@@ -66,7 +66,8 @@ Use optional ARGS to customize your glancing blows:
 - PROMPT :: completing read title (default: "Glance: ")
 - SEPARATOR :: completing read entry separator (default: " → ")
 - FILTER :: lambda to filter entries in completing read or
-  - 'links-only :: remove all non-link entries
+  - 'links :: keep entries with link in titles
+  - 'encrypted :: keep entries with :crypt: tag
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
   - if entry has HANDLER property, read-eval it
@@ -81,7 +82,8 @@ Use optional ARGS to customize your glancing blows:
   (let* ((scope     (or (plist-get args :scope)          nil))
 
          (filter    (or (plist-get args :filter)         (lambda nil t)))
-         (filter*   (cond ((eq filter 'links-only) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+         (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+                          ((eq filter 'encrypted) (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))
                           (t filter)))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
@@ -122,13 +124,18 @@ Try to handle current org-entry:
 #+NAME: compl-map-doc
 #+BEGIN_SRC org
 PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there is only one entry, call ACTION without completing read.
+If there is no entries, raise exception.
 #+END_SRC
 *** Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action)
 <<compl-map-doc()>>
-  (let* ((clean-entries (remove 'nil entries))
-         (marker (cdr (assoc-string (org-completing-read prompt entries) entries))))
+  (let* ((entries* (remove 'nil entries))
+         (choice (cond ((= (length entries*) 1) (caar entries*))
+                       ((= (length entries*) 0) (error "Empty set."))
+                       (t (org-completing-read prompt entries*))))
+         (marker (cdr (assoc-string choice entries*))))
     (org-goto-marker-or-bmk marker)
     (funcall action)))
 #+END_SRC
@@ -166,7 +173,8 @@ Browse org-link at point.
 #+BEGIN_SRC emacs-lisp
 (require 'ert)
 #+END_SRC
-** with-buffer-contents
+** with-temp-org-buffer
+#+NAME: with-temp-org-buffer
 #+BEGIN_SRC emacs-lisp
 (defmacro with-temp-org-buffer (s &rest forms)
   "Create a temporary org-mode buffer with contents S and execute FORMS."
@@ -217,9 +225,10 @@ Browse org-link at point.
 ,* First
 ,* Second
 ,* Third
+,* Security
 "
 (let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
-  (should-error (org-glance :filter (lambda () (org-match-line "^.*Second")))))))
+  (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
 #+END_SRC
 *** filter-doesnt-remove-suitable-entries
 #+BEGIN_SRC emacs-lisp
@@ -235,7 +244,10 @@ Browse org-link at point.
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 #+END_SRC
 * Development
-** [[elisp:(and%20(org-sbe%20"org-block-execute")%20(org-babel-tangle)%20(load-file%20"org-glance.el")%20(byte-compile-file%20"org-glance.el")%20(ert-run-tests-interactively%20"^org-glance-test/"%20"*org-glance-tests*"))][build]]
+** Run build                                                                   :build:
+:PROPERTIES:
+:HANDLER:  (and (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
+:END:
 ** org-block-execute
 #+NAME: org-block-execute
 #+BEGIN_SRC emacs-lisp :tangle no :results silent

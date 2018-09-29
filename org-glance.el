@@ -39,7 +39,8 @@
 - PROMPT :: completing read title (default: \"Glance: \")
 - SEPARATOR :: completing read entry separator (default: \" → \")
 - FILTER :: lambda to filter entries in completing read or
-  - 'links-only :: remove all non-link entries
+  - 'links :: keep entries with link in titles
+  - 'encrypted :: keep entries with :crypt: tag
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
   - if entry has HANDLER property, read-eval it
@@ -49,7 +50,8 @@
   (let* ((scope     (or (plist-get args :scope)          nil))
 
          (filter    (or (plist-get args :filter)         (lambda nil t)))
-         (filter*   (cond ((eq filter 'links-only) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+         (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+                          ((eq filter 'encrypted) (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))
                           (t filter)))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
@@ -78,9 +80,14 @@
         ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
 
 (defun org-glance/compl-map (prompt entries action)
-"PROMPT org-completing-read on ENTRIES and call ACTION on selected."
-  (let* ((clean-entries (remove 'nil entries))
-         (marker (cdr (assoc-string (org-completing-read prompt entries) entries))))
+"PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there is only one entry, call ACTION without completing read.
+If there is no entries, raise exception."
+  (let* ((entries* (remove 'nil entries))
+         (choice (cond ((= (length entries*) 1) (caar entries*))
+                       ((= (length entries*) 0) (error "Empty set."))
+                       (t (org-completing-read prompt entries*))))
+         (marker (cdr (assoc-string choice entries*))))
     (org-goto-marker-or-bmk marker)
     (funcall action)))
 

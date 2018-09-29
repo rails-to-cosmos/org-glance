@@ -41,9 +41,10 @@
 * First
 * Second
 * Third
+* Security
 "
 (let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
-  (should-error (org-glance :filter (lambda () (org-match-line "^.*Second")))))))
+  (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
 
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   "Test filtering."
