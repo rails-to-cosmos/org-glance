@@ -1,0 +1,237 @@
+#+TITLE: org-glance
+#+AUTHOR: Dmitry Akatov
+#+EMAIL: akatovda@yandex.com
+#+CATEGORY: org-glance
+#+PROPERTY: header-args:emacs-lisp+ :noweb yes
+#+PROPERTY: header-args:org :tangle no
+
+* Hello
+:PROPERTIES:
+:header-args: :tangle org-glance.el
+:END:
+
+#+BEGIN_SRC emacs-lisp
+;;; org-glance.el --- org-mode traversing. Fast and convenient.
+
+;; Copyright (C) 2018 Dmitry Akatov
+
+;; Author: Dmitry Akatov <akatovda@yandex.com>
+;; Created: 29 September, 2018
+;; Version: 0.1
+
+;; Keywords: org-mode tools
+;; Homepage: https://github.com/rails-to-cosmos/org-glance
+
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;; This package allows you to manage bookmarks and travel around the
+;; digital world with an org-mode power behind your shoulders.
+
+;;; Code:
+#+END_SRC
+* Requirements
+:PROPERTIES:
+:header-args: :tangle org-glance.el
+:END:
+
+#+BEGIN_SRC emacs-lisp
+(require 's)
+(require 'org)
+#+END_SRC
+* Features
+:PROPERTIES:
+:header-args: :tangle org-glance.el
+:END:
+
+** org-glance
+*** Documentation
+#+NAME: org-glance-doc
+#+BEGIN_SRC org
+Use optional ARGS to customize your glancing blows:
+- SCOPE :: see detailed documentation in org-map-entries (org.el)
+- PROMPT :: completing read title (default: "Glance: ")
+- SEPARATOR :: completing read entry separator (default: " → ")
+- FILTER :: lambda to filter entries in completing read
+- ACTION :: lambda to call on selected entry
+  - if entry has an org-link in title, browse it
+  - if entry has :handler property, read-eval it
+- HANDLER :: property name to read-eval on select (default: "HANDLER")
+
+\(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])
+#+END_SRC
+*** Implementation
+#+BEGIN_SRC emacs-lisp
+(defun org-glance (&rest args)
+<<org-glance-doc()>>
+  (let* ((scope     (or (plist-get args :scope)          nil))
+         (filter    (or (plist-get args :filter)         (lambda nil t)))
+         (handler   (or (plist-get args :handler)        "HANDLER"))
+         (prompt    (or (plist-get args :prompt)         "Glance: "))
+         (separator (or (plist-get args :separator)      " → "))
+         (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
+
+    (cl-flet ((traverse ()
+                        (let* ((mark (point-marker))
+                               (title (s-join separator (org-get-outline-path t))))
+                          (when (funcall filter)
+                            (cons title mark)))))
+      (let* ((entry-map (remove 'nil (org-map-entries #'traverse scope)))
+             (marker (cdr (assoc-string (org-completing-read prompt entry-map) entry-map))))
+        (org-goto-marker-or-bmk marker)
+        (funcall action)))))
+#+END_SRC
+** handle-entry
+*** Documentation
+#+NAME: handle-entry-doc
+#+BEGIN_SRC org
+Try to handle current org-entry:
+1. If there is an org-link, browse it.
+2. If not, call HANDLER.
+#+END_SRC
+*** Implementation
+#+BEGIN_SRC emacs-lisp
+(defun org-glance/handle-entry (handler)
+<<handle-entry-doc()>>
+  (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
+        ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
+#+END_SRC
+** follow-org-link-at-point
+*** Documentation
+#+NAME: follow-org-link-at-point-doc
+#+BEGIN_SRC org
+Browse org-link at point.
+#+END_SRC
+*** Implementation
+#+BEGIN_SRC emacs-lisp
+(defun org-glance/follow-org-link-at-point ()
+<<follow-org-link-at-point-doc()>>
+  (let ((link (buffer-substring-no-properties
+               (save-excursion (org-beginning-of-line) (point))
+               (save-excursion (org-end-of-line) (point))))
+        (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
+    (org-open-link-from-string link)))
+#+END_SRC
+* Footer
+:PROPERTIES:
+:header-args: :tangle org-glance.el
+:END:
+
+#+BEGIN_SRC emacs-lisp
+(provide 'org-glance)
+;;; org-glance.el ends here
+#+END_SRC
+* Tests
+:PROPERTIES:
+:header-args: :tangle tests.el
+:END:
+
+** Requirements
+#+BEGIN_SRC emacs-lisp
+(require 'ert)
+#+END_SRC
+** with-buffer-contents
+#+BEGIN_SRC emacs-lisp
+(defmacro with-temp-org-buffer (s &rest forms)
+  "Create a temporary org-mode buffer with contents S and execute FORMS."
+  `(save-excursion
+     (with-temp-buffer
+       (progn
+         (org-mode)
+         (goto-char 0)
+         (insert ,s)
+         (goto-char 0)
+         ,@forms))))
+#+END_SRC
+** handling
+*** handle-org-link
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/handle-org-link ()
+  "Test that we can handle org-links."
+  (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
+    (let ((unread-command-events (listify-key-sequence (kbd "elisp RET")))
+          (begin-marker (with-current-buffer (messages-buffer)
+                          (point-max-marker))))
+      (org-glance)
+      (should (string= (string-trim (with-current-buffer (messages-buffer)
+                                      (buffer-substring begin-marker (point-max))))
+                       "(+ 1 2) => 3")))))
+#+END_SRC
+*** handle-property
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/handle-property ()
+  "Test that we can use handler property."
+  (with-temp-org-buffer
+"
+,* Title
+:PROPERTIES:
+:HANDLER: (+ 1 9)
+:END:
+"
+(let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
+  (should (= (org-glance) 10)))))
+#+END_SRC
+** filtering
+*** filter-removes-entries
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/filter-removes-entries ()
+  "Test filtering."
+  (with-temp-org-buffer
+"
+,* First
+,* Second
+,* Third
+"
+(let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
+  (should-error (org-glance :filter (lambda () (org-match-line "^.*Second")))))))
+#+END_SRC
+*** filter-doesnt-remove-suitable-entries
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
+  "Test filtering."
+  (with-temp-org-buffer
+"
+,* First
+,* Second
+,* Third
+"
+(let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
+  (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
+#+END_SRC
+* Development
+** [[elisp:(and%20(org-sbe%20"org-block-execute")%20(org-babel-tangle)%20(load-file%20"org-glance.el")%20(byte-compile-file%20"org-glance.el")%20(ert-run-tests-interactively%20"^org-glance-test/"%20"*org-glance-tests*"))][build]]
+** org-block-execute
+#+NAME: org-block-execute
+#+BEGIN_SRC emacs-lisp :tangle no :results silent
+(defun org-babel-execute:org (body params)
+  "Execute an org-block code with org-babel.
+Print BODY as multiline string escaping quotes.
+No PARAMS needed yet.  This function is called
+by `org-babel-execute-src-block'."
+  (let ((escaped-body
+         (with-temp-org-buffer body
+           (while (search-forward "\"" nil t)
+             (replace-match "\\\"" "FIXEDCASE" "LITERAL"))
+           ;; (org-table-recalculate-buffer-tables)
+           (buffer-substring-no-properties (point-min) (point-max)))))
+    (concat "\"" escaped-body "\"")))
+#+END_SRC
+* Local Variables
+# Local Variables:
+# org-src-preserve-indentation: t
+# org-adapt-indentation: nil
+# indent-tabs-mode: nil
+# End:
