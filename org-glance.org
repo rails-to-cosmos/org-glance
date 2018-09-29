@@ -62,13 +62,14 @@
 #+NAME: org-glance-doc
 #+BEGIN_SRC org
 Use optional ARGS to customize your glancing blows:
-- SCOPE :: see detailed documentation in org-map-entries (org.el)
+- SCOPE :: org-file or SCOPE from org-map-entries (org.el)
 - PROMPT :: completing read title (default: "Glance: ")
 - SEPARATOR :: completing read entry separator (default: " → ")
-- FILTER :: lambda to filter entries in completing read
+- FILTER :: lambda to filter entries in completing read or
+  - 'links-only :: remove all non-link entries
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
-  - if entry has :handler property, read-eval it
+  - if entry has HANDLER property, read-eval it
 - HANDLER :: property name to read-eval on select (default: "HANDLER")
 
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])
@@ -78,18 +79,28 @@ Use optional ARGS to customize your glancing blows:
 (defun org-glance (&rest args)
 <<org-glance-doc()>>
   (let* ((scope     (or (plist-get args :scope)          nil))
+
          (filter    (or (plist-get args :filter)         (lambda nil t)))
+         (filter*   (cond ((eq filter 'links-only) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+                          (t filter)))
+
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
          (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
-
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
                                (title (s-join separator (org-get-outline-path t))))
-                          (when (funcall filter)
+                          (when (funcall filter*)
                             (cons title mark)))))
-      (let* ((entry-map (remove 'nil (org-map-entries #'traverse scope)))
+
+      (let* ((entry-map (if (and (stringp scope) (file-exists-p scope))
+                            (with-temp-buffer
+                              (org-mode)
+                              (insert-file-contents-literally scope)
+                              (org-map-entries #'traverse))
+                          (org-map-entries #'traverse scope)))
+             (clean-entries (remove 'nil entry-map))
              (marker (cdr (assoc-string (org-completing-read prompt entry-map) entry-map))))
         (org-goto-marker-or-bmk marker)
         (funcall action)))))
