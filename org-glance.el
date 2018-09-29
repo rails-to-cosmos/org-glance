@@ -56,22 +56,19 @@
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
          (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
-    (cl-flet ((traverse ()
-                        (let* ((mark (point-marker))
-                               (title (s-join separator (org-get-outline-path t))))
-                          (when (funcall filter*)
-                            (cons title mark)))))
 
-      (let* ((entry-map (if (and (stringp scope) (file-exists-p scope))
-                            (with-temp-buffer
-                              (org-mode)
-                              (insert-file-contents-literally scope)
-                              (org-map-entries #'traverse))
-                          (org-map-entries #'traverse scope)))
-             (clean-entries (remove 'nil entry-map))
-             (marker (cdr (assoc-string (org-completing-read prompt entry-map) entry-map))))
-        (org-goto-marker-or-bmk marker)
-        (funcall action)))))
+    (cl-flet ((traverse ()
+                (let* ((mark (point-marker))
+                       (title (s-join separator (org-get-outline-path t))))
+                  (when (funcall filter*)
+                    (cons title mark)))))
+
+      (if (and (stringp scope) (file-exists-p scope))
+          (with-temp-buffer
+            (org-mode)
+            (insert-file-contents-literally scope)
+            (org-glance/compl-map prompt (org-map-entries #'traverse) action))
+        (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))
 
 (defun org-glance/handle-entry (handler)
 "Try to handle current org-entry:
@@ -79,6 +76,13 @@
 2. If not, call HANDLER."
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
         ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
+
+(defun org-glance/compl-map (prompt entries action)
+"PROMPT org-completing-read on ENTRIES and call ACTION on selected."
+  (let* ((clean-entries (remove 'nil entries))
+         (marker (cdr (assoc-string (org-completing-read prompt entries) entries))))
+    (org-goto-marker-or-bmk marker)
+    (funcall action)))
 
 (defun org-glance/follow-org-link-at-point ()
 "Browse org-link at point."
