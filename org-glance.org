@@ -113,18 +113,21 @@ Use optional ARGS to customize your glancing blows:
          (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
 
     (cl-flet ((traverse ()
-                (let* ((mark (point-marker))
-                       (title (s-join separator (org-get-outline-path t))))
-                  (when (funcall filter*)
-                    (cons title mark)))))
+                        (let* ((mark (point-marker))
+                               (title (s-join separator (org-get-outline-path t))))
+                          (when (funcall filter*)
+                            (cons title mark)))))
 
-      (if (and (stringp scope) (file-exists-p scope))
-          (with-temp-buffer
-            (org-mode)
-            (insert-file-contents-literally scope)
-            (org-overview)
-            (org-glance/compl-map prompt (org-map-entries #'traverse) action))
-        (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))
+      (save-window-excursion
+        (save-mark-and-excursion
+          (org-save-outline-visibility t
+            (if (and (stringp scope) (file-exists-p scope))
+                (with-temp-buffer
+                  (org-mode)
+                  (insert-file-contents-literally scope)
+                  (org-overview)
+                  (org-glance/compl-map prompt (org-map-entries #'traverse) action))
+              (org-glance/compl-map prompt (org-map-entries #'traverse scope) action))))))))
 #+END_SRC
 ** handle-entry                                                                :Feature:
 *** Documentation                                                             :Documentation:
