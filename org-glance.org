@@ -77,7 +77,7 @@ Use optional ARGS to customize your glancing blows:
 - PROMPT :: completing read title (default: "Glance: ")
 - SEPARATOR :: completing read entry separator (default: " → ")
 - FILTER :: lambda to filter entries in completing read or
-  - 'links :: keep entries with link in titles
+  - 'links :: keep entries with link in title
   - 'encrypted :: keep entries with :crypt: tag
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
