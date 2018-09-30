@@ -2,7 +2,8 @@
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 #+CATEGORY: org-glance
-#+TAGS: License Feature Test Documentation Implementation Development build
+#+TAGS: License Documentation
+#+TAGS: Feature Test Implementation Development
 #+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no"))
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
@@ -260,7 +261,7 @@ by `org-babel-execute-src-block'."
 * Development
 ** Run build                                                                   :build:
 :PROPERTIES:
-:HANDLER:  (and (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
+:HANDLER:  (progn (delete-file "tests.el") (delete-file "org-glance.el") (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
 :END:
 * Local Variables
 # Local Variables:
