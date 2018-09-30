@@ -33,8 +33,6 @@
 (require 's)
 (require 'org)
 
-(add-to-invisibility-spec 'org-glance)
-
 (defun org-glance (&rest args)
 "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
