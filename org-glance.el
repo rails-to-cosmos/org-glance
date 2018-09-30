@@ -33,6 +33,8 @@
 (require 's)
 (require 'org)
 
+(add-to-invisibility-spec 'org-glance)
+
 (defun org-glance (&rest args)
 "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -69,6 +71,7 @@
           (with-temp-buffer
             (org-mode)
             (insert-file-contents-literally scope)
+            (org-overview)
             (org-glance/compl-map prompt (org-map-entries #'traverse) action))
         (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))
 

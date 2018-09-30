@@ -101,6 +101,7 @@ Use optional ARGS to customize your glancing blows:
           (with-temp-buffer
             (org-mode)
             (insert-file-contents-literally scope)
+            (org-overview)
             (org-glance/compl-map prompt (org-map-entries #'traverse) action))
         (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))
 #+END_SRC
@@ -200,6 +201,7 @@ Browse org-link at point.
       (should (string= (string-trim (with-current-buffer (messages-buffer)
                                       (buffer-substring begin-marker (point-max))))
                        "(+ 1 2) => 3")))))
+
 #+END_SRC
 *** handle-property
 #+BEGIN_SRC emacs-lisp
