@@ -332,6 +332,18 @@ by `org-babel-execute-src-block'."
 :HANDLER:  (and (org-sbe "report") (org-glance-devtools/build-report))
 :END:
 
+#+NAME: init-environment
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-devtools/build ()
+  (interactive)
+  (org-glance
+   :filter (lambda () (seq-intersection
+                  (list "build")
+                  (org-get-tags-at)))))
+
+(local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
+#+END_SRC
+
 #+NAME: report
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-devtools/build-report ()
@@ -371,6 +383,7 @@ by `org-babel-execute-src-block'."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
+# eval: (and (org-sbe "report") (org-glance-devtools/build-report) (org-sbe "init-environment"))
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
