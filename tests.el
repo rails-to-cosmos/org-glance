@@ -106,3 +106,7 @@
 "
 (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
+
+(require 'org-glance)
+(ert-deftest org-glance-test/feature-provision ()
+  (should (featurep 'org-glance)))

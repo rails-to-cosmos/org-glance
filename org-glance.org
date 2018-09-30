@@ -306,9 +306,17 @@ Browse org-link at point.
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 #+END_SRC
 ** provide                                                                     :Feature:
+*** Implementation
 #+BEGIN_SRC emacs-lisp
 (provide 'org-glance)
 ;;; org-glance.el ends here
+#+END_SRC
+*** Tests
+**** feature-provision                                                       :Test:
+#+BEGIN_SRC emacs-lisp
+(require 'org-glance)
+(ert-deftest org-glance-test/feature-provision ()
+  (should (featurep 'org-glance)))
 #+END_SRC
 ** org-block-execute                                                           :Development:
 #+NAME: org-block-execute
