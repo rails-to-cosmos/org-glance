@@ -66,8 +66,7 @@
                           (when (funcall filter*)
                             (cons title mark)))))
 
-      (save-window-excursion
-        (save-mark-and-excursion
+      (save-mark-and-excursion
           (org-save-outline-visibility t
             (if (and (stringp scope) (file-exists-p scope))
                 (with-temp-buffer
@@ -75,7 +74,7 @@
                   (insert-file-contents-literally scope)
                   (org-overview)
                   (org-glance/compl-map prompt (org-map-entries #'traverse) action))
-              (org-glance/compl-map prompt (org-map-entries #'traverse scope) action))))))))
+              (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))))
 
 (defun org-glance/handle-entry (handler)
 "Try to handle current org-entry:
