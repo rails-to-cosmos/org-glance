@@ -139,27 +139,44 @@ Try to handle current org-entry:
 (defun org-glance/handle-entry (handler)
 <<handle-entry-doc()>>
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
-        ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
+        ((org-entry-get nil handler) (let ((action (read (org-entry-get nil handler))))
+                                       (cond ((symbolp action) (read (macroexpand (list 'org-sbe (symbol-name action)))))
+                                             (t (eval action)))))))
 #+END_SRC
 *** Tests
-**** handle-org-link                                                         :Test:
+**** can-handle-org-links                                                    :Test:
+***** Predicate
 #+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/handle-org-link ()
-  "Test that we can handle org-links."
+(defun org-glance-predicate/can-handle-org-links ()
+  "Can we handle org-links?"
   (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
-    (let ((unread-command-events (listify-key-sequence (kbd "elisp RET")))
-          (begin-marker (with-current-buffer (messages-buffer)
-                          (point-max-marker))))
-      (org-glance)
-      (should (string= (string-trim (with-current-buffer (messages-buffer)
-                                      (buffer-substring begin-marker (point-max))))
-                       "(+ 1 2) => 3")))))
-
+                        (let ((unread-command-events (listify-key-sequence (kbd "elisp RET")))
+                              (begin-marker (with-current-buffer (messages-buffer)
+                                              (point-max-marker))))
+                          (org-glance)
+                          (string= (string-trim (with-current-buffer (messages-buffer)
+                                                  (buffer-substring begin-marker (point-max))))
+                                   "(+ 1 2) => 3"))))
 #+END_SRC
-**** handle-property                                                         :Test:
+***** Explanation
 #+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/handle-property ()
-  "Test that we can use handler property."
+(defun org-glance-test-explainer/can-handle-org-links ()
+  (message "Handling org-links feature doesn't work properly"))
+
+(put 'org-glance-predicate/can-handle-org-links
+     'ert-explainer
+     'org-glance-test-explainer/can-handle-org-links)
+#+END_SRC
+***** Test
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-handle-org-links ()
+  "Test that we can handle org-links."
+  (should (org-glance-predicate/can-handle-org-links)))
+#+END_SRC
+**** can-handle-default-property                                             :Test:
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-handle-default-property ()
+  "Test that we can use default handler property."
   (with-temp-org-buffer
 "
 ,* Title
@@ -169,6 +186,55 @@ Try to handle current org-entry:
 "
 (let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
   (should (= (org-glance) 10)))))
+#+END_SRC
+**** can-handle-custom-property                                              :Test:
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-handle-custom-property ()
+  "Test that we can use custom handler property."
+  (with-temp-org-buffer
+"
+,* Title
+:PROPERTIES:
+:CUSTOM_HANDLER: (+ 1 11)
+:END:
+"
+(let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
+  (should (= (org-glance :handler "CUSTOM_HANDLER") 12)))))
+#+END_SRC
+**** can-handle-symbolic-property                                            :Test:
+***** Predicate
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-predicate/can-handle-symbolic-property ()
+  "Can we handle symbolic property as org-babel block name?"
+  (with-temp-org-buffer
+   "
+,* Please, handle custom block
+:PROPERTIES:
+:CUSTOM_HANDLER: custom-block
+:END:
+
+,#+NAME: custom-block
+,#+BEGIN_SRC emacs-lisp
+(+ 15 16)
+,#+END_SRC
+"
+   (let ((unread-command-events (listify-key-sequence (kbd "Plea RET"))))
+     (= (org-glance :handler "CUSTOM_HANDLER") 31))))
+#+END_SRC
+***** Explanation
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-test-explainer/can-handle-symbolic-property ()
+  (message "Failed to handle symbolic property as org-babel block name"))
+
+(put 'org-glance-predicate/can-handle-symbolic-property
+     'ert-explainer
+     'org-glance-test-explainer/can-handle-symbolic-property)
+#+END_SRC
+***** Test
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-handle-symbolic-property ()
+  "Test that we can handle symbolic properties."
+  (should (org-glance-predicate/can-handle-symbolic-property)))
 #+END_SRC
 ** compl-map                                                                   :Feature:
 *** Documentation                                                             :Documentation:
@@ -261,8 +327,40 @@ by `org-babel-execute-src-block'."
 * Development
 ** Run build                                                                   :build:
 :PROPERTIES:
-:HANDLER:  (progn (delete-file "tests.el") (delete-file "org-glance.el") (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
+:HANDLER:  report
 :END:
+
+#+NAME: report
+#+BEGIN_SRC emacs-lisp
+(let ((report (read (org-sbe "build"))))
+  (caddr report)
+  (when (> (caddr report) 0)
+    (pop-to-buffer "*org-glance-tests*"))
+  (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))
+#+END_SRC
+
+#+NAME: build
+#+BEGIN_SRC emacs-lisp :tangle no :results silent
+(let ((test-file "tests.el")
+      (impl-file "org-glance.el"))
+  (delete-file test-file)
+  (delete-file impl-file)
+  (org-sbe "org-block-execute")
+  (org-sbe "with-temp-org-buffer")
+  (org-babel-tangle)
+  (load-file impl-file)
+  (byte-compile-file impl-file)
+  (load-file test-file)
+
+  (let* ((test-$ "^org-glance-test/")
+         (test-buffer "*org-glance-tests*")
+         (ert-stats (ert-run-tests-interactively test-$ test-buffer))
+         (expected (ert-stats-completed-expected ert-stats))
+         (unexpected (ert-stats-completed-unexpected ert-stats))
+         (skipped (ert-stats-skipped ert-stats))
+         (total (ert-stats-total ert-stats)))
+    (list total expected unexpected skipped)))
+#+END_SRC
 * Local Variables
 # Local Variables:
 # org-use-tag-inheritance: t

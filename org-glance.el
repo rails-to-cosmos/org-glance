@@ -79,7 +79,9 @@
 1. If there is an org-link, browse it.
 2. If not, call HANDLER."
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
-        ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
+        ((org-entry-get nil handler) (let ((action (read (org-entry-get nil handler))))
+                                       (cond ((symbolp action) (read (macroexpand (list 'org-sbe (symbol-name action)))))
+                                             (t (eval action)))))))
 
 (defun org-glance/compl-map (prompt entries action)
 "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
