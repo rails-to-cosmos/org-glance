@@ -2,11 +2,13 @@
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 #+CATEGORY: org-glance
-#+PROPERTY: header-args:emacs-lisp+ :noweb yes
+#+TAGS: License Feature Test Documentation Implementation Development build
+#+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no"))
+#+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
-#+PROPERTY: header-args:markdown :tangle README.md
 
 * Hello
+** README                                                                      :Documentation:
 #+BEGIN_SRC markdown
 Org-glance: walk in the woods with pleasure
 ===============================
@@ -16,11 +18,7 @@ Fast, clean and convenient way of traversing your org-mode forest.
 Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 #+END_SRC
-* Header
-:PROPERTIES:
-:header-args: :tangle org-glance.el
-:END:
-
+** License                                                                     :License:
 #+BEGIN_SRC emacs-lisp
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
@@ -55,21 +53,32 @@ flexible build system or whatever you can imagine with ease.
 ;;; Code:
 #+END_SRC
 * Requirements
-:PROPERTIES:
-:header-args: :tangle org-glance.el
-:END:
-
+** Implementation                                                              :Feature:
 #+BEGIN_SRC emacs-lisp
 (require 's)
+(require 'cl-lib)
 (require 'org)
 #+END_SRC
+** Testing                                                                     :Test:
+#+BEGIN_SRC emacs-lisp
+(require 'ert)
+#+END_SRC
 * Features
-:PROPERTIES:
-:header-args: :tangle org-glance.el
-:END:
-
-** org-glance
-*** Documentation
+** temp-org-buffer                                                             :Test:
+#+NAME: with-temp-org-buffer
+#+BEGIN_SRC emacs-lisp
+(defmacro with-temp-org-buffer (s &rest forms)
+  "Create a temporary org-mode buffer with contents S and execute FORMS."
+  `(save-excursion
+     (with-temp-buffer
+       (org-mode)
+       (goto-char 0)
+       (insert ,s)
+       (goto-char 0)
+       ,@forms)))
+#+END_SRC
+** org-glance                                                                  :Feature:
+*** Documentation                                                             :Documentation:
 #+NAME: org-glance-doc
 #+BEGIN_SRC org
 Use optional ARGS to customize your glancing blows:
@@ -86,7 +95,7 @@ Use optional ARGS to customize your glancing blows:
 
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])
 #+END_SRC
-*** Implementation
+*** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
 <<org-glance-doc()>>
@@ -116,90 +125,23 @@ Use optional ARGS to customize your glancing blows:
             (org-glance/compl-map prompt (org-map-entries #'traverse) action))
         (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))
 #+END_SRC
-** handle-entry
-*** Documentation
+** handle-entry                                                                :Feature:
+*** Documentation                                                             :Documentation:
 #+NAME: handle-entry-doc
 #+BEGIN_SRC org
 Try to handle current org-entry:
 1. If there is an org-link, browse it.
 2. If not, call HANDLER.
 #+END_SRC
-*** Implementation
+*** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/handle-entry (handler)
 <<handle-entry-doc()>>
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
         ((org-entry-get nil handler) (eval (read (org-entry-get nil handler))))))
 #+END_SRC
-** compl-map
-*** Documentation
-#+NAME: compl-map-doc
-#+BEGIN_SRC org
-PROMPT org-completing-read on ENTRIES and call ACTION on selected.
-If there is only one entry, call ACTION without completing read.
-If there is no entries, raise exception.
-#+END_SRC
-*** Implementation
-#+BEGIN_SRC emacs-lisp
-(defun org-glance/compl-map (prompt entries action)
-<<compl-map-doc()>>
-  (let* ((entries* (remove 'nil entries))
-         (choice (cond ((= (length entries*) 1) (caar entries*))
-                       ((= (length entries*) 0) (error "Empty set."))
-                       (t (org-completing-read prompt entries*))))
-         (marker (cdr (assoc-string choice entries*))))
-    (org-goto-marker-or-bmk marker)
-    (funcall action)))
-#+END_SRC
-** follow-org-link-at-point
-*** Documentation
-#+NAME: follow-org-link-at-point-doc
-#+BEGIN_SRC org
-Browse org-link at point.
-#+END_SRC
-*** Implementation
-#+BEGIN_SRC emacs-lisp
-(defun org-glance/follow-org-link-at-point ()
-<<follow-org-link-at-point-doc()>>
-  (let ((link (buffer-substring-no-properties
-               (save-excursion (org-beginning-of-line) (point))
-               (save-excursion (org-end-of-line) (point))))
-        (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
-    (org-open-link-from-string link)))
-#+END_SRC
-* Footer
-:PROPERTIES:
-:header-args: :tangle org-glance.el
-:END:
-
-#+BEGIN_SRC emacs-lisp
-(provide 'org-glance)
-;;; org-glance.el ends here
-#+END_SRC
-* Tests
-:PROPERTIES:
-:header-args: :tangle tests.el
-:END:
-
-** Requirements
-#+BEGIN_SRC emacs-lisp
-(require 'ert)
-#+END_SRC
-** with-temp-org-buffer
-#+NAME: with-temp-org-buffer
-#+BEGIN_SRC emacs-lisp
-(defmacro with-temp-org-buffer (s &rest forms)
-  "Create a temporary org-mode buffer with contents S and execute FORMS."
-  `(save-excursion
-     (with-temp-buffer
-       (org-mode)
-       (goto-char 0)
-       (insert ,s)
-       (goto-char 0)
-       ,@forms)))
-#+END_SRC
-** handling
-*** handle-org-link
+*** Tests
+**** handle-org-link                                                         :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/handle-org-link ()
   "Test that we can handle org-links."
@@ -213,7 +155,7 @@ Browse org-link at point.
                        "(+ 1 2) => 3")))))
 
 #+END_SRC
-*** handle-property
+**** handle-property                                                         :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/handle-property ()
   "Test that we can use handler property."
@@ -227,8 +169,47 @@ Browse org-link at point.
 (let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
   (should (= (org-glance) 10)))))
 #+END_SRC
-** filtering
-*** filter-removes-entries
+** compl-map                                                                   :Feature:
+*** Documentation                                                             :Documentation:
+#+NAME: compl-map-doc
+#+BEGIN_SRC org
+PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there is only one entry, call ACTION without completing read.
+If there is no entries, raise exception.
+#+END_SRC
+*** Implementation                                                            :Implementation:
+#+BEGIN_SRC emacs-lisp
+(defun org-glance/compl-map (prompt entries action)
+<<compl-map-doc()>>
+  (let* ((entries* (remove 'nil entries))
+         (choice (cond ((= (length entries*) 1) (caar entries*))
+                       ((= (length entries*) 0) (error "Empty set."))
+                       (t (org-completing-read prompt entries*))))
+         (marker (cdr (assoc-string choice entries*))))
+    (org-goto-marker-or-bmk marker)
+    (funcall action)))
+#+END_SRC
+** follow-org-link-at-point                                                    :Feature:
+*** Documentation                                                             :Documentation:
+#+NAME: follow-org-link-at-point-doc
+#+BEGIN_SRC org
+Browse org-link at point.
+#+END_SRC
+*** Implementation                                                            :Implementation:
+#+BEGIN_SRC emacs-lisp
+(defun org-glance/follow-org-link-at-point ()
+<<follow-org-link-at-point-doc()>>
+  (let ((link (buffer-substring-no-properties
+               (save-excursion (org-beginning-of-line) (point))
+               (save-excursion (org-end-of-line) (point))))
+        (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
+    (org-open-link-from-string link)))
+#+END_SRC
+** filtering                                                                   :Feature:
+*** Documentation                                                             :Documentation:
+*** Implementation                                                            :Implementation:
+*** Tests
+**** filter-removes-entries                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
@@ -242,7 +223,7 @@ Browse org-link at point.
 (let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
   (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
 #+END_SRC
-*** filter-doesnt-remove-suitable-entries
+**** filter-doesnt-remove-suitable-entries                                   :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   "Test filtering."
@@ -255,14 +236,14 @@ Browse org-link at point.
 (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 #+END_SRC
-* Development
-** Run build                                                                   :build:
-:PROPERTIES:
-:HANDLER:  (and (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
-:END:
-** org-block-execute
+** provide                                                                     :Feature:
+#+BEGIN_SRC emacs-lisp
+(provide 'org-glance)
+;;; org-glance.el ends here
+#+END_SRC
+** org-block-execute                                                           :Development:
 #+NAME: org-block-execute
-#+BEGIN_SRC emacs-lisp :tangle no :results silent
+#+BEGIN_SRC emacs-lisp
 (defun org-babel-execute:org (body params)
   "Execute an org-block code with org-babel.
 Print BODY as multiline string escaping quotes.
@@ -276,8 +257,14 @@ by `org-babel-execute-src-block'."
            (buffer-substring-no-properties (point-min) (point-max)))))
     (concat "\"" escaped-body "\"")))
 #+END_SRC
+* Development
+** Run build                                                                   :build:
+:PROPERTIES:
+:HANDLER:  (and (org-sbe "org-block-execute") (org-sbe "with-temp-org-buffer") (org-babel-tangle) (load-file "org-glance.el") (load-file "tests.el") (byte-compile-file "org-glance.el") (ert-run-tests-interactively "^org-glance-test/" "*org-glance-tests*"))
+:END:
 * Local Variables
 # Local Variables:
+# org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
 # indent-tabs-mode: nil

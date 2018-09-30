@@ -31,6 +31,7 @@
 ;;; Code:
 
 (require 's)
+(require 'cl-lib)
 (require 'org)
 
 (defun org-glance (&rest args)
