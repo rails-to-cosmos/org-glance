@@ -4,12 +4,11 @@
   "Create a temporary org-mode buffer with contents S and execute FORMS."
   `(save-excursion
      (with-temp-buffer
-       (progn
-         (org-mode)
-         (goto-char 0)
-         (insert ,s)
-         (goto-char 0)
-         ,@forms))))
+       (org-mode)
+       (goto-char 0)
+       (insert ,s)
+       (goto-char 0)
+       ,@forms)))
 
 (ert-deftest org-glance-test/handle-org-link ()
   "Test that we can handle org-links."
