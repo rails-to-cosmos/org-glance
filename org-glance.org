@@ -326,19 +326,20 @@ by `org-babel-execute-src-block'."
            (buffer-substring-no-properties (point-min) (point-max)))))
     (concat "\"" escaped-body "\"")))
 #+END_SRC
-* Development
-** Run build                                                                   :build:
+* Devtools
+** Build                                                                       :build:
 :PROPERTIES:
-:HANDLER:  report
+:HANDLER:  (and (org-sbe "report") (org-glance-devtools/build-report))
 :END:
 
 #+NAME: report
 #+BEGIN_SRC emacs-lisp
-(let ((report (read (org-sbe "build"))))
-  (caddr report)
-  (when (> (caddr report) 0)
-    (pop-to-buffer "*org-glance-tests*"))
-  (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))
+(defun org-glance-devtools/build-report ()
+  (let ((report (read (org-sbe "build"))))
+    (caddr report)
+    (when (> (caddr report) 0)
+      (pop-to-buffer "*org-glance-tests*"))
+    (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report))))
 #+END_SRC
 
 #+NAME: build
@@ -363,6 +364,11 @@ by `org-babel-execute-src-block'."
          (total (ert-stats-total ert-stats)))
     (list total expected unexpected skipped)))
 #+END_SRC
+* Applications
+** org-glance-build
+** org-glance-passwords
+** org-glance-bookmarks
+** org-glance-fs
 * Local Variables
 # Local Variables:
 # org-use-tag-inheritance: t
