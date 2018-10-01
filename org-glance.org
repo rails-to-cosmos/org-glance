@@ -120,9 +120,7 @@ Use optional ARGS to customize your glancing blows:
                           (when (funcall filter*)
                             (cons title mark)))))
 
-      (save-mark-and-excursion
-          (org-save-outline-visibility t
-            (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))))
+      (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
 #+END_SRC
 ** handle-entry                                                                :Feature:
 *** Documentation                                                             :Documentation:
@@ -339,8 +337,10 @@ by `org-babel-execute-src-block'."
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-devtools/build ()
   (interactive)
-  (org-glance
-   :filter (lambda () (seq-intersection '("build") (org-get-tags-at)))))
+  (save-mark-and-excursion
+    (org-save-outline-visibility t
+      (org-glance
+       :filter (lambda () (seq-intersection '("build") (org-get-tags-at)))))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
 #+END_SRC
