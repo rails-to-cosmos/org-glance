@@ -49,7 +49,7 @@
 
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
   (let* ((scope     (or (plist-get args :scope)          nil))
-
+         (scope*    (cond ((stringp scope) (list scope)) (t scope)))
          (filter    (or (plist-get args :filter)         (lambda nil t)))
          (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
                           ((eq filter 'encrypted) (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))
@@ -68,13 +68,7 @@
 
       (save-mark-and-excursion
           (org-save-outline-visibility t
-            (if (and (stringp scope) (file-exists-p scope))
-                (with-temp-buffer
-                  (org-mode)
-                  (insert-file-contents-literally scope)
-                  (org-overview)
-                  (org-glance/compl-map prompt (org-map-entries #'traverse) action))
-              (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))))
+            (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))))
 
 (defun org-glance/handle-entry (handler)
 "Try to handle current org-entry:

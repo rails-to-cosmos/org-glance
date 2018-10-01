@@ -102,6 +102,7 @@ Use optional ARGS to customize your glancing blows:
 (defun org-glance (&rest args)
 <<org-glance-doc()>>
   (let* ((scope     (or (plist-get args :scope)          nil))
+         (scope*    (cond ((stringp scope) (list scope)) (t scope)))
 
          (filter    (or (plist-get args :filter)         (lambda nil t)))
          (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
@@ -121,13 +122,7 @@ Use optional ARGS to customize your glancing blows:
 
       (save-mark-and-excursion
           (org-save-outline-visibility t
-            (if (and (stringp scope) (file-exists-p scope))
-                (with-temp-buffer
-                  (org-mode)
-                  (insert-file-contents-literally scope)
-                  (org-overview)
-                  (org-glance/compl-map prompt (org-map-entries #'traverse) action))
-              (org-glance/compl-map prompt (org-map-entries #'traverse scope) action)))))))
+            (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))))
 #+END_SRC
 ** handle-entry                                                                :Feature:
 *** Documentation                                                             :Documentation:
