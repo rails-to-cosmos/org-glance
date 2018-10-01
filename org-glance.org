@@ -3,7 +3,7 @@
 #+EMAIL: akatovda@yandex.com
 #+CATEGORY: org-glance
 #+TAGS: License Documentation
-#+TAGS: Feature Test Implementation Development
+#+TAGS: Feature Test
 #+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no"))
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
@@ -80,7 +80,7 @@ flexible build system or whatever you can imagine with ease.
        ,@forms)))
 #+END_SRC
 ** TODO org-glance [1/2]                                                       :Feature:
-*** DONE Implementation                                                       :Implementation:
+*** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -119,7 +119,7 @@ flexible build system or whatever you can imagine with ease.
 #+END_SRC
 *** TODO Tests
 ** DONE handle-entry [2/2]                                                     :Feature:
-*** DONE Implementation                                                       :Implementation:
+*** DONE Implementation
 CLOSED: [2018-10-01 Mon 21:28]
 
 #+BEGIN_SRC emacs-lisp
@@ -226,7 +226,7 @@ CLOSED: [2018-10-01 Mon 21:28]
   (should (org-glance-predicate/can-handle-symbolic-property)))
 #+END_SRC
 ** TODO compl-map [1/2]                                                        :Feature:
-*** DONE Implementation                                                       :Implementation:
+*** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
@@ -242,7 +242,7 @@ If there is no entries, raise exception."
 #+END_SRC
 *** TODO Tests
 ** TODO follow-org-link-at-point [1/2]                                         :Feature:
-*** DONE Implementation                                                       :Implementation:
+*** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/follow-org-link-at-point ()
   "Browse org-link at point."
@@ -254,7 +254,7 @@ If there is no entries, raise exception."
 #+END_SRC
 *** TODO Tests
 ** TODO filtering [1/2]                                                        :Feature:
-*** TODO Implementation                                                       :Implementation:
+*** TODO Implementation
 *** DONE Tests
 **** filter-removes-entries                                                  :Test:
 #+BEGIN_SRC emacs-lisp
