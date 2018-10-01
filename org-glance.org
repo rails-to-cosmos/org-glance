@@ -65,8 +65,8 @@ flexible build system or whatever you can imagine with ease.
 (require 'ert)
 (require 'org-glance)
 #+END_SRC
-* Features
-** temp-org-buffer                                                             :Test:
+* Features [3/7]
+** DONE temp-org-buffer                                                        :Test:
 #+NAME: with-temp-org-buffer
 #+BEGIN_SRC emacs-lisp
 (defmacro with-temp-org-buffer (s &rest forms)
@@ -79,8 +79,8 @@ flexible build system or whatever you can imagine with ease.
        (goto-char 0)
        ,@forms)))
 #+END_SRC
-** org-glance                                                                  :Feature:
-*** Implementation                                                            :Implementation:
+** TODO org-glance [1/2]                                                       :Feature:
+*** DONE Implementation                                                       :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -117,8 +117,11 @@ flexible build system or whatever you can imagine with ease.
 
       (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
 #+END_SRC
-** handle-entry                                                                :Feature:
-*** Implementation                                                            :Implementation:
+*** TODO Tests
+** DONE handle-entry [2/2]                                                     :Feature:
+*** DONE Implementation                                                       :Implementation:
+CLOSED: [2018-10-01 Mon 21:28]
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/handle-entry (handler)
   "Try to handle current org-entry:
@@ -129,8 +132,8 @@ flexible build system or whatever you can imagine with ease.
                                        (cond ((symbolp action) (read (macroexpand (list 'org-sbe (symbol-name action)))))
                                              (t (eval action)))))))
 #+END_SRC
-*** Tests
-**** can-handle-org-links                                                    :Test:
+*** DONE Tests
+**** DONE can-handle-org-links                                               :Test:
 ***** Predicate
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-predicate/can-handle-org-links ()
@@ -159,7 +162,7 @@ flexible build system or whatever you can imagine with ease.
   "Test that we can handle org-links."
   (should (org-glance-predicate/can-handle-org-links)))
 #+END_SRC
-**** can-handle-default-property                                             :Test:
+**** DONE can-handle-default-property                                        :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/can-handle-default-property ()
   "Test that we can use default handler property."
@@ -173,7 +176,7 @@ flexible build system or whatever you can imagine with ease.
 (let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
   (should (= (org-glance) 10)))))
 #+END_SRC
-**** can-handle-custom-property                                              :Test:
+**** DONE can-handle-custom-property                                         :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/can-handle-custom-property ()
   "Test that we can use custom handler property."
@@ -187,7 +190,7 @@ flexible build system or whatever you can imagine with ease.
 (let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
   (should (= (org-glance :handler "CUSTOM_HANDLER") 12)))))
 #+END_SRC
-**** can-handle-symbolic-property                                            :Test:
+**** DONE can-handle-symbolic-property                                       :Test:
 ***** Predicate
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-predicate/can-handle-symbolic-property ()
@@ -222,8 +225,8 @@ flexible build system or whatever you can imagine with ease.
   "Test that we can handle symbolic properties."
   (should (org-glance-predicate/can-handle-symbolic-property)))
 #+END_SRC
-** compl-map                                                                   :Feature:
-*** Implementation                                                            :Implementation:
+** TODO compl-map [1/2]                                                        :Feature:
+*** DONE Implementation                                                       :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
@@ -237,8 +240,9 @@ If there is no entries, raise exception."
     (org-goto-marker-or-bmk marker)
     (funcall action)))
 #+END_SRC
-** follow-org-link-at-point                                                    :Feature:
-*** Implementation                                                            :Implementation:
+*** TODO Tests
+** TODO follow-org-link-at-point [1/2]                                         :Feature:
+*** DONE Implementation                                                       :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/follow-org-link-at-point ()
   "Browse org-link at point."
@@ -248,9 +252,10 @@ If there is no entries, raise exception."
         (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
 #+END_SRC
-** filtering                                                                   :Feature:
-*** Implementation                                                            :Implementation:
-*** Tests
+*** TODO Tests
+** TODO filtering [1/2]                                                        :Feature:
+*** TODO Implementation                                                       :Implementation:
+*** DONE Tests
 **** filter-removes-entries                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/filter-removes-entries ()
@@ -278,33 +283,17 @@ If there is no entries, raise exception."
 (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 #+END_SRC
-** provide                                                                     :Feature:
-*** Implementation
+** DONE provide [2/2]                                                          :Feature:
+*** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (provide 'org-glance)
 ;;; org-glance.el ends here
 #+END_SRC
-*** Tests
-**** feature-provision                                                       :Test:
+*** DONE Tests [1/1]
+**** DONE feature-provision                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
-#+END_SRC
-** org-block-execute                                                           :Development:
-#+NAME: org-block-execute
-#+BEGIN_SRC emacs-lisp
-(defun org-babel-execute:org (body params)
-  "Execute an org-block code with org-babel.
-Print BODY as multiline string escaping quotes.
-No PARAMS needed yet.  This function is called
-by `org-babel-execute-src-block'."
-  (let ((escaped-body
-         (with-temp-org-buffer body
-           (while (search-forward "\"" nil t)
-             (replace-match "\\\"" "FIXEDCASE" "LITERAL"))
-           ;; (org-table-recalculate-buffer-tables)
-           (buffer-substring-no-properties (point-min) (point-max)))))
-    (concat "\"" escaped-body "\"")))
 #+END_SRC
 * Devtools
 ** Development Environment
@@ -340,7 +329,6 @@ by `org-babel-execute-src-block'."
       (impl-file "org-glance.el"))
   (delete-file test-file)
   (delete-file impl-file)
-  (org-sbe "org-block-execute")
   (org-sbe "with-temp-org-buffer")
   (org-babel-tangle)
   (load-file impl-file)
