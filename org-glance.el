@@ -51,25 +51,23 @@
   (let* ((scope     (or (plist-get args :scope)          nil))
          (scope*    (cond ((stringp scope) (list scope)) (t scope)))
 
-         (filter    (or (plist-get args :filter)         (lambda nil t)))
-         (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
-                          ((eq filter 'encrypted) (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))
-                          (t filter)))
+         (user-filter (or (plist-get args :filter)       (lambda () t)))
+         (filter-predicates (org-glance--filter-predicates user-filter))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
+         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler)))))
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
                                (title (s-join separator (org-get-outline-path t))))
-                          (when (funcall filter*)
+                          (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
       (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
 
-(defun org-glance/handle-entry (handler)
+(defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
 1. If there is an org-link, browse it.
 2. If not, call HANDLER."
@@ -97,6 +95,25 @@ If there is no entries, raise exception."
                (save-excursion (org-end-of-line) (point))))
         (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
+
+(defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+                                     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
+
+(defun org-glance--filter-predicates (filter)
+  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+- list of symbols (possible default filters) and lambdas (custom filters)
+- string name of default filter
+- symbolic name of default filter
+- lambda function with no params called on entry"
+  (let* ((predicates (cond ((functionp filter) (list filter))
+                           ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
+                           ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
+                           ((listp filter) (loop for elt in filter
+                                                 when (functionp elt) collect elt
+                                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
+                                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
+                           (t (error "Unable to recognize filter.")))))
+    predicates))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

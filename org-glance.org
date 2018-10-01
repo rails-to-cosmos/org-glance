@@ -4,7 +4,7 @@
 #+CATEGORY: org-glance
 #+TAGS: License Documentation
 #+TAGS: Feature Test
-#+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no"))
+#+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "org-glance-tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no"))
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
@@ -65,7 +65,7 @@ flexible build system or whatever you can imagine with ease.
 (require 'ert)
 (require 'org-glance)
 #+END_SRC
-* Features [3/7]
+* Features [4/7]
 ** DONE temp-org-buffer                                                        :Test:
 #+NAME: with-temp-org-buffer
 #+BEGIN_SRC emacs-lisp
@@ -99,20 +99,18 @@ flexible build system or whatever you can imagine with ease.
   (let* ((scope     (or (plist-get args :scope)          nil))
          (scope*    (cond ((stringp scope) (list scope)) (t scope)))
 
-         (filter    (or (plist-get args :filter)         (lambda nil t)))
-         (filter*   (cond ((eq filter 'links) (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
-                          ((eq filter 'encrypted) (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))
-                          (t filter)))
+         (user-filter (or (plist-get args :filter)       (lambda () t)))
+         (filter-predicates (org-glance--filter-predicates user-filter))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         (lambda nil (org-glance/handle-entry handler)))))
+         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler)))))
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
                                (title (s-join separator (org-get-outline-path t))))
-                          (when (funcall filter*)
+                          (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
       (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
@@ -120,10 +118,8 @@ flexible build system or whatever you can imagine with ease.
 *** TODO Tests
 ** DONE handle-entry [2/2]                                                     :Feature:
 *** DONE Implementation
-CLOSED: [2018-10-01 Mon 21:28]
-
 #+BEGIN_SRC emacs-lisp
-(defun org-glance/handle-entry (handler)
+(defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
 1. If there is an org-link, browse it.
 2. If not, call HANDLER."
@@ -253,9 +249,73 @@ If there is no entries, raise exception."
     (org-open-link-from-string link)))
 #+END_SRC
 *** TODO Tests
-** TODO filtering [1/2]                                                        :Feature:
-*** TODO Implementation
+** DONE filtering [2/2]                                                        :Feature:
+*** DONE Implementation
+#+BEGIN_SRC emacs-lisp
+(defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+                                     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
+
+(defun org-glance--filter-predicates (filter)
+  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+- list of symbols (possible default filters) and lambdas (custom filters)
+- string name of default filter
+- symbolic name of default filter
+- lambda function with no params called on entry"
+  (let* ((predicates (cond ((functionp filter) (list filter))
+                           ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
+                           ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
+                           ((listp filter) (loop for elt in filter
+                                                 when (functionp elt) collect elt
+                                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
+                                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
+                           (t (error "Unable to recognize filter.")))))
+    predicates))
+#+END_SRC
 *** DONE Tests
+**** filter-produces-proper-predicates                                       :Test:
+***** Predicate
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-predicate/filter-produces-proper-predicates (input expected)
+  "Can we split user filter into atomic predicates?"
+  (equal (org-glance--filter-predicates input) expected))
+#+END_SRC
+***** Explanation
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-test-explainer/filter-produces-proper-predicates (filter expected)
+  (cond ((functionp filter) (message "Unable to resolve lambda filter"))
+        ((symbolp filter) (message "Unable to resolve symbolic filter"))
+        ((stringp filter) (message "Unable to resolve string filter"))
+        ((listp filter) (loop for elt in filter
+                              when (functionp elt) do (message "Unable to resolve lambda from filter list")
+                              when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
+                              when (stringp elt)   do (message "Unable to resolve string from filter list")))
+        (t (message "Unrecognized filter must raise an error"))))
+
+(put 'org-glance-predicate/filter-produces-proper-predicates
+     'ert-explainer
+     'org-glance-test-explainer/filter-produces-proper-predicates)
+#+END_SRC
+***** Implementation
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           (lambda () t) '((lambda () t)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           'links (list (alist-get 'links org-glance/default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           "links" (list (alist-get 'links org-glance/default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           (list 'links (lambda () t) "links")
+           (list (alist-get 'links org-glance/default-filters)
+                 (lambda () t)
+                 (alist-get 'links org-glance/default-filters)))))
+#+END_SRC
 **** filter-removes-entries                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/filter-removes-entries ()
@@ -325,7 +385,7 @@ If there is no entries, raise exception."
 
 #+NAME: build
 #+BEGIN_SRC emacs-lisp :tangle no :results silent
-(let ((test-file "tests.el")
+(let ((test-file "org-glance-tests.el")
       (impl-file "org-glance.el"))
   (delete-file test-file)
   (delete-file impl-file)
@@ -351,7 +411,7 @@ If there is no entries, raise exception."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
-# eval: (and (org-sbe "init-denv") (org-sbe "report") (org-glance-devtools/build-report))
+# eval: (or (org-sbe "init-denv") (org-sbe "report") (org-glance-devtools/build-report))
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil

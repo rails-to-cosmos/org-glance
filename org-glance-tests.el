@@ -85,6 +85,43 @@
   "Test that we can handle symbolic properties."
   (should (org-glance-predicate/can-handle-symbolic-property)))
 
+(defun org-glance-predicate/filter-produces-proper-predicates (input expected)
+  "Can we split user filter into atomic predicates?"
+  (equal (org-glance--filter-predicates input) expected))
+
+(defun org-glance-test-explainer/filter-produces-proper-predicates (filter expected)
+  (cond ((functionp filter) (message "Unable to resolve lambda filter"))
+        ((symbolp filter) (message "Unable to resolve symbolic filter"))
+        ((stringp filter) (message "Unable to resolve string filter"))
+        ((listp filter) (loop for elt in filter
+                              when (functionp elt) do (message "Unable to resolve lambda from filter list")
+                              when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
+                              when (stringp elt)   do (message "Unable to resolve string from filter list")))
+        (t (message "Unrecognized filter must raise an error"))))
+
+(put 'org-glance-predicate/filter-produces-proper-predicates
+     'ert-explainer
+     'org-glance-test-explainer/filter-produces-proper-predicates)
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           (lambda () t) '((lambda () t)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           'links (list (alist-get 'links org-glance/default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           "links" (list (alist-get 'links org-glance/default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
+  (should (org-glance-predicate/filter-produces-proper-predicates
+           (list 'links (lambda () t) "links")
+           (list (alist-get 'links org-glance/default-filters)
+                 (lambda () t)
+                 (alist-get 'links org-glance/default-filters)))))
+
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
   (with-temp-org-buffer
