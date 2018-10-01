@@ -63,6 +63,7 @@ flexible build system or whatever you can imagine with ease.
 ** Testing                                                                     :Test:
 #+BEGIN_SRC emacs-lisp
 (require 'ert)
+(require 'org-glance)
 #+END_SRC
 * Features
 ** temp-org-buffer                                                             :Test:
@@ -314,7 +315,6 @@ Browse org-link at point.
 *** Tests
 **** feature-provision                                                       :Test:
 #+BEGIN_SRC emacs-lisp
-(require 'org-glance)
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
 #+END_SRC
@@ -345,9 +345,7 @@ by `org-babel-execute-src-block'."
 (defun org-glance-devtools/build ()
   (interactive)
   (org-glance
-   :filter (lambda () (seq-intersection
-                  (list "build")
-                  (org-get-tags-at)))))
+   :filter (lambda () (seq-intersection '("build") (org-get-tags-at)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
 #+END_SRC

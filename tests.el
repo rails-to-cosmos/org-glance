@@ -1,4 +1,5 @@
 (require 'ert)
+(require 'org-glance)
 
 (defmacro with-temp-org-buffer (s &rest forms)
   "Create a temporary org-mode buffer with contents S and execute FORMS."
@@ -107,6 +108,5 @@
 (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
   (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 
-(require 'org-glance)
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
