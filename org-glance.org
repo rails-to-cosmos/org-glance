@@ -80,27 +80,22 @@ flexible build system or whatever you can imagine with ease.
        ,@forms)))
 #+END_SRC
 ** org-glance                                                                  :Feature:
-*** Documentation                                                             :Documentation:
-#+NAME: org-glance-doc
-#+BEGIN_SRC org
-Use optional ARGS to customize your glancing blows:
-- SCOPE :: org-file or SCOPE from org-map-entries (org.el)
-- PROMPT :: completing read title (default: "Glance: ")
-- SEPARATOR :: completing read entry separator (default: " → ")
-- FILTER :: lambda to filter entries in completing read or
-  - 'links :: keep entries with link in title
-  - 'encrypted :: keep entries with :crypt: tag
-- ACTION :: lambda to call on selected entry
-  - if entry has an org-link in title, browse it
-  - if entry has HANDLER property, read-eval it
-- HANDLER :: property name to read-eval on select (default: "HANDLER")
-
-\(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])
-#+END_SRC
 *** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
-<<org-glance-doc()>>
+  "Use optional ARGS to customize your glancing blows:
+- SCOPE :: org-file or SCOPE from org-map-entries (org.el)
+- PROMPT :: completing read title (default: \"Glance: \")
+- SEPARATOR :: completing read entry separator (default: \" → \")
+- FILTER :: lambda to filter entries in completing read or list of symbols:
+  - links :: keep entries with link in title
+  - encrypted :: keep entries with :crypt: tag
+- ACTION :: lambda to call on selected entry
+  - if entry has an org-link in title, browse it
+  - if entry has HANDLER property, read-eval it
+- HANDLER :: property name to read-eval on select (default: \"HANDLER\")
+
+\(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
   (let* ((scope     (or (plist-get args :scope)          nil))
          (scope*    (cond ((stringp scope) (list scope)) (t scope)))
 
@@ -123,17 +118,12 @@ Use optional ARGS to customize your glancing blows:
       (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
 #+END_SRC
 ** handle-entry                                                                :Feature:
-*** Documentation                                                             :Documentation:
-#+NAME: handle-entry-doc
-#+BEGIN_SRC org
-Try to handle current org-entry:
-1. If there is an org-link, browse it.
-2. If not, call HANDLER.
-#+END_SRC
 *** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/handle-entry (handler)
-<<handle-entry-doc()>>
+  "Try to handle current org-entry:
+1. If there is an org-link, browse it.
+2. If not, call HANDLER."
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
         ((org-entry-get nil handler) (let ((action (read (org-entry-get nil handler))))
                                        (cond ((symbolp action) (read (macroexpand (list 'org-sbe (symbol-name action)))))
@@ -233,17 +223,12 @@ Try to handle current org-entry:
   (should (org-glance-predicate/can-handle-symbolic-property)))
 #+END_SRC
 ** compl-map                                                                   :Feature:
-*** Documentation                                                             :Documentation:
-#+NAME: compl-map-doc
-#+BEGIN_SRC org
-PROMPT org-completing-read on ENTRIES and call ACTION on selected.
-If there is only one entry, call ACTION without completing read.
-If there is no entries, raise exception.
-#+END_SRC
 *** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action)
-<<compl-map-doc()>>
+  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there is only one entry, call ACTION without completing read.
+If there is no entries, raise exception."
   (let* ((entries* (remove 'nil entries))
          (choice (cond ((= (length entries*) 1) (caar entries*))
                        ((= (length entries*) 0) (error "Empty set."))
@@ -253,15 +238,10 @@ If there is no entries, raise exception.
     (funcall action)))
 #+END_SRC
 ** follow-org-link-at-point                                                    :Feature:
-*** Documentation                                                             :Documentation:
-#+NAME: follow-org-link-at-point-doc
-#+BEGIN_SRC org
-Browse org-link at point.
-#+END_SRC
 *** Implementation                                                            :Implementation:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/follow-org-link-at-point ()
-<<follow-org-link-at-point-doc()>>
+  "Browse org-link at point."
   (let ((link (buffer-substring-no-properties
                (save-excursion (org-beginning-of-line) (point))
                (save-excursion (org-end-of-line) (point))))
@@ -269,7 +249,6 @@ Browse org-link at point.
     (org-open-link-from-string link)))
 #+END_SRC
 ** filtering                                                                   :Feature:
-*** Documentation                                                             :Documentation:
 *** Implementation                                                            :Implementation:
 *** Tests
 **** filter-removes-entries                                                  :Test:
@@ -328,12 +307,8 @@ by `org-babel-execute-src-block'."
     (concat "\"" escaped-body "\"")))
 #+END_SRC
 * Devtools
-** Build                                                                       :build:
-:PROPERTIES:
-:HANDLER:  (and (org-sbe "report") (org-glance-devtools/build-report))
-:END:
-
-#+NAME: init-environment
+** Development Environment
+#+NAME: init-denv
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-devtools/build ()
   (interactive)
@@ -344,6 +319,10 @@ by `org-babel-execute-src-block'."
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
 #+END_SRC
+** Build                                                                       :build:
+:PROPERTIES:
+:HANDLER:  (and (org-sbe "report") (org-glance-devtools/build-report))
+:END:
 
 #+NAME: report
 #+BEGIN_SRC emacs-lisp
@@ -384,7 +363,7 @@ by `org-babel-execute-src-block'."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
-# eval: (and (org-sbe "report") (org-glance-devtools/build-report) (org-sbe "init-environment"))
+# eval: (and (org-sbe "init-denv") (org-sbe "report") (org-glance-devtools/build-report))
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil

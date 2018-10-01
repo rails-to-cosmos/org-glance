@@ -35,13 +35,13 @@
 (require 'org)
 
 (defun org-glance (&rest args)
-"Use optional ARGS to customize your glancing blows:
+  "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
 - PROMPT :: completing read title (default: \"Glance: \")
 - SEPARATOR :: completing read entry separator (default: \" → \")
-- FILTER :: lambda to filter entries in completing read or
-  - 'links :: keep entries with link in title
-  - 'encrypted :: keep entries with :crypt: tag
+- FILTER :: lambda to filter entries in completing read or list of symbols:
+  - links :: keep entries with link in title
+  - encrypted :: keep entries with :crypt: tag
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
   - if entry has HANDLER property, read-eval it
@@ -70,7 +70,7 @@
       (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
 
 (defun org-glance/handle-entry (handler)
-"Try to handle current org-entry:
+  "Try to handle current org-entry:
 1. If there is an org-link, browse it.
 2. If not, call HANDLER."
   (cond ((org-match-line (format "^.*%s.*$" org-bracket-link-regexp)) (org-glance/follow-org-link-at-point))
@@ -79,7 +79,7 @@
                                              (t (eval action)))))))
 
 (defun org-glance/compl-map (prompt entries action)
-"PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there is only one entry, call ACTION without completing read.
 If there is no entries, raise exception."
   (let* ((entries* (remove 'nil entries))
@@ -91,7 +91,7 @@ If there is no entries, raise exception."
     (funcall action)))
 
 (defun org-glance/follow-org-link-at-point ()
-"Browse org-link at point."
+  "Browse org-link at point."
   (let ((link (buffer-substring-no-properties
                (save-excursion (org-beginning-of-line) (point))
                (save-excursion (org-end-of-line) (point))))
