@@ -33,6 +33,7 @@
 (require 's)
 (require 'cl-lib)
 (require 'org)
+(require 'dash)
 
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -58,6 +59,7 @@
          (user-filter (or (plist-get args :filter)       (lambda () t)))
          (filter-predicates (org-glance--filter-predicates user-filter))
 
+         (outline-path-ignore (or (plist-get args :outline-path-ignore) nil))
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
@@ -65,7 +67,7 @@
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (s-join separator (org-get-outline-path t))))
+                               (title (s-join separator (-difference (org-get-outline-path t) outline-path-ignore))))
                           (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
