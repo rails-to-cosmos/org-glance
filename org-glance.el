@@ -47,10 +47,12 @@
   - encrypted :: keep entries with :crypt: tag
 
   You can customize default filters by setting org-glance/default-filters variable.
+
 - ACTION :: lambda to call on selected entry
   - if entry has an org-link in title, browse it
   - if entry has HANDLER property, read-eval it
 - HANDLER :: property name to read-eval on select (default: \"HANDLER\")
+- OUTLINE-PATH-IGNORE :: list of strings to ignore in outline-path
 
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
   (let* ((scope     (or (plist-get args :scope)          nil))
@@ -60,6 +62,7 @@
          (filter-predicates (org-glance--filter-predicates user-filter))
 
          (outline-path-ignore (or (plist-get args :outline-path-ignore) nil))
+
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
