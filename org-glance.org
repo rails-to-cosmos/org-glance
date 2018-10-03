@@ -266,14 +266,14 @@ If there is no entries, raise exception."
   (let ((scopes (cond ((stringp scopes) (list scopes))
                       (t scopes)))
         aggregated-scope)
-    (loop for scope in scopes
-          do (cond
-              ((and (functionp scope) (bufferp (funcall scope)))
-               (when-let (buffer-fn (buffer-file-name (funcall scope)))
-                 (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
+    (cl-loop for scope in scopes
+             do (cond
+                 ((and (functionp scope) (bufferp (funcall scope)))
+                  (when-let (buffer-fn (buffer-file-name (funcall scope)))
+                    (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
 
-              ((stringp scope)
-               (add-to-list 'aggregated-scope (expand-file-name scope)))))
+                 ((stringp scope)
+                  (add-to-list 'aggregated-scope (expand-file-name scope)))))
     aggregated-scope))
 #+END_SRC
 *** TODO Tests
@@ -292,10 +292,10 @@ If there is no entries, raise exception."
   (let* ((predicates (cond ((functionp filter) (list filter))
                            ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
                            ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
-                           ((listp filter) (loop for elt in filter
-                                                 when (functionp elt) collect elt
-                                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
-                                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
+                           ((listp filter) (cl-loop for elt in filter
+                                                    when (functionp elt) collect elt
+                                                    when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
+                                                    when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
                            (t (error "Unable to recognize filter.")))))
     predicates))
 #+END_SRC
@@ -313,10 +313,10 @@ If there is no entries, raise exception."
   (cond ((functionp filter) (message "Unable to resolve lambda filter"))
         ((symbolp filter) (message "Unable to resolve symbolic filter"))
         ((stringp filter) (message "Unable to resolve string filter"))
-        ((listp filter) (loop for elt in filter
-                              when (functionp elt) do (message "Unable to resolve lambda from filter list")
-                              when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
-                              when (stringp elt)   do (message "Unable to resolve string from filter list")))
+        ((listp filter) (cl-loop for elt in filter
+                                 when (functionp elt) do (message "Unable to resolve lambda from filter list")
+                                 when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
+                                 when (stringp elt)   do (message "Unable to resolve string from filter list")))
         (t (message "Unrecognized filter must raise an error"))))
 
 (put 'org-glance-predicate/filter-produces-proper-predicates
