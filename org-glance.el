@@ -55,8 +55,8 @@
 - OUTLINE-PATH-IGNORE :: list of strings to ignore in outline-path
 
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
-  (let* ((scope     (or (plist-get args :scope)          nil))
-         (scope*    (cond ((stringp scope) (list scope)) (t scope)))
+  (let* ((user-scopes (or (plist-get args :scope)          nil))
+         (aggregated-scopes (org-glance--aggregate-scopes user-scopes))
 
          (user-filter (or (plist-get args :filter)       (lambda () t)))
          (filter-predicates (org-glance--filter-predicates user-filter))
@@ -74,7 +74,7 @@
                           (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
-      (org-glance/compl-map prompt (org-map-entries #'traverse nil scope*) action))))
+      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action))))
 
 (defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
@@ -104,6 +104,19 @@ If there is no entries, raise exception."
                (save-excursion (org-end-of-line) (point))))
         (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
+
+(defun org-glance--aggregate-scopes (scopes)
+  (let ((scopes (cond ((stringp scopes) (list scopes))
+                      (t scopes)))
+        aggregated-scope)
+    (loop for scope in scopes
+          do (cond
+              ((and (functionp scope) (bufferp (funcall scope)))
+               (add-to-list 'aggregated-scope (expand-file-name (buffer-file-name (funcall scope)))))
+
+              ((stringp scope)
+               (add-to-list 'aggregated-scope (expand-file-name scope)))))
+    aggregated-scope))
 
 (defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
                                      (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
