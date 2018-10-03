@@ -269,7 +269,8 @@ If there is no entries, raise exception."
     (loop for scope in scopes
           do (cond
               ((and (functionp scope) (bufferp (funcall scope)))
-               (add-to-list 'aggregated-scope (expand-file-name (buffer-file-name (funcall scope)))))
+               (when-let (buffer-fn (buffer-file-name (funcall scope)))
+                 (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
 
               ((stringp scope)
                (add-to-list 'aggregated-scope (expand-file-name scope)))))
