@@ -35,6 +35,12 @@
 (require 'org)
 (require 'dash)
 
+(defun buffer-mode (&optional buffer-or-name)
+  "Returns the major mode associated with a buffer.
+If buffer-or-name is nil return current buffer's mode."
+  (buffer-local-value 'major-mode
+   (if buffer-or-name (get-buffer buffer-or-name) (current-buffer))))
+
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -94,11 +100,12 @@ If there is no entries, raise exception."
          (choice (cond ((= (length entries*) 1) (caar entries*))
                        ((= (length entries*) 0) (error "Empty set."))
                        (t (org-completing-read prompt entries*))))
-         (marker (cdr (assoc-string choice entries*))))
-    (if save-outline-visibility-p
+         (marker (cdr (assoc-string choice entries*)))
+         (source-buffer (current-buffer)))
+    (if save-outline-visibility-p ;; (eq (marker-buffer marker) (current-buffer))
         (org-save-outline-visibility t
-              (org-goto-marker-or-bmk marker)
-              (funcall action))
+          (org-goto-marker-or-bmk marker)
+          (funcall action))
       (save-excursion
         (org-goto-marker-or-bmk marker)
         (funcall action)))))
@@ -117,7 +124,7 @@ If there is no entries, raise exception."
         aggregated-scope)
     (cl-loop for scope in scopes
              do (cond
-                 ((and (functionp scope) (bufferp (funcall scope)))
+                 ((and (functionp scope) (bufferp (funcall scope)) (eq (buffer-mode (funcall scope)) 'org-mode))
                   (when-let (buffer-fn (buffer-file-name (funcall scope)))
                     (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
 
