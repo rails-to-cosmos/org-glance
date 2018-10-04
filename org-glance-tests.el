@@ -1,6 +1,11 @@
 (require 'ert)
 (require 'org-glance)
 
+(defun trim-string (string)
+  "Remove white spaces in beginning and ending of STRING.
+White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
+  (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
+
 (defmacro with-temp-org-buffer (s &rest forms)
   "Create a temporary org-mode buffer with contents S and execute FORMS."
   `(save-excursion
@@ -14,12 +19,14 @@
 (defun org-glance-predicate/can-handle-org-links ()
   "Can we handle org-links?"
   (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
-                        (let ((unread-command-events (listify-key-sequence (kbd "elisp RET")))
+                        (let ((org-confirm-elisp-link-function nil)
+                              (unread-command-events (listify-key-sequence (kbd "elisp RET")))
                               (begin-marker (with-current-buffer (messages-buffer)
                                               (point-max-marker))))
                           (org-glance)
-                          (string= (string-trim (with-current-buffer (messages-buffer)
-                                                  (buffer-substring begin-marker (point-max))))
+                          (string= (trim-string
+                                    (with-current-buffer (messages-buffer)
+                                      (buffer-substring begin-marker (point-max))))
                                    "(+ 1 2) => 3"))))
 
 (defun org-glance-test-explainer/can-handle-org-links ()
@@ -71,7 +78,8 @@
 (+ 15 16)
 #+END_SRC
 "
-   (let ((unread-command-events (listify-key-sequence (kbd "Plea RET"))))
+   (let ((org-confirm-babel-evaluate nil)
+         (unread-command-events (listify-key-sequence (kbd "Plea RET"))))
      (= (org-glance :handler "CUSTOM_HANDLER") 31))))
 
 (defun org-glance-test-explainer/can-handle-symbolic-property ()

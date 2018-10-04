@@ -30,10 +30,8 @@
 
 ;;; Code:
 
-(require 's)
 (require 'cl-lib)
 (require 'org)
-(require 'dash)
 
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
@@ -77,8 +75,8 @@ If buffer-or-name is nil return current buffer's mode."
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (s-join separator (-difference (org-get-outline-path t) outline-path-ignore))))
-                          (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+                               (title (mapconcat 'identity (cl-set-difference (org-get-outline-path t) outline-path-ignore) separator)))
+                          (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
       (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action save-outline-visibility-p))))
@@ -106,7 +104,7 @@ If there is no entries, raise exception."
         (org-save-outline-visibility t
           (org-goto-marker-or-bmk marker)
           (funcall action))
-      (save-excursion
+      (progn
         (org-goto-marker-or-bmk marker)
         (funcall action)))))
 
@@ -115,7 +113,7 @@ If there is no entries, raise exception."
   (let ((link (buffer-substring-no-properties
                (save-excursion (org-beginning-of-line) (point))
                (save-excursion (org-end-of-line) (point))))
-        (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
+        (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
 
 (defun org-glance--aggregate-scopes (scopes)
@@ -125,8 +123,8 @@ If there is no entries, raise exception."
     (cl-loop for scope in scopes
              do (cond
                  ((and (functionp scope) (bufferp (funcall scope)) (eq (buffer-mode (funcall scope)) 'org-mode))
-                  (when-let (buffer-fn (buffer-file-name (funcall scope)))
-                    (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
+                  (when-let (buffer-file (buffer-file-name (funcall scope)))
+                    (add-to-list 'aggregated-scope (expand-file-name buffer-file))))
 
                  ((stringp scope)
                   (add-to-list 'aggregated-scope (expand-file-name scope)))))
