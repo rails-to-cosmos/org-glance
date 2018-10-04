@@ -110,6 +110,7 @@ flexible build system or whatever you can imagine with ease.
          (filter-predicates (org-glance--filter-predicates user-filter))
 
          (outline-path-ignore (or (plist-get args :outline-path-ignore) nil))
+         (save-outline-visibility-p (or (plist-get args :save-outline-visibility-p) nil))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
@@ -122,7 +123,7 @@ flexible build system or whatever you can imagine with ease.
                           (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
-      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action))))
+      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action save-outline-visibility-p))))
 #+END_SRC
 *** TODO Tests
 ** DONE handle-entry [2/2]                                                     :Feature:
@@ -233,7 +234,7 @@ flexible build system or whatever you can imagine with ease.
 ** TODO compl-map [1/2]                                                        :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
-(defun org-glance/compl-map (prompt entries action)
+(defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there is only one entry, call ACTION without completing read.
 If there is no entries, raise exception."
@@ -242,8 +243,13 @@ If there is no entries, raise exception."
                        ((= (length entries*) 0) (error "Empty set."))
                        (t (org-completing-read prompt entries*))))
          (marker (cdr (assoc-string choice entries*))))
-    (org-goto-marker-or-bmk marker)
-    (funcall action)))
+    (if save-outline-visibility-p
+        (org-save-outline-visibility t
+              (org-goto-marker-or-bmk marker)
+              (funcall action))
+      (save-excursion
+        (org-goto-marker-or-bmk marker)
+        (funcall action)))))
 #+END_SRC
 *** TODO Tests
 ** TODO follow-org-link-at-point [1/2]                                         :Feature:

@@ -62,6 +62,7 @@
          (filter-predicates (org-glance--filter-predicates user-filter))
 
          (outline-path-ignore (or (plist-get args :outline-path-ignore) nil))
+         (save-outline-visibility-p (or (plist-get args :save-outline-visibility-p) nil))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
@@ -74,7 +75,7 @@
                           (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
-      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action))))
+      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action save-outline-visibility-p))))
 
 (defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
@@ -85,7 +86,7 @@
                                        (cond ((symbolp action) (read (macroexpand (list 'org-sbe (symbol-name action)))))
                                              (t (eval action)))))))
 
-(defun org-glance/compl-map (prompt entries action)
+(defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there is only one entry, call ACTION without completing read.
 If there is no entries, raise exception."
@@ -94,8 +95,13 @@ If there is no entries, raise exception."
                        ((= (length entries*) 0) (error "Empty set."))
                        (t (org-completing-read prompt entries*))))
          (marker (cdr (assoc-string choice entries*))))
-    (org-goto-marker-or-bmk marker)
-    (funcall action)))
+    (if save-outline-visibility-p
+        (org-save-outline-visibility t
+              (org-goto-marker-or-bmk marker)
+              (funcall action))
+      (save-excursion
+        (org-goto-marker-or-bmk marker)
+        (funcall action)))))
 
 (defun org-glance/follow-org-link-at-point ()
   "Browse org-link at point."
@@ -109,14 +115,14 @@ If there is no entries, raise exception."
   (let ((scopes (cond ((stringp scopes) (list scopes))
                       (t scopes)))
         aggregated-scope)
-    (loop for scope in scopes
-          do (cond
-              ((and (functionp scope) (bufferp (funcall scope)))
-               (when-let (buffer-fn (buffer-file-name (funcall scope)))
-                 (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
+    (cl-loop for scope in scopes
+             do (cond
+                 ((and (functionp scope) (bufferp (funcall scope)))
+                  (when-let (buffer-fn (buffer-file-name (funcall scope)))
+                    (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
 
-              ((stringp scope)
-               (add-to-list 'aggregated-scope (expand-file-name scope)))))
+                 ((stringp scope)
+                  (add-to-list 'aggregated-scope (expand-file-name scope)))))
     aggregated-scope))
 
 (defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
@@ -131,10 +137,10 @@ If there is no entries, raise exception."
   (let* ((predicates (cond ((functionp filter) (list filter))
                            ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
                            ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
-                           ((listp filter) (loop for elt in filter
-                                                 when (functionp elt) collect elt
-                                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
-                                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
+                           ((listp filter) (cl-loop for elt in filter
+                                                    when (functionp elt) collect elt
+                                                    when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
+                                                    when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
                            (t (error "Unable to recognize filter.")))))
     predicates))
 

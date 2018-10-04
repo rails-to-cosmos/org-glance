@@ -93,10 +93,10 @@
   (cond ((functionp filter) (message "Unable to resolve lambda filter"))
         ((symbolp filter) (message "Unable to resolve symbolic filter"))
         ((stringp filter) (message "Unable to resolve string filter"))
-        ((listp filter) (loop for elt in filter
-                              when (functionp elt) do (message "Unable to resolve lambda from filter list")
-                              when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
-                              when (stringp elt)   do (message "Unable to resolve string from filter list")))
+        ((listp filter) (cl-loop for elt in filter
+                                 when (functionp elt) do (message "Unable to resolve lambda from filter list")
+                                 when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
+                                 when (stringp elt)   do (message "Unable to resolve string from filter list")))
         (t (message "Unrecognized filter must raise an error"))))
 
 (put 'org-glance-predicate/filter-produces-proper-predicates
