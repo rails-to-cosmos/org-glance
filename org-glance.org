@@ -56,10 +56,9 @@ flexible build system or whatever you can imagine with ease.
 * Requirements
 ** Implementation                                                              :Feature:
 #+BEGIN_SRC emacs-lisp
-(require 's)
-(require 'cl-lib)
 (require 'org)
-(require 'dash)
+(require 'cl-lib)
+(require 'subr-x)
 
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
@@ -71,6 +70,11 @@ If buffer-or-name is nil return current buffer's mode."
 #+BEGIN_SRC emacs-lisp
 (require 'ert)
 (require 'org-glance)
+
+(defun trim-string (string)
+  "Remove white spaces in beginning and ending of STRING.
+White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
+  (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
 #+END_SRC
 * Features [4/7]
 ** DONE temp-org-buffer                                                        :Test:
@@ -125,8 +129,8 @@ If buffer-or-name is nil return current buffer's mode."
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (s-join separator (-difference (org-get-outline-path t) outline-path-ignore))))
-                          (when (every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+                               (title (mapconcat 'identity (cl-set-difference (org-get-outline-path t) outline-path-ignore) separator)))
+                          (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
       (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action save-outline-visibility-p))))
@@ -151,12 +155,14 @@ If buffer-or-name is nil return current buffer's mode."
 (defun org-glance-predicate/can-handle-org-links ()
   "Can we handle org-links?"
   (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
-                        (let ((unread-command-events (listify-key-sequence (kbd "elisp RET")))
+                        (let ((org-confirm-elisp-link-function nil)
+                              (unread-command-events (listify-key-sequence (kbd "elisp RET")))
                               (begin-marker (with-current-buffer (messages-buffer)
                                               (point-max-marker))))
                           (org-glance)
-                          (string= (string-trim (with-current-buffer (messages-buffer)
-                                                  (buffer-substring begin-marker (point-max))))
+                          (string= (trim-string
+                                    (with-current-buffer (messages-buffer)
+                                      (buffer-substring begin-marker (point-max))))
                                    "(+ 1 2) => 3"))))
 #+END_SRC
 ***** Explanation
@@ -219,7 +225,8 @@ If buffer-or-name is nil return current buffer's mode."
 (+ 15 16)
 ,#+END_SRC
 "
-   (let ((unread-command-events (listify-key-sequence (kbd "Plea RET"))))
+   (let ((org-confirm-babel-evaluate nil)
+         (unread-command-events (listify-key-sequence (kbd "Plea RET"))))
      (= (org-glance :handler "CUSTOM_HANDLER") 31))))
 #+END_SRC
 ***** Explanation
@@ -254,7 +261,7 @@ If there is no entries, raise exception."
         (org-save-outline-visibility t
           (org-goto-marker-or-bmk marker)
           (funcall action))
-      (save-excursion
+      (progn
         (org-goto-marker-or-bmk marker)
         (funcall action)))))
 #+END_SRC
@@ -267,7 +274,7 @@ If there is no entries, raise exception."
   (let ((link (buffer-substring-no-properties
                (save-excursion (org-beginning-of-line) (point))
                (save-excursion (org-end-of-line) (point))))
-        (org-link-frame-setup (acons 'file 'find-file org-link-frame-setup)))
+        (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
 #+END_SRC
 *** TODO Tests
@@ -282,8 +289,8 @@ If there is no entries, raise exception."
     (cl-loop for scope in scopes
              do (cond
                  ((and (functionp scope) (bufferp (funcall scope)) (eq (buffer-mode (funcall scope)) 'org-mode))
-                  (when-let (buffer-fn (buffer-file-name (funcall scope)))
-                    (add-to-list 'aggregated-scope (expand-file-name buffer-fn))))
+                  (when-let (buffer-file (buffer-file-name (funcall scope)))
+                    (add-to-list 'aggregated-scope (expand-file-name buffer-file))))
 
                  ((stringp scope)
                   (add-to-list 'aggregated-scope (expand-file-name scope)))))
@@ -397,53 +404,31 @@ If there is no entries, raise exception."
   (should (featurep 'org-glance)))
 #+END_SRC
 * Devtools
-** Development Environment
-#+NAME: init-denv
-#+BEGIN_SRC emacs-lisp
+** Init
+#+NAME: init
+#+BEGIN_SRC emacs-lisp :results silent
 (defun org-glance-devtools/build ()
   (interactive)
-  (save-mark-and-excursion
-    (org-save-outline-visibility t
-      (org-glance
-       :filter (lambda () (seq-intersection '("build") (org-get-tags-at)))))))
+  (let ((project-files '("org-glance.el" "org-glance-tests.el")))
+    (org-sbe "with-temp-org-buffer")
+    (mapc 'delete-file project-files)
+    (org-babel-tangle)
+    (mapc 'load-file project-files)
+    (mapc 'byte-compile-file project-files)
+
+    (let* ((test-$ "^org-glance-test/")
+           (test-buffer "*org-glance-tests*")
+           (ert-stats (ert-run-tests-interactively test-$ test-buffer))
+           (expected (ert-stats-completed-expected ert-stats))
+           (unexpected (ert-stats-completed-unexpected ert-stats))
+           (skipped (ert-stats-skipped ert-stats))
+           (total (ert-stats-total ert-stats))
+           (report (list total expected unexpected skipped)))
+      (when (> (caddr report) 0)
+        (pop-to-buffer "*org-glance-tests*"))
+      (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
-#+END_SRC
-** Build                                                                       :build:
-:PROPERTIES:
-:HANDLER:  (and (org-sbe "report") (org-glance-devtools/build-report))
-:END:
-
-#+NAME: report
-#+BEGIN_SRC emacs-lisp
-(defun org-glance-devtools/build-report ()
-  (let ((report (read (org-sbe "build"))))
-    (caddr report)
-    (when (> (caddr report) 0)
-      (pop-to-buffer "*org-glance-tests*"))
-    (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report))))
-#+END_SRC
-
-#+NAME: build
-#+BEGIN_SRC emacs-lisp :tangle no :results silent
-(let ((test-file "org-glance-tests.el")
-      (impl-file "org-glance.el"))
-  (delete-file test-file)
-  (delete-file impl-file)
-  (org-sbe "with-temp-org-buffer")
-  (org-babel-tangle)
-  (load-file impl-file)
-  (byte-compile-file impl-file)
-  (load-file test-file)
-
-  (let* ((test-$ "^org-glance-test/")
-         (test-buffer "*org-glance-tests*")
-         (ert-stats (ert-run-tests-interactively test-$ test-buffer))
-         (expected (ert-stats-completed-expected ert-stats))
-         (unexpected (ert-stats-completed-unexpected ert-stats))
-         (skipped (ert-stats-skipped ert-stats))
-         (total (ert-stats-total ert-stats)))
-    (list total expected unexpected skipped)))
 #+END_SRC
 * Applications
 ** org-glance-build
@@ -452,7 +437,7 @@ If there is no entries, raise exception."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
-# eval: (or (org-sbe "report") (org-glance-devtools/build-report) (org-sbe "init-denv"))
+# eval: (org-sbe "init")
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
