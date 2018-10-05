@@ -76,11 +76,21 @@ If buffer-or-name is nil return current buffer's mode."
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (mapconcat 'identity (cl-set-difference (org-get-outline-path t) outline-path-ignore) separator)))
+                               (title (mapconcat 'identity
+                                                 (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=)
+                                                 separator)))
                           (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
                             (cons title mark)))))
 
-      (org-glance/compl-map prompt (org-map-entries #'traverse nil aggregated-scopes) action save-outline-visibility-p))))
+      (with-temp-buffer
+        (org-mode)
+
+        (cl-loop for scope in aggregated-scopes
+                 do (cond ((and (stringp scope) (file-exists-p scope)) (insert-file-contents scope))
+                          ((bufferp scope) (insert-buffer-substring-no-properties scope))
+                          (t (insert "Hello"))))
+
+        (org-glance/compl-map prompt (org-map-entries #'traverse) action save-outline-visibility-p)))))
 
 (defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
@@ -117,19 +127,18 @@ If there is no entries, raise exception."
         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
     (org-open-link-from-string link)))
 
-(defun org-glance--aggregate-scopes (scopes)
-  (let ((scopes (cond ((stringp scopes) (list scopes))
-                      (t scopes)))
-        aggregated-scope)
-    (cl-loop for scope in scopes
-             do (cond
-                 ((and (functionp scope) (bufferp (funcall scope)) (eq (buffer-mode (funcall scope)) 'org-mode))
-                  (when-let (buffer-file (buffer-file-name (funcall scope)))
-                    (add-to-list 'aggregated-scope (expand-file-name buffer-file))))
-
-                 ((stringp scope)
-                  (add-to-list 'aggregated-scope (expand-file-name scope)))))
-    aggregated-scope))
+(defun org-glance--aggregate-scopes (&optional scopes)
+  (if-let ((scopes (cond ((or (stringp scopes) (and (symbolp scopes) (not (null scopes))))
+                          (list scopes))
+                         (t scopes))))
+      (cl-loop for scope in scopes
+               when (bufferp scope)
+               collect scope
+               when (functionp scope)
+               collect (funcall scope)
+               when (and (stringp scope) (file-exists-p (expand-file-name scope)))
+               collect (expand-file-name scope))
+    (list (current-buffer))))
 
 (defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
                                      (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
