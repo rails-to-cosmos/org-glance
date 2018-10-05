@@ -404,8 +404,7 @@ If there is no entries, raise exception."
   (should (featurep 'org-glance)))
 #+END_SRC
 * Devtools
-** Init
-#+NAME: init
+#+NAME: devtools-build-require
 #+BEGIN_SRC emacs-lisp :results silent
 (defun org-glance-devtools/build ()
   (interactive)
@@ -437,7 +436,7 @@ If there is no entries, raise exception."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
-# eval: (org-sbe "init")
+# eval: (org-sbe "devtools-build-require")
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
