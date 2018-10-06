@@ -28,7 +28,7 @@ the file returning the result of evaluating BODY."
          (kill-buffer)
          (delete-file fn)))))
 
-(defun org-glance-predicate/can-handle-org-links ()
+(defun org-glance-req/can-handle-org-links-p ()
   "Can we handle org-links?"
   (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
                         (let ((org-confirm-elisp-link-function nil)
@@ -44,13 +44,13 @@ the file returning the result of evaluating BODY."
 (defun org-glance-test-explainer/can-handle-org-links ()
   (message "Handling org-links feature doesn't work properly"))
 
-(put 'org-glance-predicate/can-handle-org-links
+(put 'org-glance-req/can-handle-org-links-p
      'ert-explainer
      'org-glance-test-explainer/can-handle-org-links)
 
 (ert-deftest org-glance-test/can-handle-org-links ()
   "Test that we can handle org-links."
-  (should (org-glance-predicate/can-handle-org-links)))
+  (should (org-glance-req/can-handle-org-links-p)))
 
 (ert-deftest org-glance-test/can-handle-default-property ()
   "Test that we can use default handler property."
@@ -76,7 +76,7 @@ the file returning the result of evaluating BODY."
 (let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
   (should (= (org-glance :handler "CUSTOM_HANDLER") 12)))))
 
-(defun org-glance-predicate/can-handle-symbolic-property ()
+(defun org-glance-req/can-handle-symbolic-property ()
   "Can we handle symbolic property as org-babel block name?"
   (with-temp-org-buffer
    "
@@ -97,16 +97,16 @@ the file returning the result of evaluating BODY."
 (defun org-glance-test-explainer/can-handle-symbolic-property ()
   (message "Failed to handle symbolic property as org-babel block name"))
 
-(put 'org-glance-predicate/can-handle-symbolic-property
+(put 'org-glance-req/can-handle-symbolic-property
      'ert-explainer
      'org-glance-test-explainer/can-handle-symbolic-property)
 
 (ert-deftest org-glance-test/can-handle-symbolic-property ()
   "Test that we can handle symbolic properties."
-  (should (org-glance-predicate/can-handle-symbolic-property)))
+  (should (org-glance-req/can-handle-symbolic-property)))
 
 (defun org-glance-req/scopes-contain-no-duplicates-p ()
-  "Scopes contain no duplicates, aren't they?"
+  "Return t if glance can deal with duplicates."
   (let ((scopes
          (org-glance-with-temp-filebuffer
           (org-glance--aggregate-scopes
@@ -137,7 +137,7 @@ the file returning the result of evaluating BODY."
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
   (should (org-glance-req/scopes-can-handle-nil-lambdas-p)))
 
-(defun org-glance-predicate/filter-produces-proper-predicates (input expected)
+(defun org-glance-req/filter-produces-proper-predicates (input expected)
   "Can we split user filter into atomic predicates?"
   (equal (org-glance--filter-predicates input) expected))
 
@@ -151,24 +151,24 @@ the file returning the result of evaluating BODY."
                                  when (stringp elt)   do (message "Unable to resolve string from filter list")))
         (t (message "Unrecognized filter must raise an error"))))
 
-(put 'org-glance-predicate/filter-produces-proper-predicates
+(put 'org-glance-req/filter-produces-proper-predicates
      'ert-explainer
      'org-glance-test-explainer/filter-produces-proper-predicates)
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
-  (should (org-glance-predicate/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates
            (lambda () t) '((lambda () t)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
-  (should (org-glance-predicate/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates
            'links (list (alist-get 'links org-glance/default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
-  (should (org-glance-predicate/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates
            "links" (list (alist-get 'links org-glance/default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
-  (should (org-glance-predicate/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates
            (list 'links (lambda () t) "links")
            (list (alist-get 'links org-glance/default-filters)
                  (lambda () t)
@@ -176,26 +176,24 @@ the file returning the result of evaluating BODY."
 
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
-  (with-temp-org-buffer
-"
+  (with-temp-org-buffer "
 * First
 * Second
 * Third
 * Security
 "
-(let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
-  (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
+   (let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
+     (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
 
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   "Test filtering."
-  (with-temp-org-buffer
-"
+  (with-temp-org-buffer "
 * First
 * Second
 * Third
 "
-(let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
-  (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
+                        (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
+                          (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
 
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
