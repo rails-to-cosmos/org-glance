@@ -16,6 +16,18 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
        (goto-char 0)
        ,@forms)))
 
+(defmacro org-glance-with-temp-filebuffer (&rest body)
+  "Open temp-file with org-glance prefix into a temporary buffer
+execute BODY there like `progn', then kill the buffer and delete
+the file returning the result of evaluating BODY."
+  `(save-window-excursion
+     (let ((fn (make-temp-file "org-glance")))
+       (find-file fn)
+       (unwind-protect
+           ,@body
+         (kill-buffer)
+         (delete-file fn)))))
+
 (defun org-glance-predicate/can-handle-org-links ()
   "Can we handle org-links?"
   (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
@@ -92,6 +104,38 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
 (ert-deftest org-glance-test/can-handle-symbolic-property ()
   "Test that we can handle symbolic properties."
   (should (org-glance-predicate/can-handle-symbolic-property)))
+
+(defun org-glance-req/scopes-contain-no-duplicates-p ()
+  "Scopes contain no duplicates, aren't they?"
+  (let ((scopes
+         (org-glance-with-temp-filebuffer
+          (org-glance--aggregate-scopes
+           (list
+            ;; buffer
+            (current-buffer)
+
+            ;; filename
+            (buffer-file-name)
+
+            ;; function that returns buffer
+            'current-buffer
+
+            ;; function that returns filename
+            'buffer-file-name)))))
+    (= (length scopes) 1)))
+
+(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
+  (should (org-glance-req/scopes-contain-no-duplicates-p)))
+
+(defun org-glance-req/scopes-can-handle-nil-lambdas-p ()
+  "Don't nil lambdas break glance?"
+  (not (null
+        (condition-case nil
+            (org-glance--aggregate-scopes (list (lambda () nil)))
+          (error nil)))))
+
+(ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
+  (should (org-glance-req/scopes-can-handle-nil-lambdas-p)))
 
 (defun org-glance-predicate/filter-produces-proper-predicates (input expected)
   "Can we split user filter into atomic predicates?"

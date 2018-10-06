@@ -89,6 +89,18 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
        (insert ,s)
        (goto-char 0)
        ,@forms)))
+
+(defmacro org-glance-with-temp-filebuffer (&rest body)
+  "Open temp-file with org-glance prefix into a temporary buffer
+execute BODY there like `progn', then kill the buffer and delete
+the file returning the result of evaluating BODY."
+  `(save-window-excursion
+     (let ((fn (make-temp-file "org-glance")))
+       (find-file fn)
+       (unwind-protect
+           ,@body
+         (kill-buffer)
+         (delete-file fn)))))
 #+END_SRC
 ** TODO org-glance [1/2]                                                       :Feature:
 *** DONE Implementation
@@ -129,11 +141,10 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (mapconcat 'identity
-                                                 (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=)
-                                                 separator)))
-                          (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
-                            (cons title mark)))))
+                               (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
+                               (title (mapconcat 'identity outline separator)))
+                  (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+                    (cons title mark)))))
 
       (with-temp-buffer
         (org-mode)
@@ -289,26 +300,85 @@ If there is no entries, raise exception."
 #+END_SRC
 *** TODO Tests
 ** TODO scoping [1/3]                                                          :Feature:
-*** TODO Documentation
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance--aggregate-scopes (&optional scopes)
-  (if-let ((scopes (cond ((or (stringp scopes) (and (symbolp scopes) (not (null scopes))))
-                          (list scopes))
-                         (t scopes))))
-      (cl-loop for scope in scopes
-               when (bufferp scope)
-               collect scope
-               when (functionp scope)
-               collect (funcall scope)
-               when (and (stringp scope) (file-exists-p (expand-file-name scope)))
-               collect (expand-file-name scope))
-    (list (current-buffer))))
+  "Provides list of scopes (scope may be buffer or existing file).
+Without specifying SCOPES it returns list with current buffer."
+
+  (let* ((scopes (cond ((or (stringp scopes)
+                            (and (symbolp scopes)
+                                 (not (null scopes))))
+                        (list scopes))
+                       (t scopes)))
+
+         (ascopes (cl-loop for scope in scopes
+
+                           ;; collect buffers
+                           when (bufferp scope)
+                           collect scope
+
+                           ;; collect functions that return buffers or filenames
+                           when (functionp scope)
+                           collect (if-let ((fob (funcall scope)))
+                                       (if (bufferp fob)
+                                           fob
+                                         (or (get-file-buffer (expand-file-name fob))
+                                             (expand-file-name fob))))
+
+                           ;; collect file names
+                           when (and (stringp scope) (file-exists-p (expand-file-name scope)))
+                           collect (or (get-file-buffer (expand-file-name scope))
+                                       (expand-file-name scope)))))
+
+    (or (remove 'nil (seq-uniq ascopes))
+        (list (current-buffer)))))
 #+END_SRC
 *** TODO Tests
-**** must be file name or list of file names
-**** scopes types (org-glance--aggregate-scopes (list 'current-buffer "there" "friends" (current-buffer)))
-**** aggregate scopes (nil)
+**** Return must contain no duplicates                                       :Test:
+***** DONE Predicate
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-req/scopes-contain-no-duplicates-p ()
+  "Scopes contain no duplicates, aren't they?"
+  (let ((scopes
+         (org-glance-with-temp-filebuffer
+          (org-glance--aggregate-scopes
+           (list
+            ;; buffer
+            (current-buffer)
+
+            ;; filename
+            (buffer-file-name)
+
+            ;; function that returns buffer
+            'current-buffer
+
+            ;; function that returns filename
+            'buffer-file-name)))))
+    (= (length scopes) 1)))
+#+END_SRC
+***** DONE Test
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
+  (should (org-glance-req/scopes-contain-no-duplicates-p)))
+#+END_SRC
+**** Proper handling lambda with nil return                                  :Test:
+***** DONE Predicate
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-req/scopes-can-handle-nil-lambdas-p ()
+  "Don't nil lambdas break glance?"
+  (not (null
+        (condition-case nil
+            (org-glance--aggregate-scopes (list (lambda () nil)))
+          (error nil)))))
+#+END_SRC
+***** DONE Test
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
+  (should (org-glance-req/scopes-can-handle-nil-lambdas-p)))
+#+END_SRC
+**** Input must handle scopes of types: buffer, fun, filename
+**** Proper handle nil input
 ** DONE filtering [2/2]                                                        :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp

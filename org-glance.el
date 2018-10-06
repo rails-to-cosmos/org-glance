@@ -76,11 +76,10 @@ If buffer-or-name is nil return current buffer's mode."
 
     (cl-flet ((traverse ()
                         (let* ((mark (point-marker))
-                               (title (mapconcat 'identity
-                                                 (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=)
-                                                 separator)))
-                          (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
-                            (cons title mark)))))
+                               (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
+                               (title (mapconcat 'identity outline separator)))
+                  (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+                    (cons title mark)))))
 
       (with-temp-buffer
         (org-mode)
@@ -128,17 +127,36 @@ If there is no entries, raise exception."
     (org-open-link-from-string link)))
 
 (defun org-glance--aggregate-scopes (&optional scopes)
-  (if-let ((scopes (cond ((or (stringp scopes) (and (symbolp scopes) (not (null scopes))))
-                          (list scopes))
-                         (t scopes))))
-      (cl-loop for scope in scopes
-               when (bufferp scope)
-               collect scope
-               when (functionp scope)
-               collect (funcall scope)
-               when (and (stringp scope) (file-exists-p (expand-file-name scope)))
-               collect (expand-file-name scope))
-    (list (current-buffer))))
+  "Provides list of scopes (scope may be buffer or existing file).
+Without specifying SCOPES it returns list with current buffer."
+
+  (let* ((scopes (cond ((or (stringp scopes)
+                            (and (symbolp scopes)
+                                 (not (null scopes))))
+                        (list scopes))
+                       (t scopes)))
+
+         (ascopes (cl-loop for scope in scopes
+
+                           ;; collect buffers
+                           when (bufferp scope)
+                           collect scope
+
+                           ;; collect functions that return buffers or filenames
+                           when (functionp scope)
+                           collect (if-let ((fob (funcall scope)))
+                                       (if (bufferp fob)
+                                           fob
+                                         (or (get-file-buffer (expand-file-name fob))
+                                             (expand-file-name fob))))
+
+                           ;; collect file names
+                           when (and (stringp scope) (file-exists-p (expand-file-name scope)))
+                           collect (or (get-file-buffer (expand-file-name scope))
+                                       (expand-file-name scope)))))
+
+    (or (remove 'nil (seq-uniq ascopes))
+        (list (current-buffer)))))
 
 (defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
                                      (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
