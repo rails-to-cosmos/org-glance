@@ -137,7 +137,7 @@ the file returning the result of evaluating BODY."
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
   (should (org-glance-req/scopes-can-handle-nil-lambdas-p)))
 
-(defun org-glance-req/filter-produces-proper-predicates (input expected)
+(defun org-glance-req/filter-produces-proper-predicates-p (input expected)
   "Can we split user filter into atomic predicates?"
   (equal (org-glance--filter-predicates input) expected))
 
@@ -151,24 +151,24 @@ the file returning the result of evaluating BODY."
                                  when (stringp elt)   do (message "Unable to resolve string from filter list")))
         (t (message "Unrecognized filter must raise an error"))))
 
-(put 'org-glance-req/filter-produces-proper-predicates
+(put 'org-glance-req/filter-produces-proper-predicates-p
      'ert-explainer
      'org-glance-test-explainer/filter-produces-proper-predicates)
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
-  (should (org-glance-req/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates-p
            (lambda () t) '((lambda () t)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
-  (should (org-glance-req/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates-p
            'links (list (alist-get 'links org-glance/default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
-  (should (org-glance-req/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates-p
            "links" (list (alist-get 'links org-glance/default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
-  (should (org-glance-req/filter-produces-proper-predicates
+  (should (org-glance-req/filter-produces-proper-predicates-p
            (list 'links (lambda () t) "links")
            (list (alist-get 'links org-glance/default-filters)
                  (lambda () t)
