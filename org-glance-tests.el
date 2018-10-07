@@ -1,4 +1,5 @@
 (require 'ert)
+(load-file "org-glance.el") ;; for batch-mode
 (require 'org-glance)
 
 (defun trim-string (string)
@@ -42,7 +43,7 @@ the file returning the result of evaluating BODY."
                                    "(+ 1 2) => 3"))))
 
 (defun org-glance-test-explainer/can-handle-org-links ()
-  (message "Handling org-links feature doesn't work properly"))
+  "Handling org-links feature doesn't work properly")
 
 (put 'org-glance-req/can-handle-org-links-p
      'ert-explainer
@@ -95,7 +96,7 @@ the file returning the result of evaluating BODY."
      (= (org-glance :handler "CUSTOM_HANDLER") 31))))
 
 (defun org-glance-test-explainer/can-handle-symbolic-property ()
-  (message "Failed to handle symbolic property as org-babel block name"))
+  "Failed to handle symbolic property as org-babel block name")
 
 (put 'org-glance-req/can-handle-symbolic-property
      'ert-explainer
@@ -142,14 +143,14 @@ the file returning the result of evaluating BODY."
   (equal (org-glance--filter-predicates input) expected))
 
 (defun org-glance-test-explainer/filter-produces-proper-predicates (filter expected)
-  (cond ((functionp filter) (message "Unable to resolve lambda filter"))
-        ((symbolp filter) (message "Unable to resolve symbolic filter"))
-        ((stringp filter) (message "Unable to resolve string filter"))
+  (cond ((functionp filter) "Unable to resolve lambda filter")
+        ((symbolp filter) "Unable to resolve symbolic filter")
+        ((stringp filter) "Unable to resolve string filter")
         ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) do (message "Unable to resolve lambda from filter list")
-                                 when (symbolp elt)   do (message "Unable to resolve symbol from filter list")
-                                 when (stringp elt)   do (message "Unable to resolve string from filter list")))
-        (t (message "Unrecognized filter must raise an error"))))
+                                 when (functionp elt) return "Unable to resolve lambda from filter list"
+                                 when (symbolp elt)   return "Unable to resolve symbol from filter list"
+                                 when (stringp elt)   return "Unable to resolve string from filter list"))
+        (t "Unrecognized filter must raise an error")))
 
 (put 'org-glance-req/filter-produces-proper-predicates-p
      'ert-explainer
@@ -174,16 +175,25 @@ the file returning the result of evaluating BODY."
                  (lambda () t)
                  (alist-get 'links org-glance/default-filters)))))
 
+(defun org-glance-req/filter-removes-entries-p (filter content input)
+  (with-temp-org-buffer content
+   (let ((unread-command-events (listify-key-sequence (kbd (format "%s RET" input)))))
+     (condition-case nil
+         (org-glance :filter filter))
+     (error t))))
+
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
-  (with-temp-org-buffer "
-* First
-* Second
-* Third
-* Security
-"
-   (let ((unread-command-events (listify-key-sequence (kbd "third RET"))))
-     (should-error (org-glance :filter (lambda () (org-match-line "^.*Sec")))))))
+  (should-error
+   (org-glance-req/filter-removes-entries-p
+    (lambda () (org-match-line "^.*Sec"))
+
+    "* First
+     * Second
+     * Third
+     * Security"
+
+    "Third")))
 
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   "Test filtering."

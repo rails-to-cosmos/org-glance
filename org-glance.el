@@ -33,6 +33,7 @@
 (require 'org)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'seq)
 
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
