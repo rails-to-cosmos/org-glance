@@ -63,6 +63,8 @@ flexible build system or whatever you can imagine with ease.
 (require 'subr-x)
 (require 'seq)
 
+(defvar org-glance--scope-buffer-name "*org-glance-scope*")
+
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
 If buffer-or-name is nil return current buffer's mode."
@@ -94,15 +96,26 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
        (goto-char 0)
        ,@forms)))
 
-(defmacro org-glance-with-temp-filebuffer (&rest body)
+(defmacro org-glance--with-buffer-contents (s &rest forms)
+  "Create a temporary buffer with contents S and execute FORMS."
+  `(save-excursion
+     (with-temp-buffer
+       (progn
+         (goto-char 0)
+         (insert ,s)
+         (goto-char 0)
+         ,@forms))))
+
+(defmacro org-glance--with-temp-filebuffer (&rest body)
   "Open temp-file with org-glance prefix into a temporary buffer
 execute BODY there like `progn', then kill the buffer and delete
 the file returning the result of evaluating BODY."
   `(save-window-excursion
-     (let ((fn (make-temp-file "org-glance")))
+     (let ((fn (make-temp-file "org-glance-")))
        (find-file fn)
        (unwind-protect
            ,@body
+         (save-buffer)
          (kill-buffer)
          (delete-file fn)))))
 #+END_SRC
@@ -141,24 +154,43 @@ the file returning the result of evaluating BODY."
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler)))))
+         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler))))
 
-    (cl-flet ((traverse ()
-                        (let* ((mark (point-marker))
-                               (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
-                               (title (mapconcat 'identity outline separator)))
-                  (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
-                    (cons title mark)))))
+         (entries (org-glance--entries aggregated-scopes separator outline-path-ignore filter-predicates)))
 
-      (with-temp-buffer
-        (org-mode)
+    (unwind-protect
+        (org-glance/compl-map prompt entries action save-outline-visibility-p)
+      (kill-buffer org-glance--scope-buffer-name))))
 
-        (cl-loop for scope in aggregated-scopes
-                 do (cond ((and (stringp scope) (file-exists-p scope)) (insert-file-contents scope))
-                          ((bufferp scope) (insert-buffer-substring-no-properties scope))
-                          (t (insert "Hello"))))
+(defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
+  "Return outline path of current `'org-mode`' entry.
 
-        (org-glance/compl-map prompt (org-map-entries #'traverse) action save-outline-visibility-p)))))
+Org node titles separated by SEPARATOR, titles specified in
+OUTLINE-PATH-IGNORE will be ignored.
+
+All FILTER-PREDICATES lambdas must be t."
+  (let* ((mark (point-marker))
+         (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
+         (title (mapconcat 'identity outline separator)))
+    (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+      (cons title mark))))
+
+(defun org-glance--entries (scope &optional separator outline-path-ignore filter-predicates)
+  "Return glance entries by SCOPE.
+
+Specify SEPARATOR and OUTLINE-PATH-IGNORE to customize
+outline-paths appearence.
+
+Add some FILTER-PREDICATES to filter unwanted entries."
+  (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+    (erase-buffer)
+    (org-mode)
+    (cl-loop for s in scope
+             do (cond ((and (stringp s) (file-exists-p s)) (insert-file-contents s))
+                      ((bufferp s) (insert-buffer-substring-no-properties s))))
+    (org-map-entries
+     #'(lambda () (org-glance--get-outline-path-and-marker-at-point
+              separator outline-path-ignore filter-predicates)))))
 #+END_SRC
 *** TODO Tests
 ** DONE handle-entry [2/2]                                                     :Feature:
@@ -260,7 +292,7 @@ the file returning the result of evaluating BODY."
   "Test that we can handle symbolic properties."
   (should (org-glance-req/can-handle-symbolic-property)))
 #+END_SRC
-** TODO compl-map [1/2]                                                        :Feature:
+** TODO compl-map [2/2]                                                        :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
@@ -281,7 +313,26 @@ If there is no entries, raise exception."
         (org-goto-marker-or-bmk marker)
         (funcall action)))))
 #+END_SRC
-*** TODO Tests
+*** DONE Tests
+**** Can complete non-file-visiting buffers                                  :Test:
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-req/compl-non-file-buffer-p ()
+  "Return t if org-glance can work properly from non-file buffers."
+  (let ((expr "(+ 13 17)"))
+    (org-glance--with-buffer-contents
+     (format "
+,* Hello World
+:PROPERTIES:
+:HANDLER: %s
+:END:" expr)
+     (let ((buf (current-buffer)))
+       (with-temp-buffer
+         (= (org-glance :scope (list buf))
+            (eval (read expr))))))))
+
+(ert-deftest org-glance-test/compl-non-file-buffer ()
+  (should (org-glance-req/compl-non-file-buffer-p)))
+#+END_SRC
 ** TODO follow-org-link-at-point [1/2]                                         :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
@@ -315,11 +366,11 @@ Without specifying SCOPES it returns list with current buffer."
 
                            ;; collect functions that return buffers or filenames
                            when (functionp scope)
-                           collect (if-let ((fob (funcall scope)))
-                                       (if (bufferp fob)
-                                           fob
-                                         (or (get-file-buffer (expand-file-name fob))
-                                             (expand-file-name fob))))
+                           collect (when-let ((fob (funcall scope)))
+                                     (if (bufferp fob)
+                                         fob
+                                       (or (get-file-buffer (expand-file-name fob))
+                                           (expand-file-name fob))))
 
                            ;; collect file names
                            when (and (stringp scope) (file-exists-p (expand-file-name scope)))
@@ -335,7 +386,7 @@ Without specifying SCOPES it returns list with current buffer."
 (defun org-glance-req/scopes-contain-no-duplicates-p ()
   "Return t if glance can deal with duplicates."
   (let ((scopes
-         (org-glance-with-temp-filebuffer
+         (org-glance--with-temp-filebuffer
           (org-glance--aggregate-scopes
            (list
             ;; buffer
@@ -436,12 +487,12 @@ Without specifying SCOPES it returns list with current buffer."
   (with-temp-org-buffer content
    (let ((unread-command-events (listify-key-sequence (kbd (format "%s RET" input)))))
      (condition-case nil
-         (org-glance :filter filter))
-     (error t))))
+         (org-glance :filter filter)
+       (error t)))))
 
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
-  (should-error
+  (should
    (org-glance-req/filter-removes-entries-p
     (lambda () (org-match-line "^.*Sec"))
 

@@ -41,6 +41,8 @@ If buffer-or-name is nil return current buffer's mode."
   (buffer-local-value 'major-mode
    (if buffer-or-name (get-buffer buffer-or-name) (current-buffer))))
 
+(defvar org-glance--scope-buffer-name "*org-glance-scope*")
+
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -73,24 +75,43 @@ If buffer-or-name is nil return current buffer's mode."
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler)))))
+         (action    (or (plist-get args :action)         (lambda nil (org-glance--handle-entry handler))))
 
-    (cl-flet ((traverse ()
-                        (let* ((mark (point-marker))
-                               (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
-                               (title (mapconcat 'identity outline separator)))
-                  (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
-                    (cons title mark)))))
+         (entries (org-glance--entries aggregated-scopes separator outline-path-ignore filter-predicates)))
 
-      (with-temp-buffer
-        (org-mode)
+    (unwind-protect
+        (org-glance/compl-map prompt entries action save-outline-visibility-p)
+      (kill-buffer org-glance--scope-buffer-name))))
 
-        (cl-loop for scope in aggregated-scopes
-                 do (cond ((and (stringp scope) (file-exists-p scope)) (insert-file-contents scope))
-                          ((bufferp scope) (insert-buffer-substring-no-properties scope))
-                          (t (insert "Hello"))))
+(defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
+  "Return outline path of current `'org-mode`' entry.
 
-        (org-glance/compl-map prompt (org-map-entries #'traverse) action save-outline-visibility-p)))))
+Org node titles separated by SEPARATOR, titles specified in
+OUTLINE-PATH-IGNORE will be ignored.
+
+All FILTER-PREDICATES lambdas must be t."
+  (let* ((mark (point-marker))
+         (outline (cl-set-difference (org-get-outline-path t) outline-path-ignore :test 'string=))
+         (title (mapconcat 'identity outline separator)))
+    (when (cl-every (lambda (fp) (if fp (funcall fp) nil)) filter-predicates)
+      (cons title mark))))
+
+(defun org-glance--entries (scope &optional separator outline-path-ignore filter-predicates)
+  "Return glance entries by SCOPE.
+
+Specify SEPARATOR and OUTLINE-PATH-IGNORE to customize
+outline-paths appearence.
+
+Add some FILTER-PREDICATES to filter unwanted entries."
+  (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+    (erase-buffer)
+    (org-mode)
+    (cl-loop for s in scope
+             do (cond ((and (stringp s) (file-exists-p s)) (insert-file-contents s))
+                      ((bufferp s) (insert-buffer-substring-no-properties s))))
+    (org-map-entries
+     #'(lambda () (org-glance--get-outline-path-and-marker-at-point
+              separator outline-path-ignore filter-predicates)))))
 
 (defun org-glance--handle-entry (handler)
   "Try to handle current org-entry:
@@ -145,11 +166,11 @@ Without specifying SCOPES it returns list with current buffer."
 
                            ;; collect functions that return buffers or filenames
                            when (functionp scope)
-                           collect (if-let ((fob (funcall scope)))
-                                       (if (bufferp fob)
-                                           fob
-                                         (or (get-file-buffer (expand-file-name fob))
-                                             (expand-file-name fob))))
+                           collect (when-let ((fob (funcall scope)))
+                                     (if (bufferp fob)
+                                         fob
+                                       (or (get-file-buffer (expand-file-name fob))
+                                           (expand-file-name fob))))
 
                            ;; collect file names
                            when (and (stringp scope) (file-exists-p (expand-file-name scope)))

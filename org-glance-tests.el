@@ -17,15 +17,26 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
        (goto-char 0)
        ,@forms)))
 
-(defmacro org-glance-with-temp-filebuffer (&rest body)
+(defmacro org-glance--with-buffer-contents (s &rest forms)
+  "Create a temporary buffer with contents S and execute FORMS."
+  `(save-excursion
+     (with-temp-buffer
+       (progn
+         (goto-char 0)
+         (insert ,s)
+         (goto-char 0)
+         ,@forms))))
+
+(defmacro org-glance--with-temp-filebuffer (&rest body)
   "Open temp-file with org-glance prefix into a temporary buffer
 execute BODY there like `progn', then kill the buffer and delete
 the file returning the result of evaluating BODY."
   `(save-window-excursion
-     (let ((fn (make-temp-file "org-glance")))
+     (let ((fn (make-temp-file "org-glance-")))
        (find-file fn)
        (unwind-protect
            ,@body
+         (save-buffer)
          (kill-buffer)
          (delete-file fn)))))
 
@@ -107,10 +118,27 @@ the file returning the result of evaluating BODY."
   "Test that we can handle symbolic properties."
   (should (org-glance-req/can-handle-symbolic-property)))
 
+(defun org-glance-req/compl-non-file-buffer-p ()
+  "Return t if org-glance can work properly from non-file buffers."
+  (let ((expr "(+ 13 17)"))
+    (org-glance--with-buffer-contents
+     (format "
+* Hello World
+:PROPERTIES:
+:HANDLER: %s
+:END:" expr)
+     (let ((buf (current-buffer)))
+       (with-temp-buffer
+         (= (org-glance :scope (list buf))
+            (eval (read expr))))))))
+
+(ert-deftest org-glance-test/compl-non-file-buffer ()
+  (should (org-glance-req/compl-non-file-buffer-p)))
+
 (defun org-glance-req/scopes-contain-no-duplicates-p ()
   "Return t if glance can deal with duplicates."
   (let ((scopes
-         (org-glance-with-temp-filebuffer
+         (org-glance--with-temp-filebuffer
           (org-glance--aggregate-scopes
            (list
             ;; buffer
@@ -180,12 +208,12 @@ the file returning the result of evaluating BODY."
   (with-temp-org-buffer content
    (let ((unread-command-events (listify-key-sequence (kbd (format "%s RET" input)))))
      (condition-case nil
-         (org-glance :filter filter))
-     (error t))))
+         (org-glance :filter filter)
+       (error t)))))
 
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
-  (should-error
+  (should
    (org-glance-req/filter-removes-entries-p
     (lambda () (org-match-line "^.*Sec"))
 
