@@ -8,6 +8,8 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
+- [[elisp:(org-sbe%20"devtools-build-require")][Devtools Setup]]
+
 * Hello
 ** README                                                                      :Documentation:
 #+BEGIN_SRC markdown
@@ -176,16 +178,17 @@ the file returning the result of evaluating BODY."
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-req/can-handle-org-links-p ()
   "Can we handle org-links?"
-  (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
-                        (let ((org-confirm-elisp-link-function nil)
-                              (unread-command-events (listify-key-sequence (kbd "elisp RET")))
-                              (begin-marker (with-current-buffer (messages-buffer)
-                                              (point-max-marker))))
-                          (org-glance)
-                          (string= (trim-string
-                                    (with-current-buffer (messages-buffer)
-                                      (buffer-substring begin-marker (point-max))))
-                                   "(+ 1 2) => 3"))))
+  (with-temp-org-buffer
+   "* [[elisp:(+%201%202)][elisp]]"
+   (let ((org-confirm-elisp-link-function nil)
+         (unread-command-events (listify-key-sequence (kbd "elisp RET")))
+         (begin-marker (with-current-buffer (messages-buffer)
+                         (point-max-marker))))
+     (org-glance)
+     (string= (trim-string
+               (with-current-buffer (messages-buffer)
+                 (buffer-substring begin-marker (point-max))))
+              "(+ 1 2) => 3"))))
 
 (defun org-glance-test-explainer/can-handle-org-links ()
   "Handling org-links feature doesn't work properly")
@@ -498,6 +501,7 @@ Without specifying SCOPES it returns list with current buffer."
       (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
+(message "Development tools have been successfully configured")
 #+END_SRC
 * Applications
 ** org-glance-build
@@ -506,7 +510,6 @@ Without specifying SCOPES it returns list with current buffer."
 ** org-glance-fs
 * Local Variables
 # Local Variables:
-# eval: (org-sbe "devtools-build-require")
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil

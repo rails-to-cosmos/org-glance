@@ -31,16 +31,17 @@ the file returning the result of evaluating BODY."
 
 (defun org-glance-req/can-handle-org-links-p ()
   "Can we handle org-links?"
-  (with-temp-org-buffer "* [[elisp:(+%201%202)][elisp]]"
-                        (let ((org-confirm-elisp-link-function nil)
-                              (unread-command-events (listify-key-sequence (kbd "elisp RET")))
-                              (begin-marker (with-current-buffer (messages-buffer)
-                                              (point-max-marker))))
-                          (org-glance)
-                          (string= (trim-string
-                                    (with-current-buffer (messages-buffer)
-                                      (buffer-substring begin-marker (point-max))))
-                                   "(+ 1 2) => 3"))))
+  (with-temp-org-buffer
+   "* [[elisp:(+%201%202)][elisp]]"
+   (let ((org-confirm-elisp-link-function nil)
+         (unread-command-events (listify-key-sequence (kbd "elisp RET")))
+         (begin-marker (with-current-buffer (messages-buffer)
+                         (point-max-marker))))
+     (org-glance)
+     (string= (trim-string
+               (with-current-buffer (messages-buffer)
+                 (buffer-substring begin-marker (point-max))))
+              "(+ 1 2) => 3"))))
 
 (defun org-glance-test-explainer/can-handle-org-links ()
   "Handling org-links feature doesn't work properly")
