@@ -176,7 +176,8 @@ the file returning the result of evaluating BODY."
 
     (unwind-protect
         (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      (kill-buffer org-glance--scope-buffer-name))))
+      ;; (kill-buffer org-glance--scope-buffer-name)
+      )))
 #+END_SRC
 *** TODO Tests
 ** TODO get-entries [1/2]                                                      :Feature:
@@ -217,7 +218,8 @@ Add some FILTER-PREDICATES to filter unwanted entries."
                       ((bufferp s)
                        (let ((hash (buffer-hash s)))
                          (insert-buffer-substring-no-properties s)
-                         (puthash s hash org-glance--cache)))))
+                         (puthash s hash org-glance--cache))))
+             finally (insert "\n"))
 
     (org-map-entries
      #'(lambda () (org-glance--get-outline-path-and-marker-at-point
