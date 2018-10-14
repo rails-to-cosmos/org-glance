@@ -8,7 +8,7 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
-- [[elisp:(org-sbe%20"devtools-build-require")][Devtools Setup]]
+- [[elisp:(org-sbe%20"devtools-build-require")][Setup development environment]]
 
 * Hello
 ** README                                                                      :Documentation:
@@ -20,6 +20,18 @@ Fast, clean and convenient way of traversing your org-mode forest.
 
 Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
+
+## Running tests
+
+### Batch mode
+
+    emacs -batch -l ert -l org-glance-tests.el -f ert-run-tests-batch-and-exit
+
+### Org-mode
+
+Browse link `Setup development environment`. After that you can build
+project using `C-x y m` key or running `org-glance-devtools/build`
+command from `org-glance.org` buffer.
 #+END_SRC
 ** License                                                                     :License:
 #+BEGIN_SRC emacs-lisp
@@ -64,6 +76,7 @@ flexible build system or whatever you can imagine with ease.
 (require 'seq)
 
 (defvar org-glance--scope-buffer-name "*org-glance-scope*")
+(setq org-glance--cache (make-hash-table :test 'equal))
 
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
@@ -76,14 +89,16 @@ If buffer-or-name is nil return current buffer's mode."
 (require 'ert)
 (load-file "org-glance.el") ;; for batch-mode
 (require 'org-glance)
+#+END_SRC
 
+#+NAME: trim-string
+#+BEGIN_SRC emacs-lisp
 (defun trim-string (string)
   "Remove white spaces in beginning and ending of STRING.
 White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
   (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
 #+END_SRC
-* Features [4/8]
-** DONE Temp buffers                                                           :Test:
+
 #+NAME: with-temp-org-buffer
 #+BEGIN_SRC emacs-lisp
 (defmacro with-temp-org-buffer (s &rest forms)
@@ -119,6 +134,7 @@ the file returning the result of evaluating BODY."
          (kill-buffer)
          (delete-file fn)))))
 #+END_SRC
+* Features [5/9]
 ** TODO org-glance [1/2]                                                       :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
@@ -161,7 +177,11 @@ the file returning the result of evaluating BODY."
     (unwind-protect
         (org-glance/compl-map prompt entries action save-outline-visibility-p)
       (kill-buffer org-glance--scope-buffer-name))))
-
+#+END_SRC
+*** TODO Tests
+** TODO get-entries [1/2]                                                      :Feature:
+*** DONE Implementation
+#+BEGIN_SRC emacs-lisp
 (defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
   "Return outline path of current `'org-mode`' entry.
 
@@ -185,9 +205,20 @@ Add some FILTER-PREDICATES to filter unwanted entries."
   (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
     (erase-buffer)
     (org-mode)
+
     (cl-loop for s in scope
-             do (cond ((and (stringp s) (file-exists-p s)) (insert-file-contents s))
-                      ((bufferp s) (insert-buffer-substring-no-properties s))))
+             do (cond ((and (stringp s) (file-exists-p s))
+                       (let* ((mtime (file-attribute-modification-time (file-attributes s)))
+                              (ftime (format-time-string "%Y-%m-%dT%H:%M:%S" mtime))
+                              (hash (md5 ftime)))
+                         (insert-file-contents s)
+                         (puthash s hash org-glance--cache)))
+
+                      ((bufferp s)
+                       (let ((hash (buffer-hash s)))
+                         (insert-buffer-substring-no-properties s)
+                         (puthash s hash org-glance--cache)))))
+
     (org-map-entries
      #'(lambda () (org-glance--get-outline-path-and-marker-at-point
               separator outline-path-ignore filter-predicates)))))
@@ -292,7 +323,7 @@ Add some FILTER-PREDICATES to filter unwanted entries."
   "Test that we can handle symbolic properties."
   (should (org-glance-req/can-handle-symbolic-property)))
 #+END_SRC
-** TODO compl-map [2/2]                                                        :Feature:
+** DONE compl-map [2/2]                                                        :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
@@ -552,7 +583,7 @@ Without specifying SCOPES it returns list with current buffer."
       (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
-(message "Development tools have been successfully configured")
+(message "Development tools are now ready to use. Happy hacking!")
 #+END_SRC
 * Applications
 ** org-glance-build

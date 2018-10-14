@@ -35,13 +35,14 @@
 (require 'subr-x)
 (require 'seq)
 
+(defvar org-glance--scope-buffer-name "*org-glance-scope*")
+(setq org-glance--cache (make-hash-table :test 'equal))
+
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
 If buffer-or-name is nil return current buffer's mode."
   (buffer-local-value 'major-mode
    (if buffer-or-name (get-buffer buffer-or-name) (current-buffer))))
-
-(defvar org-glance--scope-buffer-name "*org-glance-scope*")
 
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -106,9 +107,20 @@ Add some FILTER-PREDICATES to filter unwanted entries."
   (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
     (erase-buffer)
     (org-mode)
+
     (cl-loop for s in scope
-             do (cond ((and (stringp s) (file-exists-p s)) (insert-file-contents s))
-                      ((bufferp s) (insert-buffer-substring-no-properties s))))
+             do (cond ((and (stringp s) (file-exists-p s))
+                       (let* ((mtime (file-attribute-modification-time (file-attributes s)))
+                              (ftime (format-time-string "%Y-%m-%dT%H:%M:%S" mtime))
+                              (hash (md5 ftime)))
+                         (insert-file-contents s)
+                         (puthash s hash org-glance--cache)))
+
+                      ((bufferp s)
+                       (let ((hash (buffer-hash s)))
+                         (insert-buffer-substring-no-properties s)
+                         (puthash s hash org-glance--cache)))))
+
     (org-map-entries
      #'(lambda () (org-glance--get-outline-path-and-marker-at-point
               separator outline-path-ignore filter-predicates)))))
