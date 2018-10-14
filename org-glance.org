@@ -176,8 +176,7 @@ the file returning the result of evaluating BODY."
 
     (unwind-protect
         (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      ;; (kill-buffer org-glance--scope-buffer-name)
-      )))
+      (kill-buffer org-glance--scope-buffer-name))))
 #+END_SRC
 *** TODO Tests
 ** TODO get-entries [1/2]                                                      :Feature:

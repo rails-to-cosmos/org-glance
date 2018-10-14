@@ -119,7 +119,8 @@ Add some FILTER-PREDICATES to filter unwanted entries."
                       ((bufferp s)
                        (let ((hash (buffer-hash s)))
                          (insert-buffer-substring-no-properties s)
-                         (puthash s hash org-glance--cache)))))
+                         (puthash s hash org-glance--cache))))
+             finally (insert "\n"))
 
     (org-map-entries
      #'(lambda () (org-glance--get-outline-path-and-marker-at-point
