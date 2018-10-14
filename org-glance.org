@@ -588,6 +588,8 @@ Without specifying SCOPES it returns list with current buffer."
 ** org-glance-passwords
 ** org-glance-bookmarks
 ** org-glance-fs
+* Known issues [0/1]
+** TODO Global categories in one buffer override categories in another isolated buffer
 * Local Variables
 # Local Variables:
 # org-use-tag-inheritance: t
