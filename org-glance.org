@@ -578,8 +578,6 @@ Without specifying SCOPES it returns list with current buffer."
            (skipped (ert-stats-skipped ert-stats))
            (total (ert-stats-total ert-stats))
            (report (list total expected unexpected skipped)))
-      (when (> (caddr report) 0)
-        (pop-to-buffer "*org-glance-tests*"))
       (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
