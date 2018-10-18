@@ -145,7 +145,7 @@ If there is no entries, raise exception."
                        (t (org-completing-read prompt entries*))))
          (marker (cdr (assoc-string choice entries*)))
          (source-buffer (current-buffer)))
-    (if save-outline-visibility-p ;; (eq (marker-buffer marker) (current-buffer))
+    (if save-outline-visibility-p
         (org-save-outline-visibility t
           (org-goto-marker-or-bmk marker)
           (funcall action))

@@ -8,7 +8,11 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
-- [[elisp:(org-sbe%20"devtools-build-require")][Setup development environment]]
+#+TBLNAME: Components
+| ! | Component | Available |
+|---+-----------+-----------|
+| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  |           |
+#+TBLFM: $3='(if (fboundp 'org-glance-devtools/build) "YES" "NO")
 
 * Hello
 ** README                                                                      :Documentation:
@@ -134,7 +138,7 @@ the file returning the result of evaluating BODY."
          (kill-buffer)
          (delete-file fn)))))
 #+END_SRC
-* Features [5/9]
+* Features [4/8]
 ** TODO org-glance [1/2]                                                       :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
@@ -337,7 +341,7 @@ If there is no entries, raise exception."
                        (t (org-completing-read prompt entries*))))
          (marker (cdr (assoc-string choice entries*)))
          (source-buffer (current-buffer)))
-    (if save-outline-visibility-p ;; (eq (marker-buffer marker) (current-buffer))
+    (if save-outline-visibility-p
         (org-save-outline-visibility t
           (org-goto-marker-or-bmk marker)
           (funcall action))
@@ -377,7 +381,7 @@ If there is no entries, raise exception."
     (org-open-link-from-string link)))
 #+END_SRC
 *** TODO Tests
-** TODO scoping [1/3]                                                          :Feature:
+** TODO scoping [1/2]                                                          :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance--aggregate-scopes (&optional scopes)
@@ -582,6 +586,7 @@ Without specifying SCOPES it returns list with current buffer."
       (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
 
 (local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
+(org-table-iterate-buffer-tables)
 (message "Development tools are now ready to use. Happy hacking!")
 #+END_SRC
 * Applications
@@ -593,6 +598,7 @@ Without specifying SCOPES it returns list with current buffer."
 ** TODO Global categories in one buffer override categories in another isolated buffer
 * Local Variables
 # Local Variables:
+# eval: (org-table-iterate-buffer-tables)
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
