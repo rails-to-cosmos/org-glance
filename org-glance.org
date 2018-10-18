@@ -11,7 +11,7 @@
 #+TBLNAME: Components
 | ! | Component | Available |
 |---+-----------+-----------|
-| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  |           |
+| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  | YES       |
 #+TBLFM: $3='(if (fboundp 'org-glance-devtools/build) "YES" "NO")
 
 * Hello
@@ -180,7 +180,9 @@ the file returning the result of evaluating BODY."
 
     (unwind-protect
         (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      (kill-buffer org-glance--scope-buffer-name))))
+      (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+        (erase-buffer)
+        (kill-buffer)))))
 #+END_SRC
 *** TODO Tests
 ** TODO get-entries [1/2]                                                      :Feature:
@@ -207,7 +209,6 @@ outline-paths appearence.
 
 Add some FILTER-PREDICATES to filter unwanted entries."
   (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
-    (erase-buffer)
     (org-mode)
 
     (cl-loop for s in scope

@@ -82,7 +82,9 @@ If buffer-or-name is nil return current buffer's mode."
 
     (unwind-protect
         (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      (kill-buffer org-glance--scope-buffer-name))))
+      (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+        (erase-buffer)
+        (kill-buffer)))))
 
 (defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
   "Return outline path of current `'org-mode`' entry.
@@ -106,6 +108,7 @@ outline-paths appearence.
 Add some FILTER-PREDICATES to filter unwanted entries."
   (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
     (erase-buffer)
+
     (org-mode)
 
     (cl-loop for s in scope
