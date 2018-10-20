@@ -591,7 +591,7 @@ Without specifying SCOPES it returns list with current buffer."
 (message "Development tools are now ready to use. Happy hacking!")
 #+END_SRC
 * Applications
-** org-glance-build
+** org-glance-snippets
 ** org-glance-passwords
 ** org-glance-bookmarks
 ** org-glance-fs

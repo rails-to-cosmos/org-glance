@@ -107,8 +107,6 @@ outline-paths appearence.
 
 Add some FILTER-PREDICATES to filter unwanted entries."
   (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
-    (erase-buffer)
-
     (org-mode)
 
     (cl-loop for s in scope
