@@ -80,11 +80,13 @@ If buffer-or-name is nil return current buffer's mode."
 
          (entries (org-glance--entries aggregated-scopes separator outline-path-ignore filter-predicates)))
 
-    (unwind-protect
-        (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
-        (erase-buffer)
-        (kill-buffer)))))
+    (if entries
+        (unwind-protect
+            (org-glance/compl-map prompt entries action save-outline-visibility-p)
+          (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+            (erase-buffer)
+            (kill-buffer)))
+      (message (format "Nothing glance to in scopes %s" (prin1-to-string aggregated-scopes))))))
 
 (defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
   "Return outline path of current `'org-mode`' entry.

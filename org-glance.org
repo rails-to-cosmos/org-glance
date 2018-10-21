@@ -178,11 +178,13 @@ the file returning the result of evaluating BODY."
 
          (entries (org-glance--entries aggregated-scopes separator outline-path-ignore filter-predicates)))
 
-    (unwind-protect
-        (org-glance/compl-map prompt entries action save-outline-visibility-p)
-      (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
-        (erase-buffer)
-        (kill-buffer)))))
+    (if entries
+        (unwind-protect
+            (org-glance/compl-map prompt entries action save-outline-visibility-p)
+          (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
+            (erase-buffer)
+            (kill-buffer)))
+      (message (format "Nothing glance to in scopes %s" (prin1-to-string aggregated-scopes))))))
 #+END_SRC
 *** TODO Tests
 ** TODO get-entries [1/2]                                                      :Feature:
