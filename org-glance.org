@@ -184,7 +184,7 @@ the file returning the result of evaluating BODY."
           (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
             (erase-buffer)
             (kill-buffer)))
-      (message (format "Nothing glance to in scopes %s" (prin1-to-string aggregated-scopes))))))
+      (message (format "Nothing to glance for in scopes %s" (prin1-to-string aggregated-scopes))))))
 #+END_SRC
 *** TODO Tests
 ** TODO get-entries [1/2]                                                      :Feature:
@@ -337,12 +337,13 @@ Add some FILTER-PREDICATES to filter unwanted entries."
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there is only one entry, call ACTION without completing read.
-If there is no entries, raise exception."
-  (let* ((entries* (remove 'nil entries))
-         (choice (cond ((= (length entries*) 1) (caar entries*))
-                       ((= (length entries*) 0) (error "Empty set."))
-                       (t (org-completing-read prompt entries*))))
-         (marker (cdr (assoc-string choice entries*)))
+If there are no entries, raise exception."
+  (let* ((entries (remove 'nil entries))
+         (entries-count (length entries))
+         (choice (cond ((= entries-count 1) (caar entries))
+                       ((= entries-count 0) (error "Empty set."))
+                       (t (org-completing-read prompt entries))))
+         (marker (cdr (assoc-string choice entries)))
          (source-buffer (current-buffer)))
     (if save-outline-visibility-p
         (org-save-outline-visibility t
@@ -353,7 +354,7 @@ If there is no entries, raise exception."
         (funcall action)))))
 #+END_SRC
 *** DONE Tests
-**** Can complete non-file-visiting buffers                                  :Test:
+**** DONE Can complete non-file-visiting buffers                             :Test:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-req/compl-non-file-buffer-p ()
   "Return t if org-glance can work properly from non-file buffers."

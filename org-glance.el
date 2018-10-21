@@ -86,7 +86,7 @@ If buffer-or-name is nil return current buffer's mode."
           (with-current-buffer (get-buffer-create org-glance--scope-buffer-name)
             (erase-buffer)
             (kill-buffer)))
-      (message (format "Nothing glance to in scopes %s" (prin1-to-string aggregated-scopes))))))
+      (message (format "Nothing to glance for in scopes %s" (prin1-to-string aggregated-scopes))))))
 
 (defun org-glance--get-outline-path-and-marker-at-point (&optional separator outline-path-ignore filter-predicates)
   "Return outline path of current `'org-mode`' entry.
@@ -141,12 +141,13 @@ Add some FILTER-PREDICATES to filter unwanted entries."
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there is only one entry, call ACTION without completing read.
-If there is no entries, raise exception."
-  (let* ((entries* (remove 'nil entries))
-         (choice (cond ((= (length entries*) 1) (caar entries*))
-                       ((= (length entries*) 0) (error "Empty set."))
-                       (t (org-completing-read prompt entries*))))
-         (marker (cdr (assoc-string choice entries*)))
+If there are no entries, raise exception."
+  (let* ((entries (remove 'nil entries))
+         (entries-count (length entries))
+         (choice (cond ((= entries-count 1) (caar entries))
+                       ((= entries-count 0) (error "Empty set."))
+                       (t (org-completing-read prompt entries))))
+         (marker (cdr (assoc-string choice entries)))
          (source-buffer (current-buffer)))
     (if save-outline-visibility-p
         (org-save-outline-visibility t
