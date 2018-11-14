@@ -80,7 +80,7 @@ command from `org-glance.org` buffer.
 (require 'seq)
 
 (defvar org-glance--scope-buffer-name "*org-glance-scope*")
-(defvar org-glance-cache-file-name "/tmp/org-glance-cache.org")
+(defvar org-glance-cache-file "/tmp/org-glance-cache.org")
 (defvar org-glance-defaults--separator " → ")
 
 (defun buffer-mode (&optional buffer-or-name)
