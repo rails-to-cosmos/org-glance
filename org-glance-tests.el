@@ -65,59 +65,6 @@ the file returning the result of evaluating BODY."
   "Test that we can handle org-links."
   (should (org-glance-req/can-handle-org-links-p)))
 
-(ert-deftest org-glance-test/can-handle-default-property ()
-  "Test that we can use default handler property."
-  (with-temp-org-buffer
-"
-* Title
-:PROPERTIES:
-:HANDLER: (+ 1 9)
-:END:
-"
-(let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
-  (should (= (org-glance) 10)))))
-
-(ert-deftest org-glance-test/can-handle-custom-property ()
-  "Test that we can use custom handler property."
-  (with-temp-org-buffer
-"
-* Title
-:PROPERTIES:
-:CUSTOM_HANDLER: (+ 1 11)
-:END:
-"
-(let ((unread-command-events (listify-key-sequence (kbd "tit RET"))))
-  (should (= (org-glance :handler "CUSTOM_HANDLER") 12)))))
-
-(defun org-glance-req/can-handle-symbolic-property ()
-  "Can we handle symbolic property as org-babel block name?"
-  (with-temp-org-buffer
-   "
-* Please, handle custom block
-:PROPERTIES:
-:CUSTOM_HANDLER: custom-block
-:END:
-
-#+NAME: custom-block
-#+BEGIN_SRC emacs-lisp
-(+ 15 16)
-#+END_SRC
-"
-   (let ((org-confirm-babel-evaluate nil)
-         (unread-command-events (listify-key-sequence (kbd "Plea RET"))))
-     (= (org-glance :handler "CUSTOM_HANDLER") 31))))
-
-(defun org-glance-test-explainer/can-handle-symbolic-property ()
-  "Failed to handle symbolic property as org-babel block name")
-
-(put 'org-glance-req/can-handle-symbolic-property
-     'ert-explainer
-     'org-glance-test-explainer/can-handle-symbolic-property)
-
-(ert-deftest org-glance-test/can-handle-symbolic-property ()
-  "Test that we can handle symbolic properties."
-  (should (org-glance-req/can-handle-symbolic-property)))
-
 (defun org-glance-req/compl-non-file-buffer-p ()
   "Return t if org-glance can work properly from non-file buffers."
   (let ((expr "(+ 13 17)"))
