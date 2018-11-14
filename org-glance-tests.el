@@ -17,16 +17,6 @@ White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
        (goto-char 0)
        ,@forms)))
 
-(defmacro org-glance--with-buffer-contents (s &rest forms)
-  "Create a temporary buffer with contents S and execute FORMS."
-  `(save-excursion
-     (with-temp-buffer
-       (progn
-         (goto-char 0)
-         (insert ,s)
-         (goto-char 0)
-         ,@forms))))
-
 (defmacro org-glance--with-temp-filebuffer (&rest body)
   "Open temp-file with org-glance prefix into a temporary buffer
 execute BODY there like `progn', then kill the buffer and delete
@@ -42,17 +32,29 @@ the file returning the result of evaluating BODY."
 
 (defun org-glance-req/can-handle-org-links-p ()
   "Can we handle org-links?"
-  (with-temp-org-buffer
-   "* [[elisp:(+%201%202)][elisp]]"
-   (let ((org-confirm-elisp-link-function nil)
-         (unread-command-events (listify-key-sequence (kbd "elisp RET")))
-         (begin-marker (with-current-buffer (messages-buffer)
-                         (point-max-marker))))
-     (org-glance)
-     (string= (trim-string
-               (with-current-buffer (messages-buffer)
-                 (buffer-substring begin-marker (point-max))))
-              "(+ 1 2) => 3"))))
+  (let ((expr "(+ 1 2)")
+        (caption "elisp-link"))
+
+    (with-temp-org-buffer
+     (format "* [[elisp:%s][%s]]" (org-link-escape expr) caption)
+
+     (let ((buffer (current-buffer))
+           (org-confirm-elisp-link-function nil)
+
+           (begin-marker
+            (with-current-buffer (messages-buffer)
+              (point-max-marker)))
+
+           (unread-command-events
+            (listify-key-sequence
+             (kbd (format "%s RET" caption)))))
+
+       (org-glance :inplace t)
+
+       (string= (trim-string
+                 (with-current-buffer (messages-buffer)
+                   (buffer-substring begin-marker (point-max))))
+                (format "%s => %s" expr (eval (read expr))))))))
 
 (defun org-glance-test-explainer/can-handle-org-links ()
   "Handling org-links feature doesn't work properly")
@@ -67,17 +69,29 @@ the file returning the result of evaluating BODY."
 
 (defun org-glance-req/compl-non-file-buffer-p ()
   "Return t if org-glance can work properly from non-file buffers."
-  (let ((expr "(+ 13 17)"))
-    (org-glance--with-buffer-contents
-     (format "
-* Hello World
-:PROPERTIES:
-:HANDLER: %s
-:END:" expr)
-     (let ((buf (current-buffer)))
-       (with-temp-buffer
-         (= (org-glance :scope (list buf))
-            (eval (read expr))))))))
+  (let ((expr "(+ 13 17)")
+        (caption "elisp-link"))
+
+    (with-temp-org-buffer
+     (format "* [[elisp:%s][%s]]" (org-link-escape expr) caption)
+
+     (let ((buffer (current-buffer))
+           (org-confirm-elisp-link-function nil)
+
+           (begin-marker
+            (with-current-buffer (messages-buffer)
+              (point-max-marker)))
+
+           (unread-command-events
+            (listify-key-sequence
+             (kbd (format "%s RET" caption)))))
+
+       (org-glance :scope (list buffer) :inplace t)
+
+       (string= (trim-string
+                 (with-current-buffer (messages-buffer)
+                   (buffer-substring begin-marker (point-max))))
+                (format "%s => %s" expr (eval (read expr))))))))
 
 (ert-deftest org-glance-test/compl-non-file-buffer ()
   (should (org-glance-req/compl-non-file-buffer-p)))
@@ -155,7 +169,7 @@ the file returning the result of evaluating BODY."
   (with-temp-org-buffer content
    (let ((unread-command-events (listify-key-sequence (kbd (format "%s RET" input)))))
      (condition-case nil
-         (org-glance :filter filter)
+         (org-glance :filter filter :inplace t)
        (error t)))))
 
 (ert-deftest org-glance-test/filter-removes-entries ()
@@ -165,9 +179,9 @@ the file returning the result of evaluating BODY."
     (lambda () (org-match-line "^.*Sec"))
 
     "* First
-     * Second
+     * [[elisp:(+%2011%2012)][Second]]
      * Third
-     * Security"
+     * [[elisp:(+%2011%2012)][Security]]"
 
     "Third")))
 
@@ -175,11 +189,11 @@ the file returning the result of evaluating BODY."
   "Test filtering."
   (with-temp-org-buffer "
 * First
-* Second
+* [[elisp:(+%2011%2012)][Second]]
 * Third
 "
-                        (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
-                          (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second"))))))))
+      (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
+        (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second")) :inplace t))))))
 
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
