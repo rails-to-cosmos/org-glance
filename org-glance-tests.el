@@ -178,10 +178,11 @@ the file returning the result of evaluating BODY."
    (org-glance-req/filter-removes-entries-p
     (lambda () (org-match-line "^.*Sec"))
 
-    "* First
-     * [[elisp:(+%2011%2012)][Second]]
-     * Third
-     * [[elisp:(+%2011%2012)][Security]]"
+    "
+* First
+* [[elisp:(+%2011%2012)][Second]]
+* Third
+* [[elisp:(+%2011%2012)][Security]]"
 
     "Third")))
 
