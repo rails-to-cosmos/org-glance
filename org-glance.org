@@ -129,9 +129,9 @@ the file returning the result of evaluating BODY."
          (kill-buffer)
          (delete-file fn)))))
 #+END_SRC
-* Features [4/11]
-** TODO org-glance [1/2]                                                       :Feature:
-*** DONE Implementation
+* Features
+** TODO org-glance                                                             :Feature:
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -188,6 +188,7 @@ the file returning the result of evaluating BODY."
     ;;     (kill-buffer)))
     ))
 #+END_SRC
+
 *** TODO Tests
 ** TODO outliner                                                               :Feature:
 #+BEGIN_SRC emacs-lisp
@@ -214,6 +215,8 @@ All FILTERS lambdas must be t."
       (list title point file-or-buffer))))
 #+END_SRC
 ** TODO cache                                                                  :Feature:
+*** add-scope
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--add-scope (scope-name entries)
   (loop for (title level) in entries
@@ -233,7 +236,11 @@ All FILTERS lambdas must be t."
         do (progn
              (org-insert-heading-respect-content)
              (setq prev-level level))))
+#+END_SRC
 
+*** get-scope
+
+#+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--get-scope (scope-name)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
     (lambda (headline)
@@ -243,21 +250,30 @@ All FILTERS lambdas must be t."
             (end (org-element-property :end headline)))
         (when (and (= level 1) (string= title scope-name))
           (list begin end))))))
+#+END_SRC
 
+*** insert-contents
+
+#+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--insert-contents (fob scope-type)
   (case scope-type
     ('file (insert-file-contents fob))
     ('file-buffer (insert-file-contents (buffer-file-name fob)))
     ('buffer (insert-buffer-substring-no-properties fob))))
+#+END_SRC
 
+*** read-contents
+
+#+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--read-contents (fob scope-type)
   (case scope-type
       ('file (find-file file-or-buffer))
       ('file-buffer (switch-to-buffer file-or-buffer))
       ('buffer (switch-to-buffer file-or-buffer))))
 #+END_SRC
-** TODO get-entries [1/2]                                                      :Feature:
-*** DONE Implementation
+
+** TODO entries                                                                :Feature:
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance--entries (&rest args)
   "Return glance entries by SCOPE.
@@ -346,9 +362,9 @@ Add some FILTERS to filter unwanted entries."
                         (entries (funcall handler file-or-buffer scope-type)))
                    (remove nil entries)))))
 #+END_SRC
+
 *** TODO Tests
 ** TODO sort-entries
-*** Implementation
 *** Tests
 **** classification problem
 classes:
@@ -412,7 +428,7 @@ connections:
 
 ;; (json-read-file "~/.context")
 #+END_SRC
-** DONE compl-map [2/2]                                                        :Feature:
+** DONE compl-map                                                              :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
@@ -444,7 +460,7 @@ If there are no entries, raise exception."
       (with-current-buffer (find-file-noselect file-or-buffer t nil)
         (funcall visitor)))))
 #+END_SRC
-*** DONE Tests [2/2]
+*** DONE Tests
 **** DONE Can handle org-links                                               :Test:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-req/can-handle-org-links-p ()
@@ -515,8 +531,8 @@ If there are no entries, raise exception."
 (ert-deftest org-glance-test/compl-non-file-buffer ()
   (should (org-glance-req/compl-non-file-buffer-p)))
 #+END_SRC
-** TODO scoping [1/2]                                                          :Feature:
-*** DONE Implementation
+** TODO scoping                                                                :Feature:
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
@@ -550,7 +566,8 @@ Without specifying SCOPES it returns list with current buffer."
     (or (remove 'nil (seq-uniq ascopes))
         (list (current-buffer)))))
 #+END_SRC
-*** TODO Tests [2/4]
+
+*** TODO Tests
 **** DONE Return must contain no duplicates                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-req/scopes-contain-no-duplicates-p ()
@@ -589,7 +606,7 @@ Without specifying SCOPES it returns list with current buffer."
 #+END_SRC
 **** TODO Input must handle scopes of types: buffer, fun, filename
 **** TODO Proper handle nil input
-** DONE filtering [2/2]                                                        :Feature:
+** DONE filtering                                                              :Feature:
 *** DONE Implementation
 #+BEGIN_SRC emacs-lisp
 (defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
@@ -685,13 +702,14 @@ Without specifying SCOPES it returns list with current buffer."
       (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
         (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second")) :inplace t))))))
 #+END_SRC
-** DONE provide [2/2]                                                          :Feature:
-*** DONE Implementation
+** DONE provide                                                                :Feature:
+
 #+BEGIN_SRC emacs-lisp
 (provide 'org-glance)
 ;;; org-glance.el ends here
 #+END_SRC
-*** DONE Tests [1/1]
+
+*** DONE Tests
 **** DONE feature-provision                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/feature-provision ()
