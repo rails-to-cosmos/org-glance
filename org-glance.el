@@ -199,7 +199,7 @@ Add some FILTERS to filter unwanted entries."
                       (org-mode)
 
                       (when (file-exists-p org-glance-cache-file)
-                        (insert-file-contents-literally org-glance-cache-file))
+                        (insert-file-contents org-glance-cache-file))
 
                       (let* ((entries (with-temp-buffer
                                         (org-mode)
@@ -276,17 +276,8 @@ If there are no entries, raise exception."
               (org-save-outline-visibility t
                 (funcall visitor)))
           (funcall visitor))
-      (with-current-buffer (find-file-noselect file-or-buffer t t)
+      (with-current-buffer (find-file-noselect file-or-buffer t nil)
         (funcall visitor)))))
-
-(defun org-glance/follow-org-link-at-point ()
-  "Browse org-link at point."
-  (let ((link (buffer-substring-no-properties
-               (save-excursion (org-beginning-of-line) (point))
-               (save-excursion (org-end-of-line) (point))))
-        ;; (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
-        )
-    (org-open-link-from-string link)))
 
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
