@@ -199,41 +199,44 @@ All FILTERS lambdas must be t."
          (inplace-p           (or (plist-get args :inplace)             nil))
          (file-or-buffer      (or (plist-get args :file-or-buffer)      nil))
 
-         (point (point))
-         (item (org-entry-get point "ITEM"))
+         (item (org-entry-get (point) "ITEM"))
          (path (funcall (if inplace-p 'append 'cdr) (org-get-outline-path t)))
          (outline (cl-set-difference path outline-ignore :test 'string=))
          (title (mapconcat 'identity outline separator)))
     (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
                (not (string-empty-p (s-trim title))))
-      (list title point file-or-buffer))))
+      (list title (point) file-or-buffer))))
 #+END_SRC
 
 ** TODO cache                                                                  :Feature:
 *** add-scope
 
 #+BEGIN_SRC emacs-lisp
-(defun org-glance-cache--add-scope (scope-name entries state)
-  (loop for (title level) in entries
-        for i below (length entries)
-        with prev-level
-        initially (progn
-                    (end-of-buffer)
-                    (org-insert-heading nil nil t)
-                    (insert scope-name)
-                    (org-set-property "CREATED" (current-time-string))
-                    (org-set-property "STATE" state)
-                    (org-insert-heading-respect-content)
-                    (org-do-demote))
-        do (progn
-             (insert title)
-             (when prev-level
-               (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
-                     ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
-        when (< (+ i 1) (length entries))
-        do (progn
-             (org-insert-heading-respect-content)
-             (setq prev-level level))))
+(defun org-glance-cache--add-scope (&rest args)
+  (let* ((scope (or (plist-get args :scope) nil))
+         (-> (assert scope nil "Specify :scope to cache it."))
+         (entries (or (plist-get args :entries) nil))
+         (state (or (plist-get args :state) nil)))
+    (loop for (title level) in entries
+          for i below (length entries)
+          with prev-level
+          initially (progn
+                      (end-of-buffer)
+                      (org-insert-heading nil nil t)
+                      (insert scope)
+                      (org-set-property "CREATED" (current-time-string))
+                      (org-set-property "STATE" state)
+                      (org-insert-heading-respect-content)
+                      (org-do-demote))
+          do (progn
+               (insert title)
+               (when prev-level
+                 (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
+                       ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
+          when (< (+ i 1) (length entries))
+          do (progn
+               (org-insert-heading-respect-content)
+               (setq prev-level level)))))
 #+END_SRC
 
 *** get-scope
@@ -326,9 +329,12 @@ Add some FILTERS to filter unwanted entries."
                                         (list (buffer-hash) ;; state
                                               (org-map-entries  ;; entries
                                                (lambda () (let* ((element (org-element-at-point))
-                                                            (title (org-element-property :title element))
-                                                            (level (org-element-property :level element)))
-                                                       (list title level)))))))
+                                                                 (title (org-element-property :title element))
+                                                                 (level (org-element-property :level element)))
+                                                       (list title level)
+                                                       ;; (when (every 'funcall filters)
+                                                       ;;   (list title level))
+                                                       ))))))
                              (entries (cadr contents))
                              (state (car contents))
                              (scope-name (funcall scope-name-getter file-or-buffer scope-type))
@@ -338,7 +344,10 @@ Add some FILTERS to filter unwanted entries."
                                    (> (length entries) 0)
                                    (not (string= org-glance-cache-file scope-name)))
                           (org-glance-cache--remove-scope scope-name)
-                          (org-glance-cache--add-scope scope-name entries state)
+                          (org-glance-cache--add-scope
+                           :scope scope-name
+                           :entries entries
+                           :state state)
                           (setq cached-scope (org-glance-cache--get-scope scope-name)))
 
                         (when-let ((scope-point (cadr cached-scope)))
