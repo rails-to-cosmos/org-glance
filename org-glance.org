@@ -11,7 +11,7 @@
 #+TBLNAME: Components
 | ! | Component | Available |
 |---+-----------+-----------|
-| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  | YES       |
+| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  | NO        |
 #+TBLFM: $3='(if (fboundp 'org-glance-devtools/build) "YES" "NO")
 
 * Hello
@@ -277,12 +277,20 @@ All FILTERS lambdas must be t."
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--get-scope (scope-name)
   (car (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (headline)
-       (let* ((level (org-element-property :level headline))
-              (title (org-element-property :title headline))
-              (begin (org-element-property :begin headline))
-              (state (org-entry-get begin "STATE"))
-              (end (org-element-property :end headline)))
+     (lambda (hl)
+       (let* ((props (org-element--get-node-properties))
+              (state (plist-get props :STATE))
+              ;; maybe map properties?
+              ;; (org-element-map hl 'node-property
+              ;;   (lambda (np)
+              ;;     (cons (org-element-property :key np)
+              ;;           (org-element-property :value np))))
+
+              (level (org-element-property :level hl))
+              (title (org-element-property :title hl))
+              (begin (org-element-property :begin hl))
+
+              (end (org-element-property :end hl)))
          (when (and (= level 1) (string= title scope-name))
            (list state begin end)))))))
 #+END_SRC
