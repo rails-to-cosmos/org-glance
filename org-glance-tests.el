@@ -30,74 +30,60 @@ the file returning the result of evaluating BODY."
          (kill-buffer)
          (delete-file fn)))))
 
-(defun org-glance-req/can-handle-org-links-p ()
-  "Can we handle org-links?"
-  (let ((expr "(+ 1 2)")
-        (caption "elisp-link"))
+(defun org-glance-test (&rest args)
+  (save-excursion
+    (with-temp-buffer
+      (org-mode)
+      (let ((begin-marker (with-current-buffer (messages-buffer)
+                            (point-max-marker)))
+            (context (plist-get args :context))
+            (expression (plist-get args :expression))
+            (input (plist-get args :input)))
 
-    (with-temp-org-buffer
-     (format "* [[elisp:%s][%s]]" (org-link-escape expr) caption)
+        (let* ((buffer (current-buffer))
+               (org-confirm-elisp-link-function nil)
+               (unread-command-events
+                (listify-key-sequence
+                 (kbd (format "%s RET" input)))))
+          (insert (format "* [[elisp:%s][%s]]" (org-link-escape expression) input))
+          (apply 'org-glance context))
 
-     (let ((buffer (current-buffer))
-           (org-confirm-elisp-link-function nil)
+        (string= (format "%s => %s" expression (eval (read expression)))
+                 (trim-string
+                  (-last-item
+                   (butlast
+                    (s-lines
+                     (with-current-buffer (messages-buffer)
+                       (buffer-substring begin-marker (point-max))))))))))))
 
-           (begin-marker
-            (with-current-buffer (messages-buffer)
-              (point-max-marker)))
-
-           (unread-command-events
-            (listify-key-sequence
-             (kbd (format "%s RET" caption)))))
-
-       (org-glance :inplace t)
-
-       (string= (trim-string
-                 (with-current-buffer (messages-buffer)
-                   (buffer-substring begin-marker (point-max))))
-                (format "%s => %s" expr (eval (read expr))))))))
-
-(defun org-glance-test-explainer/can-handle-org-links ()
-  "Handling org-links feature doesn't work properly")
-
-(put 'org-glance-req/can-handle-org-links-p
-     'ert-explainer
-     'org-glance-test-explainer/can-handle-org-links)
+(ert-deftest org-glance-test/can-work-with-empty-cache-file ()
+  "Should work with empty cache file."
+  (should
+   (org-glance-test
+    :context '(:no-cache-file)
+    :expression "(+ 1 5)"
+    :input "Hello")))
 
 (ert-deftest org-glance-test/can-handle-org-links ()
   "Test that we can handle org-links."
-  (should (org-glance-req/can-handle-org-links-p)))
-
-(defun org-glance-req/compl-non-file-buffer-p ()
-  "Return t if org-glance can work properly from non-file buffers."
-  (let ((expr "(+ 13 17)")
-        (caption "elisp-link"))
-
-    (with-temp-org-buffer
-     (format "* [[elisp:%s][%s]]" (org-link-escape expr) caption)
-
-     (let ((buffer (current-buffer))
-           (org-confirm-elisp-link-function nil)
-
-           (begin-marker
-            (with-current-buffer (messages-buffer)
-              (point-max-marker)))
-
-           (unread-command-events
-            (listify-key-sequence
-             (kbd (format "%s RET" caption)))))
-
-       (org-glance :scope (list buffer) :inplace t)
-
-       (string= (trim-string
-                 (with-current-buffer (messages-buffer)
-                   (buffer-substring begin-marker (point-max))))
-                (format "%s => %s" expr (eval (read expr))))))))
+  (should
+   (org-glance-test
+    :context '(:no-cache-file)
+    :expression "(+ 1 7)"
+    :input "elisp-link")))
 
 (ert-deftest org-glance-test/compl-non-file-buffer ()
-  (should (org-glance-req/compl-non-file-buffer-p)))
+  "Should work properly from non-file buffers."
+  (should
+   (org-glance-test
+    :context '(:no-cache-file
+               :inplace
+               :scope (list buffer))
+    :expression "(+ 13 17)"
+    :input "elisp-link")))
 
-(defun org-glance-req/scopes-contain-no-duplicates-p ()
-  "Return t if glance can deal with duplicates."
+(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
+  "Scope should not contain duplicates."
   (let ((scopes
          (org-glance--with-temp-filebuffer
           (org-glance--aggregate-scopes
@@ -113,20 +99,15 @@ the file returning the result of evaluating BODY."
 
             ;; function that returns filename
             'buffer-file-name)))))
-    (= (length scopes) 1)))
-
-(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
-  (should (org-glance-req/scopes-contain-no-duplicates-p)))
-
-(defun org-glance-req/scopes-can-handle-nil-lambdas-p ()
-  "Don't nil lambdas break glance?"
-  (not (null
-        (condition-case nil
-            (org-glance--aggregate-scopes (list (lambda () nil)))
-          (error nil)))))
+    (should (= (length scopes) 1))))
 
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
-  (should (org-glance-req/scopes-can-handle-nil-lambdas-p)))
+  "Ignore nil lambdas in scopes."
+  (should
+   (not (null
+         (condition-case nil
+             (org-glance--aggregate-scopes (list (lambda () nil)))
+           (error nil))))))
 
 (defun org-glance-req/filter-produces-proper-predicates-p (input expected)
   "Can we split user filter into atomic predicates?"
@@ -165,36 +146,26 @@ the file returning the result of evaluating BODY."
                  (lambda () t)
                  (alist-get 'links org-glance/default-filters)))))
 
-(defun org-glance-req/filter-removes-entries-p (filter content input)
-  (with-temp-org-buffer content
-   (let ((unread-command-events (listify-key-sequence (kbd (format "%s RET" input)))))
-     (condition-case nil
-         (org-glance :filter filter :inplace t)
-       (error t)))))
-
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
   (should
-   (org-glance-req/filter-removes-entries-p
-    (lambda () (org-match-line "^.*Sec"))
-
-    "
-* First
-* [[elisp:(+%2011%2012)][Second]]
-* Third
-* [[elisp:(+%2011%2012)][Security]]"
-
-    "Third")))
+   (condition-case nil
+        (org-glance-test
+         :context (list :no-cache-file
+                        :inplace
+                        :filter (lambda () (org-match-line "^ example$")))
+         :expression "(+ 1 5)"
+         :input "elisp-link")
+     (error t))))
 
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
-  "Test filtering."
-  (with-temp-org-buffer "
-* First
-* [[elisp:(+%2011%2012)][Second]]
-* Third
-"
-      (let ((unread-command-events (listify-key-sequence (kbd "sec RET"))))
-        (should (eq nil (org-glance :filter (lambda () (org-match-line "^.*Second")) :inplace t))))))
+  (should
+   (org-glance-test
+    :context (list :no-cache-file
+                   :inplace
+                   :filter (lambda () (org-match-line "^.*elisp-link.*$")))
+    :expression "(+ 1 5)"
+    :input "elisp-link")))
 
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))

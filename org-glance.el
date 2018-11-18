@@ -75,8 +75,13 @@ If buffer-or-name is nil return current buffer's mode."
          (outline-ignore (or (plist-get args :outline-ignore) nil))
 
          ;; user predicates
-         (save-outline-visibility-p (or (plist-get args :save-outline-visibility-p) nil))
-         (inplace-p                 (or (plist-get args :inplace) nil))
+         (save-outline-visibility-p (plist-member args :save-outline-visibility))
+         (inplace-p                 (plist-member args :inplace))
+         (no-cache-file-p           (plist-member args :no-cache-file))
+
+         (org-glance-cache-file (if no-cache-file-p
+                                    (make-temp-file "org-glance-")
+                                  org-glance-cache-file))
 
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
@@ -89,9 +94,12 @@ If buffer-or-name is nil return current buffer's mode."
                    :outline-ignore outline-ignore
                    :filters filters
                    :inplace inplace-p))
-         (-> (assert entries nil (format "Nothing to glance for %s" (prin1-to-string aggregated-scopes)))))
-
-    (org-glance/compl-map prompt entries action save-outline-visibility-p)))
+         (-> (when (not entries) nil (error "Nothing to glance for %s" (prin1-to-string aggregated-scopes)))))
+    (org-glance/compl-map prompt entries action save-outline-visibility-p)
+    (when no-cache-file-p
+      (with-current-buffer (get-file-buffer org-glance-cache-file)
+        (kill-buffer))
+      (delete-file org-glance-cache-file))))
 
 (defun org-glance--get-entry-coordinates (&rest args)
   "Return outline path of current `'org-mode`' entry.
@@ -115,8 +123,8 @@ All FILTERS lambdas must be t."
       (list title (point) file-or-buffer))))
 
 (defun org-glance-cache--add-scope (&rest args)
-  (let* ((scope (or (plist-get args :scope) nil))
-         (-> (assert scope nil "Specify :scope to cache it."))
+  (let* ((scope (plist-get args :scope))
+         (-> (assert (plist-member args :scope) nil "Specify :scope to cache it."))
          (entries (or (plist-get args :entries) nil))
          (state (or (plist-get args :state) nil)))
     (loop for (title level) in entries
@@ -193,10 +201,11 @@ Add some FILTERS to filter unwanted entries."
                                     ((bufferp file-or-buffer) 'buffer))))
 
          (scope-name-getter (lambda (file-or-buffer scope-type)
-                              (case scope-type
-                                ('file (expand-file-name file-or-buffer))
-                                ('file-buffer (expand-file-name (buffer-file-name file-or-buffer)))
-                                ('buffer (buffer-name file-or-buffer)))))
+                              (s-trim
+                               (case scope-type
+                                 ('file (expand-file-name file-or-buffer))
+                                 ('file-buffer (expand-file-name (buffer-file-name file-or-buffer)))
+                                 ('buffer (buffer-name file-or-buffer))))))
 
          (implant (lambda (file-or-buffer scope-type)
                     (with-temp-file org-glance-cache-file
@@ -325,8 +334,9 @@ Without specifying SCOPES it returns list with current buffer."
     (or (remove 'nil (seq-uniq ascopes))
         (list (current-buffer)))))
 
-(defvar org-glance/default-filters '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
-                                     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
+(defvar org-glance/default-filters
+  '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+    (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
 
 (defun org-glance--filter-predicates (filter)
   "Factorize FILTER into list of predicates. Acceptable FILTER values:
