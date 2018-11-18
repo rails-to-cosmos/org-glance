@@ -60,7 +60,7 @@ the file returning the result of evaluating BODY."
   "Should work with empty cache file."
   (should
    (org-glance-test
-    :context '(:no-cache-file)
+    :context '(:no-cache-file t)
     :expression "(+ 1 5)"
     :input "Hello")))
 
@@ -68,7 +68,7 @@ the file returning the result of evaluating BODY."
   "Test that we can handle org-links."
   (should
    (org-glance-test
-    :context '(:no-cache-file)
+    :context '(:no-cache-file t)
     :expression "(+ 1 7)"
     :input "elisp-link")))
 
@@ -76,8 +76,8 @@ the file returning the result of evaluating BODY."
   "Should work properly from non-file buffers."
   (should
    (org-glance-test
-    :context '(:no-cache-file
-               :inplace
+    :context '(:no-cache-file t
+               :inplace t
                :scope (list buffer))
     :expression "(+ 13 17)"
     :input "elisp-link")))
@@ -151,8 +151,8 @@ the file returning the result of evaluating BODY."
   (should
    (condition-case nil
         (org-glance-test
-         :context (list :no-cache-file
-                        :inplace
+         :context (list :no-cache-file t
+                        :inplace t
                         :filter (lambda () (org-match-line "^ example$")))
          :expression "(+ 1 5)"
          :input "elisp-link")
@@ -161,8 +161,8 @@ the file returning the result of evaluating BODY."
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   (should
    (org-glance-test
-    :context (list :no-cache-file
-                   :inplace
+    :context (list :no-cache-file t
+                   :inplace t
                    :filter (lambda () (org-match-line "^.*elisp-link.*$")))
     :expression "(+ 1 5)"
     :input "elisp-link")))

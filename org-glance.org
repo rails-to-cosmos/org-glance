@@ -11,7 +11,7 @@
 #+TBLNAME: Components
 | ! | Component | Available |
 |---+-----------+-----------|
-| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  | NO        |
+| # | [[elisp:(org-sbe%20"devtools-build-require")][Devtools]]  | YES       |
 #+TBLFM: $3='(if (fboundp 'org-glance-devtools/build) "YES" "NO")
 
 * Hello
@@ -189,9 +189,9 @@ the file returning the result of evaluating BODY."
          (outline-ignore (or (plist-get args :outline-ignore) nil))
 
          ;; user predicates
-         (save-outline-visibility-p (plist-member args :save-outline-visibility))
-         (inplace-p                 (plist-member args :inplace))
-         (no-cache-file-p           (plist-member args :no-cache-file))
+         (save-outline-visibility-p (plist-get args :save-outline-visibility))
+         (inplace-p                 (plist-get args :inplace))
+         (no-cache-file-p           (plist-get args :no-cache-file))
 
          (org-glance-cache-file (if no-cache-file-p
                                     (make-temp-file "org-glance-")
@@ -211,8 +211,9 @@ the file returning the result of evaluating BODY."
          (-> (when (not entries) nil (error "Nothing to glance for %s" (prin1-to-string aggregated-scopes)))))
     (org-glance/compl-map prompt entries action save-outline-visibility-p)
     (when no-cache-file-p
-      (with-current-buffer (get-file-buffer org-glance-cache-file)
-        (kill-buffer))
+      (when-let ((fb (get-file-buffer org-glance-cache-file)))
+        (with-current-buffer fb
+          (kill-buffer)))
       (delete-file org-glance-cache-file))))
 #+END_SRC
 
@@ -491,7 +492,7 @@ connections:
 ;; (json-read-file "~/.context")
 #+END_SRC
 ** DONE compl-map                                                              :Feature:
-*** DONE Implementation
+
 #+BEGIN_SRC emacs-lisp
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
@@ -522,6 +523,7 @@ If there are no entries, raise exception."
       (with-current-buffer (find-file-noselect file-or-buffer t nil)
         (funcall visitor)))))
 #+END_SRC
+
 *** DONE Tests
 **** DONE Can handle empty cache file                                        :Test:
 
@@ -530,7 +532,7 @@ If there are no entries, raise exception."
   "Should work with empty cache file."
   (should
    (org-glance-test
-    :context '(:no-cache-file)
+    :context '(:no-cache-file t)
     :expression "(+ 1 5)"
     :input "Hello")))
 #+END_SRC
@@ -542,7 +544,7 @@ If there are no entries, raise exception."
   "Test that we can handle org-links."
   (should
    (org-glance-test
-    :context '(:no-cache-file)
+    :context '(:no-cache-file t)
     :expression "(+ 1 7)"
     :input "elisp-link")))
 #+END_SRC
@@ -554,8 +556,8 @@ If there are no entries, raise exception."
   "Should work properly from non-file buffers."
   (should
    (org-glance-test
-    :context '(:no-cache-file
-               :inplace
+    :context '(:no-cache-file t
+               :inplace t
                :scope (list buffer))
     :expression "(+ 13 17)"
     :input "elisp-link")))
@@ -708,8 +710,8 @@ Without specifying SCOPES it returns list with current buffer."
   (should
    (condition-case nil
         (org-glance-test
-         :context (list :no-cache-file
-                        :inplace
+         :context (list :no-cache-file t
+                        :inplace t
                         :filter (lambda () (org-match-line "^ example$")))
          :expression "(+ 1 5)"
          :input "elisp-link")
@@ -722,8 +724,8 @@ Without specifying SCOPES it returns list with current buffer."
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   (should
    (org-glance-test
-    :context (list :no-cache-file
-                   :inplace
+    :context (list :no-cache-file t
+                   :inplace t
                    :filter (lambda () (org-match-line "^.*elisp-link.*$")))
     :expression "(+ 1 5)"
     :input "elisp-link")))

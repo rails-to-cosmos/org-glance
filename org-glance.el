@@ -75,9 +75,9 @@ If buffer-or-name is nil return current buffer's mode."
          (outline-ignore (or (plist-get args :outline-ignore) nil))
 
          ;; user predicates
-         (save-outline-visibility-p (plist-member args :save-outline-visibility))
-         (inplace-p                 (plist-member args :inplace))
-         (no-cache-file-p           (plist-member args :no-cache-file))
+         (save-outline-visibility-p (plist-get args :save-outline-visibility))
+         (inplace-p                 (plist-get args :inplace))
+         (no-cache-file-p           (plist-get args :no-cache-file))
 
          (org-glance-cache-file (if no-cache-file-p
                                     (make-temp-file "org-glance-")
@@ -97,8 +97,9 @@ If buffer-or-name is nil return current buffer's mode."
          (-> (when (not entries) nil (error "Nothing to glance for %s" (prin1-to-string aggregated-scopes)))))
     (org-glance/compl-map prompt entries action save-outline-visibility-p)
     (when no-cache-file-p
-      (with-current-buffer (get-file-buffer org-glance-cache-file)
-        (kill-buffer))
+      (when-let ((fb (get-file-buffer org-glance-cache-file)))
+        (with-current-buffer fb
+          (kill-buffer)))
       (delete-file org-glance-cache-file))))
 
 (defun org-glance--get-entry-coordinates (&rest args)
@@ -150,12 +151,20 @@ All FILTERS lambdas must be t."
 
 (defun org-glance-cache--get-scope (scope-name)
   (car (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (headline)
-       (let* ((level (org-element-property :level headline))
-              (title (org-element-property :title headline))
-              (begin (org-element-property :begin headline))
-              (state (org-entry-get begin "STATE"))
-              (end (org-element-property :end headline)))
+     (lambda (hl)
+       (let* ((props (org-element--get-node-properties))
+              (state (plist-get props :STATE))
+              ;; maybe map properties?
+              ;; (org-element-map hl 'node-property
+              ;;   (lambda (np)
+              ;;     (cons (org-element-property :key np)
+              ;;           (org-element-property :value np))))
+
+              (level (org-element-property :level hl))
+              (title (org-element-property :title hl))
+              (begin (org-element-property :begin hl))
+
+              (end (org-element-property :end hl)))
          (when (and (= level 1) (string= title scope-name))
            (list state begin end)))))))
 
