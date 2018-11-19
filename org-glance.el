@@ -36,7 +36,10 @@
 (require 'seq)
 
 (defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
-(make-directory (file-name-directory org-glance-cache-file))
+
+(condition-case nil
+    (make-directory (file-name-directory org-glance-cache-file))
+  (error nil))
 
 (defvar org-glance-defaults--separator " → ")
 
@@ -152,10 +155,10 @@ All FILTERS lambdas must be t."
                (setq prev-level level)))))
 
 (defun org-glance-cache--get-scope (scope-name)
-  (car (org-element-map (org-element-parse-buffer 'headline) 'headline
+  (car
+   (org-element-map (org-element-parse-buffer 'headline) 'headline
      (lambda (hl)
-       (let* ((props (org-element--get-node-properties))
-              (state (plist-get props :STATE))
+       (let* (
               ;; maybe map properties?
               ;; (org-element-map hl 'node-property
               ;;   (lambda (np)
@@ -168,9 +171,12 @@ All FILTERS lambdas must be t."
 
               (end (org-element-property :end hl)))
          (when (and (= level 1) (string= title scope-name))
-           (goto-char begin)
-           (org-set-property "USED" (current-time-string))
-           (list state begin end)))))))
+           (save-excursion
+             (goto-char begin)
+             (let* ((props (org-element--get-node-properties))
+                    (state (plist-get props :STATE)))
+               (org-set-property "USED" (current-time-string))
+               (list state begin end)))))))))
 
 (defun org-glance-cache--remove-scope (scope-name)
   (when-let (scope (org-glance-cache--get-scope scope-name))
@@ -233,8 +239,8 @@ Add some FILTERS to filter unwanted entries."
                                         (list (buffer-hash) ;; state
                                               (org-map-entries  ;; entries
                                                (lambda () (let* ((element (org-element-at-point))
-                                                                 (title (org-element-property :title element))
-                                                                 (level (org-element-property :level element)))
+                                                            (title (org-element-property :title element))
+                                                            (level (org-element-property :level element)))
                                                        (list title level)
                                                        ;; (when (every 'funcall filters)
                                                        ;;   (list title level))
@@ -247,11 +253,16 @@ Add some FILTERS to filter unwanted entries."
                         (when (and (or (not cached-scope) (not (string= state (car cached-scope))))
                                    (> (length entries) 0)
                                    (not (string= org-glance-cache-file scope-name)))
+                          (prin1 "-- Debug:")
+                          (prin1 cached-scope)
+                          (prin1 state)
+                          (prin1 "-- End")
                           (org-glance-cache--remove-scope scope-name)
                           (org-glance-cache--add-scope
                            :scope scope-name
                            :entries entries
                            :state state)
+                          ;; TODO: possible optimization/add-scope can return scope
                           (setq cached-scope (org-glance-cache--get-scope scope-name)))
 
                         (when-let ((scope-point (cadr cached-scope)))
