@@ -35,7 +35,7 @@
 (require 'subr-x)
 (require 'seq)
 
-(defvar org-glance-cache-file "/tmp/org-glance-cache.org")
+(defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
 (defvar org-glance-defaults--separator " → ")
 
 (defun buffer-mode (&optional buffer-or-name)
@@ -166,6 +166,8 @@ All FILTERS lambdas must be t."
 
               (end (org-element-property :end hl)))
          (when (and (= level 1) (string= title scope-name))
+           (goto-char begin)
+           (org-set-property "USED" (current-time-string))
            (list state begin end)))))))
 
 (defun org-glance-cache--remove-scope (scope-name)
