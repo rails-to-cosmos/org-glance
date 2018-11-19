@@ -80,7 +80,10 @@ command from `org-glance.org` buffer.
 (require 'seq)
 
 (defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
-(make-directory (file-name-directory org-glance-cache-file))
+
+(condition-case nil
+    (make-directory (file-name-directory org-glance-cache-file))
+  (error nil))
 
 (defvar org-glance-defaults--separator " → ")
 

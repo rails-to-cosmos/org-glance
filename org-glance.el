@@ -36,6 +36,8 @@
 (require 'seq)
 
 (defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
+(make-directory (file-name-directory org-glance-cache-file))
+
 (defvar org-glance-defaults--separator " → ")
 
 (defun buffer-mode (&optional buffer-or-name)
