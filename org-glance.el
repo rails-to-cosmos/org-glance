@@ -62,9 +62,9 @@ If buffer-or-name is nil return current buffer's mode."
 
   You can customize default filters by setting org-glance/default-filters variable.
 
-- ACTION :: lambda to call on selected entry
+- ACTION
+  - if specified, call it with point on selected entry
   - if entry has an org-link in title, browse it
-  - if entry has HANDLER property, read-eval it
 - HANDLER :: property name to read-eval on select (default: \"HANDLER\")
 - OUTLINE-IGNORE :: list of strings to ignore in outline-path
 
@@ -91,7 +91,7 @@ If buffer-or-name is nil return current buffer's mode."
          (handler   (or (plist-get args :handler)        "HANDLER"))
          (prompt    (or (plist-get args :prompt)         "Glance: "))
          (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         'org-glance/follow-org-link-at-point))
+         (action    (or (plist-get args :action)         nil))
 
          (entries (org-glance--entries
                    :scope aggregated-scopes
@@ -99,7 +99,8 @@ If buffer-or-name is nil return current buffer's mode."
                    :outline-ignore outline-ignore
                    :filters filters
                    :inplace inplace-p))
-         (-> (when (not entries) nil (error "Nothing to glance for %s" (prin1-to-string aggregated-scopes)))))
+         (-> (when (not entries) nil (error "Nothing to glance for %s"
+                                            (prin1-to-string aggregated-scopes)))))
     (org-glance/compl-map prompt entries action save-outline-visibility-p)
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
@@ -253,10 +254,6 @@ Add some FILTERS to filter unwanted entries."
                         (when (and (or (not cached-scope) (not (string= state (car cached-scope))))
                                    (> (length entries) 0)
                                    (not (string= org-glance-cache-file scope-name)))
-                          (prin1 "-- Debug:")
-                          (prin1 cached-scope)
-                          (prin1 state)
-                          (prin1 "-- End")
                           (org-glance-cache--remove-scope scope-name)
                           (org-glance-cache--add-scope
                            :scope scope-name
@@ -304,16 +301,18 @@ If there are no entries, raise exception."
          (choice (cond
                   ((= entries-count 0) (error "Empty set."))
                   (t (org-completing-read prompt entries))))
+
          (data (assoc-string choice entries))
          (point (cadr data))
          (file-or-buffer (caddr data))
 
-         (visitor (lambda () (let* ((point (goto-char point))
-                               (line (thing-at-point 'line t))
-                               (search (string-match org-any-link-re line))
-
-                               (link (substring line (match-beginning 0) (match-end 0))))
-                          (org-open-link-from-string link))))
+         (visitor (lambda () (let ((point (goto-char point)))
+                          (if action
+                              (funcall action)
+                            (let* ((line (thing-at-point 'line t))
+                                   (search (string-match org-any-link-re line))
+                                   (link (substring line (match-beginning 0) (match-end 0))))
+                              (org-open-link-from-string link))))))
 
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
