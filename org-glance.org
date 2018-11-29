@@ -2,8 +2,7 @@
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 #+CATEGORY: org-glance
-#+TAGS: License Documentation
-#+TAGS: Feature Test
+#+TAGS: License Documentation Feature Test
 #+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "org-glance-tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no")) :results silent
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
@@ -761,7 +760,7 @@ Without specifying SCOPES it returns list with current buffer."
 ** TODO cache properties!
 ** TODO profiler-start/profiler-report analyze
 ** TODO Fix fast insertion error (org-glance-cache-file does not have time to create)
-* Local Variables
+* Settings
 # Local Variables:
 # test-buffer: "*org-glance-tests*"
 # test-selector: "^org-glance-test/"
