@@ -8,8 +8,6 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
-- [[elisp:(org-sbe%20"devtools-build-require")][Initialize devtools]]
-
 * Hello
 ** README                                                                      :Documentation:
 #+BEGIN_SRC markdown
@@ -754,43 +752,19 @@ Without specifying SCOPES it returns list with current buffer."
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
 #+END_SRC
-* Devtools
-#+NAME: devtools-build-require
-#+BEGIN_SRC emacs-lisp :results silent
-(defun org-glance-devtools/build ()
-  (interactive)
-  (let ((project-files '("org-glance.el" "org-glance-tests.el")))
-    (org-sbe "with-temp-org-buffer")
-    (mapc 'delete-file project-files)
-    (org-babel-tangle)
-    (mapc 'load-file project-files)
-    (mapc 'byte-compile-file project-files)
-
-    (let* ((test-$ "^org-glance-test/")
-           (test-buffer "*org-glance-tests*")
-           (ert-stats (ert-run-tests-interactively test-$ test-buffer))
-           (expected (ert-stats-completed-expected ert-stats))
-           (unexpected (ert-stats-completed-unexpected ert-stats))
-           (skipped (ert-stats-skipped ert-stats))
-           (total (ert-stats-total ert-stats))
-           (report (list total expected unexpected skipped)))
-      (apply 'message (append '("Build finished. Ran %d tests, %d were as expected, %d failed, %d skipped") report)))))
-
-(local-set-key (kbd "C-x y m") 'org-glance-devtools/build)
-(org-table-iterate-buffer-tables)
-(message "Development tools are now ready to use. Happy hacking!")
-#+END_SRC
 * Applications
 ** org-glance-snippets
 ** org-glance-passwords
 ** org-glance-bookmarks
 ** org-glance-fs
 * Todo
+** TODO cache properties!
 ** TODO profiler-start/profiler-report analyze
 ** TODO Fix fast insertion error (org-glance-cache-file does not have time to create)
 * Local Variables
 # Local Variables:
-# eval: (org-table-iterate-buffer-tables)
+# test-buffer: "*org-glance-tests*"
+# test-selector: "^org-glance-test/"
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
