@@ -138,7 +138,7 @@ All FILTERS lambdas must be t."
           for i below (length entries)
           with prev-level
           initially (progn
-                      (end-of-buffer)
+                      (goto-char (point-max))
                       (org-insert-heading nil nil t)
                       (insert scope)
                       (org-set-property "CREATED" (current-time-string))
@@ -191,9 +191,9 @@ All FILTERS lambdas must be t."
 
 (defun org-glance-cache--read-contents (fob scope-type)
   (case scope-type
-      ('file (find-file file-or-buffer))
-      ('file-buffer (switch-to-buffer file-or-buffer))
-      ('buffer (switch-to-buffer file-or-buffer))))
+      ('file (find-file fob))
+      ('file-buffer (switch-to-buffer fob))
+      ('buffer (switch-to-buffer fob))))
 
 (defun org-glance--entries (&rest args)
   "Return glance entries by SCOPE.

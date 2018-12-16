@@ -7,6 +7,7 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
+
 * Hello
 ** README                                                                      :Documentation:
 #+BEGIN_SRC markdown
@@ -154,8 +155,7 @@ the file returning the result of evaluating BODY."
 #+END_SRC
 * Features
 ** TODO org-glance                                                             :Feature:
-
-#+BEGIN_SRC emacs-lisp
+#+BEGIN_SRC emacs-lisp :tangle yes
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -254,7 +254,7 @@ All FILTERS lambdas must be t."
           for i below (length entries)
           with prev-level
           initially (progn
-                      (end-of-buffer)
+                      (goto-char (point-max))
                       (org-insert-heading nil nil t)
                       (insert scope)
                       (org-set-property "CREATED" (current-time-string))
@@ -323,9 +323,9 @@ All FILTERS lambdas must be t."
 #+BEGIN_SRC emacs-lisp
 (defun org-glance-cache--read-contents (fob scope-type)
   (case scope-type
-      ('file (find-file file-or-buffer))
-      ('file-buffer (switch-to-buffer file-or-buffer))
-      ('buffer (switch-to-buffer file-or-buffer))))
+      ('file (find-file fob))
+      ('file-buffer (switch-to-buffer fob))
+      ('buffer (switch-to-buffer fob))))
 #+END_SRC
 
 ** TODO entries                                                                :Feature:
@@ -757,13 +757,14 @@ Without specifying SCOPES it returns list with current buffer."
 ** org-glance-bookmarks
 ** org-glance-fs
 * Todo
-** TODO cache properties!
+** TODO Use org-current-tag-alist
+** TODO cache properties
 ** TODO profiler-start/profiler-report analyze
 ** TODO Fix fast insertion error (org-glance-cache-file does not have time to create)
 * Settings
 # Local Variables:
-# test-buffer: "*org-glance-tests*"
-# test-selector: "^org-glance-test/"
+# org-literate-test-buffer: "*org-glance-tests*"
+# org-literate-test-selector: "^org-glance-test/"
 # org-use-tag-inheritance: t
 # org-src-preserve-indentation: t
 # org-adapt-indentation: nil
