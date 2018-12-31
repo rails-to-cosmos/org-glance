@@ -119,41 +119,39 @@ All FILTERS lambdas must be t."
          (outline-ignore      (or (plist-get args :outline-ignore)      nil))
          (filters             (or (plist-get args :filters)             nil))
          (inplace-p           (or (plist-get args :inplace)             nil))
-         (file-or-buffer      (or (plist-get args :file-or-buffer)      nil))
-
+         (fob                 (or (plist-get args :fob)                 nil))
          (item (org-entry-get (point) "ITEM"))
          (path (funcall (if inplace-p 'append 'cdr) (org-get-outline-path t)))
          (outline (cl-set-difference path outline-ignore :test 'string=))
          (title (mapconcat 'identity outline separator)))
     (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
                (not (string-empty-p (s-trim title))))
-      (list title (point) file-or-buffer))))
+      (list title (point) fob))))
 
-(defun org-glance-cache--add-scope (&rest args)
-  (let* ((scope (plist-get args :scope))
-         (-> (assert (plist-member args :scope) nil "Specify :scope to cache it."))
-         (entries (or (plist-get args :entries) nil))
-         (state (or (plist-get args :state) nil)))
-    (loop for (title level) in entries
-          for i below (length entries)
-          with prev-level
-          initially (progn
-                      (goto-char (point-max))
-                      (org-insert-heading nil nil t)
-                      (insert scope)
-                      (org-set-property "CREATED" (current-time-string))
-                      (org-set-property "STATE" state)
-                      (org-insert-heading-respect-content)
-                      (org-do-demote))
-          do (progn
-               (insert title)
-               (when prev-level
-                 (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
-                       ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
-          when (< (+ i 1) (length entries))
-          do (progn
-               (org-insert-heading-respect-content)
-               (setq prev-level level)))))
+;; org-element-interpret-data
+
+(defun org-glance-cache--add-scope (scope entries state)
+  (cl-loop for (title level) in entries
+           for i below (length entries)
+           with prev-level
+           initially (progn
+                       (goto-char (point-max))
+                       (org-insert-heading nil nil t)
+                       (insert scope)
+                       (org-set-property "CREATED" (current-time-string))
+                       (org-set-property "STATE" state)
+                       (org-insert-heading-respect-content)
+                       (org-do-demote))
+           do (progn
+                (insert title)
+                (when prev-level
+                  (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
+                        ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
+
+           when (< (+ i 1) (length entries))
+           do (progn
+                (org-insert-heading-respect-content)
+                (setq prev-level level))))
 
 (defun org-glance-cache--get-scope (scope-name)
   (car
@@ -178,6 +176,13 @@ All FILTERS lambdas must be t."
                     (state (plist-get props :STATE)))
                (org-set-property "USED" (current-time-string))
                (list state begin end)))))))))
+
+(defun org-glance-cache--get-scope-state-headlines (fob scope-type)
+  (with-temp-buffer
+    (org-mode)
+    (org-glance-cache--insert-contents fob scope-type)
+    (list (buffer-hash)
+          (org-element-parse-buffer 'headline))))
 
 (defun org-glance-cache--remove-scope (scope-name)
   (when-let (scope (org-glance-cache--get-scope scope-name))
@@ -205,7 +210,7 @@ When INPLACE flag specified, do not modify *org-glance-scope* buffer.
 
 Add some FILTERS to filter unwanted entries."
   (let* ((scope               (or (plist-get args :scope)               (list (current-buffer))))
-         (-> (assert (listp scope) nil "Scope must be instance of list."))
+         (_ (assert (listp scope) nil "Scope must be an instance of list."))
 
          (separator           (or (plist-get args :separator)           org-glance-defaults--separator))
          (outline-ignore      (or (plist-get args :outline-ignore)      nil))
@@ -215,50 +220,37 @@ Add some FILTERS to filter unwanted entries."
          ;; Possible beautify and optimization: switch to opened buffer instead of finding file
          ;; (live-buffers (remove nil (mapcar 'buffer-file-name (buffer-list))))
 
-         (scope-type-getter (lambda (file-or-buffer)
-                              (cond ((and (stringp file-or-buffer) (file-exists-p file-or-buffer)) 'file)
-                                    ((and (bufferp file-or-buffer) (buffer-file-name file-or-buffer) (file-exists-p (buffer-file-name file-or-buffer))) 'file-buffer)
-                                    ((bufferp file-or-buffer) 'buffer))))
+         (scope-type-getter (lambda (fob)
+                              (cond ((and (stringp fob) (file-exists-p fob)) 'file)
+                                    ((and (bufferp fob) (buffer-file-name fob) (file-exists-p (buffer-file-name fob))) 'file-buffer)
+                                    ((bufferp fob) 'buffer))))
 
-         (scope-name-getter (lambda (file-or-buffer scope-type)
+         (scope-name-getter (lambda (fob scope-type)
                               (s-trim
                                (case scope-type
-                                 ('file (expand-file-name file-or-buffer))
-                                 ('file-buffer (expand-file-name (buffer-file-name file-or-buffer)))
-                                 ('buffer (buffer-name file-or-buffer))))))
+                                 ('file (expand-file-name fob))
+                                 ('file-buffer (expand-file-name (buffer-file-name fob)))
+                                 ('buffer (buffer-name fob))))))
 
-         (implant (lambda (file-or-buffer scope-type)
+         (implant (lambda (fob scope-type)
                     (with-temp-file org-glance-cache-file
                       (org-mode)
 
                       (when (file-exists-p org-glance-cache-file)
                         (insert-file-contents org-glance-cache-file))
 
-                      (let* ((contents (with-temp-buffer
-                                        (org-mode)
-                                        (org-glance-cache--insert-contents file-or-buffer scope-type)
-                                        (list (buffer-hash) ;; state
-                                              (org-map-entries  ;; entries
-                                               (lambda () (let* ((element (org-element-at-point))
-                                                            (title (org-element-property :title element))
-                                                            (level (org-element-property :level element)))
-                                                       (list title level)
-                                                       ;; (when (every 'funcall filters)
-                                                       ;;   (list title level))
-                                                       ))))))
-                             (entries (cadr contents))
+                      (let* ((contents (org-glance-cache--get-scope-state-headlines fob scope-type))
                              (state (car contents))
-                             (scope-name (funcall scope-name-getter file-or-buffer scope-type))
+                             (entries (cadr contents))
+                             (scope-name (funcall scope-name-getter fob scope-type))
                              (cached-scope (org-glance-cache--get-scope scope-name)))
 
-                        (when (and (or (not cached-scope) (not (string= state (car cached-scope))))
+                        (when (and (or (not cached-scope)
+                                       (not (string= state (car cached-scope))))
                                    (> (length entries) 0)
                                    (not (string= org-glance-cache-file scope-name)))
                           (org-glance-cache--remove-scope scope-name)
-                          (org-glance-cache--add-scope
-                           :scope scope-name
-                           :entries entries
-                           :state state)
+                          (org-glance-cache--add-scope scope-name entries state)
                           ;; TODO: possible optimization/add-scope can return scope
                           (setq cached-scope (org-glance-cache--get-scope scope-name)))
 
@@ -269,12 +261,12 @@ Add some FILTERS to filter unwanted entries."
                                            :outline-ignore outline-ignore
                                            :filters filters
                                            :inplace inplace-p
-                                           :file-or-buffer org-glance-cache-file)))
+                                           :fob org-glance-cache-file)))
                             (save-excursion
                               (goto-char scope-point)
                               (org-map-entries outliner nil 'tree))))))))
 
-         (visitor (lambda (file-or-buffer scope-type)
+         (visitor (lambda (fob scope-type)
                     (save-window-excursion
                       (let ((outliner
                              (apply-partially
@@ -283,15 +275,15 @@ Add some FILTERS to filter unwanted entries."
                               :outline-ignore outline-ignore
                               :filters filters
                               :inplace inplace-p
-                              :file-or-buffer file-or-buffer)))
-                        (org-glance-cache--read-contents file-or-buffer scope-type)
+                              :fob fob)))
+                        (org-glance-cache--read-contents fob scope-type)
                         (org-map-entries outliner)))))
 
          (handler (if inplace-p visitor implant)))
 
-    (loop for file-or-buffer in scope
-          append (let* ((scope-type (funcall scope-type-getter file-or-buffer))
-                        (entries (funcall handler file-or-buffer scope-type)))
+    (loop for fob in scope
+          append (let* ((scope-type (funcall scope-type-getter fob))
+                        (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
 
 (defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
@@ -304,7 +296,7 @@ If there are no entries, raise exception."
 
          (data (assoc-string choice entries))
          (point (cadr data))
-         (file-or-buffer (caddr data))
+         (fob (caddr data))
 
          (visitor (lambda () (let ((point (goto-char point)))
                           (if action
@@ -316,13 +308,13 @@ If there are no entries, raise exception."
 
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
-    (if (bufferp file-or-buffer)
-        (with-current-buffer file-or-buffer
+    (if (bufferp fob)
+        (with-current-buffer fob
           (if save-outline-visibility-p
               (org-save-outline-visibility t
                 (funcall visitor)))
           (funcall visitor))
-      (with-current-buffer (find-file-noselect file-or-buffer t nil)
+      (with-current-buffer (find-file-noselect fob t nil)
         (funcall visitor)))))
 
 (defun org-glance--aggregate-scopes (&optional scopes)
