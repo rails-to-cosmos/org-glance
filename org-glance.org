@@ -161,13 +161,19 @@ the file returning the result of evaluating BODY."
            :initarg :source)
 
    ;; private declarations
-   (name :type string :initarg :name)
-   (type :type symbol :initarg :type)
-   (headlines :type list :initarg :headlines)
-   (state :type (or string nil) :initarg :state))
+   (name :type string
+         :initarg :name)
+
+   (type :type symbol
+         :initarg :type)
+
+   (headlines :type list
+              :initarg :headlines)
+
+   (state :type (or string nil)
+          :initarg :state))
   "Unified interface for buffer/file scopes.")
 
-;; constructor
 (cl-defmethod initialize-instance :after ((scope og-scope) &rest args)
   ;; determine scope type
   (let ((source (oref scope :source)))
@@ -189,9 +195,14 @@ the file returning the result of evaluating BODY."
     ;; determine scope name
     (oset scope :name
           (case (oref scope :type)
-            ('buffer (buffer-name source))
-            ('file (expand-file-name source))
-            ('file-buffer (expand-file-name (buffer-file-name source)))))
+            ('buffer
+             (buffer-name source))
+
+            ('file
+             (expand-file-name source))
+
+            ('file-buffer
+             (expand-file-name (buffer-file-name source)))))
 
     ;; determine scope state and contents
     (case (oref scope :type)
@@ -245,14 +256,22 @@ the file returning the result of evaluating BODY."
 ** og-cache
 #+BEGIN_SRC emacs-lisp
 (defclass og-cache ()
-  ((scopes :type list :initarg :scopes)))
+  ((scopes :type hash-table
+           :initform (cl-make-hash-table :test #'equal)
+           :initarg :scopes)))
 
 (cl-defmethod og-cache--add-scope ((cache og-cache) scope)
-  "Insert SCOPE into CACHE if scope state has been modified."
-  (if (not (slot-boundp cache :scopes))
-      (oset cache scopes (list scope))
-    (add-to-list (oref cache scopes) scope))
-  (oref scope :name))
+  "Insert SCOPE into CACHE if scope state has been modified then return t.
+If state has not been modified, do not update CACHE and return nil."
+  (with-slots (name state) scope
+    (let* ((scopes (oref cache :scopes))
+           (ex-scope (gethash name scopes)))
+      (if ex-scope
+          (unless (equal state (oref ex-scope :state))
+            (puthash name scope scopes)
+            t)
+        (puthash name scope scopes)
+        t))))
 
 (let ((scope (og-scope :source (current-buffer)))
       (cache (og-cache)))
