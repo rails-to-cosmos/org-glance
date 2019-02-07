@@ -37,7 +37,7 @@ the file returning the result of evaluating BODY."
       (let ((begin-marker (with-current-buffer (messages-buffer)
                             (point-max-marker)))
             (context (plist-get args :context))
-            (expression (plist-get args :expression))
+            (expression (format "(+ %i %i)" (random 10) (random 10)))
             (input (plist-get args :input)))
 
         (let* ((buffer (current-buffer))
@@ -61,7 +61,6 @@ the file returning the result of evaluating BODY."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
-    :expression "(+ 1 5)"
     :input "Hello")))
 
 (ert-deftest org-glance-test/can-handle-org-links ()
@@ -69,7 +68,6 @@ the file returning the result of evaluating BODY."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
-    :expression "(+ 1 7)"
     :input "elisp-link")))
 
 (ert-deftest org-glance-test/compl-non-file-buffer ()
@@ -79,7 +77,6 @@ the file returning the result of evaluating BODY."
     :context '(:no-cache-file t
                :inplace t
                :scope (list buffer))
-    :expression "(+ 13 17)"
     :input "elisp-link")))
 
 (ert-deftest org-glance-test/scopes-contain-no-duplicates ()
@@ -154,7 +151,6 @@ the file returning the result of evaluating BODY."
          :context (list :no-cache-file t
                         :inplace t
                         :filter (lambda () (org-match-line "^ example$")))
-         :expression "(+ 1 5)"
          :input "elisp-link")
      (error t))))
 
@@ -164,7 +160,6 @@ the file returning the result of evaluating BODY."
     :context (list :no-cache-file t
                    :inplace t
                    :filter (lambda () (org-match-line "^.*elisp-link.*$")))
-    :expression "(+ 1 5)"
     :input "elisp-link")))
 
 (ert-deftest org-glance-test/feature-provision ()

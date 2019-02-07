@@ -1,6 +1,6 @@
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
-;; Copyright (C) 2018 Dmitry Akatov
+;; Copyright (C) 2018-2019 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -81,7 +81,9 @@ If buffer-or-name is nil return current buffer's mode."
 
          ;; user predicates
          (save-outline-visibility-p (plist-get args :save-outline-visibility))
-         (inplace-p                 (plist-get args :inplace))
+         (inplace-p                 t ;; (plist-get args :inplace)
+                                    ;; temporary while outplace completions fail
+                                    )
          (no-cache-file-p           (plist-get args :no-cache-file))
 
          (org-glance-cache-file (if no-cache-file-p
@@ -101,7 +103,7 @@ If buffer-or-name is nil return current buffer's mode."
                    :inplace inplace-p))
          (-> (when (not entries) nil (error "Nothing to glance for %s"
                                             (prin1-to-string aggregated-scopes)))))
-    (org-glance/compl-map prompt entries action save-outline-visibility-p)
+    (org-glance/completing-visit prompt entries action save-outline-visibility-p)
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
         (with-current-buffer fb
@@ -127,6 +129,16 @@ All FILTERS lambdas must be t."
     (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
                (not (string-empty-p (s-trim title))))
       (list title (point) fob))))
+
+(defun org-glance--visit-entry-at-point ()
+  (save-excursion
+      (let ((point (goto-char point)))
+        (if action
+            (funcall action)
+          (let* ((line (thing-at-point 'line t))
+                 (search (string-match org-any-link-re line))
+                 (link (substring line (match-beginning 0) (match-end 0))))
+            (org-open-link-from-string link))))))
 
 ;; org-element-interpret-data
 
@@ -286,7 +298,7 @@ Add some FILTERS to filter unwanted entries."
                         (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
 
-(defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
+(defun org-glance/completing-visit (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there are no entries, raise exception."
   (let* ((entries-count (length entries))
@@ -298,24 +310,16 @@ If there are no entries, raise exception."
          (point (cadr data))
          (fob (caddr data))
 
-         (visitor (lambda () (let ((point (goto-char point)))
-                          (if action
-                              (funcall action)
-                            (let* ((line (thing-at-point 'line t))
-                                   (search (string-match org-any-link-re line))
-                                   (link (substring line (match-beginning 0) (match-end 0))))
-                              (org-open-link-from-string link))))))
-
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
     (if (bufferp fob)
         (with-current-buffer fob
           (if save-outline-visibility-p
               (org-save-outline-visibility t
-                (funcall visitor)))
-          (funcall visitor))
+                (org-glance--visit-entry-at-point))
+            (org-glance--visit-entry-at-point)))
       (with-current-buffer (find-file-noselect fob t nil)
-        (funcall visitor)))))
+        (org-glance--visit-entry-at-point)))))
 
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).

@@ -133,7 +133,7 @@ the file returning the result of evaluating BODY."
       (let ((begin-marker (with-current-buffer (messages-buffer)
                             (point-max-marker)))
             (context (plist-get args :context))
-            (expression (plist-get args :expression))
+            (expression (format "(+ %i %i)" (random 10) (random 10)))
             (input (plist-get args :input)))
 
         (let* ((buffer (current-buffer))
@@ -315,7 +315,9 @@ If state has not been modified, do not update CACHE and return nil."
 
          ;; user predicates
          (save-outline-visibility-p (plist-get args :save-outline-visibility))
-         (inplace-p                 (plist-get args :inplace))
+         (inplace-p                 t ;; (plist-get args :inplace)
+                                    ;; temporary while outplace completions fail
+                                    )
          (no-cache-file-p           (plist-get args :no-cache-file))
 
          (org-glance-cache-file (if no-cache-file-p
@@ -371,15 +373,14 @@ All FILTERS lambdas must be t."
 
 #+begin_src emacs-lisp
 (defun org-glance--visit-entry-at-point ()
-  (save-window-excursion
-    (save-excursion
+  (save-excursion
       (let ((point (goto-char point)))
         (if action
             (funcall action)
           (let* ((line (thing-at-point 'line t))
                  (search (string-match org-any-link-re line))
                  (link (substring line (match-beginning 0) (match-end 0))))
-            (org-open-link-from-string link)))))))
+            (org-open-link-from-string link))))))
 #+end_src
 
 *** TODO Tests
@@ -571,9 +572,9 @@ Add some FILTERS to filter unwanted entries."
 #+END_SRC
 
 *** TODO Tests
-*** TODO sort-entries
-**** Tests
-***** classification problem
+** TODO sort-entries
+*** Tests
+**** classification problem
 classes:
 - i.e. bookmarks or passwords
 - items must be normally distributed
@@ -681,7 +682,6 @@ If there are no entries, raise exception."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
-    :expression "(+ 1 5)"
     :input "Hello")))
 #+END_SRC
 
@@ -693,7 +693,6 @@ If there are no entries, raise exception."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
-    :expression "(+ 1 7)"
     :input "elisp-link")))
 #+END_SRC
 
@@ -707,7 +706,6 @@ If there are no entries, raise exception."
     :context '(:no-cache-file t
                :inplace t
                :scope (list buffer))
-    :expression "(+ 13 17)"
     :input "elisp-link")))
 #+END_SRC
 
@@ -861,7 +859,6 @@ Without specifying SCOPES it returns list with current buffer."
          :context (list :no-cache-file t
                         :inplace t
                         :filter (lambda () (org-match-line "^ example$")))
-         :expression "(+ 1 5)"
          :input "elisp-link")
      (error t))))
 #+END_SRC
@@ -875,7 +872,6 @@ Without specifying SCOPES it returns list with current buffer."
     :context (list :no-cache-file t
                    :inplace t
                    :filter (lambda () (org-match-line "^.*elisp-link.*$")))
-    :expression "(+ 1 5)"
     :input "elisp-link")))
 #+END_SRC
 
