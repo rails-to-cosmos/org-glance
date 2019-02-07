@@ -7,7 +7,6 @@
 #+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
 #+PROPERTY: header-args:org :tangle no
 
-
 * Hello
 ** README                                                                      :Documentation:
 #+BEGIN_SRC markdown
@@ -35,7 +34,7 @@ command from `org-glance.org` buffer.
 #+BEGIN_SRC emacs-lisp
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
-;; Copyright (C) 2018 Dmitry Akatov
+;; Copyright (C) 2018-2019 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -273,12 +272,16 @@ If state has not been modified, do not update CACHE and return nil."
         (puthash name scope scopes)
         t))))
 
-(let ((scope (og-scope :source (current-buffer)))
-      (cache (og-cache)))
-  (og-cache--add-scope cache scope))
+(ert-deftest og-cache-test/scoping ()
+  (let ((scope (og-scope :source (current-buffer)))
+        (cache (og-cache)))
+    (og-cache--add-scope cache scope)))
+
+(ert-run-tests-batch 'og-cache-test/scoping)
 #+END_SRC
 * Features
 ** TODO org-glance                                                             :Feature:
+
 #+BEGIN_SRC emacs-lisp :tangle yes
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -332,7 +335,7 @@ If state has not been modified, do not update CACHE and return nil."
                    :inplace inplace-p))
          (-> (when (not entries) nil (error "Nothing to glance for %s"
                                             (prin1-to-string aggregated-scopes)))))
-    (org-glance/compl-map prompt entries action save-outline-visibility-p)
+    (org-glance/completing-visit prompt entries action save-outline-visibility-p)
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
         (with-current-buffer fb
@@ -364,6 +367,22 @@ All FILTERS lambdas must be t."
       (list title (point) fob))))
 #+END_SRC
 
+** TODO visitor                                                                :Feature:
+
+#+begin_src emacs-lisp
+(defun org-glance--visit-entry-at-point ()
+  (save-window-excursion
+    (save-excursion
+      (let ((point (goto-char point)))
+        (if action
+            (funcall action)
+          (let* ((line (thing-at-point 'line t))
+                 (search (string-match org-any-link-re line))
+                 (link (substring line (match-beginning 0) (match-end 0))))
+            (org-open-link-from-string link)))))))
+#+end_src
+
+*** TODO Tests
 ** TODO cache                                                                  :Feature:
 *** add-scope
 
@@ -552,9 +571,9 @@ Add some FILTERS to filter unwanted entries."
 #+END_SRC
 
 *** TODO Tests
-** TODO sort-entries
-*** Tests
-**** classification problem
+*** TODO sort-entries
+**** Tests
+***** classification problem
 classes:
 - i.e. bookmarks or passwords
 - items must be normally distributed
@@ -626,10 +645,10 @@ connections:
 
 ;; (json-read-file "~/.context")
 #+END_SRC
-** DONE compl-map                                                              :Feature:
+** DONE completions                                                            :Feature:
 
 #+BEGIN_SRC emacs-lisp
-(defun org-glance/compl-map (prompt entries action &optional save-outline-visibility-p)
+(defun org-glance/completing-visit (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there are no entries, raise exception."
   (let* ((entries-count (length entries))
@@ -641,24 +660,16 @@ If there are no entries, raise exception."
          (point (cadr data))
          (fob (caddr data))
 
-         (visitor (lambda () (let ((point (goto-char point)))
-                          (if action
-                              (funcall action)
-                            (let* ((line (thing-at-point 'line t))
-                                   (search (string-match org-any-link-re line))
-                                   (link (substring line (match-beginning 0) (match-end 0))))
-                              (org-open-link-from-string link))))))
-
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
     (if (bufferp fob)
         (with-current-buffer fob
           (if save-outline-visibility-p
               (org-save-outline-visibility t
-                (funcall visitor)))
-          (funcall visitor))
+                (org-glance--visit-entry-at-point))
+            (org-glance--visit-entry-at-point)))
       (with-current-buffer (find-file-noselect fob t nil)
-        (funcall visitor)))))
+        (org-glance--visit-entry-at-point)))))
 #+END_SRC
 
 *** DONE Tests
