@@ -130,18 +130,18 @@ the file returning the result of evaluating BODY."
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
   (should (org-glance-req/filter-produces-proper-predicates-p
-           'links (list (alist-get 'links org-glance/default-filters)))))
+           'links (list (alist-get 'links org-glance--default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
   (should (org-glance-req/filter-produces-proper-predicates-p
-           "links" (list (alist-get 'links org-glance/default-filters)))))
+           "links" (list (alist-get 'links org-glance--default-filters)))))
 
 (ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
   (should (org-glance-req/filter-produces-proper-predicates-p
            (list 'links (lambda () t) "links")
-           (list (alist-get 'links org-glance/default-filters)
+           (list (alist-get 'links org-glance--default-filters)
                  (lambda () t)
-                 (alist-get 'links org-glance/default-filters)))))
+                 (alist-get 'links org-glance--default-filters)))))
 
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."

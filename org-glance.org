@@ -72,7 +72,7 @@ command from `org-glance.org` buffer.
 (require 'subr-x)
 (require 'seq)
 
-(defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
+(defvar org-glance-cache-file (concat user-emacs-directory "org-glance--org-glance-cache.org"))
 
 (condition-case nil
     (make-directory (file-name-directory org-glance-cache-file))
@@ -280,9 +280,9 @@ If state has not been modified, do not update CACHE and return nil."
 (ert-run-tests-batch 'og-cache-test/scoping)
 #+END_SRC
 * Features
-** TODO org-glance                                                             :Feature:
+** org-glance                                                                  :Feature:
 
-#+BEGIN_SRC emacs-lisp :tangle yes
+#+BEGIN_SRC emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -294,7 +294,7 @@ If state has not been modified, do not update CACHE and return nil."
   - links :: keep entries with link in title
   - encrypted :: keep entries with :crypt: tag
 
-  You can customize default filters by setting org-glance/default-filters variable.
+  You can customize default filters by setting org-glance--default-filters variable.
 
 - ACTION
   - if specified, call it with point on selected entry
@@ -336,16 +336,17 @@ If state has not been modified, do not update CACHE and return nil."
                    :filters filters
                    :inplace inplace-p))
          (-> (when (not entries) nil (error "Nothing to glance for %s"
-                                            (prin1-to-string aggregated-scopes)))))
-    (org-glance/completing-visit prompt entries action save-outline-visibility-p)
+                                            (prin1-to-string aggregated-scopes))))
+         (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
         (with-current-buffer fb
           (kill-buffer)))
-      (delete-file org-glance-cache-file))))
+      (delete-file org-glance-cache-file))
+    result))
 #+END_SRC
 
-** TODO outliner                                                               :Feature:
+** outliner                                                                    :Feature:
 
 #+BEGIN_SRC emacs-lisp
 (defun org-glance--get-entry-coordinates (&rest args)
@@ -369,8 +370,9 @@ All FILTERS lambdas must be t."
       (list title (point) fob))))
 #+END_SRC
 
-** TODO visitor                                                                :Feature:
+** visitor                                                                     :Feature:
 
+#+name: visit-entry-at-point
 #+begin_src emacs-lisp
 (defun org-glance--visit-entry-at-point ()
   (save-excursion
@@ -383,7 +385,324 @@ All FILTERS lambdas must be t."
             (org-open-link-from-string link))))))
 #+end_src
 
-*** TODO Tests
+#+name: compl-visit
+#+begin_src emacs-lisp
+(defun org-glance--compl-visit (prompt entries action &optional save-outline-visibility-p)
+  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there are no entries, raise exception."
+  (let* ((entries-count (length entries))
+         (choice (cond
+                  ((= entries-count 0) (error "Empty set."))
+                  (t (org-completing-read prompt entries))))
+
+         (data (assoc-string choice entries))
+         (point (cadr data))
+         (fob (caddr data))
+
+         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+
+    (if (bufferp fob)
+        (with-current-buffer fob
+          (if save-outline-visibility-p
+              (org-save-outline-visibility t
+                (org-glance--visit-entry-at-point))
+            (org-glance--visit-entry-at-point)))
+      (with-current-buffer (find-file-noselect fob t nil)
+        (org-glance--visit-entry-at-point)))))
+#+end_src
+
+*** Tests [3/3]
+**** DONE Can visit empty cache file                                         :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-work-with-empty-cache-file ()
+  "Should work with empty cache file."
+  (should
+   (org-glance-test
+    :context '(:no-cache-file t)
+    :input "Hello")))
+#+END_SRC
+
+**** DONE Can visit org-links                                                :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/can-handle-org-links ()
+  "Test that we can handle org-links."
+  (should
+   (org-glance-test
+    :context '(:no-cache-file t)
+    :input "elisp-link")))
+#+END_SRC
+
+**** DONE Can complete non-file-visiting buffers                             :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/compl-non-file-buffer ()
+  "Should work properly from non-file buffers."
+  (should
+   (org-glance-test
+    :context '(:no-cache-file t
+               :inplace t
+               :scope (list buffer))
+    :input "elisp-link")))
+#+END_SRC
+
+** entries                                                                     :Feature:
+
+#+BEGIN_SRC emacs-lisp
+(defun org-glance--entries (&rest args)
+  "Return glance entries by SCOPE.
+
+Specify SEPARATOR and OUTLINE-IGNORE to customize
+outline-paths appearence.
+
+When INPLACE flag specified, do not modify *org-glance-scope* buffer.
+
+Add some FILTERS to filter unwanted entries."
+  (let* ((scope               (or (plist-get args :scope)               (list (current-buffer))))
+         (_ (assert (listp scope) nil "Scope must be an instance of list."))
+
+         (separator           (or (plist-get args :separator)           org-glance-defaults--separator))
+         (outline-ignore      (or (plist-get args :outline-ignore)      nil))
+         (inplace-p           (or (plist-get args :inplace)             nil))
+         (filters             (or (plist-get args :filters)             nil))
+
+         ;; Possible beautify and optimization: switch to opened buffer instead of finding file
+         ;; (live-buffers (remove nil (mapcar 'buffer-file-name (buffer-list))))
+
+         (scope-type-getter (lambda (fob)
+                              (cond ((and (stringp fob) (file-exists-p fob)) 'file)
+                                    ((and (bufferp fob) (buffer-file-name fob) (file-exists-p (buffer-file-name fob))) 'file-buffer)
+                                    ((bufferp fob) 'buffer))))
+
+         (scope-name-getter (lambda (fob scope-type)
+                              (s-trim
+                               (case scope-type
+                                 ('file (expand-file-name fob))
+                                 ('file-buffer (expand-file-name (buffer-file-name fob)))
+                                 ('buffer (buffer-name fob))))))
+
+         (implant (lambda (fob scope-type)
+                    (with-temp-file org-glance-cache-file
+                      (org-mode)
+
+                      (when (file-exists-p org-glance-cache-file)
+                        (insert-file-contents org-glance-cache-file))
+
+                      (let* ((contents (org-glance-cache--get-scope-state-headlines fob scope-type))
+                             (state (car contents))
+                             (entries (cadr contents))
+                             (scope-name (funcall scope-name-getter fob scope-type))
+                             (cached-scope (org-glance-cache--get-scope scope-name)))
+
+                        (when (and (or (not cached-scope)
+                                       (not (string= state (car cached-scope))))
+                                   (> (length entries) 0)
+                                   (not (string= org-glance-cache-file scope-name)))
+                          (org-glance-cache--remove-scope scope-name)
+                          (org-glance-cache--add-scope scope-name entries state)
+                          ;; TODO: possible optimization/add-scope can return scope
+                          (setq cached-scope (org-glance-cache--get-scope scope-name)))
+
+                        (when-let ((scope-point (cadr cached-scope)))
+                          (let ((outliner (apply-partially
+                                           'org-glance--get-entry-coordinates
+                                           :separator separator
+                                           :outline-ignore outline-ignore
+                                           :filters filters
+                                           :inplace inplace-p
+                                           :fob org-glance-cache-file)))
+                            (save-excursion
+                              (goto-char scope-point)
+                              (org-map-entries outliner nil 'tree))))))))
+
+         (visitor (lambda (fob scope-type)
+                    (save-window-excursion
+                      (let ((outliner
+                             (apply-partially
+                              'org-glance--get-entry-coordinates
+                              :separator separator
+                              :outline-ignore outline-ignore
+                              :filters filters
+                              :inplace inplace-p
+                              :fob fob)))
+                        (org-glance-cache--read-contents fob scope-type)
+                        (org-map-entries outliner)))))
+
+         (handler (if inplace-p visitor implant)))
+
+    (loop for fob in scope
+          append (let* ((scope-type (funcall scope-type-getter fob))
+                        (entries (funcall handler fob scope-type)))
+                   (remove nil entries)))))
+#+END_SRC
+
+** scoping                                                                     :Feature:
+
+#+BEGIN_SRC emacs-lisp
+(defun org-glance--aggregate-scopes (&optional scopes)
+  "Provides list of scopes (scope may be buffer or existing file).
+Without specifying SCOPES it returns list with current buffer."
+
+  (let* ((scopes (cond ((or (stringp scopes)
+                            (and (symbolp scopes)
+                                 (not (null scopes))))
+                        (list scopes))
+                       (t scopes)))
+
+         (ascopes (cl-loop for scope in scopes
+
+                           ;; collect buffers
+                           when (bufferp scope)
+                           collect scope
+
+                           ;; collect functions that return buffers or filenames
+                           when (functionp scope)
+                           collect (when-let ((fob (funcall scope)))
+                                     (if (bufferp fob)
+                                         fob
+                                       (or (get-file-buffer (expand-file-name fob))
+                                           (expand-file-name fob))))
+
+                           ;; collect file names
+                           when (and (stringp scope) (file-exists-p (expand-file-name scope)))
+                           collect (or (get-file-buffer (expand-file-name scope))
+                                       (expand-file-name scope)))))
+
+    (or (remove 'nil (seq-uniq ascopes))
+        (list (current-buffer)))))
+#+END_SRC
+
+*** Tests [2/4]
+**** DONE Return must contain no duplicates                                  :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
+  "Scope should not contain duplicates."
+  (let ((scopes
+         (org-glance--with-temp-filebuffer
+          (org-glance--aggregate-scopes
+           (list
+            ;; buffer
+            (current-buffer)
+
+            ;; filename
+            (buffer-file-name)
+
+            ;; function that returns buffer
+            'current-buffer
+
+            ;; function that returns filename
+            'buffer-file-name)))))
+    (should (= (length scopes) 1))))
+#+END_SRC
+
+**** DONE Proper handling lambda with nil return                             :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
+  "Ignore nil lambdas in scopes."
+  (should
+   (not (null
+         (condition-case nil
+             (org-glance--aggregate-scopes (list (lambda () nil)))
+           (error nil))))))
+#+END_SRC
+
+**** TODO Input must handle scopes of types: buffer, fun, filename
+**** TODO Proper handle nil input
+** filtering                                                                   :Feature:
+
+#+BEGIN_SRC emacs-lisp
+(defvar org-glance--default-filters
+  '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+    (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
+
+(defun org-glance--filter-predicates (filter)
+  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+- list of symbols (possible default filters) and lambdas (custom filters)
+- string name of default filter
+- symbolic name of default filter
+- lambda function with no params called on entry"
+  (cond ((functionp filter) (list filter))
+        ((symbolp filter) (list (alist-get filter org-glance--default-filters)))
+        ((stringp filter) (list (alist-get (intern filter) org-glance--default-filters)))
+        ((listp filter) (cl-loop for elt in filter
+                                 when (functionp elt) collect elt
+                                 when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
+                                 when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
+        (t (error "Unable to recognize filter."))))
+#+END_SRC
+
+*** Tests [3/3]
+**** DONE Filter produces proper predicates                                  :Test:
+
+#+BEGIN_SRC emacs-lisp
+(defun org-glance-req/filter-produces-proper-predicates-p (input expected)
+  "Can we split user filter into atomic predicates?"
+  (equal (org-glance--filter-predicates input) expected))
+
+(defun org-glance-test-explainer/filter-produces-proper-predicates (filter expected)
+  (cond ((functionp filter) "Unable to resolve lambda filter")
+        ((symbolp filter) "Unable to resolve symbolic filter")
+        ((stringp filter) "Unable to resolve string filter")
+        ((listp filter) (cl-loop for elt in filter
+                                 when (functionp elt) return "Unable to resolve lambda from filter list"
+                                 when (symbolp elt)   return "Unable to resolve symbol from filter list"
+                                 when (stringp elt)   return "Unable to resolve string from filter list"))
+        (t "Unrecognized filter must raise an error")))
+
+(put 'org-glance-req/filter-produces-proper-predicates-p
+     'ert-explainer
+     'org-glance-test-explainer/filter-produces-proper-predicates)
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
+  (should (org-glance-req/filter-produces-proper-predicates-p
+           (lambda () t) '((lambda () t)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
+  (should (org-glance-req/filter-produces-proper-predicates-p
+           'links (list (alist-get 'links org-glance--default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
+  (should (org-glance-req/filter-produces-proper-predicates-p
+           "links" (list (alist-get 'links org-glance--default-filters)))))
+
+(ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
+  (should (org-glance-req/filter-produces-proper-predicates-p
+           (list 'links (lambda () t) "links")
+           (list (alist-get 'links org-glance--default-filters)
+                 (lambda () t)
+                 (alist-get 'links org-glance--default-filters)))))
+#+END_SRC
+
+**** DONE Filter removes entries                                             :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/filter-removes-entries ()
+  "Test filtering."
+  (should
+   (condition-case nil
+        (org-glance-test
+         :context (list :no-cache-file t
+                        :inplace t
+                        :filter (lambda () (org-match-line "^ example$")))
+         :input "elisp-link")
+     (error t))))
+#+END_SRC
+
+**** DONE Filter doesnt remove suitable entries                              :Test:
+
+#+BEGIN_SRC emacs-lisp
+(ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
+  (should
+   (org-glance-test
+    :context (list :no-cache-file t
+                   :inplace t
+                   :filter (lambda () (org-match-line "^.*elisp-link.*$")))
+    :input "elisp-link")))
+#+END_SRC
+
 ** TODO cache                                                                  :Feature:
 *** add-scope
 
@@ -481,97 +800,6 @@ All FILTERS lambdas must be t."
       ('buffer (switch-to-buffer fob))))
 #+END_SRC
 
-** TODO entries                                                                :Feature:
-
-#+BEGIN_SRC emacs-lisp
-(defun org-glance--entries (&rest args)
-  "Return glance entries by SCOPE.
-
-Specify SEPARATOR and OUTLINE-IGNORE to customize
-outline-paths appearence.
-
-When INPLACE flag specified, do not modify *org-glance-scope* buffer.
-
-Add some FILTERS to filter unwanted entries."
-  (let* ((scope               (or (plist-get args :scope)               (list (current-buffer))))
-         (_ (assert (listp scope) nil "Scope must be an instance of list."))
-
-         (separator           (or (plist-get args :separator)           org-glance-defaults--separator))
-         (outline-ignore      (or (plist-get args :outline-ignore)      nil))
-         (inplace-p           (or (plist-get args :inplace)             nil))
-         (filters             (or (plist-get args :filters)             nil))
-
-         ;; Possible beautify and optimization: switch to opened buffer instead of finding file
-         ;; (live-buffers (remove nil (mapcar 'buffer-file-name (buffer-list))))
-
-         (scope-type-getter (lambda (fob)
-                              (cond ((and (stringp fob) (file-exists-p fob)) 'file)
-                                    ((and (bufferp fob) (buffer-file-name fob) (file-exists-p (buffer-file-name fob))) 'file-buffer)
-                                    ((bufferp fob) 'buffer))))
-
-         (scope-name-getter (lambda (fob scope-type)
-                              (s-trim
-                               (case scope-type
-                                 ('file (expand-file-name fob))
-                                 ('file-buffer (expand-file-name (buffer-file-name fob)))
-                                 ('buffer (buffer-name fob))))))
-
-         (implant (lambda (fob scope-type)
-                    (with-temp-file org-glance-cache-file
-                      (org-mode)
-
-                      (when (file-exists-p org-glance-cache-file)
-                        (insert-file-contents org-glance-cache-file))
-
-                      (let* ((contents (org-glance-cache--get-scope-state-headlines fob scope-type))
-                             (state (car contents))
-                             (entries (cadr contents))
-                             (scope-name (funcall scope-name-getter fob scope-type))
-                             (cached-scope (org-glance-cache--get-scope scope-name)))
-
-                        (when (and (or (not cached-scope)
-                                       (not (string= state (car cached-scope))))
-                                   (> (length entries) 0)
-                                   (not (string= org-glance-cache-file scope-name)))
-                          (org-glance-cache--remove-scope scope-name)
-                          (org-glance-cache--add-scope scope-name entries state)
-                          ;; TODO: possible optimization/add-scope can return scope
-                          (setq cached-scope (org-glance-cache--get-scope scope-name)))
-
-                        (when-let ((scope-point (cadr cached-scope)))
-                          (let ((outliner (apply-partially
-                                           'org-glance--get-entry-coordinates
-                                           :separator separator
-                                           :outline-ignore outline-ignore
-                                           :filters filters
-                                           :inplace inplace-p
-                                           :fob org-glance-cache-file)))
-                            (save-excursion
-                              (goto-char scope-point)
-                              (org-map-entries outliner nil 'tree))))))))
-
-         (visitor (lambda (fob scope-type)
-                    (save-window-excursion
-                      (let ((outliner
-                             (apply-partially
-                              'org-glance--get-entry-coordinates
-                              :separator separator
-                              :outline-ignore outline-ignore
-                              :filters filters
-                              :inplace inplace-p
-                              :fob fob)))
-                        (org-glance-cache--read-contents fob scope-type)
-                        (org-map-entries outliner)))))
-
-         (handler (if inplace-p visitor implant)))
-
-    (loop for fob in scope
-          append (let* ((scope-type (funcall scope-type-getter fob))
-                        (entries (funcall handler fob scope-type)))
-                   (remove nil entries)))))
-#+END_SRC
-
-*** TODO Tests
 ** TODO sort-entries
 *** Tests
 **** classification problem
@@ -646,243 +874,14 @@ connections:
 
 ;; (json-read-file "~/.context")
 #+END_SRC
-** DONE completions                                                            :Feature:
-
-#+BEGIN_SRC emacs-lisp
-(defun org-glance/completing-visit (prompt entries action &optional save-outline-visibility-p)
-  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
-If there are no entries, raise exception."
-  (let* ((entries-count (length entries))
-         (choice (cond
-                  ((= entries-count 0) (error "Empty set."))
-                  (t (org-completing-read prompt entries))))
-
-         (data (assoc-string choice entries))
-         (point (cadr data))
-         (fob (caddr data))
-
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-
-    (if (bufferp fob)
-        (with-current-buffer fob
-          (if save-outline-visibility-p
-              (org-save-outline-visibility t
-                (org-glance--visit-entry-at-point))
-            (org-glance--visit-entry-at-point)))
-      (with-current-buffer (find-file-noselect fob t nil)
-        (org-glance--visit-entry-at-point)))))
-#+END_SRC
-
-*** DONE Tests
-**** DONE Can handle empty cache file                                        :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/can-work-with-empty-cache-file ()
-  "Should work with empty cache file."
-  (should
-   (org-glance-test
-    :context '(:no-cache-file t)
-    :input "Hello")))
-#+END_SRC
-
-**** DONE Can handle org-links                                               :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/can-handle-org-links ()
-  "Test that we can handle org-links."
-  (should
-   (org-glance-test
-    :context '(:no-cache-file t)
-    :input "elisp-link")))
-#+END_SRC
-
-**** DONE Can complete non-file-visiting buffers                             :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/compl-non-file-buffer ()
-  "Should work properly from non-file buffers."
-  (should
-   (org-glance-test
-    :context '(:no-cache-file t
-               :inplace t
-               :scope (list buffer))
-    :input "elisp-link")))
-#+END_SRC
-
-** TODO scoping                                                                :Feature:
-
-#+BEGIN_SRC emacs-lisp
-(defun org-glance--aggregate-scopes (&optional scopes)
-  "Provides list of scopes (scope may be buffer or existing file).
-Without specifying SCOPES it returns list with current buffer."
-
-  (let* ((scopes (cond ((or (stringp scopes)
-                            (and (symbolp scopes)
-                                 (not (null scopes))))
-                        (list scopes))
-                       (t scopes)))
-
-         (ascopes (cl-loop for scope in scopes
-
-                           ;; collect buffers
-                           when (bufferp scope)
-                           collect scope
-
-                           ;; collect functions that return buffers or filenames
-                           when (functionp scope)
-                           collect (when-let ((fob (funcall scope)))
-                                     (if (bufferp fob)
-                                         fob
-                                       (or (get-file-buffer (expand-file-name fob))
-                                           (expand-file-name fob))))
-
-                           ;; collect file names
-                           when (and (stringp scope) (file-exists-p (expand-file-name scope)))
-                           collect (or (get-file-buffer (expand-file-name scope))
-                                       (expand-file-name scope)))))
-
-    (or (remove 'nil (seq-uniq ascopes))
-        (list (current-buffer)))))
-#+END_SRC
-
-*** TODO Tests
-**** DONE Return must contain no duplicates                                  :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
-  "Scope should not contain duplicates."
-  (let ((scopes
-         (org-glance--with-temp-filebuffer
-          (org-glance--aggregate-scopes
-           (list
-            ;; buffer
-            (current-buffer)
-
-            ;; filename
-            (buffer-file-name)
-
-            ;; function that returns buffer
-            'current-buffer
-
-            ;; function that returns filename
-            'buffer-file-name)))))
-    (should (= (length scopes) 1))))
-#+END_SRC
-
-**** DONE Proper handling lambda with nil return                             :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
-  "Ignore nil lambdas in scopes."
-  (should
-   (not (null
-         (condition-case nil
-             (org-glance--aggregate-scopes (list (lambda () nil)))
-           (error nil))))))
-#+END_SRC
-
-**** TODO Input must handle scopes of types: buffer, fun, filename
-**** TODO Proper handle nil input
-** DONE filtering                                                              :Feature:
-
-#+BEGIN_SRC emacs-lisp
-(defvar org-glance/default-filters
-  '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
-    (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
-
-(defun org-glance--filter-predicates (filter)
-  "Factorize FILTER into list of predicates. Acceptable FILTER values:
-- list of symbols (possible default filters) and lambdas (custom filters)
-- string name of default filter
-- symbolic name of default filter
-- lambda function with no params called on entry"
-  (cond ((functionp filter) (list filter))
-        ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
-        ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
-        ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) collect elt
-                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
-                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
-        (t (error "Unable to recognize filter."))))
-#+END_SRC
-
-*** DONE Tests
-**** DONE Filter produces proper predicates                                  :Test:
-
-#+BEGIN_SRC emacs-lisp
-(defun org-glance-req/filter-produces-proper-predicates-p (input expected)
-  "Can we split user filter into atomic predicates?"
-  (equal (org-glance--filter-predicates input) expected))
-
-(defun org-glance-test-explainer/filter-produces-proper-predicates (filter expected)
-  (cond ((functionp filter) "Unable to resolve lambda filter")
-        ((symbolp filter) "Unable to resolve symbolic filter")
-        ((stringp filter) "Unable to resolve string filter")
-        ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) return "Unable to resolve lambda from filter list"
-                                 when (symbolp elt)   return "Unable to resolve symbol from filter list"
-                                 when (stringp elt)   return "Unable to resolve string from filter list"))
-        (t "Unrecognized filter must raise an error")))
-
-(put 'org-glance-req/filter-produces-proper-predicates-p
-     'ert-explainer
-     'org-glance-test-explainer/filter-produces-proper-predicates)
-
-(ert-deftest org-glance-test/filter-produces-proper-predicates-lambda ()
-  (should (org-glance-req/filter-produces-proper-predicates-p
-           (lambda () t) '((lambda () t)))))
-
-(ert-deftest org-glance-test/filter-produces-proper-predicates-symbol ()
-  (should (org-glance-req/filter-produces-proper-predicates-p
-           'links (list (alist-get 'links org-glance/default-filters)))))
-
-(ert-deftest org-glance-test/filter-produces-proper-predicates-string ()
-  (should (org-glance-req/filter-produces-proper-predicates-p
-           "links" (list (alist-get 'links org-glance/default-filters)))))
-
-(ert-deftest org-glance-test/filter-produces-proper-predicates-list ()
-  (should (org-glance-req/filter-produces-proper-predicates-p
-           (list 'links (lambda () t) "links")
-           (list (alist-get 'links org-glance/default-filters)
-                 (lambda () t)
-                 (alist-get 'links org-glance/default-filters)))))
-#+END_SRC
-
-**** DONE Filter removes entries                                             :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/filter-removes-entries ()
-  "Test filtering."
-  (should
-   (condition-case nil
-        (org-glance-test
-         :context (list :no-cache-file t
-                        :inplace t
-                        :filter (lambda () (org-match-line "^ example$")))
-         :input "elisp-link")
-     (error t))))
-#+END_SRC
-
-**** DONE Filter doesnt remove suitable entries                              :Test:
-
-#+BEGIN_SRC emacs-lisp
-(ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
-  (should
-   (org-glance-test
-    :context (list :no-cache-file t
-                   :inplace t
-                   :filter (lambda () (org-match-line "^.*elisp-link.*$")))
-    :input "elisp-link")))
-#+END_SRC
-
-** DONE provide                                                                :Feature:
+** DONE provision                                                              :Feature:
 
 #+BEGIN_SRC emacs-lisp
 (provide 'org-glance)
 ;;; org-glance.el ends here
 #+END_SRC
 
-*** DONE Tests
+*** Tests [1/1]
 **** DONE feature-provision                                                  :Test:
 #+BEGIN_SRC emacs-lisp
 (ert-deftest org-glance-test/feature-provision ()

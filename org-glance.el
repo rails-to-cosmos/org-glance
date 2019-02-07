@@ -35,7 +35,7 @@
 (require 'subr-x)
 (require 'seq)
 
-(defvar org-glance-cache-file (concat user-emacs-directory "org-glance/org-glance-cache.org"))
+(defvar org-glance-cache-file (concat user-emacs-directory "org-glance--org-glance-cache.org"))
 
 (condition-case nil
     (make-directory (file-name-directory org-glance-cache-file))
@@ -60,7 +60,7 @@ If buffer-or-name is nil return current buffer's mode."
   - links :: keep entries with link in title
   - encrypted :: keep entries with :crypt: tag
 
-  You can customize default filters by setting org-glance/default-filters variable.
+  You can customize default filters by setting org-glance--default-filters variable.
 
 - ACTION
   - if specified, call it with point on selected entry
@@ -102,13 +102,14 @@ If buffer-or-name is nil return current buffer's mode."
                    :filters filters
                    :inplace inplace-p))
          (-> (when (not entries) nil (error "Nothing to glance for %s"
-                                            (prin1-to-string aggregated-scopes)))))
-    (org-glance/completing-visit prompt entries action save-outline-visibility-p)
+                                            (prin1-to-string aggregated-scopes))))
+         (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
         (with-current-buffer fb
           (kill-buffer)))
-      (delete-file org-glance-cache-file))))
+      (delete-file org-glance-cache-file))
+    result))
 
 (defun org-glance--get-entry-coordinates (&rest args)
   "Return outline path of current `'org-mode`' entry.
@@ -140,77 +141,28 @@ All FILTERS lambdas must be t."
                  (link (substring line (match-beginning 0) (match-end 0))))
             (org-open-link-from-string link))))))
 
-;; org-element-interpret-data
+(defun org-glance--compl-visit (prompt entries action &optional save-outline-visibility-p)
+  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
+If there are no entries, raise exception."
+  (let* ((entries-count (length entries))
+         (choice (cond
+                  ((= entries-count 0) (error "Empty set."))
+                  (t (org-completing-read prompt entries))))
 
-(defun org-glance-cache--add-scope (scope entries state)
-  (cl-loop for (title level) in entries
-           for i below (length entries)
-           with prev-level
-           initially (progn
-                       (goto-char (point-max))
-                       (org-insert-heading nil nil t)
-                       (insert scope)
-                       (org-set-property "CREATED" (current-time-string))
-                       (org-set-property "STATE" state)
-                       (org-insert-heading-respect-content)
-                       (org-do-demote))
-           do (progn
-                (insert title)
-                (when prev-level
-                  (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
-                        ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
+         (data (assoc-string choice entries))
+         (point (cadr data))
+         (fob (caddr data))
 
-           when (< (+ i 1) (length entries))
-           do (progn
-                (org-insert-heading-respect-content)
-                (setq prev-level level))))
+         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
-(defun org-glance-cache--get-scope (scope-name)
-  (car
-   (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (hl)
-       (let* (
-              ;; maybe map properties?
-              ;; (org-element-map hl 'node-property
-              ;;   (lambda (np)
-              ;;     (cons (org-element-property :key np)
-              ;;           (org-element-property :value np))))
-
-              (level (org-element-property :level hl))
-              (title (org-element-property :title hl))
-              (begin (org-element-property :begin hl))
-
-              (end (org-element-property :end hl)))
-         (when (and (= level 1) (string= title scope-name))
-           (save-excursion
-             (goto-char begin)
-             (let* ((props (org-element--get-node-properties))
-                    (state (plist-get props :STATE)))
-               (org-set-property "USED" (current-time-string))
-               (list state begin end)))))))))
-
-(defun org-glance-cache--get-scope-state-headlines (fob scope-type)
-  (with-temp-buffer
-    (org-mode)
-    (org-glance-cache--insert-contents fob scope-type)
-    (list (buffer-hash)
-          (org-element-parse-buffer 'headline))))
-
-(defun org-glance-cache--remove-scope (scope-name)
-  (when-let (scope (org-glance-cache--get-scope scope-name))
-    (delete-region (cadr scope) (caddr scope))))
-
-(defun org-glance-cache--insert-contents (fob scope-type)
-  (case scope-type
-    ('file (insert-file-contents fob))
-    ('file-buffer (insert-file-contents (buffer-file-name fob)))
-    ('buffer (insert-buffer-substring-no-properties fob))))
-
-(defun org-glance-cache--read-contents (fob scope-type)
-  (case scope-type
-      ('file (find-file fob))
-      ('file-buffer (switch-to-buffer fob))
-      ('buffer (switch-to-buffer fob))))
+    (if (bufferp fob)
+        (with-current-buffer fob
+          (if save-outline-visibility-p
+              (org-save-outline-visibility t
+                (org-glance--visit-entry-at-point))
+            (org-glance--visit-entry-at-point)))
+      (with-current-buffer (find-file-noselect fob t nil)
+        (org-glance--visit-entry-at-point)))))
 
 (defun org-glance--entries (&rest args)
   "Return glance entries by SCOPE.
@@ -298,29 +250,6 @@ Add some FILTERS to filter unwanted entries."
                         (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
 
-(defun org-glance/completing-visit (prompt entries action &optional save-outline-visibility-p)
-  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
-If there are no entries, raise exception."
-  (let* ((entries-count (length entries))
-         (choice (cond
-                  ((= entries-count 0) (error "Empty set."))
-                  (t (org-completing-read prompt entries))))
-
-         (data (assoc-string choice entries))
-         (point (cadr data))
-         (fob (caddr data))
-
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-
-    (if (bufferp fob)
-        (with-current-buffer fob
-          (if save-outline-visibility-p
-              (org-save-outline-visibility t
-                (org-glance--visit-entry-at-point))
-            (org-glance--visit-entry-at-point)))
-      (with-current-buffer (find-file-noselect fob t nil)
-        (org-glance--visit-entry-at-point)))))
-
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
 Without specifying SCOPES it returns list with current buffer."
@@ -353,7 +282,79 @@ Without specifying SCOPES it returns list with current buffer."
     (or (remove 'nil (seq-uniq ascopes))
         (list (current-buffer)))))
 
-(defvar org-glance/default-filters
+;; org-element-interpret-data
+
+(defun org-glance-cache--add-scope (scope entries state)
+  (cl-loop for (title level) in entries
+           for i below (length entries)
+           with prev-level
+           initially (progn
+                       (goto-char (point-max))
+                       (org-insert-heading nil nil t)
+                       (insert scope)
+                       (org-set-property "CREATED" (current-time-string))
+                       (org-set-property "STATE" state)
+                       (org-insert-heading-respect-content)
+                       (org-do-demote))
+           do (progn
+                (insert title)
+                (when prev-level
+                  (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
+                        ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
+
+           when (< (+ i 1) (length entries))
+           do (progn
+                (org-insert-heading-respect-content)
+                (setq prev-level level))))
+
+(defun org-glance-cache--get-scope (scope-name)
+  (car
+   (org-element-map (org-element-parse-buffer 'headline) 'headline
+     (lambda (hl)
+       (let* (
+              ;; maybe map properties?
+              ;; (org-element-map hl 'node-property
+              ;;   (lambda (np)
+              ;;     (cons (org-element-property :key np)
+              ;;           (org-element-property :value np))))
+
+              (level (org-element-property :level hl))
+              (title (org-element-property :title hl))
+              (begin (org-element-property :begin hl))
+
+              (end (org-element-property :end hl)))
+         (when (and (= level 1) (string= title scope-name))
+           (save-excursion
+             (goto-char begin)
+             (let* ((props (org-element--get-node-properties))
+                    (state (plist-get props :STATE)))
+               (org-set-property "USED" (current-time-string))
+               (list state begin end)))))))))
+
+(defun org-glance-cache--get-scope-state-headlines (fob scope-type)
+  (with-temp-buffer
+    (org-mode)
+    (org-glance-cache--insert-contents fob scope-type)
+    (list (buffer-hash)
+          (org-element-parse-buffer 'headline))))
+
+(defun org-glance-cache--remove-scope (scope-name)
+  (when-let (scope (org-glance-cache--get-scope scope-name))
+    (delete-region (cadr scope) (caddr scope))))
+
+(defun org-glance-cache--insert-contents (fob scope-type)
+  (case scope-type
+    ('file (insert-file-contents fob))
+    ('file-buffer (insert-file-contents (buffer-file-name fob)))
+    ('buffer (insert-buffer-substring-no-properties fob))))
+
+(defun org-glance-cache--read-contents (fob scope-type)
+  (case scope-type
+      ('file (find-file fob))
+      ('file-buffer (switch-to-buffer fob))
+      ('buffer (switch-to-buffer fob))))
+
+(defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
 
@@ -364,12 +365,12 @@ Without specifying SCOPES it returns list with current buffer."
 - symbolic name of default filter
 - lambda function with no params called on entry"
   (cond ((functionp filter) (list filter))
-        ((symbolp filter) (list (alist-get filter org-glance/default-filters)))
-        ((stringp filter) (list (alist-get (intern filter) org-glance/default-filters)))
+        ((symbolp filter) (list (alist-get filter org-glance--default-filters)))
+        ((stringp filter) (list (alist-get (intern filter) org-glance--default-filters)))
         ((listp filter) (cl-loop for elt in filter
                                  when (functionp elt) collect elt
-                                 when (symbolp elt)   collect (alist-get elt org-glance/default-filters)
-                                 when (stringp elt)   collect (alist-get (intern elt) org-glance/default-filters)))
+                                 when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
+                                 when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
         (t (error "Unable to recognize filter."))))
 
 (provide 'org-glance)
