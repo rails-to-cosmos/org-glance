@@ -106,8 +106,7 @@ If buffer-or-name is nil return current buffer's mode."
          (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
-        (with-current-buffer fb
-          (kill-buffer)))
+        (kill-buffer fb))
       (delete-file org-glance-cache-file))
     result))
 
@@ -282,6 +281,25 @@ Without specifying SCOPES it returns list with current buffer."
     (or (remove 'nil (seq-uniq ascopes))
         (list (current-buffer)))))
 
+(defvar org-glance--default-filters
+  '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
+    (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
+
+(defun org-glance--filter-predicates (filter)
+  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+- list of symbols (possible default filters) and lambdas (custom filters)
+- string name of default filter
+- symbolic name of default filter
+- lambda function with no params called on entry"
+  (cond ((functionp filter) (list filter))
+        ((symbolp filter) (list (alist-get filter org-glance--default-filters)))
+        ((stringp filter) (list (alist-get (intern filter) org-glance--default-filters)))
+        ((listp filter) (cl-loop for elt in filter
+                                 when (functionp elt) collect elt
+                                 when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
+                                 when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
+        (t (error "Unable to recognize filter."))))
+
 ;; org-element-interpret-data
 
 (defun org-glance-cache--add-scope (scope entries state)
@@ -353,25 +371,6 @@ Without specifying SCOPES it returns list with current buffer."
       ('file (find-file fob))
       ('file-buffer (switch-to-buffer fob))
       ('buffer (switch-to-buffer fob))))
-
-(defvar org-glance--default-filters
-  '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
-    (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
-
-(defun org-glance--filter-predicates (filter)
-  "Factorize FILTER into list of predicates. Acceptable FILTER values:
-- list of symbols (possible default filters) and lambdas (custom filters)
-- string name of default filter
-- symbolic name of default filter
-- lambda function with no params called on entry"
-  (cond ((functionp filter) (list filter))
-        ((symbolp filter) (list (alist-get filter org-glance--default-filters)))
-        ((stringp filter) (list (alist-get (intern filter) org-glance--default-filters)))
-        ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) collect elt
-                                 when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
-                                 when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
-        (t (error "Unable to recognize filter."))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

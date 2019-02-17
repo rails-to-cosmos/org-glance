@@ -340,8 +340,7 @@ If state has not been modified, do not update CACHE and return nil."
          (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
-        (with-current-buffer fb
-          (kill-buffer)))
+        (kill-buffer fb))
       (delete-file org-glance-cache-file))
     result))
 #+END_SRC
