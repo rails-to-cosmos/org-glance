@@ -538,7 +538,19 @@ Add some FILTERS to filter unwanted entries."
 
 ** scoping                                                                     :Feature:
 
-#+BEGIN_SRC emacs-lisp
+*** defaults
+
+**** build scope from current buffer with mode specified
+
+#+begin_src emacs-lisp
+(defun og-scope-current-buffer-with-mode (buffer-major-mode)
+  (lexical-let ((bmm buffer-major-mode))
+    (lambda () (when (eq major-mode bmm)) (current-buffer))))
+#+end_src
+
+*** aggregator
+
+#+begin_src emacs-lisp
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
 Without specifying SCOPES it returns list with current buffer."
@@ -570,7 +582,7 @@ Without specifying SCOPES it returns list with current buffer."
 
     (or (remove 'nil (seq-uniq ascopes))
         (list (current-buffer)))))
-#+END_SRC
+#+end_src
 
 *** Tests [2/4]
 **** DONE Return must contain no duplicates                                  :Test:

@@ -249,6 +249,10 @@ Add some FILTERS to filter unwanted entries."
                         (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
 
+(defun og-scope-current-buffer-with-mode (buffer-major-mode)
+  (lexical-let ((bmm buffer-major-mode))
+    (lambda () (when (eq major-mode bmm)) (current-buffer))))
+
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
 Without specifying SCOPES it returns list with current buffer."
