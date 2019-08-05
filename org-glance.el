@@ -35,7 +35,16 @@
 (require 'subr-x)
 (require 'seq)
 
-(defvar org-glance-cache-file (concat user-emacs-directory "org-glance--org-glance-cache.org"))
+(defgroup org-glance nil
+  "\nOptions concerning glancing entries."
+  :tag "Org Glance"
+  :group 'org)
+
+(defcustom org-glance-cache-file
+  (concat user-emacs-directory "org-glance--org-glance-cache.org")
+  "A file to store headlines visited."
+  :group 'org-glance
+  :type 'string)
 
 (condition-case nil
     (make-directory (file-name-directory org-glance-cache-file))
@@ -249,7 +258,7 @@ Add some FILTERS to filter unwanted entries."
                         (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
 
-(defun og-scope-current-buffer-with-mode (buffer-major-mode)
+(defun og-build-scope-from-buffer-with-mode (buffer-major-mode)
   (lexical-let ((bmm buffer-major-mode))
     (lambda () (when (eq major-mode bmm)) (current-buffer))))
 

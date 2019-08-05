@@ -2,14 +2,16 @@
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 #+CATEGORY: org-glance
-#+TAGS: License Documentation Feature Test
-#+PROPERTY: header-args:emacs-lisp :noweb yes :tangle (cond ((seq-intersection '("Test") (org-get-tags-at)) "org-glance-tests.el") ((seq-intersection '("Feature" "License") (org-get-tags-at)) "yes") (t "no")) :results silent
-#+PROPERTY: header-args:markdown :tangle (cond ((seq-intersection '("Documentation") (org-get-tags-at)) "README.md") (t "no"))
+#+PROPERTY: REPO_ALL Dev Test Prod
+#+TAGS: License Documentation
+#+TAGS: Experiment Test
+#+PROPERTY: header-args:emacs-lisp :tangle (oldt-tt '("Test" "org-glance-tests.el") '("Experiment" "no") '(t "yes")) :results silent :noweb yes
+#+PROPERTY: header-args:markdown :tangle (oldt-tt '("Documentation" "README.md") '(t "no"))
 #+PROPERTY: header-args:org :tangle no
 
 * Hello
 ** README                                                                      :Documentation:
-#+BEGIN_SRC markdown
+#+begin_src markdown
 Org-glance: walk in the woods with pleasure
 ===============================
 
@@ -29,9 +31,9 @@ flexible build system or whatever you can imagine with ease.
 Browse link `Setup development environment`. After that you can build
 project using `C-x y m` key or running `org-glance-devtools/build`
 command from `org-glance.org` buffer.
-#+END_SRC
+#+end_src
 ** License                                                                     :License:
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
 ;; Copyright (C) 2018-2019 Dmitry Akatov
@@ -63,46 +65,58 @@ command from `org-glance.org` buffer.
 ;; digital world with an org-mode power behind your shoulders.
 
 ;;; Code:
-#+END_SRC
-* Requirements
-** Implementation                                                              :Feature:
-#+BEGIN_SRC emacs-lisp
+#+end_src
+** Requirements
+#+begin_src emacs-lisp
 (require 'org)
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+#+end_src
+* Customs
+#+begin_src emacs-lisp
+(defgroup org-glance nil
+  "\nOptions concerning glancing entries."
+  :tag "Org Glance"
+  :group 'org)
 
-(defvar org-glance-cache-file (concat user-emacs-directory "org-glance--org-glance-cache.org"))
+(defcustom org-glance-cache-file
+  (concat user-emacs-directory "org-glance--org-glance-cache.org")
+  "A file to store headlines visited."
+  :group 'org-glance
+  :type 'string)
 
 (condition-case nil
     (make-directory (file-name-directory org-glance-cache-file))
   (error nil))
 
 (defvar org-glance-defaults--separator " → ")
-
+#+end_src
+* Utils
+#+begin_src emacs-lisp
 (defun buffer-mode (&optional buffer-or-name)
   "Returns the major mode associated with a buffer.
 If buffer-or-name is nil return current buffer's mode."
   (buffer-local-value 'major-mode
    (if buffer-or-name (get-buffer buffer-or-name) (current-buffer))))
-#+END_SRC
-** Testing                                                                     :Test:
-#+BEGIN_SRC emacs-lisp
+#+end_src
+* Testing                                                                       :Test:
+#+begin_src emacs-lisp
 (require 'ert)
 (load-file "org-glance.el") ;; for batch-mode
 (require 'org-glance)
-#+END_SRC
+#+end_src
 
 #+NAME: trim-string
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun trim-string (string)
   "Remove white spaces in beginning and ending of STRING.
 White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
   (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
-#+END_SRC
+#+end_src
 
 #+NAME: with-temp-org-buffer
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defmacro with-temp-org-buffer (s &rest forms)
   "Create a temporary org-mode buffer with contents S and execute FORMS."
   `(save-excursion
@@ -151,10 +165,11 @@ the file returning the result of evaluating BODY."
                     (s-lines
                      (with-current-buffer (messages-buffer)
                        (buffer-substring begin-marker (point-max))))))))))))
-#+END_SRC
-* Classes
+#+end_src
+* Classes                                                                       :Experiment:
 ** og-scope
-#+BEGIN_SRC emacs-lisp
+
+#+begin_src emacs-lisp
 (defclass og-scope ()
   ((source :type (or string buffer)
            :initarg :source)
@@ -251,9 +266,11 @@ the file returning the result of evaluating BODY."
 ;;   ;;               (org-insert-heading-respect-content)
 ;;   ;;               (setq prev-level level)))
 ;;   )
-#+END_SRC
+#+end_src
+
 ** og-cache
-#+BEGIN_SRC emacs-lisp
+
+#+begin_src emacs-lisp
 (defclass og-cache ()
   ((scopes :type hash-table
            :initform (cl-make-hash-table :test #'equal)
@@ -278,11 +295,11 @@ If state has not been modified, do not update CACHE and return nil."
     (og-cache--add-scope cache scope)))
 
 (ert-run-tests-batch 'og-cache-test/scoping)
-#+END_SRC
-* Features
-** org-glance                                                                  :Feature:
+#+end_src
 
-#+BEGIN_SRC emacs-lisp
+* Features
+** org-glance
+#+begin_src emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -343,11 +360,9 @@ If state has not been modified, do not update CACHE and return nil."
         (kill-buffer fb))
       (delete-file org-glance-cache-file))
     result))
-#+END_SRC
-
-** outliner                                                                    :Feature:
-
-#+BEGIN_SRC emacs-lisp
+#+end_src
+** outliner
+#+begin_src emacs-lisp
 (defun org-glance--get-entry-coordinates (&rest args)
   "Return outline path of current `'org-mode`' entry.
 
@@ -367,9 +382,8 @@ All FILTERS lambdas must be t."
     (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
                (not (string-empty-p (s-trim title))))
       (list title (point) fob))))
-#+END_SRC
-
-** visitor                                                                     :Feature:
+#+end_src
+** visitor
 
 #+name: visit-entry-at-point
 #+begin_src emacs-lisp
@@ -413,29 +427,29 @@ If there are no entries, raise exception."
 *** Tests [3/3]
 **** DONE Can visit empty cache file                                         :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/can-work-with-empty-cache-file ()
   "Should work with empty cache file."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
     :input "Hello")))
-#+END_SRC
+#+end_src
 
 **** DONE Can visit org-links                                                :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/can-handle-org-links ()
   "Test that we can handle org-links."
   (should
    (org-glance-test
     :context '(:no-cache-file t)
     :input "elisp-link")))
-#+END_SRC
+#+end_src
 
 **** DONE Can complete non-file-visiting buffers                             :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/compl-non-file-buffer ()
   "Should work properly from non-file buffers."
   (should
@@ -444,11 +458,10 @@ If there are no entries, raise exception."
                :inplace t
                :scope (list buffer))
     :input "elisp-link")))
-#+END_SRC
+#+end_src
 
-** entries                                                                     :Feature:
-
-#+BEGIN_SRC emacs-lisp
+** entries
+#+begin_src emacs-lisp
 (defun org-glance--entries (&rest args)
   "Return glance entries by SCOPE.
 
@@ -534,9 +547,8 @@ Add some FILTERS to filter unwanted entries."
           append (let* ((scope-type (funcall scope-type-getter fob))
                         (entries (funcall handler fob scope-type)))
                    (remove nil entries)))))
-#+END_SRC
-
-** scoping                                                                     :Feature:
+#+end_src
+** scoping
 
 *** defaults
 
@@ -587,7 +599,7 @@ Without specifying SCOPES it returns list with current buffer."
 *** Tests [2/4]
 **** DONE Return must contain no duplicates                                  :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/scopes-contain-no-duplicates ()
   "Scope should not contain duplicates."
   (let ((scopes
@@ -606,11 +618,11 @@ Without specifying SCOPES it returns list with current buffer."
             ;; function that returns filename
             'buffer-file-name)))))
     (should (= (length scopes) 1))))
-#+END_SRC
+#+end_src
 
 **** DONE Proper handling lambda with nil return                             :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
   "Ignore nil lambdas in scopes."
   (should
@@ -618,13 +630,13 @@ Without specifying SCOPES it returns list with current buffer."
          (condition-case nil
              (org-glance--aggregate-scopes (list (lambda () nil)))
            (error nil))))))
-#+END_SRC
+#+end_src
 
 **** TODO Input must handle scopes of types: buffer, fun, filename
 **** TODO Proper handle nil input
-** filtering                                                                   :Feature:
+** filtering
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
@@ -643,12 +655,12 @@ Without specifying SCOPES it returns list with current buffer."
                                  when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
                                  when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
         (t (error "Unable to recognize filter."))))
-#+END_SRC
+#+end_src
 
 *** Tests [3/3]
 **** DONE Filter produces proper predicates                                  :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-req/filter-produces-proper-predicates-p (input expected)
   "Can we split user filter into atomic predicates?"
   (equal (org-glance--filter-predicates input) expected))
@@ -685,11 +697,11 @@ Without specifying SCOPES it returns list with current buffer."
            (list (alist-get 'links org-glance--default-filters)
                  (lambda () t)
                  (alist-get 'links org-glance--default-filters)))))
-#+END_SRC
+#+end_src
 
 **** DONE Filter removes entries                                             :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/filter-removes-entries ()
   "Test filtering."
   (should
@@ -700,11 +712,11 @@ Without specifying SCOPES it returns list with current buffer."
                         :filter (lambda () (org-match-line "^ example$")))
          :input "elisp-link")
      (error t))))
-#+END_SRC
+#+end_src
 
 **** DONE Filter doesnt remove suitable entries                              :Test:
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/filter-doesnt-remove-suitable-entries ()
   (should
    (org-glance-test
@@ -712,12 +724,12 @@ Without specifying SCOPES it returns list with current buffer."
                    :inplace t
                    :filter (lambda () (org-match-line "^.*elisp-link.*$")))
     :input "elisp-link")))
-#+END_SRC
+#+end_src
 
-** TODO cache                                                                  :Feature:
+** TODO cache
 *** add-scope
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 ;; org-element-interpret-data
 
 (defun org-glance-cache--add-scope (scope entries state)
@@ -742,11 +754,11 @@ Without specifying SCOPES it returns list with current buffer."
            do (progn
                 (org-insert-heading-respect-content)
                 (setq prev-level level))))
-#+END_SRC
+#+end_src
 
 *** get-scope
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-cache--get-scope (scope-name)
   (car
    (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -770,48 +782,48 @@ Without specifying SCOPES it returns list with current buffer."
                     (state (plist-get props :STATE)))
                (org-set-property "USED" (current-time-string))
                (list state begin end)))))))))
-#+END_SRC
+#+end_src
 
 *** get-scope-state-elements
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-cache--get-scope-state-headlines (fob scope-type)
   (with-temp-buffer
     (org-mode)
     (org-glance-cache--insert-contents fob scope-type)
     (list (buffer-hash)
           (org-element-parse-buffer 'headline))))
-#+END_SRC
+#+end_src
 
 *** delete-scope
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-cache--remove-scope (scope-name)
   (when-let (scope (org-glance-cache--get-scope scope-name))
     (delete-region (cadr scope) (caddr scope))))
-#+END_SRC
+#+end_src
 
 *** insert-contents
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-cache--insert-contents (fob scope-type)
   (case scope-type
     ('file (insert-file-contents fob))
     ('file-buffer (insert-file-contents (buffer-file-name fob)))
     ('buffer (insert-buffer-substring-no-properties fob))))
-#+END_SRC
+#+end_src
 
 *** read-contents
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (defun org-glance-cache--read-contents (fob scope-type)
   (case scope-type
       ('file (find-file fob))
       ('file-buffer (switch-to-buffer fob))
       ('buffer (switch-to-buffer fob))))
-#+END_SRC
+#+end_src
 
-** TODO sort-entries
+** TODO sort-entries                                                           :Experiment:
 *** Tests
 **** classification problem
 classes:
@@ -831,7 +843,7 @@ independent variables (normalization needed):
 connections:
 -
 
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 ;; (require 'eieio)
 
 ;; (cl-defmethod add-to-cache)
@@ -884,20 +896,18 @@ connections:
 ;;   (insert (json-encode-hash-table (oref-default og-context targets))))
 
 ;; (json-read-file "~/.context")
-#+END_SRC
-** DONE provision                                                              :Feature:
-
-#+BEGIN_SRC emacs-lisp
+#+end_src
+** DONE provision
+#+begin_src emacs-lisp
 (provide 'org-glance)
 ;;; org-glance.el ends here
-#+END_SRC
-
+#+end_src
 *** Tests [1/1]
 **** DONE feature-provision                                                  :Test:
-#+BEGIN_SRC emacs-lisp
+#+begin_src emacs-lisp
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
-#+END_SRC
+#+end_src
 * Applications
 ** org-glance-snippets
 ** org-glance-passwords
