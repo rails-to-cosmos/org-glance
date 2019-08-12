@@ -563,21 +563,27 @@ Add some FILTERS to filter unwanted entries."
 *** aggregator
 
 #+begin_src emacs-lisp
+(defvar org-glance--default-scopes-alist
+  `((org-file-archives . ,(lambda () (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+                                       (directory-files-recursively default-directory (concat fn ".org_archive")))))))
+
+(alist-get 'org-file-archives org-glance--default-scopes-alist)
+
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
 Without specifying SCOPES it returns list with current buffer."
 
   (let* ((scopes (cond ((or (stringp scopes)
-                            (and (symbolp scopes)
-                                 (not (null scopes))))
+                            (and (symbolp scopes) (not (null scopes))))
                         (list scopes))
                        (t scopes)))
 
          (ascopes (cl-loop for scope in scopes
 
                            ;; collect buffers
-                           when (bufferp scope)
-                           collect scope
+                           when (bufferp scope) collect scope
+                           when (and (symbolp scope) (alist-get scope org-glance--default-scopes-alist))
+                           collect (funcall (alist-get scope org-glance--default-scopes-alist))
 
                            ;; collect functions that return buffers or filenames
                            when (functionp scope)
@@ -592,13 +598,12 @@ Without specifying SCOPES it returns list with current buffer."
                            collect (or (get-file-buffer (expand-file-name scope))
                                        (expand-file-name scope)))))
 
-    (or (remove 'nil (seq-uniq ascopes))
+    (or (remove 'nil (seq-uniq (-flatten ascopes)))
         (list (current-buffer)))))
 #+end_src
 
 *** Tests [2/4]
 **** DONE Return must contain no duplicates                                  :Test:
-
 #+begin_src emacs-lisp
 (ert-deftest org-glance-test/scopes-contain-no-duplicates ()
   "Scope should not contain duplicates."
@@ -619,9 +624,7 @@ Without specifying SCOPES it returns list with current buffer."
             'buffer-file-name)))))
     (should (= (length scopes) 1))))
 #+end_src
-
 **** DONE Proper handling lambda with nil return                             :Test:
-
 #+begin_src emacs-lisp
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
   "Ignore nil lambdas in scopes."
@@ -631,7 +634,6 @@ Without specifying SCOPES it returns list with current buffer."
              (org-glance--aggregate-scopes (list (lambda () nil)))
            (error nil))))))
 #+end_src
-
 **** TODO Input must handle scopes of types: buffer, fun, filename
 **** TODO Proper handle nil input
 ** filtering

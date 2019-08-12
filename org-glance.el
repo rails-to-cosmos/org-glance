@@ -262,21 +262,27 @@ Add some FILTERS to filter unwanted entries."
   (lexical-let ((bmm buffer-major-mode))
     (lambda () (when (eq major-mode bmm)) (current-buffer))))
 
+(defvar org-glance--default-scopes-alist
+  `((org-file-archives . ,(lambda () (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+                                       (directory-files-recursively default-directory (concat fn ".org_archive")))))))
+
+(alist-get 'org-file-archives org-glance--default-scopes-alist)
+
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
 Without specifying SCOPES it returns list with current buffer."
 
   (let* ((scopes (cond ((or (stringp scopes)
-                            (and (symbolp scopes)
-                                 (not (null scopes))))
+                            (and (symbolp scopes) (not (null scopes))))
                         (list scopes))
                        (t scopes)))
 
          (ascopes (cl-loop for scope in scopes
 
                            ;; collect buffers
-                           when (bufferp scope)
-                           collect scope
+                           when (bufferp scope) collect scope
+                           when (and (symbolp scope) (alist-get scope org-glance--default-scopes-alist))
+                           collect (funcall (alist-get scope org-glance--default-scopes-alist))
 
                            ;; collect functions that return buffers or filenames
                            when (functionp scope)
@@ -291,7 +297,7 @@ Without specifying SCOPES it returns list with current buffer."
                            collect (or (get-file-buffer (expand-file-name scope))
                                        (expand-file-name scope)))))
 
-    (or (remove 'nil (seq-uniq ascopes))
+    (or (remove 'nil (seq-uniq (-flatten ascopes)))
         (list (current-buffer)))))
 
 (defvar org-glance--default-filters
