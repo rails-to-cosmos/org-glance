@@ -58,6 +58,9 @@ If buffer-or-name is nil return current buffer's mode."
   (buffer-local-value 'major-mode
    (if buffer-or-name (get-buffer buffer-or-name) (current-buffer))))
 
+(defun org-glance-headline-contains-tags-p (&rest tags)
+  (equal (seq-intersection tags (org-get-tags)) tags))
+
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
 - SCOPE :: org-file or SCOPE from org-map-entries (org.el)
@@ -82,19 +85,16 @@ If buffer-or-name is nil return current buffer's mode."
 \(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
   (let* ((user-scopes (or (plist-get args :scope)          nil))
          (aggregated-scopes (org-glance--aggregate-scopes user-scopes))
+         (err-nothing-found (or (plist-get args :nothing-found-msg) "Nothing to glance for"))
 
          (user-filter (or (plist-get args :filter)       (lambda () t)))
          (filters (org-glance--filter-predicates user-filter))
-
          (outline-ignore (or (plist-get args :outline-ignore) nil))
-
-         ;; user predicates
          (save-outline-visibility-p (plist-get args :save-outline-visibility))
          (inplace-p                 t ;; (plist-get args :inplace)
                                     ;; temporary while outplace completions fail
                                     )
          (no-cache-file-p           (plist-get args :no-cache-file))
-
          (org-glance-cache-file (if no-cache-file-p
                                     (make-temp-file "org-glance-")
                                   org-glance-cache-file))
@@ -104,14 +104,15 @@ If buffer-or-name is nil return current buffer's mode."
          (separator (or (plist-get args :separator)      " → "))
          (action    (or (plist-get args :action)         nil))
 
-         (entries (org-glance--entries
-                   :scope aggregated-scopes
-                   :separator separator
-                   :outline-ignore outline-ignore
-                   :filters filters
-                   :inplace inplace-p))
-         (-> (when (not entries) nil (error "Nothing to glance for %s"
-                                            (prin1-to-string aggregated-scopes))))
+         (entries (or (org-glance--entries
+                       :scope aggregated-scopes
+                       :separator separator
+                       :outline-ignore outline-ignore
+                       :filters filters
+                       :inplace inplace-p)
+                      (error "%s %s"
+                             err-nothing-found
+                             (prin1-to-string aggregated-scopes))))
          (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
     (when no-cache-file-p
       (when-let ((fb (get-file-buffer org-glance-cache-file)))
@@ -137,40 +138,27 @@ All FILTERS lambdas must be t."
          (title (mapconcat 'identity outline separator)))
     (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
                (not (string-empty-p (s-trim title))))
-      (list title (point) fob))))
+      (list title (point-marker)))))
 
 (defun org-glance--visit-entry-at-point ()
   (save-excursion
-      (let ((point (goto-char point)))
-        (if action
-            (funcall action)
-          (let* ((line (thing-at-point 'line t))
-                 (search (string-match org-any-link-re line))
-                 (link (substring line (match-beginning 0) (match-end 0))))
-            (org-open-link-from-string link))))))
+    (let* ((line (thing-at-point 'line t))
+           (search (string-match org-any-link-re line))
+           (link (substring line (match-beginning 0) (match-end 0))))
+      (org-open-link-from-string link))))
 
 (defun org-glance--compl-visit (prompt entries action &optional save-outline-visibility-p)
   "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
 If there are no entries, raise exception."
-  (let* ((entries-count (length entries))
-         (choice (cond
-                  ((= entries-count 0) (error "Empty set."))
-                  (t (org-completing-read prompt entries))))
+  (when (seq-empty-p entries)
+    (error "Empty set"))
 
-         (data (assoc-string choice entries))
-         (point (cadr data))
-         (fob (caddr data))
-
+  (let* ((choice (org-completing-read prompt entries))
+         (marker (cadr (assoc-string choice entries)))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-
-    (if (bufferp fob)
-        (with-current-buffer fob
-          (if save-outline-visibility-p
-              (org-save-outline-visibility t
-                (org-glance--visit-entry-at-point))
-            (org-glance--visit-entry-at-point)))
-      (with-current-buffer (find-file-noselect fob t nil)
-        (org-glance--visit-entry-at-point)))))
+    (with-current-buffer (marker-buffer marker)
+      (org-goto-marker-or-bmk marker)
+      (org-glance--visit-entry-at-point))))
 
 (defun org-glance--entries (&rest args)
   "Return glance entries by SCOPE.
