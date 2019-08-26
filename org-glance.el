@@ -248,7 +248,7 @@ Add some FILTERS to filter unwanted entries."
 
 (defun og-build-scope-from-buffer-with-mode (buffer-major-mode)
   (lexical-let ((bmm buffer-major-mode))
-    (lambda () (when (eq major-mode bmm)) (current-buffer))))
+    (lambda () (when (eq major-mode bmm) (current-buffer)))))
 
 (defvar org-glance--default-scopes-alist
   `((org-file-archives . ,(lambda () (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))

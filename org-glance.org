@@ -548,7 +548,7 @@ Add some FILTERS to filter unwanted entries."
 #+begin_src emacs-lisp
 (defun og-build-scope-from-buffer-with-mode (buffer-major-mode)
   (lexical-let ((bmm buffer-major-mode))
-    (lambda () (when (eq major-mode bmm)) (current-buffer))))
+    (lambda () (when (eq major-mode bmm) (current-buffer)))))
 #+end_src
 
 *** aggregator
