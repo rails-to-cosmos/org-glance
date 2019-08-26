@@ -34,27 +34,26 @@ the file returning the result of evaluating BODY."
   (save-excursion
     (with-temp-buffer
       (org-mode)
-      (let ((begin-marker (with-current-buffer (messages-buffer)
-                            (point-max-marker)))
-            (context (plist-get args :context))
-            (expression (format "(+ %i %i)" (random 10) (random 10)))
-            (input (plist-get args :input)))
-
-        (let* ((buffer (current-buffer))
-               (org-confirm-elisp-link-function nil)
-               (unread-command-events
-                (listify-key-sequence
-                 (kbd (format "%s RET" input)))))
-          (insert (format "* [[elisp:%s][%s]]" (org-link-escape expression) input))
-          (apply 'org-glance context))
-
-        (string= (format "%s => %s" expression (eval (read expression)))
-                 (trim-string
-                  (-last-item
-                   (butlast
-                    (s-lines
-                     (with-current-buffer (messages-buffer)
-                       (buffer-substring begin-marker (point-max))))))))))))
+      (let* ((context (plist-get args :context))
+             (input (plist-get args :input))
+             (action (plist-get context :action))
+             (expected (plist-get context :expected))
+             (begin-marker (with-current-buffer (messages-buffer)
+                             (point-max-marker)))
+             (expression (format "(+ %i %i)" (random 10) (random 10)))
+             (buffer (current-buffer))
+             (org-confirm-elisp-link-function nil)
+             (unread-command-events
+              (listify-key-sequence
+               (kbd (format "%s RET" input)))))
+        (insert (format "* [[elisp:%s][%s]]" (org-link-escape expression) input))
+        (apply 'org-glance context)
+        (cond (action (= (funcall action) expected))
+              (t (string= (format "%s => %s" expression (eval (read expression)))
+                          (thread-first
+                              (with-current-buffer (messages-buffer)
+                                (buffer-substring begin-marker (point-max-marker)))
+                            s-lines butlast -last-item trim-string))))))))
 
 (ert-deftest org-glance-test/can-work-with-empty-cache-file ()
   "Should work with empty cache file."
@@ -75,6 +74,16 @@ the file returning the result of evaluating BODY."
   (should
    (org-glance-test
     :context '(:no-cache-file t
+               :inplace t
+               :scope (list buffer))
+    :input "elisp-link")))
+
+(ert-deftest org-glance-test/call-custom-action ()
+  "Should call custom action if specified."
+  (should
+   (org-glance-test
+    :context '(:action (lambda () 1)
+               :expected 1
                :inplace t
                :scope (list buffer))
     :input "elisp-link")))
@@ -114,10 +123,10 @@ the file returning the result of evaluating BODY."
   (cond ((functionp filter) "Unable to resolve lambda filter")
         ((symbolp filter) "Unable to resolve symbolic filter")
         ((stringp filter) "Unable to resolve string filter")
-        ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) return "Unable to resolve lambda from filter list"
-                                 when (symbolp elt)   return "Unable to resolve symbol from filter list"
-                                 when (stringp elt)   return "Unable to resolve string from filter list"))
+        ((listp filter) (loop for elt in filter
+                              when (functionp elt) return "Unable to resolve lambda from filter list"
+                              when (symbolp elt)   return "Unable to resolve symbol from filter list"
+                              when (stringp elt)   return "Unable to resolve string from filter list"))
         (t "Unrecognized filter must raise an error")))
 
 (put 'org-glance-req/filter-produces-proper-predicates-p
