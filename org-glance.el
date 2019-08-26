@@ -250,11 +250,12 @@ Add some FILTERS to filter unwanted entries."
   (lexical-let ((bmm buffer-major-mode))
     (lambda () (when (eq major-mode bmm) (current-buffer)))))
 
-(defvar org-glance--default-scopes-alist
-  `((org-file-archives . ,(lambda () (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
-                                       (directory-files-recursively default-directory (concat fn ".org_archive")))))))
+(defun org-glance--get-file-archives ()
+  (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+    (directory-files-recursively default-directory (concat fn ".org_archive"))))
 
-(alist-get 'org-file-archives org-glance--default-scopes-alist)
+(defvar org-glance--default-scopes-alist
+  `((file-with-archives . org-glance--get-file-archives)))
 
 (defun org-glance--aggregate-scopes (&optional scopes)
   "Provides list of scopes (scope may be buffer or existing file).
