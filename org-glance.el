@@ -207,40 +207,6 @@ If buffer-or-name is nil return current buffer's mode."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
-(defun org-glance-scope--implant (scope)
-  (with-temp-file org-glance-cache-file
-    (org-mode)
-
-    (when (file-exists-p org-glance-cache-file)
-      (insert-file-contents org-glance-cache-file))
-
-    (let* ((contents (org-glance-cache--get-scope-state-headlines scope))
-           (state (car contents))
-           (entries (cadr contents))
-           (scope-name (org-glance-scope--get-name scope))
-           (cached-scope (org-glance-cache--get-scope scope-name)))
-
-      (when (and (or (not cached-scope)
-                     (not (string= state (car cached-scope))))
-                 (> (length entries) 0)
-                 (not (string= org-glance-cache-file scope-name)))
-        (org-glance-cache--remove-scope scope-name)
-        (org-glance-cache--add-scope scope-name entries state)
-        ;; TODO: possible optimization/add-scope can return scope
-        (setq cached-scope (org-glance-cache--get-scope scope-name)))
-
-      (when-let ((scope-point (cadr cached-scope)))
-        (let ((outliner (apply-partially
-                         'org-glance--get-entry-coordinates
-                         :separator separator
-                         :outline-ignore outline-ignore
-                         :filters filters
-                         :inplace inplace-p
-                         :scope org-glance-cache-file)))
-          (save-excursion
-            (goto-char scope-point)
-            (org-map-entries outliner nil 'tree)))))))
-
 (defun org-glance-scope--list-archives ()
   (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
     (directory-files-recursively default-directory (concat fn ".org_archive"))))
@@ -254,7 +220,7 @@ If buffer-or-name is nil return current buffer's mode."
   handler)
 
 (cl-defun org-glance-filter-create (&optional filter)
-  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+  "Factorize FILTER into list of filters. Acceptable FILTER values:
 - list of symbols (possible default filters) and lambdas (custom filters)
 - string name of default filter
 - symbolic name of default filter
@@ -296,66 +262,6 @@ If buffer-or-name is nil return current buffer's mode."
 ;;                     org-glance-scope-entries))
 ;;       (filters (org-glance-filter-create "links")))
 ;;   (org-glance-filter-entries filters entries))
-
-;; org-element-interpret-data
-
-(defun org-glance-cache--add-scope (scope entries state)
-  (cl-loop for (title level) in entries
-           for i below (length entries)
-           with prev-level
-           initially (progn
-                       (goto-char (point-max))
-                       (org-insert-heading nil nil t)
-                       (insert scope)
-                       (org-set-property "CREATED" (current-time-string))
-                       (org-set-property "STATE" state)
-                       (org-insert-heading-respect-content)
-                       (org-do-demote))
-           do (progn
-                (insert title)
-                (when prev-level
-                  (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
-                        ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
-
-           when (< (+ i 1) (length entries))
-           do (progn
-                (org-insert-heading-respect-content)
-                (setq prev-level level))))
-
-(defun org-glance-cache--get-scope (scope-name)
-  (car
-   (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (hl)
-       (let* (
-              ;; maybe map properties?
-              ;; (org-element-map hl 'node-property
-              ;;   (lambda (np)
-              ;;     (cons (org-element-property :key np)
-              ;;           (org-element-property :value np))))
-
-              (level (org-element-property :level hl))
-              (title (org-element-property :title hl))
-              (begin (org-element-property :begin hl))
-
-              (end (org-element-property :end hl)))
-         (when (and (= level 1) (string= title scope-name))
-           (save-excursion
-             (goto-char begin)
-             (let* ((props (org-element--get-node-properties))
-                    (state (plist-get props :STATE)))
-               (org-set-property "USED" (current-time-string))
-               (list state begin end)))))))))
-
-(defun org-glance-cache--get-scope-state-headlines (scope)
-  (with-temp-buffer
-    (org-mode)
-    (org-glance-cache--insert-contents scope)
-    (list (buffer-hash)
-          (org-element-parse-buffer 'headline))))
-
-(defun org-glance-cache--remove-scope (scope-name)
-  (when-let (scope (org-glance-cache--get-scope scope-name))
-    (delete-region (cadr scope) (caddr scope))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

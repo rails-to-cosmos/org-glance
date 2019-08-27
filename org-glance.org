@@ -334,7 +334,7 @@ the file returning the result of evaluating BODY."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 #+end_src
-*** implant
+*** COMMENT implant
 #+begin_src emacs-lisp
 (defun org-glance-scope--implant (scope)
   (with-temp-file org-glance-cache-file
@@ -428,7 +428,7 @@ the file returning the result of evaluating BODY."
   handler)
 
 (cl-defun org-glance-filter-create (&optional filter)
-  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+  "Factorize FILTER into list of filters. Acceptable FILTER values:
 - list of symbols (possible default filters) and lambdas (custom filters)
 - string name of default filter
 - symbolic name of default filter
@@ -580,7 +580,7 @@ the file returning the result of evaluating BODY."
     :input "elisp-link")))
 #+end_src
 
-** TODO cache
+** COMMENT cache
 *** add-scope
 #+begin_src emacs-lisp
 ;; org-element-interpret-data
