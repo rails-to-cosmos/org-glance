@@ -224,7 +224,7 @@ the file returning the result of evaluating BODY."
          (entry (-some->> entries
                           ;; (apply-partially #'org-glance-entries-filter filter)
                           org-glance-entries-browse)))
-    (org-glance-entry-location-visit entry action)
+    (org-glance-entry-location-act entry action)
     ;; (when no-cache-file-p
     ;;   (when-let ((fb (get-file-buffer org-glance-cache-file)))
     ;;     (kill-buffer fb))
@@ -348,18 +348,20 @@ the file returning the result of evaluating BODY."
        org-glance-entry-location-outline
        (s-join separator)))
 
-(defun org-glance-entry-location-visit (entry &optional action)
-  (let ((marker (org-glance-entry-location-marker entry)))
-    (with-current-buffer (marker-buffer marker)
-      (save-excursion
-        (org-goto-marker-or-bmk marker)
-        (if action
-            (funcall action)
-          (let* ((line (thing-at-point 'line t))
-                 (search (string-match org-any-link-re line))
-                 (link (substring line (match-beginning 0) (match-end 0)))
-                 (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-            (org-open-link-from-string link)))))))
+(defun org-glance-entry-location-visit (entry)
+  (->> entry
+       org-glance-entry-location-marker
+       org-goto-marker-or-bmk))
+
+(defun org-glance-entry-location-act (entry &optional action)
+  (org-glance-entry-location-visit entry)
+  (if action
+      (funcall action)
+    (let* ((line (thing-at-point 'line t))
+           (search (string-match org-any-link-re line))
+           (link (substring line (match-beginning 0) (match-end 0)))
+           (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+      (org-open-link-from-string link))))
 #+end_src
 *** implant
 #+begin_src emacs-lisp
@@ -463,6 +465,52 @@ the file returning the result of evaluating BODY."
                                     org-glance-filter-create))
         ((listp filter) (mapcar #'(lambda (f) (thread-first f org-glance-filter-create car)) filter))
         (t (error "Unable to recognize filter."))))
+
+(defun org-glance-filter-apply (filter &optional entry)
+  (cond ((org-glance-filter-p filter)
+         (save-window-excursion
+           (save-excursion
+             (when (org-glance-entry-location-p entry)
+               (org-glance-entry-location-visit entry))
+             (condition-case nil
+                 (-some->> filter org-glance-filter-handler funcall)
+               (error nil)))))
+        ((listp filter)
+         (-all? #'org-glance-filter-apply filter))
+
+        ;; (entries
+        ;;  (loop for entry in entries
+        ;;        collect (save-window-excursion
+        ;;                  (-all? (lambda (f) (condition-case nil
+        ;;                                    (save-excursion
+        ;;                                      (org-glance-entry-location-visit entry)
+        ;;                                      (funcall f entry))
+        ;;                                  (error nil))) filter))))
+        )
+
+  ;; (if entries
+  ;;     (loop for entry in entries
+  ;;           collect (save-window-excursion
+  ;;                     (-all? (lambda (f) (condition-case nil
+  ;;                                       (save-excursion
+  ;;                                         (org-glance-entry-location-visit entry)
+  ;;                                         (funcall f entry))
+  ;;                                     (error nil))) filter)))
+  ;;   (-all? (lambda (f) (condition-case nil
+  ;;                     (save-excursion
+  ;;                       (-some->> f
+  ;;                                 org-glance-filter-handler
+  ;;                                 funcall))
+  ;;                   (error nil))) filter))
+  )
+
+(let ((entries (->> "/tmp/1.org"
+                    org-glance-scope-create
+                    org-glance-scope-entries))
+      (filters (org-glance-filter-create "links")))
+  filters
+  ;; (org-glance-filter-apply filters entries)
+  )
 #+end_src
 ** COMMENT Tests [4/4]
 *** DONE Can visit empty cache file                                           :Test:
