@@ -34,6 +34,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+(require 'dash-functional)
 
 (defgroup org-glance nil
   "\nOptions concerning glancing entries."
@@ -63,59 +64,35 @@ If buffer-or-name is nil return current buffer's mode."
 
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
-- SCOPE :: org-file or SCOPE from org-map-entries (org.el)
-- PROMPT :: completing read title (default: \"Glance: \")
-- SEPARATOR :: completing read entry separator (default: \" → \")
-- FILTER :: list or one filter of type lambda/symbol/string to specify entries in completing read.
+
+- :scope
+  Org-file or SCOPE from org-map-entries (org.el)
+
+- :filter
+  List or one filter of type lambda/symbol/string to specify entries in completing read.
 
   Possible default filters:
-  - links :: keep entries with link in title
-  - encrypted :: keep entries with :crypt: tag
+  - links - keep entries with link in title
+  - encrypted - keep entries with :crypt: tag
 
   You can customize default filters by setting org-glance--default-filters variable.
 
-- ACTION
+- :action
   - if specified, call it with point on selected entry
   - if entry has an org-link in title, browse it
-- OUTLINE-IGNORE :: list of strings to ignore in outline-path
-
-- INPLACE :: do not build scope file if specified
-
-\(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION])"
-  (let* ((scope (org-glance-scope-create (plist-get args :scope)))
-         (filter (org-glance-filter-create (plist-get args :filter)))
-         (action (plist-get args :action))
-
-         (prompt (or (plist-get args :prompt) "Glance: "))
-         (err-nothing-found (or (plist-get args :nothing-found-msg) "Nothing to glance for"))
-
-         ;; (save-outline-visibility-p (plist-get args :save-outline-visibility))
-         ;; (no-cache-file-p           (plist-get args :no-cache-file))
-         ;; (org-glance-cache-file (if no-cache-file-p
-         ;;                            (make-temp-file "org-glance-")
-         ;;                          org-glance-cache-file))
-         ;; (outline-settings (record 'org-glance-settings--outline
-         ;;                           :scope scope
-         ;;                           :separator (or (plist-get args :separator) org-glance-defaults--separator)
-         ;;                           :outline-ignore (plist-get args :outline-ignore)
-         ;;                           :inplace t ;; (plist-get args :inplace)
-         ;;                           ;; temporary while outplace completions fail
-         ;;                           :filters (org-glance--filter-predicates user-filter)))
-
-         (entries (or (org-glance-scope-entries scope)
-                      (error "%s %s"
-                             err-nothing-found
-                             (prin1-to-string scope))))
-         (entry (-some->> entries
-                          ;; (apply-partially #'org-glance-entries-filter filter)
-                          org-glance-entries-browse)))
-    (org-glance-entry-location-act entry action)
-    ;; (when no-cache-file-p
-    ;;   (when-let ((fb (get-file-buffer org-glance-cache-file)))
-    ;;     (kill-buffer fb))
-    ;;   (delete-file org-glance-cache-file))
-    ;; result
-    ))
+\(fn [:scope SCOPE] [:filter FILTER] [:action ACTION])"
+  (let* ((filter (-some->> :filter
+                           (plist-get args)
+                           (org-glance-filter-create)))
+         (entry (-some->> :scope
+                          (plist-get args)
+                          (org-glance-scope-create)
+                          (org-glance-scope-entries)
+                          (org-glance-filter-entries filter)
+                          (org-glance-entries-browse)))
+         (action (-some->> :action
+                           (plist-get args))))
+    (org-glance-entry-location-act entry action)))
 
 (cl-defstruct (org-glance-scope (:constructor org-glance-scope--create)
                                 (:copier nil))
@@ -171,11 +148,6 @@ If buffer-or-name is nil return current buffer's mode."
                    (org-glance-scope-visit fob)
                    (org-map-entries #'org-glance-entry-location-at-point)))))
 
-;; (->> (org-agenda-files)
-;;      org-glance-scope-create
-;;      org-glance-scope-entries
-;;      org-glance-entries-browse)
-
 (defun org-glance-entries-browse (entries)
   (let* ((prompt "Glance: ")
          (separator org-glance-defaults--separator)
@@ -201,8 +173,7 @@ If buffer-or-name is nil return current buffer's mode."
                   (apply #'org-glance-scope--create)
                   list)
         (-some->> (current-buffer)
-                  org-glance-scope-create
-                  list))))
+                  org-glance-scope-create))))
 
 (cl-defstruct (org-glance-entry-location (:constructor org-glance-entry-location--create)
                                          (:copier nil))
@@ -302,50 +273,29 @@ If buffer-or-name is nil return current buffer's mode."
         (t (error "Unable to recognize filter."))))
 
 (defun org-glance-filter-apply (filter &optional entry)
-  (cond ((org-glance-filter-p filter)
-         (save-window-excursion
-           (save-excursion
-             (when (org-glance-entry-location-p entry)
-               (org-glance-entry-location-visit entry))
-             (condition-case nil
-                 (-some->> filter org-glance-filter-handler funcall)
-               (error nil)))))
-        ((listp filter)
-         (-all? #'org-glance-filter-apply filter))
+  (assert (org-glance-filter-p filter))
+  (assert (or (null entry)
+              (org-glance-entry-location-p entry)))
+  (save-window-excursion
+    (save-excursion
+      (when (org-glance-entry-location-p entry)
+        (org-glance-entry-location-visit entry))
+      (condition-case nil
+          (-some->> filter org-glance-filter-handler funcall)
+        (error nil)))))
 
-        ;; (entries
-        ;;  (loop for entry in entries
-        ;;        collect (save-window-excursion
-        ;;                  (-all? (lambda (f) (condition-case nil
-        ;;                                    (save-excursion
-        ;;                                      (org-glance-entry-location-visit entry)
-        ;;                                      (funcall f entry))
-        ;;                                  (error nil))) filter))))
-        )
+(defun org-glance-filter-entries (filters &optional entries)
+  (assert (-all? #'org-glance-filter-p filters))
+  (assert (or (null entries)
+              (-all? #'org-glance-entry-location-p entries)))
+  (-filter (lambda (entry) (-all? (-cut org-glance-filter-apply <> entry) filters)) entries))
 
-  ;; (if entries
-  ;;     (loop for entry in entries
-  ;;           collect (save-window-excursion
-  ;;                     (-all? (lambda (f) (condition-case nil
-  ;;                                       (save-excursion
-  ;;                                         (org-glance-entry-location-visit entry)
-  ;;                                         (funcall f entry))
-  ;;                                     (error nil))) filter)))
-  ;;   (-all? (lambda (f) (condition-case nil
-  ;;                     (save-excursion
-  ;;                       (-some->> f
-  ;;                                 org-glance-filter-handler
-  ;;                                 funcall))
-  ;;                   (error nil))) filter))
-  )
 
-(let ((entries (->> "/tmp/1.org"
-                    org-glance-scope-create
-                    org-glance-scope-entries))
-      (filters (org-glance-filter-create "links")))
-  filters
-  ;; (org-glance-filter-apply filters entries)
-  )
+;; (let ((entries (->> "/tmp/1.org"
+;;                     org-glance-scope-create
+;;                     org-glance-scope-entries))
+;;       (filters (org-glance-filter-create "links")))
+;;   (org-glance-filter-entries filters entries))
 
 ;; org-element-interpret-data
 

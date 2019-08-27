@@ -80,8 +80,15 @@ the file returning the result of evaluating BODY."
   (should (->> (condition-case nil
                    (org-glance-scope-create (list (lambda () nil)))
                  (error nil))
-               null
-               not)))
+               (-all? #'org-glance-scope-p))))
+
+(ert-deftest org-glance-test/scopes-can-handle-unexisting-files ()
+  "Unexisting file in `org-glance-scope-create` should create scope with current buffer."
+  (let* ((temp-file (make-temp-file "org-glance-test-")))
+    (delete-file temp-file)
+    (should (->> temp-file
+                 org-glance-scope-create
+                 (-all? #'org-glance-scope-p)))))
 
 (ert-deftest org-glance-test/feature-provision ()
   (should (featurep 'org-glance)))
