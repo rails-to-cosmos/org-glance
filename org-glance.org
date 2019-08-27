@@ -222,7 +222,7 @@ the file returning the result of evaluating BODY."
                              err-nothing-found
                              (prin1-to-string scope))))
          (entry (-some->> entries
-                          (apply-partially #'org-glance-entries-filter filter)
+                          ;; (apply-partially #'org-glance-entries-filter filter)
                           org-glance-entries-browse)))
     (org-glance-entry-location-visit entry action)
     ;; (when no-cache-file-p
@@ -289,7 +289,7 @@ the file returning the result of evaluating BODY."
                    (org-glance-scope-visit fob)
                    (org-map-entries #'org-glance-entry-location-at-point)))))
 
-;; (->> "/tmp/1.org"
+;; (->> (org-agenda-files)
 ;;      org-glance-scope-create
 ;;      org-glance-scope-entries
 ;;      org-glance-entries-browse)
@@ -297,7 +297,9 @@ the file returning the result of evaluating BODY."
 (defun org-glance-entries-browse (entries)
   (let* ((prompt "Glance: ")
          (separator org-glance-defaults--separator)
-         (choice (org-completing-read prompt (mapcar (apply-partially #'org-glance-entry-location-outline-format separator)  entries)))
+         (choice (org-completing-read prompt
+                                      (loop for entry in entries
+                                            collect (org-glance-entry-location-outline-format separator entry))))
          (entry (loop for entry in entries
                       when (string= (org-glance-entry-location-outline-format separator entry)
                                     choice)
