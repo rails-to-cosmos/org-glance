@@ -318,7 +318,7 @@ the file returning the result of evaluating BODY."
                   org-glance-scope--detect
                   (apply #'org-glance-scope--create)
                   list)
-        (-some->> current-buffer
+        (-some->> (current-buffer)
                   org-glance-scope-create
                   list))))
 #+end_src
