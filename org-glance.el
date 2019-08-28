@@ -86,12 +86,13 @@ If buffer-or-name is nil return current buffer's mode."
                            (org-glance-filter-create)))
          (action (-some->> :action
                            (plist-get args)))
-         (entry (-some->> :scope
+         (entry (org-save-outline-visibility nil
+                  (-some->> :scope
                             (plist-get args)
                             (org-glance-scope-create)
                             (org-glance-scope-entries)
                             (org-glance-filter-entries filter)
-                            (org-glance-entries-browse))))
+                            (org-glance-entries-browse)))))
     (org-glance-entry-location-act entry action)))
 
 (cl-defstruct (org-glance-scope (:constructor org-glance-scope--create)
@@ -190,13 +191,12 @@ If buffer-or-name is nil return current buffer's mode."
   scope outline marker)
 
 (cl-defun org-glance-entry-location-at-point ()
-  (org-save-outline-visibility nil
-    (let ((scope (car (org-glance-scope-create (current-buffer)))))
+  (let ((scope (car (org-glance-scope-create (current-buffer)))))
       (org-glance-entry-location--create
        :scope scope
        :outline (cl-list* (org-glance-scope-name scope)
                           (org-get-outline-path t))
-       :marker (point-marker)))))
+       :marker (point-marker))))
 
 (defun org-glance-entry-location-outline-format (separator entry)
   (->> entry
