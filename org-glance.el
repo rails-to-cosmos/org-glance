@@ -101,18 +101,26 @@ If buffer-or-name is nil return current buffer's mode."
 (defvar org-glance--default-scopes-alist
   `((file-with-archives . (lambda () (org-glance-scope--list-archives)))))
 
-(defun org-glance-scope--prepr (scope)
-  (cond ((bufferp scope) scope)
+(defun org-glance-scope--preprocess (scope)
+  (cond ((bufferp scope)
+         (list scope))
+
         ((and (symbolp scope) (alist-get scope org-glance--default-scopes-alist))
          (funcall (alist-get scope org-glance--default-scopes-alist)))
-        ((functionp scope) (when-let ((fob (funcall scope)))
-                             (if (bufferp fob)
-                                 fob
-                               (or (get-file-buffer (expand-file-name fob))
-                                   (expand-file-name fob)))))
+
+        ((functionp scope)
+         (-some->> (funcall scope)
+                   (org-glance-scope--preprocess)))
+
         ((and (stringp scope)
-              (file-exists-p (expand-file-name scope))) (or (get-file-buffer (expand-file-name scope))
-              (expand-file-name scope)))))
+              (file-exists-p (expand-file-name scope)))
+         (list (or (get-file-buffer (expand-file-name scope))
+                   (expand-file-name scope))))
+
+        ((listp scope)
+         (-some->> scope
+                   (-keep #'org-glance-scope--preprocess)
+                   -flatten))))
 
 (defun org-glance-scope--detect (scope)
   (cond
@@ -127,7 +135,10 @@ If buffer-or-name is nil return current buffer's mode."
    ((and (bufferp scope) (buffer-file-name scope) (file-exists-p (buffer-file-name scope)))
     `(:type :file-buffer
             :name ,(expand-file-name (buffer-file-name scope))
-            :handle ,scope))))
+            :handle ,scope))
+   ((listp scope)
+    (->> scope
+         (-keep #'org-glance-scope--detect)))))
 
 (defun org-glance-scope-visit (scope)
   (case (org-glance-scope-type scope)
@@ -168,10 +179,9 @@ If buffer-or-name is nil return current buffer's mode."
                 -flatten
                 seq-uniq)
     (or (-some->> lfob
-                  org-glance-scope--prepr
+                  org-glance-scope--preprocess
                   org-glance-scope--detect
-                  (apply #'org-glance-scope--create)
-                  list)
+                  (-keep #'(lambda (r) (apply #'org-glance-scope--create r))))
         (-some->> (current-buffer)
                   org-glance-scope-create))))
 
