@@ -318,29 +318,6 @@ the file returning the result of evaluating BODY."
 ;;     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
 ;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
 #+end_src
-**** entries
-#+begin_src emacs-lisp
-(cl-defgeneric org-glance-scope-entries (scope))
-
-(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
-  (save-window-excursion
-    (org-glance-scope-visit scope)
-    (save-excursion
-      (org-save-outline-visibility nil
-        (org-map-entries #'org-glance-entry-create)))))
-
-(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
-  (save-window-excursion
-    (org-glance-scope-visit scope)
-    (save-excursion
-      (org-save-outline-visibility nil
-        (org-map-entries #'org-glance-entry-create)))))
-
-(cl-defmethod org-glance-scope-entries ((scope list))
-  (-some->> scope
-            (mapcar #'org-glance-scope-entries)
-            (-flatten)))
-#+end_src
 **** name
 #+begin_src emacs-lisp
 (cl-defgeneric org-glance-scope-name (scope))
@@ -367,13 +344,13 @@ the file returning the result of evaluating BODY."
   (should (equal (org-glance-scope-create (current-buffer)) (org-glance-scope-create (list (current-buffer)))))
   (should (equal (org-glance-scope-create (current-buffer)) (org-glance-scope-create (list (list (current-buffer)))))))
 #+end_src
-*** entry
+*** entries
 #+begin_src emacs-lisp
 (cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
                                 (:copier nil))
-  scope outline marker)
+  scope outline point)
 
-(cl-defun org-glance-entry-create (&optional scope)
+(cl-defun org-glance-entry-create (&optional scope point)
   (let ((scope (or scope
                    (org-glance-scope-create (current-buffer)))))
     (org-glance-entry--create
@@ -381,7 +358,21 @@ the file returning the result of evaluating BODY."
      :outline (cl-list*
                (s-join " " (org-glance-scope-name scope))
                (org-get-outline-path t))
-     :marker (point-marker))))
+     :point (or point (point)))))
+
+(cl-defun org-glance-entry-serialize (entry)
+  (let ((scope (org-glance-entry-scope entry)))
+    (when (-all-p #'org-glance-scope-file-p scope)
+      (prin1-to-string (list (cons 'outline (org-glance-entry-outline entry))
+                             (cons 'point   (org-glance-entry-point entry))
+                             (cons 'scope    (org-glance-scope-file-file (car scope))))))))
+
+(cl-defun org-glance-entry-deserialize (string)
+  (let* ((params (read string))
+         (scope (org-glance-scope-create
+                 (alist-get 'scope params)))
+         (point (alist-get 'point params)))
+    (org-glance-entry-create scope point)))
 
 (defun org-glance-entry-format (entry)
   (->> entry
@@ -390,8 +381,9 @@ the file returning the result of evaluating BODY."
 
 (defun org-glance-entry-visit (entry)
   (->> entry
-       org-glance-entry-marker
-       org-goto-marker-or-bmk))
+       org-glance-entry-scope
+       org-glance-scope-visit)
+  (goto-char (org-glance-entry-point)))
 
 (defun org-glance-entry-act (entry &optional action)
   (org-glance-entry-visit entry)
@@ -410,15 +402,29 @@ the file returning the result of evaluating BODY."
          (entry (loop for entry in entries
                       when (string= (org-glance-entry-format entry)
                                     choice)
-                      do (return entry)))
-         (marker (org-glance-entry-marker entry)))
+                      do (return entry))))
     entry))
 
-;; (->> "/tmp/1.org"
-;;      org-glance-scope--adapt
-;;      org-glance-scope-create
-;;      org-glance-scope-entries
-;;      org-glance-entries-browse)
+(cl-defgeneric org-glance-scope-entries (scope))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
+
+(cl-defmethod org-glance-scope-entries ((scope list))
+  (-some->> scope
+            (mapcar #'org-glance-scope-entries)
+            (-flatten)))
 #+end_src
 *** defaults
 #+begin_src emacs-lisp
