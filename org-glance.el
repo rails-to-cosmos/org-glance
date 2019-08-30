@@ -94,116 +94,154 @@ If buffer-or-name is nil return current buffer's mode."
                             (org-glance-entries-browse))))
     (org-glance-entry-act entry action)))
 
-(cl-defstruct (org-glance-scope (:constructor org-glance-scope--create)
-                                (:copier nil))
-  type name handle)
+(cl-defmethod org-glance-scope-create (scope)
+  "Create list of scopes from file/buffer/function/symbol or sequence of it."
+  (-some->> scope
+            org-glance-scope--adapt
+            org-glance-scope--create))
 
-(defvar org-glance--default-scopes-alist
-  `((file-with-archives . org-glance-scope--list-archives)))
+(cl-defgeneric org-glance-scope--create (lfob))
 
-(defun org-glance-scope--list-archives ()
-  (-some->> (buffer-file-name)
-            (file-name-nondirectory)
-            (file-name-sans-extension)
-            (s-append ".org_archive")
-            (directory-files-recursively default-directory)))
+(cl-defmethod org-glance-scope--create ((lfob string))
+  (when (file-exists-p lfob)
+    `(,(org-glance-scope-file--create
+        :name (file-name-nondirectory lfob)
+        :file (expand-file-name lfob)))))
 
-(defun org-glance-scope--preprocess (scope)
-  (cond ((bufferp scope)
-         (list scope))
+(cl-defmethod org-glance-scope--create ((lfob buffer))
+  (if (buffer-file-name lfob)
+      `(,(org-glance-scope-file--create
+          :name (expand-file-name (buffer-file-name lfob))
+          :file (buffer-file-name lfob)))
+    `(,(org-glance-scope-buffer--create
+        :name (buffer-name lfob)
+        :buffer lfob))))
 
-        ((and (symbolp scope) (alist-get scope org-glance--default-scopes-alist))
-         (funcall (alist-get scope org-glance--default-scopes-alist)))
+(cl-defmethod org-glance-scope--create ((lfob list))
+  (-some->> lfob
+            (-keep #'org-glance-scope--create)
+            (-flatten)))
 
-        ((functionp scope)
-         (-some->> (funcall scope)
-                   (org-glance-scope--preprocess)))
+(cl-defgeneric org-glance-scope--adapt (lfob)
+  "Adapt list-file-or-buffer to list of file-or-buffers.")
 
-        ((and (stringp scope)
-              (file-exists-p (expand-file-name scope)))
-         (list (or (get-file-buffer (expand-file-name scope))
-                   (expand-file-name scope))))
+(cl-defmethod org-glance-scope--adapt ((lfob sequence))
+  "Adapt each element of LFOB."
+  (-some->> lfob
+            (-keep #'(lambda (fob) (->> fob org-glance-scope--adapt)))
+            (-flatten)
+            (seq-uniq)))
 
-        ((listp scope)
-         (-some->> scope
-                   (-keep #'org-glance-scope--preprocess)
-                   -flatten))))
+(cl-defmethod org-glance-scope--adapt ((lfob symbol))
+  "Return extracted LFOB from `org-glance--default-scopes-alist'."
+  (-some->> lfob
+            (funcall (-cut alist-get <> org-glance--default-scopes-alist))
+            (funcall)))
 
-(defun org-glance-scope--detect (scope)
-  (cond
-   ((and (stringp scope) (file-exists-p scope))
-    `(:type :file
-            :name ,(expand-file-name scope)
-            :handle ,scope))
-   ((bufferp scope)
-    `(:type :buffer
-            :name ,(buffer-name scope)
-            :handle ,scope))
-   ((and (bufferp scope) (buffer-file-name scope) (file-exists-p (buffer-file-name scope)))
-    `(:type :file-buffer
-            :name ,(expand-file-name (buffer-file-name scope))
-            :handle ,scope))
-   ((listp scope)
-    (->> scope
-         (-keep #'org-glance-scope--detect)))))
+(cl-defmethod org-glance-scope--adapt ((lfob buffer))
+  "Return list of LFOB."
+  (list lfob))
 
-(defun org-glance-scope-visit (scope)
-  (case (org-glance-scope-type scope)
-    (:file (find-file (org-glance-scope-handle scope)))
-    (:file-buffer (switch-to-buffer (org-glance-scope-handle scope)))
-    (:buffer (switch-to-buffer (org-glance-scope-handle scope)))))
+(cl-defmethod org-glance-scope--adapt ((lfob function))
+  "Adapt result of LFOB."
+  (-some->> lfob
+            (funcall)
+            (org-glance-scope--adapt)))
 
-(defun org-glance-scope-insert (scope)
-  (case (org-glance-scope-type scope)
-    (:file (insert-file-contents (org-glance-scope-handle scope)))
-    (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
-    (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
+(cl-defmethod org-glance-scope--adapt ((lfob string))
+  "Return list of file LFOB if exists."
+  (when (file-exists-p (expand-file-name lfob))
+    (list (or (get-file-buffer (expand-file-name lfob))
+              (expand-file-name lfob)))))
 
-(defun org-glance-scope-entries (scope)
-  (loop for fob in scope
-        append (save-window-excursion
-                 (save-excursion
-                   (org-glance-scope-visit fob)
-                   (org-map-entries #'org-glance-entry-at-point)))))
+;; (org-glance-scope--adapt 'file-with-archives)
+;; (org-glance-scope--adapt (current-buffer))
+;; (org-glance-scope--adapt `(file-with-archives ,(current-buffer)))
 
-(defun org-glance-entry-format-batch (separator entries)
-  (mapcar (apply-partially #'org-glance-entry-format separator) entries))
+(cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
+                                     (:copier nil))
+  name file)
 
-(defun org-glance-entries-browse (entries)
-  (let* ((prompt "Glance: ")
-         (separator org-glance-defaults--separator)
-         (choice (org-completing-read prompt (org-glance-entry-format-batch separator entries)))
-         (entry (loop for entry in entries
-                      when (string= (org-glance-entry-format separator entry)
-                                    choice)
-                      do (return entry)))
-         (marker (org-glance-entry-marker entry)))
-    entry))
+(cl-defstruct (org-glance-scope-buffer (:constructor org-glance-scope-buffer--create)
+                                       (:copier nil))
+  name buffer)
 
-(cl-defun org-glance-scope-create (lfob)
-  (if (listp lfob)
-      (-some->> lfob
-                (-keep #'(lambda (f) (->> f org-glance-scope-create car)))
-                -flatten
-                seq-uniq)
-    (or (-some->> lfob
-                  org-glance-scope--preprocess
-                  org-glance-scope--detect
-                  (-keep #'(lambda (r) (apply #'org-glance-scope--create r))))
-        (-some->> (current-buffer)
-                  org-glance-scope-create))))
+(cl-defgeneric org-glance-scope-name (scope))
+
+(cl-defmethod org-glance-scope-name ((scope org-glance-scope-file))
+  (-some->> scope
+            org-glance-scope-file-name
+            list))
+
+(cl-defmethod org-glance-scope-name ((scope org-glance-scope-buffer))
+  (-some->> scope
+            org-glance-scope-buffer-name
+            list))
+
+(cl-defmethod org-glance-scope-name ((scope list))
+  (-some->> scope
+            (-keep #'org-glance-scope-name)
+            (-flatten)))
+
+(cl-defgeneric org-glance-scope-visit (scope))
+
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-file))
+  (->> scope
+       org-glance-scope-file-file
+       find-file))
+
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-buffer))
+  (->> scope
+       org-glance-scope-buffer-buffer
+       find-file))
+
+(cl-defmethod org-glance-scope-visit ((scope list))
+  (-some->> scope
+            (-keep #'org-glance-scope-visit)))
+
+(cl-defgeneric org-glance-scope-entries (scope))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-at-point)))))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-at-point)))))
+
+(cl-defmethod org-glance-scope-entries ((scope list))
+  (-some->> scope
+            (mapcar #'org-glance-scope-entries)
+            (-flatten)))
+
+;; (->> "/tmp/1.org"
+;;      org-glance-scope--adapt
+;;      org-glance-scope-create
+;;      org-glance-scope-entries)
+
+;; (defun org-glance-scope-insert (scope)
+;;   (case (org-glance-scope-type scope)
+;;     (:file (insert-file-contents (org-glance-scope-handle scope)))
+;;     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
+;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
 
 (cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
                                          (:copier nil))
   scope outline marker)
 
 (cl-defun org-glance-entry-at-point ()
-  (let ((scope (car (org-glance-scope-create (current-buffer)))))
-      (org-glance-entry--create
-       :scope scope
-       :outline (cl-list* (org-glance-scope-name scope)
-                          (org-get-outline-path t))
-       :marker (point-marker))))
+  (let ((scope (org-glance-scope-create (current-buffer))))
+    (org-glance-entry--create
+     :scope scope
+     :outline (cl-list* (org-glance-scope-name scope)
+                        (org-get-outline-path t))
+     :marker (point-marker))))
 
 (defun org-glance-entry-format (separator entry)
   (->> entry
@@ -225,7 +263,29 @@ If buffer-or-name is nil return current buffer's mode."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
+(defun org-glance-entry-format-batch (separator entries)
+  (mapcar (apply-partially #'org-glance-entry-format separator) entries))
 
+(defun org-glance-entries-browse (entries)
+  (let* ((prompt "Glance: ")
+         (separator org-glance-defaults--separator)
+         (choice (org-completing-read prompt (org-glance-entry-format-batch separator entries)))
+         (entry (loop for entry in entries
+                      when (string= (org-glance-entry-format separator entry)
+                                    choice)
+                      do (return entry)))
+         (marker (org-glance-entry-marker entry)))
+    entry))
+
+(defvar org-glance--default-scopes-alist
+  `((file-with-archives . org-glance-scope--list-archives)))
+
+(defun org-glance-scope--list-archives ()
+  (-some->> (buffer-file-name)
+            (file-name-nondirectory)
+            (file-name-sans-extension)
+            (s-append ".org_archive")
+            (directory-files-recursively default-directory)))
 
 (defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
