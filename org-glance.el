@@ -100,6 +100,10 @@ If buffer-or-name is nil return current buffer's mode."
             org-glance-scope--adapt
             org-glance-scope--create))
 
+(cl-defmethod org-glance-scope-p (scope)
+  (or (org-glance-scope-file-p scope)
+      (org-glance-scope-buffer-p scope)))
+
 (cl-defgeneric org-glance-scope--create (lfob))
 
 (cl-defmethod org-glance-scope--create ((lfob string))
@@ -220,11 +224,6 @@ If buffer-or-name is nil return current buffer's mode."
             (mapcar #'org-glance-scope-entries)
             (-flatten)))
 
-;; (->> "/tmp/1.org"
-;;      org-glance-scope--adapt
-;;      org-glance-scope-create
-;;      org-glance-scope-entries)
-
 ;; (defun org-glance-scope-insert (scope)
 ;;   (case (org-glance-scope-type scope)
 ;;     (:file (insert-file-contents (org-glance-scope-handle scope)))
@@ -232,21 +231,22 @@ If buffer-or-name is nil return current buffer's mode."
 ;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
 
 (cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
-                                         (:copier nil))
+                                (:copier nil))
   scope outline marker)
 
 (cl-defun org-glance-entry-at-point ()
   (let ((scope (org-glance-scope-create (current-buffer))))
     (org-glance-entry--create
      :scope scope
-     :outline (cl-list* (org-glance-scope-name scope)
-                        (org-get-outline-path t))
+     :outline (cl-list*
+               (s-join " " (org-glance-scope-name scope))
+               (org-get-outline-path t))
      :marker (point-marker))))
 
-(defun org-glance-entry-format (separator entry)
+(defun org-glance-entry-format (entry)
   (->> entry
-       org-glance-entry-outline
-       (s-join separator)))
+       (org-glance-entry-outline)
+       (s-join org-glance-defaults--separator)))
 
 (defun org-glance-entry-visit (entry)
   (->> entry
@@ -263,19 +263,22 @@ If buffer-or-name is nil return current buffer's mode."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
-(defun org-glance-entry-format-batch (separator entries)
-  (mapcar (apply-partially #'org-glance-entry-format separator) entries))
-
 (defun org-glance-entries-browse (entries)
   (let* ((prompt "Glance: ")
          (separator org-glance-defaults--separator)
-         (choice (org-completing-read prompt (org-glance-entry-format-batch separator entries)))
+         (choice (org-completing-read prompt (mapcar #'org-glance-entry-format entries)))
          (entry (loop for entry in entries
-                      when (string= (org-glance-entry-format separator entry)
+                      when (string= (org-glance-entry-format entry)
                                     choice)
                       do (return entry)))
          (marker (org-glance-entry-marker entry)))
     entry))
+
+;; (->> "/tmp/1.org"
+;;      org-glance-scope--adapt
+;;      org-glance-scope-create
+;;      org-glance-scope-entries
+;;      org-glance-entries-browse)
 
 (defvar org-glance--default-scopes-alist
   `((file-with-archives . org-glance-scope--list-archives)))
