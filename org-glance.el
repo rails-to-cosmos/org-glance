@@ -79,20 +79,29 @@ If buffer-or-name is nil return current buffer's mode."
 
 - :action
   - if specified, call it with point on selected entry
-  - if entry has an org-link in title, browse it
-\(fn [:scope SCOPE] [:filter FILTER] [:action ACTION])"
+  - if entry has an org-link in title, browse it"
   (let* ((filter (-some->> :filter
                            (plist-get args)
                            (org-glance-filter-create)))
+         (cache (plist-get args :cache))
          (action (-some->> :action
                            (plist-get args)))
-         (entry (-some->> :scope
-                          (plist-get args)
-                          (org-glance-scope-create)
-                          (org-glance-scope-entries)
-                          (org-glance-filter-apply filter)
-                          (org-glance-entries-browse))))
-    (org-glance-entry-act entry action)))
+         (entries (if (and cache (file-exists-p cache))
+                      (org-glance-entries-load-from-file cache)
+                    (-some->> :scope
+                              (plist-get args)
+                              (org-glance-scope-create)
+                              (org-glance-scope-entries)
+                              (org-glance-filter-apply filter)))))
+
+    (when cache
+      (message "Please wait while cache is refreshing...")
+      (org-glance-entries-save-to-file cache entries)
+      (message "Cache is up to date now."))
+
+    (-some->> entries
+              (org-glance-entries-browse)
+              (org-glance-entry-act action))))
 
 (cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
                                      (:copier nil))
@@ -111,6 +120,31 @@ If buffer-or-name is nil return current buffer's mode."
 (cl-defmethod org-glance-scope-p (scope)
   (or (org-glance-scope-file-p scope)
       (org-glance-scope-buffer-p scope)))
+
+(cl-defgeneric org-glance-scope-serialize (scope))
+
+(cl-defmethod org-glance-scope-serialize ((scope list))
+  (-flatten (mapcar #'org-glance-scope-serialize scope)))
+
+(cl-defmethod org-glance-scope-serialize ((scope org-glance-scope-file))
+  (mapcar #'org-glance-entry-serialize (org-glance-scope-entries scope)))
+
+(cl-defmethod org-glance-scope-serialize ((scope org-glance-scope-buffer))
+  (mapcar #'org-glance-entry-serialize (org-glance-scope-entries scope)))
+
+(cl-defun org-glance-entries-save-to-file (file entries)
+  (with-temp-file file
+    (insert "`(")
+    (dolist (entry entries)
+      (insert (org-glance-entry-serialize entry) "\n"))
+    (insert ")"))
+  entries)
+
+(cl-defun org-glance-entries-load-from-file (file)
+  (let ((entries (with-temp-buffer
+                   (insert-file-contents file)
+                   (eval (read (buffer-substring (point-min) (point-max)))))))
+    (mapcar #'org-glance-entry-deserialize entries)))
 
 (cl-defgeneric org-glance-scope--create (lfob))
 
@@ -213,29 +247,32 @@ If buffer-or-name is nil return current buffer's mode."
                                 (:copier nil))
   scope outline point)
 
-(cl-defun org-glance-entry-create (&optional scope point)
-  (let ((scope (or scope
-                   (org-glance-scope-create (current-buffer)))))
+(cl-defun org-glance-entry-create (&optional scope outline point)
+  (let* ((scope (or scope
+                    (org-glance-scope-create (current-buffer))))
+         (outline (or outline
+                      (cl-list*
+                       (s-join " " (org-glance-scope-name scope))
+                       (org-get-outline-path t))))
+         (point (or point (point))))
     (org-glance-entry--create
      :scope scope
-     :outline (cl-list*
-               (s-join " " (org-glance-scope-name scope))
-               (org-get-outline-path t))
-     :point (or point (point)))))
+     :outline outline
+     :point point)))
 
 (cl-defun org-glance-entry-serialize (entry)
   (let ((scope (org-glance-entry-scope entry)))
     (when (-all-p #'org-glance-scope-file-p scope)
-      (prin1-to-string (list (cons 'outline (org-glance-entry-outline entry))
-                             (cons 'point   (org-glance-entry-point entry))
-                             (cons 'scope    (org-glance-scope-file-file (car scope))))))))
+      (prin1-to-string
+       `(,(cons 'outline (org-glance-entry-outline entry))
+         ,(cons 'point   (org-glance-entry-point entry))
+         ,(cons 'scope   (org-glance-scope-file-file (car scope))))))))
 
-(cl-defun org-glance-entry-deserialize (string)
-  (let* ((params (read string))
-         (scope (org-glance-scope-create
-                 (alist-get 'scope params)))
-         (point (alist-get 'point params)))
-    (org-glance-entry-create scope point)))
+(cl-defun org-glance-entry-deserialize (input)
+  (let* ((scope (org-glance-scope-create (alist-get 'scope input)))
+         (point (alist-get 'point input))
+         (outline (alist-get 'outline input)))
+    (org-glance-entry-create scope outline point)))
 
 (defun org-glance-entry-format (entry)
   (->> entry
@@ -246,9 +283,9 @@ If buffer-or-name is nil return current buffer's mode."
   (->> entry
        org-glance-entry-scope
        org-glance-scope-visit)
-  (goto-char (org-glance-entry-point)))
+  (goto-char (org-glance-entry-point entry)))
 
-(defun org-glance-entry-act (entry &optional action)
+(defun org-glance-entry-act (action entry)
   (org-glance-entry-visit entry)
   (if action
       (funcall action)
