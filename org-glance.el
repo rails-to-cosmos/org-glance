@@ -318,23 +318,20 @@ If buffer-or-name is nil return current buffer's mode."
         ((listp filter) (mapcar #'(lambda (f) (thread-first f org-glance-filter-create car)) filter))
         (t (error "Unable to recognize filter."))))
 
-(defun org-glance-filter-apply (filter &optional entry)
-  (assert (org-glance-filter-p filter))
-  (assert (or (null entry)
-              (org-glance-entry-p entry)))
+(cl-defgeneric org-glance-filter-apply (filter entry))
+
+(cl-defmethod org-glance-filter-apply ((filter org-glance-filter) (entry org-glance-entry))
   (save-window-excursion
     (save-excursion
-      (when (org-glance-entry-p entry)
-        (org-glance-entry-visit entry))
-      (condition-case nil
-          (-some->> filter org-glance-filter-handler funcall)
-        (error nil)))))
+      (org-save-outline-visibility
+          (when (org-glance-entry-p entry)
+            (org-glance-entry-visit entry))
+        (condition-case nil
+            (-some->> filter org-glance-filter-handler funcall)
+          (error nil))))))
 
-(defun org-glance-filter-apply (filters &optional entries)
-  (assert (-all? #'org-glance-filter-p filters))
-  (assert (or (null entries)
-              (-all? #'org-glance-entry-p entries)))
-  (-filter (lambda (entry) (-all? (-cut org-glance-filter-apply <> entry) filters)) entries))
+(cl-defmethod org-glance-filter-apply ((filter list) (entry list))
+  (-filter (lambda (e) (-all? (-cut org-glance-filter-apply <> e) filter)) entry))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
