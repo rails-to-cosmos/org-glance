@@ -86,14 +86,13 @@ If buffer-or-name is nil return current buffer's mode."
                            (org-glance-filter-create)))
          (action (-some->> :action
                            (plist-get args)))
-         (entry (org-save-outline-visibility nil
-                  (-some->> :scope
+         (entry (-some->> :scope
                             (plist-get args)
                             (org-glance-scope-create)
                             (org-glance-scope-entries)
                             (org-glance-filter-entries filter)
-                            (org-glance-entries-browse)))))
-    (org-glance-entry-location-act entry action)))
+                            (org-glance-entries-browse))))
+    (org-glance-entry-act entry action)))
 
 (cl-defstruct (org-glance-scope (:constructor org-glance-scope--create)
                                 (:copier nil))
@@ -147,7 +146,7 @@ If buffer-or-name is nil return current buffer's mode."
     (:file-buffer (switch-to-buffer (org-glance-scope-handle scope)))
     (:buffer (switch-to-buffer (org-glance-scope-handle scope)))))
 
-(defun org-glance-scope-contents-insert (scope)
+(defun org-glance-scope-insert (scope)
   (case (org-glance-scope-type scope)
     (:file (insert-file-contents (org-glance-scope-handle scope)))
     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
@@ -158,19 +157,20 @@ If buffer-or-name is nil return current buffer's mode."
         append (save-window-excursion
                  (save-excursion
                    (org-glance-scope-visit fob)
-                   (org-map-entries #'org-glance-entry-location-at-point)))))
+                   (org-map-entries #'org-glance-entry-at-point)))))
+
+(defun org-glance-entry-format-batch (separator entries)
+  (mapcar (apply-partially #'org-glance-entry-format separator) entries))
 
 (defun org-glance-entries-browse (entries)
   (let* ((prompt "Glance: ")
          (separator org-glance-defaults--separator)
-         (choice (org-completing-read prompt
-                                      (loop for entry in entries
-                                            collect (org-glance-entry-location-outline-format separator entry))))
+         (choice (org-completing-read prompt (org-glance-entry-format-batch separator entries)))
          (entry (loop for entry in entries
-                      when (string= (org-glance-entry-location-outline-format separator entry)
+                      when (string= (org-glance-entry-format separator entry)
                                     choice)
                       do (return entry)))
-         (marker (org-glance-entry-location-marker entry)))
+         (marker (org-glance-entry-marker entry)))
     entry))
 
 (cl-defun org-glance-scope-create (lfob)
@@ -186,30 +186,30 @@ If buffer-or-name is nil return current buffer's mode."
         (-some->> (current-buffer)
                   org-glance-scope-create))))
 
-(cl-defstruct (org-glance-entry-location (:constructor org-glance-entry-location--create)
+(cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
                                          (:copier nil))
   scope outline marker)
 
-(cl-defun org-glance-entry-location-at-point ()
+(cl-defun org-glance-entry-at-point ()
   (let ((scope (car (org-glance-scope-create (current-buffer)))))
-      (org-glance-entry-location--create
+      (org-glance-entry--create
        :scope scope
        :outline (cl-list* (org-glance-scope-name scope)
                           (org-get-outline-path t))
        :marker (point-marker))))
 
-(defun org-glance-entry-location-outline-format (separator entry)
+(defun org-glance-entry-format (separator entry)
   (->> entry
-       org-glance-entry-location-outline
+       org-glance-entry-outline
        (s-join separator)))
 
-(defun org-glance-entry-location-visit (entry)
+(defun org-glance-entry-visit (entry)
   (->> entry
-       org-glance-entry-location-marker
+       org-glance-entry-marker
        org-goto-marker-or-bmk))
 
-(defun org-glance-entry-location-act (entry &optional action)
-  (org-glance-entry-location-visit entry)
+(defun org-glance-entry-act (entry &optional action)
+  (org-glance-entry-visit entry)
   (if action
       (funcall action)
     (let* ((line (thing-at-point 'line t))
@@ -252,11 +252,11 @@ If buffer-or-name is nil return current buffer's mode."
 (defun org-glance-filter-apply (filter &optional entry)
   (assert (org-glance-filter-p filter))
   (assert (or (null entry)
-              (org-glance-entry-location-p entry)))
+              (org-glance-entry-p entry)))
   (save-window-excursion
     (save-excursion
-      (when (org-glance-entry-location-p entry)
-        (org-glance-entry-location-visit entry))
+      (when (org-glance-entry-p entry)
+        (org-glance-entry-visit entry))
       (condition-case nil
           (-some->> filter org-glance-filter-handler funcall)
         (error nil)))))
@@ -264,15 +264,8 @@ If buffer-or-name is nil return current buffer's mode."
 (defun org-glance-filter-entries (filters &optional entries)
   (assert (-all? #'org-glance-filter-p filters))
   (assert (or (null entries)
-              (-all? #'org-glance-entry-location-p entries)))
+              (-all? #'org-glance-entry-p entries)))
   (-filter (lambda (entry) (-all? (-cut org-glance-filter-apply <> entry) filters)) entries))
-
-
-;; (let ((entries (->> "/tmp/1.org"
-;;                     org-glance-scope-create
-;;                     org-glance-scope-entries))
-;;       (filters (org-glance-filter-create "links")))
-;;   (org-glance-filter-entries filters entries))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
