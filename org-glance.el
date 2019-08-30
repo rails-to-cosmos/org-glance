@@ -87,12 +87,20 @@ If buffer-or-name is nil return current buffer's mode."
          (action (-some->> :action
                            (plist-get args)))
          (entry (-some->> :scope
-                            (plist-get args)
-                            (org-glance-scope-create)
-                            (org-glance-scope-entries)
-                            (org-glance-filter-entries filter)
-                            (org-glance-entries-browse))))
+                          (plist-get args)
+                          (org-glance-scope-create)
+                          (org-glance-scope-entries)
+                          (org-glance-filter-apply filter)
+                          (org-glance-entries-browse))))
     (org-glance-entry-act entry action)))
+
+(cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
+                                     (:copier nil))
+  name file)
+
+(cl-defstruct (org-glance-scope-buffer (:constructor org-glance-scope-buffer--create)
+                                       (:copier nil))
+  name buffer)
 
 (cl-defmethod org-glance-scope-create (scope)
   "Create list of scopes from file/buffer/function/symbol or sequence of it."
@@ -159,16 +167,51 @@ If buffer-or-name is nil return current buffer's mode."
               (expand-file-name lfob)))))
 
 ;; (org-glance-scope--adapt 'file-with-archives)
-;; (org-glance-scope--adapt (current-buffer))
+;; (org-glance-scope--adapt `((,(current-buffer))))
 ;; (org-glance-scope--adapt `(file-with-archives ,(current-buffer)))
 
-(cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
-                                     (:copier nil))
-  name file)
+(cl-defgeneric org-glance-scope-visit (scope))
 
-(cl-defstruct (org-glance-scope-buffer (:constructor org-glance-scope-buffer--create)
-                                       (:copier nil))
-  name buffer)
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-file))
+  (->> scope
+       org-glance-scope-file-file
+       find-file))
+
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-buffer))
+  (->> scope
+       org-glance-scope-buffer-buffer
+       find-file))
+
+(cl-defmethod org-glance-scope-visit ((scope list))
+  (-some->> scope
+            (-keep #'org-glance-scope-visit)))
+
+;; (defun org-glance-scope-insert (scope)
+;;   (case (org-glance-scope-type scope)
+;;     (:file (insert-file-contents (org-glance-scope-handle scope)))
+;;     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
+;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
+
+(cl-defgeneric org-glance-scope-entries (scope))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
+
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
+
+(cl-defmethod org-glance-scope-entries ((scope list))
+  (-some->> scope
+            (mapcar #'org-glance-scope-entries)
+            (-flatten)))
 
 (cl-defgeneric org-glance-scope-name (scope))
 
@@ -187,55 +230,13 @@ If buffer-or-name is nil return current buffer's mode."
             (-keep #'org-glance-scope-name)
             (-flatten)))
 
-(cl-defgeneric org-glance-scope-visit (scope))
-
-(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-file))
-  (->> scope
-       org-glance-scope-file-file
-       find-file))
-
-(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-buffer))
-  (->> scope
-       org-glance-scope-buffer-buffer
-       find-file))
-
-(cl-defmethod org-glance-scope-visit ((scope list))
-  (-some->> scope
-            (-keep #'org-glance-scope-visit)))
-
-(cl-defgeneric org-glance-scope-entries (scope))
-
-(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
-  (save-window-excursion
-    (org-glance-scope-visit scope)
-    (save-excursion
-      (org-save-outline-visibility nil
-        (org-map-entries #'org-glance-entry-at-point)))))
-
-(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
-  (save-window-excursion
-    (org-glance-scope-visit scope)
-    (save-excursion
-      (org-save-outline-visibility nil
-        (org-map-entries #'org-glance-entry-at-point)))))
-
-(cl-defmethod org-glance-scope-entries ((scope list))
-  (-some->> scope
-            (mapcar #'org-glance-scope-entries)
-            (-flatten)))
-
-;; (defun org-glance-scope-insert (scope)
-;;   (case (org-glance-scope-type scope)
-;;     (:file (insert-file-contents (org-glance-scope-handle scope)))
-;;     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
-;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
-
 (cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
                                 (:copier nil))
   scope outline marker)
 
-(cl-defun org-glance-entry-at-point ()
-  (let ((scope (org-glance-scope-create (current-buffer))))
+(cl-defun org-glance-entry-create (&optional scope)
+  (let ((scope (or scope
+                   (org-glance-scope-create (current-buffer)))))
     (org-glance-entry--create
      :scope scope
      :outline (cl-list*
@@ -329,7 +330,7 @@ If buffer-or-name is nil return current buffer's mode."
           (-some->> filter org-glance-filter-handler funcall)
         (error nil)))))
 
-(defun org-glance-filter-entries (filters &optional entries)
+(defun org-glance-filter-apply (filters &optional entries)
   (assert (-all? #'org-glance-filter-p filters))
   (assert (or (null entries)
               (-all? #'org-glance-entry-p entries)))
