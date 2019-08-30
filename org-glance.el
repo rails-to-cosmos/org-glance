@@ -95,9 +95,7 @@ If buffer-or-name is nil return current buffer's mode."
                               (org-glance-filter-apply filter)))))
 
     (when cache
-      (message "Please wait while cache is refreshing...")
-      (org-glance-entries-save-to-file cache entries)
-      (message "Cache is up to date now."))
+      (org-glance-entries-save-to-file cache entries))
 
     (-some->> entries
               (org-glance-entries-browse)
