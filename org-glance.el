@@ -99,7 +99,14 @@ If buffer-or-name is nil return current buffer's mode."
   type name handle)
 
 (defvar org-glance--default-scopes-alist
-  `((file-with-archives . (lambda () (org-glance-scope--list-archives)))))
+  `((file-with-archives . org-glance-scope--list-archives)))
+
+(defun org-glance-scope--list-archives ()
+  (-some->> (buffer-file-name)
+            (file-name-nondirectory)
+            (file-name-sans-extension)
+            (s-append ".org_archive")
+            (directory-files-recursively default-directory)))
 
 (defun org-glance-scope--preprocess (scope)
   (cond ((bufferp scope)
@@ -218,9 +225,7 @@ If buffer-or-name is nil return current buffer's mode."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
-(defun org-glance-scope--list-archives ()
-  (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
-    (directory-files-recursively default-directory (concat fn ".org_archive"))))
+
 
 (defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))

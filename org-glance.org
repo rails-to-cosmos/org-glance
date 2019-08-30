@@ -175,7 +175,7 @@ the file returning the result of evaluating BODY."
                             s-lines butlast -last-item trim-string))))))))
 #+end_src
 * Features
-** org-glance
+** entrypoint
 #+begin_src emacs-lisp
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
@@ -217,7 +217,14 @@ the file returning the result of evaluating BODY."
   type name handle)
 
 (defvar org-glance--default-scopes-alist
-  `((file-with-archives . (lambda () (org-glance-scope--list-archives)))))
+  `((file-with-archives . org-glance-scope--list-archives)))
+
+(defun org-glance-scope--list-archives ()
+  (-some->> (buffer-file-name)
+            (file-name-nondirectory)
+            (file-name-sans-extension)
+            (s-append ".org_archive")
+            (directory-files-recursively default-directory)))
 
 (defun org-glance-scope--preprocess (scope)
   (cond ((bufferp scope)
@@ -345,48 +352,10 @@ the file returning the result of evaluating BODY."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 #+end_src
-*** COMMENT implant
-#+begin_src emacs-lisp
-(defun org-glance-scope--implant (scope)
-  (with-temp-file org-glance-cache-file
-    (org-mode)
-
-    (when (file-exists-p org-glance-cache-file)
-      (insert-file-contents org-glance-cache-file))
-
-    (let* ((contents (org-glance-cache--get-scope-state-headlines scope))
-           (state (car contents))
-           (entries (cadr contents))
-           (scope-name (org-glance-scope--get-name scope))
-           (cached-scope (org-glance-cache--get-scope scope-name)))
-
-      (when (and (or (not cached-scope)
-                     (not (string= state (car cached-scope))))
-                 (> (length entries) 0)
-                 (not (string= org-glance-cache-file scope-name)))
-        (org-glance-cache--remove-scope scope-name)
-        (org-glance-cache--add-scope scope-name entries state)
-        ;; TODO: possible optimization/add-scope can return scope
-        (setq cached-scope (org-glance-cache--get-scope scope-name)))
-
-      (when-let ((scope-point (cadr cached-scope)))
-        (let ((outliner (apply-partially
-                         'org-glance--get-entry-coordinates
-                         :separator separator
-                         :outline-ignore outline-ignore
-                         :filters filters
-                         :inplace inplace-p
-                         :scope org-glance-cache-file)))
-          (save-excursion
-            (goto-char scope-point)
-            (org-map-entries outliner nil 'tree)))))))
-#+end_src
 *** defaults
 **** archives
 #+begin_src emacs-lisp
-(defun org-glance-scope--list-archives ()
-  (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
-    (directory-files-recursively default-directory (concat fn ".org_archive"))))
+
 #+end_src
 *** Tests [3/5]
 **** DONE Return must contain no duplicates                                  :Test:
