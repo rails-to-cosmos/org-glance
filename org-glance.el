@@ -206,13 +206,13 @@ If buffer-or-name is nil return current buffer's mode."
 
 (cl-defmethod org-glance-scope-visit ((scope org-glance-scope-file))
   (->> scope
-       org-glance-scope-file-file
-       find-file))
+       (org-glance-scope-file-file)
+       (find-file)))
 
 (cl-defmethod org-glance-scope-visit ((scope org-glance-scope-buffer))
   (->> scope
-       org-glance-scope-buffer-buffer
-       find-file))
+       (org-glance-scope-buffer-buffer)
+       (switch-to-buffer)))
 
 (cl-defmethod org-glance-scope-visit ((scope list))
   (-some->> scope
