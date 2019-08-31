@@ -34,6 +34,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'seq)
+(require 'dash-functional)
 
 (defgroup org-glance nil
   "\nOptions concerning glancing entries."
@@ -63,322 +64,317 @@ If buffer-or-name is nil return current buffer's mode."
 
 (defun org-glance (&rest args)
   "Use optional ARGS to customize your glancing blows:
-- SCOPE :: org-file or SCOPE from org-map-entries (org.el)
-- PROMPT :: completing read title (default: \"Glance: \")
-- SEPARATOR :: completing read entry separator (default: \" → \")
-- FILTER :: list or one filter of type lambda/symbol/string to specify entries in completing read.
+
+- :scope
+  Org-file or SCOPE from org-map-entries (org.el)
+
+- :filter
+  List or one filter of type lambda/symbol/string to specify entries in completing read.
 
   Possible default filters:
-  - links :: keep entries with link in title
-  - encrypted :: keep entries with :crypt: tag
+  - links - keep entries with link in title
+  - encrypted - keep entries with :crypt: tag
 
   You can customize default filters by setting org-glance--default-filters variable.
 
-- ACTION
+- :action
   - if specified, call it with point on selected entry
-  - if entry has an org-link in title, browse it
-- HANDLER :: property name to read-eval on select (default: \"HANDLER\")
-- OUTLINE-IGNORE :: list of strings to ignore in outline-path
+  - if entry has an org-link in title, browse it"
+  (let* ((filter (-some->> :filter
+                           (plist-get args)
+                           (org-glance-filter-create)))
+         (cache (plist-get args :cache))
+         (action (-some->> :action
+                           (plist-get args)))
+         (entries (if (and cache (file-exists-p cache))
+                      (org-glance-entries-load-from-file cache)
+                    (-some->> :scope
+                              (plist-get args)
+                              (org-glance-scope-create)
+                              (org-glance-scope-entries)
+                              (org-glance-filter-apply filter)))))
 
-- INPLACE :: do not build scope file if specified
+    (when cache
+      (org-glance-entries-save-to-file cache entries))
 
-\(fn [:scope SCOPE] [:prompt PROMPT] [:separator SEPARATOR] [:filter FILTER] [:action ACTION] [:handler HANDLER])"
-  (let* ((user-scopes (or (plist-get args :scope)          nil))
-         (aggregated-scopes (org-glance--aggregate-scopes user-scopes))
-         (err-nothing-found (or (plist-get args :nothing-found-msg) "Nothing to glance for"))
+    (-some->> entries
+              (org-glance-entries-browse)
+              (org-glance-entry-act action))))
 
-         (user-filter (or (plist-get args :filter)       (lambda () t)))
-         (filters (org-glance--filter-predicates user-filter))
-         (outline-ignore (or (plist-get args :outline-ignore) nil))
-         (save-outline-visibility-p (plist-get args :save-outline-visibility))
-         (inplace-p                 t ;; (plist-get args :inplace)
-                                    ;; temporary while outplace completions fail
-                                    )
-         (no-cache-file-p           (plist-get args :no-cache-file))
-         (org-glance-cache-file (if no-cache-file-p
-                                    (make-temp-file "org-glance-")
-                                  org-glance-cache-file))
+(cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
+                                     (:copier nil))
+  name file)
 
-         (handler   (or (plist-get args :handler)        "HANDLER"))
-         (prompt    (or (plist-get args :prompt)         "Glance: "))
-         (separator (or (plist-get args :separator)      " → "))
-         (action    (or (plist-get args :action)         nil))
+(cl-defstruct (org-glance-scope-buffer (:constructor org-glance-scope-buffer--create)
+                                       (:copier nil))
+  name buffer)
 
-         (entries (or (org-glance--entries
-                       :scope aggregated-scopes
-                       :separator separator
-                       :outline-ignore outline-ignore
-                       :filters filters
-                       :inplace inplace-p)
-                      (error "%s %s"
-                             err-nothing-found
-                             (prin1-to-string aggregated-scopes))))
-         (result (org-glance--compl-visit prompt entries action save-outline-visibility-p)))
-    (when no-cache-file-p
-      (when-let ((fb (get-file-buffer org-glance-cache-file)))
-        (kill-buffer fb))
-      (delete-file org-glance-cache-file))
-    result))
+(cl-defmethod org-glance-scope-create (scope)
+  "Create list of scopes from file/buffer/function/symbol or sequence of it."
+  (-some->> scope
+            org-glance-scope--adapt
+            org-glance-scope--create))
 
-(defun org-glance--get-entry-coordinates (&rest args)
-  "Return outline path of current `'org-mode`' entry.
+(cl-defmethod org-glance-scope-p (scope)
+  (or (org-glance-scope-file-p scope)
+      (org-glance-scope-buffer-p scope)))
 
-Org node titles separated by SEPARATOR, titles specified in
-OUTLINE-IGNORE will be ignored.
+(cl-defgeneric org-glance-scope-serialize (scope))
 
-All FILTERS lambdas must be t."
-  (let* ((separator           (or (plist-get args :separator)           org-glance-defaults--separator))
-         (outline-ignore      (or (plist-get args :outline-ignore)      nil))
-         (filters             (or (plist-get args :filters)             nil))
-         (inplace-p           (or (plist-get args :inplace)             nil))
-         (fob                 (or (plist-get args :fob)                 nil))
-         (item (org-entry-get (point) "ITEM"))
-         (path (funcall (if inplace-p 'append 'cdr) (org-get-outline-path t)))
-         (outline (cl-set-difference path outline-ignore :test 'string=))
-         (title (mapconcat 'identity outline separator)))
-    (when (and (cl-every (lambda (fp) (if fp (funcall fp) nil)) filters)
-               (not (string-empty-p (s-trim title))))
-      (list title (point-marker)))))
+(cl-defmethod org-glance-scope-serialize ((scope list))
+  (-flatten (mapcar #'org-glance-scope-serialize scope)))
 
-(defun org-glance--visit-entry-at-point ()
-  (save-excursion
+(cl-defmethod org-glance-scope-serialize ((scope org-glance-scope-file))
+  (mapcar #'org-glance-entry-serialize (org-glance-scope-entries scope)))
+
+(cl-defmethod org-glance-scope-serialize ((scope org-glance-scope-buffer))
+  (mapcar #'org-glance-entry-serialize (org-glance-scope-entries scope)))
+
+(cl-defun org-glance-entries-save-to-file (file entries)
+  (with-temp-file file
+    (insert "`(")
+    (dolist (entry entries)
+      (insert (org-glance-entry-serialize entry) "\n"))
+    (insert ")"))
+  entries)
+
+(cl-defun org-glance-entries-load-from-file (file)
+  (let ((entries (with-temp-buffer
+                   (insert-file-contents file)
+                   (eval (read (buffer-substring (point-min) (point-max)))))))
+    (mapcar #'org-glance-entry-deserialize entries)))
+
+(cl-defgeneric org-glance-scope--create (lfob))
+
+(cl-defmethod org-glance-scope--create ((lfob string))
+  (when (file-exists-p lfob)
+    `(,(org-glance-scope-file--create
+        :name (file-name-nondirectory lfob)
+        :file (expand-file-name lfob)))))
+
+(cl-defmethod org-glance-scope--create ((lfob buffer))
+  (if (buffer-file-name lfob)
+      `(,(org-glance-scope-file--create
+          :name (expand-file-name (buffer-file-name lfob))
+          :file (buffer-file-name lfob)))
+    `(,(org-glance-scope-buffer--create
+        :name (buffer-name lfob)
+        :buffer lfob))))
+
+(cl-defmethod org-glance-scope--create ((lfob list))
+  (-some->> lfob
+            (-keep #'org-glance-scope--create)
+            (-flatten)))
+
+(cl-defgeneric org-glance-scope--adapt (lfob)
+  "Adapt list-file-or-buffer to list of file-or-buffers.")
+
+(cl-defmethod org-glance-scope--adapt ((lfob sequence))
+  "Adapt each element of LFOB."
+  (-some->> lfob
+            (-keep #'(lambda (fob) (->> fob org-glance-scope--adapt)))
+            (-flatten)
+            (seq-uniq)))
+
+(cl-defmethod org-glance-scope--adapt ((lfob symbol))
+  "Return extracted LFOB from `org-glance--default-scopes-alist'."
+  (-some->> lfob
+            (funcall (-cut alist-get <> org-glance--default-scopes-alist))
+            (funcall)))
+
+(cl-defmethod org-glance-scope--adapt ((lfob buffer))
+  "Return list of LFOB."
+  (list lfob))
+
+(cl-defmethod org-glance-scope--adapt ((lfob function))
+  "Adapt result of LFOB."
+  (-some->> lfob
+            (funcall)
+            (org-glance-scope--adapt)))
+
+(cl-defmethod org-glance-scope--adapt ((lfob string))
+  "Return list of file LFOB if exists."
+  (when (file-exists-p (expand-file-name lfob))
+    (list (or (get-file-buffer (expand-file-name lfob))
+              (expand-file-name lfob)))))
+
+;; (org-glance-scope--adapt 'file-with-archives)
+;; (org-glance-scope--adapt `((,(current-buffer))))
+;; (org-glance-scope--adapt `(file-with-archives ,(current-buffer)))
+
+(cl-defgeneric org-glance-scope-visit (scope))
+
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-file))
+  (->> scope
+       (org-glance-scope-file-file)
+       (find-file)))
+
+(cl-defmethod org-glance-scope-visit ((scope org-glance-scope-buffer))
+  (->> scope
+       (org-glance-scope-buffer-buffer)
+       (switch-to-buffer)))
+
+(cl-defmethod org-glance-scope-visit ((scope list))
+  (-some->> scope
+            (-keep #'org-glance-scope-visit)))
+
+;; (defun org-glance-scope-insert (scope)
+;;   (case (org-glance-scope-type scope)
+;;     (:file (insert-file-contents (org-glance-scope-handle scope)))
+;;     (:file-buffer (insert-file-contents (buffer-file-name (org-glance-scope-handle scope))))
+;;     (:buffer (insert-buffer-substring-no-properties (org-glance-scope-handle scope)))))
+
+(cl-defgeneric org-glance-scope-name (scope))
+
+(cl-defmethod org-glance-scope-name ((scope org-glance-scope-file))
+  (-some->> scope
+            org-glance-scope-file-name
+            list))
+
+(cl-defmethod org-glance-scope-name ((scope org-glance-scope-buffer))
+  (-some->> scope
+            org-glance-scope-buffer-name
+            list))
+
+(cl-defmethod org-glance-scope-name ((scope list))
+  (-some->> scope
+            (-keep #'org-glance-scope-name)
+            (-flatten)))
+
+(cl-defstruct (org-glance-entry (:constructor org-glance-entry--create)
+                                (:copier nil))
+  scope outline point)
+
+(cl-defun org-glance-entry-create (&optional scope outline point)
+  (let* ((scope (or scope
+                    (org-glance-scope-create (current-buffer))))
+         (outline (or outline
+                      (cl-list*
+                       (s-join " " (org-glance-scope-name scope))
+                       (org-get-outline-path t))))
+         (point (or point (point))))
+    (org-glance-entry--create
+     :scope scope
+     :outline outline
+     :point point)))
+
+(cl-defun org-glance-entry-serialize (entry)
+  (let ((scope (org-glance-entry-scope entry)))
+    (when (-all-p #'org-glance-scope-file-p scope)
+      (prin1-to-string
+       `(,(cons 'outline (org-glance-entry-outline entry))
+         ,(cons 'point   (org-glance-entry-point entry))
+         ,(cons 'scope   (org-glance-scope-file-file (car scope))))))))
+
+(cl-defun org-glance-entry-deserialize (input)
+  (let* ((scope (org-glance-scope-create (alist-get 'scope input)))
+         (point (alist-get 'point input))
+         (outline (alist-get 'outline input)))
+    (org-glance-entry-create scope outline point)))
+
+(defun org-glance-entry-format (entry)
+  (->> entry
+       (org-glance-entry-outline)
+       (s-join org-glance-defaults--separator)))
+
+(defun org-glance-entry-visit (entry)
+  (->> entry
+       org-glance-entry-scope
+       org-glance-scope-visit)
+  (goto-char (org-glance-entry-point entry)))
+
+(defun org-glance-entry-act (action entry)
+  (org-glance-entry-visit entry)
+  (if action
+      (funcall action)
     (let* ((line (thing-at-point 'line t))
            (search (string-match org-any-link-re line))
-           (link (substring line (match-beginning 0) (match-end 0))))
+           (link (substring line (match-beginning 0) (match-end 0)))
+           (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
-(defun org-glance--compl-visit (prompt entries action &optional save-outline-visibility-p)
-  "PROMPT org-completing-read on ENTRIES and call ACTION on selected.
-If there are no entries, raise exception."
-  (when (seq-empty-p entries)
-    (error "Empty set"))
+(defun org-glance-entries-browse (entries)
+  (let* ((prompt "Glance: ")
+         (separator org-glance-defaults--separator)
+         (choice (org-completing-read prompt (mapcar #'org-glance-entry-format entries)))
+         (entry (loop for entry in entries
+                      when (string= (org-glance-entry-format entry)
+                                    choice)
+                      do (return entry))))
+    entry))
 
-  (let* ((choice (org-completing-read prompt entries))
-         (marker (cadr (assoc-string choice entries)))
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-    (with-current-buffer (marker-buffer marker)
-      (org-goto-marker-or-bmk marker)
-      (org-glance--visit-entry-at-point))))
+(cl-defgeneric org-glance-scope-entries (scope))
 
-(defun org-glance--entries (&rest args)
-  "Return glance entries by SCOPE.
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-file))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
 
-Specify SEPARATOR and OUTLINE-IGNORE to customize
-outline-paths appearence.
+(cl-defmethod org-glance-scope-entries ((scope org-glance-scope-buffer))
+  (save-window-excursion
+    (org-glance-scope-visit scope)
+    (save-excursion
+      (org-save-outline-visibility nil
+        (org-map-entries #'org-glance-entry-create)))))
 
-When INPLACE flag specified, do not modify *org-glance-scope* buffer.
-
-Add some FILTERS to filter unwanted entries."
-  (let* ((scope               (or (plist-get args :scope)               (list (current-buffer))))
-         (_ (assert (listp scope) nil "Scope must be an instance of list."))
-
-         (separator           (or (plist-get args :separator)           org-glance-defaults--separator))
-         (outline-ignore      (or (plist-get args :outline-ignore)      nil))
-         (inplace-p           (or (plist-get args :inplace)             nil))
-         (filters             (or (plist-get args :filters)             nil))
-
-         ;; Possible beautify and optimization: switch to opened buffer instead of finding file
-         ;; (live-buffers (remove nil (mapcar 'buffer-file-name (buffer-list))))
-
-         (scope-type-getter (lambda (fob)
-                              (cond ((and (stringp fob) (file-exists-p fob)) 'file)
-                                    ((and (bufferp fob) (buffer-file-name fob) (file-exists-p (buffer-file-name fob))) 'file-buffer)
-                                    ((bufferp fob) 'buffer))))
-
-         (scope-name-getter (lambda (fob scope-type)
-                              (s-trim
-                               (case scope-type
-                                 ('file (expand-file-name fob))
-                                 ('file-buffer (expand-file-name (buffer-file-name fob)))
-                                 ('buffer (buffer-name fob))))))
-
-         (implant (lambda (fob scope-type)
-                    (with-temp-file org-glance-cache-file
-                      (org-mode)
-
-                      (when (file-exists-p org-glance-cache-file)
-                        (insert-file-contents org-glance-cache-file))
-
-                      (let* ((contents (org-glance-cache--get-scope-state-headlines fob scope-type))
-                             (state (car contents))
-                             (entries (cadr contents))
-                             (scope-name (funcall scope-name-getter fob scope-type))
-                             (cached-scope (org-glance-cache--get-scope scope-name)))
-
-                        (when (and (or (not cached-scope)
-                                       (not (string= state (car cached-scope))))
-                                   (> (length entries) 0)
-                                   (not (string= org-glance-cache-file scope-name)))
-                          (org-glance-cache--remove-scope scope-name)
-                          (org-glance-cache--add-scope scope-name entries state)
-                          ;; TODO: possible optimization/add-scope can return scope
-                          (setq cached-scope (org-glance-cache--get-scope scope-name)))
-
-                        (when-let ((scope-point (cadr cached-scope)))
-                          (let ((outliner (apply-partially
-                                           'org-glance--get-entry-coordinates
-                                           :separator separator
-                                           :outline-ignore outline-ignore
-                                           :filters filters
-                                           :inplace inplace-p
-                                           :fob org-glance-cache-file)))
-                            (save-excursion
-                              (goto-char scope-point)
-                              (org-map-entries outliner nil 'tree))))))))
-
-         (visitor (lambda (fob scope-type)
-                    (save-window-excursion
-                      (let ((outliner
-                             (apply-partially
-                              'org-glance--get-entry-coordinates
-                              :separator separator
-                              :outline-ignore outline-ignore
-                              :filters filters
-                              :inplace inplace-p
-                              :fob fob)))
-                        (org-glance-cache--read-contents fob scope-type)
-                        (org-map-entries outliner)))))
-
-         (handler (if inplace-p visitor implant)))
-
-    (loop for fob in scope
-          append (let* ((scope-type (funcall scope-type-getter fob))
-                        (entries (funcall handler fob scope-type)))
-                   (remove nil entries)))))
-
-(defun og-build-scope-from-buffer-with-mode (buffer-major-mode)
-  (lexical-let ((bmm buffer-major-mode))
-    (lambda () (when (eq major-mode bmm) (current-buffer)))))
-
-(defun org-glance--get-file-archives ()
-  (let ((fn (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
-    (directory-files-recursively default-directory (concat fn ".org_archive"))))
+(cl-defmethod org-glance-scope-entries ((scope list))
+  (-some->> scope
+            (mapcar #'org-glance-scope-entries)
+            (-flatten)))
 
 (defvar org-glance--default-scopes-alist
-  `((file-with-archives . org-glance--get-file-archives)))
+  `((file-with-archives . org-glance-scope--list-archives)))
 
-(defun org-glance--aggregate-scopes (&optional scopes)
-  "Provides list of scopes (scope may be buffer or existing file).
-Without specifying SCOPES it returns list with current buffer."
-
-  (let* ((scopes (cond ((or (stringp scopes)
-                            (and (symbolp scopes) (not (null scopes))))
-                        (list scopes))
-                       (t scopes)))
-
-         (ascopes (cl-loop for scope in scopes
-
-                           ;; collect buffers
-                           when (bufferp scope) collect scope
-                           when (and (symbolp scope) (alist-get scope org-glance--default-scopes-alist))
-                           collect (funcall (alist-get scope org-glance--default-scopes-alist))
-
-                           ;; collect functions that return buffers or filenames
-                           when (functionp scope)
-                           collect (when-let ((fob (funcall scope)))
-                                     (if (bufferp fob)
-                                         fob
-                                       (or (get-file-buffer (expand-file-name fob))
-                                           (expand-file-name fob))))
-
-                           ;; collect file names
-                           when (and (stringp scope) (file-exists-p (expand-file-name scope)))
-                           collect (or (get-file-buffer (expand-file-name scope))
-                                       (expand-file-name scope)))))
-
-    (or (remove 'nil (seq-uniq (-flatten ascopes)))
-        (list (current-buffer)))))
+(defun org-glance-scope--list-archives ()
+  (-some->> (buffer-file-name)
+            (file-name-nondirectory)
+            (file-name-sans-extension)
+            (s-append ".org_archive")
+            (directory-files-recursively default-directory)))
 
 (defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
     (encrypted . (lambda () (seq-intersection (list "crypt") (org-get-tags-at))))))
 
-(defun org-glance--filter-predicates (filter)
-  "Factorize FILTER into list of predicates. Acceptable FILTER values:
+(cl-defstruct (org-glance-filter (:constructor org-glance-filter--create)
+                                 (:copier nil))
+  handler)
+
+(cl-defun org-glance-filter-create (&optional filter)
+  "Factorize FILTER into list of filters. Acceptable FILTER values:
 - list of symbols (possible default filters) and lambdas (custom filters)
 - string name of default filter
 - symbolic name of default filter
 - lambda function with no params called on entry"
-  (cond ((functionp filter) (list filter))
-        ((symbolp filter) (list (alist-get filter org-glance--default-filters)))
-        ((stringp filter) (list (alist-get (intern filter) org-glance--default-filters)))
-        ((listp filter) (cl-loop for elt in filter
-                                 when (functionp elt) collect elt
-                                 when (symbolp elt)   collect (alist-get elt org-glance--default-filters)
-                                 when (stringp elt)   collect (alist-get (intern elt) org-glance--default-filters)))
+  (cond ((null filter) (org-glance-filter-create #'(lambda () t)))
+        ((functionp filter) (-some->> filter
+                                      (org-glance-filter--create :handler)
+                                      list))
+        ((symbolp filter) (-some->> (alist-get filter org-glance--default-filters)
+                                    (org-glance-filter--create :handler)
+                                    list))
+        ((stringp filter) (-some->> filter
+                                    intern
+                                    org-glance-filter-create))
+        ((listp filter) (mapcar #'(lambda (f) (thread-first f org-glance-filter-create car)) filter))
         (t (error "Unable to recognize filter."))))
 
-;; org-element-interpret-data
+(cl-defgeneric org-glance-filter-apply (filter entry))
 
-(defun org-glance-cache--add-scope (scope entries state)
-  (cl-loop for (title level) in entries
-           for i below (length entries)
-           with prev-level
-           initially (progn
-                       (goto-char (point-max))
-                       (org-insert-heading nil nil t)
-                       (insert scope)
-                       (org-set-property "CREATED" (current-time-string))
-                       (org-set-property "STATE" state)
-                       (org-insert-heading-respect-content)
-                       (org-do-demote))
-           do (progn
-                (insert title)
-                (when prev-level
-                  (cond ((> prev-level level) (dotimes (ld (- prev-level level)) (org-do-promote)))
-                        ((< prev-level level) (dotimes (ld (- level prev-level)) (org-do-demote))))))
+(cl-defmethod org-glance-filter-apply ((filter org-glance-filter) (entry org-glance-entry))
+  (save-window-excursion
+    (save-excursion
+      (org-save-outline-visibility
+          (when (org-glance-entry-p entry)
+            (org-glance-entry-visit entry))
+        (condition-case nil
+            (-some->> filter org-glance-filter-handler funcall)
+          (error nil))))))
 
-           when (< (+ i 1) (length entries))
-           do (progn
-                (org-insert-heading-respect-content)
-                (setq prev-level level))))
-
-(defun org-glance-cache--get-scope (scope-name)
-  (car
-   (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (hl)
-       (let* (
-              ;; maybe map properties?
-              ;; (org-element-map hl 'node-property
-              ;;   (lambda (np)
-              ;;     (cons (org-element-property :key np)
-              ;;           (org-element-property :value np))))
-
-              (level (org-element-property :level hl))
-              (title (org-element-property :title hl))
-              (begin (org-element-property :begin hl))
-
-              (end (org-element-property :end hl)))
-         (when (and (= level 1) (string= title scope-name))
-           (save-excursion
-             (goto-char begin)
-             (let* ((props (org-element--get-node-properties))
-                    (state (plist-get props :STATE)))
-               (org-set-property "USED" (current-time-string))
-               (list state begin end)))))))))
-
-(defun org-glance-cache--get-scope-state-headlines (fob scope-type)
-  (with-temp-buffer
-    (org-mode)
-    (org-glance-cache--insert-contents fob scope-type)
-    (list (buffer-hash)
-          (org-element-parse-buffer 'headline))))
-
-(defun org-glance-cache--remove-scope (scope-name)
-  (when-let (scope (org-glance-cache--get-scope scope-name))
-    (delete-region (cadr scope) (caddr scope))))
-
-(defun org-glance-cache--insert-contents (fob scope-type)
-  (case scope-type
-    ('file (insert-file-contents fob))
-    ('file-buffer (insert-file-contents (buffer-file-name fob)))
-    ('buffer (insert-buffer-substring-no-properties fob))))
-
-(defun org-glance-cache--read-contents (fob scope-type)
-  (case scope-type
-      ('file (find-file fob))
-      ('file-buffer (switch-to-buffer fob))
-      ('buffer (switch-to-buffer fob))))
+(cl-defmethod org-glance-filter-apply ((filter list) (entry list))
+  (-filter (lambda (e) (-all? (-cut org-glance-filter-apply <> e) filter)) entry))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
