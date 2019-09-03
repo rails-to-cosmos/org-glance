@@ -249,6 +249,7 @@ If buffer-or-name is nil return current buffer's mode."
   (let* ((scope (or scope
                     (org-glance-scope-create (current-buffer))))
          (outline (or outline
+                      (org-element-property :OUTLINE (org-element-at-point))
                       (cl-list*
                        (s-join " " (org-glance-scope-name scope))
                        (org-get-outline-path t))))
@@ -325,14 +326,23 @@ If buffer-or-name is nil return current buffer's mode."
             (-flatten)))
 
 (defvar org-glance--default-scopes-alist
-  `((file-with-archives . org-glance-scope--list-archives)))
+  `((file-with-archives . org-glance-scope--list-archives)
+    (agenda-with-archives . org-glance-scope--agenda-with-archives)))
 
 (defun org-glance-scope--list-archives ()
-  (-some->> (buffer-file-name)
+  (append (list (buffer-file-name)) (org-glance-scope--list-file-archives (buffer-file-name))))
+
+(defun org-glance-scope--list-file-archives (filename)
+  (-some->> filename
             (file-name-nondirectory)
             (file-name-sans-extension)
             (s-append ".org_archive")
-            (directory-files-recursively default-directory)))
+            (directory-files-recursively (file-name-directory filename))))
+
+(defun org-glance-scope--agenda-with-archives ()
+  (loop for filename in (org-agenda-files)
+        append (list filename)
+        append (org-glance-scope--list-file-archives filename)))
 
 (defvar org-glance--default-filters
   '((links . (lambda () (org-match-line (format "^.*%s.*$" org-bracket-link-regexp))))
