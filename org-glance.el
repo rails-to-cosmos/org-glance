@@ -248,12 +248,11 @@ If buffer-or-name is nil return current buffer's mode."
 (cl-defun org-glance-entry-create (&optional scope outline point)
   (let* ((scope (or scope
                     (org-glance-scope-create (current-buffer))))
+         (point (or point (point)))
          (outline (or outline
-                      (org-element-property :OUTLINE (org-element-at-point))
                       (cl-list*
                        (s-join " " (org-glance-scope-name scope))
-                       (org-get-outline-path t))))
-         (point (or point (point))))
+                       (org-get-outline-path t)))))
     (org-glance-entry--create
      :scope scope
      :outline outline
