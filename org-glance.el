@@ -69,13 +69,16 @@ If buffer-or-name is nil return current buffer's mode."
   Org-file or SCOPE from org-map-entries (org.el)
 
 - :filter
-  List or one filter of type lambda/symbol/string to specify entries in completing read.
+
+  List or one filter of type lambda/symbol/string to specify
+  entries in completing read.
 
   Possible default filters:
   - links - keep entries with link in title
   - encrypted - keep entries with :crypt: tag
 
-  You can customize default filters by setting org-glance--default-filters variable.
+  You can customize default filters by setting
+  org-glance--default-filters variable.
 
 - :action
   - if specified, call it with point on selected entry
@@ -84,8 +87,8 @@ If buffer-or-name is nil return current buffer's mode."
                            (plist-get args)
                            (org-glance-filter-create)))
          (cache (plist-get args :cache))
-         (action (-some->> :action
-                           (plist-get args)))
+         (action (plist-get args :action))
+         (fallback (plist-get args :fallback))
          (entries (if (and cache (file-exists-p cache))
                       (org-glance-entries-load-from-file cache)
                     (-some->> :scope
@@ -97,9 +100,10 @@ If buffer-or-name is nil return current buffer's mode."
     (when cache
       (org-glance-entries-save-to-file cache entries))
 
-    (-some->> entries
-              (org-glance-entries-browse)
-              (org-glance-entry-act action))))
+    (let ((entry-or-fallback-result (org-glance-entries-browse entries fallback)))
+      (if (org-glance-entry-p entry-or-fallback-result)
+          (org-glance-entry-act action entry-or-fallback-result)
+        entry-or-fallback-result))))
 
 (cl-defstruct (org-glance-scope-file (:constructor org-glance-scope-file--create)
                                      (:copier nil))
@@ -293,7 +297,7 @@ If buffer-or-name is nil return current buffer's mode."
            (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
       (org-open-link-from-string link))))
 
-(defun org-glance-entries-browse (entries)
+(defun org-glance-entries-browse (entries &optional fallback)
   (let* ((prompt "Glance: ")
          (separator org-glance-defaults--separator)
          (choice (org-completing-read prompt (mapcar #'org-glance-entry-format entries)))
@@ -301,7 +305,10 @@ If buffer-or-name is nil return current buffer's mode."
                       when (string= (org-glance-entry-format entry)
                                     choice)
                       do (return entry))))
-    entry))
+    (if (null entry)
+        (when fallback
+          (funcall fallback choice))
+      entry)))
 
 (cl-defgeneric org-glance-scope-entries (scope))
 
