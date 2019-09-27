@@ -7,6 +7,9 @@
 White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
   (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
 
+(defun org-glance-headline-contains-tags-p (&rest tags)
+  (equal (seq-intersection tags (org-get-tags)) tags))
+
 (defmacro with-temp-org-buffer (s &rest forms)
   "Create a temporary org-mode buffer with contents S and execute FORMS."
   `(save-excursion
@@ -54,11 +57,6 @@ the file returning the result of evaluating BODY."
                               (with-current-buffer (messages-buffer)
                                 (buffer-substring begin-marker (point-max-marker)))
                             s-lines butlast -last-item trim-string))))))))
-
-(ert-deftest org-glance-test/scope-constructor-returns-list-of-fobs ()
-  "Scope constructor should generate list of files-or-buffers."
-  (should (equal (org-glance-scope-create (current-buffer)) (org-glance-scope-create (list (current-buffer)))))
-  (should (equal (org-glance-scope-create (current-buffer)) (org-glance-scope-create (list (list (current-buffer)))))))
 
 (ert-deftest org-glance-test/scopes-contain-no-duplicates ()
   "Scope should not contain duplicates."

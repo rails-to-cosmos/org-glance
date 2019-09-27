@@ -1,0 +1,26 @@
+;;;###autoload
+(defun org-glance-bookmark-jump ()
+  (interactive)
+  (let ((org-glance-prompt "Jump to bookmark: ")
+        (org-glance-cache "~/.emacs.d/org-glance/bookmarks.el")
+        (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
+        (org-glance-title-property :TITLE)
+        (org-glance-action #'og-act--open-org-link)
+        (org-glance-filter (lambda (headline)
+                             (and (s-matches? org-bracket-link-regexp (org-element-property :raw-value headline))
+                                  (-contains? (org-element-property :tags headline) "Bookmark")))))
+    (org-glance 'agenda-with-archives)))
+
+;;;###autoload
+(defun org-glance-bookmark-visit ()
+  (interactive)
+  (let ((org-glance-prompt "Visit bookmark: ")
+        (org-glance-cache "~/.emacs.d/org-glance/bookmarks.el")
+        (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
+        (org-glance-title-property :TITLE)
+        (org-glance-filter (lambda (headline)
+                             (and (s-matches? org-bracket-link-regexp (org-element-property :raw-value headline))
+                                  (-contains? (org-element-property :tags headline) "Bookmark")))))
+    (org-glance 'agenda-with-archives)))
+
+(provide 'org-glance-bookmark)
