@@ -41,22 +41,21 @@
   :tag "Org Glance"
   :group 'org)
 
-(defun require-from (relpath &rest features)
-  "Require FEATURES from RELPATH directory."
-  (let* ((file (or load-file-name buffer-file-name))
-         (curpath (file-name-directory file))
-         (load-path (list (expand-file-name relpath curpath))))
-    (dolist (feature features)
-      (require feature))))
+(defmacro with-relative-path (relpath &rest body)
+  (declare (debug (form body)) (indent 1))
+  `(let* ((file (or load-file-name buffer-file-name))
+          (path (file-name-directory file))
+          (load-path (list (expand-file-name ,relpath path))))
+     ,@body))
 
-(require-from "core"
-             'org-glance-entry
-             'org-glance-adapter
-             'org-glance-act
-             'org-glance-scope)
+(with-relative-path "core"
+  (require 'org-glance-entry)
+  (require 'org-glance-adapter)
+  (require 'org-glance-act)
+  (require 'org-glance-scope))
 
-(require-from "apps"
-             'org-glance-bookmark)
+(with-relative-path "apps"
+  (require 'org-glance-bookmark))
 
 (defvar org-glance-prompt "Glance: "
   "Completing read prompt.")
