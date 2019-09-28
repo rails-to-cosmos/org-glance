@@ -60,11 +60,15 @@
               headline)))))))
 
 (cl-defun org-glance-save (file entries)
+  (unless (file-exists-p (file-name-directory file))
+    (make-directory (file-name-directory file) t))
+
   (with-temp-file file
     (insert "`(")
     (dolist (entry entries)
       (insert (org-glance-serialize entry) "\n"))
     (insert ")"))
+
   entries)
 
 (cl-defun org-glance-load (file)

@@ -41,17 +41,21 @@
   :tag "Org Glance"
   :group 'org)
 
-(let ((load-path (list "./core")))
-  (require 'org-glance-entry)
-  (require 'org-glance-adapter)
-  (require 'org-glance-act)
-  (require 'org-glance-scope))
+(defun require-from (dir &rest packages)
+  (let ((load-path (list (expand-file-name dir (file-name-directory (or load-file-name buffer-file-name))))))
+    (dolist (package packages)
+      (require package))))
 
-(let ((load-path (list "./app")))
-  (require 'org-glance-bookmark))
+(require-from "core"
+             'org-glance-entry
+             'org-glance-adapter
+             'org-glance-act
+             'org-glance-scope)
+
+(require-from "app"
+             'org-glance-bookmark)
 
 (defvar org-glance-prompt "Glance: ")
-
 
 (defvar org-glance-cache nil
   "Visited headlines file storage.")
@@ -63,7 +67,6 @@
 (defvar org-glance-action nil)
 (defvar org-glance-filter nil)
 
-;;;###autoload
 (defun org-glance (&rest org-files)
   (let* ((cache org-glance-cache)
          (fallback org-glance-fallback)
@@ -73,9 +76,8 @@
                         (org-glance-load cache)
                       (org-glance-read org-files filter))))
     (unwind-protect
-        (if-let (headline (org-glance-browse headlines fallback))
-            (org-glance-act headline action)
-          choice)
+        (when-let (headline (org-glance-browse headlines fallback))
+          (org-glance-act headline action))
       (when (and cache (not (file-exists-p cache)))
         (org-glance-save cache headlines)))))
 
