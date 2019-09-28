@@ -37,14 +37,17 @@
 (require 'dash-functional)
 
 (defgroup org-glance nil
-  "\nOptions concerning glancing entries."
+  "Options concerning glancing entries."
   :tag "Org Glance"
   :group 'org)
 
-(defun require-from (dir &rest packages)
-  (let ((load-path (list (expand-file-name dir (file-name-directory (or load-file-name buffer-file-name))))))
-    (dolist (package packages)
-      (require package))))
+(defun require-from (relpath &rest features)
+  "Require FEATURES from RELPATH directory."
+  (let* ((file (or load-file-name buffer-file-name))
+         (curpath (file-name-directory file))
+         (load-path (list (expand-file-name relpath curpath))))
+    (dolist (feature features)
+      (require feature))))
 
 (require-from "core"
              'org-glance-entry
@@ -52,22 +55,25 @@
              'org-glance-act
              'org-glance-scope)
 
-(require-from "app"
+(require-from "apps"
              'org-glance-bookmark)
 
-(defvar org-glance-prompt "Glance: ")
-
+(defvar org-glance-prompt "Glance: "
+  "Completing read prompt.")
 (defvar org-glance-cache nil
   "Visited headlines file storage.")
-
 (defvar org-glance-title-property :org-glance-title
   "Entry property considered as a title.")
-
-(defvar org-glance-fallback nil)
-(defvar org-glance-action nil)
-(defvar org-glance-filter nil)
+(defvar org-glance-fallback nil
+  "Fallback result of completing read.")
+(defvar org-glance-action nil
+  "Function to call on selected entry.")
+(defvar org-glance-filter nil
+  "Function to filter entries.")
 
 (defun org-glance (&rest org-files)
+  "Completing read on entries of ORG-FILES filtered by org-glance-filter.
+Call org-glance-action on selected headline."
   (let* ((cache org-glance-cache)
          (fallback org-glance-fallback)
          (action org-glance-action)
@@ -75,6 +81,8 @@
          (headlines (if (and cache (file-exists-p cache))
                         (org-glance-load cache)
                       (org-glance-read org-files filter))))
+    (unless headlines
+      (user-error "Nothing to glance for"))
     (unwind-protect
         (when-let (headline (org-glance-browse headlines fallback))
           (org-glance-act headline action))
