@@ -38,7 +38,11 @@
 
 (cl-defmethod org-glance-read ((files list) &optional filter)
   (loop for file in (org-glance-adapt-scope files)
-        append (org-glance-read file filter)))
+        do (message "Glance %s" file)
+        append (org-glance-read file filter) into result
+        when (not (sit-for 0))
+        do (return result)
+        finally (return result)))
 
 (cl-defmethod org-glance-read ((file string) &optional filter)
   (pcase-let ((`(,file ,id) (s-split-up-to "#" file 2)))

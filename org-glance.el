@@ -41,20 +41,20 @@
   :tag "Org Glance"
   :group 'org)
 
-(defmacro with-relative-path (relpath &rest body)
+(defmacro from (relpath &rest body)
   (declare (debug (form body)) (indent 1))
   `(let* ((file (or load-file-name buffer-file-name))
           (path (file-name-directory file))
           (load-path (list (expand-file-name ,relpath path))))
      ,@body))
 
-(with-relative-path "core"
+(from "core"
   (require 'org-glance-entry)
   (require 'org-glance-adapter)
   (require 'org-glance-act)
   (require 'org-glance-scope))
 
-(with-relative-path "apps"
+(from "apps"
   (require 'org-glance-bookmark))
 
 (defvar org-glance-prompt "Glance: "
