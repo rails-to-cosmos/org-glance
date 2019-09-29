@@ -42,7 +42,7 @@
     (org-schedule nil "+1d 20:00")
     (save-buffer)
     (redisplay)
-    (message "%s added to shopping list on %s"
+    (message "%s has been added to shopping list on %s"
              (org-entry-get (point) "ITEM")
              (org-entry-get (point) "SCHEDULED"))))
 
