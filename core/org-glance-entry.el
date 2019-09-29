@@ -14,24 +14,16 @@
                                     :begin ,begin
                                     :file ,file))))
 
-(defun org-glance-visit (file headline)
-  (find-file file)
-  (goto-char (org-element-property :begin headline))
-  (org-show-context 'org-goto))
-
 (defun org-glance-format (headline)
   (or (when org-glance-title-property
         (org-element-property org-glance-title-property headline))
       (org-element-property :raw-value headline)))
 
-(defun org-glance-browse (headlines &optional fallback)
-  (let* ((prompt org-glance-prompt)
-         (choice (org-completing-read prompt (mapcar #'org-glance-format headlines)))
-         (headline (loop for headline in headlines
+(defun org-glance-browse (headlines &optional choice fallback)
+  (let* ((headline (loop for headline in headlines
                          when (string= (org-glance-format headline) choice)
                          do (return headline))))
-    (or headline (when fallback
-                   (funcall fallback choice)))))
+    (or headline (when fallback (funcall fallback choice)))))
 
 (cl-defgeneric org-glance-read (file &optional filter)
   "Read org-element headlines from one or many files.")

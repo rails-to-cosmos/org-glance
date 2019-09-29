@@ -72,6 +72,8 @@
   "Function to call on selected entry.")
 (defvar org-glance-filter nil
   "Function to filter entries.")
+(defvar org-glance-choice nil
+  "Headline title to glance without prompt.")
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
@@ -86,8 +88,23 @@ Call org-glance-action on selected headline."
     (unless headlines
       (user-error "Nothing to glance for"))
     (unwind-protect
-        (when-let (headline (org-glance-browse headlines fallback))
-          (org-glance-act headline action))
+        (let* ((prompt org-glance-prompt)
+               (choice (or org-glance-choice
+                           (org-completing-read prompt (mapcar #'org-glance-format headlines))))
+               (headline (org-glance-browse headlines choice fallback)))
+
+          (unless headline
+            (user-error "Headline not found"))
+
+          (condition-case nil
+              (org-glance-act headline action)
+            (user-error
+             (message "Cache file %s is outdated, actualizing..." cache)
+             (redisplay)
+             (delete-file cache)
+             (let ((org-glance-choice choice))
+               (apply #'org-glance org-files)))))
+
       (when (and cache (not (file-exists-p cache)))
         (org-glance-save cache headlines)))))
 

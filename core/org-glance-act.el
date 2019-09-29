@@ -6,9 +6,17 @@
 (defun og-act--visit-headline (headline)
   (let ((file (org-element-property :file headline))
         (point (org-element-property :begin headline)))
-    (find-file file)
+
+    (if (file-exists-p file)
+        (find-file file)
+      (user-error "File not found: %s" file))
+
     (goto-char point)
-    (org-show-context)))
+
+    (if (string= (org-element-property :raw-value (org-element-at-point))
+                 (org-element-property :raw-value headline))
+        (org-show-context 'org-goto)
+      (user-error "Cache file is outdated"))))
 
 (defun og-act--open-org-link (headline)
   (let ((title (org-element-property :raw-value headline)))
