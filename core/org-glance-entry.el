@@ -46,7 +46,8 @@
 
 (cl-defmethod org-glance-read ((file string) &optional filter)
   (pcase-let ((`(,file ,id) (s-split-up-to "#" file 2)))
-    (when (file-exists-p file)
+    (when (and (file-exists-p file)
+               (not (f-directory? file)))
       (with-temp-buffer
         (insert-file-contents file)
 
