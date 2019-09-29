@@ -56,7 +56,8 @@
   (require 'org-glance-scope))
 
 (from "apps"
-  (require 'org-glance-bookmark))
+  (require 'org-glance-bookmarks)
+  (require 'org-glance-contacts))
 
 (defvar org-glance-prompt "Glance: "
   "Completing read prompt.")
