@@ -22,11 +22,13 @@
       (user-error "Cache file is outdated"))))
 
 (defun og-act--open-org-link (headline)
-  (let ((title (org-element-property :raw-value headline)))
-    (if-let (search (string-match org-any-link-re title))
-        (let ((link (substring title (match-beginning 0) (match-end 0)))
-              (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-          (org-open-link-from-string link))
-      (user-error "Link not found: %s" title))))
+  (let* ((file (org-element-property :file headline))
+         (file-buffer (get-file-buffer file))
+         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+    (og-act--visit-headline headline)
+    (org-open-at-point)
+    (if file-buffer
+        (bury-buffer file-buffer)
+      (kill-buffer (get-file-buffer file)))))
 
 (provide 'org-glance-act)
