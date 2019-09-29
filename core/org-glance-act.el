@@ -1,11 +1,14 @@
 (cl-defun org-glance-act (headline &optional action)
   (if action
       (funcall action headline)
-    (let ((file (org-element-property :file headline))
-          (point (org-element-property :begin headline)))
-      (find-file file)
-      (goto-char point)
-      (org-show-context))))
+    (og-act--visit-headline headline)))
+
+(defun og-act--visit-headline (headline)
+  (let ((file (org-element-property :file headline))
+        (point (org-element-property :begin headline)))
+    (find-file file)
+    (goto-char point)
+    (org-show-context)))
 
 (defun og-act--open-org-link (headline)
   (let ((title (org-element-property :raw-value headline)))

@@ -57,7 +57,8 @@
 
 (from "apps"
   (require 'org-glance-bookmarks)
-  (require 'org-glance-contacts))
+  (require 'org-glance-contacts)
+  (require 'org-glance-inventory))
 
 (defvar org-glance-prompt "Glance: "
   "Completing read prompt.")
