@@ -42,7 +42,8 @@
   :group 'org)
 
 (defmacro from (relpath &rest body)
-  (declare (debug (form body)) (indent 1))
+  (declare (debug (form body))
+           (indent 1))
   `(let* ((file (or load-file-name buffer-file-name))
           (path (file-name-directory file))
           (load-path (list (expand-file-name ,relpath path))))
