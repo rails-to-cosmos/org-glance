@@ -57,6 +57,7 @@
 
 (from "apps"
   (require 'org-glance-bookmarks)
+  (require 'org-glance-password-manager)
   (require 'org-glance-contacts)
   (require 'org-glance-inventory))
 

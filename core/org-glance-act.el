@@ -14,8 +14,8 @@
 
     (goto-char point)
 
-    (if (string= (org-element-property :raw-value (org-element-at-point))
-                 (org-element-property :raw-value headline))
+    (if (s-contains? (org-element-property :raw-value (org-element-at-point))
+                     (org-element-property :raw-value headline))
         (org-show-context 'org-goto)
       (unless file-buffer
         (kill-buffer))
