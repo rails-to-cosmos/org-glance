@@ -10,7 +10,7 @@
 
     (if (file-exists-p file)
         (find-file file)
-      (user-error "File not found: %s" file))
+      (org-glance-cache-outdated "File not found: %s" file))
 
     (goto-char point)
 
@@ -21,7 +21,7 @@
         (org-show-context 'org-goto)
       (unless file-buffer
         (kill-buffer))
-      (user-error "Cache file is outdated"))))
+      (org-glance-cache-outdated "Cache file is outdated"))))
 
 (defun og-act--open-org-link (headline)
   (let* ((file (org-element-property :file headline))

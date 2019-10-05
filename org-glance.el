@@ -41,6 +41,27 @@
   :tag "Org Glance"
   :group 'org)
 
+(defvar org-glance-prompt "Glance: "
+  "Completing read prompt.")
+(defvar org-glance-cache nil
+  "Visited headlines file storage.")
+(defvar org-glance-title-property :org-glance-title
+  "Entry property considered as a title.")
+(defvar org-glance-fallback nil
+  "Fallback result of completing read.")
+(defvar org-glance-action nil
+  "Function to call on selected entry.")
+(defvar org-glance-filter nil
+  "Function to filter entries.")
+(defvar org-glance-choice nil
+  "Headline title to glance without prompt.")
+(defvar org-glance-reread nil
+  "Reread scope to org-glance-cache (if specified).")
+
+(define-error 'org-glance-cache-outdated "Cache file is outdated" 'user-error)
+(defun org-glance-cache-outdated (format &rest args)
+  (signal 'org-glance-cache-outdated (list (apply #'format-message format args))))
+
 (defmacro from (relpath &rest body)
   (declare (debug (form body))
            (indent 1))
@@ -60,23 +81,6 @@
   (require 'org-glance-password-manager)
   (require 'org-glance-contacts)
   (require 'org-glance-inventory))
-
-(defvar org-glance-prompt "Glance: "
-  "Completing read prompt.")
-(defvar org-glance-cache nil
-  "Visited headlines file storage.")
-(defvar org-glance-title-property :org-glance-title
-  "Entry property considered as a title.")
-(defvar org-glance-fallback nil
-  "Fallback result of completing read.")
-(defvar org-glance-action nil
-  "Function to call on selected entry.")
-(defvar org-glance-filter nil
-  "Function to filter entries.")
-(defvar org-glance-choice nil
-  "Headline title to glance without prompt.")
-(defvar org-glance-reread nil
-  "Reread scope to org-glance-cache (if specified).")
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
@@ -103,9 +107,9 @@ Call org-glance-action on selected headline."
           (unless headline
             (user-error "Headline not found"))
 
-          (condition-case nil
+          (condition-case exc
               (org-glance-act headline action)
-            (user-error
+            (org-glance-cache-outdated
              (message "Cache file %s is outdated, actualizing..." cache)
              (redisplay)
              (let ((org-glance-choice choice)
