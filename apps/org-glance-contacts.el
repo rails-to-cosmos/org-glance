@@ -34,10 +34,8 @@
 (defvar og-contacts-filter (lambda (headline)
                              (-contains? (org-element-property :tags headline) "Contact")))
 
-(defun org-glance-contacts-visit (&optional reread)
+(defun org-glance-contacts-visit (&optional org-glance-reread)
   (interactive "P")
-  (when reread
-    (delete-file og-contacts-cache-file))
   (let ((org-glance-prompt "Visit contact: ")
         (org-glance-cache og-contacts-cache-file)
         (org-glance-fallback (lambda (x) (user-error "Contact not found.")))

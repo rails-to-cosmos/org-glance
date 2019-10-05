@@ -37,10 +37,8 @@
                               (-contains? (org-element-property :tags headline) "Bookmark"))))
 
 ;;;###autoload
-(defun org-glance-bookmarks-jump (&optional reread)
+(defun org-glance-bookmarks-jump (&optional org-glance-reread)
   (interactive "P")
-  (when reread
-    (delete-file og-bmkp-cache-file))
   (let ((org-glance-prompt "Jump to bookmark: ")
         (org-glance-cache og-bmkp-cache-file)
         (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
@@ -50,10 +48,8 @@
     (org-glance 'agenda-with-archives)))
 
 ;;;###autoload
-(defun org-glance-bookmarks-visit (&optional reread)
+(defun org-glance-bookmarks-visit (&optional org-glance-reread)
   (interactive "P")
-  (when reread
-    (delete-file og-bmkp-cache-file))
   (let ((org-glance-prompt "Visit bookmark: ")
         (org-glance-cache og-bmkp-cache-file)
         (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
