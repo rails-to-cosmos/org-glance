@@ -12,7 +12,7 @@
                         (aes-is-encrypted))
                       (user-error "Headline is already encrypted.")
                     plain)))
-         (encrypted (aes-encrypt-buffer-or-string plain "QTC090dfjeduvz")))
+         (encrypted (aes-encrypt-buffer-or-string plain)))
     (save-excursion
       (org-end-of-meta-data)
       (kill-region beg end)
