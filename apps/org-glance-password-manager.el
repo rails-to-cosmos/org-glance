@@ -29,6 +29,8 @@
                           (user-error "Headline is not encrypted.")
                         encrypted)))
          (plain (aes-decrypt-buffer-or-string encrypted)))
+    (unless plain
+      (user-error "Wrong password."))
     (save-excursion
       (org-end-of-meta-data)
       (kill-region beg end)
