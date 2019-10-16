@@ -67,7 +67,8 @@
            (indent 1))
   `(let* ((file (or load-file-name buffer-file-name))
           (path (file-name-directory file))
-          (load-path (list (expand-file-name ,relpath path))))
+          (default-directory (expand-file-name ,relpath path))
+          (load-path (list default-directory)))
      ,@body))
 
 (from "core"
@@ -76,11 +77,9 @@
   (require 'org-glance-act)
   (require 'org-glance-scope))
 
-(from "apps"
-  (require 'org-glance-bookmarks)
-  (require 'org-glance-password-manager)
-  (require 'org-glance-contacts)
-  (require 'org-glance-inventory))
+(from "plugins"
+  (loop for file in (directory-files default-directory t "^\\w.*\\.el$")
+        do (load-file file)))
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
