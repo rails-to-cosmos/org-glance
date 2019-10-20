@@ -42,51 +42,42 @@
   :tag "Org Glance"
   :group 'org)
 
-(defvar org-glance-prompt "Glance: "
+(defvar org-glance-prompt
+  "Glance: "
   "Completing read prompt.")
-(defvar org-glance-cache nil
+
+(defvar org-glance-cache
+  nil
   "Visited headlines file storage.")
-(defvar org-glance-title-property :org-glance-title
+
+(defvar org-glance-title-property
+  :org-glance-title
   "Entry property considered as a title.")
-(defvar org-glance-fallback nil
+
+(defvar org-glance-fallback
+  nil
   "Fallback result of completing read.")
-(defvar org-glance-action nil
+
+(defvar org-glance-action
+  nil
   "Function to call on selected entry.")
-(defvar org-glance-filter nil
+
+(defvar org-glance-filter
+  nil
   "Function to filter entries.")
-(defvar org-glance-choice nil
+
+(defvar org-glance-choice
+  nil
   "Headline title to glance without prompt.")
-(defvar org-glance-reread nil
+
+(defvar org-glance-reread
+  nil
   "Reread scope to org-glance-cache (if specified).")
 
-(define-error 'org-glance-cache-outdated "Cache file is outdated" 'user-error)
-(defun org-glance-cache-outdated (format &rest args)
-  (signal 'org-glance-cache-outdated (list (apply #'format-message format args))))
+(require 'org-glance-helpers)
 
-(defmacro from (relpath &rest body)
-  (declare (debug (form body))
-           (indent 1))
-  `(let* ((file (or load-file-name buffer-file-name))
-          (path (file-name-directory file))
-          (default-directory (expand-file-name ,relpath path))
-          (load-path (list default-directory)))
-     ,@body))
-
-(from "core"
-  (require 'org-glance-entry)
-  (require 'org-glance-adapter)
-  (require 'org-glance-act)
-  (require 'org-glance-scope))
-
-(from "plugins"
-  (loop for file in (directory-files default-directory t "^\\w.*\\.el$")
-        do (require
-            (->> file
-                 file-name-nondirectory
-                 file-name-sans-extension
-                 intern)
-            file
-            t)))
+(from :core import :all)
+(from :plugins import :all)
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
@@ -97,10 +88,10 @@ Call org-glance-action on selected headline."
                           (org-glance-load org-glance-cache)
                         (org-glance-read org-files org-glance-filter))))
       (unwind-protect
-          (let* ((choice (or org-glance-choice
-                             (org-completing-read org-glance-prompt
-                                                  (mapcar #'org-glance-format headlines))))
-                 (headline (org-glance-browse headlines choice org-glance-fallback)))
+          (if-let ((choice (or org-glance-choice
+                               (org-completing-read org-glance-prompt
+                                                    (mapcar #'org-glance-format headlines))))
+                   (headline (org-glance-browse headlines choice org-glance-fallback)))
 
             (unless headline
               (user-error "Headline not found"))
@@ -115,10 +106,12 @@ Call org-glance-action on selected headline."
                      (org-glance-reread t))
                  (apply #'org-glance org-files)))))
 
+        ;; Unwind forms:
         (when (and org-glance-cache
                    (or (not (file-exists-p org-glance-cache))
                        org-glance-reread))
           (org-glance-save org-glance-cache headlines)))
+
     (user-error "Nothing to glance for")))
 
 (provide 'org-glance)
