@@ -36,6 +36,10 @@
 (require 'seq)
 (require 'dash-functional)
 (require 'aes)
+(require 'org-glance-helpers)
+
+(from :core import :all)
+(from :plugins import :all)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -73,11 +77,6 @@
 (defvar org-glance-reread
   nil
   "Reread scope to org-glance-cache (if specified).")
-
-(require 'org-glance-helpers)
-
-(from :core import :all)
-(from :plugins import :all)
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
