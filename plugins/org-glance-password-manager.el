@@ -1,5 +1,3 @@
-(require 'aes)
-
 (defvar og-pm-cache-file "~/.emacs.d/org-glance/passwords.el")
 
 (defun org-glance-password-manager-encrypt-current ()

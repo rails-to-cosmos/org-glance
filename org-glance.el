@@ -35,6 +35,7 @@
 (require 'subr-x)
 (require 'seq)
 (require 'dash-functional)
+(require 'aes)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -79,46 +80,46 @@
 
 (from "plugins"
   (loop for file in (directory-files default-directory t "^\\w.*\\.el$")
-        do (load-file file)))
+        do (require
+            (->> file
+                 file-name-nondirectory
+                 file-name-sans-extension
+                 intern)
+            file
+            t)))
 
 (defun org-glance (&rest org-files)
   "Completing read on entries of ORG-FILES filtered by org-glance-filter.
 Call org-glance-action on selected headline."
-  (let* ((cache org-glance-cache)
-         (fallback org-glance-fallback)
-         (action org-glance-action)
-         (filter org-glance-filter)
-         (headlines (if (and cache
-                             (file-exists-p cache)
-                             (null org-glance-reread))
-                        (org-glance-load cache)
-                      (org-glance-read org-files filter))))
+  (if-let ((headlines (if (and org-glance-cache
+                               (file-exists-p org-glance-cache)
+                               (null org-glance-reread))
+                          (org-glance-load org-glance-cache)
+                        (org-glance-read org-files org-glance-filter))))
+      (unwind-protect
+          (let* ((choice (or org-glance-choice
+                             (org-completing-read org-glance-prompt
+                                                  (mapcar #'org-glance-format headlines))))
+                 (headline (org-glance-browse headlines choice org-glance-fallback)))
 
-    (unless headlines
-      (user-error "Nothing to glance for"))
+            (unless headline
+              (user-error "Headline not found"))
 
-    (unwind-protect
-        (let* ((prompt org-glance-prompt)
-               (choice (or org-glance-choice
-                           (org-completing-read prompt (mapcar #'org-glance-format headlines))))
-               (headline (org-glance-browse headlines choice fallback)))
+            (condition-case exc
+                (org-glance-act headline org-glance-action)
 
-          (unless headline
-            (user-error "Headline not found"))
+              (org-glance-cache-outdated
+               (message "Cache file %s is outdated, actualizing..." org-glance-cache)
+               (redisplay)
+               (let ((org-glance-choice choice)
+                     (org-glance-reread t))
+                 (apply #'org-glance org-files)))))
 
-          (condition-case exc
-              (org-glance-act headline action)
-            (org-glance-cache-outdated
-             (message "Cache file %s is outdated, actualizing..." cache)
-             (redisplay)
-             (let ((org-glance-choice choice)
-                   (org-glance-reread t))
-               (apply #'org-glance org-files)))))
-
-      (when (and cache
-                 (or (not (file-exists-p cache))
-                     org-glance-reread))
-        (org-glance-save cache headlines)))))
+        (when (and org-glance-cache
+                   (or (not (file-exists-p org-glance-cache))
+                       org-glance-reread))
+          (org-glance-save org-glance-cache headlines)))
+    (user-error "Nothing to glance for")))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
