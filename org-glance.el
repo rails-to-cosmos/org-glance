@@ -46,72 +46,64 @@
   :tag "Org Glance"
   :group 'org)
 
-(defvar org-glance-prompt
-  "Glance: "
-  "Completing read prompt.")
-
-(defvar org-glance-cache
-  nil
-  "Visited headlines file storage.")
-
-(defvar org-glance-title-property
-  :org-glance-title
-  "Entry property considered as a title.")
-
-(defvar org-glance-fallback
-  nil
-  "Fallback result of completing read.")
-
-(defvar org-glance-action
-  nil
-  "Function to call on selected entry.")
-
-(defvar org-glance-filter
-  nil
-  "Function to filter entries.")
-
-(defvar org-glance-choice
-  nil
-  "Headline title to glance without prompt.")
-
-(defvar org-glance-reread
-  nil
-  "Reread scope to org-glance-cache (if specified).")
-
-(defun org-glance (&rest org-files)
-  "Completing read on entries of ORG-FILES filtered by org-glance-filter.
-Call org-glance-action on selected headline."
-  (if-let ((headlines (if (and org-glance-cache
-                               (file-exists-p org-glance-cache)
-                               (null org-glance-reread))
-                          (org-glance-load org-glance-cache)
-                        (org-glance-read org-files org-glance-filter))))
+(cl-defun org-glance (scope
+                      &key
+                      filter
+                      action
+                      fallback
+                      default-choice
+                      cache-file force-reread-p
+                      (prompt "Glance: ")
+                      (title-property :org-glance-title))
+  "Run completing read on org-files entries from SCOPE list prompting a PROMPT.
+Filter headlines by FILTER method.
+Call ACTION method on selected headline.
+Specify CACHE file name to save headlines to read-optimized el-file.
+Specify FORCE-REREAD-P predicate to reread cache file.
+If user input doesn't match any entry, call FALLBACK method with user input as argument.
+Read headline title in completing read prompt from org-property TITLE-PROPERTY."
+  (if-let ((headlines (if (and cache-file
+                               (file-exists-p cache-file)
+                               (null force-reread-p))
+                          (org-glance-load cache-file
+                           :title-property title-property)
+                        (org-glance-read scope
+                         :filter filter))))
       (unwind-protect
-          (if-let ((choice (or org-glance-choice
-                               (org-completing-read org-glance-prompt
-                                                    (mapcar #'org-glance-format headlines))))
-                   (headline (org-glance-browse headlines choice org-glance-fallback)))
+          (when-let (choice (or default-choice
+                                (org-glance-completing-read headlines
+                                 :prompt prompt
+                                 :title-property title-property)))
+              (if-let (headline (org-glance-browse headlines
+                                 :choice choice
+                                 :fallback fallback
+                                 :title-property title-property))
+                  (condition-case nil
+                      (if (functionp action)
+                          (funcall action headline)
+                        (user-error "Specify ACTION method to call on headline"))
+                    (org-glance-cache-outdated
+                     (message "Cache file %s is outdated, actualizing..." cache-file)
+                     (redisplay)
+                     (org-glance scope
+                                 :prompt prompt
+                                 :filter filter
+                                 :action action
+                                 :cache-file cache-file
+                                 :fallback fallback
+                                 :default-choice choice
+                                 :force-reread-p t)))
+                (user-error "Headline not found")))
 
-            (unless headline
-              (user-error "Headline not found"))
-
-            (condition-case exc
-                (org-glance-act headline org-glance-action)
-
-              (org-glance-cache-outdated
-               (message "Cache file %s is outdated, actualizing..." org-glance-cache)
-               (redisplay)
-               (let ((org-glance-choice choice)
-                     (org-glance-reread t))
-                 (apply #'org-glance org-files)))))
-
-        ;; Unwind forms:
-        (when (and org-glance-cache
-                   (or (not (file-exists-p org-glance-cache))
-                       org-glance-reread))
-          (org-glance-save org-glance-cache headlines)))
+        ;; Unwind
+        (when (and cache-file
+                   (or force-reread-p
+                       (not (file-exists-p cache-file))))
+          (org-glance-save cache-file headlines
+                           :title-property title-property)))
 
     (user-error "Nothing to glance for")))
+
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

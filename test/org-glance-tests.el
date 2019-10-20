@@ -1,37 +1,51 @@
 (require 'ert)
-(load-file "org-glance.el") ;; for batch-mode
+;; (load-file "org-glance.el") ;; for batch-mode
 (require 'org-glance)
 
-(defun trim-string (string)
-  "Remove white spaces in beginning and ending of STRING.
-White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
-  (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
+;; (defun trim-string (string)
+;;   "Remove white spaces in beginning and ending of STRING.
+;; White space here is any of: space, tab, emacs newline (line feed, ASCII 10)."
+;;   (replace-regexp-in-string "\\`[ \t\n]*" "" (replace-regexp-in-string "[ \t\n]*\\'" "" string)))
 
-(defun org-glance-headline-contains-tags-p (&rest tags)
-  (equal (seq-intersection tags (org-get-tags)) tags))
+;; (defun org-glance-headline-contains-tags-p (&rest tags)
+;;   (equal (seq-intersection tags (org-get-tags)) tags))
 
-(defmacro with-temp-org-buffer (s &rest forms)
-  "Create a temporary org-mode buffer with contents S and execute FORMS."
-  `(save-excursion
-     (with-temp-buffer
-       (org-mode)
-       (goto-char 0)
-       (insert ,s)
-       (goto-char 0)
-       ,@forms)))
-
-(defmacro org-glance--with-temp-filebuffer (&rest body)
+(defmacro --org-glance (&rest body)
   "Open temp-file with org-glance prefix into a temporary buffer
 execute BODY there like `progn', then kill the buffer and delete
 the file returning the result of evaluating BODY."
-  `(save-window-excursion
-     (let ((fn (make-temp-file "org-glance-")))
-       (find-file fn)
-       (unwind-protect
-           ,@body
-         (save-buffer)
-         (kill-buffer)
-         (delete-file fn)))))
+  `(let ((fn (make-temp-file "org-glance-")))
+     (find-file fn)
+     (unwind-protect
+         (progn
+           (loop for symbol in '(,@body)
+                 do (insert (symbol-name symbol)))
+           (save-buffer)
+           ;; (org-glance fn)
+           )
+       (save-buffer)
+       (kill-buffer)
+       (delete-file fn))))
+
+(macroexpand (--org-glance
+               * hello there
+               :PROPERTIES:
+               :HELLO: 1
+               :HEY: 2
+               :END:
+               ** 2
+               *** 3))
+
+(ert-deftest org-glance-test--feature-provided ()
+  (should (featurep 'org-glance)))
+
+(defmacro with-temp-org-buffer (s &rest forms)
+  "Create a temporary org-mode buffer with contents S and execute FORMS."
+  `(with-temp-buffer
+     (org-mode)
+     (insert ,s)
+     (goto-char 0)
+     ,@forms))
 
 (defun org-glance-test (&rest args)
   (save-excursion
@@ -58,21 +72,6 @@ the file returning the result of evaluating BODY."
                                 (buffer-substring begin-marker (point-max-marker)))
                             s-lines butlast -last-item trim-string))))))))
 
-(ert-deftest org-glance-test/scopes-contain-no-duplicates ()
-  "Scope should not contain duplicates."
-  (let ((scopes
-         (org-glance--with-temp-filebuffer
-          (org-glance-scope-create
-           `(;; buffer
-             ,(current-buffer)
-             ;; filename
-             ,(buffer-file-name)
-             ;; function symbol that returns buffer
-             current-buffer
-             ;; function that returns filename
-             buffer-file-name)))))
-    (should (= (length scopes) 1))))
-
 (ert-deftest org-glance-test/scopes-can-handle-nil-lambdas ()
   "Ignore nil lambdas in scopes."
   (should (->> (condition-case nil
@@ -87,6 +86,3 @@ the file returning the result of evaluating BODY."
     (should (->> temp-file
                  org-glance-scope-create
                  (-all? #'org-glance-scope-p)))))
-
-(ert-deftest org-glance-test/feature-provision ()
-  (should (featurep 'org-glance)))

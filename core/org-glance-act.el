@@ -1,8 +1,3 @@
-(cl-defun org-glance-act (headline &optional action)
-  (if action
-      (funcall action headline)
-    (user-error "Specify org-glance-action method to call on headline")))
-
 (defun og-act--visit-headline (headline)
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))

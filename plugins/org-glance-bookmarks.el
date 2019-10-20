@@ -37,24 +37,29 @@
                               (-contains? (org-element-property :tags headline) "Bookmark"))))
 
 ;;;###autoload
-(defun org-glance-bookmarks-jump (&optional org-glance-reread)
+(defun org-glance-bookmarks-jump (&optional force-reread-p)
   (interactive "P")
-  (let ((org-glance-prompt "Jump to bookmark: ")
-        (org-glance-cache og-bmkp-cache-file)
-        (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
-        (org-glance-title-property :TITLE)
-        (org-glance-action #'og-act--open-org-link)
-        (org-glance-filter og-bmkp-filter))
-    (org-glance 'agenda-with-archives)))
+  (org-glance
+   '(agenda-with-archives)
+   :prompt "Jump to bookmark: "
+   :cache-file og-bmkp-cache-file
+   :fallback (lambda (x) (user-error "Bookmark not found."))
+   :force-reread-p force-reread-p
+   :title-property :TITLE
+   :filter og-bmkp-filter
+   :action #'og-act--open-org-link))
 
 ;;;###autoload
-(defun org-glance-bookmarks-visit (&optional org-glance-reread)
+(defun org-glance-bookmarks-visit (&optional force-reread-p)
   (interactive "P")
-  (let ((org-glance-prompt "Visit bookmark: ")
-        (org-glance-cache og-bmkp-cache-file)
-        (org-glance-fallback (lambda (x) (user-error "Bookmark not found.")))
-        (org-glance-title-property :TITLE)
-        (org-glance-filter og-bmkp-filter))
-    (org-glance 'agenda-with-archives)))
+  (org-glance
+   '(agenda-with-archives)
+   :prompt "Visit bookmark: "
+   :cache-file og-bmkp-cache-file
+   :fallback (lambda (x) (user-error "Bookmark not found."))
+   :action #'og-act--visit-headline
+   :force-reread-p force-reread-p
+   :title-property :TITLE
+   :filter og-bmkp-filter))
 
 (provide 'org-glance-bookmarks)

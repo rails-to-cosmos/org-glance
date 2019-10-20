@@ -1,42 +1,49 @@
-(cl-defun org-glance-serialize (headline)
+(cl-defun org-glance-serialize (headline &key title-property)
   (prin1-to-string
-   (list (when org-glance-title-property
-           (org-element-property org-glance-title-property headline))
+   (list (when title-property
+           (org-element-property title-property headline))
          (org-element-property :raw-value headline)
          (org-element-property :begin headline)
          (org-element-property :file headline))))
 
-(cl-defun org-glance-deserialize (input)
+(cl-defun org-glance-deserialize (input &key title-property)
   (destructuring-bind (alias title begin file) input
     (org-element-create 'headline
-       `(,org-glance-title-property ,alias
-                                    :raw-value ,title
-                                    :begin ,begin
-                                    :file ,file))))
+     `(,title-property ,alias
+       :raw-value ,title
+       :begin ,begin
+       :file ,file))))
 
-(defun org-glance-format (headline)
-  (or (when org-glance-title-property
-        (org-element-property org-glance-title-property headline))
+(cl-defun org-glance-completing-read (headlines &key prompt title-property)
+  (org-completing-read prompt
+   (loop for headline in headlines
+         collect (org-glance-format headline
+                  :title-property title-property))))
+
+(cl-defun org-glance-format (headline &key title-property)
+  (or (when title-property
+        (org-element-property title-property headline))
       (org-element-property :raw-value headline)))
 
-(defun org-glance-browse (headlines &optional choice fallback)
-  (let* ((headline (loop for headline in headlines
-                         when (string= (org-glance-format headline) choice)
-                         do (return headline))))
-    (or headline (when fallback (funcall fallback choice)))))
+(cl-defun org-glance-browse (headlines &key choice fallback title-property)
+  (or (loop for headline in headlines
+            when (string= (org-glance-format headline
+                           :title-property title-property) choice)
+            do (return headline))
+      (when fallback (funcall fallback choice))))
 
-(cl-defgeneric org-glance-read (file &optional filter)
+(cl-defgeneric org-glance-read (file &key filter)
   "Read org-element headlines from one or many files.")
 
-(cl-defmethod org-glance-read ((files list) &optional filter)
+(cl-defmethod org-glance-read ((files list) &key filter)
   (loop for file in (org-glance-adapt-scope files)
         do (message "Glance %s" file)
-        append (org-glance-read file filter) into result
+        append (org-glance-read file :filter filter) into result
         when (not (sit-for 0))
         do (return result)
         finally (return result)))
 
-(cl-defmethod org-glance-read ((file string) &optional filter)
+(cl-defmethod org-glance-read ((file string) &key filter)
   (pcase-let ((`(,file ,id) (s-split-up-to "#" file 2)))
     (when (and (file-exists-p file)
                (not (f-directory? file)))
@@ -56,22 +63,28 @@
               (plist-put (cadr headline) :file file)
               headline)))))))
 
-(cl-defun org-glance-save (file entries)
+(cl-defun org-glance-save (file entries &key title-property)
   (unless (file-exists-p (file-name-directory file))
     (make-directory (file-name-directory file) t))
 
   (with-temp-file file
     (insert "`(")
     (dolist (entry entries)
-      (insert (org-glance-serialize entry) "\n"))
+      (insert (org-glance-serialize entry
+               :title-property title-property) "\n"))
     (insert ")"))
 
   entries)
 
-(cl-defun org-glance-load (file)
-  (let ((entries (with-temp-buffer
-                   (insert-file-contents file)
-                   (eval (read (substring-no-properties (buffer-string)))))))
-    (mapcar #'org-glance-deserialize entries)))
+(cl-defun org-glance-load (file &key title-property)
+  (let ((entries
+         (with-temp-buffer (insert-file-contents file)
+                           (->> (buffer-string)
+                                substring-no-properties
+                                read
+                                eval))))
+    (loop for entry in entries
+          collect (org-glance-deserialize entry
+                   :title-property title-property))))
 
 (provide 'org-glance-entry)

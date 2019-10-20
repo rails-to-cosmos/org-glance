@@ -35,67 +35,67 @@
       (insert plain)
       plain)))
 
-(defun org-glance-password-manager-visit (&optional org-glance-reread)
+(defun org-glance-password-manager-visit (&optional force-reread-p)
   (interactive "P")
-  (let ((org-glance-prompt "Visit secure data: ")
-        (org-glance-cache og-pm-cache-file)
-        (org-glance-fallback (lambda (x) (user-error "Entry not found.")))
-        (org-glance-title-property :TITLE)
-        (org-glance-filter (lambda (headline)
-                             (save-excursion
-                               (goto-char (org-element-property :begin headline))
-                               (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-                                      (end (save-excursion (org-end-of-subtree t)))
-                                      (contents (buffer-substring-no-properties beg end)))
-                                 (with-temp-buffer
-                                   (insert contents)
-                                   (aes-is-encrypted)))))))
-    (org-glance 'agenda-with-archives)))
+  (org-glance
+   '(agenda-with-archives)
+   :prompt "Visit secure data: "
+   :cache-file og-pm-cache-file
+   :force-reread-p force-reread-p
+   :fallback (lambda (x) (user-error "Entry not found."))
+   :title-property :TITLE
+   :filter #'ogpm-filter
+   :action #'og-act--visit-headline))
 
-(defun org-glance-password-manager-secure-data-to-kill-ring (&optional org-glance-reread)
+(defun org-glance-password-manager-secure-data-to-kill-ring (&optional force-reread-p)
   (interactive "P")
-  (let ((org-glance-prompt "Extract secure data: ")
-        (org-glance-cache og-pm-cache-file)
-        (org-glance-fallback (lambda (x) (user-error "Entry not found.")))
-        (org-glance-title-property :TITLE)
-        (org-glance-action (lambda (headline)
-                             (with-temp-buffer
-                               (org-mode)
-                               (insert-file-contents (org-element-property :file headline))
-                               (goto-char (org-element-property :begin headline))
-                               (org-narrow-to-subtree)
-                               (let ((tf (make-temp-file "ogpm"))
-                                     (dc (org-glance-password-manager-decrypt-current))
-                                     (org-glance-cache nil)
-                                     (org-glance-reread nil)
-                                     (org-glance-filter nil)
-                                     (org-glance-prompt "Copy to kill ring: ")
-                                     (org-glance-action (lambda (headline)
-                                                          (with-temp-buffer
-                                                            (org-mode)
-                                                            (insert-file-contents (org-element-property :file headline))
-                                                            (goto-char (org-element-property :begin headline))
-                                                            (let* ((beg (save-excursion (org-end-of-line) (1+ (point))))
-                                                                   (end (save-excursion (org-end-of-subtree t)))
-                                                                   (contents (buffer-substring-no-properties beg end)))
-                                                              (kill-new contents t))))))
-                                 (unwind-protect
-                                     (with-temp-file tf
-                                       (insert dc))
-                                   (while (condition-case nil
-                                              (or (org-glance tf) t)
-                                            (quit (kill-new "" t) nil)
-                                            (error (kill-new "" t) nil)))
-                                   (delete-file tf))))))
-        (org-glance-filter (lambda (headline)
-                             (save-excursion
-                               (goto-char (org-element-property :begin headline))
-                               (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-                                      (end (save-excursion (org-end-of-subtree t)))
-                                      (contents (buffer-substring-no-properties beg end)))
-                                 (with-temp-buffer
-                                   (insert contents)
-                                   (aes-is-encrypted)))))))
-    (org-glance 'agenda-with-archives)))
+  (org-glance
+   '(agenda-with-archives)
+   :prompt "Extract secure data: "
+   :cache-file og-pm-cache-file
+   :force-reread-p force-reread-p
+   :fallback (lambda (x) (user-error "Entry not found."))
+   :title-property :TITLE
+   :filter #'ogpm--filter
+   :action #'ogpm--extract))
+
+(defun ogpm--extract (headline)
+  (with-temp-buffer
+    (org-mode)
+    (insert-file-contents (org-element-property :file headline))
+    (goto-char (org-element-property :begin headline))
+    (org-narrow-to-subtree)
+    (let ((tf (make-temp-file "ogpm"))
+          (dc (org-glance-password-manager-decrypt-current)))
+      (unwind-protect
+          (with-temp-file tf
+            (insert dc))
+        (while (condition-case exc
+                   (org-glance tf
+                               :prompt "Copy to kill ring: "
+                               :action #'ogpm--copy)
+                 (quit (kill-new "" t) nil)
+                 (error (kill-new "" t) nil)))
+        (delete-file tf)))))
+
+(defun ogpm--copy (headline)
+  (with-temp-buffer
+    (org-mode)
+    (insert-file-contents (org-element-property :file headline))
+    (goto-char (org-element-property :begin headline))
+    (let* ((beg (save-excursion (org-end-of-line) (1+ (point))))
+           (end (save-excursion (org-end-of-subtree t)))
+           (contents (buffer-substring-no-properties beg end)))
+      (kill-new contents t))))
+
+(defun ogpm--filter (headline)
+  (save-excursion
+    (goto-char (org-element-property :begin headline))
+    (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+           (end (save-excursion (org-end-of-subtree t)))
+           (contents (buffer-substring-no-properties beg end)))
+      (with-temp-buffer
+        (insert contents)
+        (aes-is-encrypted)))))
 
 (provide 'org-glance-password-manager)
