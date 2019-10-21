@@ -36,10 +36,18 @@
 (require 'seq)
 (require 'dash-functional)
 (require 'aes)
-(require 'org-glance-helpers)
+(require 'load-relative)
 
-(from :core import :all)
-(from :plugins import :all)
+(require-relative-list
+ '("./core/org-glance-act.el"
+   "./core/org-glance-adapter.el"
+   "./core/org-glance-entry.el"
+   "./core/org-glance-exceptions.el"
+   "./core/org-glance-scope.el"
+
+   "./plugins/org-glance-bookmarks.el"
+   "./plugins/org-glance-password-manager.el"
+   "./plugins/org-glance-contacts.el"))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -104,6 +112,5 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
 
     (user-error "Nothing to glance for")))
 
-
-(provide 'org-glance)
+(provide-me)
 ;;; org-glance.el ends here

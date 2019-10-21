@@ -30,6 +30,7 @@
 
 ;;; Code:
 
+(require 'load-relative)
 
 (defvar og-bmkp-cache-file "~/.emacs.d/org-glance/bookmarks.el")
 (defvar og-bmkp-filter (lambda (headline)
@@ -62,4 +63,5 @@
    :title-property :TITLE
    :filter og-bmkp-filter))
 
-(provide 'org-glance-bookmarks)
+(provide-me)
+;;; org-glance-bookmarks.el ends here

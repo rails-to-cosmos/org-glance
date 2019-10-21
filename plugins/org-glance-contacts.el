@@ -30,6 +30,8 @@
 
 ;;; Code:
 
+(require 'load-relative)
+
 (defvar og-contacts-cache-file "~/.emacs.d/org-glance/contacts.el")
 
 (defun ogct--filter (headline)
@@ -45,4 +47,5 @@
               :filter #'ogct--filter
               :action #'og-act--visit-headline))
 
-(provide 'org-glance-contacts)
+(provide-me)
+;;; org-glance-contacts.el ends here
