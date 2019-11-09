@@ -37,13 +37,14 @@
 (defun ogct--filter (headline)
   (-contains? (org-element-property :tags headline) "Contact"))
 
-(defun org-glance-contacts-visit (&optional org-glance-reread)
+(defun org-glance-contacts-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance '(agenda-with-archives)
               :prompt "Visit contact: "
               :cache-file og-contacts-cache-file
               :fallback (lambda (x) (user-error "Contact not found."))
               :title-property :TITLE
+              :force-reread-p force-reread-p
               :filter #'ogct--filter
               :action #'og-act--visit-headline))
 

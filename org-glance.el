@@ -40,10 +40,8 @@
 
 (require-relative-list
  '("./core/org-glance-act.el"
-   "./core/org-glance-adapter.el"
    "./core/org-glance-entry.el"
    "./core/org-glance-exceptions.el"
-   "./core/org-glance-scope.el"
 
    "./plugins/org-glance-bookmarks.el"
    "./plugins/org-glance-password-manager.el"
@@ -110,7 +108,7 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
           (org-glance-save cache-file headlines
                            :title-property title-property)))
 
-    (user-error "Nothing to glance for")))
+    (user-error "Nothing to glance at")))
 
 (provide-me)
 ;;; org-glance.el ends here
