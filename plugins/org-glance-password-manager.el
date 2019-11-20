@@ -76,7 +76,7 @@
    :force-reread-p force-reread-p
    :fallback (lambda (x) (user-error "Entry not found."))
    :title-property :TITLE
-   :filter #'ogpm-filter
+   :filter #'ogpm--filter
    :action #'og-act--visit-headline))
 
 (defun org-glance-password-manager-secure-data-to-kill-ring (&optional force-reread-p)
