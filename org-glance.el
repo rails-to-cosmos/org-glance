@@ -80,26 +80,27 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
                                 (org-glance-completing-read headlines
                                  :prompt prompt
                                  :title-property title-property)))
-              (if-let (headline (org-glance-browse headlines
-                                 :choice choice
-                                 :fallback fallback
-                                 :title-property title-property))
-                  (condition-case nil
-                      (if (functionp action)
-                          (funcall action headline)
-                        (user-error "Specify ACTION method to call on headline"))
-                    (org-glance-cache-outdated
-                     (message "Cache file %s is outdated, actualizing..." cache-file)
-                     (redisplay)
-                     (org-glance scope
-                                 :prompt prompt
-                                 :filter filter
-                                 :action action
-                                 :cache-file cache-file
-                                 :fallback fallback
-                                 :default-choice choice
-                                 :force-reread-p t)))
-                (user-error "Headline not found")))
+            (if-let (headline (org-glance-browse headlines
+                                                 :choice choice
+                                                 :fallback fallback
+                                                 :title-property title-property))
+                (condition-case nil
+                    (if (functionp action)
+                        (funcall action headline)
+                      (user-error "Specify ACTION method to call on headline"))
+                  (org-glance-cache-outdated
+                   (message "Cache file %s is outdated, actualizing..." cache-file)
+                   (redisplay)
+                   (org-glance scope
+                               :prompt prompt
+                               :filter filter
+                               :action action
+                               :cache-file cache-file
+                               :fallback fallback
+                               :default-choice choice
+                               :title-property title-property
+                               :force-reread-p t)))
+              (user-error "Headline not found")))
 
         ;; Unwind
         (when (and cache-file
