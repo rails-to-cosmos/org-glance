@@ -131,8 +131,7 @@
 (cl-defun org-glance-completing-read (headlines &key prompt title-property)
   (org-completing-read prompt
                        (cl-loop for headline in headlines
-                                collect (org-glance-format headline
-                                                           :title-property title-property))))
+                                collect (org-glance-format headline :title-property title-property))))
 
 (cl-defun org-glance-format (headline &key title-property)
   (or (when title-property
@@ -141,8 +140,7 @@
 
 (cl-defun org-glance-browse (headlines &key choice fallback title-property)
   (or (cl-loop for headline in headlines
-               when (string= (org-glance-format headline
-                                                :title-property title-property) choice)
+               when (string= (org-glance-format headline :title-property title-property) choice)
                do (cl-return headline))
       (when fallback (funcall fallback choice))))
 
