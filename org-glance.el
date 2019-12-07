@@ -38,9 +38,9 @@
 (require 'aes)
 (require 'load-relative)
 
-(require-relative "plugins/org-glance-bookmarks.el")
-(require-relative "plugins/org-glance-password-manager.el")
-(require-relative "plugins/org-glance-contacts.el")
+(load-relative "plugins/org-glance-bookmarks.el")
+(load-relative "plugins/org-glance-password-manager.el")
+(load-relative "plugins/org-glance-contacts.el")
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

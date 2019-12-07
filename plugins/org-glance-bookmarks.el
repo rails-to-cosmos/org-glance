@@ -44,11 +44,11 @@
   (org-glance
    '(agenda-with-archives)
    :prompt "Jump to bookmark: "
-   :cache-file og-bmkp-cache-file
+   :cache-file org-glance-bmkp-cache-file
    :fallback (lambda (x) (user-error "Bookmark not found"))
    :force-reread-p force-reread-p
    :title-property :TITLE
-   :filter og-bmkp-filter
+   :filter org-glance-bmkp-filter
    :action #'org-glance-act--open-org-link))
 
 ;;;###autoload
@@ -57,7 +57,7 @@
   (org-glance
    '(agenda-with-archives)
    :prompt "Visit bookmark: "
-   :cache-file og-bmkp-cache-file
+   :cache-file org-glance-bmkp-cache-file
    :fallback (lambda (x) (user-error "Bookmark not found"))
    :action #'org-glance-act--visit-headline
    :force-reread-p force-reread-p
