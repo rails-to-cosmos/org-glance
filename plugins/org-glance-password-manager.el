@@ -30,7 +30,7 @@
 
 ;;; Code:
 
-(defvar og-pm-cache-file "~/.emacs.d/org-glance/passwords.el")
+(defvar org-glance-pm-cache-file "~/.emacs.d/org-glance/passwords.el")
 
 (defun org-glance-password-manager-encrypt-current ()
   (interactive)
@@ -72,32 +72,32 @@
   (org-glance
    '(agenda-with-archives)
    :prompt "Visit secure data: "
-   :cache-file og-pm-cache-file
+   :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p
    :fallback (lambda (x) (user-error "Entry not found."))
    :title-property :TITLE
-   :filter #'ogpm--filter
-   :action #'og-act--visit-headline))
+   :filter #'org-glance-pm--filter
+   :action #'org-glance-act--visit-headline))
 
 (defun org-glance-password-manager-secure-data-to-kill-ring (&optional force-reread-p)
   (interactive "P")
   (org-glance
    '(agenda-with-archives)
    :prompt "Extract secure data: "
-   :cache-file og-pm-cache-file
+   :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p
    :fallback (lambda (x) (user-error "Entry not found."))
    :title-property :TITLE
-   :filter #'ogpm--filter
-   :action #'ogpm--extract))
+   :filter #'org-glance-pm--filter
+   :action #'org-glance-pm--extract))
 
-(defun ogpm--extract (headline)
+(defun org-glance-pm--extract (headline)
   (with-temp-buffer
     (org-mode)
     (insert-file-contents (org-element-property :file headline))
     (goto-char (org-element-property :begin headline))
     (org-narrow-to-subtree)
-    (let ((tf (make-temp-file "ogpm"))
+    (let ((tf (make-temp-file "org-glance-pm"))
           (dc (org-glance-password-manager-decrypt-current)))
       (unwind-protect
           (with-temp-file tf
@@ -105,12 +105,12 @@
         (while (condition-case exc
                    (org-glance tf
                                :prompt "Copy to kill ring: "
-                               :action #'ogpm--copy)
+                               :action #'org-glance-pm--copy)
                  (quit (kill-new "" t) nil)
                  (error (kill-new "" t) nil)))
         (delete-file tf)))))
 
-(defun ogpm--copy (headline)
+(defun org-glance-pm--copy (headline)
   (with-temp-buffer
     (org-mode)
     (insert-file-contents (org-element-property :file headline))
@@ -120,7 +120,7 @@
            (contents (buffer-substring-no-properties beg end)))
       (kill-new contents t))))
 
-(defun ogpm--filter (headline)
+(defun org-glance-pm--filter (headline)
   (save-excursion
     (goto-char (org-element-property :begin headline))
     (let* ((beg (save-excursion (org-end-of-meta-data) (point)))

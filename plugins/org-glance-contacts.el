@@ -32,21 +32,21 @@
 
 (require 'load-relative)
 
-(defvar og-contacts-cache-file "~/.emacs.d/org-glance/contacts.el")
+(defvar org-glance-contacts-cache-file "~/.emacs.d/org-glance/contacts.el")
 
-(defun ogct--filter (headline)
+(defun org-glance-contacts--filter (headline)
   (-contains? (org-element-property :tags headline) "Contact"))
 
 (defun org-glance-contacts-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance '(agenda-with-archives)
               :prompt "Visit contact: "
-              :cache-file og-contacts-cache-file
+              :cache-file org-glance-contacts-cache-file
               :fallback (lambda (x) (user-error "Contact not found."))
               :title-property :TITLE
               :force-reread-p force-reread-p
-              :filter #'ogct--filter
-              :action #'og-act--visit-headline))
+              :filter #'org-glance-contacts--filter
+              :action #'org-glance-act--visit-headline))
 
 (provide-me)
 ;;; org-glance-contacts.el ends here

@@ -32,10 +32,11 @@
 
 (require 'load-relative)
 
-(defvar og-bmkp-cache-file "~/.emacs.d/org-glance/bookmarks.el")
-(defvar og-bmkp-filter (lambda (headline)
-                         (and (s-matches? org-bracket-link-regexp (org-element-property :raw-value headline))
-                              (-contains? (org-element-property :tags headline) "Bookmark"))))
+(defvar org-glance-bmkp-cache-file "~/.emacs.d/org-glance/bookmarks.el")
+(defvar org-glance-bmkp-filter
+  (lambda (headline)
+    (and (s-matches? org-bracket-link-regexp (org-element-property :raw-value headline))
+         (-contains? (org-element-property :tags headline) "Bookmark"))))
 
 ;;;###autoload
 (defun org-glance-bookmarks-jump (&optional force-reread-p)
@@ -44,11 +45,11 @@
    '(agenda-with-archives)
    :prompt "Jump to bookmark: "
    :cache-file og-bmkp-cache-file
-   :fallback (lambda (x) (user-error "Bookmark not found."))
+   :fallback (lambda (x) (user-error "Bookmark not found"))
    :force-reread-p force-reread-p
    :title-property :TITLE
    :filter og-bmkp-filter
-   :action #'og-act--open-org-link))
+   :action #'org-glance-act--open-org-link))
 
 ;;;###autoload
 (defun org-glance-bookmarks-visit (&optional force-reread-p)
@@ -57,11 +58,11 @@
    '(agenda-with-archives)
    :prompt "Visit bookmark: "
    :cache-file og-bmkp-cache-file
-   :fallback (lambda (x) (user-error "Bookmark not found."))
-   :action #'og-act--visit-headline
+   :fallback (lambda (x) (user-error "Bookmark not found"))
+   :action #'org-glance-act--visit-headline
    :force-reread-p force-reread-p
    :title-property :TITLE
-   :filter og-bmkp-filter))
+   :filter org-glance-bmkp-filter))
 
 (provide-me)
 ;;; org-glance-bookmarks.el ends here
