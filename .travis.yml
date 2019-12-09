@@ -4,7 +4,7 @@ sudo: false
 
 env:
   matrix:
-    - emacs=emacs25
+    - emacs=emacs26
 
 before_install:
   - git clone https://github.com/cask/cask.git "$HOME/.cask"
