@@ -31,7 +31,9 @@
 ;;; Code:
 
 (require 'org)
+(require 'cl)
 (require 'cl-lib)
+(require 'cl-generic)
 (require 'subr-x)
 (require 'seq)
 (require 'dash-functional)
