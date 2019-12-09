@@ -134,8 +134,7 @@
                                 collect (org-glance-format headline :title-property title-property))))
 
 (cl-defun org-glance-format (headline &key title-property)
-  (or (when title-property
-        (org-element-property title-property headline))
+  (or (and title-property (org-element-property title-property headline))
       (org-element-property :raw-value headline)))
 
 (cl-defun org-glance-browse (headlines &key choice fallback title-property)
@@ -234,10 +233,11 @@
                       (prompt "Glance: ")
                       (title-property :org-glance-title))
   "Run completing read on org-files entries from SCOPE list prompting a PROMPT.
+Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.
-Specify CACHE file name to save headlines to read-optimized el-file.
-Specify FORCE-REREAD-P predicate to reread cache file.
+Specify CACHE-FILE to save headlines to read-optimized el-file.
+Specify FORCE-REREAD-P predicate to reread cache file. Usually this flag is set by C-u prefix.
 If user input doesn't match any entry, call FALLBACK method with user input as argument.
 Read headline title in completing read prompt from org-property TITLE-PROPERTY."
   (if-let ((headlines (if (and cache-file
