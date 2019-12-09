@@ -21,6 +21,7 @@ branches:
     - master
 
 script:
+  - bash -c 'emacs --version'
   - cask build
   - cask exec ert-runner
 
