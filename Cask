@@ -9,6 +9,7 @@
  (depends-on "f")
  (depends-on "cl")
  (depends-on "cl-lib")
+ (depends-on "cl-generic")
  (depends-on "dash")
  (depends-on "dash-functional")
  (depends-on "seq")
