@@ -31,13 +31,15 @@
 ;;; Code:
 
 (require 'org)
-(require 'cl-lib)
-(require 'cl-generic)
-(require 'subr-x)
 (require 'seq)
-(require 'dash-functional)
-(require 'aes)
-(require 'load-relative)
+
+(eval-when-compile
+  (require 'aes)
+  (require 'cl-lib)
+  (require 'cl-generic)
+  (require 'dash-functional)
+  (require 'load-relative)
+  (require 'subr-x))
 
 (load-relative "plugins/org-glance-bookmarks.el")
 (load-relative "plugins/org-glance-password-manager.el")
@@ -262,7 +264,7 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
                   (org-glance-cache-outdated
                    (message "Cache file %s is outdated, actualizing..." cache-file)
                    (redisplay)
-                   (org-glance scope
+                   (org-glance scopeggg
                                :prompt prompt
                                :filter filter
                                :action action
