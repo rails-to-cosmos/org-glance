@@ -32,13 +32,13 @@
 
 (require 'org)
 (require 'seq)
+(require 'cl-lib)
+(require 'load-relative)
 
 (eval-when-compile
   (require 'aes)
-  (require 'cl-lib)
   (require 'cl-generic)
   (require 'dash-functional)
-  (require 'load-relative)
   (require 'subr-x))
 
 (load-relative "plugins/org-glance-bookmarks.el")
