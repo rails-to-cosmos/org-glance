@@ -1,0 +1,35 @@
+language: generic
+
+sudo: false
+
+env:
+  matrix:
+    - emacs=emacs-snapshot
+
+before_install:
+  - git clone https://github.com/cask/cask.git "$HOME/.cask"
+  - export PATH="$HOME/.cask/bin:$PATH"
+
+install:
+  - cask install
+
+exec:
+  - cask exec ert-runner
+
+branches:
+  only:
+    - master
+
+script:
+  - cask install
+  - cask build
+  - cask exec ert-runner
+
+#
+# Emacs
+#
+# Local Variables:
+# indent-tabs-mode: nil
+# coding: utf-8
+# End:
+#
