@@ -1,36 +1,21 @@
-language: generic
-sudo: required
-dist: trusty
-cache:
-  - directories:
-      - "$HOME/emacs/"
-matrix:
-  fast_finish: true
-  allow_failures:
-    - env: EMACS_VERSION=snapshot
-env:
-  - EMACS_VERSION=26.3
+language: emacs-lisp
 before_install:
-  # Configure $PATH: Executables are installed to $HOME/bin
-  - export PATH="$HOME/bin:$PATH"
-  # Download the makefile to emacs-travis.mk
-  - wget 'https://raw.githubusercontent.com/flycheck/emacs-travis/master/emacs-travis.mk'
-  # Install Emacs (according to $EMACS_VERSION) and Cask
-  - make -f emacs-travis.mk install_emacs
-  - make -f emacs-travis.mk install_cask
-  # Install Texinfo, if you need to build info manuals for your project
-  - make -f emacs-travis.mk install_texinfo
-install:
-  - cask install
-exec:
-  - cask exec ert-runner
+  - curl -fsSkL https://gist.github.com/rejeep/7736123/raw | sh
+  - export PATH="/home/travis/.cask/bin:$PATH"
+  - export PATH="/home/travis/.evm/bin:$PATH"
+  - evm install $EVM_EMACS --use
+  - cask
+env:
+  - EVM_EMACS=emacs-23.4-bin
+  - EVM_EMACS=emacs-24.1-bin
+  - EVM_EMACS=emacs-24.2-bin
+  - EVM_EMACS=emacs-24.3-bin
+script:
+  - emacs --version
+  - make test
 branches:
   only:
     - master
-script:
-  - bash -c 'emacs --version'
-  - cask build
-  - cask exec ert-runner
 
 #
 # Emacs
