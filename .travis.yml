@@ -6,6 +6,7 @@ before_install:
   - export PATH="/home/travis/.evm/bin:$PATH"
   - curl -fsSkL https://raw.github.com/rejeep/evm/master/go | bash
   - evm install $EVM_EMACS --use
+  - echo $PATH
   - curl -fsSkL https://raw.github.com/cask/cask/master/go | python
 env:
   - EVM_EMACS=emacs-26.3-travis
