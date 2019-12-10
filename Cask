@@ -15,5 +15,6 @@
  (depends-on "seq")
  (depends-on "aes")
  (depends-on "ert-runner")
+ (depends-on "ecukes")
  (depends-on "undercover")
  (depends-on "load-relative"))
