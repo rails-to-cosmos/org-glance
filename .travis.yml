@@ -1,5 +1,7 @@
 dist: trusty
 language: emacs-lisp
+env:
+  - EVM_EMACS=emacs-26.3-travis
 before_install:
   - sudo mkdir /usr/local/evm
   - sudo chown travis:travis /usr/local/evm
@@ -9,8 +11,7 @@ before_install:
   - evm install $EVM_EMACS --use
   - ln -s /usr/local/evm/emacs-26.3-travis /tmp/emacs-26.3-travis
   - curl -fsSkL https://raw.github.com/cask/cask/master/go | python
-env:
-  - EVM_EMACS=emacs-26.3-travis
+  - cask install
 script:
   - emacs --version
   - make test
