@@ -1,3 +1,4 @@
+dist: trusty
 language: emacs-lisp
 before_install:
   - sudo mkdir /usr/local/evm
