@@ -74,7 +74,7 @@
    :prompt "Visit secure data: "
    :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p
-   :fallback (lambda (x) (user-error "Entry not found."))
+   :fallback (-partial #'user-error "Entry not found.")
    :title-property :TITLE
    :filter #'org-glance-pm--filter
    :action #'org-glance-act--visit-headline))
@@ -86,7 +86,7 @@
    :prompt "Extract secure data: "
    :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p
-   :fallback (lambda (x) (user-error "Entry not found."))
+   :fallback (-partial #'user-error "Entry not found.")
    :title-property :TITLE
    :filter #'org-glance-pm--filter
    :action #'org-glance-pm--extract))

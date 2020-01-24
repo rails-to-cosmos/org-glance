@@ -133,8 +133,8 @@
 
 (cl-defun org-glance-completing-read (headlines &key prompt title-property)
   (org-completing-read prompt
-                       (cl-loop for headline in headlines
-                                collect (org-glance-format headline :title-property title-property))))
+   (cl-loop for headline in headlines
+            collect (org-glance-format headline :title-property title-property))))
 
 (cl-defun org-glance-format (headline &key title-property)
   (or (and title-property (org-element-property title-property headline))

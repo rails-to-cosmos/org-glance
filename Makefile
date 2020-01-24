@@ -1,7 +1,7 @@
 CASK ?= cask
 EMACS ?= emacs
 
-all: test
+all: install test
 
 test: unit ecukes
 
