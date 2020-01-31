@@ -30,8 +30,6 @@
 
 ;;; Code:
 
-(require 'load-relative)
-
 (defvar org-glance-bmkp-cache-file "~/.emacs.d/org-glance/bookmarks.el")
 (defvar org-glance-bmkp-filter
   (lambda (headline)

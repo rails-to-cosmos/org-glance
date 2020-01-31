@@ -3,7 +3,7 @@ EMACS ?= emacs
 
 all: install test
 
-test: unit ecukes
+test: ecukes
 
 unit:
 	${CASK} exec ert-runner

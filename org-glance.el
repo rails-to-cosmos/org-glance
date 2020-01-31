@@ -264,7 +264,7 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
                   (org-glance-cache-outdated
                    (message "Cache file %s is outdated, actualizing..." cache-file)
                    (redisplay)
-                   (org-glance scopeggg
+                   (org-glance scope
                                :prompt prompt
                                :filter filter
                                :action action
