@@ -1,7 +1,0 @@
-* 0
-* 1
-:PROPERTIES:
-:HELLO: WORLD
-:END:
-** 2
-*** 3

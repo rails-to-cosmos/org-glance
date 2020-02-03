@@ -1,0 +1,9 @@
+Simple test cases.
+
+* Empty headline 1
+* Simple headline with properties
+:PROPERTIES:
+:HELLO: WORLD
+:END:
+** Empty headline 2
+*** Empty headline 3

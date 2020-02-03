@@ -1,9 +1,9 @@
 CASK ?= cask
 EMACS ?= emacs
 
-all: test
+all: install test
 
-test: unit ecukes
+test: ecukes
 
 unit:
 	${CASK} exec ert-runner

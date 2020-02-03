@@ -134,8 +134,8 @@
 
 (cl-defun org-glance-completing-read (headlines &key prompt title-property)
   (org-completing-read prompt
-                       (cl-loop for headline in headlines
-                                collect (org-glance-format headline :title-property title-property))))
+   (cl-loop for headline in headlines
+            collect (org-glance-format headline :title-property title-property))))
 
 (cl-defun org-glance-format (headline &key title-property)
   (or (and title-property (org-element-property title-property headline))
@@ -265,7 +265,7 @@ Read headline title in completing read prompt from org-property TITLE-PROPERTY."
                   (org-glance-cache-outdated
                    (message "Cache file %s is outdated, actualizing..." cache-file)
                    (redisplay)
-                   (org-glance scopeggg
+                   (org-glance scope
                                :prompt prompt
                                :filter filter
                                :action action

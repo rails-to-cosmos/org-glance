@@ -3,21 +3,24 @@
 ;;
 ;;; Code:
 
+(defun org-glance--load-resource (resource-name)
+  (f-expand resource-name resource-path))
+
 (ert-deftest org-glance-test--feature-provided ()
   (should (featurep 'org-glance)))
 
 (ert-deftest org-glance-test--should-extract-property ()
-  (let* ((res (f-expand "template.org" resource-path))
-         (user-input "1")
+  (let* ((res (org-glance--load-resource "simple.org"))
+         (choice "Simple headline with properties")
          (key :HELLO)
          (expected-val "WORLD")
          (actual-val (org-glance res
-                                 :default-choice user-input
+                                 :default-choice choice
                                  :action (lambda (hl) (org-element-property key hl)))))
     (should (string= expected-val actual-val))))
 
 (ert-deftest org-glance-test--should-raise-user-error-on-fnf ()
-  (let* ((file (f-expand "file-not-found.org" resource-path)))
+  (let ((file (f-expand "file-not-found.org" resource-path)))
     (should-not (f-exists? file))
     (should (eq t
                 (condition-case nil
