@@ -1,12 +1,12 @@
-;;; org-glance-contacts.el --- fast contact information retrieval utility.
+;;; org-glance-gists.el --- fast src-blocks retrieval utility.
 
 ;; Copyright (C) 2019-2020 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
-;; Created: 8 Sep 2019
+;; Created: 2 Dec 2019
 ;; Version: 0.1
 
-;; Keywords: contacts org tools
+;; Keywords: babel org tools
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 
 ;; This file is not part of GNU Emacs.
@@ -32,21 +32,18 @@
 
 (require 'load-relative)
 
-(defvar org-glance-contacts-cache-file "~/.emacs.d/org-glance/contacts.el")
+(defvar og-gists-cache-file "~/.emacs.d/org-glance/gists.el")
 
-(defun org-glance-contacts--filter (headline)
-  (-contains? (org-element-property :tags headline) "Contact"))
-
-(defun org-glance-contacts-visit (&optional force-reread-p)
+(defun org-glance-gists-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance '(agenda-with-archives)
-              :prompt "Visit contact: "
-              :cache-file org-glance-contacts-cache-file
-              :fallback (lambda (x) (user-error "Contact not found."))
+              :prompt "Visit gist: "
+              :cache-file og-gists-cache-file
+              :fallback (lambda (x) (user-error "Gist not found."))
               :title-property :TITLE
+              :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
               :force-reread-p force-reread-p
-              :filter #'org-glance-contacts--filter
               :action #'org-glance-act--visit-headline))
 
 (provide-me)
-;;; org-glance-contacts.el ends here
+;;; org-glance-gists.el ends here

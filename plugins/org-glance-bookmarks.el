@@ -1,6 +1,6 @@
 ;;; org-glance-bookmarks.el --- use org-link headlines in your agenda files as bookmarks.
 
-;; Copyright (C) 2019 Dmitry Akatov
+;; Copyright (C) 2019-2020 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 8 Sep 2019

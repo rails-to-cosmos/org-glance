@@ -1,6 +1,6 @@
 ;;; org-glance-password-manager.el --- encrypt org-headline contents
 
-;; Copyright (C) 2019 Dmitry Akatov
+;; Copyright (C) 2019-2020 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 20 Oct 2019

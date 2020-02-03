@@ -1,6 +1,6 @@
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
-;; Copyright (C) 2018-2019 Dmitry Akatov
+;; Copyright (C) 2018-2020 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -44,6 +44,7 @@
 (load-relative "plugins/org-glance-bookmarks.el")
 (load-relative "plugins/org-glance-password-manager.el")
 (load-relative "plugins/org-glance-contacts.el")
+(load-relative "plugins/org-glance-gists.el")
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
