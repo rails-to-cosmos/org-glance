@@ -154,8 +154,7 @@
   (cl-loop for file in (org-glance-adapt-scope files)
            do (message "Glance %s" file)
            append (org-glance-read file :filter filter) into result
-           when (not (sit-for 0))
-           do (cl-return result)
+           do (redisplay)
            finally (cl-return result)))
 
 (cl-defmethod org-glance-read ((file string) &key filter)
