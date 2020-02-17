@@ -34,6 +34,49 @@
 
 (defvar og-gists-cache-file "~/.emacs.d/org-glance/gists.el")
 
+(defun org-glance-act--gist-execute (headline)
+  (let* ((file (org-element-property :file headline))
+         (point (org-element-property :begin headline))
+         (file-buffer (get-file-buffer file))
+         (case-fold-search t))
+
+    (if (file-exists-p file)
+        (find-file file)
+      (org-glance-cache-outdated "File not found: %s" file))
+
+    (goto-char point)
+    ;; at headline
+
+    (org-show-subtree)
+    (search-forward "#+BEGIN_SRC")
+    (beginning-of-line)
+    ;; at src block
+
+    (assert (org-in-src-block-p))
+    ;; assert block in proper gist
+    (let ((block-headers (nth 2 (org-babel-get-src-block-info))))
+      (loop for pair in block-headers
+            when (eq (car pair) :var)
+            collect
+            (let* ((key (cadr pair))
+                   (prompt (format "%s: " (symbol-name key)))
+                   (pvals (cddr pair))
+                   (compls (s-split "|" pvals)))
+              (if (> (length compls) 1)
+                  (list key (org-completing-read prompt compls))
+                (list key (car compls))))))))
+
+(defun org-glance-gists-execute (&optional force-reread-p)
+  (interactive "P")
+  (org-glance '(agenda-with-archives)
+              :prompt "Execute gist: "
+              :cache-file og-gists-cache-file
+              :fallback (lambda (x) (user-error "Gist not found."))
+              :title-property :TITLE
+              :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
+              :force-reread-p force-reread-p
+              :action #'org-glance-act--gist-execute))
+
 (defun org-glance-gists-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance '(agenda-with-archives)
