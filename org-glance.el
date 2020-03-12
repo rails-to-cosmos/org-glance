@@ -197,20 +197,29 @@
              collect (org-glance-deserialize entry
                                              :title-property title-property))))
 
+(defun org-glance--element-at-point-equals-headline (headline)
+  (condition-case nil
+      (s-contains? (org-element-property :raw-value (org-element-at-point))
+                   (org-element-property :raw-value headline))
+    (error nil)))
+
 (defun org-glance-act--visit-headline (headline)
   "Goto HEADLINE."
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (file-buffer (get-file-buffer file)))
+
     (if (file-exists-p file)
         (find-file file)
       (org-glance-cache-outdated "File not found: %s" file))
+
+    (widen)
     (goto-char point)
-    (if (condition-case nil
-            (s-contains? (org-element-property :raw-value (org-element-at-point))
-                         (org-element-property :raw-value headline))
-          (error nil))
-        (org-show-context 'org-goto)
+
+    (if (org-glance--element-at-point-equals-headline headline)
+        (progn
+          (org-narrow-to-subtree)
+          (org-show-all))
       (unless file-buffer
         (kill-buffer))
       (org-glance-cache-outdated "Cache file is outdated"))))
