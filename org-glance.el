@@ -51,6 +51,9 @@
   :tag "Org Glance"
   :group 'org)
 
+(defconst org-glance-property--glance-archive-dir
+  "GLANCE_ARCHIVE_DIR")
+
 (defvar org-glance--default-scopes-alist
   `((file-with-archives . org-glance-scope--list-archives)
     (agenda-with-archives . org-glance-scope--agenda-with-archives)))
@@ -63,12 +66,29 @@
   (signal 'org-glance-cache-outdated
           (list (apply #'format-message format args))))
 
+(defun org-glance--get-file-archive-dirs (filename)
+  (let* ((default-directory (file-name-directory filename))
+         (glance-archive-dir-prop (format "#+%s:" org-glance-property--glance-archive-dir)))
+    (with-temp-buffer
+      (insert-file-contents-literally filename)
+      (goto-char (point-min))
+      (loop while (search-forward glance-archive-dir-prop nil t)
+            collect (-some->> (thing-at-point 'line)
+                      substring-no-properties
+                      (s-replace glance-archive-dir-prop "")
+                      s-trim
+                      file-truename)
+            into result
+            finally (return (or result (list default-directory)))))))
+
 (defun org-glance-scope--list-file-archives (filename)
-  (-some->> filename
-    (file-name-nondirectory)
-    (file-name-sans-extension)
-    (s-append ".org_archive")
-    (directory-files-recursively (file-name-directory filename))))
+  (let ((archive-dirs (org-glance--get-file-archive-dirs filename))
+        (archive-filename (-some->> filename
+                            file-name-nondirectory
+                            file-name-sans-extension
+                            (s-append ".org_archive"))))
+    (loop for archive-dir in archive-dirs
+          append (directory-files-recursively archive-dir archive-filename))))
 
 (defun org-glance-scope--list-archives ()
   (append (list (buffer-file-name))
