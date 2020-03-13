@@ -54,8 +54,9 @@
 (defconst org-glance-property--glance-archive-dir
   "GLANCE_ARCHIVE_DIR")
 
-(defvar org-glance--default-scopes-alist
+(defvar org-glance--default-scope-alist
   `((file-with-archives . org-glance-scope--list-archives)
+    (agenda . org-agenda-files)
     (agenda-with-archives . org-glance-scope--agenda-with-archives)))
 
 (define-error 'org-glance-cache-outdated
@@ -118,9 +119,9 @@
             (seq-uniq)))
 
 (cl-defmethod org-glance-adapt-scope ((lfob symbol))
-  "Return extracted LFOB from `org-glance--default-scopes-alist'."
+  "Return extracted LFOB from `org-glance--default-scope-alist'."
   (-some->> lfob
-            (funcall (-cut alist-get <> org-glance--default-scopes-alist))
+            (funcall (-cut alist-get <> org-glance--default-scope-alist))
             (funcall)))
 
 (cl-defmethod org-glance-adapt-scope ((lfob buffer))
@@ -229,20 +230,21 @@
          (point (org-element-property :begin headline))
          (file-buffer (get-file-buffer file)))
 
-    (if (file-exists-p file)
-        (find-file file)
-      (org-glance-cache-outdated "File not found: %s" file))
+    (cond ((file-exists-p file)
+           (find-file file))
+          (t
+           (org-glance-cache-outdated "File not found: %s" file)))
 
     (widen)
     (goto-char point)
 
-    (if (org-glance--element-at-point-equals-headline headline)
-        (progn
-          (org-narrow-to-subtree)
-          (org-show-all))
-      (unless file-buffer
-        (kill-buffer))
-      (org-glance-cache-outdated "Cache file is outdated"))))
+    (cond ((org-glance--element-at-point-equals-headline headline)
+           (org-narrow-to-subtree)
+           (org-show-all))
+          (t
+           (unless file-buffer
+             (kill-buffer))
+           (org-glance-cache-outdated "Cache file is outdated")))))
 
 (defun org-glance-act--open-org-link (headline)
   "Open org-link at HEADLINE."
@@ -255,15 +257,16 @@
         (bury-buffer file-buffer)
       (kill-buffer (get-file-buffer file)))))
 
-(cl-defun org-glance (scope
-                      &key
+(cl-defun org-glance (&key
                       filter
-                      action
                       fallback
                       default-choice
-                      cache-file force-reread-p
+                      cache-file
+                      force-reread-p
+                      (scope '(agenda))
+                      (action #'org-glance-act--visit-headline)
                       (prompt "Glance: ")
-                      (title-property :org-glance-title))
+                      (title-property :title))
   "Run completing read on org-files entries from SCOPE list prompting a PROMPT.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
@@ -272,43 +275,46 @@ Specify CACHE-FILE to save headlines to read-optimized el-file.
 Specify FORCE-REREAD-P predicate to reread cache file. Usually this flag is set by C-u prefix.
 If user input doesn't match any entry, call FALLBACK method with user input as argument.
 Read headline title in completing read prompt from org-property TITLE-PROPERTY."
-  (if-let ((headlines (if (and cache-file
-                               (file-exists-p cache-file)
-                               (null force-reread-p))
-                          (org-glance-load cache-file :title-property title-property)
-                        (org-glance-read scope :filter filter))))
-      (unwind-protect
-          (when-let (choice (or default-choice
-                                (org-glance-completing-read headlines
-                                                            :prompt prompt
-                                                            :title-property title-property)))
-            (if-let (headline (org-glance-browse headlines
-                                                 :choice choice
-                                                 :fallback fallback
-                                                 :title-property title-property))
-                (condition-case nil
-                    (if (functionp action)
-                        (funcall action headline)
-                      (user-error "Specify ACTION method to call on headline"))
-                  (org-glance-cache-outdated
-                   (message "Cache file %s is outdated, actualizing..." cache-file)
-                   (redisplay)
-                   (org-glance scope
-                               :prompt prompt
-                               :filter filter
-                               :action action
-                               :cache-file cache-file
-                               :fallback fallback
-                               :default-choice choice
-                               :title-property title-property
-                               :force-reread-p t)))
-              (user-error "Headline not found")))
-        ;; Unwind
-        (when (and cache-file
-                   (or force-reread-p
-                       (not (file-exists-p cache-file))))
-          (org-glance-save cache-file headlines :title-property title-property)))
-    (user-error "Nothing to glance at (scope: %s)" scope)))
+  (let ((headlines (if (and cache-file
+                            (file-exists-p cache-file)
+                            (null force-reread-p))
+                       (org-glance-load cache-file :title-property title-property)
+                     (org-glance-read scope :filter filter))))
+
+    (unless headlines
+      (user-error "Nothing to glance at (scope: %s)" scope))
+
+    (unwind-protect
+        (when-let (choice (or default-choice
+                              (org-glance-completing-read headlines
+                                                          :prompt prompt
+                                                          :title-property title-property)))
+          (if-let (headline (org-glance-browse headlines
+                                               :choice choice
+                                               :fallback fallback
+                                               :title-property title-property))
+              (condition-case nil
+                  (if (functionp action)
+                      (funcall action headline)
+                    (user-error "Specify ACTION method to call on headline"))
+                (org-glance-cache-outdated
+                 (message "Cache file %s is outdated, actualizing..." cache-file)
+                 (redisplay)
+                 (org-glance scope
+                             :prompt prompt
+                             :filter filter
+                             :action action
+                             :cache-file cache-file
+                             :fallback fallback
+                             :default-choice choice
+                             :title-property title-property
+                             :force-reread-p t)))
+            (user-error "Headline not found")))
+      ;; Unwind
+      (when (and cache-file
+                 (or force-reread-p
+                     (not (file-exists-p cache-file))))
+        (org-glance-save cache-file headlines :title-property title-property)))))
 
 (provide-me)
 ;;; org-glance.el ends here

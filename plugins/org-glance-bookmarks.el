@@ -40,7 +40,7 @@
 (defun org-glance-bookmarks-jump (&optional force-reread-p)
   (interactive "P")
   (org-glance
-   '(agenda-with-archives)
+   :scope '(agenda-with-archives)
    :prompt "Jump to bookmark: "
    :cache-file org-glance-bmkp-cache-file
    :fallback (lambda (x) (user-error "Bookmark not found"))
@@ -53,7 +53,7 @@
 (defun org-glance-bookmarks-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance
-   '(agenda-with-archives)
+   :scope '(agenda-with-archives)
    :prompt "Visit bookmark: "
    :cache-file org-glance-bmkp-cache-file
    :fallback (lambda (x) (user-error "Bookmark not found"))

@@ -70,7 +70,7 @@
 (defun org-glance-password-manager-visit (&optional force-reread-p)
   (interactive "P")
   (org-glance
-   '(agenda-with-archives)
+   :scope '(agenda-with-archives)
    :prompt "Visit secure data: "
    :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p
@@ -82,7 +82,7 @@
 (defun org-glance-password-manager-secure-data-to-kill-ring (&optional force-reread-p)
   (interactive "P")
   (org-glance
-   '(agenda-with-archives)
+   :scope '(agenda-with-archives)
    :prompt "Extract secure data: "
    :cache-file org-glance-pm-cache-file
    :force-reread-p force-reread-p

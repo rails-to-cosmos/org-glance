@@ -68,25 +68,27 @@
 
 (defun org-glance-gists-execute (&optional force-reread-p)
   (interactive "P")
-  (org-glance '(agenda-with-archives)
-              :prompt "Execute gist: "
-              :cache-file og-gists-cache-file
-              :fallback (lambda (x) (user-error "Gist not found."))
-              :title-property :TITLE
-              :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
-              :force-reread-p force-reread-p
-              :action #'org-glance-act--gist-execute))
+  (org-glance
+   :scope '(agenda-with-archives)
+   :prompt "Execute gist: "
+   :cache-file og-gists-cache-file
+   :fallback (lambda (x) (user-error "Gist not found."))
+   :title-property :TITLE
+   :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
+   :force-reread-p force-reread-p
+   :action #'org-glance-act--gist-execute))
 
 (defun org-glance-gists-visit (&optional force-reread-p)
   (interactive "P")
-  (org-glance '(agenda-with-archives)
-              :prompt "Visit gist: "
-              :cache-file og-gists-cache-file
-              :fallback (lambda (x) (user-error "Gist not found."))
-              :title-property :TITLE
-              :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
-              :force-reread-p force-reread-p
-              :action #'org-glance-act--visit-headline))
+  (org-glance
+   :scope '(agenda-with-archives)
+   :prompt "Visit gist: "
+   :cache-file og-gists-cache-file
+   :fallback (lambda (x) (user-error "Gist not found."))
+   :title-property :TITLE
+   :filter (lambda (headline) (-contains? (org-element-property :tags headline) "Gist"))
+   :force-reread-p force-reread-p
+   :action #'org-glance-act--visit-headline))
 
 (provide-me)
 ;;; org-glance-gists.el ends here
