@@ -103,7 +103,7 @@
           (with-temp-file tf
             (insert dc))
         (while (condition-case exc
-                   (org-glance tf
+                   (org-glance :scope tf
                                :prompt "Copy to kill ring: "
                                :action #'org-glance-pm--copy)
                  (quit (kill-new "" t) nil)
