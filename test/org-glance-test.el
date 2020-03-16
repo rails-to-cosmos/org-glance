@@ -14,7 +14,7 @@
          (choice "Simple headline with properties")
          (key :HELLO)
          (expected-val "WORLD")
-         (actual-val (org-glance res
+         (actual-val (org-glance :scope res
                                  :default-choice choice
                                  :action (lambda (hl) (org-element-property key hl)))))
     (should (string= expected-val actual-val))))
@@ -24,7 +24,7 @@
     (should-not (f-exists? file))
     (should (eq t
                 (condition-case nil
-                    (progn (org-glance file) nil)
+                    (progn (org-glance :scope file) nil)
                   (user-error t))))))
 
 ;;; org-glance-test.el ends here
