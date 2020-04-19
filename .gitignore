@@ -1,3 +1,4 @@
 /*.elc
 *.elc
 ogpm-cache.el
+.cask

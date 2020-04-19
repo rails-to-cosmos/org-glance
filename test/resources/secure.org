@@ -1,8 +1,0 @@
-Test cases for org-glance-password-manager.
-
-Encryption password is 12345.
-
-* Secure data
-aes-encrypted V 1.3-OCB-B-4-4-M
-JsAdOXqMGuu9QQSO1GNJrWLFp3XJx9aUXF9/MiQOAeA8cUzPbABbxJ6piPq9ftcY9TL7BsvjdKjY
-mpDn6DYwFtTXJjNwpYxvJluJ6gjPXw==

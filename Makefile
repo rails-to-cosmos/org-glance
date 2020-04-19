@@ -1,17 +1,16 @@
 CASK ?= cask
 EMACS ?= emacs
 
-all: install test
+.PHONY: all test clean
 
-test: ecukes
+all: init
 
-unit:
-	${CASK} exec ert-runner
-
-ecukes:
-	${CASK} exec ecukes
-
-install:
+init:
 	${CASK} install
+	${CASK} exec ert-runner init
 
-.PHONY:	all test unit ecukes install
+test:
+	${CASK} exec ert-runner -L . -L test
+
+clean:
+	  rm -rf *.elc
