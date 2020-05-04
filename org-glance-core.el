@@ -63,48 +63,6 @@
              collect (org-glance-cache--deserialize entry
                                                     :title-property title-property))))
 
-(defun org-glance--element-at-point-equals-headline (headline)
-  (condition-case nil
-      (s-contains? (org-element-property :raw-value (org-element-at-point))
-                   (org-element-property :raw-value headline))
-    (error nil)))
-
-(defun org-glance-act--visit-headline (headline)
-  "Goto HEADLINE."
-  (let* ((file (org-element-property :file headline))
-         (point (org-element-property :begin headline))
-         (file-buffer (get-file-buffer file)))
-
-    (cond ((file-exists-p file)
-           (find-file file))
-          (t
-           (org-glance-cache-outdated "File not found: %s" file)))
-
-    (widen)
-    (goto-char point)
-
-    (cond ((org-glance--element-at-point-equals-headline headline)
-           (while (org-up-heading-safe) t)
-           (org-narrow-to-subtree)
-           (org-show-all)
-           (widen)
-           (goto-char point))
-          (t
-           (unless file-buffer
-             (kill-buffer))
-           (org-glance-cache-outdated "Cache file is outdated")))))
-
-(defun org-glance-act--open-org-link (headline)
-  "Open org-link at HEADLINE."
-  (let* ((file (org-element-property :file headline))
-         (file-buffer (get-file-buffer file))
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-    (org-glance-act--visit-headline headline)
-    (org-open-at-point)
-    (if file-buffer
-        (bury-buffer file-buffer)
-      (kill-buffer (get-file-buffer file)))))
-
 (cl-defun org-glance-cache-reread (&key
                                    filter
                                    cache-file

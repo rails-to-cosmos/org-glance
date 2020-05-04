@@ -17,10 +17,12 @@
 
 (cl-defun org-glance-cache--deserialize (input &key title-property)
   (cl-destructuring-bind (alias title begin file) input
-    (org-element-create 'headline
-                        `(,title-property ,alias
-                                          :raw-value ,title
-                                          :begin ,begin
-                                          :file ,file))))
+    (org-element-create
+     'headline
+     `(,title-property
+       ,alias
+       :raw-value ,title
+       :begin ,begin
+       :file ,file))))
 
 (provide-me)
