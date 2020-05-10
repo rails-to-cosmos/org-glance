@@ -1,14 +1,16 @@
 ;; -*- lexical-binding: t -*-
 
 (eval-when-compile
+  (require 'cl))
+
+(eval-and-compile
   (require 'aes)
-  (require 'cl)
   (require 'load-relative)
   (require 'org)
-  (require 'org-element))
-
-(require 'org-glance-cache)
-(require 'org-glance-sec)
+  (require 'org-element)
+  (require 'org-glance)
+  (require 'org-glance-cache)
+  (require 'org-glance-sec))
 
 ;; buffer-locals for mv sync
 
@@ -30,10 +32,11 @@
   :type 'hook
   :group 'org-glance)
 
-(defvar org-glance-views '())
-(defvar org-glance-view-scopes (make-hash-table :test 'equal))
-(defvar org-glance-view-types (make-hash-table :test 'equal))
-(defvar org-glance-view-actions (make-hash-table :test 'equal))
+(eval-and-compile
+  (defvar org-glance-views '())
+  (defvar org-glance-view-scopes (make-hash-table :test 'equal))
+  (defvar org-glance-view-types (make-hash-table :test 'equal))
+  (defvar org-glance-view-actions (make-hash-table :test 'equal)))
 
 ;; locals in materialized buffers
 (defvar -org-glance-pwd nil)
@@ -43,10 +46,11 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
-(defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
-(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
-(define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window)
+(eval-and-compile
+  (defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
+  (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
+  (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
+  (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window))
 
 (define-error 'org-glance-view-not-modified "No changes found in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))

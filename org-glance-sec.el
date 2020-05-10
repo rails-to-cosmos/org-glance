@@ -32,7 +32,13 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl))
+  (require 'cl)
+  (require 'org)
+  (require 'org-element))
+
+(eval-and-compile
+  (require 'aes)
+  (require 'org-glance))
 
 (defun org-glance-sec-decrypt-subtree (&optional pwd)
   "Decrypt subtree at point.

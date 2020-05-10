@@ -1,6 +1,12 @@
 (eval-when-compile
   (require 'cl))
 
+(eval-and-compile
+  (require 'org)
+  (require 'ts)
+  (require 'ledger-mode)
+  (require 'load-relative))
+
 (defconst org-glance-ledger-commodity-regexp
   "\\(\"[^\"]+\"\\|[^]!&(-/:-@[^{-}[:digit:][:blank:]]+\\)")
 
@@ -41,7 +47,8 @@
   (save-excursion
     (save-restriction
       (org-narrow-to-subtree)
-      (let* ((tags (if (string-empty-p (org-get-tags-string)) ":" (org-get-tags-string)))
+      (let* ((tag-string (org-make-tag-string (org-get-tags)))
+             (tags (if (string-empty-p tag-string) ":" tag-string))
              (title (org-entry-get (point) "ITEM"))
              (contents (buffer-substring-no-properties
                         (point-min)

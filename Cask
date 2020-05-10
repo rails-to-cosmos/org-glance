@@ -18,4 +18,6 @@
  (depends-on "org-plus-contrib")
  (depends-on "seq")
  (depends-on "undercover")
+ (depends-on "ledger-mode")
+ (depends-on "ts")
  (depends-on "with-simulated-input"))
