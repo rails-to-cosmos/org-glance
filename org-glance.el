@@ -67,7 +67,6 @@
   (require 'subr-x))
 
 (require 'org-glance-views)
-
 (require 'org-glance-cache)
 (require 'org-glance-core)
 (require 'org-glance-ledger)

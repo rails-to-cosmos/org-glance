@@ -26,8 +26,9 @@
 
 (cl-defmacro with-user-choice (choice &rest forms)
   (declare (indent 1))
-  `(with-simulated-input '(,(concat choice " " "RET"))
-     ,@forms))
+  `(let ((user-input (format "%s RET" (eval ,choice))))
+     (with-simulated-input user-input
+       ,@forms)))
 
 (cl-defmacro with-materialized-view (view &rest forms)
   (declare (indent 1))

@@ -45,15 +45,15 @@
           (should (member "Country" (org-get-tags))))))))
 
 (ert-deftest org-glance-test/sync-view ()
-  "Materialized view should be able to sync with original file."
-  (with-scope "countries.org"
-    (with-temp-view "Country"
-      (with-user-choice "Ukraine"
-        (with-materialized-view "Country"
-          ;; (replace-string "Ukraine" "Belarus")
-          (should-error
-           (org-glance-view-sync-subtree)
-           :type 'org-glance-view-not-modified))))))
+  "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
+  (let ((scope "countries.org")
+        (view "Country")
+        (entry "Ukraine"))
+    (with-scope scope
+      (with-temp-view view
+        (with-user-choice entry
+          (with-materialized-view view
+            (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))))))
 
 ;; (with-current-buffer
 ;;     (with-simulated-input

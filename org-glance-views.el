@@ -1,10 +1,5 @@
 ;; -*- lexical-binding: t -*-
 
-(defvar org-glance-views '())
-(defvar org-glance-view-scopes (make-hash-table :test 'equal))
-(defvar org-glance-view-types (make-hash-table :test 'equal))
-(defvar org-glance-view-actions (make-hash-table :test 'equal))
-
 (eval-when-compile
   (require 'aes)
   (require 'cl)
@@ -35,6 +30,12 @@
   :type 'hook
   :group 'org-glance)
 
+(defvar org-glance-views '())
+(defvar org-glance-view-scopes (make-hash-table :test 'equal))
+(defvar org-glance-view-types (make-hash-table :test 'equal))
+(defvar org-glance-view-actions (make-hash-table :test 'equal))
+
+;; locals in materialized buffers
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
 (defvar -org-glance-beg nil)
@@ -43,7 +44,6 @@
 (defvar -org-glance-indent nil)
 
 (defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
-
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window)
@@ -116,7 +116,7 @@
   (format "~/.emacs.d/org-glance/org-glance-%s.el" view))
 
 (defun -org-glance-fallback-for (view)
-  (-partial #'user-error "%s not found" view))
+  (-partial #'user-error "%s not found: %s" view))
 
 (defun -org-glance-prompt-for (action view)
   (format "%s %s: " action view))
@@ -389,8 +389,6 @@ then run `org-completing-read' to open it."
            (src-hash (org-glance-view-source-hash)))
 
       (unless (string= glance-hash src-hash)
-        (message glance-hash)
-        (message src-hash)
         (user-error "Source file modified, please reread"))
 
       (when (string= glance-hash mat-hash)
@@ -441,7 +439,6 @@ then run `org-completing-read' to open it."
         (org-mode)
         (insert buffer-contents)
         (goto-char (point-min))
-        (message (buffer-hash))
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash (&optional src beg end)
@@ -457,7 +454,6 @@ then run `org-completing-read' to open it."
         (with-temp-buffer
           (org-mode)
           (insert subtree)
-          (message (buffer-hash))
           (buffer-hash))))))
 
 (defun org-glance-backup-views (&optional dir)
