@@ -36,18 +36,11 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
-;; (defun -org-glance-remove-mv-props ()
-;;   (or -org-glance-src (org-delete-property "ORG_GLANCE_SOURCE"))
-;;   (or -org-glance-beg (org-delete-property "ORG_GLANCE_BEG"))
-;;   (or -org-glance-end (org-delete-property "ORG_GLANCE_END"))
-;;   (or -org-glance-hash (org-delete-property "ORG_GLANCE_HASH"))
-;;   (or -org-glance-indent (org-delete-property "ORG_GLANCE_INDENT")))
-
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend org-mode map with sync abilities.")
 
-(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-mv--sync-subtree)
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-mv--visit-original-heading)
+(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window)
 
 ;;;###autoload
@@ -347,7 +340,7 @@ then run `org-completing-read' to open it."
 
 ;;     output-filename))
 
-(defun org-glance-mv--visit-original-heading ()
+(defun org-glance-view-visit-original-heading ()
   (interactive)
   (let* ((beg -org-glance-beg))
     (find-file-other-window -org-glance-src)
@@ -385,9 +378,9 @@ then run `org-completing-read' to open it."
 
 (defun org-glance-mv--sync-buffer ()
   (interactive)
-  (org-map-entries #'org-glance-mv--sync-subtree))
+  (org-map-entries #'org-glance-view-sync-subtree))
 
-(defun org-glance-mv--sync-subtree ()
+(defun org-glance-view-sync-subtree ()
   (interactive)
   (save-excursion
     (while (org-up-heading-safe) t)
@@ -424,28 +417,20 @@ then run `org-completing-read' to open it."
             (insert new-contents)
             (setq end (point)))
 
-          (if -org-glance-beg
-              (setq-local -org-glance-beg beg)
-            (org-set-property "ORG_GLANCE_BEG" (number-to-string beg)))
+          (setq-local -org-glance-beg beg)
+          (setq-local -org-glance-end end)
+          (setq-local -org-glance-hash (org-glance-mv--get-source-hash source beg end))
 
-          (if -org-glance-end
-              (setq-local -org-glance-end end)
-            (org-set-property "ORG_GLANCE_END" (number-to-string end)))
-
-          (if -org-glance-hash
-              (setq-local -org-glance-hash (org-glance-mv--get-source-hash source beg end))
-            (org-set-property "ORG_GLANCE_HASH" (org-glance-mv--get-source-hash source beg end)))
-
-          (let ((end-diff (- end end-old)))
-            (org-map-entries
-             (lambda ()
-               (condition-case nil
-                   (when (and (> (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG") beg)
-                              (string= source (org-glance-mv--safe-extract-property "ORG_GLANCE_SOURCE")))
-                     (org-set-property "ORG_GLANCE_BEG" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG"))))
-                     (org-set-property "ORG_GLANCE_END" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_END"))))
-                     (message "Update indentation for headline %s" (org-entry-get (point) "ITEM")))
-                 (error (message "Skip headline %s" (org-entry-get (point) "ITEM")))))))
+          ;; (let ((end-diff (- end end-old)))
+          ;;   (org-map-entries
+          ;;    (lambda ()
+          ;;      (condition-case nil
+          ;;          (when (and (> (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG") beg)
+          ;;                     (string= source (org-glance-mv--safe-extract-property "ORG_GLANCE_SOURCE")))
+          ;;            (org-set-property "ORG_GLANCE_BEG" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG"))))
+          ;;            (org-set-property "ORG_GLANCE_END" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_END"))))
+          ;;            (message "Update indentation for headline %s" (org-entry-get (point) "ITEM")))
+          ;;        (error (message "Skip headline %s" (org-entry-get (point) "ITEM")))))))
 
           (with-demoted-errors (run-hooks 'after-materialize-sync-hook)))))))
 
@@ -477,10 +462,11 @@ then run `org-completing-read' to open it."
     (loop for view in org-glance-views
           do (org-glance-mv--backup (symbol-name view) dir))))
 
-(cl-defmacro org-glance-def-view (tag &key bind type
-                                      (scope '(agenda-with-archives))
-                                      (title-property :TITLE)
-                                      &allow-other-keys)
+(cl-defmacro org-glance-def-view (tag
+                                  &key bind type
+                                  (scope '(agenda-with-archives))
+                                  (title-property :TITLE)
+                                  &allow-other-keys)
 
   (declare (indent 1))
   `(progn
@@ -495,5 +481,11 @@ then run `org-completing-read' to open it."
                      (global-set-key (kbd binding)
                                      (lambda () (interactive)
                                        (funcall command-name tag))))))))
+
+(cl-defun org-glance-remove-view (tag)
+  (setq org-glance-views
+        (cl-remove (intern tag) org-glance-views))
+  (remhash (intern tag) org-glance-view-scopes)
+  (remhash (intern tag) org-glance-view-types))
 
 (provide-me)

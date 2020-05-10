@@ -7,38 +7,62 @@
   (require 'org)
   (require 'org-element)
   (require 'org-glance)
-  (require 'with-simulated-input))
+  (require 'with-simulated-input)
+  (require 'load-relative)
+  (require 'f))
 
-(ert-deftest org-glance-test--feature-provided ()
+(require 'org-glance-test-init)
+(require 'org-glance-test-helpers)
+
+(ert-deftest org-glance-test/provide-feature ()
   (should (featurep 'org-glance)))
 
-(ert-deftest org-glance-test--view-defined ()
-  "When define view by `org-glance-def-view' it should appear in `org-glance-views' variable."
-  (let ((org-glance-views '()))
-    (org-glance-def-view "org-glance-test")
-    (should (member 'org-glance-test org-glance-views))
-    (should (member 'org-glance-test (hash-table-keys org-glance-view-scopes)))))
+(ert-deftest org-glance-test/define-view ()
+  "View should be properly registered."
+  (let ((view 'Country))
+    (with-temp-view (symbol-name view)
+      (should (member view org-glance-views))
+      (should (member view (hash-table-keys org-glance-view-scopes)))
+      (should (member view (hash-table-keys org-glance-view-types))))
+    (should-not (member view org-glance-views))
+    (should-not (member view (hash-table-keys org-glance-view-scopes)))
+    (should-not (member view (hash-table-keys org-glance-view-types)))))
 
-(ert-deftest org-glance-test--mv-sync ()
-  "Matviews should materialize."
-  (let* ((orig-file (make-temp-file "org-glance-test-"))
-         (org-agenda-files (list orig-file))
-         (view-name "testview")
-         (view-contents "
-* first :testview:
-** a
-** b
-** c
-* second :testview:
-"))
-    (with-temp-file orig-file (insert view-contents))
-    (org-glance-def-view view-name)
-    (with-simulated-input
-        '("first RET")
-      (org-glance-action-materialize view-name t))))
+(ert-deftest org-glance-test/materialize-view ()
+  "View should be able to materialize in a separate buffer."
+  (with-scope "countries.org"
+    (with-temp-view "Country"
+      (with-user-choice "Netherlands"
+        (with-materialized-view "Country"
+          (should (string= "Netherlands" (org-entry-title)))
+          (should (member "Country" (org-get-tags))))))))
 
-;; (hash-table-keys org-glance-view-scopes)
-;; (gethash 'test-view org-glance-view-scopes)
+(ert-deftest org-glance-test/sync-view ()
+  "Materialized view should be able to sync with original file."
+  (with-scope "countries.org"
+    (with-temp-view "Country"
+      (with-user-choice "Ukraine"
+        (with-materialized-view "Country"
+          (replace-string "Ukraine" "Belarus")
+          ;; (org-glance-view-sync-subtree)
+          )))))
+
+;; (with-current-buffer
+;;     (with-simulated-input
+;;         '("first RET")
+;;       (org-glance-action-materialize "testview" t))
+;;   ;; w
+;;   ;; (with-simulated-input '("y RET")
+;;   ;;   (org-glance-mv--sync-subtree))
+;;   )
+
+;; (let ((org-agenda-files (list (org-glance-test-get-resource "1.org")))
+;;       (view "testview"))
+
+
+;;   (with-simulated-input
+;;       '("third RET yes RET")
+;;     (org-glance-action-materialize view t)))
 
 ;; Local Variables:
 ;; org-literate-test-selector: "^org-glance-test--*"
