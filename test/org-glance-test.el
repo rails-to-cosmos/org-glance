@@ -40,9 +40,16 @@
     (should (string= "Netherlands" (org-entry-title)))
     (should (member "Country" (org-get-tags)))))
 
-(ert-deftest org-glance-test/sync-view ()
+(ert-deftest org-glance-test/sync-view-not-modified ()
   "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
   (-og-user-story :choose "Ukraine" :view "Country" :from "countries.org" :act 'materialize
     (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))
+
+;; (ert-deftest org-glance-test/sync-view-modified ()
+;;   "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
+;;   (-og-user-story :choose "Russia" :view "Country" :from "countries.org" :act 'materialize
+;;     (replace-string "Russia" "Russian Federation")
+;;     (with-user-choice "yes"
+;;       (org-glance-view-sync-subtree))))
 
 ;;; org-glance-test.el ends here

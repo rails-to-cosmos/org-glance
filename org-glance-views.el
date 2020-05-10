@@ -48,10 +48,10 @@
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window)
 
-(define-error 'org-glance-view-not-modified "No changes found in materialized view." 'user-error)
+(define-error 'org-glance-view-not-modified "No changes found in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
 
-(define-error 'org-glance-view-corrupted "Materialized view source corrupted." 'user-error)
+(define-error 'org-glance-view-corrupted "Materialized view source corrupted" 'user-error)
 (cl-defun org-glance-view-corrupted (format &rest args) (signal 'org-glance-view-corrupted (list (apply #'format-message format args))))
 
 ;;;###autoload
@@ -220,8 +220,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
       (delete-region (point-min) (point-max))
       (org-mode)
       (org-glance-view-mode)
-      (insert headline)
-      (insert contents)
+      (insert
+       (with-temp-buffer
+         (insert headline)
+         (insert "\n")
+         (insert contents)
+         (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       (goto-char (point-min))
       (let ((hash (org-glance-view-subtree-hash)))
         (setq-local -org-glance-src file)

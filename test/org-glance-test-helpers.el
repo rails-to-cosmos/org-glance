@@ -33,11 +33,11 @@
 (cl-defmacro with-materialized-view (view &rest forms)
   (declare (indent 1))
   `(let ((buffer (org-glance-action-materialize ,view t)))
-      (with-current-buffer buffer
-        (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
-        ,@forms)
-      (message "Kill buffer %s" buffer)
-      (kill-buffer buffer)))
+     (with-current-buffer buffer
+       (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
+       ,@forms)
+     (message "Kill buffer %s" buffer)
+     (kill-buffer buffer)))
 
 (cl-defmacro -og-user-story (&body forms &key choose view from act &allow-other-keys)
   (declare (indent 8))
