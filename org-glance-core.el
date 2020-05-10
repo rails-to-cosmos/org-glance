@@ -2,6 +2,13 @@
   (require 'cl)
   (require 'subr-x))
 
+(eval-and-compile
+  (require 'org)
+  (require 'org-element)
+  (require 'load-relative)
+  (require 'org-glance-scope)
+  (require 'org-glance-cache))
+
 (cl-defun org-glance-completing-read (headlines &key prompt title-property)
   (org-completing-read prompt
                        (cl-loop for headline in headlines

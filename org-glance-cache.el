@@ -1,3 +1,8 @@
+(eval-and-compile
+  (require 'org)
+  (require 'org-element)
+  (require 'load-relative))
+
 (define-error 'org-glance-cache-outdated
   "Material view cache file is outdated"
   'user-error)
@@ -34,3 +39,4 @@
        :file ,file))))
 
 (provide-me)
+;;; org-glance-cache.el ends here
