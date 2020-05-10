@@ -31,50 +31,18 @@
 
 (ert-deftest org-glance-test/materialize-view ()
   "View should be able to materialize in a separate buffer."
-  (with-scope "countries.org"
-    (with-temp-view "Country"
-      (with-user-choice "Netherlands"
-        (with-materialized-view "Country"
-          (should (eq -org-glance-beg 1))
-          (should (eq -org-glance-end 90))
-          (should (eq -org-glance-indent 0))
-          (should (eq -org-glance-pwd nil))
-          (should (string= -org-glance-hash "c27f2eb34de678e0a7ef3312b239c1b2f6f61885"))
-          ;; (should (eq -org-glance-src 90))
-          (should (string= "Netherlands" (org-entry-title)))
-          (should (member "Country" (org-get-tags))))))))
+  (-og-user-story :choose "Netherlands" :view "Country" :from "countries.org" :act 'materialize
+    (should (eq -org-glance-beg 1))
+    (should (eq -org-glance-end 90))
+    (should (eq -org-glance-indent 0))
+    (should (eq -org-glance-pwd nil))
+    (should (string= -org-glance-hash "c27f2eb34de678e0a7ef3312b239c1b2f6f61885"))
+    (should (string= "Netherlands" (org-entry-title)))
+    (should (member "Country" (org-get-tags)))))
 
 (ert-deftest org-glance-test/sync-view ()
   "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
-  (let ((scope "countries.org")
-        (view "Country")
-        (entry "Ukraine"))
-    (with-scope scope
-      (with-temp-view view
-        (with-user-choice entry
-          (with-materialized-view view
-            (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))))))
-
-;; (with-current-buffer
-;;     (with-simulated-input
-;;         '("first RET")
-;;       (org-glance-action-materialize "testview" t))
-;;   ;; w
-;;   ;; (with-simulated-input '("y RET")
-;;   ;;   (org-glance-mv--sync-subtree))
-;;   )
-
-;; (let ((org-agenda-files (list (org-glance-test-get-resource "1.org")))
-;;       (view "testview"))
-
-
-;;   (with-simulated-input
-;;       '("third RET yes RET")
-;;     (org-glance-action-materialize view t)))
-
-;; Local Variables:
-;; org-literate-test-selector: "^org-glance-test--*"
-;; org-literate-test-buffer: "*org-glance-tests*"
-;; End:
+  (-og-user-story :choose "Ukraine" :view "Country" :from "countries.org" :act 'materialize
+    (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))
 
 ;;; org-glance-test.el ends here
