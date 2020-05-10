@@ -36,19 +36,24 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
-(defvar org-glance-view-mode-map (make-sparse-keymap)
-  "Extend org-mode map with sync abilities.")
+(defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
 
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window)
+
+(define-error 'org-glance-view-not-modified "No changes found in materialized view." 'user-error)
+(cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
+
+(define-error 'org-glance-view-corrupted "Materialized view source corrupted." 'user-error)
+(cl-defun org-glance-view-corrupted (format &rest args) (signal 'org-glance-view-corrupted (list (apply #'format-message format args))))
 
 ;;;###autoload
 (define-minor-mode org-glance-view-mode
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
-(defun org-glance-view-filter (view headline)
+(cl-defun org-glance-view-filter (view headline)
   (-contains?
    (mapcar #'s-downcase (org-element-property :tags headline))
    (s-downcase view)))
@@ -218,8 +223,8 @@ Make it accessible FOR views of TYPE in `org-glance-view-actions'."
          (beg (-org-glance-first-level-heading))
          (end-of-meta-data (-org-glance-end-of-meta-data))
          (end-of-subtree (-org-glance-end-of-subtree))
-         (headline (buffer-substring-no-properties beg end-of-meta-data))
-         (contents (buffer-substring-no-properties end-of-meta-data end-of-subtree)))
+         (headline (s-trim (buffer-substring-no-properties beg end-of-meta-data)))
+         (contents (s-trim (buffer-substring-no-properties end-of-meta-data end-of-subtree))))
     (when (get-buffer output-buffer)
       (kill-buffer output-buffer))
     (with-current-buffer (get-buffer-create output-buffer)
@@ -229,7 +234,7 @@ Make it accessible FOR views of TYPE in `org-glance-view-actions'."
       (insert headline)
       (insert contents)
       (goto-char (point-min))
-      (let ((hash (org-glance-mv--get-subtree-hash)))
+      (let ((hash (org-glance-view-subtree-hash)))
         (setq-local -org-glance-src file)
         (setq-local -org-glance-beg beg)
         (setq-local -org-glance-end end-of-subtree)
@@ -280,7 +285,7 @@ then run `org-completing-read' to open it."
 (defun org-glance-mv--safe-extract-property (property)
   (condition-case nil
       (org-entry-get (point) property)
-    (error (user-error "Materialized properties corrupted, please reread"))))
+    (error (org-glance-view-corrupted "Materialized properties corrupted, please reread"))))
 
 (defun org-glance-mv--safe-extract-num-property (property)
   (string-to-number (org-glance-mv--safe-extract-property property)))
@@ -376,9 +381,9 @@ then run `org-completing-read' to open it."
             (message "View %s backup is up to date" view)))
       (copy-file vf new-file-path t))))
 
-(defun org-glance-mv--sync-buffer ()
-  (interactive)
-  (org-map-entries #'org-glance-view-sync-subtree))
+;; (defun org-glance-mv--sync-buffer ()
+;;   (interactive)
+;;   (org-map-entries #'org-glance-view-sync-subtree))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -391,12 +396,17 @@ then run `org-completing-read' to open it."
            (promote-level -org-glance-indent)
            (glance-hash -org-glance-hash)
            (end-old end)
-           (mat-hash (org-glance-mv--get-subtree-hash))
-           (src-hash (org-glance-mv--get-source-hash source beg end)))
+           (mat-hash (org-glance-view-subtree-hash))
+           (src-hash (org-glance-view-source-hash)))
+
       (unless (string= glance-hash src-hash)
+        (message glance-hash)
+        (message src-hash)
         (user-error "Source file modified, please reread"))
+
       (when (string= glance-hash mat-hash)
-        (user-error "No changes made in subtree"))
+        (org-glance-view-not-modified "No changes made in subtree"))
+
       (when (y-or-n-p "Subtree has been modified. Apply changes?")
         (let ((new-contents (save-restriction
                               (org-narrow-to-subtree)
@@ -405,7 +415,6 @@ then run `org-completing-read' to open it."
                                   (org-mode)
                                   (insert buffer-contents)
                                   (goto-char (point-min))
-                                  ;; (-org-glance-remove-mv-props)
                                   (-org-glance-demote-subtree promote-level)
                                   (buffer-substring-no-properties (point-min) (point-max)))))))
 
@@ -419,7 +428,7 @@ then run `org-completing-read' to open it."
 
           (setq-local -org-glance-beg beg)
           (setq-local -org-glance-end end)
-          (setq-local -org-glance-hash (org-glance-mv--get-source-hash source beg end))
+          (setq-local -org-glance-hash (org-glance-view-source-hash))
 
           ;; (let ((end-diff (- end end-old)))
           ;;   (org-map-entries
@@ -434,7 +443,8 @@ then run `org-completing-read' to open it."
 
           (with-demoted-errors (run-hooks 'after-materialize-sync-hook)))))))
 
-(defun org-glance-mv--get-subtree-hash ()
+(defun org-glance-view-subtree-hash ()
+  (interactive)
   (save-restriction
     (org-narrow-to-subtree)
     (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -442,19 +452,24 @@ then run `org-completing-read' to open it."
         (org-mode)
         (insert buffer-contents)
         (goto-char (point-min))
-        ;; (-org-glance-remove-mv-props)
+        (message (buffer-hash))
         (buffer-hash)))))
 
-(defun org-glance-mv--get-source-hash (src beg end)
-  (with-temp-buffer
-    (insert-file-contents src)
-    (let ((subtree (condition-case nil
-                       (buffer-substring-no-properties beg end)
-                     (error (user-error "Materialized properties corrupted, please reread")))))
-      (with-temp-buffer
-        (org-mode)
-        (insert subtree)
-        (buffer-hash)))))
+(defun org-glance-view-source-hash (&optional src beg end)
+  (interactive)
+  (let ((src (or src -org-glance-src))
+        (beg (or beg -org-glance-beg))
+        (end (or end -org-glance-end)))
+    (with-temp-buffer
+      (insert-file-contents src)
+      (let ((subtree (condition-case nil
+                         (buffer-substring-no-properties beg end)
+                       (error (org-glance-view-corrupted "Materialized properties corrupted, please reread")))))
+        (with-temp-buffer
+          (org-mode)
+          (insert subtree)
+          (message (buffer-hash))
+          (buffer-hash))))))
 
 (defun org-glance-backup-views (&optional dir)
   (interactive)

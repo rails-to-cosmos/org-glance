@@ -2,3 +2,7 @@
 * Belgium                                                                       :Country:
 * Georgia                                                                       :Country:
 * Ukraine                                                                       :Country:
+* Russia                                                                        :Country:
+** Central                                                                     :Region:
+** Northwestern                                                                :Region:
+** Southern                                                                    :Region:

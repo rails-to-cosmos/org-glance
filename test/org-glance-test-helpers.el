@@ -10,7 +10,10 @@
      (with-temp-file scope-file
        (insert-file-contents-literally (org-glance-test-get-resource ,scope)))
      ,@forms
-     (message "Exiting temporary scope %s" scope-file)))
+     (message "Exiting temporary scope %s" scope-file)
+     (kill-buffer (get-file-buffer scope-file))
+     (message "Remove file %s" scope-file)
+     (delete-file scope-file)))
 
 (cl-defmacro with-temp-view (view &rest forms)
   (declare (indent 1))
@@ -29,8 +32,8 @@
 (cl-defmacro with-materialized-view (view &rest forms)
   (declare (indent 1))
   `(with-current-buffer
-       (org-glance-action-materialize ,view)
-     (message "In materialized view %s buffer %s" ,view (current-buffer))
+       (org-glance-action-materialize ,view t)
+     (message "Visit materialized view %s buffer %s" ,view (current-buffer))
      ,@forms))
 
 (defun org-entry-title ()

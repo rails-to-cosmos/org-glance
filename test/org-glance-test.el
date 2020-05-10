@@ -34,6 +34,12 @@
     (with-temp-view "Country"
       (with-user-choice "Netherlands"
         (with-materialized-view "Country"
+          (should (eq -org-glance-beg 1))
+          (should (eq -org-glance-end 90))
+          (should (eq -org-glance-indent 0))
+          (should (eq -org-glance-pwd nil))
+          (should (string= -org-glance-hash "c27f2eb34de678e0a7ef3312b239c1b2f6f61885"))
+          ;; (should (eq -org-glance-src 90))
           (should (string= "Netherlands" (org-entry-title)))
           (should (member "Country" (org-get-tags))))))))
 
@@ -43,9 +49,11 @@
     (with-temp-view "Country"
       (with-user-choice "Ukraine"
         (with-materialized-view "Country"
-          (replace-string "Ukraine" "Belarus")
-          ;; (org-glance-view-sync-subtree)
-          )))))
+          ;; (replace-string "Ukraine" "Belarus")
+          (should-error
+           (org-glance-view-sync-subtree)
+
+           :type 'org-glance-view-not-modified))))))
 
 ;; (with-current-buffer
 ;;     (with-simulated-input
