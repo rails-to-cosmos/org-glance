@@ -15,7 +15,7 @@
      (message "Remove file %s" scope-file)
      (delete-file scope-file)))
 
-(cl-defmacro with-temp-view (view &rest forms)
+(cl-defmacro with-view (view &rest forms)
   (declare (indent 1))
   `(progn
      (message "Create view %s" ,view)
@@ -30,9 +30,9 @@
      (with-simulated-input user-input
        ,@forms)))
 
-(cl-defmacro with-materialized-view (view &rest forms)
-  (declare (indent 1))
-  `(let ((buffer (org-glance-action-materialize ,view t)))
+(cl-defmacro with-view-materialized (view entry &rest forms)
+  (declare (indent 2))
+  `(let ((buffer (with-user-choice ,entry (org-glance-action-materialize ,view t))))
      (with-current-buffer buffer
        (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
        ,@forms)
@@ -42,11 +42,8 @@
 (cl-defmacro -og-user-story (&body forms &key choose view from act &allow-other-keys)
   (declare (indent 8))
   `(with-scope ,from
-     (with-temp-view ,view
-       (with-user-choice ,choose
-         (when (eq ,act 'materialize)
-           (with-materialized-view ,view
-             ,@forms))))))
+     (with-view ,view
+       (cond ((eq ,act 'materialize) (with-view-materialized ,view ,choose ,@forms))))))
 
 (defun org-entry-title ()
   (org-entry-get (point) "ITEM"))
