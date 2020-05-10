@@ -1,6 +1,6 @@
 (source gnu)
-(source org)
 (source melpa)
+(source org)
 
 (package-file "org-glance.el")
 

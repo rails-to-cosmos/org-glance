@@ -2,6 +2,14 @@
   "Material view cache file is outdated"
   'user-error)
 
+;; (defun org-glance-reread (&optional view)
+;;   (interactive)
+;;   (setq view (-org-glance-view-completing-read view))
+;;   (org-glance-cache-reread
+;;    :scope (gethash (intern view) org-glance-view-scopes '(agenda))
+;;    :filter (-org-glance-filter-for view)
+;;    :cache-file (-org-glance-cache-for view)))
+
 (defun org-glance-cache-outdated (format &rest args)
   "Raise `org-glance-cache-outdated' exception formatted with FORMAT ARGS."
   (signal 'org-glance-cache-outdated

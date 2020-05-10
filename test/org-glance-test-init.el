@@ -1,7 +1,8 @@
 (eval-when-compile
-  (require 'load-relative)
   (require 'undercover)
   (require 'f))
+
+(require 'load-relative)
 
 (undercover "org-glance.el")
 

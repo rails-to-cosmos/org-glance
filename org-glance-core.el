@@ -1,3 +1,7 @@
+(eval-when-compile
+  (require 'cl)
+  (require 'subr-x))
+
 (cl-defun org-glance-completing-read (headlines &key prompt title-property)
   (org-completing-read prompt
                        (cl-loop for headline in headlines

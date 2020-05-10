@@ -1,3 +1,6 @@
+(eval-when-compile
+  (require 'cl))
+
 (defconst org-glance-loc--glance-dir "GLANCE_DIR")
 
 (defun org-glance-loc--get-rel-dirs (filename)
@@ -24,19 +27,19 @@ will search views in \"archives\", \"resources\" and
     (with-temp-buffer
       (insert-file-contents filename)
       (goto-char (point-min))
-      (loop while (search-forward glance-dir-property nil t)
-            with glance-archive-dir
-            do (setq glance-archive-dir
-                     (-some->> (thing-at-point 'line)
-                       substring-no-properties
-                       (s-replace glance-dir-property "")
-                       s-trim
-                       file-truename))
-            if (file-exists-p glance-archive-dir)
-            collect glance-archive-dir into result
-            else
-            do (warn "glance-archive-dir from %s not found: %s" filename glance-archive-dir)
-            finally (return (or result (list default-directory)))))))
+      (cl-loop while (search-forward glance-dir-property nil t)
+               with glance-archive-dir
+               do (setq glance-archive-dir
+                        (-some->> (thing-at-point 'line)
+                          substring-no-properties
+                          (s-replace glance-dir-property "")
+                          s-trim
+                          file-truename))
+               if (file-exists-p glance-archive-dir)
+               collect glance-archive-dir into result
+               else
+               do (warn "glance-archive-dir from %s not found: %s" filename glance-archive-dir)
+               finally (return (or result (list default-directory)))))))
 
 (defun org-glance-loc--list-archives (filename)
   "Return list of org-archives for FILENAME.

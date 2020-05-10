@@ -1,13 +1,19 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'org)
-(require 'aes)
-
 (defvar org-glance-views '())
-
 (defvar org-glance-view-scopes (make-hash-table :test 'equal))
 (defvar org-glance-view-types (make-hash-table :test 'equal))
 (defvar org-glance-view-actions (make-hash-table :test 'equal))
+
+(eval-when-compile
+  (require 'aes)
+  (require 'cl)
+  (require 'load-relative)
+  (require 'org)
+  (require 'org-element))
+
+(require 'org-glance-cache)
+(require 'org-glance-sec)
 
 ;; buffer-locals for mv sync
 
@@ -60,27 +66,26 @@
 
 (cl-defun org-glance-list-views (&key type &allow-other-keys)
   "List views mathing TYPE."
-  (loop for view being the hash-keys in org-glance-view-types
-        using (hash-value types)
-        if (or (seq-set-equal-p (intersection type types) type)
-               (seq-set-equal-p (intersection type '(any all _ *)) type))
-        collect view))
+  (cl-loop for view being the hash-keys in org-glance-view-types
+           using (hash-value types)
+           if (or (seq-set-equal-p (cl-intersection type types) type)
+                  (seq-set-equal-p (cl-intersection type '(any all _ *)) type))
+           collect view))
 
 ;; some private helpers
 
 (defun -org-glance-promote-subtree ()
   (let ((promote-level 0))
-    (while
-        (condition-case nil
-            (org-with-limited-levels (org-map-tree 'org-promote) t)
-          (error nil))
-      (incf promote-level))
+    (cl-loop while (condition-case nil
+                       (org-with-limited-levels (org-map-tree 'org-promote) t)
+                     (error nil))
+             do (incf promote-level))
     promote-level))
 
 (defun -org-glance-demote-subtree (level)
-  (loop repeat level
-        do (org-with-limited-levels
-            (org-map-tree 'org-demote))))
+  (cl-loop repeat level
+           do (org-with-limited-levels
+               (org-map-tree 'org-demote))))
 
 (defun -org-glance-first-level-heading ()
   (save-excursion
@@ -121,14 +126,6 @@
 
 ;; common interactives
 
-(defun org-glance-reread (&optional view)
-  (interactive)
-  (setq view (-org-glance-view-completing-read view))
-  (org-glance-cache-reread
-   :scope (gethash (intern view) org-glance-view-scopes '(agenda))
-   :filter (-org-glance-filter-for view)
-   :cache-file (-org-glance-cache-for view)))
-
 ;; (defun org-glance-materialize (&optional view minify)
 ;;   (interactive)
 ;;   (let ((view (-org-glance-view-completing-read view)))
@@ -136,14 +133,6 @@
 ;;     (org-glance-mv--materialize-cache (-org-glance-cache-for view) minify)))
 
 ;; action factory
-
-(defun org-glance-view-actions (type)
-  "List allowed methods for view of TYPE from `org-glance-view-actions'."
-  (gethash type org-glance-view-actions))
-
-(defun org-glance-view-types ()
-  "List allowed methods for view of TYPE from `org-glance-view-actions'."
-  (hash-table-keys org-glance-view-actions))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
   (when (eq on 'current-headline)
@@ -153,9 +142,9 @@
       (user-error "Unbound function %s" fn))
     (funcall fn on)))
 
-(defmacro org-glance-def-action (name args for type &rest body)
+(defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
-Make it accessible FOR views of TYPE in `org-glance-view-actions'."
+Make it accessible for views of TYPE in `org-glance-view-actions'."
   (declare (debug
             ;; Same as defun but use cl-lambda-list.
             (&define [&or name ("setf" :name setf name)]
@@ -206,7 +195,7 @@ Make it accessible FOR views of TYPE in `org-glance-view-actions'."
     (goto-char point)
 
     (cond ((-element-at-point-equals-headline headline)
-           (while (org-up-heading-safe) t)  ;; expand parents
+           (cl-loop while (org-up-heading-safe))  ;; expand parents
            (org-narrow-to-subtree)
            (org-show-all)
            (widen)
@@ -351,7 +340,7 @@ then run `org-completing-read' to open it."
     (find-file-other-window -org-glance-src)
     (widen)
     (goto-char beg)
-    (while (org-up-heading-safe) t)
+    (cl-loop while (org-up-heading-safe))
     (org-narrow-to-subtree)
     (org-show-all)
     (widen)
@@ -388,14 +377,14 @@ then run `org-completing-read' to open it."
 (defun org-glance-view-sync-subtree ()
   (interactive)
   (save-excursion
-    (while (org-up-heading-safe) t)
+    (cl-loop while (org-up-heading-safe))
     (with-demoted-errors (run-hooks 'before-materialize-sync-hook))
     (let* ((source -org-glance-src)
            (beg -org-glance-beg)
            (end -org-glance-end)
            (promote-level -org-glance-indent)
            (glance-hash -org-glance-hash)
-           (end-old end)
+           ;; (end-old end)
            (mat-hash (org-glance-view-subtree-hash))
            (src-hash (org-glance-view-source-hash)))
 
@@ -474,21 +463,18 @@ then run `org-completing-read' to open it."
 (defun org-glance-backup-views (&optional dir)
   (interactive)
   (let ((dir (or dir (read-directory-name "Backup directory: "))))
-    (loop for view in org-glance-views
-          do (org-glance-mv--backup (symbol-name view) dir))))
+    (cl-loop for view in org-glance-views
+             do (org-glance-mv--backup (symbol-name view) dir))))
 
-(cl-defmacro org-glance-def-view (tag
-                                  &key bind type
+(cl-defmacro org-glance-def-view (tag &key bind type
                                   (scope '(agenda-with-archives))
-                                  (title-property :TITLE)
                                   &allow-other-keys)
-
   (declare (indent 1))
   `(progn
      (cl-pushnew (intern ,tag) org-glance-views)
      (puthash (intern ,tag) (quote ,scope) org-glance-view-scopes)
      (puthash (intern ,tag) ,type org-glance-view-types)
-     (assert (listp ,type) nil "Type must be instance of list.")
+     (cl-assert (listp ,type) nil "Type must be instance of list.")
      (when (quote ,bind)
        (cl-loop for (binding . cmd) in (quote ,bind)
                 do (lexical-let ((command-name (intern (format "org-glance-action-%s" cmd)))
@@ -498,9 +484,9 @@ then run `org-completing-read' to open it."
                                        (funcall command-name tag))))))))
 
 (cl-defun org-glance-remove-view (tag)
-  (setq org-glance-views
-        (cl-remove (intern tag) org-glance-views))
+  (setq org-glance-views (cl-remove (intern tag) org-glance-views))
   (remhash (intern tag) org-glance-view-scopes)
   (remhash (intern tag) org-glance-view-types))
 
 (provide-me)
+;;; org-glance-views.el ends here

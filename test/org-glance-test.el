@@ -3,13 +3,14 @@
 ;;; Commentary:
 ;; This package allows you to manage your org-mode entries as materialized views.
 
-(eval-when-compile
-  (require 'org)
-  (require 'org-element)
-  (require 'org-glance)
-  (require 'with-simulated-input)
-  (require 'load-relative)
-  (require 'f))
+(require 'org)
+(require 'org-element)
+(require 'load-relative)
+(require 'f)
+(require 'org-glance)
+(require 'org-glance-views)
+(require 'with-simulated-input)
+(require 'subr-x)
 
 (require 'org-glance-test-init)
 (require 'org-glance-test-helpers)
@@ -52,7 +53,6 @@
           ;; (replace-string "Ukraine" "Belarus")
           (should-error
            (org-glance-view-sync-subtree)
-
            :type 'org-glance-view-not-modified))))))
 
 ;; (with-current-buffer

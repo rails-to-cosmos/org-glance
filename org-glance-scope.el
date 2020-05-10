@@ -1,3 +1,6 @@
+(eval-when-compile
+  (require 'cl))
+
 (defvar org-glance-scope--default-scope-alist
   `((file-with-archives . org-glance-scope--list-archives)
     (agenda . org-agenda-files)
@@ -32,9 +35,7 @@
 
 (cl-defmethod org-glance-scope--adapt ((lfob symbol))
   "Return extracted LFOB from `org-glance-scope--default-scope-alist'."
-  (-some->> lfob
-    (funcall (-cut alist-get <> org-glance-scope--default-scope-alist))
-    (funcall)))
+  (funcall (cdr (assoc lfob org-glance-scope--default-scope-alist))))
 
 (cl-defmethod org-glance-scope--adapt ((lfob buffer))
   "Return list of LFOB."

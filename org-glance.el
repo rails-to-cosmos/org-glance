@@ -56,23 +56,24 @@
 ;;; Code:
 
 (eval-when-compile
+  (require 'aes)
+  (require 'cl)
+  (require 'cl-generic)
+  (require 'cl-lib)
+  (require 'dash-functional)
+  (require 'load-relative)
   (require 'org)
   (require 'seq)
-  (require 'load-relative)
-  (require 'cl)
-  (require 'cl-lib)
-  (require 'cl-generic)
-  (require 'aes)
-  (require 'dash-functional)
   (require 'subr-x))
 
-(require 'org-glance-loc)
-(require 'org-glance-ledger)
-(require 'org-glance-scope)
 (require 'org-glance-views)
-(require 'org-glance-sec)
+
 (require 'org-glance-cache)
 (require 'org-glance-core)
+(require 'org-glance-ledger)
+(require 'org-glance-loc)
+(require 'org-glance-scope)
+(require 'org-glance-sec)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -97,9 +98,7 @@ Specify CACHE-FILE to save headlines in read-optimized el-file.
 Specify REREAD-P predicate to reread cache file. Usually this flag is set by C-u prefix.
 If user input doesn't match any entry, call FALLBACK method with user input as argument.
 Read headline title in completing read prompt from org property named TITLE-PROPERTY."
-
   (let (headlines)
-
     (when (or reread-p (not cache-file) (not (file-exists-p cache-file)))
       (when (and reread-p cache-file)
         (message "Reread cache file %s..." cache-file))
@@ -109,13 +108,10 @@ Read headline title in completing read prompt from org property named TITLE-PROP
              :filter filter
              :cache-file cache-file
              :title-property title-property)))
-
     (unless headlines
       (setq headlines (org-glance-load cache-file :title-property title-property)))
-
     (unless headlines
       (user-error "Nothing to glance at (scope: %s)" scope))
-
     (unwind-protect
         (when-let (choice (or default-choice
                               (org-glance-completing-read headlines

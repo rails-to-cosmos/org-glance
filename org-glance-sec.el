@@ -31,6 +31,8 @@
 
 ;;; Code:
 
+(eval-when-compile
+  (require 'cl))
 
 (defun org-glance-sec-decrypt-subtree (&optional pwd)
   "Decrypt subtree at point.
@@ -78,13 +80,12 @@ If RETURN-PLAIN is non-nil, return decrypted contents as string."
       (unwind-protect
           (with-temp-file tf
             (insert dc))
-        (while
-            (condition-case exc
-                (org-glance :scope tf
-                            :prompt "Copy to kill ring: "
-                            :action #'org-glance-sec--copy)
-              (quit (kill-new "" t) nil)
-              (error (kill-new "" t) nil)))
+        (cl-loop while (condition-case nil
+                           (org-glance :scope tf
+                                       :prompt "Copy to kill ring: "
+                                       :action #'org-glance-sec--copy)
+                         (quit (kill-new "" t) nil)
+                         (error (kill-new "" t) nil)))
         (delete-file tf)))))
 
 (defun org-glance-sec--copy (headline)

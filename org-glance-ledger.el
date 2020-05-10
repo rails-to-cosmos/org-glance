@@ -1,3 +1,6 @@
+(eval-when-compile
+  (require 'cl))
+
 (defconst org-glance-ledger-commodity-regexp
   "\\(\"[^\"]+\"\\|[^]!&(-/:-@[^{-}[:digit:][:blank:]]+\\)")
 
@@ -21,9 +24,10 @@
   (save-match-data
     (let ((pos 0)
           matches)
-      (while (string-match regexp string pos)
-        (push (match-string 0 string) matches)
-        (setq pos (match-end 0)))
+      (cl-loop while (string-match regexp string pos)
+               do (progn
+                    (push (match-string 0 string) matches)
+                    (setq pos (match-end 0))))
       matches)))
 
 (defun org-glance-ledger--build-report-from-subtree-at-point ()
