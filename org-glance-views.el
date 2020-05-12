@@ -214,10 +214,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let* ((file (buffer-file-name))
          (output-buffer "*org-glance materialized view*")
          (beg (-org-glance-first-level-heading))
-         (end-of-meta-data (-org-glance-end-of-meta-data))
          (end-of-subtree (-org-glance-end-of-subtree))
-         (headline (s-trim (buffer-substring-no-properties beg end-of-meta-data)))
-         (contents (s-trim (buffer-substring-no-properties end-of-meta-data end-of-subtree))))
+         (contents (s-trim-right (buffer-substring-no-properties beg end-of-subtree))))
     (when (get-buffer output-buffer)
       (kill-buffer output-buffer))
     (with-current-buffer (get-buffer-create output-buffer)
@@ -226,8 +224,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
       (org-glance-view-mode)
       (insert
        (with-temp-buffer
-         (insert headline)
-         (insert "\n")
          (insert contents)
          (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       (goto-char (point-min))
