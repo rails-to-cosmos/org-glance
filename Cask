@@ -1,6 +1,5 @@
 (source gnu)
 (source melpa)
-(source org)
 
 (package-file "org-glance.el")
 
@@ -15,7 +14,6 @@
  (depends-on "ert-runner")
  (depends-on "f")
  (depends-on "load-relative")
- (depends-on "org-plus-contrib")
  (depends-on "seq")
  (depends-on "undercover")
  (depends-on "ledger-mode")

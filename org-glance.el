@@ -84,7 +84,7 @@
                       (action #'org-glance--visit--any)
                       (prompt "Glance: ")
                       (title-property :TITLE))
-  "Run completing read on org-files entries from SCOPE list prompting a PROMPT.
+  "Run completing read on org entries from SCOPE list prompting a PROMPT.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.

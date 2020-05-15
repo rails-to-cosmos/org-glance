@@ -201,7 +201,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (cond ((-element-at-point-equals-headline headline)
            (cl-loop while (org-up-heading-safe))  ;; expand parents
            (org-narrow-to-subtree)
-           (org-show-all)
+           (outline-show-branches)
            (widen)
            (goto-char point))
           (t (unless file-buffer
@@ -346,7 +346,7 @@ then run `org-completing-read' to open it."
     (goto-char beg)
     (cl-loop while (org-up-heading-safe))
     (org-narrow-to-subtree)
-    (org-show-all)
+    (outline-show-branches)
     (widen)
     (goto-char beg)))
 
