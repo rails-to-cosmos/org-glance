@@ -12,6 +12,10 @@
      (with-temp-file scope-file
        (message "Create scope %s from %s" scope-file ,scope)
        (insert-file-contents-literally (org-glance-test-get-resource ,scope)))
+     (message "Scope file size: %s" (->> scope-file
+                                         file-attributes
+                                         file-attribute-size
+                                         file-size-human-readable))
      (unwind-protect
          ,@forms
        (message "Exit scope %s" scope-file)
