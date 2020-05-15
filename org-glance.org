@@ -1,1 +1,0 @@
-* TODO Починить org-glance-view-decrypt

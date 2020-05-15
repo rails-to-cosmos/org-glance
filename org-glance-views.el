@@ -33,6 +33,7 @@
   :group 'org-glance)
 
 (eval-and-compile
+  (defvar org-glance-cache-directory (concat user-emacs-directory "org-glance"))
   (defvar org-glance-views '())
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
   (defvar org-glance-view-types (make-hash-table :test 'equal))
@@ -117,7 +118,7 @@
   (-partial #'org-glance-view-filter view))
 
 (defun -org-glance-cache-for (view)
-  (format "~/.emacs.d/org-glance/org-glance-%s.el" view))
+  (format "%s/org-glance-%s.el" org-glance-cache-directory view))
 
 (defun -org-glance-fallback-for (view)
   (-partial #'user-error "%s not found: %s" view))
@@ -275,13 +276,13 @@ then run `org-completing-read' to open it."
               (-org-glance-promote-subtree))
             'append 'local))
 
-(defun org-glance-mv--safe-extract-property (property)
-  (condition-case nil
-      (org-entry-get (point) property)
-    (error (org-glance-view-corrupted "Materialized properties corrupted, please reread"))))
+;; (defun org-glance-mv--safe-extract-property (property)
+;;   (condition-case nil
+;;       (org-entry-get (point) property)
+;;     (error (org-glance-view-corrupted "Materialized properties corrupted, please reread"))))
 
-(defun org-glance-mv--safe-extract-num-property (property)
-  (string-to-number (org-glance-mv--safe-extract-property property)))
+;; (defun org-glance-mv--safe-extract-num-property (property)
+;;   (string-to-number (org-glance-mv--safe-extract-property property)))
 
 ;; (defun org-glance-mv--materialize-cache (filename &optional interact)
 ;;   (let ((headlines (org-glance-load filename))
@@ -350,29 +351,29 @@ then run `org-completing-read' to open it."
     (widen)
     (goto-char beg)))
 
-(defun org-glance-mv--backup (&optional view dir)
-  (interactive)
-  (let* ((view (or view (org-completing-read "View: " org-glance-views)))
-         (dir (or dir (read-directory-name "Backup directory: ")))
-         (vf (funcall (intern (format "org-glance--%s-materialize" (s-downcase view))) 'interact))
-         (new-file (concat (s-downcase view) ".org"))
-         (new-file-path (f-join dir new-file)))
+;; (defun org-glance-mv--backup (&optional view dir)
+;;   (interactive)
+;;   (let* ((view (or view (org-completing-read "View: " org-glance-views)))
+;;          (dir (or dir (read-directory-name "Backup directory: ")))
+;;          (vf (funcall (intern (format "org-glance--%s-materialize" (s-downcase view))) 'interact))
+;;          (new-file (concat (s-downcase view) ".org"))
+;;          (new-file-path (f-join dir new-file)))
 
-    (condition-case nil
-        (mkdir dir)
-      (error nil))
+;;     (condition-case nil
+;;         (mkdir dir)
+;;       (error nil))
 
-    (if (file-exists-p new-file-path)
-        (let ((existed-buffer-hash (with-temp-buffer
-                                     (insert-file-contents new-file-path)
-                                     (buffer-hash)))
-              (new-buffer-hash (with-temp-buffer
-                                 (insert-file-contents vf)
-                                 (buffer-hash))))
-          (if (not (string= existed-buffer-hash new-buffer-hash))
-              (copy-file vf new-file-path t)
-            (message "View %s backup is up to date" view)))
-      (copy-file vf new-file-path t))))
+;;     (if (file-exists-p new-file-path)
+;;         (let ((existed-buffer-hash (with-temp-buffer
+;;                                      (insert-file-contents new-file-path)
+;;                                      (buffer-hash)))
+;;               (new-buffer-hash (with-temp-buffer
+;;                                  (insert-file-contents vf)
+;;                                  (buffer-hash))))
+;;           (if (not (string= existed-buffer-hash new-buffer-hash))
+;;               (copy-file vf new-file-path t)
+;;             (message "View %s backup is up to date" view)))
+;;       (copy-file vf new-file-path t))))
 
 ;; (defun org-glance-mv--sync-buffer ()
 ;;   (interactive)
@@ -460,11 +461,11 @@ then run `org-completing-read' to open it."
           (insert subtree)
           (buffer-hash))))))
 
-(defun org-glance-backup-views (&optional dir)
-  (interactive)
-  (let ((dir (or dir (read-directory-name "Backup directory: "))))
-    (cl-loop for view in org-glance-views
-             do (org-glance-mv--backup (symbol-name view) dir))))
+;; (defun org-glance-backup-views (&optional dir)
+;;   (interactive)
+;;   (let ((dir (or dir (read-directory-name "Backup directory: "))))
+;;     (cl-loop for view in org-glance-views
+;;              do (org-glance-mv--backup (symbol-name view) dir))))
 
 (cl-defmacro org-glance-def-view (tag &key bind type
                                   (scope '(agenda-with-archives))

@@ -1,10 +1,6 @@
 (eval-when-compile
-  (require 'undercover)
-  (require 'f))
-
-(require 'load-relative)
-
-(undercover "org-glance.el")
+  (require 'f)
+  (require 'load-relative))
 
 (defvar org-glance-test/test-path
   (->> (or load-file-name
