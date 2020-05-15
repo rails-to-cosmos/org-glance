@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
+(require 'edebug)
+
 (eval-when-compile
   (require 'cl))
 
@@ -154,6 +156,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
             ;; Same as defun but use cl-lambda-list.
             (&define [&or name ("setf" :name setf name)]
                      cl-lambda-list
+                     symbolp
                      cl-declarations-or-string
                      [&optional ("interactive" interactive)]
                      def-body))
