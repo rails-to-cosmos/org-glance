@@ -12,9 +12,6 @@
 (require 'with-simulated-input)
 (require 'subr-x)
 
-(require 'org-glance-test-init)
-(require 'org-glance-test-helpers)
-
 (ert-deftest org-glance-test/provide-feature ()
   (should (featurep 'org-glance)))
 

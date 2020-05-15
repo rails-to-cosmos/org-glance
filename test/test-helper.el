@@ -4,5 +4,7 @@
   (undercover "*.el"))
 
 (require 'org-glance)
+(require 'org-glance-test-init)
+(require 'org-glance-test-helpers)
 
 ;;; test-helper.el ends here
