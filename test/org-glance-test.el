@@ -81,8 +81,8 @@
                (user-story :view "Service" :in "services.org" :input "Simple service bookmark" :act 'open)
                (link-opened-p "Bookmark")))
 
-      ;; (should-error  ; child methods should not be available
-      ;;  (user-story :view "Service" :in "services.org" :input '("Service with CI" "Child method") :act 'open))
-      )))
+      (should (->>   ; methods from child subtrees should be available
+               (user-story :view "Service" :in "services.org" :input '("Service with CI" "Child method") :act 'open)
+               (link-opened-p "Child method"))))))
 
 ;;; org-glance-test.el ends here
