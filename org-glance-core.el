@@ -9,18 +9,18 @@
   (require 'org-glance-scope)
   (require 'org-glance-cache))
 
-(cl-defun org-glance-completing-read (headlines &key prompt title-property)
+(cl-defun org-glance-completing-read (headlines &key prompt)
   (org-completing-read prompt
                        (cl-loop for headline in headlines
-                                collect (org-glance-format headline :title-property title-property))))
+                                collect (org-glance-format headline))))
 
-(cl-defun org-glance-format (headline &key title-property)
-  (or (and title-property (org-element-property title-property headline))
+(cl-defun org-glance-format (headline)
+  (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
 
-(cl-defun org-glance-browse (headlines &key choice fallback title-property)
+(cl-defun org-glance-browse (headlines &key choice fallback)
   (or (cl-loop for headline in headlines
-               when (string= (org-glance-format headline :title-property title-property) choice)
+               when (string= (org-glance-format headline) choice)
                do (cl-return headline))
       (when fallback (funcall fallback choice))))
 
@@ -52,18 +52,17 @@
               (plist-put (cadr headline) :file file)
               headline)))))))
 
-(cl-defun org-glance-save (file entries &key title-property)
+(cl-defun org-glance-save (file entries)
   (unless (file-exists-p (file-name-directory file))
     (make-directory (file-name-directory file) t))
   (with-temp-file file
     (insert "`(")
     (dolist (entry entries)
-      (insert (org-glance-cache--serialize entry
-                                    :title-property title-property) "\n"))
+      (insert (org-glance-cache--serialize entry) "\n"))
     (insert ")"))
   entries)
 
-(cl-defun org-glance-load (file &key title-property)
+(cl-defun org-glance-load (file)
   (let ((entries
          (with-temp-buffer (insert-file-contents file)
                            (->> (buffer-string)
@@ -71,14 +70,12 @@
                                 read
                                 eval))))
     (cl-loop for entry in entries
-             collect (org-glance-cache--deserialize entry
-                                                    :title-property title-property))))
+             collect (org-glance-cache--deserialize entry))))
 
 (cl-defun org-glance-cache-reread (&key
                                    filter
                                    cache-file
-                                   (scope '(agenda))
-                                   (title-property :TITLE)
+                                   scope
                                    &allow-other-keys)
   (let ((headlines (org-glance-read scope :filter filter)))
 
@@ -86,7 +83,7 @@
       (user-error "Nothing to glance at scope %s" (pp-to-string scope)))
 
     (when cache-file
-      (org-glance-save cache-file headlines :title-property title-property))
+      (org-glance-save cache-file headlines))
 
     headlines))
 

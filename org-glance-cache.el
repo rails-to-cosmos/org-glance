@@ -20,19 +20,18 @@
   (signal 'org-glance-cache-outdated
           (list (apply #'format-message format args))))
 
-(cl-defun org-glance-cache--serialize (headline &key title-property)
+(cl-defun org-glance-cache--serialize (headline)
   (prin1-to-string
-   (list (when title-property
-           (org-element-property title-property headline))
+   (list (org-element-property :TITLE headline)
          (org-element-property :raw-value headline)
          (org-element-property :begin headline)
          (org-element-property :file headline))))
 
-(cl-defun org-glance-cache--deserialize (input &key title-property)
+(cl-defun org-glance-cache--deserialize (input)
   (cl-destructuring-bind (alias title begin file) input
     (org-element-create
      'headline
-     `(,title-property
+     `(:TITLE
        ,alias
        :raw-value ,title
        :begin ,begin

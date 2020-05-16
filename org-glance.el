@@ -82,39 +82,36 @@
                       reread-p
                       (scope '(agenda))
                       (action #'org-glance--visit--any)
-                      (prompt "Glance: ")
-                      (title-property :TITLE))
+                      (prompt "Glance: "))
   "Run completing read on org entries from SCOPE list prompting a PROMPT.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.
 Specify CACHE-FILE to save headlines in read-optimized el-file.
 Specify REREAD-P predicate to reread cache file. Usually this flag is set by C-u prefix.
-If user input doesn't match any entry, call FALLBACK method with user input as argument.
-Read headline title in completing read prompt from org property named TITLE-PROPERTY."
+If user input doesn't match any entry, call FALLBACK method with user input as argument."
   (let (headlines)
-    (when (or reread-p (not cache-file) (not (file-exists-p cache-file)))
+    (when (or reread-p
+              (not cache-file)
+              (not (file-exists-p cache-file)))
       (when (and reread-p cache-file)
         (message "Reread cache file %s..." cache-file))
       (setq headlines
             (org-glance-cache-reread
              :scope scope
              :filter filter
-             :cache-file cache-file
-             :title-property title-property)))
+             :cache-file cache-file)))
     (unless headlines
-      (setq headlines (org-glance-load cache-file :title-property title-property)))
+      (setq headlines (org-glance-load cache-file)))
     (unless headlines
       (user-error "Nothing to glance at (scope: %s)" scope))
     (unwind-protect
         (when-let (choice (or default-choice
                               (org-glance-completing-read headlines
-                                                          :prompt prompt
-                                                          :title-property title-property)))
+                                                          :prompt prompt)))
           (if-let (headline (org-glance-browse headlines
                                                :choice choice
-                                               :fallback fallback
-                                               :title-property title-property))
+                                               :fallback fallback))
               (condition-case nil
                   (if (functionp action)
                       (funcall action headline)
@@ -129,14 +126,13 @@ Read headline title in completing read prompt from org property named TITLE-PROP
                              :cache-file cache-file
                              :fallback fallback
                              :default-choice choice
-                             :title-property title-property
                              :reread-p t)))
             (user-error "Headline not found")))
       ;; Unwind
       (when (and cache-file
                  (or reread-p
                      (not (file-exists-p cache-file))))
-        (org-glance-save cache-file headlines :title-property title-property)))))
+        (org-glance-save cache-file headlines)))))
 
 (provide-me)
 ;;; org-glance.el ends here
