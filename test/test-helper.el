@@ -52,9 +52,10 @@
      (unwind-protect
          ,@forms
        (message "Exit scope %s" scope-file)
-       (kill-buffer (get-file-buffer scope-file))
+       ;; (kill-buffer (get-file-buffer scope-file))
        (message "Remove file %s" scope-file)
-       (delete-file scope-file))))
+       ;; (delete-file scope-file)
+       )))
 
 (cl-defmacro with-view (view &rest forms)
   (declare (indent 1))
@@ -66,26 +67,52 @@
      (message "Remove view %s" ,view)
      (org-glance-remove-view ,view)))
 
-(cl-defmacro with-user-choice (choice &rest forms)
+(cl-defmacro with-user-input (choice &rest forms)
   (declare (indent 1))
   `(let ((user-input (format "%s RET" (eval ,choice))))
      (with-simulated-input user-input
        ,@forms)))
 
-(cl-defmacro with-view-materialized (view entry &rest forms)
+(cl-defmacro in-materialized-buffer (view entry &rest forms)
   (declare (indent 2))
-  `(let ((buffer (with-user-choice ,entry (org-glance-action-materialize ,view t))))
+  `(let ((buffer (with-user-input ,entry (org-glance-action-materialize ,view t))))
      (unwind-protect
          (with-current-buffer buffer
            (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
            ,@forms)
        (message "Kill buffer %s" buffer)
-       (kill-buffer buffer))))
+       ;; (kill-buffer buffer)
+       )))
 
-(cl-defmacro -og-user-story (&body forms &key choose view from act &allow-other-keys)
+(cl-defmacro user-story (&body forms &key input view in act &allow-other-keys)
   (declare (indent 8))
-  `(with-scope ,from
-     (with-view ,view
-       (cond ((eq ,act 'materialize) (with-view-materialized ,view ,choose ,@forms))))))
+  (let ((user-input
+         (cond
+          ((stringp input)
+           (s-join " SPC " (s-split-words input)))
+          ((listp input)
+           (concat (s-join " RET "
+                           (cl-loop for cmd in (eval input)
+                                    collect (s-join " SPC " (s-split-words cmd))))
+                   " RET")))))
+    `(with-scope ,in
+       (with-view ,view
+         (message "Simulate user input: %s" ,user-input)
+         (cond
+
+          ((eq ,act 'materialize)
+           (in-materialized-buffer ,view ,user-input
+             ,@forms))
+
+          ((eq ,act 'open)
+           (with-user-input ,user-input
+             (let ((messages-point-before-action ;; will capture action output
+                    (with-current-buffer (messages-buffer)
+                      (point-max))))
+               (org-glance-action-open ,view t)
+               (with-current-buffer (messages-buffer)
+                 (buffer-substring-no-properties messages-point-before-action (point-max))))))
+
+          (t (error "Unknown action in user story.")))))))
 
 ;;; test-helper.el ends here

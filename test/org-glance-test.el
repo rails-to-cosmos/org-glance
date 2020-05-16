@@ -3,6 +3,8 @@
 ;;; Commentary:
 ;; This package allows you to manage your org-mode entries as materialized views.
 
+;;; Code:
+
 (require 'org)
 (require 'org-element)
 (require 'load-relative)
@@ -13,6 +15,7 @@
 (require 'subr-x)
 
 (ert-deftest org-glance-test/provide-feature ()
+  "Dummy test."
   (should (featurep 'org-glance)))
 
 (ert-deftest org-glance-test/define-view ()
@@ -28,7 +31,7 @@
 
 (ert-deftest org-glance-test/materialize-view ()
   "View should be able to materialize in a separate buffer."
-  (-og-user-story :choose "Netherlands" :view "Country" :from "countries.org" :act 'materialize
+  (user-story :view "Country" :in "countries.org" :input "Netherlands" :act 'materialize
     (should (eq -org-glance-beg 1))
     (should (eq -org-glance-end 90))
     (should (eq -org-glance-indent 0))
@@ -39,12 +42,12 @@
 
 (ert-deftest org-glance-test/sync-view-not-modified ()
   "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
-  (-og-user-story :act 'materialize :choose "Ukraine" :view "Country" :from "countries.org"
+  (user-story :view "Country" :in "countries.org" :input "Ukraine" :act 'materialize
     (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))
 
 (ert-deftest org-glance-test/sync-view-modified ()
   "Sync should modify original file when materialized view is modified."
-  (-og-user-story :act 'materialize :choose "Russia" :view "Country" :from "countries.org"
+  (user-story :view "Country" :in "countries.org" :input "Russia" :act 'materialize
     (let* ((old-title "Russia")
            (new-title "Russian Federation")
            (mvpos (save-excursion
@@ -54,12 +57,25 @@
            (mvbeg -org-glance-beg))
       (goto-char (point-min))
       (replace-string old-title new-title)
-      (with-user-choice "y" (org-glance-view-sync-subtree))
+      (with-user-input "y" (org-glance-view-sync-subtree))
       (message "Visit source file: %s" -org-glance-src)
       (message "Searching for changes...")
-      (with-user-choice "yes" (find-file -org-glance-src))
+      (with-user-input "yes" (find-file -org-glance-src))
       (goto-char (point-min))
       (search-forward "Russian Federation")
       (should (eq (point) (+ mvbeg mvpos titlediff -1))))))
+
+(ert-deftest org-glance-test/link-view-open ()
+  "Link view open feature spec."
+  (cl-flet ((link-opened-p (title output) (s-ends-with-p (format "(pp \"%s\") => \"%s\"\n" title title) output)))
+    (let ((org-confirm-elisp-link-function nil))
+
+      (should (->> ;; completing read on multiple links in subtree
+               (user-story :view "Service" :in "services.org" :input '("Service with CI" "Coverage") :act 'open)
+               (link-opened-p "Coverage")))
+
+      (should (->>   ; without completing read if there is only one link
+               (user-story :view "Service" :in "services.org" :input '("Simple service bookmark") :act 'open)
+               (link-opened-p "Bookmark"))))))
 
 ;;; org-glance-test.el ends here

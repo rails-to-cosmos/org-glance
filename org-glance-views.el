@@ -14,7 +14,7 @@
   (require 'org-glance-cache)
   (require 'org-glance-sec))
 
-;; buffer-locals for mv sync
+;; buffer-locals for materialized views
 
 (defcustom after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -250,11 +250,24 @@ then run `org-completing-read' to open it."
   (let* ((file (org-element-property :file headline))
          (file-buffer (get-file-buffer file))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-    (org-glance-call-action 'visit :on headline)
-    (org-open-at-point)
-    (if file-buffer (bury-buffer file-buffer)
-      (kill-buffer (get-file-buffer file)))))
 
+    (org-glance-call-action 'materialize :on headline)
+
+    (let* ((links (org-element-map (org-element-parse-buffer) 'link
+                    (lambda (link)
+                      (cons
+                       (substring-no-properties (nth 2 link))
+                       (org-element-property :begin link)))))
+           (point (cond
+                   ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                   ((= (length links) 1) (cdar links))
+                   (t (user-error "Unable to find links in %s" file)))))
+      (goto-char point)
+      (org-open-at-point))
+
+    (if file-buffer
+        (bury-buffer file-buffer)
+      (kill-buffer (get-file-buffer file)))))
 
 ;;; Actions for CRYPT views
 
