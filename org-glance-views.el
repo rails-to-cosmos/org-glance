@@ -1,7 +1,5 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'edebug)
-
 (eval-when-compile
   (require 'cl))
 
@@ -11,8 +9,7 @@
   (require 'org)
   (require 'org-element)
   (require 'org-glance)
-  (require 'org-glance-cache)
-  (require 'org-glance-sec))
+  (require 'org-glance-cache))
 
 ;; buffer-locals for materialized views
 
@@ -81,6 +78,40 @@
            collect view))
 
 ;; some private helpers
+
+(defun -org-glance-encrypt-subtree (&optional password)
+  "Encrypt subtree at point with PASSWORD."
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (plain (let ((plain (buffer-substring-no-properties beg end)))
+                  (if (with-temp-buffer
+                        (insert plain)
+                        (aes-is-encrypted))
+                      (user-error "Headline is already encrypted")
+                    plain)))
+         (encrypted (aes-encrypt-buffer-or-string plain password)))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert encrypted))))
+
+(defun -org-glance-decrypt-subtree (&optional password)
+  "Decrypt subtree at point with PASSWORD."
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
+                      (if (not (with-temp-buffer
+                                 (insert encrypted)
+                                 (aes-is-encrypted)))
+                          (user-error "Headline is not encrypted")
+                        encrypted)))
+         (plain (aes-decrypt-buffer-or-string encrypted password)))
+    (unless plain
+      (user-error "Wrong password"))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert plain))))
 
 (defun -org-glance-promote-subtree ()
   (let ((promote-level 0))
@@ -277,20 +308,20 @@ then run `org-completing-read' to open it."
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
                   (setq-local -org-glance-pwd (read-passwd "Password: "))
-                  (org-glance-sec-decrypt-subtree -org-glance-pwd)))
+                  (-org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'after-materialize-hook #'decrypt t)
     (org-glance-call-action 'materialize :on headline)
     (remove-hook 'after-materialize-hook #'decrypt))
   (add-hook 'before-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
-              (org-glance-sec-encrypt-subtree -org-glance-pwd)
+              (-org-glance-encrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local)
   (add-hook 'after-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
-              (org-glance-sec-decrypt-subtree -org-glance-pwd)
+              (-org-glance-decrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local))
 
