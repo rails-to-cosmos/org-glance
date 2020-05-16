@@ -6,6 +6,10 @@
 - [[elisp:(pp "Logs")][Logs]]
 - [[elisp:(pp "Repository")][Repository]]
 
+** Child service
+
+- [[elisp:(pp "Child method")][Child method]]
+
 * Simple service bookmark                                                       :Service:
 
 - [[elisp:(pp "Bookmark")][Bookmark]]

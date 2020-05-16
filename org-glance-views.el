@@ -39,7 +39,8 @@
   (defvar org-glance-views '())
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
   (defvar org-glance-view-types (make-hash-table :test 'equal))
-  (defvar org-glance-view-actions (make-hash-table :test 'equal)))
+  (defvar org-glance-view-actions (make-hash-table :test 'equal))
+  (defvar org-glance-default-scope '(agenda)))
 
 ;; locals in materialized buffers
 (defvar -org-glance-pwd nil)
@@ -172,13 +173,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (defun ,(intern (format "org-glance-action-%s" name)) (&optional view reread-p)
                     (interactive)
                     (let* ((view (-org-glance-view-completing-read view (list (quote ,type)))))
-                      (org-glance :scope (gethash (intern view) org-glance-view-scopes '(agenda))
-                                  :prompt (-org-glance-prompt-for (quote ,name) view)
-                                  :cache-file (-org-glance-cache-for view)
-                                  :reread-p reread-p
-                                  :filter (-org-glance-filter-for view)
-                                  :fallback (-org-glance-fallback-for view)
-                                  :action (function ,(intern (format "org-glance--%s--%s" name type))))))
+                      (org-glance
+                       :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
+                       :prompt (-org-glance-prompt-for (quote ,name) view)
+                       :cache-file (-org-glance-cache-for view)
+                       :reread-p reread-p
+                       :filter (-org-glance-filter-for view)
+                       :fallback (-org-glance-fallback-for view)
+                       :action (function ,(intern (format "org-glance--%s--%s" name type))))))
 
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
@@ -483,24 +485,28 @@ then run `org-completing-read' to open it."
 ;;     (cl-loop for view in org-glance-views
 ;;              do (org-glance-mv--backup (symbol-name view) dir))))
 
-(cl-defmacro org-glance-def-view (tag &key bind type
-                                  (scope '(agenda-with-archives))
-                                  &allow-other-keys)
+(cl-defmacro org-glance-def-view (view &key bind type scope &allow-other-keys)
   (declare
-   (debug (stringp listp symbolp listp def-body))
+   (debug (stringp listp listp listp))
    (indent 1))
   `(progn
-     (cl-pushnew (intern ,tag) org-glance-views)
-     (puthash (intern ,tag) (quote ,scope) org-glance-view-scopes)
-     (puthash (intern ,tag) ,type org-glance-view-types)
-     (cl-assert (listp ,type) nil "Type must be instance of list.")
+
+     (cl-pushnew (intern ,view) org-glance-views)
+
+     (when ,scope
+       (puthash (intern ,view) ,scope org-glance-view-scopes))
+
+     (puthash (intern ,view) ,type org-glance-view-types)
+
      (when (quote ,bind)
        (cl-loop for (binding . cmd) in (quote ,bind)
                 do (lexical-let ((command-name (intern (format "org-glance-action-%s" cmd)))
-                                 (tag ,tag))
+                                 (view ,view))
                      (global-set-key (kbd binding)
                                      (lambda () (interactive)
-                                       (funcall command-name tag))))))))
+                                       (funcall command-name view))))))
+
+     (message "Create view %s" ,view)))
 
 (cl-defun org-glance-remove-view (tag)
   (setq org-glance-views (cl-remove (intern tag) org-glance-views))

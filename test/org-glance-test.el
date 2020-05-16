@@ -20,14 +20,17 @@
 
 (ert-deftest org-glance-test/define-view ()
   "View should be properly registered."
-  (let ((view 'Country))
-    (with-view (symbol-name view)
-      (should (member view org-glance-views))
-      (should (member view (hash-table-keys org-glance-view-scopes)))
-      (should (member view (hash-table-keys org-glance-view-types))))
-    (should-not (member view org-glance-views))
-    (should-not (member view (hash-table-keys org-glance-view-scopes)))
-    (should-not (member view (hash-table-keys org-glance-view-types)))))
+  (user-story :view "Country" :in "countries.org"
+    (should (member 'Country org-glance-views))
+    (should (member 'Country (hash-table-keys org-glance-view-scopes)))
+    (should (member 'Country (hash-table-keys org-glance-view-types))))
+  ;; (let ((view 'Country))
+;;     (with-view (symbol-name view)
+;; )
+;;     (should-not (member view org-glance-views))
+;;     (should-not (member view (hash-table-keys org-glance-view-scopes)))
+;;     (should-not (member view (hash-table-keys org-glance-view-types))))
+  )
 
 (ert-deftest org-glance-test/materialize-view ()
   "View should be able to materialize in a separate buffer."
@@ -75,7 +78,11 @@
                (link-opened-p "Coverage")))
 
       (should (->>   ; without completing read if there is only one link
-               (user-story :view "Service" :in "services.org" :input '("Simple service bookmark") :act 'open)
-               (link-opened-p "Bookmark"))))))
+               (user-story :view "Service" :in "services.org" :input "Simple service bookmark" :act 'open)
+               (link-opened-p "Bookmark")))
+
+      ;; (should-error  ; child methods should not be available
+      ;;  (user-story :view "Service" :in "services.org" :input '("Service with CI" "Child method") :act 'open))
+      )))
 
 ;;; org-glance-test.el ends here
