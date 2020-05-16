@@ -1,0 +1,8 @@
+* org-glance                                                                    :Service:
+
+Bookmarks:
+- [[elisp:(format "Build")][Build]]
+- [[elisp:(format "Coverage")][Coverage]]
+- [[elisp:(format "Deploy")][Deploy]]
+- [[elisp:(format "Logs")][Logs]]
+- [[elisp:(format "Repository")][Repository]]
