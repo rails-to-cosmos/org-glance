@@ -149,7 +149,7 @@
       (user-error "Unbound function %s" fn))
     (funcall fn on)))
 
-(defmacro org-glance-def-action (name args _ type &rest body)
+(cl-defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
 Make it accessible for views of TYPE in `org-glance-view-actions'."
   (declare (debug
@@ -473,7 +473,9 @@ then run `org-completing-read' to open it."
 (cl-defmacro org-glance-def-view (tag &key bind type
                                   (scope '(agenda-with-archives))
                                   &allow-other-keys)
-  (declare (indent 1))
+  (declare
+   (debug (stringp listp symbolp listp def-body))
+   (indent 1))
   `(progn
      (cl-pushnew (intern ,tag) org-glance-views)
      (puthash (intern ,tag) (quote ,scope) org-glance-view-scopes)
