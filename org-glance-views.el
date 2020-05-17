@@ -34,6 +34,7 @@
 (eval-and-compile
   (defvar org-glance-cache-directory (concat user-emacs-directory "org-glance"))
   (defvar org-glance-views '())
+  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
   (defvar org-glance-view-types (make-hash-table :test 'equal))
   (defvar org-glance-view-actions (make-hash-table :test 'equal))
@@ -249,7 +250,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "Materialize HEADLINE in separate buffer."
   (org-glance-call-action 'visit :on headline)
   (let* ((file (buffer-file-name))
-         (output-buffer "*org-glance materialized view*")
+         (output-buffer org-glance-materialized-view-buffer)
          (beg (-org-glance-first-level-heading))
          (end-of-subtree (-org-glance-end-of-subtree))
          (contents (s-trim-right (buffer-substring-no-properties beg end-of-subtree))))
@@ -284,19 +285,23 @@ then run `org-completing-read' to open it."
          (file-buffer (get-file-buffer file))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
 
-    (org-glance-call-action 'materialize :on headline)
+    (save-window-excursion
+      (org-glance-call-action 'materialize :on headline))
 
-    (let* ((links (org-element-map (org-element-parse-buffer) 'link
-                    (lambda (link)
-                      (cons
-                       (substring-no-properties (nth 2 link))
-                       (org-element-property :begin link)))))
-           (point (cond
-                   ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                   ((= (length links) 1) (cdar links))
-                   (t (user-error "Unable to find links in %s" file)))))
-      (goto-char point)
-      (org-open-at-point))
+    (unwind-protect
+        (with-current-buffer org-glance-materialized-view-buffer
+          (let* ((links (org-element-map (org-element-parse-buffer) 'link
+                          (lambda (link)
+                            (cons
+                             (substring-no-properties (nth 2 link))
+                             (org-element-property :begin link)))))
+                 (point (cond
+                         ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                         ((= (length links) 1) (cdar links))
+                         (t (user-error "Unable to find links in %s" file)))))
+            (goto-char point)
+            (org-open-at-point)))
+      (kill-buffer org-glance-materialized-view-buffer))
 
     (if file-buffer
         (bury-buffer file-buffer)
@@ -307,8 +312,8 @@ then run `org-completing-read' to open it."
 (org-glance-def-action decrypt (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
-                  (setq-local -org-glance-pwd (read-passwd "Password: "))
-                  (-org-glance-decrypt-subtree -org-glance-pwd)))
+                     (setq-local -org-glance-pwd (read-passwd "Password: "))
+                     (-org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'after-materialize-hook #'decrypt t)
     (org-glance-call-action 'materialize :on headline)
     (remove-hook 'after-materialize-hook #'decrypt))
