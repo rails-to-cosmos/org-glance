@@ -204,7 +204,11 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
                   (defun ,(intern (format "org-glance-action-%s" name)) (&optional view reread-p)
                     (interactive)
-                    (let* ((view (-org-glance-view-completing-read view (list (quote ,type)))))
+
+                    (when (equal current-prefix-arg '(4))
+                      (setq reread-p t))
+
+                    (let ((view (-org-glance-view-completing-read view (list (quote ,type)))))
                       (org-glance
                        :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                        :prompt (-org-glance-prompt-for (quote ,name) view)
