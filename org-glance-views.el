@@ -164,16 +164,6 @@
 (defun -org-glance-view-completing-read (view &optional type)
   (or view (org-completing-read "View: " (org-glance-list-views :type type))))
 
-;; common interactives
-
-;; (defun org-glance-materialize (&optional view minify)
-;;   (interactive)
-;;   (let ((view (-org-glance-view-completing-read view)))
-;;     (org-glance-reread view)
-;;     (org-glance-mv--materialize-cache (-org-glance-cache-for view) minify)))
-
-;; action factory
-
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
   (when (eq on 'current-headline)
     (setq on (org-element-at-point)))
@@ -222,10 +212,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                       ,@(cdr res)))))
 
     (if (car res) `(progn ,(car res) ,form) form)))
-
-;;
-;;; Actions available for all types of views
-;;
 
 (org-glance-def-action visit (headline) :for all
   "Visit HEADLINE."
@@ -280,8 +266,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         (setq-local -org-glance-indent (-org-glance-promote-subtree))))
     (switch-to-buffer-other-window output-buffer)))
 
-;;; Actions available for LINK views
-;;
 (org-glance-def-action open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
 then run `org-completing-read' to open it."
@@ -334,69 +318,6 @@ then run `org-completing-read' to open it."
               (-org-glance-promote-subtree))
             'append 'local))
 
-;; (defun org-glance-mv--safe-extract-property (property)
-;;   (condition-case nil
-;;       (org-entry-get (point) property)
-;;     (error (org-glance-view-corrupted "Materialized properties corrupted, please reread"))))
-
-;; (defun org-glance-mv--safe-extract-num-property (property)
-;;   (string-to-number (org-glance-mv--safe-extract-property property)))
-
-;; (defun org-glance-mv--materialize-cache (filename &optional interact)
-;;   (let ((headlines (org-glance-load filename))
-;;         (file-entries (make-hash-table))
-;;         (output-filename (make-temp-file "org-glance-materialized-" nil ".org")))
-
-;;     (loop for hl in headlines
-;;           do (let ((fn (intern (org-element-property :file hl)))
-;;                    (pos (org-element-property :begin hl)))
-;;                (puthash fn (cons pos (gethash fn file-entries)) file-entries)))
-
-;;     (maphash (lambda (file entries)
-;;                (with-temp-buffer
-;;                  (org-mode)
-;;                  (insert-file-contents (symbol-name file))
-;;                  (loop for pos in entries
-;;                        do (let* ((beg (save-excursion
-;;                                         (goto-char pos)
-;;                                         (beginning-of-line)
-;;                                         (point)))
-;;                                  (end (save-excursion
-;;                                         (goto-char pos)
-;;                                         (org-end-of-subtree)
-;;                                         (point)))
-;;                                  (contents (buffer-substring-no-properties beg end)))
-;;                             (with-temp-buffer
-;;                               (org-mode)
-;;                               (insert contents)
-;;                               (goto-char (point-min))
-;;                               (let ((promote-level 0))
-;;                                 (while
-;;                                     (condition-case nil
-;;                                         (org-with-limited-levels (org-map-tree 'org-promote) t)
-;;                                       (error nil))
-;;                                   (incf promote-level))
-
-;;                                 (let ((hash (buffer-hash)))
-;;                                   (goto-char (point-min))
-;;                                   (org-set-property "ORG_GLANCE_SOURCE" (symbol-name file))
-;;                                   (org-set-property "ORG_GLANCE_INDENT" (number-to-string promote-level))
-;;                                   (org-set-property "ORG_GLANCE_BEG" (number-to-string beg))
-;;                                   (org-set-property "ORG_GLANCE_END" (number-to-string end))
-;;                                   (org-set-property "ORG_GLANCE_HASH" hash)
-;;                                   (goto-char (point-max))
-;;                                   (insert "\n")
-;;                                   (append-to-file (point-min) (point-max) output-filename))))))))
-;;              file-entries)
-
-;;     (unless interact
-;;       (with-current-buffer (find-file-other-window output-filename)
-;;         (org-mode)
-;;         (org-overview)
-;;         (org-glance-view-mode)))
-
-;;     output-filename))
-
 (defun org-glance-view-visit-original-heading ()
   (interactive)
   (let* ((beg -org-glance-beg))
@@ -408,34 +329,6 @@ then run `org-completing-read' to open it."
     (outline-show-branches)
     (widen)
     (goto-char beg)))
-
-;; (defun org-glance-mv--backup (&optional view dir)
-;;   (interactive)
-;;   (let* ((view (or view (org-completing-read "View: " org-glance-views)))
-;;          (dir (or dir (read-directory-name "Backup directory: ")))
-;;          (vf (funcall (intern (format "org-glance--%s-materialize" (s-downcase view))) 'interact))
-;;          (new-file (concat (s-downcase view) ".org"))
-;;          (new-file-path (f-join dir new-file)))
-
-;;     (condition-case nil
-;;         (mkdir dir)
-;;       (error nil))
-
-;;     (if (file-exists-p new-file-path)
-;;         (let ((existed-buffer-hash (with-temp-buffer
-;;                                      (insert-file-contents new-file-path)
-;;                                      (buffer-hash)))
-;;               (new-buffer-hash (with-temp-buffer
-;;                                  (insert-file-contents vf)
-;;                                  (buffer-hash))))
-;;           (if (not (string= existed-buffer-hash new-buffer-hash))
-;;               (copy-file vf new-file-path t)
-;;             (message "View %s backup is up to date" view)))
-;;       (copy-file vf new-file-path t))))
-
-;; (defun org-glance-mv--sync-buffer ()
-;;   (interactive)
-;;   (org-map-entries #'org-glance-view-sync-subtree))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -509,18 +402,11 @@ then run `org-completing-read' to open it."
           (insert subtree)
           (buffer-hash))))))
 
-;; (defun org-glance-backup-views (&optional dir)
-;;   (interactive)
-;;   (let ((dir (or dir (read-directory-name "Backup directory: "))))
-;;     (cl-loop for view in org-glance-views
-;;              do (org-glance-mv--backup (symbol-name view) dir))))
-
 (cl-defmacro org-glance-def-view (view &key bind type scope &allow-other-keys)
   (declare
    (debug (stringp listp listp listp))
    (indent 1))
   `(progn
-
      (cl-pushnew (intern ,view) org-glance-views)
 
      (when ,scope
