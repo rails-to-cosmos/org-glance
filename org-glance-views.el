@@ -437,13 +437,11 @@ then run `org-completing-read' to open it."
   (interactive)
   (save-excursion
     (cl-loop while (org-up-heading-safe))
-    (with-demoted-errors (run-hooks 'before-materialize-sync-hook))
     (let* ((source -org-glance-src)
            (beg -org-glance-beg)
            (end -org-glance-end)
            (promote-level -org-glance-indent)
            (glance-hash -org-glance-hash)
-           ;; (end-old end)
            (mat-hash (org-glance-view-subtree-hash))
            (src-hash (org-glance-view-source-hash)))
 
@@ -454,15 +452,18 @@ then run `org-completing-read' to open it."
         (org-glance-view-not-modified "No changes made in subtree"))
 
       (when (y-or-n-p "Subtree has been modified. Apply changes?")
-        (let ((new-contents (save-restriction
-                              (org-narrow-to-subtree)
-                              (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-                                (with-temp-buffer
-                                  (org-mode)
-                                  (insert buffer-contents)
-                                  (goto-char (point-min))
-                                  (-org-glance-demote-subtree promote-level)
-                                  (buffer-substring-no-properties (point-min) (point-max)))))))
+        (with-demoted-errors (run-hooks 'before-materialize-sync-hook))
+
+        (let ((new-contents
+               (save-restriction
+                 (org-narrow-to-subtree)
+                 (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
+                   (with-temp-buffer
+                     (org-mode)
+                     (insert buffer-contents)
+                     (goto-char (point-min))
+                     (-org-glance-demote-subtree promote-level)
+                     (buffer-substring-no-properties (point-min) (point-max)))))))
 
           (with-temp-file source
             (org-mode)
@@ -475,17 +476,6 @@ then run `org-completing-read' to open it."
           (setq-local -org-glance-beg beg)
           (setq-local -org-glance-end end)
           (setq-local -org-glance-hash (org-glance-view-source-hash))
-
-          ;; (let ((end-diff (- end end-old)))
-          ;;   (org-map-entries
-          ;;    (lambda ()
-          ;;      (condition-case nil
-          ;;          (when (and (> (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG") beg)
-          ;;                     (string= source (org-glance-mv--safe-extract-property "ORG_GLANCE_SOURCE")))
-          ;;            (org-set-property "ORG_GLANCE_BEG" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_BEG"))))
-          ;;            (org-set-property "ORG_GLANCE_END" (number-to-string (+ end-diff (org-glance-mv--safe-extract-num-property "ORG_GLANCE_END"))))
-          ;;            (message "Update indentation for headline %s" (org-entry-get (point) "ITEM")))
-          ;;        (error (message "Skip headline %s" (org-entry-get (point) "ITEM")))))))
 
           (with-demoted-errors (run-hooks 'after-materialize-sync-hook)))))))
 
