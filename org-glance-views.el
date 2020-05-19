@@ -54,7 +54,7 @@
   (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
   (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window))
 
-(define-error 'org-glance-view-not-modified "No changes found in materialized view" 'user-error)
+(define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
 
 (define-error 'org-glance-view-corrupted "Materialized view source corrupted" 'user-error)
@@ -238,33 +238,33 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (org-glance-def-action materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
-  (org-glance-call-action 'visit :on headline)
-  (let* ((file (buffer-file-name))
-         (output-buffer org-glance-materialized-view-buffer)
-         (beg (-org-glance-first-level-heading))
-         (end-of-subtree (-org-glance-end-of-subtree))
-         (contents (s-trim-right (buffer-substring-no-properties beg end-of-subtree))))
-    (when (get-buffer output-buffer)
-      (kill-buffer output-buffer))
-    (with-current-buffer (get-buffer-create output-buffer)
-      (delete-region (point-min) (point-max))
-      (org-mode)
-      (org-glance-view-mode)
-      (insert
-       (with-temp-buffer
-         (insert contents)
-         (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-      (goto-char (point-min))
-      (let ((hash (org-glance-view-subtree-hash)))
-        (setq-local -org-glance-src file)
-        (setq-local -org-glance-beg beg)
-        (setq-local -org-glance-end end-of-subtree)
-        (setq-local -org-glance-hash hash)
-        ;; run hooks on original subtree
-        (with-demoted-errors (run-hooks 'after-materialize-hook))
-        ;; then promote it saving original level
-        (setq-local -org-glance-indent (-org-glance-promote-subtree))))
-    (switch-to-buffer-other-window output-buffer)))
+  (save-window-excursion
+    (org-glance-call-action 'visit :on headline)
+    (let* ((file (org-element-property :file headline))
+           (beg (-org-glance-first-level-heading))
+           (end-of-subtree (-org-glance-end-of-subtree))
+           (contents (s-trim-right (buffer-substring-no-properties beg end-of-subtree))))
+      (when (get-buffer org-glance-materialized-view-buffer)
+        (kill-buffer org-glance-materialized-view-buffer))
+      (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
+        (delete-region (point-min) (point-max))
+        (org-mode)
+        (org-glance-view-mode)
+        (insert
+         (with-temp-buffer
+           (insert contents)
+           (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+        (goto-char (point-min))
+        (let ((hash (org-glance-view-subtree-hash)))
+          (setq-local -org-glance-src file)
+          (setq-local -org-glance-beg beg)
+          (setq-local -org-glance-end end-of-subtree)
+          (setq-local -org-glance-hash hash)
+          ;; run hooks on original subtree
+          (with-demoted-errors (run-hooks 'after-materialize-hook))
+          ;; then promote it saving original level
+          (setq-local -org-glance-indent (-org-glance-promote-subtree))))))
+  (switch-to-buffer org-glance-materialized-view-buffer))
 
 (org-glance-def-action open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
