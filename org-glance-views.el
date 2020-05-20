@@ -52,7 +52,7 @@
   (defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
   (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
   (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
-  (define-key org-glance-view-mode-map (kbd "C-c C-q") #'quit-window))
+  (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
