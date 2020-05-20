@@ -219,8 +219,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
          (point (org-element-property :begin headline))
          (file-buffer (get-file-buffer file)))
 
-    (cond ((file-exists-p file)
-           (find-file file))
+    (cond ((file-exists-p file) (find-file file))
           (t (org-glance-cache-outdated "File not found: %s" file)))
 
     (widen)
@@ -231,7 +230,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (org-narrow-to-subtree)
            (outline-show-branches)
            (widen)
-           (goto-char point))
+           (goto-char point)
+           (outline-show-subtree))
           (t (unless file-buffer
                (kill-buffer))
              (org-glance-cache-outdated "Cache file is outdated")))))
@@ -303,8 +303,9 @@ then run `org-completing-read' to open it."
                      (setq-local -org-glance-pwd (read-passwd "Password: "))
                      (-org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'after-materialize-hook #'decrypt t)
-    (org-glance-call-action 'materialize :on headline)
-    (remove-hook 'after-materialize-hook #'decrypt))
+    (unwind-protect
+        (org-glance-call-action 'materialize :on headline)
+      (remove-hook 'after-materialize-hook #'decrypt)))
   (add-hook 'before-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
@@ -320,15 +321,13 @@ then run `org-completing-read' to open it."
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
-  (let* ((beg -org-glance-beg))
-    (find-file-other-window -org-glance-src)
-    (widen)
-    (goto-char beg)
+  (save-excursion
     (cl-loop while (org-up-heading-safe))
-    (org-narrow-to-subtree)
-    (outline-show-branches)
-    (widen)
-    (goto-char beg)))
+    (let* ((heading (list :file -org-glance-src
+                          :begin -org-glance-beg
+                          :raw-value (org-element-property :raw-value (org-element-at-point))))
+           (virtual-element (org-element-create 'headline heading)))
+      (org-glance-call-action 'visit :on virtual-element))))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
