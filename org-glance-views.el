@@ -161,7 +161,7 @@
 (defun -org-glance-prompt-for (action view)
   (format "%s %s: " action view))
 
-(defun -org-glance-view-completing-read (view &optional type)
+(defun org-glance-view-choose (&optional view type)
   (or view (org-completing-read "View: " (org-glance-list-views :type type))))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
@@ -198,7 +198,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (when (equal current-prefix-arg '(4))
                       (setq reread-p t))
 
-                    (let ((view (-org-glance-view-completing-read view (list (quote ,type)))))
+                    (let ((view (org-glance-view-choose view (list (quote ,type)))))
                       (org-glance
                        :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                        :prompt (-org-glance-prompt-for (quote ,name) view)
@@ -226,7 +226,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (goto-char point)
 
     (cond ((-element-at-point-equals-headline headline)
-           (cl-loop while (org-up-heading-safe))  ;; expand parents
+           (cl-loop while (org-up-heading-safe)) ;; expand parents
            (org-narrow-to-subtree)
            (outline-show-branches)
            (widen)
@@ -376,7 +376,6 @@ then run `org-completing-read' to open it."
           (with-demoted-errors (run-hooks 'after-materialize-sync-hook)))))))
 
 (defun org-glance-view-subtree-hash ()
-  (interactive)
   (save-restriction
     (org-narrow-to-subtree)
     (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -387,7 +386,6 @@ then run `org-completing-read' to open it."
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash (&optional src beg end)
-  (interactive)
   (let ((src (or src -org-glance-src))
         (beg (or beg -org-glance-beg))
         (end (or end -org-glance-end)))
@@ -427,6 +425,18 @@ then run `org-completing-read' to open it."
   (setq org-glance-views (cl-remove (intern tag) org-glance-views))
   (remhash (intern tag) org-glance-view-scopes)
   (remhash (intern tag) org-glance-view-types))
+
+(defun org-glance-capture-subtree-at-point ()
+  (interactive)
+  (unless (org-at-heading-p) (org-back-to-heading))
+  (let ((view (org-completing-read "View: " (seq-difference (org-glance-list-views)
+                                                            (mapcar #'intern (org-get-tags)))))
+        (headline (org-element-at-point)))
+    (when (org-glance-view-filter view headline)
+      (user-error "Subtree is already captured"))
+    (org-toggle-tag view)
+    ;; capture action priority list
+    ))
 
 (provide-me)
 ;;; org-glance-views.el ends here
