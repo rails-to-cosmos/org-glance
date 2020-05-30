@@ -23,14 +23,7 @@
   (user-story :view "Country" :in "countries.org"
     (should (member 'Country org-glance-views))
     (should (member 'Country (hash-table-keys org-glance-view-scopes)))
-    (should (member 'Country (hash-table-keys org-glance-view-types))))
-  ;; (let ((view 'Country))
-;;     (with-view (symbol-name view)
-;; )
-;;     (should-not (member view org-glance-views))
-;;     (should-not (member view (hash-table-keys org-glance-view-scopes)))
-;;     (should-not (member view (hash-table-keys org-glance-view-types))))
-  )
+    (should (member 'Country (hash-table-keys org-glance-view-types)))))
 
 (ert-deftest org-glance-test/materialize-view ()
   "View should be able to materialize in a separate buffer."
@@ -46,6 +39,11 @@
 (ert-deftest org-glance-test/sync-view-not-modified ()
   "Sync should raise `org-glance-view-not-modified' if materialized view is not modified."
   (user-story :view "Country" :in "countries.org" :input "Ukraine" :act 'materialize
+    (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))
+
+(ert-deftest org-glance-test/sync-view-not-modified-indented ()
+  "Sync should raise `org-glance-view-not-modified' if materialized view is not modified (subtree indented)."
+  (user-story :view "Region" :in "countries.org" :input "Northwestern" :act 'materialize
     (should-error (org-glance-view-sync-subtree) :type 'org-glance-view-not-modified)))
 
 (ert-deftest org-glance-test/sync-view-modified ()
@@ -77,7 +75,7 @@
                (user-story :view "Service" :in "services.org" :input '("Service with CI" "Coverage") :act 'open)
                (link-opened-p "Coverage")))
 
-      (should (->>   ; without completing read if there is only one link
+      (should (->> ; without completing read if there is only one link
                (user-story :view "Service" :in "services.org" :input "Simple service bookmark" :act 'open)
                (link-opened-p "Bookmark")))
 

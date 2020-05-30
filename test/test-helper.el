@@ -37,6 +37,15 @@
 (defun org-glance-test-get-resource (resource)
   (f-join org-glance-test/test-resources-path resource))
 
+;; (defun -org-glance-rename-subtree (title)
+;;   (interactive)
+;;   (save-excursion
+;;     (org-back-to-heading)
+;;     (org-beginning-of-line)
+;;     (org-kill-line)
+;;     (insert title)
+;;     (substring-no-properties (car kill-ring))))
+
 (cl-defmacro with-temp-view (view scope &rest forms)
   (declare (indent defun))
   `(let* ((scope-file (make-temp-file "org-glance-test-"))
@@ -46,14 +55,11 @@
      (with-temp-file scope-file
        (message "Create scope %s from %s" scope-file ,scope)
        (insert-file-contents-literally (org-glance-test-get-resource ,scope)))
-
      (message "Scope file size: %s" (->> scope-file
                                          file-attributes
                                          file-attribute-size
                                          file-size-human-readable))
-
      (unwind-protect
-
          (unwind-protect
              (progn
                (org-glance-def-view ,view
@@ -61,12 +67,8 @@
                ,@forms)
            (message "Remove view %s" ,view)
            (org-glance-remove-view ,view))
-
-       (message "Exit scope %s" scope-file)
-       ;; (kill-buffer (get-file-buffer scope-file))
        (message "Remove file %s" scope-file)
-       ;; (delete-file scope-file)
-       )))
+       (delete-file scope-file))))
 
 (cl-defmacro with-user-input (user-input &rest forms)
   (declare (indent defun))
@@ -81,10 +83,13 @@
      (unwind-protect
          (with-current-buffer buffer
            (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
-           ,@forms)
-       (message "Kill buffer %s" buffer)
-       ;; (kill-buffer buffer)
-       )))
+           (message "-org-glance-pwd: %s" -org-glance-pwd)
+           (message "-org-glance-src: %s" -org-glance-src)
+           (message "-org-glance-beg: %d" -org-glance-beg)
+           (message "-org-glance-end: %d" -org-glance-end)
+           (message "-org-glance-hash: %s" -org-glance-hash)
+           (message "-org-glance-indent: %d" -org-glance-indent)
+           ,@forms))))
 
 (cl-defmacro follow-link-capture-output (view)
   (declare (indent defun))

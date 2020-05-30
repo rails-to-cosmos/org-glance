@@ -129,8 +129,7 @@
 
 (defun -org-glance-first-level-heading ()
   (save-excursion
-    (unless (org-at-heading-p)
-      (org-back-to-heading))
+    (unless (org-at-heading-p) (org-back-to-heading))
     (beginning-of-line)
     (point)))
 
@@ -261,15 +260,15 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (insert contents)
            (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
         (goto-char (point-min))
-        (let ((hash (org-glance-view-subtree-hash)))
-          (setq-local -org-glance-src file)
-          (setq-local -org-glance-beg beg)
-          (setq-local -org-glance-end end-of-subtree)
-          (setq-local -org-glance-hash hash)
-          ;; run hooks on original subtree
-          (with-demoted-errors (run-hooks 'after-materialize-hook))
-          ;; then promote it saving original level
-          (setq-local -org-glance-indent (-org-glance-promote-subtree))))))
+        (setq-local -org-glance-src file)
+        (setq-local -org-glance-beg beg)
+        (setq-local -org-glance-end end-of-subtree)
+        ;; extract hash from promoted subtree
+        (setq-local -org-glance-hash (org-glance-view-subtree-hash))
+        ;; run hooks on original subtree
+        (with-demoted-errors (run-hooks 'after-materialize-hook))
+        ;; then promote it saving original level
+        (setq-local -org-glance-indent (-org-glance-promote-subtree)))))
   (switch-to-buffer org-glance-materialized-view-buffer))
 
 (org-glance-def-action open (headline) :for link
@@ -389,6 +388,9 @@ then run `org-completing-read' to open it."
         (org-mode)
         (insert buffer-contents)
         (goto-char (point-min))
+        (-org-glance-promote-subtree)
+        (message "Subtree string:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
+        (message "Subtree hash: \"%s\"" (buffer-hash))
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash (&optional src beg end)
@@ -403,6 +405,10 @@ then run `org-completing-read' to open it."
         (with-temp-buffer
           (org-mode)
           (insert subtree)
+          (cl-loop while (org-up-heading-safe))
+          (-org-glance-promote-subtree)
+          (message "Source string:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
+          (message "Source hash: \"%s\"" (buffer-hash))
           (buffer-hash))))))
 
 (cl-defmacro org-glance-def-view (view &key bind type scope &allow-other-keys)
