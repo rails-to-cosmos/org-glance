@@ -4,3 +4,7 @@ Links:
 - [[https://github.com/rails-to-cosmos/org-glance][Repository]]
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
+
+* Known bugs
+
+** TODO indented subtree materialized hash

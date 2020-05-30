@@ -159,10 +159,10 @@
   (-partial #'user-error "%s not found: %s" view))
 
 (defun -org-glance-prompt-for (action view)
-  (format "%s %s: " action view))
+  (s-titleize (format "%s %s: " action view)))
 
-(defun org-glance-view-choose (&optional view type)
-  (or view (org-completing-read "View: " (org-glance-list-views :type type))))
+(cl-defun org-glance-view-choose (&key view type (purpose "Choose"))
+  (or view (org-completing-read (format "%s view: " purpose) (org-glance-list-views :type type))))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
   (when (eq on 'current-headline)
@@ -198,15 +198,21 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (when (equal current-prefix-arg '(4))
                       (setq reread-p t))
 
-                    (let ((view (org-glance-view-choose view (list (quote ,type)))))
-                      (org-glance
-                       :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
-                       :prompt (-org-glance-prompt-for (quote ,name) view)
-                       :cache-file (-org-glance-cache-for view)
-                       :reread-p reread-p
-                       :filter (-org-glance-filter-for view)
-                       :fallback (-org-glance-fallback-for view)
-                       :action (function ,(intern (format "org-glance--%s--%s" name type))))))
+                    (setq view (if (equal current-prefix-arg '(16))
+                                   (org-glance-view-choose :type (list (quote ,type))
+                                                           :purpose ,(s-titleize (format "%s" name)))
+                                 (org-glance-view-choose :view view
+                                                         :type (list (quote ,type))
+                                                         :purpose ,(s-titleize (format "%s" name)))))
+
+                    (org-glance
+                     :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
+                     :prompt (-org-glance-prompt-for (quote ,name) view)
+                     :cache-file (-org-glance-cache-for view)
+                     :reread-p reread-p
+                     :filter (-org-glance-filter-for view)
+                     :fallback (-org-glance-fallback-for view)
+                     :action (function ,(intern (format "org-glance--%s--%s" name type)))))
 
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
