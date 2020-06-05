@@ -286,7 +286,10 @@ then run `org-completing-read' to open it."
           (let* ((links (org-element-map (org-element-parse-buffer) 'link
                           (lambda (link)
                             (cons
-                             (substring-no-properties (nth 2 link))
+                             (substring-no-properties
+                              (or (nth 2 link) ;; link alias
+                                  (org-element-property :raw-link link)) ;; full link if alias is none
+                              )
                              (org-element-property :begin link)))))
                  (point (cond
                          ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))

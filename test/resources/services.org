@@ -5,6 +5,7 @@
 - [[elisp:(pp "Deploy")][Deploy]]
 - [[elisp:(pp "Logs")][Logs]]
 - [[elisp:(pp "Repository")][Repository]]
+- [[https:github.com]] (link without title)
 
 ** Child service
 
