@@ -39,6 +39,7 @@
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
   (defvar org-glance-view-types (make-hash-table :test 'equal))
   (defvar org-glance-view-actions (make-hash-table :test 'equal))
+  (defvar org-glance-view-files (make-hash-table :test 'equal))
   (defvar org-glance-default-scope '(agenda)))
 
 ;; locals in materialized buffers
@@ -221,8 +222,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (org-glance
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                      :prompt (-org-glance-prompt-for (quote ,name) view)
-                     :cache-file (-org-glance-db-for view)
-                     :reread-p (member "--all" args)
+                     :cache-file (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
+                     :reread-p (member "--reread" args)
                      :filter (-org-glance-filter-for view)
                      :fallback (-org-glance-fallback-for view)
                      :action (function ,(intern (format "org-glance--%s--%s" name type)))))
@@ -428,16 +429,14 @@ then run `org-completing-read' to open it."
           (message "Source hash: \"%s\"" (buffer-hash))
           (buffer-hash))))))
 
-(cl-defmacro org-glance-def-view (view &key bind type scope &allow-other-keys)
+(cl-defmacro org-glance-def-view (view &key bind type scope file &allow-other-keys)
   (declare
    (debug (stringp listp listp listp))
    (indent 1))
   `(progn
      (cl-pushnew (intern ,view) org-glance-views)
-
-     (when ,scope
-       (puthash (intern ,view) ,scope org-glance-view-scopes))
-
+     (puthash (intern ,view) ,scope org-glance-view-scopes)
+     (puthash (intern ,view) ,file org-glance-view-files)
      (puthash (intern ,view) ,type org-glance-view-types)
 
      (when (quote ,bind)
