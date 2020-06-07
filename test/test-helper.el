@@ -79,7 +79,7 @@
 
 (cl-defmacro in-materialized-buffer (view &rest forms)
   (declare (indent defun))
-  `(let ((buffer (org-glance-action-materialize ,view t)))
+  `(let ((buffer (org-glance-action-materialize (list "--reread") ,view)))
      (unwind-protect
          (with-current-buffer buffer
            (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
@@ -96,7 +96,7 @@
   `(let ((messages-point-before-action ;; will capture action output
           (with-current-buffer (messages-buffer)
             (point-max))))
-     (org-glance-action-open ,view t)
+     (org-glance-action-open (list "--reread") ,view)
      (with-current-buffer (messages-buffer)
        (buffer-substring-no-properties messages-point-before-action (point-max)))))
 

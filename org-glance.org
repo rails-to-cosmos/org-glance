@@ -5,4 +5,8 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* TODO Specify database file in tests
+* tasks [0/1]
+** TODO Specify database file in tests
+* dist-packages
+** https://github.com/skeeto/emacsql
+** https://magit.vc/manual/transient/

@@ -66,16 +66,18 @@
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
-(transient-define-prefix org-glance-transient-actions (view-name)
+(defun org-glance-act-arguments nil
+  (transient-args 'org-glance-act))
+
+(transient-define-prefix org-glance-act (view-name)
   "In Glance-View buffer, perform action on selected view"
-  :info-manual "(org-glance)Call action on view"
   ["Arguments"
    ("-r" "Reread database file" ("-r" "--reread"))]
-  ["Action "
-   [("j " "Jump" org-glance-action-open)]
-   [("m " "Materialize" org-glance-action-materialize)]
-   [("v " "Visit" org-glance-action-visit)]
-   [("d " "Decrypt" org-glance-action-decrypt)]])
+  ["Actions"
+   [("j" "Jump"        org-glance-action-open)]
+   [("m" "Materialize" org-glance-action-materialize)]
+   [("v" "Visit"       org-glance-action-visit)]
+   [("d" "Decrypt"     org-glance-action-decrypt)]])
 
 (cl-defun org-glance-view-filter (view headline)
   (-contains?
@@ -207,11 +209,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let* ((res (cl--transform-lambda (cons args body) name))
 	 (form `(progn
 
-                  (defun ,(intern (format "org-glance-action-%s" name)) (&optional view reread-p)
-                    (interactive)
-
-                    (when (equal current-prefix-arg '(4))
-                      (setq reread-p t))
+                  (defun ,(intern (format "org-glance-action-%s" name)) (&optional args view)
+                    (interactive (list (org-glance-act-arguments)))
 
                     (setq view
                           (org-glance-view-choose
@@ -223,7 +222,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                      :prompt (-org-glance-prompt-for (quote ,name) view)
                      :cache-file (-org-glance-db-for view)
-                     :reread-p reread-p
+                     :reread-p (member "--all" args)
                      :filter (-org-glance-filter-for view)
                      :fallback (-org-glance-fallback-for view)
                      :action (function ,(intern (format "org-glance--%s--%s" name type)))))
