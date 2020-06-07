@@ -66,7 +66,7 @@
   (require 'subr-x))
 
 (require 'org-glance-core)
-(require 'org-glance-cache)
+(require 'org-glance-db)
 (require 'org-glance-scope)
 
 (defgroup org-glance nil
@@ -97,12 +97,12 @@ If user input doesn't match any entry, call FALLBACK method with user input as a
       (when (and reread-p cache-file)
         (message "Reread cache file %s..." cache-file))
       (setq headlines
-            (org-glance-cache-reread
+            (org-glance-db-reread
              :scope scope
              :filter filter
              :cache-file cache-file)))
     (unless headlines
-      (setq headlines (org-glance-load cache-file)))
+      (setq headlines (org-glance-db-load cache-file)))
     (unless headlines
       (user-error "Nothing to glance at (scope: %s)" scope))
     (unwind-protect
@@ -116,7 +116,7 @@ If user input doesn't match any entry, call FALLBACK method with user input as a
                   (if (functionp action)
                       (funcall action headline)
                     (user-error "Specify ACTION method to call on headline"))
-                (org-glance-cache-outdated
+                (org-glance-db-outdated
                  (message "Cache file %s is outdated, actualizing..." cache-file)
                  (redisplay)
                  (org-glance :scope scope
@@ -132,7 +132,7 @@ If user input doesn't match any entry, call FALLBACK method with user input as a
       (when (and cache-file
                  (or reread-p
                      (not (file-exists-p cache-file))))
-        (org-glance-save cache-file headlines)))))
+        (org-glance-db-save cache-file headlines)))))
 
 (provide-me)
 ;;; org-glance.el ends here

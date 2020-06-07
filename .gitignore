@@ -2,3 +2,4 @@
 *.elc
 ogpm-cache.el
 .cask
+/dist/

@@ -6,10 +6,11 @@
 (eval-and-compile
   (require 'aes)
   (require 'load-relative)
+  (require 'transient)
   (require 'org)
   (require 'org-element)
   (require 'org-glance)
-  (require 'org-glance-cache))
+  (require 'org-glance-db))
 
 ;; buffer-locals for materialized views
 
@@ -32,7 +33,7 @@
   :group 'org-glance)
 
 (eval-and-compile
-  (defvar org-glance-cache-directory (concat user-emacs-directory "org-glance"))
+  (defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
   (defvar org-glance-views '())
   (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
@@ -64,6 +65,17 @@
 (define-minor-mode org-glance-view-mode
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
+
+(transient-define-prefix org-glance-transient-actions (view-name)
+  "In Glance-View buffer, perform action on selected view"
+  :info-manual "(org-glance)Call action on view"
+  ["Arguments"
+   ("-r" "Reread database file" ("-r" "--reread"))]
+  ["Action "
+   [("j " "Jump" org-glance-action-open)]
+   [("m " "Materialize" org-glance-action-materialize)]
+   [("v " "Visit" org-glance-action-visit)]
+   [("d " "Decrypt" org-glance-action-decrypt)]])
 
 (cl-defun org-glance-view-filter (view headline)
   (-contains?
@@ -151,8 +163,8 @@
 (defun -org-glance-filter-for (view)
   (-partial #'org-glance-view-filter view))
 
-(defun -org-glance-cache-for (view)
-  (format "%s/org-glance-%s.el" org-glance-cache-directory view))
+(defun -org-glance-db-for (view)
+  (format "%s/org-glance-%s.el" org-glance-db-directory view))
 
 (defun -org-glance-fallback-for (view)
   (-partial #'user-error "%s not found: %s" view))
@@ -161,7 +173,11 @@
   (s-titleize (format "%s %s: " action view)))
 
 (cl-defun org-glance-view-choose (&key view type (purpose "Choose"))
-  (or view (org-completing-read (format "%s view: " purpose) (org-glance-list-views :type type))))
+  (or view
+      (let ((views (org-glance-list-views :type type)))
+        (if (> (length views) 1)
+            (org-completing-read (format "%s view: " purpose) views)
+          (symbol-name (car views))))))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
   (when (eq on 'current-headline)
@@ -197,17 +213,16 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (when (equal current-prefix-arg '(4))
                       (setq reread-p t))
 
-                    (setq view (if (equal current-prefix-arg '(16))
-                                   (org-glance-view-choose :type (list (quote ,type))
-                                                           :purpose ,(s-titleize (format "%s" name)))
-                                 (org-glance-view-choose :view view
-                                                         :type (list (quote ,type))
-                                                         :purpose ,(s-titleize (format "%s" name)))))
+                    (setq view
+                          (org-glance-view-choose
+                           :view view
+                           :type (list (quote ,type))
+                           :purpose ,(s-titleize (format "%s" name))))
 
                     (org-glance
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                      :prompt (-org-glance-prompt-for (quote ,name) view)
-                     :cache-file (-org-glance-cache-for view)
+                     :cache-file (-org-glance-db-for view)
                      :reread-p reread-p
                      :filter (-org-glance-filter-for view)
                      :fallback (-org-glance-fallback-for view)
@@ -225,7 +240,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
          (file-buffer (get-file-buffer file)))
 
     (cond ((file-exists-p file) (find-file file))
-          (t (org-glance-cache-outdated "File not found: %s" file)))
+          (t (org-glance-db-outdated "File not found: %s" file)))
 
     (widen)
     (goto-char point)
@@ -239,7 +254,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (outline-show-subtree))
           (t (unless file-buffer
                (kill-buffer))
-             (org-glance-cache-outdated "Cache file is outdated")))))
+             (org-glance-db-outdated "Cache file is outdated")))))
 
 (org-glance-def-action materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."

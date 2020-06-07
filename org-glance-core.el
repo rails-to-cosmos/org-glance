@@ -7,7 +7,7 @@
   (require 'org-element)
   (require 'load-relative)
   (require 'org-glance-scope)
-  (require 'org-glance-cache))
+  (require 'org-glance-db))
 
 (cl-defun org-glance-completing-read (headlines &key prompt)
   (org-completing-read prompt
@@ -51,40 +51,5 @@
                                   headline))
               (plist-put (cadr headline) :file file)
               headline)))))))
-
-(cl-defun org-glance-save (file entries)
-  (unless (file-exists-p (file-name-directory file))
-    (make-directory (file-name-directory file) t))
-  (with-temp-file file
-    (insert "`(")
-    (dolist (entry entries)
-      (insert (org-glance-cache--serialize entry) "\n"))
-    (insert ")"))
-  entries)
-
-(cl-defun org-glance-load (file)
-  (let ((entries
-         (with-temp-buffer (insert-file-contents file)
-                           (->> (buffer-string)
-                                substring-no-properties
-                                read
-                                eval))))
-    (cl-loop for entry in entries
-             collect (org-glance-cache--deserialize entry))))
-
-(cl-defun org-glance-cache-reread (&key
-                                   filter
-                                   cache-file
-                                   scope
-                                   &allow-other-keys)
-  (let ((headlines (org-glance-read scope :filter filter)))
-
-    (unless headlines
-      (user-error "Nothing to glance at scope %s" (pp-to-string scope)))
-
-    (when cache-file
-      (org-glance-save cache-file headlines))
-
-    headlines))
 
 (provide-me)
