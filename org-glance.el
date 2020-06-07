@@ -97,7 +97,7 @@ If user input doesn't match any entry, call FALLBACK method with user input as a
       (when (and reread-p cache-file)
         (message "Reread cache file %s..." cache-file))
       (setq headlines
-            (org-glance-db-reread
+            (org-glance-db-create
              :scope scope
              :filter filter
              :cache-file cache-file)))

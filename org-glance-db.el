@@ -32,16 +32,12 @@
     (cl-loop for entry in entries
              collect (org-glance-db--deserialize entry))))
 
-(cl-defun org-glance-db-reread (&key
-                                   filter
-                                   cache-file
-                                   scope
-                                   &allow-other-keys)
+(cl-defun org-glance-db-create (&key filter db-file scope &allow-other-keys)
   (let ((headlines (org-glance-read scope :filter filter)))
     (unless headlines
       (user-error "Nothing to glance at scope %s" (pp-to-string scope)))
-    (when cache-file
-      (org-glance-db-save cache-file headlines))
+    (when db-file
+      (org-glance-db-save db-file headlines))
     headlines))
 
 (cl-defun org-glance-db--serialize (headline)
