@@ -22,8 +22,9 @@
   "View should be properly registered."
   (user-story :view "Country" :in "countries.org"
     (should (member 'Country org-glance-views))
-    (should (member 'Country (hash-table-keys org-glance-view-scopes)))
-    (should (member 'Country (hash-table-keys org-glance-view-types)))))
+    ;; (should (member 'Country (hash-table-keys org-glance-view-scopes)))
+    ;; (should (member 'Country (hash-table-keys org-glance-view-types)))
+    ))
 
 (ert-deftest org-glance-test/materialize-view ()
   "View should be able to materialize in a separate buffer."

@@ -12,6 +12,8 @@
  (depends-on "dash-functional")
  (depends-on "transient")
  (depends-on "ert")
+ (depends-on "eieio")
+ (depends-on "eieio-core")
  (depends-on "ert-runner")
  (depends-on "f")
  (depends-on "ledger-mode")

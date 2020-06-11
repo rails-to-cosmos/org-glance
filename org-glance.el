@@ -68,6 +68,7 @@
 (require 'org-glance-core)
 (require 'org-glance-db)
 (require 'org-glance-scope)
+(require 'org-glance-transient)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

@@ -6,11 +6,11 @@
 (eval-and-compile
   (require 'aes)
   (require 'load-relative)
-  (require 'transient)
   (require 'org)
   (require 'org-element)
   (require 'org-glance)
-  (require 'org-glance-db))
+  (require 'org-glance-db)
+  (require 'transient))
 
 ;; buffer-locals for materialized views
 
@@ -69,16 +69,6 @@
 
 (defun org-glance-act-arguments nil
   (transient-args 'org-glance-act))
-
-(transient-define-prefix org-glance-act (view-name)
-  "In Glance-View buffer, perform action on selected view"
-  ["Arguments"
-   ("-r" "Reread database file" ("-r" "--reread"))]
-  ["Actions"
-   [("j" "Jump"        org-glance-action-open)]
-   [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit"       org-glance-action-visit)]
-   [("d" "Decrypt"     org-glance-action-decrypt)]])
 
 (cl-defun org-glance-view-filter (view headline)
   (-contains?
@@ -175,12 +165,11 @@
 (defun -org-glance-prompt-for (action view)
   (s-titleize (format "%s %s: " action view)))
 
-(cl-defun org-glance-view-choose (&key view type (purpose "Choose"))
-  (or view
-      (let ((views (org-glance-list-views :type type)))
-        (if (> (length views) 1)
-            (org-completing-read (format "%s view: " purpose) views)
-          (symbol-name (car views))))))
+(defun org-glance-read-view (prompt &optional type)
+  (let ((views (org-glance-list-views :type type)))
+    (if (> (length views) 1)
+        (org-completing-read prompt views)
+      (symbol-name (car views)))))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
   (when (eq on 'current-headline)
@@ -214,10 +203,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (interactive (list (org-glance-act-arguments)))
 
                     (setq view
-                          (org-glance-view-choose
-                           :view view
-                           :type (list (quote ,type))
-                           :purpose ,(s-titleize (format "%s" name))))
+                          (or view (org-glance-read-view
+                                    (format "%s view: " ,(s-titleize (format "%s" name)))
+                                    (list (quote ,type)))))
 
                     (org-glance
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
@@ -435,9 +423,15 @@ then run `org-completing-read' to open it."
    (indent 1))
   `(progn
      (cl-pushnew (intern ,view) org-glance-views)
-     (puthash (intern ,view) ,scope org-glance-view-scopes)
-     (puthash (intern ,view) ,file org-glance-view-files)
-     (puthash (intern ,view) ,type org-glance-view-types)
+
+     (when ,scope
+       (puthash (intern ,view) ,scope org-glance-view-scopes))
+
+     (when ,file
+       (puthash (intern ,view) ,file org-glance-view-files))
+
+     (when ,type
+       (puthash (intern ,view) ,type org-glance-view-types))
 
      (when (quote ,bind)
        (cl-loop for (binding . cmd) in (quote ,bind)

@@ -7,6 +7,12 @@
   (require 'ledger-mode)
   (require 'load-relative))
 
+(defun org-make-tag-string (tags)
+  "Return string associated to TAGS.
+TAGS is a list of strings."
+  (if (null tags) ""
+    (format ":%s:" (mapconcat #'identity tags ":"))))
+
 (defconst org-glance-ledger-commodity-regexp
   "\\(\"[^\"]+\"\\|[^]!&(-/:-@[^{-}[:digit:][:blank:]]+\\)")
 
