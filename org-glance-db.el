@@ -12,43 +12,16 @@
   (signal 'org-glance-db-outdated
           (list (apply #'format-message format args))))
 
-(cl-defgeneric org-glance-read (file &key filter)
-  "Read org-element headlines from one or many files.")
-
-(cl-defmethod org-glance-read ((files list) &key filter)
-  (cl-loop for file in (org-glance-scope--adapt files)
-           do (message "Glance %s" file)
-           append (org-glance-read file :filter filter) into result
-           do (redisplay)
-           finally (cl-return result)))
-
-(cl-defmethod org-glance-read ((file string) &key filter)
-  (pcase-let ((`(,file ,id) (s-split-up-to "#" file 2)))
-    (when (and (file-exists-p file)
-               (not (f-directory? file)))
-      (with-temp-buffer
-        (insert-file-contents file)
-        (when id
-          (goto-char (org-find-entry-with-id id))
-          (org-narrow-to-subtree))
-        (org-element-map (org-element-parse-buffer 'headline) 'headline
-          (lambda (headline)
-            (when-let (headline (if filter
-                                    (when (funcall filter headline)
-                                      headline)
-                                  headline))
-              (plist-put (cadr headline) :file file)
-              headline)))))))
-
-(cl-defun org-glance-db-save (file entries)
-  (unless (file-exists-p (file-name-directory file))
-    (make-directory (file-name-directory file) t))
-  (with-temp-file file
+(cl-defun org-glance-db-init (db headlines)
+  (message "Init database file %s..." db)
+  (unless (file-exists-p (file-name-directory db))
+    (make-directory (file-name-directory db) t))
+  (with-temp-file db
     (insert "`(")
-    (dolist (entry entries)
-      (insert (org-glance-db--serialize entry) "\n"))
+    (dolist (headline headlines)
+      (insert (org-glance-db--serialize headline) "\n"))
     (insert ")"))
-  entries)
+  headlines)
 
 (cl-defun org-glance-db-load (file)
   (let ((entries
@@ -57,16 +30,7 @@
                                 substring-no-properties
                                 read
                                 eval))))
-    (cl-loop for entry in entries
-             collect (org-glance-db--deserialize entry))))
-
-(cl-defun org-glance-db-create (&key filter db-file scope &allow-other-keys)
-  (let ((headlines (org-glance-read scope :filter filter)))
-    (unless headlines
-      (user-error "Nothing to glance at scope %s" (pp-to-string scope)))
-    (when db-file
-      (org-glance-db-save db-file headlines))
-    headlines))
+    (mapcar #'org-glance-db--deserialize entries)))
 
 (cl-defun org-glance-db--serialize (headline)
   (prin1-to-string

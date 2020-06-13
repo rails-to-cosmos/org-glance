@@ -13,6 +13,26 @@
 
 (defconst org-glance-loc--glance-dir "GLANCE_DIR")
 
+(cl-defmethod org-glance-scope-headlines (scope &optional filter)
+  (cl-loop
+   for file in (org-glance-scope--adapt scope)
+   do (message "Glance %s" file)
+   append (org-glance-headlines-from-file file filter)
+   into result
+   do (redisplay)
+   finally (cl-return result)))
+
+(cl-defmethod org-glance-headlines-from-file ((file string) &optional filter)
+  (unless (file-exists-p file) (user-error "File %s does not exist" file))
+  (when (f-directory? file) (user-error "Scope file %s is a directory" file))
+  (with-temp-buffer
+    (insert-file-contents file)
+    (org-element-map (org-element-parse-buffer 'headline) 'headline
+      (lambda (headline)
+        (when (or (null filter) (and filter (funcall filter headline)))
+          (plist-put (cadr headline) :file file)
+          headline)))))
+
 (defun org-glance-loc--get-rel-dirs (filename)
   "Get related directories from FILENAME.
 

@@ -40,7 +40,7 @@
   (defvar org-glance-view-types (make-hash-table :test 'equal))
   (defvar org-glance-view-actions (make-hash-table :test 'equal))
   (defvar org-glance-view-files (make-hash-table :test 'equal))
-  (defvar org-glance-default-scope '(agenda)))
+  (defvar org-glance-default-scope '(agenda-with-archives)))
 
 ;; locals in materialized buffers
 (defvar -org-glance-pwd nil)
@@ -75,13 +75,14 @@
    (mapcar #'s-downcase (org-element-property :tags headline))
    (s-downcase view)))
 
-(cl-defun org-glance-list-views (&key type &allow-other-keys)
+(defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
-  (cl-loop for view being the hash-keys in org-glance-view-types
-           using (hash-value types)
-           if (or (seq-set-equal-p (cl-intersection type types) type)
-                  (seq-set-equal-p (cl-intersection type '(any all _ *)) type))
-           collect view))
+  (cond ((or (null type) (seq-set-equal-p (cl-intersection type '(any all _ *)) type))
+         org-glance-views)
+        (t (cl-loop for view in org-glance-views
+                    if (let ((types (gethash view org-glance-view-types)))
+                         (seq-set-equal-p (cl-intersection type types) type))
+                    collect view))))
 
 ;; some private helpers
 
@@ -159,14 +160,11 @@
 (defun -org-glance-db-for (view)
   (format "%s/org-glance-%s.el" org-glance-db-directory view))
 
-(defun -org-glance-fallback-for (view)
-  (-partial #'user-error "%s not found: %s" view))
-
 (defun -org-glance-prompt-for (action view)
   (s-titleize (format "%s %s: " action view)))
 
 (defun org-glance-read-view (prompt &optional type)
-  (let ((views (org-glance-list-views :type type)))
+  (let ((views (org-glance-list-views type)))
     (if (> (length views) 1)
         (org-completing-read prompt views)
       (symbol-name (car views)))))
@@ -210,10 +208,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (org-glance
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
                      :prompt (-org-glance-prompt-for (quote ,name) view)
-                     :cache-file (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
-                     :reread-p (member "--reread" args)
+                     :db (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
+                     :db-init (member "--reread" args)
                      :filter (-org-glance-filter-for view)
-                     :fallback (-org-glance-fallback-for view)
                      :action (function ,(intern (format "org-glance--%s--%s" name type)))))
 
                   (defun ,(intern (format "org-glance--%s--%s" name type))

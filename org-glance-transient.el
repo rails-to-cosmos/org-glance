@@ -6,7 +6,6 @@
 
 (defclass org-glance--variable:view (org-glance--variable)
   ((choices     :initarg :choices)
-   (fallback    :initarg :fallback    :initform nil)
    (default     :initarg :default     :initform nil)))
 
 (cl-defmethod transient-infix-read ((obj org-glance--variable:view))

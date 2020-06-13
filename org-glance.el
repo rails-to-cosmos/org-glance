@@ -36,7 +36,6 @@
 ;;   - materialize
 ;;   - reread
 ;; - define private methods:
-;;   - fallback
 ;;   - filter
 ;; - create cache file in ~/.emacs.d/org-glance/org-glance-[view].el
 
@@ -65,7 +64,6 @@
   (require 'seq)
   (require 'subr-x))
 
-(require 'org-glance-core)
 (require 'org-glance-db)
 (require 'org-glance-scope)
 (require 'org-glance-transient)
@@ -75,65 +73,49 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance (&key
-                      filter
-                      fallback
-                      default-choice
-                      cache-file
-                      reread-p
-                      (scope '(agenda))
-                      (action #'org-glance--visit--any)
-                      (prompt "Glance: "))
-  "Run completing read on org entries from SCOPE list prompting a PROMPT.
+(defun org-glance-format (headline)
+  (or (org-element-property :TITLE headline)
+      (org-element-property :raw-value headline)))
+
+(cl-defun org-glance
+    (&key db
+          db-init
+          default-choice
+          (filter #'(lambda (headline) t))
+          (scope '(agenda))
+          (action #'org-glance--visit--all)
+          (prompt "Glance: "))
+  "Run completing read on org entries from SCOPE asking a PROMPT.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.
-Specify CACHE-FILE to save headlines in read-optimized el-file.
-Specify REREAD-P predicate to reread cache file. Usually this flag is set by C-u prefix.
-If user input doesn't match any entry, call FALLBACK method with user input as argument."
-  (let (headlines)
-    (when (or reread-p
-              (not cache-file)
-              (not (file-exists-p cache-file)))
-      (when (and reread-p cache-file)
-        (message "Reread cache file %s..." cache-file))
-      (setq headlines
-            (org-glance-db-create
-             :scope scope
-             :filter filter
-             :cache-file cache-file)))
-    (unless headlines
-      (setq headlines (org-glance-db-load cache-file)))
-    (unless headlines
-      (user-error "Nothing to glance at (scope: %s)" scope))
+Specify DB to save headlines in read-optimized el-file.
+Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u prefix."
+  (unless (functionp action)
+    (user-error "Specify ACTION to call on headline"))
+  (let ((headlines
+         (cond ((or (null db) (not (file-exists-p db))) (org-glance-scope-headlines scope filter))
+               ((and db db-init) (org-glance-db-init db (org-glance-scope-headlines scope filter)))
+               (db (org-glance-db-load db))
+               (t (user-error "Nothing to glance at (scope: %s)" scope)))))
     (unwind-protect
-        (when-let (choice (or default-choice
-                              (org-glance-completing-read headlines
-                                                          :prompt prompt)))
-          (if-let (headline (org-glance-browse headlines
-                                               :choice choice
-                                               :fallback fallback))
-              (condition-case nil
-                  (if (functionp action)
-                      (funcall action headline)
-                    (user-error "Specify ACTION method to call on headline"))
+        (when-let (choice (or default-choice (org-completing-read prompt (mapcar #'org-glance-format headlines))))
+          (if-let (headline (cl-loop
+                             for hl in headlines
+                             when (string= (org-glance-format hl) choice)
+                             do (cl-return hl)))
+              (condition-case nil (funcall action headline)
                 (org-glance-db-outdated
-                 (message "Cache file %s is outdated, actualizing..." cache-file)
+                 (message "Database %s is outdated, actualizing..." db)
                  (redisplay)
                  (org-glance :scope scope
                              :prompt prompt
                              :filter filter
                              :action action
-                             :cache-file cache-file
-                             :fallback fallback
-                             :default-choice choice
-                             :reread-p t)))
-            (user-error "Headline not found")))
-      ;; Unwind
-      (when (and cache-file
-                 (or reread-p
-                     (not (file-exists-p cache-file))))
-        (org-glance-db-save cache-file headlines)))))
+                             :db db
+                             :db-init t
+                             :default-choice choice)))
+            (user-error "Headline not found"))))))
 
 (provide-me)
 ;;; org-glance.el ends here

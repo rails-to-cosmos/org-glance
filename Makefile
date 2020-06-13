@@ -14,4 +14,5 @@ test:
 testsrc:
 	${CASK} clean-elc
 	${CASK} exec ert-runner -L . -L test
-clean: ${CASK} clean-elc
+clean:
+	${CASK} clean-elc
