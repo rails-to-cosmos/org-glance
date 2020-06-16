@@ -81,7 +81,7 @@
     (&key db
           db-init
           default-choice
-          (filter #'(lambda (headline) t))
+          (filter #'(lambda (_) t))
           (scope '(agenda))
           (action #'org-glance--visit--all)
           (prompt "Glance: "))
@@ -94,9 +94,12 @@ Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u 
   (unless (functionp action)
     (user-error "Specify ACTION to call on headline"))
   (let ((headlines
-         (cond ((or (null db) (not (file-exists-p db))) (org-glance-scope-headlines scope filter))
-               ((and db db-init) (org-glance-db-init db (org-glance-scope-headlines scope filter)))
-               (db (org-glance-db-load db))
+         (cond ((or (and db db-init)
+                    (and db (not (file-exists-p db))))
+                (org-glance-db-init db (org-glance-scope-headlines scope filter)))
+               ((null db) (org-glance-scope-headlines scope filter))
+               ((and (not (null db))
+                     (file-exists-p db)) (org-glance-db-load db))
                (t (user-error "Nothing to glance at (scope: %s)" scope)))))
     (unwind-protect
         (when-let (choice (or default-choice (org-completing-read prompt (mapcar #'org-glance-format headlines))))
