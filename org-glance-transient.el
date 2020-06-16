@@ -27,7 +27,7 @@
   [ ;; "Arguments"
    ("-r" "Reread database from scope" "--reread")
    ;; (org-glance-arg:--view)
-   ("V" org-glance-act.current-view)
+   ;; ("V" org-glance-act.current-view)
    ]
   ["Actions"
    [("j" "Jump"        org-glance-action-open)]
