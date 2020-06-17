@@ -30,25 +30,21 @@
 (cl-defmethod transient-format-value ((obj org-glance--variable:view))
   (propertize (or (oref obj value) "ALL") 'face 'transient-argument))
 
-;; (transient-define-infix org-glance-act.current-view ()
-;;   :class 'org-glance--variable:view
-;;   :variable "--current-view"
-;;   :reader 'org-glance-read-test)
+(transient-define-infix org-glance-act.current-view ()
+  :class 'org-glance--variable:view
+  :variable "--current-view"
+  :reader 'org-glance-read-view)
 
 ;;;###autoload (autoload 'org-glance-act "org-glance" nil t)
 (transient-define-prefix org-glance-act (view)
   "In Glance-View buffer, perform action on selected view"
   ["Arguments"
    ("-r" "Rebuild database file" "--reread")
-   ;; ("-v" org-glance-act.current-view)
-   ]
+   ("-v" "Current view" org-glance-act.current-view)]
   ["Actions"
    [("j" "Jump"        org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
    [("v" "Visit"       org-glance-action-visit)]
-   [("d" "Decrypt"     org-glance-action-decrypt)]
-   ;; [("t" "Test"        org-glance-action-test)]
-   ]
-  )
+   [("d" "Decrypt"     org-glance-action-decrypt)]])
 
 (provide-me)
