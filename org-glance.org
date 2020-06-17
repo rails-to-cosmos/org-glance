@@ -5,9 +5,10 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* tasks [0/2]
+* tasks [0/3]
 ** TODO act on all proper views by default
 ** TODO read-only flag for materialized views
+** TODO test sandbox
 * dist-packages
 ** https://github.com/skeeto/emacsql
 ** https://magit.vc/manual/transient/

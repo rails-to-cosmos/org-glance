@@ -46,7 +46,7 @@
 ;;     (insert title)
 ;;     (substring-no-properties (car kill-ring))))
 
-(cl-defmacro with-temp-view (view scope &rest forms)
+(cl-defmacro with-temp-view (view type scope &rest forms)
   (declare (indent defun))
   `(let* ((scope-file (make-temp-file "org-glance-test-"))
           (default-directory org-glance-test/test-resources-path))
@@ -63,19 +63,26 @@
          (unwind-protect
              (progn
                (org-glance-def-view ,view
-                 :scope scope-file)
+                 :scope scope-file
+                 :type ,type)
                ,@forms)
            (message "Remove view %s" ,view)
            (org-glance-remove-view ,view))
        (message "Remove file %s" scope-file)
        (delete-file scope-file))))
 
-(cl-defmacro with-user-input (user-input &rest forms)
+(cl-defmacro org-glance-emulate-user-input (input &rest forms)
   (declare (indent defun))
-  `(let ((kbd-macro (format "%s RET" (eval ,user-input))))
-     (message "Simulate user input: %s" kbd-macro)
-     (with-simulated-input kbd-macro
-       ,@forms)))
+  (cl-flet ((user-input-to-kbd-macro (str) (s-join " SPC " (s-split-words str)))
+            (join-user-inputs (list) (s-join " RET " list)))
+    (let ((user-input (cond ((stringp input) (user-input-to-kbd-macro input))
+                            ((or (listp input)
+                                 (arrayp input))
+                             (join-user-inputs (mapcar #'user-input-to-kbd-macro (eval input)))))))
+      `(let ((kbd-macro (format "%s RET" (eval ,user-input))))
+         (message "Simulate user input: %s" kbd-macro)
+         (with-simulated-input kbd-macro
+           ,@forms)))))
 
 (cl-defmacro in-materialized-buffer (view &rest forms)
   (declare (indent defun))
@@ -100,18 +107,15 @@
      (with-current-buffer (messages-buffer)
        (buffer-substring-no-properties messages-point-before-action (point-max)))))
 
-(cl-defmacro user-story (&body forms &key input view in act &allow-other-keys)
+(cl-defmacro org-glance-sandbox (&body forms &key input view in type act &allow-other-keys)
+  "Run FORMS in isolated environment."
   (declare (indent defun))
-  (cl-flet ((user-input-to-kbd-macro (str) (s-join " SPC " (s-split-words str)))
-            (join-user-inputs (list) (s-join " RET " list)))
-    (let ((user-input (cond ((stringp input) (user-input-to-kbd-macro input))
-                            ((listp input) (join-user-inputs (mapcar #'user-input-to-kbd-macro (eval input)))))))
-      `(with-temp-view ,view ,in
+  `(with-temp-view ,view ,type ,in
          (if (and ,act ,input)
-             (with-user-input ,user-input
+             (org-glance-emulate-user-input ,input
                (cond ((eq ,act 'materialize) (in-materialized-buffer ,view ,@forms))
                      ((eq ,act 'open) (follow-link-capture-output ,view))
                      (t (error "Unknown action called in user story."))))
-           ,@forms)))))
+           ,@forms)))
 
 ;;; test-helper.el ends here

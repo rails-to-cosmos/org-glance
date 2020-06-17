@@ -14,8 +14,10 @@
 
 ;; buffer-locals for materialized views
 
-(defvar --og-transient--current-view nil
+(defvar --og-local--current-view nil
   "Local scoped current-view variable for transient forms.")
+
+(defvar --og-view-type-all '(all * _))
 
 (defcustom after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -80,7 +82,7 @@
 
 (defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
-  (cond ((or (null type) (seq-set-equal-p (cl-intersection type '(any all _ *)) type))
+  (cond ((or (null type) (seq-set-equal-p (cl-intersection type --og-view-type-all) type))
          org-glance-views)
         (t (cl-loop for view in org-glance-views
                     if (let ((types (gethash view org-glance-view-types)))
@@ -173,7 +175,7 @@
         (org-completing-read prompt views)
       (symbol-name (car views)))))
 
-(cl-defun org-glance-call-action (name &key (on 'current-headline) (for "all"))
+(cl-defun org-glance-call-action (name &key (on 'current-headline) (for 'all))
   (when (eq on 'current-headline)
     (setq on (org-element-at-point)))
   (let ((fn (intern (format "org-glance--%s--%s" name for))))
@@ -199,14 +201,36 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (cl-pushnew name (gethash type org-glance-view-actions))
            org-glance-view-actions)
   (let* ((res (cl--transform-lambda (cons args body) name))
+         (generic-func-name (format "org-glance-action-%s" name))
+         (concrete-func-name (format "org-glance-action-%s-%s" name type))
 	 (form `(progn
 
-                  (defun ,(intern (format "org-glance-action-%s" name)) (&optional args view)
+                  (unless (fboundp (quote ,(intern generic-func-name)))
+                    (defun ,(intern generic-func-name) (&optional args view)
+                      (interactive (list (org-glance-act-arguments)))
+
+                      (setq view
+                            (or view
+                                --og-local--current-view
+                                (org-glance-read-view
+                                 (format "%s view: " ,(s-titleize (format "%s" name)))
+                                 (list (quote ,type)))))
+
+                      (let* ((view-types (append '(all) (gethash (intern view) org-glance-view-types)))
+                             (main-action (intern (format "%s-%s" ,generic-func-name 'all)))
+                             (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) view-types))
+                             (view-actions-bound (-filter #'fboundp view-actions)))
+                        ;; resolve overlapping methods
+                        (cond ((= 1 (length view-actions-bound)) (funcall (pop view-actions-bound) args view))
+                              ((= 1 (length (remq main-action view-actions-bound))) (funcall (car (remq main-action view-actions-bound)) args view))
+                              (t (funcall (org-completing-read "Resolve it: " view-actions-bound) args view))))))
+
+                  (defun ,(intern concrete-func-name) (&optional args view)
                     (interactive (list (org-glance-act-arguments)))
 
                     (setq view
                           (or view
-                              --og-transient--current-view
+                              --og-local--current-view
                               (org-glance-read-view
                                (format "%s view: " ,(s-titleize (format "%s" name)))
                                (list (quote ,type)))))
@@ -311,7 +335,7 @@ then run `org-completing-read' to open it."
 
 ;;; Actions for CRYPT views
 
-(org-glance-def-action decrypt (headline) :for crypt
+(org-glance-def-action materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
                      (setq-local -org-glance-pwd (read-passwd "Password: "))
