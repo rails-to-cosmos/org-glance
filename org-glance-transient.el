@@ -19,20 +19,20 @@
       (oref obj variable)))
 
 (cl-defmethod transient-format-value ((obj org-glance--variable))
-  (propertize (or (oref obj value) "Hey") 'face 'transient-inactive-value))
+  (propertize (oref obj value) 'face 'transient-inactive-value))
 
 (defclass org-glance--variable:view (org-glance--variable)
-  ())
+  nil)
 
 (cl-defmethod transient-infix-read ((obj org-glance--variable:view))
   (oset obj value (org-glance-read-view "View: ")))
 
 (cl-defmethod transient-format-value ((obj org-glance--variable:view))
-  (propertize (or (oref obj value) "ALL") 'face 'transient-argument))
+  (concat "(" (propertize (or (oref obj value) "--all") 'face 'transient-argument) ")"))
 
 (transient-define-infix org-glance-act.current-view ()
   :class 'org-glance--variable:view
-  :variable "--current-view"
+  :variable "--og-transient--current-view"
   :reader 'org-glance-read-view)
 
 ;;;###autoload (autoload 'org-glance-act "org-glance" nil t)

@@ -14,6 +14,9 @@
 
 ;; buffer-locals for materialized views
 
+(defvar --og-transient--current-view nil
+  "Local scoped current-view variable for transient forms.")
+
 (defcustom after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
   :options '(copyright-update time-stamp)
@@ -164,6 +167,7 @@
   (s-titleize (format "%s %s: " action view)))
 
 (defun org-glance-read-view (prompt &optional type)
+  "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views type)))
     (if (> (length views) 1)
         (org-completing-read prompt views)
@@ -201,9 +205,11 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (interactive (list (org-glance-act-arguments)))
 
                     (setq view
-                          (or view (org-glance-read-view
-                                    (format "%s view: " ,(s-titleize (format "%s" name)))
-                                    (list (quote ,type)))))
+                          (or view
+                              --og-transient--current-view
+                              (org-glance-read-view
+                               (format "%s view: " ,(s-titleize (format "%s" name)))
+                               (list (quote ,type)))))
 
                     (org-glance
                      :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
