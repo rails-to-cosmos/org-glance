@@ -14,9 +14,6 @@
 
 ;; buffer-locals for materialized views
 
-(defvar --og-local--current-view nil
-  "Local scoped current-view variable for transient forms.")
-
 (defvar --og-view-type-all '(all * _))
 
 (defcustom after-materialize-hook nil
@@ -211,7 +208,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
                       (setq view
                             (or view
-                                --og-local--current-view
+                                org-glance-transient--current-view
                                 (org-glance-read-view
                                  (format "%s view: " ,(s-titleize (format "%s" name)))
                                  (list (quote ,type)))))
@@ -221,16 +218,18 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                              (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) view-types))
                              (view-actions-bound (-filter #'fboundp view-actions)))
                         ;; resolve overlapping methods
-                        (cond ((= 1 (length view-actions-bound)) (funcall (pop view-actions-bound) args view))
-                              ((= 1 (length (remq main-action view-actions-bound))) (funcall (car (remq main-action view-actions-bound)) args view))
-                              (t (funcall (org-completing-read "Resolve it: " view-actions-bound) args view))))))
+                        (cond
+                         ((= 0 (length view-actions-bound)) (user-error "No \"%s\" action bound for \"%s\"" (quote ,name) view))
+                         ((= 1 (length view-actions-bound)) (funcall (pop view-actions-bound) args view))
+                         ((= 1 (length (remq main-action view-actions-bound))) (funcall (car (remq main-action view-actions-bound)) args view))
+                         (t (funcall (org-completing-read "Resolve it: " view-actions-bound) args view))))))
 
                   (defun ,(intern concrete-func-name) (&optional args view)
                     (interactive (list (org-glance-act-arguments)))
 
                     (setq view
                           (or view
-                              --og-local--current-view
+                              org-glance-transient--current-view
                               (org-glance-read-view
                                (format "%s view: " ,(s-titleize (format "%s" name)))
                                (list (quote ,type)))))
