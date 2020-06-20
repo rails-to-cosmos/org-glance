@@ -1,5 +1,8 @@
-(require 'transient)
-(require 'eieio-core)
+(eval-and-compile
+  (require 'transient)
+  (require 'eieio-core))
+
+(declare-function org-glance-read-view "org-glance-views" (prompt &optional type))
 
 ;; Global glance transient state
 
