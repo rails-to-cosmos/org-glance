@@ -8,13 +8,10 @@
   (require 'load-relative)
   (require 'org)
   (require 'org-element)
-  (require 'org-glance)
   (require 'org-glance-db)
   (require 'transient))
 
 ;; buffer-locals for materialized views
-
-(defvar --og-view-type-all '(all * _))
 
 (defcustom after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -34,6 +31,10 @@
   :type 'hook
   :group 'org-glance)
 
+(defcustom org-glance-default-scope '(agenda-with-archives)
+  "Default scope for glancing views."
+  :group 'org-glance)
+
 (eval-and-compile
   (defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
   (defvar org-glance-views '())
@@ -41,8 +42,7 @@
   (defvar org-glance-view-scopes (make-hash-table :test 'equal))
   (defvar org-glance-view-types (make-hash-table :test 'equal))
   (defvar org-glance-view-actions (make-hash-table :test 'equal))
-  (defvar org-glance-view-files (make-hash-table :test 'equal))
-  (defvar org-glance-default-scope '(agenda-with-archives)))
+  (defvar org-glance-view-files (make-hash-table :test 'equal)))
 
 ;; locals in materialized buffers
 (defvar -org-glance-pwd nil)
@@ -53,7 +53,8 @@
 (defvar -org-glance-indent nil)
 
 (eval-and-compile
-  (defvar org-glance-view-mode-map (make-sparse-keymap) "Extend `org-mode' map with sync abilities.")
+  (defvar org-glance-view-mode-map (make-sparse-keymap)
+    "Extend `org-mode' map with sync abilities.")
   (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
   (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
   (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer))
@@ -64,7 +65,6 @@
 (define-error 'org-glance-view-corrupted "Materialized view source corrupted" 'user-error)
 (cl-defun org-glance-view-corrupted (format &rest args) (signal 'org-glance-view-corrupted (list (apply #'format-message format args))))
 
-;;;###autoload
 (define-minor-mode org-glance-view-mode
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
@@ -79,12 +79,29 @@
 
 (defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
-  (cond ((or (null type) (seq-set-equal-p (cl-intersection type --og-view-type-all) type))
+  (cond ((or (null type) (seq-set-equal-p (cl-intersection type '(all)) type))
          org-glance-views)
         (t (cl-loop for view in org-glance-views
                     if (let ((types (gethash view org-glance-view-types)))
                          (seq-set-equal-p (cl-intersection type types) type))
                     collect view))))
+
+(defun org-glance-reread-view (&optional view)
+  (interactive)
+  (unless view
+    (setq view (org-glance-read-view "Reread view: ")))
+  (message "Reread view %s" view)
+  (let ((db (-org-glance-db-for view))
+        (filter (-org-glance-filter-for view))
+        (scope (-org-glance-scope-for view)))
+    (org-glance-db-init db (org-glance-scope-headlines scope filter))))
+
+(defun org-glance-view-headlines (view)
+  "List headlines as org-elements for VIEW."
+  (org-glance-headlines
+   :db (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
+   :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
+   :filter (-org-glance-filter-for view)))
 
 ;; some private helpers
 
@@ -156,6 +173,9 @@
                    (org-element-property :raw-value headline))
     (error nil)))
 
+(defun -org-glance-scope-for (view)
+  (gethash view org-glance-view-scopes org-glance-default-scope))
+
 (defun -org-glance-filter-for (view)
   (-partial #'org-glance-view-filter view))
 
@@ -194,54 +214,50 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (doc-string 6)
            (indent 4))
   ;; register view action
-  (puthash type
-           (cl-pushnew name (gethash type org-glance-view-actions))
+  (puthash name
+           (cl-pushnew type (gethash name org-glance-view-actions))
            org-glance-view-actions)
   (let* ((res (cl--transform-lambda (cons args body) name))
          (generic-func-name (format "org-glance-action-%s" name))
          (concrete-func-name (format "org-glance-action-%s-%s" name type))
 	 (form `(progn
-
                   (unless (fboundp (quote ,(intern generic-func-name)))
-                    (defun ,(intern generic-func-name) (&optional args view)
+                    (defun ,(intern generic-func-name) (&optional args)
                       (interactive (list (org-glance-act-arguments)))
-
-                      (setq view
-                            (or view
-                                org-glance-transient--current-view
-                                (org-glance-read-view
-                                 (format "%s view: " ,(s-titleize (format "%s" name)))
-                                 (list (quote ,type)))))
-
-                      (let* ((view-types (append '(all) (gethash (intern view) org-glance-view-types)))
+                      (let* ((action-types (gethash (quote ,name) org-glance-view-actions))
+                             (headlines (loop for view being the hash-keys of org-glance-view-types
+                                              using (hash-value types)
+                                              when (or (cl-intersection action-types '(all))
+                                                       (cl-intersection action-types types))
+                                              append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines--formatted (symbol-name view)))))
                              (main-action (intern (format "%s-%s" ,generic-func-name 'all)))
-                             (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) view-types))
-                             (view-actions-bound (-filter #'fboundp view-actions)))
-                        ;; resolve overlapping methods
-                        (cond
-                         ((= 0 (length view-actions-bound)) (user-error "No \"%s\" action bound for \"%s\"" (quote ,name) view))
-                         ((= 1 (length view-actions-bound)) (funcall (pop view-actions-bound) args view))
-                         ((= 1 (length (remq main-action view-actions-bound))) (funcall (car (remq main-action view-actions-bound)) args view))
-                         (t (funcall (org-completing-read "Resolve it: " view-actions-bound) args view))))))
+                             (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) action-types))
+                             (view-actions-bound (-filter #'fboundp view-actions))
+                             (choice (org-completing-read (format "%s: " (quote ,name)) headlines))
+                             (view (symbol-name (alist-get choice headlines nil nil #'string=)))
+                             (view-types (gethash (intern view) org-glance-view-types))
+                             (allowed-action-types (-union (cl-intersection action-types view-types) '(all)))
+                             (allowed-actions (mapcar #'(lambda (at) (intern (format "%s-%s" ,generic-func-name at))) allowed-action-types))
+                             (allowed-bound-actions (cl-intersection allowed-actions view-actions-bound))
+                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                        (pp view-actions)
+                        (pp org-glance-view-actions)
+                        (cond ;; resolve overlapping methods
+                         ((= 0 (length allowed-bound-actions)) (user-error "No \"%s\" action bound for \"%s\"" (quote ,name) view))
+                         ((= 1 (length allowed-bound-actions)) (funcall (car allowed-bound-actions) args view headline))
+                         ((= 2 (length allowed-bound-actions)) (funcall (car (remq main-action allowed-bound-actions)) args view headline))
+                         (t (funcall (org-completing-read "Resolve it: " allowed-bound-actions) args view headline))))))
 
-                  (defun ,(intern concrete-func-name) (&optional args view)
+                  (defun ,(intern concrete-func-name) (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
-
-                    (setq view
-                          (or view
-                              org-glance-transient--current-view
-                              (org-glance-read-view
-                               (format "%s view: " ,(s-titleize (format "%s" name)))
-                               (list (quote ,type)))))
-
                     (org-glance
-                     :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
+                     :default-choice headline
+                     :scope (-org-glance-scope-for view)
                      :prompt (-org-glance-prompt-for (quote ,name) view)
                      :db (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
                      :db-init (member "--reread" args)
                      :filter (-org-glance-filter-for view)
                      :action (function ,(intern (format "org-glance--%s--%s" name type)))))
-
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
 
@@ -251,7 +267,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
-         (file-buffer (get-file-buffer file)))
+         (buffer (get-file-buffer file)))
 
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
@@ -266,7 +282,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (widen)
            (goto-char point)
            (outline-show-subtree))
-          (t (unless file-buffer
+          (t (unless buffer
                (kill-buffer))
              (org-glance-db-outdated "Cache file is outdated")))))
 
@@ -456,8 +472,9 @@ then run `org-completing-read' to open it."
      (when ,file
        (puthash (intern ,view) ,file org-glance-view-files))
 
-     (when ,type
-       (puthash (intern ,view) ,type org-glance-view-types))
+     (if ,type
+         (puthash (intern ,view) ,type org-glance-view-types)
+       (puthash (intern ,view) '(all) org-glance-view-types))
 
      (when (quote ,bind)
        (cl-loop for (binding . cmd) in (quote ,bind)

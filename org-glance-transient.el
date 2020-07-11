@@ -1,5 +1,6 @@
 (require 'transient)
 (require 'eieio-core)
+(require 'org-glance-views)
 
 ;; Global glance transient state
 
@@ -48,15 +49,16 @@
   :class 'org-glance-transient-variable:view
   :variable 'org-glance-transient--current-view
   :reader 'org-glance-read-view
-  :default "--all")
+  :default "false")
 
-;;;###autoload (autoload 'org-glance-act "org-glance" nil t)
+;;;###autoload
 (transient-define-prefix org-glance-act (view)
   "In Glance-View buffer, perform action on selected view"
-  ["Arguments"
-   ("-r" "Rebuild database file" "--reread")
-   ("-v" "View" org-glance-act.current-view)]
-  ["Actions"
+  ;; ["Arguments"
+  ;;  ("-r" "Reread view" org-glance-act.current-view)]
+  ["Views"
+   [("r" "Reread"      org-glance-reread-view)]]
+  ["Records"
    [("j" "Jump"        org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
    [("v" "Visit"       org-glance-action-visit)]])

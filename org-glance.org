@@ -6,6 +6,7 @@ Links:
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
 * tasks [0/3]
+** TODO fix rereads
 ** TODO act on all proper views by default
 ** TODO read-only flag for materialized views
 ** TODO test sandbox

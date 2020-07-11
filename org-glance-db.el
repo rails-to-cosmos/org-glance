@@ -12,8 +12,26 @@
   (signal 'org-glance-db-outdated
           (list (apply #'format-message format args))))
 
+(defun org-glance-format (headline)
+  (or (org-element-property :TITLE headline)
+      (org-element-property :raw-value headline)))
+
+(defun org-glance-choose-headline (choice headlines)
+  (cl-loop for hl in headlines
+           when (string= (org-glance-format hl) choice)
+           do (cl-return hl)))
+
+(defun org-glance-prompt-headlines (prompt headlines)
+  (org-completing-read prompt (mapcar #'org-glance-format headlines)))
+
+(defun org-glance-view-headlines--formatted (view)
+  "List headlines as formatted strings for VIEW."
+  (->> view
+       org-glance-view-headlines
+       (mapcar #'org-glance-format)
+       (mapcar #'(lambda (hl) (format "[%s] %s" view hl)))))
+
 (cl-defun org-glance-db-init (db headlines)
-  (message "Init database file %s..." db)
   (unless (file-exists-p (file-name-directory db))
     (make-directory (file-name-directory db) t))
   (with-temp-file db
@@ -21,6 +39,7 @@
     (dolist (headline headlines)
       (insert (org-glance-db--serialize headline) "\n"))
     (insert ")"))
+  (message "Database has been initialized: %s" db)
   headlines)
 
 (cl-defun org-glance-db-load (file)

@@ -37,22 +37,12 @@
 (defun org-glance-test-get-resource (resource)
   (f-join org-glance-test/test-resources-path resource))
 
-;; (defun -org-glance-rename-subtree (title)
-;;   (interactive)
-;;   (save-excursion
-;;     (org-back-to-heading)
-;;     (org-beginning-of-line)
-;;     (org-kill-line)
-;;     (insert title)
-;;     (substring-no-properties (car kill-ring))))
-
-(cl-defmacro with-temp-view (view type scope &rest forms)
+(cl-defmacro with-temp-view (view &rest forms &key type scope &allow-other-keys)
   (declare (indent defun))
   `(let* ((scope-file (make-temp-file "org-glance-test-"))
           (default-directory org-glance-test/test-resources-path))
 
-     ;; prepare temporary scope file
-     (with-temp-file scope-file
+     (with-temp-file scope-file  ;; prepare temporary scope file
        (message "Create scope %s from %s" scope-file ,scope)
        (insert-file-contents-literally (org-glance-test-get-resource ,scope)))
      (message "Scope file size: %s" (->> scope-file
@@ -103,19 +93,19 @@
   `(let ((messages-point-before-action ;; will capture action output
           (with-current-buffer (messages-buffer)
             (point-max))))
-     (org-glance-action-open (list "--reread") ,view)
+     (org-glance-action-open)
      (with-current-buffer (messages-buffer)
        (buffer-substring-no-properties messages-point-before-action (point-max)))))
 
-(cl-defmacro org-glance-sandbox (&body forms &key input view in type act &allow-other-keys)
-  "Run FORMS in isolated environment."
-  (declare (indent defun))
-  `(with-temp-view ,view ,type ,in
-         (if (and ,act ,input)
-             (org-glance-emulate-user-input ,input
-               (cond ((eq ,act 'materialize) (in-materialized-buffer ,view ,@forms))
-                     ((eq ,act 'open) (follow-link-capture-output ,view))
-                     (t (error "Unknown action called in user story."))))
-           ,@forms)))
+;; (cl-defmacro org-glance-sandbox (&body forms &key input view in type act &allow-other-keys)
+;;   "Run FORMS in isolated environment."
+;;   (declare (indent defun))
+;;   `(with-temp-view ,view ,type ,in
+;;          (if (and ,act ,input)
+;;              (org-glance-emulate-user-input ,input
+;;                (cond ((eq ,act 'materialize) (in-materialized-buffer ,view ,@forms))
+;;                      ((eq ,act 'open) (follow-link-capture-output ,view))
+;;                      (t (error "Unknown action called in user story."))))
+;;            ,@forms)))
 
 ;;; test-helper.el ends here

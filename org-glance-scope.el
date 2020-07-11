@@ -7,130 +7,98 @@
   (require 'load-relative))
 
 (defvar org-glance-scope--default-scope-alist
-  `((file-with-archives . org-glance-scope--list-archives)
+  '((file-with-archives . -org-glance-list-archives)
     (agenda . org-agenda-files)
-    (agenda-with-archives . org-glance-scope--agenda-with-archives)))
+    (agenda-with-archives . -org-glance-agenda-with-archives)))
 
-(defconst org-glance-loc--glance-dir "GLANCE_DIR")
+(defun -org-glance-list-archives ()
+  (append (list (buffer-file-name))
+          (org-glance-list-file-archives (buffer-file-name))))
+
+(defun -org-glance-agenda-with-archives ()
+  (cl-loop for filename in (org-agenda-files)
+           append (list filename)
+           append (org-glance-list-file-archives filename)))
+
+(cl-defun org-glance-headlines
+    (&key db
+          (scope '(agenda))
+          (filter #'(lambda (_) t))
+          (db-init nil))
+  (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
+         (load-db? (and (not (null db)) (file-exists-p db)))
+         (skip-db? (null db)))
+    (cond (create-db? (org-glance-db-init db (org-glance-scope-headlines scope filter)))
+          (load-db?   (org-glance-db-load db))
+          (skip-db?   (org-glance-scope-headlines scope filter))
+          (t         (user-error "Nothing to glance at (scope: %s)" scope)))))
+
+(cl-defmethod org-glance-filter-apply (filter headline)
+  (or (null filter) (and filter (funcall filter headline))))
 
 (cl-defmethod org-glance-scope-headlines (scope &optional filter)
   (cl-loop
-   for file in (org-glance-scope--adapt scope)
+   for file in (org-glance-scope scope)
    do (message "Glance %s" file)
-   append (org-glance-headlines-from-file file filter)
+   append (org-glance-read-headlines-from-file file filter)
    into result
    do (redisplay)
    finally (cl-return result)))
 
-(cl-defmethod org-glance-headlines-from-file ((file string) &optional filter)
-  (unless (file-exists-p file) (user-error "File %s does not exist" file))
-  (when (f-directory? file) (user-error "Scope file %s is a directory" file))
+(cl-defmethod org-glance-read-headlines-from-file ((file string) &optional filter)
   (with-temp-buffer
     (insert-file-contents file)
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (headline)
-        (when (or (null filter) (and filter (funcall filter headline)))
+        (when (org-glance-filter-apply filter headline)
           (plist-put (cadr headline) :file file)
           headline)))))
 
-(defun org-glance-loc--get-rel-dirs (filename)
-  "Get related directories from FILENAME.
+(defun org-glance-list-files-recursively (dir)
+  (directory-files-recursively dir "\\.*.org\\.*"))
 
-Header property is specified in `org-glance-loc--glance-dir'.
-
-For example, these lines in your agenda file mean that org-glance
-will search views in \"archives\", \"resources\" and
-\"~/docs/concerts\" (1) directories recursively:
-
-#+GLANCE_DIR: ../resources
-#+GLANCE_DIR: ./archives
-
-* Concerto  (1)
-  :PROPERTIES:
-  :DIR:  ~/docs/concerts
-  :END:
-
-(1) (not implemented yet)"
-
-  (let* ((default-directory (file-name-directory filename))
-         (glance-dir-property (format "#+%s:" org-glance-loc--glance-dir)))
-    (with-temp-buffer
-      (insert-file-contents filename)
-      (goto-char (point-min))
-      (cl-loop while (search-forward glance-dir-property nil t)
-               with glance-archive-dir
-               do (setq glance-archive-dir
-                        (-some->> (thing-at-point 'line)
-                          substring-no-properties
-                          (s-replace glance-dir-property "")
-                          s-trim
-                          file-truename))
-               if (file-exists-p glance-archive-dir)
-               collect glance-archive-dir into result
-               else
-               do (warn "glance-archive-dir from %s not found: %s" filename glance-archive-dir)
-               finally (return (or result (list default-directory)))))))
-
-(defun org-glance-loc--list-archives (filename)
-  "Return list of org-archives for FILENAME.
-
-Search glance directories recursively considering related
-directories from `org-glance-loc--get-rel-dirs'."
-
-  (let* ((archive-dirs (org-glance-loc--get-rel-dirs filename))
+(defun org-glance-list-file-archives (filename)
+  "Return list of org-mode files for FILENAME."
+  (let* ((dir (file-name-directory filename))
          (base-filename (-some->> filename
                           file-name-nondirectory
-                          file-name-sans-extension))
-         (archive-filename (-some->> base-filename
-                             (s-append ".org_archive")))
-         (org-filename (-some->> base-filename
-                         (s-append ".org"))))
-    (loop for archive-dir in archive-dirs
-          append (directory-files-recursively archive-dir archive-filename)
-          append (directory-files-recursively archive-dir org-filename))))
+                          file-name-sans-extension)))
+    (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
 
-(defun org-glance-scope--list-archives ()
-  (append (list (buffer-file-name))
-          (org-glance-loc--list-archives (buffer-file-name))))
+(cl-defgeneric org-glance-scope (lfob)
+  "Adapt list-file-or-buffer to list of files.")
 
-(defun org-glance-scope--agenda-with-archives ()
-  (cl-loop for filename in (org-agenda-files)
-           append (list filename)
-           append (org-glance-loc--list-archives filename)))
-
-(cl-defgeneric org-glance-scope--adapt (lfob)
-  "Adapt list-file-or-buffer to list of file-or-buffers.")
-
-(cl-defmethod org-glance-scope--adapt ((lfob string))
+(cl-defmethod org-glance-scope ((lfob string))
   "Return list of file LFOB if exists."
-  (list (or (expand-file-name lfob)
-            (-some->> lfob
-              expand-file-name
-              get-file-buffer
-              buffer-name))))
+  (let ((file (expand-file-name lfob)))
+    (cond
+     ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
+     ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
+     ((f-directory? file) (org-glance-list-files-recursively file))
+     (t file))))
 
-(cl-defmethod org-glance-scope--adapt ((lfob sequence))
+(cl-defmethod org-glance-scope ((lfob sequence))
   "Adapt each element of LFOB."
   (-some->> lfob
-    (-keep #'(lambda (fob) (->> fob org-glance-scope--adapt)))
-    (-flatten)
-    (seq-uniq)))
+    (-keep #'org-glance-scope)
+    -flatten
+    seq-uniq))
 
-(cl-defmethod org-glance-scope--adapt ((lfob symbol))
+(cl-defmethod org-glance-scope ((lfob symbol))
   "Return extracted LFOB from `org-glance-scope--default-scope-alist'."
   (funcall (cdr (assoc lfob org-glance-scope--default-scope-alist))))
 
-(cl-defmethod org-glance-scope--adapt ((lfob buffer))
-  "Return list of LFOB."
+(cl-defmethod org-glance-scope ((lfob buffer))
+  "Return list of files from LFOB buffer."
   (list
    (condition-case nil
        (get-file-buffer lfob)
      (error lfob))))
 
-(cl-defmethod org-glance-scope--adapt ((lfob function))
+(cl-defmethod org-glance-scope ((lfob function))
   "Adapt result of LFOB."
   (-some->> lfob
     funcall
-    org-glance-scope--adapt))
+    org-glance-scope))
 
 (provide-me)
