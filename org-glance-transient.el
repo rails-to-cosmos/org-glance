@@ -57,6 +57,7 @@
   ;; ["Arguments"
   ;;  ("-r" "Reread view" org-glance-act.current-view)]
   ["Views"
+   [("e" "Export"      org-glance-export-view)]
    [("r" "Reread"      org-glance-reread-view)]]
   ["Records"
    [("j" "Jump"        org-glance-action-open)]

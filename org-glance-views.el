@@ -88,13 +88,28 @@
 
 (defun org-glance-reread-view (&optional view)
   (interactive)
-  (unless view
-    (setq view (org-glance-read-view "Reread view: ")))
+  (setq view (or view (org-glance-read-view)))
   (message "Reread view %s" view)
   (let ((db (-org-glance-db-for view))
         (filter (-org-glance-filter-for view))
         (scope (-org-glance-scope-for view)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter))))
+    (org-glance-db-init db (org-glance-scope-headlines scope filter)))
+  view)
+
+(defun org-glance-export-view (&optional view destination)
+  (interactive)
+  (let* ((view (or view (org-glance-read-view)))
+         (destination (or destination (read-file-name "Export destination: ")))
+         (headlines (->> view
+                         org-glance-reread-view
+                         org-glance-view-headlines)))
+    (loop for headline in headlines
+          do (save-window-excursion
+               (org-glance-call-action 'materialize :on headline)
+               (append-to-file (point-min) (point-max) destination)
+               (kill-buffer)
+               (append-to-file "\n" nil destination)))
+    (find-file destination)))
 
 (defun org-glance-view-headlines (view)
   "List headlines as org-elements for VIEW."
@@ -105,8 +120,9 @@
 
 ;; some private helpers
 
-(defun -org-glance-encrypt-subtree (&optional password)
+(defun org-glance-encrypt-subtree (&optional password)
   "Encrypt subtree at point with PASSWORD."
+  (interactive)
   (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
          (end (save-excursion (org-end-of-subtree t)))
          (plain (let ((plain (buffer-substring-no-properties beg end)))
@@ -121,8 +137,9 @@
       (kill-region beg end)
       (insert encrypted))))
 
-(defun -org-glance-decrypt-subtree (&optional password)
+(defun org-glance-decrypt-subtree (&optional password)
   "Decrypt subtree at point with PASSWORD."
+  (interactive)
   (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
          (end (save-excursion (org-end-of-subtree t)))
          (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
@@ -185,7 +202,7 @@
 (defun -org-glance-prompt-for (action view)
   (s-titleize (format "%s %s: " action view)))
 
-(defun org-glance-read-view (prompt &optional type)
+(cl-defun org-glance-read-view (&optional (prompt "Choose view: ") type)
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views type)))
     (if (> (length views) 1)
@@ -354,7 +371,7 @@ then run `org-completing-read' to open it."
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
                      (setq-local -org-glance-pwd (read-passwd "Password: "))
-                     (-org-glance-decrypt-subtree -org-glance-pwd)))
+                     (org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'after-materialize-hook #'decrypt t)
     (unwind-protect
         (org-glance-call-action 'materialize :on headline)
@@ -362,13 +379,13 @@ then run `org-completing-read' to open it."
   (add-hook 'before-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
-              (-org-glance-encrypt-subtree -org-glance-pwd)
+              (org-glance-encrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local)
   (add-hook 'after-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
-              (-org-glance-decrypt-subtree -org-glance-pwd)
+              (org-glance-decrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local))
 
