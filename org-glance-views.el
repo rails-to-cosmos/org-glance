@@ -96,13 +96,16 @@
     (org-glance-db-init db (org-glance-scope-headlines scope filter)))
   view)
 
-(defun org-glance-export-view (&optional view destination)
+(defun org-glance-export-view (&optional view destination force)
   (interactive)
   (let* ((view (or view (org-glance-read-view)))
          (destination (or destination (read-file-name "Export destination: ")))
          (headlines (->> view
                          org-glance-reread-view
                          org-glance-view-headlines)))
+    (if (and (file-exists-p destination)
+             (or force (y-or-n-p (format "File %s already exists. Overwrite?" destination))))
+      (delete-file destination t))
     (loop for headline in headlines
           do (save-window-excursion
                (org-glance-call-action 'materialize :on headline)
