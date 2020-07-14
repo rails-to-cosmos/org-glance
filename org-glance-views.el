@@ -320,28 +320,25 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (org-glance-call-action 'visit :on headline)
     (let* ((file (org-element-property :file headline))
            (beg (-org-glance-first-level-heading))
-           (end-of-subtree (-org-glance-end-of-subtree))
-           (contents (s-trim-right (buffer-substring-no-properties beg end-of-subtree))))
+           (end (-org-glance-end-of-subtree))
+           (contents (->> (buffer-substring-no-properties beg end)
+                          (s-trim))))
       (when (get-buffer org-glance-materialized-view-buffer)
         (kill-buffer org-glance-materialized-view-buffer))
       (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
         (delete-region (point-min) (point-max))
         (org-mode)
         (org-glance-view-mode)
-        (insert
-         (with-temp-buffer
-           (insert contents)
-           (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+        (insert contents)
         (goto-char (point-min))
+        (org-overview)
+        (org-show-children)
         (setq-local -org-glance-src file)
         (setq-local -org-glance-beg beg)
-        (setq-local -org-glance-end end-of-subtree)
-        ;; extract hash from promoted subtree
-        (setq-local -org-glance-hash (org-glance-view-subtree-hash))
-        ;; run hooks on original subtree
-        (with-demoted-errors (run-hooks 'after-materialize-hook))
-        ;; then promote it saving original level
-        (setq-local -org-glance-indent (-org-glance-promote-subtree)))))
+        (setq-local -org-glance-end end)
+        (setq-local -org-glance-hash (org-glance-view-subtree-hash))  ;; extract hash from promoted subtree
+        (with-demoted-errors (run-hooks 'after-materialize-hook))  ;; run hooks on original subtree
+        (setq-local -org-glance-indent (-org-glance-promote-subtree)))))  ;; then promote it saving original level
   (switch-to-buffer org-glance-materialized-view-buffer))
 
 (org-glance-def-action open (headline) :for link
