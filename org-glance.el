@@ -58,15 +58,19 @@
   (require 'cl)
   (require 'cl-generic)
   (require 'cl-lib)
-  (require 'dash-functional)
-  (require 'load-relative)
   (require 'org)
   (require 'seq)
   (require 'subr-x))
 
-(require 'org-glance-db)
-(require 'org-glance-scope)
-(require 'org-glance-transient)
+(eval-and-compile
+  (require 'dash-functional)
+  (require 'load-relative)
+  (require 'org-glance-scope)
+  (require 'org-glance-transient))
+
+(declare-function org-glance-db-init "org-glance-db" (db headlines))
+(declare-function org-glance-db-load "org-glance-db" (file))
+(declare-function org-glance-db-outdated "org-glance-db" (format &rest args))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
