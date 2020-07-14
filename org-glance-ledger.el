@@ -2,6 +2,7 @@
   (require 'cl))
 
 (eval-and-compile
+  (require 'subr-x)
   (require 'org)
   (require 'ts)
   (require 'ledger-mode)
