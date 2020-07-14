@@ -1,6 +1,7 @@
 (eval-and-compile
   (require 'transient)
-  (require 'eieio-core))
+  (require 'eieio-core)
+  (require 'org-glance-views))
 
 ;; Global glance transient state
 

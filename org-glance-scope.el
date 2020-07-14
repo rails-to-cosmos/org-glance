@@ -4,7 +4,8 @@
   (require 'cl))
 
 (eval-and-compile
-  (require 'load-relative))
+  (require 'load-relative)
+  (require 'org-glance-db))
 
 (defvar org-glance-scope--default-scope-alist
   '((file-with-archives . -org-glance-list-archives)

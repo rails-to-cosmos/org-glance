@@ -64,9 +64,12 @@
 
 (eval-and-compile
   (require 'dash-functional)
-  (require 'load-relative)
-  (require 'org-glance-scope)
-  (require 'org-glance-transient))
+  (require 'load-relative))
+
+(require 'org-glance-db)
+(require 'org-glance-views)
+(require 'org-glance-scope)
+(require 'org-glance-transient)
 
 (declare-function org-glance-db-init "org-glance-db" (db headlines))
 (declare-function org-glance-db-load "org-glance-db" (file))

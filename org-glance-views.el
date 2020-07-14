@@ -33,7 +33,8 @@
 
 (defcustom org-glance-default-scope '(agenda-with-archives)
   "Default scope for glancing views."
-  :group 'org-glance)
+  :group 'org-glance
+  :type 'list)
 
 (eval-and-compile
   (defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
@@ -76,6 +77,13 @@
   (-contains?
    (mapcar #'s-downcase (org-element-property :tags headline))
    (s-downcase view)))
+
+(defun org-glance-view-headlines--formatted (view)
+  "List headlines as formatted strings for VIEW."
+  (->> view
+       org-glance-view-headlines
+       (mapcar #'org-glance-format)
+       (mapcar #'(lambda (hl) (format "[%s] %s" view hl)))))
 
 (defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
