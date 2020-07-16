@@ -63,8 +63,11 @@
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
 
-(define-error 'org-glance-view-corrupted "Materialized view source corrupted" 'user-error)
-(cl-defun org-glance-view-corrupted (format &rest args) (signal 'org-glance-view-corrupted (list (apply #'format-message format args))))
+(define-error 'org-glance-source-file-corrupted "Source file corrupted, please reread" 'user-error)
+(cl-defun org-glance-source-file-corrupted (format &rest args) (signal 'org-glance-source-file-corrupted (list (apply #'format-message format args))))
+
+(define-error 'org-glance-properties-corrupted "Materialized view properties corrupted, please reread" 'user-error)
+(cl-defun org-glance-properties-corrupted (format &rest args) (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
 
 (define-minor-mode org-glance-view-mode
   "A minor mode to be activated only in materialized view editor."
@@ -325,7 +328,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                           (s-trim))))
       (when (get-buffer org-glance-materialized-view-buffer)
         (switch-to-buffer org-glance-materialized-view-buffer)
-        (org-glance-view-sync-subtree)
+        (condition-case nil
+            (org-glance-view-sync-subtree)
+          (org-glance-view-not-modified nil))
         (kill-buffer org-glance-materialized-view-buffer))
       (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
         (delete-region (point-min) (point-max))
@@ -422,10 +427,10 @@ then run `org-completing-read' to open it."
            (src-hash (org-glance-view-source-hash)))
 
       (unless (string= glance-hash src-hash)
-        (user-error "Source file modified, please reread"))
+        (org-glance-source-file-corrupted source))
 
       (when (string= glance-hash mat-hash)
-        (org-glance-view-not-modified "No changes made in subtree"))
+        (org-glance-view-not-modified source))
 
       (when (y-or-n-p "Subtree has been modified. Apply changes?")
         (with-demoted-errors (run-hooks 'before-materialize-sync-hook))
@@ -476,7 +481,7 @@ then run `org-completing-read' to open it."
       (insert-file-contents src)
       (let ((subtree (condition-case nil
                          (buffer-substring-no-properties beg end)
-                       (error (org-glance-view-corrupted "Materialized properties corrupted, please reread")))))
+                       (error (org-glance-properties-corrupted "Materialized properties corrupted, please reread")))))
         (with-temp-buffer
           (org-mode)
           (insert subtree)
