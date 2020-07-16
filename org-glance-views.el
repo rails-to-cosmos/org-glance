@@ -324,6 +324,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (contents (->> (buffer-substring-no-properties beg end)
                           (s-trim))))
       (when (get-buffer org-glance-materialized-view-buffer)
+        (switch-to-buffer org-glance-materialized-view-buffer)
+        (org-glance-view-sync-subtree)
         (kill-buffer org-glance-materialized-view-buffer))
       (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
         (delete-region (point-min) (point-max))
