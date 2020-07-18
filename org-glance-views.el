@@ -79,14 +79,7 @@
 (cl-defun org-glance-view-filter (view headline)
   (-contains?
    (mapcar #'s-downcase (org-element-property :tags headline))
-   (s-downcase view)))
-
-(defun org-glance-view-headlines--formatted (view)
-  "List headlines as formatted strings for VIEW."
-  (->> view
-       org-glance-view-headlines
-       (mapcar #'org-glance-format)
-       (mapcar #'(lambda (hl) (format "[%s] %s" view hl)))))
+   (downcase (symbol-name view))))
 
 (defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
@@ -97,9 +90,8 @@
                          (seq-set-equal-p (cl-intersection type types) type))
                     collect view))))
 
-(defun org-glance-reread-view (&optional view)
+(cl-defmethod org-glance-reread-view (&optional (view (org-glance-read-view)))
   (interactive)
-  (setq view (or view (org-glance-read-view)))
   (message "Reread view %s" view)
   (let ((db (-org-glance-db-for view))
         (filter (-org-glance-filter-for view))
@@ -116,7 +108,7 @@
                          org-glance-view-headlines)))
     (if (and (file-exists-p destination)
              (or force (y-or-n-p (format "File %s already exists. Overwrite?" destination))))
-      (delete-file destination t))
+        (delete-file destination t))
     (loop for headline in headlines
           do (save-window-excursion
                (org-glance-call-action 'materialize :on headline)
@@ -125,12 +117,19 @@
                (append-to-file "\n" nil destination)))
     (find-file destination)))
 
-(defun org-glance-view-headlines (view)
+(cl-defmethod org-glance-view-headlines ((view symbol))
   "List headlines as org-elements for VIEW."
   (org-glance-headlines
-   :db (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
-   :scope (gethash (intern view) org-glance-view-scopes org-glance-default-scope)
+   :db (gethash view org-glance-view-files (-org-glance-db-for view))
+   :scope (gethash view org-glance-view-scopes org-glance-default-scope)
    :filter (-org-glance-filter-for view)))
+
+(cl-defmethod org-glance-view-headlines/formatted ((view symbol))
+  "List headlines as formatted strings for VIEW."
+  (->> view
+       org-glance-view-headlines
+       (mapcar #'org-glance-format)
+       (mapcar #'(lambda (hl) (format "[%s] %s" view hl)))))
 
 ;; some private helpers
 
@@ -194,34 +193,33 @@
     (org-end-of-meta-data)
     (point)))
 
-(defun -org-glance-end-of-subtree ()
-  (save-excursion
-    (org-end-of-subtree t)))
-
 (defun -element-at-point-equals-headline (headline)
   (condition-case nil
       (s-contains? (org-element-property :raw-value (org-element-at-point))
                    (org-element-property :raw-value headline))
     (error nil)))
 
-(defun -org-glance-scope-for (view)
+(cl-defmethod -org-glance-scope-for ((view symbol))
   (gethash view org-glance-view-scopes org-glance-default-scope))
 
-(defun -org-glance-filter-for (view)
+(cl-defmethod -org-glance-filter-for ((view symbol))
   (-partial #'org-glance-view-filter view))
 
-(defun -org-glance-db-for (view)
-  (format "%s/org-glance-%s.el" org-glance-db-directory view))
+(defmethod -org-glance-db-for ((view symbol))
+  (->> view
+       (format "org-glance-%s.el")
+       (downcase)
+       (format "%s/%s" org-glance-db-directory)))
 
 (defun -org-glance-prompt-for (action view)
   (s-titleize (format "%s %s: " action view)))
 
-(cl-defun org-glance-read-view (&optional (prompt "Choose view: ") type)
+(cl-defmethod org-glance-read-view (&optional (prompt "Choose view: ") type)
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views type)))
     (if (> (length views) 1)
-        (org-completing-read prompt views)
-      (symbol-name (car views)))))
+        (intern (org-completing-read prompt views))
+      (car views))))
 
 (cl-defun org-glance-call-action (name &key (on 'current-headline) (for 'all))
   (when (eq on 'current-headline)
@@ -230,6 +228,11 @@
     (unless (fboundp fn)
       (user-error "Unbound function %s" fn))
     (funcall fn on)))
+
+(cl-defmethod org-glance-register-action ((name symbol) (type symbol))
+  (puthash name
+           (cl-pushnew type (gethash name org-glance-view-actions))
+           org-glance-view-actions))
 
 (cl-defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
@@ -245,9 +248,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (doc-string 6)
            (indent 4))
   ;; register view action
-  (puthash name
-           (cl-pushnew type (gethash name org-glance-view-actions))
-           org-glance-view-actions)
+  (org-glance-register-action name type)
   (let* ((res (cl--transform-lambda (cons args body) name))
          (generic-func-name (format "org-glance-action-%s" name))
          (concrete-func-name (format "org-glance-action-%s-%s" name type))
@@ -260,19 +261,17 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                               using (hash-value types)
                                               when (or (cl-intersection action-types '(all))
                                                        (cl-intersection action-types types))
-                                              append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines--formatted (symbol-name view)))))
+                                              append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
                              (main-action (intern (format "%s-%s" ,generic-func-name 'all)))
                              (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) action-types))
                              (view-actions-bound (-filter #'fboundp view-actions))
                              (choice (org-completing-read (format "%s: " (quote ,name)) headlines))
-                             (view (symbol-name (alist-get choice headlines nil nil #'string=)))
-                             (view-types (gethash (intern view) org-glance-view-types))
+                             (view (alist-get choice headlines nil nil #'string=))
+                             (view-types (gethash view org-glance-view-types))
                              (allowed-action-types (-union (cl-intersection action-types view-types) '(all)))
                              (allowed-actions (mapcar #'(lambda (at) (intern (format "%s-%s" ,generic-func-name at))) allowed-action-types))
                              (allowed-bound-actions (cl-intersection allowed-actions view-actions-bound))
                              (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                        (pp view-actions)
-                        (pp org-glance-view-actions)
                         (cond ;; resolve overlapping methods
                          ((= 0 (length allowed-bound-actions)) (user-error "No \"%s\" action bound for \"%s\"" (quote ,name) view))
                          ((= 1 (length allowed-bound-actions)) (funcall (car allowed-bound-actions) args view headline))
@@ -281,14 +280,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
                   (defun ,(intern concrete-func-name) (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
-                    (org-glance
-                     :default-choice headline
-                     :scope (-org-glance-scope-for view)
-                     :prompt (-org-glance-prompt-for (quote ,name) view)
-                     :db (gethash (intern view) org-glance-view-files (-org-glance-db-for view))
-                     :db-init (member "--reread" args)
-                     :filter (-org-glance-filter-for view)
-                     :action (function ,(intern (format "org-glance--%s--%s" name type)))))
+                    (org-glance :default-choice headline
+                                :scope (-org-glance-scope-for view)
+                                :prompt (-org-glance-prompt-for (quote ,name) view)
+                                :db (gethash view org-glance-view-files (-org-glance-db-for view))
+                                :filter (-org-glance-filter-for view)
+                                :action (function ,(intern (format "org-glance--%s--%s" name type)))))
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
 
@@ -321,29 +318,36 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "Materialize HEADLINE in separate buffer."
   (save-window-excursion
     (org-glance-call-action 'visit :on headline)
-    (let* ((file (org-element-property :file headline))
-           (beg (-org-glance-first-level-heading))
-           (end (-org-glance-end-of-subtree))
-           (contents (->> (buffer-substring-no-properties beg end)
-                          (s-trim))))
-      (when (get-buffer org-glance-materialized-view-buffer)
-        (switch-to-buffer org-glance-materialized-view-buffer)
-        (condition-case nil
-            (org-glance-view-sync-subtree)
-          (org-glance-view-not-modified nil))
-        (kill-buffer org-glance-materialized-view-buffer))
-      (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
-        (delete-region (point-min) (point-max))
-        (org-mode)
-        (org-glance-view-mode)
-        (insert contents)
-        (goto-char (point-min))
-        (setq-local -org-glance-src file)
-        (setq-local -org-glance-beg beg)
-        (setq-local -org-glance-end end)
-        (setq-local -org-glance-hash (org-glance-view-subtree-hash))  ;; extract hash from promoted subtree
-        (with-demoted-errors (run-hooks 'after-materialize-hook))  ;; run hooks on original subtree
-        (setq-local -org-glance-indent (-org-glance-promote-subtree))))  ;; then promote it saving original level
+    (cl-labels ((first-level-heading () (save-excursion
+                                          (unless (org-at-heading-p) (org-back-to-heading))
+                                          (beginning-of-line)
+                                          (point)))
+                (end-of-subtree () (save-excursion (org-end-of-subtree t)))
+                (buffer-contents (beg end) (->> (buffer-substring-no-properties beg end)
+                                                (s-trim))))
+      (let* ((file (org-element-property :file headline))
+             (beg (first-level-heading))
+             (end (end-of-subtree))
+             (contents (buffer-contents beg end)))
+        (when (get-buffer org-glance-materialized-view-buffer)
+          (switch-to-buffer org-glance-materialized-view-buffer)
+          (condition-case nil
+              (org-glance-view-sync-subtree)
+            (org-glance-view-not-modified nil))
+          (kill-buffer org-glance-materialized-view-buffer))
+        (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
+          (delete-region (point-min) (point-max))
+          (org-mode)
+          (org-glance-view-mode)
+          (insert contents)
+          (goto-char (point-min))
+          (setq-local -org-glance-src file)
+          (setq-local -org-glance-beg beg)
+          (setq-local -org-glance-end end)
+          (setq-local -org-glance-hash (org-glance-view-subtree-hash)) ;; extract hash from promoted subtree
+          (with-demoted-errors (run-hooks 'after-materialize-hook)) ;; run hooks on original subtree
+          (setq-local -org-glance-indent (-org-glance-promote-subtree)))))
+      ;; then promote it saving original level
         (org-overview)
         (org-show-children))
   (switch-to-buffer org-glance-materialized-view-buffer))
@@ -365,8 +369,7 @@ then run `org-completing-read' to open it."
                             (cons
                              (substring-no-properties
                               (or (nth 2 link) ;; link alias
-                                  (org-element-property :raw-link link)) ;; full link if alias is none
-                              )
+                                  (org-element-property :raw-link link)))  ;; full link if alias is none
                              (org-element-property :begin link)))))
                  (point (cond
                          ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
@@ -496,17 +499,17 @@ then run `org-completing-read' to open it."
    (debug (stringp listp listp listp))
    (indent 1))
   `(progn
-     (cl-pushnew (intern ,view) org-glance-views)
+     (cl-pushnew ,view org-glance-views)
 
      (when ,scope
-       (puthash (intern ,view) ,scope org-glance-view-scopes))
+       (puthash ,view ,scope org-glance-view-scopes))
 
      (when ,file
-       (puthash (intern ,view) ,file org-glance-view-files))
+       (puthash ,view ,file org-glance-view-files))
 
      (if ,type
-         (puthash (intern ,view) ,type org-glance-view-types)
-       (puthash (intern ,view) '(all) org-glance-view-types))
+         (puthash ,view ,type org-glance-view-types)
+       (puthash ,view '(all) org-glance-view-types))
 
      (when (quote ,bind)
        (cl-loop for (binding . cmd) in (quote ,bind)
@@ -516,7 +519,7 @@ then run `org-completing-read' to open it."
                                      (lambda () (interactive)
                                        (funcall command-name view))))))
 
-     (message "Create view %s" ,view)))
+     (message "%s view is now available for glancing" ,view)))
 
 (cl-defun org-glance-remove-view (tag)
   (setq org-glance-views (cl-remove (intern tag) org-glance-views))

@@ -33,27 +33,25 @@
   "Override value format."
   (propertize (oref obj value) 'face 'transient-inactive-value))
 
-;; Base class for view specifying
+;; (defclass org-glance-transient-variable:view (org-glance-transient-variable)
+;;   ())
 
-(defclass org-glance-transient-variable:view (org-glance-transient-variable)
-  ())
+;; (cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
+;;   (oset obj value (org-glance-read-view)))
 
-(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
-  (oset obj value (org-glance-read-view "View: ")))
+;; (cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
+;;   (let* ((val (or (oref obj value) (oref obj default)))
+;;          (val-pretty (propertize val 'face 'transient-argument)))
+;;     (format "(%s)" val-pretty)))
 
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
-  (let* ((val (or (oref obj value) (oref obj default)))
-         (val-pretty (propertize val 'face 'transient-argument)))
-    (format "(%s)" val-pretty)))
-
-(transient-define-infix org-glance-act.current-view ()
-  :class 'org-glance-transient-variable:view
-  :variable 'org-glance-transient--current-view
-  :reader 'org-glance-read-view
-  :default "false")
+;; (transient-define-infix org-glance-act.current-view ()
+;;   :class 'org-glance-transient-variable:view
+;;   :variable 'org-glance-transient--current-view
+;;   :reader 'org-glance-read-view
+;;   :default "false")
 
 ;;;###autoload
-(transient-define-prefix org-glance-act (view)
+(transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
   ;; ["Arguments"
   ;;  ("-r" "Reread view" org-glance-act.current-view)]
