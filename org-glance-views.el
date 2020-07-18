@@ -36,16 +36,8 @@
   :group 'org-glance
   :type 'list)
 
-(eval-and-compile
-  (defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
-  (defvar org-glance-views '())
-  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
-  (defvar org-glance-view-scopes (make-hash-table :test 'equal))
-  (defvar org-glance-view-types (make-hash-table :test 'equal))
-  (defvar org-glance-view-actions (make-hash-table :test 'equal))
-  (defvar org-glance-view-files (make-hash-table :test 'equal)))
-
 ;; locals in materialized buffers
+
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
 (defvar -org-glance-beg nil)
@@ -73,39 +65,83 @@
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
+;; org-glance-view -- base view data structure
+
+(cl-defstruct org-glance-view
+  id
+  (type '(all))
+  (scope org-glance-default-scope))
+
+(defvar org-glance-views (make-hash-table :test 'equal))
+(defvar org-glance-view-actions (make-hash-table :test 'equal))
+(defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
+(defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
+
+(cl-defmethod org-glance-view ((view-id symbol))
+  (gethash view-id org-glance-views))
+
+(cl-defmethod org-glance-view-db ((view org-glance-view))
+  (->> view
+       (org-glance-view-id)
+       (format "org-glance-%s.el")
+       (downcase)
+       (format "%s/%s" org-glance-db-directory)))
+
+(cl-defmethod org-glance-view-filter ((view org-glance-view))
+  (-partial
+   #'(lambda (view headline)
+       (-contains?
+        (mapcar #'downcase (org-element-property :tags headline))
+        (downcase (symbol-name (org-glance-view-id view)))))
+   view))
+
+(cl-defmethod org-glance-reread-view (&optional (view-id (org-glance-read-view)))
+  (interactive)
+  (message "Reread view %s" view-id)
+  (let* ((view (gethash view-id org-glance-views))
+         (db (org-glance-view-db view))
+         (filter (org-glance-view-filter view))
+         (scope (org-glance-view-scope view)))
+    (org-glance-db-init db (org-glance-scope-headlines scope filter))
+    view))
+
+(cl-defmethod org-glance-view-headlines ((view org-glance-view))
+  "List headlines as org-elements for VIEW."
+  (org-glance-headlines
+   :db (org-glance-view-db view)
+   :scope (org-glance-view-scope view)
+   :filter (org-glance-view-filter view)))
+
+(cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
+  "List headlines as formatted strings for VIEW."
+  (->> view
+       org-glance-view-headlines
+       (mapcar #'org-glance-format)
+       (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
+
+(cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
+  (s-titleize (format "%s %s: " action (org-glance-view-id view))))
+
 (defun org-glance-act-arguments nil
   (transient-args 'org-glance-act))
-
-(cl-defun org-glance-view-filter (view headline)
-  (-contains?
-   (mapcar #'s-downcase (org-element-property :tags headline))
-   (downcase (symbol-name view))))
 
 (defun org-glance-list-views (&optional type)
   "List views mathing TYPE."
   (cond ((or (null type) (seq-set-equal-p (cl-intersection type '(all)) type))
-         org-glance-views)
-        (t (cl-loop for view in org-glance-views
-                    if (let ((types (gethash view org-glance-view-types)))
-                         (seq-set-equal-p (cl-intersection type types) type))
-                    collect view))))
+         (hash-table-keys org-glance-views))
+        (t (cl-loop for view-id being the hash-keys of org-glance-views
+                    using (hash-value view)
+                    if (seq-set-equal-p (cl-intersection type (org-glance-view-type view)) type)
+                    collect view-id))))
 
-(cl-defmethod org-glance-reread-view (&optional (view (org-glance-read-view)))
+(cl-defmethod org-glance-export-view
+  (&optional (view-id (org-glance-read-view))
+             (destination (read-file-name "Export destination: "))
+             force)
   (interactive)
-  (message "Reread view %s" view)
-  (let ((db (-org-glance-db-for view))
-        (filter (-org-glance-filter-for view))
-        (scope (-org-glance-scope-for view)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter)))
-  view)
-
-(defun org-glance-export-view (&optional view destination force)
-  (interactive)
-  (let* ((view (or view (org-glance-read-view)))
-         (destination (or destination (read-file-name "Export destination: ")))
-         (headlines (->> view
-                         org-glance-reread-view
-                         org-glance-view-headlines)))
+  (let ((headlines (->> view-id
+                        org-glance-reread-view
+                        org-glance-view-headlines)))
     (if (and (file-exists-p destination)
              (or force (y-or-n-p (format "File %s already exists. Overwrite?" destination))))
         (delete-file destination t))
@@ -116,20 +152,6 @@
                (kill-buffer)
                (append-to-file "\n" nil destination)))
     (find-file destination)))
-
-(cl-defmethod org-glance-view-headlines ((view symbol))
-  "List headlines as org-elements for VIEW."
-  (org-glance-headlines
-   :db (gethash view org-glance-view-files (-org-glance-db-for view))
-   :scope (gethash view org-glance-view-scopes org-glance-default-scope)
-   :filter (-org-glance-filter-for view)))
-
-(cl-defmethod org-glance-view-headlines/formatted ((view symbol))
-  "List headlines as formatted strings for VIEW."
-  (->> view
-       org-glance-view-headlines
-       (mapcar #'org-glance-format)
-       (mapcar #'(lambda (hl) (format "[%s] %s" view hl)))))
 
 ;; some private helpers
 
@@ -199,21 +221,6 @@
                    (org-element-property :raw-value headline))
     (error nil)))
 
-(cl-defmethod -org-glance-scope-for ((view symbol))
-  (gethash view org-glance-view-scopes org-glance-default-scope))
-
-(cl-defmethod -org-glance-filter-for ((view symbol))
-  (-partial #'org-glance-view-filter view))
-
-(defmethod -org-glance-db-for ((view symbol))
-  (->> view
-       (format "org-glance-%s.el")
-       (downcase)
-       (format "%s/%s" org-glance-db-directory)))
-
-(defun -org-glance-prompt-for (action view)
-  (s-titleize (format "%s %s: " action view)))
-
 (cl-defmethod org-glance-read-view (&optional (prompt "Choose view: ") type)
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views type)))
@@ -257,18 +264,17 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (defun ,(intern generic-func-name) (&optional args)
                       (interactive (list (org-glance-act-arguments)))
                       (let* ((action-types (gethash (quote ,name) org-glance-view-actions))
-                             (headlines (loop for view being the hash-keys of org-glance-view-types
-                                              using (hash-value types)
+                             (headlines (loop for view-id being the hash-keys of org-glance-views
+                                              using (hash-value view)
                                               when (or (cl-intersection action-types '(all))
-                                                       (cl-intersection action-types types))
+                                                       (cl-intersection action-types (org-glance-view-type view)))
                                               append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
                              (main-action (intern (format "%s-%s" ,generic-func-name 'all)))
                              (view-actions (mapcar (lambda (type) (intern (format "%s-%s" ,generic-func-name type))) action-types))
                              (view-actions-bound (-filter #'fboundp view-actions))
                              (choice (org-completing-read (format "%s: " (quote ,name)) headlines))
                              (view (alist-get choice headlines nil nil #'string=))
-                             (view-types (gethash view org-glance-view-types))
-                             (allowed-action-types (-union (cl-intersection action-types view-types) '(all)))
+                             (allowed-action-types (-union (cl-intersection action-types (org-glance-view-type view)) '(all)))
                              (allowed-actions (mapcar #'(lambda (at) (intern (format "%s-%s" ,generic-func-name at))) allowed-action-types))
                              (allowed-bound-actions (cl-intersection allowed-actions view-actions-bound))
                              (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
@@ -281,10 +287,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (defun ,(intern concrete-func-name) (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
                     (org-glance :default-choice headline
-                                :scope (-org-glance-scope-for view)
-                                :prompt (-org-glance-prompt-for (quote ,name) view)
-                                :db (gethash view org-glance-view-files (-org-glance-db-for view))
-                                :filter (-org-glance-filter-for view)
+                                :scope (org-glance-view-scope view)
+                                :prompt (org-glance-view-prompt view (quote ,name))
+                                :db (org-glance-view-db view)
+                                :filter (org-glance-view-filter view)
                                 :action (function ,(intern (format "org-glance--%s--%s" name type)))))
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
@@ -494,37 +500,13 @@ then run `org-completing-read' to open it."
           (message "Source hash: \"%s\"" (buffer-hash))
           (buffer-hash))))))
 
-(cl-defmacro org-glance-def-view (view &key bind type scope file &allow-other-keys)
-  (declare
-   (debug (stringp listp listp listp))
-   (indent 1))
-  `(progn
-     (cl-pushnew ,view org-glance-views)
-
-     (when ,scope
-       (puthash ,view ,scope org-glance-view-scopes))
-
-     (when ,file
-       (puthash ,view ,file org-glance-view-files))
-
-     (if ,type
-         (puthash ,view ,type org-glance-view-types)
-       (puthash ,view '(all) org-glance-view-types))
-
-     (when (quote ,bind)
-       (cl-loop for (binding . cmd) in (quote ,bind)
-                do (lexical-let ((command-name (intern (format "org-glance-action-%s" cmd)))
-                                 (view ,view))
-                     (global-set-key (kbd binding)
-                                     (lambda () (interactive)
-                                       (funcall command-name view))))))
-
-     (message "%s view is now available for glancing" ,view)))
-
-(cl-defun org-glance-remove-view (tag)
-  (setq org-glance-views (cl-remove (intern tag) org-glance-views))
-  (remhash (intern tag) org-glance-view-scopes)
-  (remhash (intern tag) org-glance-view-types))
+(cl-defmethod org-glance-def-view (view-id &key bind type scope &allow-other-keys)
+  (let ((view (make-org-glance-view
+               :id view-id
+               :scope scope
+               :type type)))
+    (puthash view-id view org-glance-views)
+    (message "%s view is now ready to glance" view-id)))
 
 (defun org-glance-capture-subtree-at-point ()
   (interactive)
@@ -532,11 +514,7 @@ then run `org-completing-read' to open it."
   (let ((view (org-completing-read "View: " (seq-difference (org-glance-list-views)
                                                             (mapcar #'intern (org-get-tags)))))
         (headline (org-element-at-point)))
-    (when (org-glance-view-filter view headline)
-      (user-error "Subtree is already captured"))
-    (org-toggle-tag view)
-    ;; capture action priority list
-    ))
+    (org-toggle-tag view)))
 
 (provide-me)
 ;;; org-glance-views.el ends here
