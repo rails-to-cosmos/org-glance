@@ -338,14 +338,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         (org-glance-view-mode)
         (insert contents)
         (goto-char (point-min))
-        (org-overview)
-        (org-show-children)
         (setq-local -org-glance-src file)
         (setq-local -org-glance-beg beg)
         (setq-local -org-glance-end end)
         (setq-local -org-glance-hash (org-glance-view-subtree-hash))  ;; extract hash from promoted subtree
         (with-demoted-errors (run-hooks 'after-materialize-hook))  ;; run hooks on original subtree
-        (setq-local -org-glance-indent (-org-glance-promote-subtree)))))  ;; then promote it saving original level
+        (setq-local -org-glance-indent (-org-glance-promote-subtree))))  ;; then promote it saving original level
+        (org-overview)
+        (org-show-children))
   (switch-to-buffer org-glance-materialized-view-buffer))
 
 (org-glance-def-action open (headline) :for link
