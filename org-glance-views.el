@@ -221,9 +221,9 @@
                    (org-element-property :raw-value headline))
     (error nil)))
 
-(cl-defmethod org-glance-read-view (&optional (prompt "Choose view: ") type)
+(cl-defmethod org-glance-read-view (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-list-views type)))
+  (let ((views (org-glance-list-views)))
     (if (> (length views) 1)
         (intern (org-completing-read prompt views))
       (car views))))
@@ -389,6 +389,18 @@ then run `org-completing-read' to open it."
         (bury-buffer file-buffer)
       (kill-buffer (get-file-buffer file)))))
 
+(org-glance-def-action property (headline) :for all
+  "Completing read all properties from HEADLINE and its successors to kill buffer."
+  (save-window-excursion
+    (org-glance-call-action 'materialize :on headline)
+    (let* ((properties (org-buffer-property-keys))
+           (property (org-completing-read "Extract property to kill ring: " properties))
+           (values (org-property-values property)))
+      (kill-new (cond
+                 ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                 ((= (length values) 1) (car values))
+                 (t (user-error "Something went wrong: %s" values)))))))
+
 ;;; Actions for CRYPT views
 
 (org-glance-def-action materialize (headline) :for crypt
@@ -412,6 +424,20 @@ then run `org-completing-read' to open it."
               (org-glance-decrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local))
+
+(org-glance-def-action property (headline) :for crypt
+  "Completing read all properties from HEADLINE and its successors to kill buffer."
+  (org-glance-call-action 'materialize :on headline :for 'crypt)
+  (let* ((properties (org-buffer-property-keys))
+         (property (org-completing-read "Extract property to kill ring: " properties))
+         (values (org-property-values property)))
+    (kill-new
+     (cond
+      ((> (length values) 1) (org-completing-read "Choose property value: " values))
+      ((= (length values) 1) (car values))
+      (t (user-error "Something went wrong: %s %s" properties values))))
+    ;; (org-glance-call-action 'property :on headline :for 'crypt)
+    ))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
@@ -500,11 +526,10 @@ then run `org-completing-read' to open it."
           (message "Source hash: \"%s\"" (buffer-hash))
           (buffer-hash))))))
 
-(cl-defmethod org-glance-def-view (view-id &key bind type scope &allow-other-keys)
-  (let ((view (make-org-glance-view
-               :id view-id
-               :scope scope
-               :type type)))
+(cl-defmethod org-glance-def-view (view-id &key type scope &allow-other-keys)
+  (let ((view (make-org-glance-view :id view-id)))
+    (when scope (setf (org-glance-view-scope view) scope))
+    (when type  (setf (org-glance-view-type view) type))
     (puthash view-id view org-glance-views)
     (message "%s view is now ready to glance" view-id)))
 
