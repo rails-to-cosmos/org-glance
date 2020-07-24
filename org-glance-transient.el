@@ -56,12 +56,12 @@
   ;; ["Arguments"
   ;;  ("-r" "Reread view" org-glance-act.current-view)]
   ["View"
-   [("e" "Export" org-glance-export-view)]
-   [("r" "Reread" org-glance-reread-view)]]
+   [("E" "Export" org-glance-export-view)]
+   [("R" "Reread" org-glance-reread-view)]]
   ["Record"
+   [("e" "Extract"    org-glance-action-extract-property)]
    [("j" "Jump"        org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit"       org-glance-action-visit)]
-   [("p" "Property"    org-glance-action-property)]])
+   [("v" "Visit"       org-glance-action-visit)]])
 
 (provide-me)
