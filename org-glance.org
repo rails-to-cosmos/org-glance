@@ -5,8 +5,12 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* tasks [2/5]
-** view-based materialized view buffers: *materialized-event*
+* tasks [3/7]
+** DONE [#A] corrupted views (many newlines)
+:LOGBOOK:
+- State "DONE"       from "TODO"       T:[2020-07-24 Fri 13:14]
+:END:
+** TODO view-based materialized view buffers: *materialized-event*
 ** TODO views dashboards
 
 | #   | Jul | Aug | Sep | Oct | Nov | Dec |

@@ -393,13 +393,14 @@ then run `org-completing-read' to open it."
   "Completing read all properties from HEADLINE and its successors to kill buffer."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline)
-    (let* ((properties (org-buffer-property-keys))
-           (property (org-completing-read "Extract property to kill ring: " properties))
-           (values (org-property-values property)))
-      (kill-new (cond
-                 ((> (length values) 1) (org-completing-read "Choose property value: " values))
-                 ((= (length values) 1) (car values))
-                 (t (user-error "Something went wrong: %s" values)))))))
+    (while t
+      (let* ((properties (org-buffer-property-keys))
+             (property (org-completing-read "Extract property: " properties))
+             (values (org-property-values property)))
+        (kill-new (cond
+                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                   ((= (length values) 1) (car values))
+                   (t (user-error "Something went wrong: %s" values))))))))
 
 ;;; Actions for CRYPT views
 
@@ -427,17 +428,17 @@ then run `org-completing-read' to open it."
 
 (org-glance-def-action property (headline) :for crypt
   "Completing read all properties from HEADLINE and its successors to kill buffer."
-  (org-glance-call-action 'materialize :on headline :for 'crypt)
-  (let* ((properties (org-buffer-property-keys))
-         (property (org-completing-read "Extract property to kill ring: " properties))
-         (values (org-property-values property)))
-    (kill-new
-     (cond
-      ((> (length values) 1) (org-completing-read "Choose property value: " values))
-      ((= (length values) 1) (car values))
-      (t (user-error "Something went wrong: %s %s" properties values))))
-    ;; (org-glance-call-action 'property :on headline :for 'crypt)
-    ))
+  (save-window-excursion
+    (org-glance-call-action 'materialize :on headline :for 'crypt)
+    (org-cycle-hide-drawers 'all)
+    (while t
+      (let* ((properties (org-buffer-property-keys))
+             (property (org-completing-read "Extract property: " properties))
+             (values (org-property-values property)))
+        (kill-new (cond
+                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                   ((= (length values) 1) (car values))
+                   (t (user-error "Something went wrong: %s" values))))))))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
@@ -519,7 +520,7 @@ then run `org-completing-read' to open it."
                        (error (org-glance-properties-corrupted "Materialized properties corrupted, please reread")))))
         (with-temp-buffer
           (org-mode)
-          (insert subtree)
+          (insert (s-trim subtree))
           (cl-loop while (org-up-heading-safe))
           (-org-glance-promote-subtree)
           (message "Source string:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
