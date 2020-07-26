@@ -376,7 +376,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
           (goto-char (point-min))
           (org-content 1)
           (org-cycle-hide-drawers 'all)
-          (org-show-set-visibility 'minimal)
           (setq-local -org-glance-src file)
           (setq-local -org-glance-beg beg)
           (setq-local -org-glance-end end)
