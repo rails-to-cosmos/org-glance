@@ -292,23 +292,23 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
          (generic-func-name (org-glance-generic-method-name name))
          (concrete-func-name (org-glance-concrete-method-name name type))
 	 (form `(progn
-                  (unless (fboundp (quote ,generic-func-name))
-                    (defun ,generic-func-name (&optional args)
-                      (interactive (list (org-glance-act-arguments)))
-                      (let* ((action (quote ,name))
-                             (action-types (gethash action org-glance-view-actions))
-                             (headlines (org-glance-headlines-for-action action))
-                             (main-action (intern (format "%s-%s" (quote ,generic-func-name) 'all)))
-                             (view-actions (mapcar (lambda (type) (org-glance-concrete-method-name action type)) action-types))
-                             (view-actions-bound (-filter #'fboundp view-actions))
-                             (choice (org-completing-read (format "%s: " action) headlines))
-                             (view (alist-get choice headlines nil nil #'string=))
-                             (view-type (org-glance-view-type view))
-                             (method-name (->> action
-                                               (org-glance-view-action-resolve view)
-                                               (org-glance-concrete-method-name action)))
-                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                        (funcall method-name args view headline))))
+
+                  ;; minor optimization:
+                  ;; (unless (fboundp (quote ,generic-func-name))
+                  ;;   )
+
+                  (defun ,generic-func-name (&optional args)
+                    (interactive (list (org-glance-act-arguments)))
+                    (let* ((action (quote ,name))
+                           (headlines (org-glance-headlines-for-action action))
+                           (choice (org-completing-read (format "%s: " action) headlines))
+                           (view (alist-get choice headlines nil nil #'string=))
+                           (view-type (org-glance-view-type view))
+                           (method-name (->> action
+                                             (org-glance-view-action-resolve view)
+                                             (org-glance-concrete-method-name action)))
+                           (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                      (funcall method-name args view headline)))
 
                   (defun ,concrete-func-name (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
@@ -451,8 +451,9 @@ then run `org-completing-read' to open it."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline :for 'crypt)
     (org-cycle-hide-drawers 'all)
-    (org-glance-buffer-properties-to-kill-ring)
-    (kill-buffer org-glance-materialized-view-buffer)))
+    (unwind-protect
+        (org-glance-buffer-properties-to-kill-ring)
+      (kill-buffer org-glance-materialized-view-buffer))))
 
 (defun org-glance-buffer-properties-to-kill-ring ()
   (while t
