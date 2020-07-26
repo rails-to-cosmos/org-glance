@@ -388,13 +388,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (org-glance-def-action open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
 then run `org-completing-read' to open it."
+  (save-window-excursion
+    (org-glance-call-action 'materialize :on headline))
+
   (let* ((file (org-element-property :file headline))
          (file-buffer (get-file-buffer file))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-
-    (save-window-excursion
-      (org-glance-call-action 'materialize :on headline))
-
     (unwind-protect
         (with-current-buffer org-glance-materialized-view-buffer
           (let* ((links (org-element-map (org-element-parse-buffer) 'link
@@ -402,7 +401,7 @@ then run `org-completing-read' to open it."
                             (cons
                              (substring-no-properties
                               (or (nth 2 link) ;; link alias
-                                  (org-element-property :raw-link link)))  ;; full link if alias is none
+                                  (org-element-property :raw-link link))) ;; full link if alias is none
                              (org-element-property :begin link)))))
                  (point (cond
                          ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
@@ -411,10 +410,8 @@ then run `org-completing-read' to open it."
             (goto-char point)
             (org-open-at-point)))
       (kill-buffer org-glance-materialized-view-buffer))
-
-    (if file-buffer
-        (bury-buffer file-buffer)
-      (kill-buffer (get-file-buffer file)))))
+    (cond (file-buffer (bury-buffer file-buffer))
+          (t (kill-buffer (get-file-buffer file))))))
 
 (org-glance-def-action extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."
