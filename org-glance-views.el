@@ -122,17 +122,23 @@
 (cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
   (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
+(cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
+  (let* ((action-types (->> org-glance-view-actions
+                            (gethash action)
+                            (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
+         (view-actions (loop for action-type in action-types
+                             with view-type = (org-glance-view-type view)
+                             when (subsetp action-type view-type)
+                             return action-type)))
+    (or view-actions
+        (car (member '(all) (gethash action org-glance-view-actions))))))
+
 (defun org-glance-act-arguments nil
   (transient-args 'org-glance-act))
 
-(defun org-glance-list-views (&optional type)
-  "List views mathing TYPE."
-  (cond ((or (null type) (seq-set-equal-p (cl-intersection type '(all)) type))
-         (hash-table-keys org-glance-views))
-        (t (cl-loop for view-id being the hash-keys of org-glance-views
-                    using (hash-value view)
-                    if (seq-set-equal-p (cl-intersection type (org-glance-view-type view)) type)
-                    collect view-id))))
+(defun org-glance-list-views ()
+  "List registered views."
+  (hash-table-keys org-glance-views))
 
 (cl-defmethod org-glance-export-view
   (&optional (view-id (org-glance-read-view))
@@ -257,6 +263,17 @@
        (format "org-glance-action-%s-%s" name)
        (intern)))
 
+;; (org-glance-view-action-resolve (org-glance-view 'Password) 'extract-property)
+;; (org-glance-view-action-resolve (org-glance-view 'Password) 'materialize)
+;; (org-glance-view-action-resolve (org-glance-view 'Password) 'visit)
+;; (org-glance-view-action-resolve (org-glance-view 'Password) 'open)
+
+(cl-defun org-glance-headlines-for-action (action)
+  (loop for view-id being the hash-keys of org-glance-views
+        using (hash-value view)
+        when (org-glance-view-action-resolve view action)
+        append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
+
 (cl-defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
 Make it accessible for views of TYPE in `org-glance-view-actions'."
@@ -278,30 +295,20 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (unless (fboundp (quote ,generic-func-name))
                     (defun ,generic-func-name (&optional args)
                       (interactive (list (org-glance-act-arguments)))
-                      (let* ((action-types (gethash (quote ,name) org-glance-view-actions))
-                             (headlines (loop for view-id being the hash-keys of org-glance-views
-                                              using (hash-value view)
-                                              when (or (cl-intersection action-types '((all)) :test #'seq-set-equal-p)
-                                                       (cl-intersection action-types (list (org-glance-view-type view)) :test #'seq-set-equal-p))
-                                              append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
+                      (let* ((action (quote ,name))
+                             (action-types (gethash action org-glance-view-actions))
+                             (headlines (org-glance-headlines-for-action action))
                              (main-action (intern (format "%s-%s" (quote ,generic-func-name) 'all)))
-                             (view-actions (mapcar (lambda (type) (org-glance-concrete-method-name (quote ,name) type)) action-types))
+                             (view-actions (mapcar (lambda (type) (org-glance-concrete-method-name action type)) action-types))
                              (view-actions-bound (-filter #'fboundp view-actions))
-                             (choice (org-completing-read (format "%s: " (quote ,name)) headlines))
+                             (choice (org-completing-read (format "%s: " action) headlines))
                              (view (alist-get choice headlines nil nil #'string=))
                              (view-type (org-glance-view-type view))
-                             (allowed-action-types (-union (cl-intersection action-types (list view-type) :test #'seq-set-equal-p) '((all))))
-                             (allowed-actions (mapcar #'(lambda (at) (org-glance-concrete-method-name (quote ,name) at)) allowed-action-types))
-                             (allowed-bound-actions (cl-intersection allowed-actions view-actions-bound))
+                             (method-name (->> action
+                                               (org-glance-view-action-resolve view)
+                                               (org-glance-concrete-method-name action)))
                              (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                        (pp allowed-action-types)
-                        (pp allowed-actions)
-                        (pp allowed-bound-actions)
-                        (cond ;; resolve overlapping methods
-                         ((= 0 (length allowed-bound-actions)) (user-error "No \"%s\" action bound for \"%s\"" (quote ,name) view))
-                         ((= 1 (length allowed-bound-actions)) (funcall (car allowed-bound-actions) args view headline))
-                         ((= 2 (length allowed-bound-actions)) (funcall (car (remq main-action allowed-bound-actions)) args view headline))
-                         (t (funcall (org-completing-read "Resolve it: " allowed-bound-actions) args view headline))))))
+                        (funcall method-name args view headline))))
 
                   (defun ,concrete-func-name (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
@@ -311,6 +318,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                 :db (org-glance-view-db view)
                                 :filter (org-glance-view-filter view)
                                 :action (function ,(intern (format "org-glance--%s--%s" name type)))))
+
                   (defun ,(intern (format "org-glance--%s--%s" name type))
                       ,@(cdr res)))))
 
@@ -409,17 +417,10 @@ then run `org-completing-read' to open it."
       (kill-buffer (get-file-buffer file)))))
 
 (org-glance-def-action extract-property (headline) :for kvs
-  "Completing read all properties from HEADLINE and its successors."
+  "Completing read all properties from HEADLINE and its successors to kill ring."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline)
-    (while t
-      (let* ((properties (org-buffer-property-keys))
-             (property (org-completing-read "Extract property: " properties))
-             (values (org-property-values property)))
-        (kill-new (cond
-                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
-                   ((= (length values) 1) (car values))
-                   (t (user-error "Something went wrong: %s" values))))))))
+    (org-glance-buffer-properties-to-kill-ring)))
 
 ;;; Actions for CRYPT views
 
@@ -446,18 +447,22 @@ then run `org-completing-read' to open it."
             'append 'local))
 
 (org-glance-def-action extract-property (headline) :for (kvs crypt)
-  "Completing read all properties from HEADLINE and its successors to kill buffer."
+  "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline :for 'crypt)
     (org-cycle-hide-drawers 'all)
-    (while t
-      (let* ((properties (org-buffer-property-keys))
-             (property (org-completing-read "Extract property: " properties))
-             (values (org-property-values property)))
-        (kill-new (cond
-                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
-                   ((= (length values) 1) (car values))
-                   (t (user-error "Something went wrong: %s" values))))))))
+    (org-glance-buffer-properties-to-kill-ring)
+    (kill-buffer org-glance-materialized-view-buffer)))
+
+(defun org-glance-buffer-properties-to-kill-ring ()
+  (while t
+    (let* ((properties (org-buffer-property-keys))
+           (property (org-completing-read "Extract property: " properties))
+           (values (org-property-values property)))
+      (kill-new (cond
+                 ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                 ((= (length values) 1) (car values))
+                 (t (user-error "Something went wrong: %s" values)))))))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
@@ -524,8 +529,6 @@ then run `org-completing-read' to open it."
         (insert buffer-contents)
         (goto-char (point-min))
         (-org-glance-promote-subtree)
-        (message "Subtree string:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
-        (message "Subtree hash: \"%s\"" (buffer-hash))
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash ()
