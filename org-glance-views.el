@@ -1,9 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
-(eval-when-compile
-  (require 'cl))
-
 (eval-and-compile
+  (require 'cl)
   (require 'aes)
   (require 'load-relative)
   (require 'org)
@@ -269,8 +267,7 @@
 ;; (org-glance-view-action-resolve (org-glance-view 'Password) 'open)
 
 (cl-defun org-glance-headlines-for-action (action)
-  (loop for view-id being the hash-keys of org-glance-views
-        using (hash-value view)
+  (loop for view being the hash-values of org-glance-views
         when (org-glance-view-action-resolve view action)
         append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
@@ -291,24 +288,22 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let* ((res (cl--transform-lambda (cons args body) name))
          (generic-func-name (org-glance-generic-method-name name))
          (concrete-func-name (org-glance-concrete-method-name name type))
+         (action-private-method (intern (format "org-glance--%s--%s" name type)))
 	 (form `(progn
 
-                  ;; minor optimization:
-                  ;; (unless (fboundp (quote ,generic-func-name))
-                  ;;   )
-
-                  (defun ,generic-func-name (&optional args)
-                    (interactive (list (org-glance-act-arguments)))
-                    (let* ((action (quote ,name))
-                           (headlines (org-glance-headlines-for-action action))
-                           (choice (org-completing-read (format "%s: " action) headlines))
-                           (view (alist-get choice headlines nil nil #'string=))
-                           (view-type (org-glance-view-type view))
-                           (method-name (->> action
-                                             (org-glance-view-action-resolve view)
-                                             (org-glance-concrete-method-name action)))
-                           (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                      (funcall method-name args view headline)))
+                  (unless (fboundp (quote ,generic-func-name))
+                    (defun ,generic-func-name (&optional args)
+                      (interactive (list (org-glance-act-arguments)))
+                      (let* ((action (quote ,name))
+                             (headlines (org-glance-headlines-for-action action))
+                             (choice (org-completing-read (format "%s: " action) headlines))
+                             (view (alist-get choice headlines nil nil #'string=))
+                             (view-type (org-glance-view-type view))
+                             (method-name (->> action
+                                               (org-glance-view-action-resolve view)
+                                               (org-glance-concrete-method-name action)))
+                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                        (funcall method-name args view headline))))
 
                   (defun ,concrete-func-name (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
@@ -317,9 +312,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                 :prompt (org-glance-view-prompt view (quote ,name))
                                 :db (org-glance-view-db view)
                                 :filter (org-glance-view-filter view)
-                                :action (function ,(intern (format "org-glance--%s--%s" name type)))))
+                                :action (function ,action-private-method)))
 
-                  (defun ,(intern (format "org-glance--%s--%s" name type))
+                  (defun ,action-private-method
                       ,@(cdr res)))))
 
     (if (car res) `(progn ,(car res) ,form) form)))

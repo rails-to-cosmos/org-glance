@@ -38,3 +38,4 @@ Links:
 ** https://magit.vc/manual/transient/
 * thoughts
 - https://grishaev.me/clj-zippers-1/
+- https://github.com/bbatsov/emacs-lisp-style-guide
