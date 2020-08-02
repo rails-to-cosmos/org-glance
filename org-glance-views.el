@@ -11,19 +11,19 @@
 
 ;; buffer-locals for materialized views
 
-(defcustom after-materialize-hook nil
+(defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
 
-(defcustom after-materialize-sync-hook nil
+(defcustom org-glance-after-materialize-sync-hook nil
   "Hook that is run after a materialized buffer is synchronized to its source file."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
 
-(defcustom before-materialize-sync-hook nil
+(defcustom org-glance-before-materialize-sync-hook nil
   "Normal hook that is run before a materialized buffer is synchronized to its source file."
   :options '(copyright-update time-stamp)
   :type 'hook
@@ -63,11 +63,12 @@
   "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
-;; org-glance-view -- base view data structure
+(defvar org-glance-view-default-type '(all)
+  "Default type for all views.")
 
 (cl-defstruct org-glance-view
   id
-  (type '(all))
+  (type org-glance-view-default-type)
   (scope org-glance-default-scope))
 
 (defvar org-glance-views (make-hash-table :test 'equal))
@@ -75,8 +76,8 @@
 (defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
 (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
 
-(cl-defmethod org-glance-view ((view-id symbol))
-  (gethash view-id org-glance-views))
+(cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
+(cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
 (cl-defmethod org-glance-view-db ((view org-glance-view))
   (->> view
@@ -129,7 +130,7 @@
                              when (subsetp action-type view-type)
                              return action-type)))
     (or view-actions
-        (car (member '(all) (gethash action org-glance-view-actions))))))
+        (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
 (defun org-glance-act-arguments nil
   (transient-args 'org-glance-act))
@@ -155,7 +156,9 @@
                (append-to-file (point-min) (point-max) destination)
                (kill-buffer)
                (append-to-file "\n" nil destination)))
-    (find-file destination)))
+    (if force
+        destination
+      (find-file destination))))
 
 ;; some private helpers
 
@@ -261,11 +264,6 @@
        (format "org-glance-action-%s-%s" name)
        (intern)))
 
-;; (org-glance-view-action-resolve (org-glance-view 'Password) 'extract-property)
-;; (org-glance-view-action-resolve (org-glance-view 'Password) 'materialize)
-;; (org-glance-view-action-resolve (org-glance-view 'Password) 'visit)
-;; (org-glance-view-action-resolve (org-glance-view 'Password) 'open)
-
 (cl-defun org-glance-headlines-for-action (action)
   (loop for view being the hash-values of org-glance-views
         when (org-glance-view-action-resolve view action)
@@ -318,6 +316,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                       ,@(cdr res)))))
 
     (if (car res) `(progn ,(car res) ,form) form)))
+
+;; (org-glance-def-type all "Doc string")
+;; (org-glance-def-type crypt)
+;; (org-glance-def-type kvs)
+
+;; (org-glance-def-action ... for type)
+
+;; (org-glance-def-capture (headline) for type
 
 (org-glance-def-action visit (headline) :for all
   "Visit HEADLINE."
@@ -375,7 +381,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
           (setq-local -org-glance-beg beg)
           (setq-local -org-glance-end end)
           (setq-local -org-glance-hash (org-glance-view-subtree-hash)) ;; extract hash from promoted subtree
-          (with-demoted-errors (run-hooks 'after-materialize-hook)) ;; run hooks on original subtree
+          (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook)) ;; run hooks on original subtree
           (setq-local -org-glance-indent (-org-glance-promote-subtree)))))
       ;; then promote it saving original level
         (org-overview)
@@ -423,17 +429,17 @@ then run `org-completing-read' to open it."
   (cl-flet ((decrypt ()
                      (setq-local -org-glance-pwd (read-passwd "Password: "))
                      (org-glance-decrypt-subtree -org-glance-pwd)))
-    (add-hook 'after-materialize-hook #'decrypt t)
+    (add-hook 'org-glance-after-materialize-hook #'decrypt t)
     (unwind-protect
         (org-glance-call-action 'materialize :on headline)
-      (remove-hook 'after-materialize-hook #'decrypt)))
-  (add-hook 'before-materialize-sync-hook
+      (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
+  (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
               (org-glance-encrypt-subtree -org-glance-pwd)
               (-org-glance-promote-subtree))
             'append 'local)
-  (add-hook 'after-materialize-sync-hook
+  (add-hook 'org-glance-after-materialize-sync-hook
             (lambda ()
               (-org-glance-demote-subtree -org-glance-indent)
               (org-glance-decrypt-subtree -org-glance-pwd)
@@ -487,7 +493,7 @@ then run `org-completing-read' to open it."
         (org-glance-view-not-modified source))
 
       (when (y-or-n-p "Subtree has been modified. Apply changes?")
-        (with-demoted-errors (run-hooks 'before-materialize-sync-hook))
+        (with-demoted-errors (run-hooks 'org-glance-before-materialize-sync-hook))
 
         (let ((new-contents
                (save-restriction
@@ -512,7 +518,7 @@ then run `org-completing-read' to open it."
           (setq-local -org-glance-end end)
           (setq-local -org-glance-hash (org-glance-view-source-hash))
 
-          (with-demoted-errors (run-hooks 'after-materialize-sync-hook)))))))
+          (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook)))))))
 
 (defun org-glance-view-subtree-hash ()
   (save-restriction
@@ -539,24 +545,38 @@ then run `org-completing-read' to open it."
           (insert (s-trim subtree))
           (cl-loop while (org-up-heading-safe))
           (-org-glance-promote-subtree)
-          (message "Source string:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
-          (message "Source hash: \"%s\"" (buffer-hash))
           (buffer-hash))))))
 
-(cl-defmethod org-glance-def-view (view-id &key type scope &allow-other-keys)
-  (let ((view (make-org-glance-view :id view-id)))
-    (when scope (setf (org-glance-view-scope view) scope))
-    (when type  (setf (org-glance-view-type view) type))
-    (puthash view-id view org-glance-views)
-    (message "%s view is now ready to glance" view-id)))
+(cl-defmacro org-glance-def-view (view-id &key type scope &allow-other-keys)
+  `(let ((view (make-org-glance-view :id (quote ,view-id))))
+     (when ,scope (setf (org-glance-view-scope view) ,scope))
+     (when ,type  (setf (org-glance-view-type view) ,type))
+     (puthash (quote ,view-id) view org-glance-views)
+     (message "%s view is now ready to glance" (quote ,view-id))
+     view))
+
+(cl-defmethod org-glance-remove-view ((view-id symbol))
+  (remhash view-id org-glance-views))
+
+(cl-defmacro with-org-glance-view (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
+  (declare (indent defun))
+  `(let ((,as (org-glance-def-view ,view-id :type ,type :scope ,scope)))
+     (unwind-protect
+         ,@forms
+       (org-glance-remove-view ,view-id))))
 
 (defun org-glance-capture-subtree-at-point ()
   (interactive)
   (unless (org-at-heading-p) (org-back-to-heading))
-  (let ((view (org-completing-read "View: " (seq-difference (org-glance-list-views)
-                                                            (mapcar #'intern (org-get-tags)))))
-        (headline (org-element-at-point)))
-    (org-toggle-tag view)))
+  (let* ((other-views (seq-difference
+                       (org-glance-list-views)
+                       (mapcar #'intern (org-get-tags))))
+         (view-id (org-completing-read "View: " other-views))
+         (view (org-glance-view view-id)))
+    (org-toggle-tag view-id)
+    ;; (loop for type in (org-glance-view-type view)
+    ;;       do (pp type))
+    ))
 
 (provide-me)
 ;;; org-glance-views.el ends here

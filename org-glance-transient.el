@@ -58,10 +58,10 @@
   ["View"
    [("E" "Export" org-glance-export-view)]
    [("R" "Reread" org-glance-reread-view)]]
-  ["Record"
-   [("e" "Extract"    org-glance-action-extract-property)]
-   [("j" "Jump"        org-glance-action-open)]
+  ["Headline"
+   [("e" "Extract" org-glance-action-extract-property)]
+   [("j" "Open" org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit"       org-glance-action-visit)]])
+   [("v" "Visit" org-glance-action-visit)]])
 
 (provide-me)

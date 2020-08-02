@@ -33,6 +33,7 @@ Links:
 :LOGBOOK:
 - State "DONE"       from "TODO"       T:[2020-07-14 Tue 20:18]
 :END:
+** TODO [bug] unable to materialize subtree with priority
 * dist-packages
 ** https://github.com/skeeto/emacsql
 ** https://magit.vc/manual/transient/
