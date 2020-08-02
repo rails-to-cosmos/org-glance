@@ -60,7 +60,7 @@
    [("R" "Reread" org-glance-reread-view)]]
   ["Headline"
    [("e" "Extract" org-glance-action-extract-property)]
-   [("j" "Open" org-glance-action-open)]
+   [("j" "Jump" org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
    [("v" "Visit" org-glance-action-visit)]])
 
