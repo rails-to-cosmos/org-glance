@@ -141,24 +141,31 @@
 
 (cl-defmethod org-glance-export-view
   (&optional (view-id (org-glance-read-view))
-             (destination (read-file-name "Export destination: "))
+             (destination (read-directory-name "Export destination: "))
              force)
   (interactive)
-  (let ((headlines (->> view-id
-                        org-glance-reread-view
-                        org-glance-view-headlines)))
-    (if (and (file-exists-p destination)
-             (or force (y-or-n-p (format "File %s already exists. Overwrite?" destination))))
-        (delete-file destination t))
+  (let* ((headlines (->> view-id
+                         org-glance-reread-view
+                         org-glance-view-headlines))
+         (filename (format "%s.org" view-id))
+         (dest-file-name (f-join destination filename)))
+    (when (and
+           (file-exists-p dest-file-name)
+           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+      (delete-file dest-file-name t))
     (loop for headline in headlines
-          do (save-window-excursion
-               (org-glance-call-action 'materialize :on headline)
-               (append-to-file (point-min) (point-max) destination)
-               (kill-buffer)
-               (append-to-file "\n" nil destination)))
+          do (org-glance-with-headline-narrowed headline
+               (append-to-file (point-min) (point-max) dest-file-name)
+               (append-to-file "\n" nil dest-file-name)))
     (if force
-        destination
-      (find-file destination))))
+        dest-file-name
+      (find-file dest-file-name))))
+
+(cl-defmethod org-glance-export-all-views
+  (&optional (destination (read-directory-name "Export destination: ")))
+  (interactive)
+  (loop for view-id being the hash-keys of org-glance-views
+        do (org-glance-export-view view-id destination 'force)))
 
 ;; some private helpers
 
@@ -305,12 +312,13 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
                   (defun ,concrete-func-name (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
-                    (org-glance :default-choice headline
-                                :scope (org-glance-view-scope view)
-                                :prompt (org-glance-view-prompt view (quote ,name))
-                                :db (org-glance-view-db view)
-                                :filter (org-glance-view-filter view)
-                                :action (function ,action-private-method)))
+                    (org-glance
+                     :default-choice headline
+                     :scope (org-glance-view-scope view)
+                     :prompt (org-glance-view-prompt view (quote ,name))
+                     :db (org-glance-view-db view)
+                     :filter (org-glance-view-filter view)
+                     :action (function ,action-private-method)))
 
                   (defun ,action-private-method
                       ,@(cdr res)))))
@@ -350,71 +358,79 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (org-glance-def-action materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
-  (save-window-excursion
-    (org-glance-call-action 'visit :on headline)
-    (cl-labels ((first-level-heading () (save-excursion
-                                          (unless (org-at-heading-p) (org-back-to-heading))
-                                          (beginning-of-line)
-                                          (point)))
-                (end-of-subtree () (save-excursion (org-end-of-subtree t)))
-                (buffer-contents (beg end) (->> (buffer-substring-no-properties beg end)
-                                                (s-trim))))
-      (let* ((file (org-element-property :file headline))
-             (beg (first-level-heading))
-             (end (end-of-subtree))
-             (contents (buffer-contents beg end)))
-        (when (get-buffer org-glance-materialized-view-buffer)
-          (switch-to-buffer org-glance-materialized-view-buffer)
-          (condition-case nil
-              (org-glance-view-sync-subtree)
-            (org-glance-view-not-modified nil))
-          (kill-buffer org-glance-materialized-view-buffer))
-        (with-current-buffer (get-buffer-create org-glance-materialized-view-buffer)
-          (delete-region (point-min) (point-max))
-          (org-mode)
-          (org-glance-view-mode)
-          (insert contents)
-          (goto-char (point-min))
-          (org-content 1)
-          (org-cycle-hide-drawers 'all)
-          (setq-local -org-glance-src file)
-          (setq-local -org-glance-beg beg)
-          (setq-local -org-glance-end end)
-          (setq-local -org-glance-hash (org-glance-view-subtree-hash)) ;; extract hash from promoted subtree
-          (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook)) ;; run hooks on original subtree
-          (setq-local -org-glance-indent (-org-glance-promote-subtree)))))
-      ;; then promote it saving original level
-        (org-overview)
-        (org-show-children))
-  (switch-to-buffer org-glance-materialized-view-buffer))
+  (cl-labels ((first-level-heading () (save-excursion
+                                        (unless (org-at-heading-p) (org-back-to-heading))
+                                        (beginning-of-line)
+                                        (point)))
+              (end-of-subtree () (save-excursion (org-end-of-subtree t)))
+              (buffer-contents (beg end) (->> (buffer-substring-no-properties beg end)
+                                              (s-trim))))
+    (let ((buffer org-glance-materialized-view-buffer))
+      (save-window-excursion
+        (org-glance-call-action 'visit :on headline)
+        (let* ((file (org-element-property :file headline))
+               (beg (first-level-heading))
+               (end (end-of-subtree))
+               (contents (buffer-contents beg end)))
+          (when (get-buffer buffer)
+            (switch-to-buffer buffer)
+            (condition-case nil
+                (org-glance-view-sync-subtree)
+              (org-glance-view-not-modified nil))
+            (kill-buffer buffer))
+          (with-current-buffer (get-buffer-create buffer)
+            (delete-region (point-min) (point-max))
+            (org-mode)
+            (org-glance-view-mode)
+            (insert contents)
+            (goto-char (point-min))
+            (org-content 1)
+            (org-cycle-hide-drawers 'all)
+            (setq-local -org-glance-src file)
+            (setq-local -org-glance-beg beg)
+            (setq-local -org-glance-end end)
+            ;; extract hash from promoted subtree
+            (setq-local -org-glance-hash (org-glance-view-subtree-hash))
+            ;; run hooks on original subtree
+            (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
+            ;; then promote it saving original level
+            (setq-local -org-glance-indent (-org-glance-promote-subtree)))
+          (org-overview)
+          (org-show-children)))
+      (switch-to-buffer buffer))))
+
+(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file)))
+     (save-window-excursion
+       (org-glance-call-action 'visit :on ,headline)
+       (widen)
+       (org-narrow-to-subtree)
+       (unwind-protect
+           (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+             ,@forms)
+         (widen)))
+     (cond (file-buffer (bury-buffer file-buffer))
+           (t (kill-buffer (get-file-buffer file))))))
 
 (org-glance-def-action open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
 then run `org-completing-read' to open it."
-  (save-window-excursion
-    (org-glance-call-action 'materialize :on headline))
-
-  (let* ((file (org-element-property :file headline))
-         (file-buffer (get-file-buffer file))
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-    (unwind-protect
-        (with-current-buffer org-glance-materialized-view-buffer
-          (let* ((links (org-element-map (org-element-parse-buffer) 'link
-                          (lambda (link)
-                            (cons
-                             (substring-no-properties
-                              (or (nth 2 link) ;; link alias
-                                  (org-element-property :raw-link link))) ;; full link if alias is none
-                             (org-element-property :begin link)))))
-                 (point (cond
-                         ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                         ((= (length links) 1) (cdar links))
-                         (t (user-error "Unable to find links in %s" file)))))
-            (goto-char point)
-            (org-open-at-point)))
-      (kill-buffer org-glance-materialized-view-buffer))
-    (cond (file-buffer (bury-buffer file-buffer))
-          (t (kill-buffer (get-file-buffer file))))))
+  (org-glance-with-headline-narrowed headline
+    (let* ((links (org-element-map (org-element-parse-buffer) 'link
+                    (lambda (link)
+                      (cons
+                       (substring-no-properties
+                        (or (nth 2 link) ;; link alias
+                            (org-element-property :raw-link link))) ;; full link if alias is none
+                       (org-element-property :begin link)))))
+           (point (cond
+                   ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                   ((= (length links) 1) (cdar links))
+                   (t (user-error "Unable to find links in %s" (buffer-file-name))))))
+      (goto-char point)
+      (org-open-at-point))))
 
 (org-glance-def-action extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."

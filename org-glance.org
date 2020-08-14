@@ -5,7 +5,11 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* tasks [3/7]
+* tasks [4/9]
+** DONE visit headlines instead of materializing (open action, attachments bug)
+:LOGBOOK:
+- State "DONE"       from "TODO"       T:[2020-08-14 Fri 17:57]
+:END:
 ** DONE [#A] corrupted views (many newlines)
 :LOGBOOK:
 - State "DONE"       from "TODO"       T:[2020-07-24 Fri 13:14]
@@ -40,3 +44,6 @@ Links:
 * thoughts
 - https://grishaev.me/clj-zippers-1/
 - https://github.com/bbatsov/emacs-lisp-style-guide
+- https://ctan.org/pkg/pgfgantt
+- https://i.imgur.com/rjmfauQ.png
+- https://www.reddit.com/r/emacs/comments/5yhk1m/gantt_charts_for_orgmode/
