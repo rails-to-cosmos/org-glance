@@ -447,7 +447,9 @@ then run `org-completing-read' to open it."
                      (org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'org-glance-after-materialize-hook #'decrypt t)
     (unwind-protect
-        (org-glance-call-action 'materialize :on headline)
+        (progn
+          (org-glance-call-action 'materialize :on headline)
+          (org-cycle-hide-drawers 'all))
       (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
@@ -466,6 +468,7 @@ then run `org-completing-read' to open it."
   "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline :for 'crypt)
+    (org-cycle-hide-drawers 'all)
     (unwind-protect
         (org-glance-buffer-properties-to-kill-ring)
       (kill-buffer org-glance-materialized-view-buffer))))
