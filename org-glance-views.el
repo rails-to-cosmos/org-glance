@@ -402,14 +402,13 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (declare (indent defun))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file)))
-     (save-window-excursion
-       (org-glance-call-action 'visit :on ,headline)
-       (widen)
-       (org-narrow-to-subtree)
-       (unwind-protect
-           (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-             ,@forms)
-         (widen)))
+     (org-glance-call-action 'visit :on ,headline)
+     (widen)
+     (org-narrow-to-subtree)
+     (unwind-protect
+         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+           ,@forms)
+       (widen))
      (cond (file-buffer (bury-buffer file-buffer))
            (t (kill-buffer (get-file-buffer file))))))
 
