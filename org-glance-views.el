@@ -395,8 +395,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
             (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
             ;; then promote it saving original level
             (setq-local -org-glance-indent (-org-glance-promote-subtree)))
-          (org-overview)
-          (org-show-children)))
+          (org-cycle 'contents)))
       (switch-to-buffer buffer))))
 
 (cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
