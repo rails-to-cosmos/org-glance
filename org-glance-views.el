@@ -139,6 +139,32 @@
   "List registered views."
   (hash-table-keys org-glance-views))
 
+(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file)))
+     (org-glance-call-action 'visit :on ,headline)
+     (widen)
+     (org-narrow-to-subtree)
+     (unwind-protect
+         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+           ,@forms)
+       (widen))
+     (cond (file-buffer (bury-buffer file-buffer))
+           (t (kill-buffer (get-file-buffer file))))))
+
+(cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file)))
+     (org-glance-call-action 'materialize :on ,headline)
+     (unwind-protect
+         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+           ,@forms)
+       (kill-buffer org-glance-materialized-view-buffer))
+     (cond (file-buffer (bury-buffer file-buffer))
+           (t (kill-buffer (get-file-buffer file))))))
+
 (cl-defmethod org-glance-export-view
   (&optional (view-id (org-glance-read-view))
              (destination (read-directory-name "Export destination: "))
@@ -154,7 +180,7 @@
            (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
       (delete-file dest-file-name t))
     (loop for headline in headlines
-          do (org-glance-with-headline-narrowed headline
+          do (org-glance-with-headline-materialized headline
                (append-to-file (point-min) (point-max) dest-file-name)
                (append-to-file "\n" nil dest-file-name)))
     (if force
@@ -397,20 +423,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
             (setq-local -org-glance-indent (-org-glance-promote-subtree)))
           (org-cycle 'contents)))
       (switch-to-buffer buffer))))
-
-(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
-  (declare (indent defun))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file)))
-     (org-glance-call-action 'visit :on ,headline)
-     (widen)
-     (org-narrow-to-subtree)
-     (unwind-protect
-         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-           ,@forms)
-       (widen))
-     (cond (file-buffer (bury-buffer file-buffer))
-           (t (kill-buffer (get-file-buffer file))))))
 
 (org-glance-def-action open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
