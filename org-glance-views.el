@@ -1,13 +1,18 @@
 ;; -*- lexical-binding: t -*-
 
+(eval-when-compile
+  (require 'cl))
+
 (eval-and-compile
-  (require 'cl)
   (require 'aes)
   (require 'load-relative)
+  (require 'transient)
+
   (require 'org)
   (require 'org-element)
+
   (require 'org-glance-db)
-  (require 'transient))
+  (require 'org-glance-scope))
 
 ;; buffer-locals for materialized views
 
@@ -127,7 +132,7 @@
                             (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
          (view-actions (loop for action-type in action-types
                              with view-type = (org-glance-view-type view)
-                             when (subsetp action-type view-type)
+                             when (cl-subsetp action-type view-type)
                              return action-type)))
     (or view-actions
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
@@ -321,7 +326,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
          (concrete-func-name (org-glance-concrete-method-name name type))
          (action-private-method (intern (format "org-glance--%s--%s" name type)))
 	 (form `(progn
-
                   (unless (fboundp (quote ,generic-func-name))
                     (defun ,generic-func-name (&optional args)
                       (interactive (list (org-glance-act-arguments)))
@@ -329,7 +333,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                              (headlines (org-glance-headlines-for-action action))
                              (choice (org-completing-read (format "%s: " action) headlines))
                              (view (alist-get choice headlines nil nil #'string=))
-                             (view-type (org-glance-view-type view))
                              (method-name (->> action
                                                (org-glance-view-action-resolve view)
                                                (org-glance-concrete-method-name action)))
@@ -338,6 +341,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
                   (defun ,concrete-func-name (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
+                    args
                     (org-glance
                      :default-choice headline
                      :scope (org-glance-view-scope view)
@@ -364,13 +368,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
-
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
-
     (widen)
     (goto-char point)
-
     (cond ((-element-at-point-equals-headline headline)
            (cl-loop while (org-up-heading-safe)) ;; expand parents
            (org-narrow-to-subtree)
@@ -447,8 +448,6 @@ then run `org-completing-read' to open it."
   (save-window-excursion
     (org-glance-call-action 'materialize :on headline)
     (org-glance-buffer-properties-to-kill-ring)))
-
-;;; Actions for CRYPT views
 
 (org-glance-def-action materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
@@ -577,35 +576,41 @@ then run `org-completing-read' to open it."
           (buffer-hash))))))
 
 (cl-defmacro org-glance-def-view (view-id &key type scope &allow-other-keys)
-  `(let ((view (make-org-glance-view :id (quote ,view-id))))
-     (when ,scope (setf (org-glance-view-scope view) ,scope))
-     (when ,type  (setf (org-glance-view-type view) ,type))
-     (puthash (quote ,view-id) view org-glance-views)
-     (message "%s view is now ready to glance" (quote ,view-id))
-     view))
+  `(progn
+     (unless (eq nil (gethash (quote ,view-id) org-glance-views))
+       (user-error "View %s is already registered." (quote ,view-id)))
+     (let ((view (make-org-glance-view :id (quote ,view-id))))
+       (when ,scope (setf (org-glance-view-scope view) ,scope))
+       (when ,type  (setf (org-glance-view-type view) ,type))
+       (puthash (quote ,view-id) view org-glance-views)
+       (message "%s view is now ready to glance" (quote ,view-id))
+       view)))
 
 (cl-defmethod org-glance-remove-view ((view-id symbol))
   (remhash view-id org-glance-views))
 
-(cl-defmacro with-org-glance-view (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
+(cl-defmacro org-glance-let (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
   (declare (indent defun))
-  `(let ((,as (org-glance-def-view ,view-id :type ,type :scope ,scope)))
+  `(let (result
+         (,as (org-glance-def-view ,view-id :type ,type :scope ,scope)))
      (unwind-protect
-         ,@forms
-       (org-glance-remove-view ,view-id))))
+         (setq result (progn ,@forms))
+       (org-glance-remove-view (quote ,view-id)))
+     result))
 
 (defun org-glance-capture-subtree-at-point ()
   (interactive)
   (unless (org-at-heading-p) (org-back-to-heading))
-  (let* ((other-views (seq-difference
-                       (org-glance-list-views)
-                       (mapcar #'intern (org-get-tags))))
-         (view-id (org-completing-read "View: " other-views))
-         (view (org-glance-view view-id)))
-    (org-toggle-tag view-id)
-    ;; (loop for type in (org-glance-view-type view)
-    ;;       do (pp type))
-    ))
+  ;; (let* ((other-views (seq-difference
+  ;;                      (org-glance-list-views)
+  ;;                      (mapcar #'intern (org-get-tags))))
+  ;;        (view-id (org-completing-read "View: " other-views))
+  ;;        (view (org-glance-view view-id)))
+  ;;   (org-toggle-tag view-id)
+  ;;   ;; (loop for type in (org-glance-view-type view)
+  ;;   ;;       do (pp type))
+  ;;   )
+  )
 
 (provide-me)
 ;;; org-glance-views.el ends here
