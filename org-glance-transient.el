@@ -1,8 +1,7 @@
 (eval-and-compile
   (require 'transient)
-  (require 'eieio-core))
-
-(declare-function org-glance-read-view "org-glance-views" (prompt &optional type))
+  (require 'eieio-core)
+  (require 'org-glance-views))
 
 ;; Global glance transient state
 
@@ -34,34 +33,35 @@
   "Override value format."
   (propertize (oref obj value) 'face 'transient-inactive-value))
 
-;; Base class for view specifying
+;; (defclass org-glance-transient-variable:view (org-glance-transient-variable)
+;;   ())
 
-(defclass org-glance-transient-variable:view (org-glance-transient-variable)
-  ())
+;; (cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
+;;   (oset obj value (org-glance-read-view)))
 
-(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
-  (oset obj value (org-glance-read-view "View: ")))
+;; (cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
+;;   (let* ((val (or (oref obj value) (oref obj default)))
+;;          (val-pretty (propertize val 'face 'transient-argument)))
+;;     (format "(%s)" val-pretty)))
 
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
-  (let* ((val (or (oref obj value) (oref obj default)))
-         (val-pretty (propertize val 'face 'transient-argument)))
-    (format "(%s)" val-pretty)))
+;; (transient-define-infix org-glance-act.current-view ()
+;;   :class 'org-glance-transient-variable:view
+;;   :variable 'org-glance-transient--current-view
+;;   :reader 'org-glance-read-view
+;;   :default "false")
 
-(transient-define-infix org-glance-act.current-view ()
-  :class 'org-glance-transient-variable:view
-  :variable 'org-glance-transient--current-view
-  :reader 'org-glance-read-view
-  :default "--all")
-
-;;;###autoload (autoload 'org-glance-act "org-glance" nil t)
-(transient-define-prefix org-glance-act (view)
+;;;###autoload
+(transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
-  ["Arguments"
-   ("-r" "Rebuild database file" "--reread")
-   ("-v" "View" org-glance-act.current-view)]
-  ["Actions"
-   [("j" "Jump"        org-glance-action-open)]
+  ;; ["Arguments"
+  ;;  ("-r" "Reread view" org-glance-act.current-view)]
+  ["View"
+   [("E" "Export" org-glance-export-view)]
+   [("R" "Reread" org-glance-reread-view)]]
+  ["Headline"
+   [("e" "Extract" org-glance-action-extract-property)]
+   [("j" "Jump" org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit"       org-glance-action-visit)]])
+   [("v" "Visit" org-glance-action-visit)]])
 
 (provide-me)

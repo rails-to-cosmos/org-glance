@@ -64,9 +64,12 @@
 
 (eval-and-compile
   (require 'dash-functional)
-  (require 'load-relative)
-  (require 'org-glance-scope)
-  (require 'org-glance-transient))
+  (require 'load-relative))
+
+(require 'org-glance-db)
+(require 'org-glance-views)
+(require 'org-glance-scope)
+(require 'org-glance-transient)
 
 (declare-function org-glance-db-init "org-glance-db" (db headlines))
 (declare-function org-glance-db-load "org-glance-db" (file))
@@ -77,14 +80,10 @@
   :tag "Org Glance"
   :group 'org)
 
-(defun org-glance-format (headline)
-  (or (org-element-property :TITLE headline)
-      (org-element-property :raw-value headline)))
-
 (cl-defun org-glance
     (&key db
-          db-init
           default-choice
+          (db-init nil)
           (filter #'(lambda (_) t))
           (scope '(agenda))
           (action #'org-glance--visit--all)
@@ -95,22 +94,15 @@ Filter headlines by FILTER method.
 Call ACTION method on selected headline.
 Specify DB to save headlines in read-optimized el-file.
 Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u prefix."
-  (unless (functionp action)
-    (user-error "Specify ACTION to call on headline"))
-  (let ((headlines
-         (cond ((or (and db db-init)
-                    (and db (not (file-exists-p db))))
-                (org-glance-db-init db (org-glance-scope-headlines scope filter)))
-               ((null db) (org-glance-scope-headlines scope filter))
-               ((and (not (null db))
-                     (file-exists-p db)) (org-glance-db-load db))
-               (t (user-error "Nothing to glance at (scope: %s)" scope)))))
+  (let* ((headlines
+          (org-glance-headlines
+           :db db
+           :db-init db-init
+           :scope scope
+           :filter filter)))
     (unwind-protect
-        (when-let (choice (or default-choice (org-completing-read prompt (mapcar #'org-glance-format headlines))))
-          (if-let (headline (cl-loop
-                             for hl in headlines
-                             when (string= (org-glance-format hl) choice)
-                             do (cl-return hl)))
+        (when-let (choice (or default-choice (org-glance-prompt-headlines prompt headlines)))
+          (if-let (headline (org-glance-choose-headline choice headlines))
               (condition-case nil (funcall action headline)
                 (org-glance-db-outdated
                  (message "Database %s is outdated, actualizing..." db)
