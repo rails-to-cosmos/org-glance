@@ -47,3 +47,5 @@ Links:
 - https://ctan.org/pkg/pgfgantt
 - https://i.imgur.com/rjmfauQ.png
 - https://www.reddit.com/r/emacs/comments/5yhk1m/gantt_charts_for_orgmode/
+- http://fastcompression.blogspot.com/p/lz4.html
+- https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
