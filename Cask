@@ -5,11 +5,9 @@
 
 (development
  (depends-on "aes")
- (depends-on "cl")
  (depends-on "cl-generic")
  (depends-on "cl-lib")
  (depends-on "dash")
- (depends-on "dash-functional")
  (depends-on "transient")
  (depends-on "ert")
  (depends-on "eieio")

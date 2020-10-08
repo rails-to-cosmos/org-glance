@@ -55,7 +55,7 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'cl)
+  (require 'cl-lib)
   (require 'cl-generic)
   (require 'cl-lib)
   (require 'org)
@@ -63,7 +63,6 @@
   (require 'subr-x))
 
 (eval-and-compile
-  (require 'dash-functional)
   (require 'load-relative))
 
 (require 'org-glance-db)

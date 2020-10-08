@@ -1,7 +1,8 @@
 ;; -*- lexical-binding: t -*-
 
 (eval-when-compile
-  (require 'cl))
+  (require 'cl-lib)
+  (require 'cl-macs))
 
 (eval-and-compile
   (require 'aes)
@@ -130,10 +131,10 @@
   (let* ((action-types (->> org-glance-view-actions
                             (gethash action)
                             (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (loop for action-type in action-types
-                             with view-type = (org-glance-view-type view)
-                             when (cl-subsetp action-type view-type)
-                             return action-type)))
+         (view-actions (cl-loop for action-type in action-types
+                                with view-type = (org-glance-view-type view)
+                                when (cl-subsetp action-type view-type)
+                                return action-type)))
     (or view-actions
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
@@ -187,10 +188,10 @@
            (file-exists-p dest-file-name)
            (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
       (delete-file dest-file-name t))
-    (loop for headline in headlines
-          do (org-glance-with-headline-materialized headline
-               (append-to-file (point-min) (point-max) dest-file-name)
-               (append-to-file "\n" nil dest-file-name)))
+    (cl-loop for headline in headlines
+             do (org-glance-with-headline-materialized headline
+                  (append-to-file (point-min) (point-max) dest-file-name)
+                  (append-to-file "\n" nil dest-file-name)))
     (if force
         dest-file-name
       (find-file dest-file-name))))
@@ -198,8 +199,8 @@
 (cl-defmethod org-glance-export-all-views
   (&optional (destination (read-directory-name "Export destination: ")))
   (interactive)
-  (loop for view-id being the hash-keys of org-glance-views
-        do (org-glance-export-view view-id destination 'force)))
+  (cl-loop for view-id being the hash-keys of org-glance-views
+           do (org-glance-export-view view-id destination 'force)))
 
 ;; some private helpers
 
@@ -306,9 +307,9 @@
        (intern)))
 
 (cl-defun org-glance-headlines-for-action (action)
-  (loop for view being the hash-values of org-glance-views
-        when (org-glance-view-action-resolve view action)
-        append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
+  (cl-loop for view being the hash-values of org-glance-views
+           when (org-glance-view-action-resolve view action)
+           append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
 (cl-defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.

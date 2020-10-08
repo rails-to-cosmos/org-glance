@@ -1,5 +1,6 @@
 (eval-when-compile
-  (require 'cl))
+  (require 'cl-lib)
+  (require 'cl-macs))
 
 (eval-and-compile
   (require 'subr-x)
@@ -76,8 +77,8 @@ TAGS is a list of strings."
          "*org-glance-ledger-report*" nil nil
          (ledger-mode)
          (insert (format "%04d/%02d/%02d %s\n" (ts-year ts) (ts-month ts) (ts-day ts) title))
-         (loop for amount in amounts
-               do (insert (format "    Expenses%s%s    %s\n" tags title amount)))
+         (cl-loop for amount in amounts
+                  do (insert (format "    Expenses%s%s    %s\n" tags title amount)))
          (insert "    Assets:Default\n")
          (switch-to-buffer-other-window "*org-glance-ledger-report*"))))))
 
