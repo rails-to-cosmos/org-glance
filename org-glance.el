@@ -62,17 +62,15 @@
   (require 'seq)
   (require 'subr-x))
 
-(eval-and-compile
-  (require 'load-relative))
-
-(require 'org-glance-db)
-(require 'org-glance-views)
-(require 'org-glance-scope)
 (require 'org-glance-transient)
 
-(declare-function org-glance-db-init "org-glance-db" (db headlines))
-(declare-function org-glance-db-load "org-glance-db" (file))
-(declare-function org-glance-db-outdated "org-glance-db" (format &rest args))
+(load "org-glance-views.el") ;; minor hack to load actions
+
+(declare-function org-glance-act "org-glance-transient")
+(declare-function org-glance-db-init "org-glance-db")
+(declare-function org-glance-db-load "org-glance-db")
+(declare-function org-glance-db-outdated "org-glance-db")
+(declare-function org-glance-headlines "org-glance-scope")
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

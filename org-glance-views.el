@@ -1,19 +1,106 @@
 ;; -*- lexical-binding: t -*-
 
-(eval-when-compile
-  (require 'cl-lib)
-  (require 'cl-macs))
+(require 'aes)
+(require 'gv)
+(require 'cl-lib)
+(require 'cl-macs)
+(require 'load-relative)
+(require 'org)
+(require 'org-element)
+(require 'org-glance-db)
+(require 'org-glance-scope)
+(require 'transient)
 
-(eval-and-compile
-  (require 'aes)
-  (require 'load-relative)
-  (require 'transient)
+(declare-function org-glance "org-glance")
 
-  (require 'org)
-  (require 'org-element)
+;; macro definition
 
-  (require 'org-glance-db)
-  (require 'org-glance-scope))
+(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file))
+          (visited-buffer (current-buffer)))
+     (org-glance-call-action 'visit :on ,headline)
+     (widen)
+     (org-narrow-to-subtree)
+     (unwind-protect
+         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+           ,@forms)
+       (widen))
+     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                       (bury-buffer file-buffer)))
+           (t (kill-buffer (get-file-buffer file))))))
+
+(cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file)))
+     (org-glance-call-action 'materialize :on ,headline)
+     (unwind-protect
+         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+           ,@forms)
+       (kill-buffer org-glance-materialized-view-buffer))
+     (cond (file-buffer (bury-buffer file-buffer))
+           (t (kill-buffer (get-file-buffer file))))))
+
+(defmacro org-glance-def-action (name args _ type &rest body)
+  "Defun method NAME (ARGS) BODY.
+Make it accessible for views of TYPE in `org-glance-view-actions'."
+  (declare (debug
+            ;; Same as defun but use cl-lambda-list.
+            (&define [&or name ("setf" :name setf name)]
+                     cl-lambda-list
+                     symbolp
+                     cl-declarations-or-string
+                     [&optional ("interactive" interactive)]
+                     def-body))
+           (doc-string 6)
+           (indent 4))
+  (org-glance-register-action name type)
+  (let* ((res (cl--transform-lambda (cons args body) name))
+         (generic-func-name (org-glance-generic-method-name name))
+         (concrete-func-name (org-glance-concrete-method-name name type))
+         (action-private-method (intern (format "org-glance--%s--%s" name type)))
+	 (form `(progn
+                  (unless (fboundp (quote ,generic-func-name))
+                    (defun ,generic-func-name (&optional args)
+                      (interactive (list (org-glance-act-arguments)))
+                      (let* ((action (quote ,name))
+                             (headlines (org-glance-headlines-for-action action))
+                             (choice (org-completing-read (format "%s: " action) headlines))
+                             (view (alist-get choice headlines nil nil #'string=))
+                             (method-name (->> action
+                                               (org-glance-view-action-resolve view)
+                                               (org-glance-concrete-method-name action)))
+                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                        (funcall method-name args view headline))))
+
+                  (defun ,concrete-func-name (&optional args view headline)
+                    (interactive (list (org-glance-act-arguments)))
+                    args
+                    (org-glance
+                     :default-choice headline
+                     :scope (org-glance-view-scope view)
+                     :prompt (org-glance-view-prompt view (quote ,name))
+                     :db (org-glance-view-db view)
+                     :filter (org-glance-view-filter view)
+                     :action (function ,action-private-method)))
+
+                  (defun ,action-private-method
+                      ,@(cdr res)))))
+
+    (if (car res) `(progn ,(car res) ,form) form)))
+
+(cl-defun org-glance-def-view (view-id &key type scope)
+  (unless (eq nil (gethash view-id org-glance-views))
+    (user-error "View %s is already registered." view-id))
+  (let ((view (make-org-glance-view :id view-id)))
+    (when scope (setf (org-glance-view-scope view) scope))
+    (when type  (setf (org-glance-view-type view) type))
+    (puthash view-id view org-glance-views)
+    (message "%s view is now ready to glance" view-id)
+    view))
 
 ;; buffer-locals for materialized views
 
@@ -49,12 +136,12 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
-(eval-and-compile
-  (defvar org-glance-view-mode-map (make-sparse-keymap)
-    "Extend `org-mode' map with sync abilities.")
-  (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
-  (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
-  (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer))
+(defvar org-glance-view-mode-map (make-sparse-keymap)
+  "Extend `org-mode' map with sync abilities.")
+
+(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
+(define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
@@ -145,35 +232,6 @@
   "List registered views."
   (hash-table-keys org-glance-views))
 
-(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
-  (declare (indent defun))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file))
-          (visited-buffer (current-buffer)))
-     (org-glance-call-action 'visit :on ,headline)
-     (widen)
-     (org-narrow-to-subtree)
-     (unwind-protect
-         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-           ,@forms)
-       (widen))
-     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                       (bury-buffer file-buffer)))
-           (t (kill-buffer (get-file-buffer file))))))
-
-(cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
-  (declare (indent defun))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file)))
-     (org-glance-call-action 'materialize :on ,headline)
-     (unwind-protect
-         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-           ,@forms)
-       (kill-buffer org-glance-materialized-view-buffer))
-     (cond (file-buffer (bury-buffer file-buffer))
-           (t (kill-buffer (get-file-buffer file))))))
-
 (cl-defmethod org-glance-export-view
   (&optional (view-id (org-glance-read-view))
              (destination (read-directory-name "Export destination: "))
@@ -245,7 +303,7 @@
     (cl-loop while (condition-case nil
                        (org-with-limited-levels (org-map-tree 'org-promote) t)
                      (error nil))
-             do (incf promote-level))
+             do (cl-incf promote-level))
     promote-level))
 
 (defun -org-glance-demote-subtree (level)
@@ -311,54 +369,6 @@
            when (org-glance-view-action-resolve view action)
            append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
-(cl-defmacro org-glance-def-action (name args _ type &rest body)
-  "Defun method NAME (ARGS) BODY.
-Make it accessible for views of TYPE in `org-glance-view-actions'."
-  (declare (debug
-            ;; Same as defun but use cl-lambda-list.
-            (&define [&or name ("setf" :name setf name)]
-                     cl-lambda-list
-                     symbolp
-                     cl-declarations-or-string
-                     [&optional ("interactive" interactive)]
-                     def-body))
-           (doc-string 6)
-           (indent 4))
-  (org-glance-register-action name type)
-  (let* ((res (cl--transform-lambda (cons args body) name))
-         (generic-func-name (org-glance-generic-method-name name))
-         (concrete-func-name (org-glance-concrete-method-name name type))
-         (action-private-method (intern (format "org-glance--%s--%s" name type)))
-	 (form `(progn
-                  (unless (fboundp (quote ,generic-func-name))
-                    (defun ,generic-func-name (&optional args)
-                      (interactive (list (org-glance-act-arguments)))
-                      (let* ((action (quote ,name))
-                             (headlines (org-glance-headlines-for-action action))
-                             (choice (org-completing-read (format "%s: " action) headlines))
-                             (view (alist-get choice headlines nil nil #'string=))
-                             (method-name (->> action
-                                               (org-glance-view-action-resolve view)
-                                               (org-glance-concrete-method-name action)))
-                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                        (funcall method-name args view headline))))
-
-                  (defun ,concrete-func-name (&optional args view headline)
-                    (interactive (list (org-glance-act-arguments)))
-                    args
-                    (org-glance
-                     :default-choice headline
-                     :scope (org-glance-view-scope view)
-                     :prompt (org-glance-view-prompt view (quote ,name))
-                     :db (org-glance-view-db view)
-                     :filter (org-glance-view-filter view)
-                     :action (function ,action-private-method)))
-
-                  (defun ,action-private-method
-                      ,@(cdr res)))))
-
-    (if (car res) `(progn ,(car res) ,form) form)))
-
 ;; (org-glance-def-type all "Doc string")
 ;; (org-glance-def-type crypt)
 ;; (org-glance-def-type kvs)
@@ -369,6 +379,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (org-glance-def-action visit (headline) :for all
   "Visit HEADLINE."
+  (message "Register VISIT action...")
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
@@ -579,24 +590,13 @@ then run `org-completing-read' to open it."
           (-org-glance-promote-subtree)
           (buffer-hash))))))
 
-(cl-defmacro org-glance-def-view (view-id &key type scope &allow-other-keys)
-  `(progn
-     (unless (eq nil (gethash (quote ,view-id) org-glance-views))
-       (user-error "View %s is already registered." (quote ,view-id)))
-     (let ((view (make-org-glance-view :id (quote ,view-id))))
-       (when ,scope (setf (org-glance-view-scope view) ,scope))
-       (when ,type  (setf (org-glance-view-type view) ,type))
-       (puthash (quote ,view-id) view org-glance-views)
-       (message "%s view is now ready to glance" (quote ,view-id))
-       view)))
-
 (cl-defmethod org-glance-remove-view ((view-id symbol))
   (remhash view-id org-glance-views))
 
 (cl-defmacro org-glance-let (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
   (declare (indent defun))
   `(let (result
-         (,as (org-glance-def-view ,view-id :type ,type :scope ,scope)))
+         (,as (org-glance-def-view (quote ,view-id) :type ,type :scope ,scope)))
      (unwind-protect
          (setq result (progn ,@forms))
        (org-glance-remove-view (quote ,view-id)))

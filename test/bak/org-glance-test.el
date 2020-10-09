@@ -5,14 +5,14 @@
 
 ;;; Code:
 
-(require 'org)
-(require 'org-element)
-(require 'load-relative)
-(require 'f)
-(require 'org-glance)
-(require 'org-glance-views)
-(require 'with-simulated-input)
-(require 'subr-x)
+;; (require 'org)
+;; (require 'org-element)
+;; (require 'load-relative)
+;; (require 'f)
+;; (require 'org-glance)
+;; ;; (require 'org-glance-views)
+;; (require 'with-simulated-input)
+;; (require 'subr-x)
 
 ;; (ert-deftest org-glance-test/provide-feature ()
 ;;   "Dummy test."
@@ -67,36 +67,36 @@
 ;;       (search-forward "Russian Federation")
 ;;       (should (eq (point) (+ mvbeg mvpos titlediff -1))))))
 
-(ert-deftest org-glance-test/link-view-open ()
-  "Link view open feature spec."
-  (load-file "org-glance-views.el")
-  ;; (with-temp-view "Service" :type '(link) :scope "services.org"
-  ;;   (follow-link-capture-output "Service")
-  ;;   ;; (org-glance-emulate-user-input "[Service] Simple service bookmark"
-  ;;   ;;   )
-  ;;   )
+;; (ert-deftest org-glance-test/link-view-open ()
+;;   "Link view open feature spec."
+;;   (load-file "org-glance-views.el")
+;;   ;; (with-temp-view "Service" :type '(link) :scope "services.org"
+;;   ;;   (follow-link-capture-output "Service")
+;;   ;;   ;; (org-glance-emulate-user-input "[Service] Simple service bookmark"
+;;   ;;   ;;   )
+;;   ;;   )
 
-  ;; (cl-flet ((link-opened-p (title output) (s-ends-with-p (format "(pp \"%s\") => \"%s\"\n" title title) output)))
-  ;;   (let ((org-confirm-elisp-link-function nil))
+;;   ;; (cl-flet ((link-opened-p (title output) (s-ends-with-p (format "(pp \"%s\") => \"%s\"\n" title title) output)))
+;;   ;;   (let ((org-confirm-elisp-link-function nil))
 
-  ;;     ;; (should (->> ;; completing read on multiple links in subtree
-  ;;     ;;          (org-glance-sandbox
-  ;;     ;;            (org-glance-def-view "Service"
-  ;;     ;;              :file "services.org"
-  ;;     ;;              :type '(link))
+;;   ;;     ;; (should (->> ;; completing read on multiple links in subtree
+;;   ;;     ;;          (org-glance-sandbox
+;;   ;;     ;;            (org-glance-def-view "Service"
+;;   ;;     ;;              :file "services.org"
+;;   ;;     ;;              :type '(link))
 
-  ;;     ;;            (org-glance-emulate-user-input ["Service with CI" "Coverage"]
-  ;;     ;;              (org-glance-action-open nil "Bookmark")))
-  ;;     ;;          (link-opened-p "Coverage")))
+;;   ;;     ;;            (org-glance-emulate-user-input ["Service with CI" "Coverage"]
+;;   ;;     ;;              (org-glance-action-open nil "Bookmark")))
+;;   ;;     ;;          (link-opened-p "Coverage")))
 
-  ;;     ;; (should (->> ; without completing read if there is only one link
-  ;;     ;;          (org-glance-sandbox :view "Service" :in "services.org" :type '(link) :input "Simple service bookmark" :act 'open)
-  ;;     ;;          (link-opened-p "Bookmark")))
+;;   ;;     ;; (should (->> ; without completing read if there is only one link
+;;   ;;     ;;          (org-glance-sandbox :view "Service" :in "services.org" :type '(link) :input "Simple service bookmark" :act 'open)
+;;   ;;     ;;          (link-opened-p "Bookmark")))
 
-  ;;     ;; (should (->>   ; methods from child subtrees should be available
-  ;;     ;;          (org-glance-sandbox :view "Service" :in "services.org" :type '(link) :input '("Service with CI" "Child method") :act 'open)
-  ;;     ;;          (link-opened-p "Child method")))
-  ;;     ))
-  )
+;;   ;;     ;; (should (->>   ; methods from child subtrees should be available
+;;   ;;     ;;          (org-glance-sandbox :view "Service" :in "services.org" :type '(link) :input '("Service with CI" "Child method") :act 'open)
+;;   ;;     ;;          (link-opened-p "Child method")))
+;;   ;;     ))
+;;   )
 
 ;;; org-glance-test.el ends here

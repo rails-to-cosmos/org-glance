@@ -3,7 +3,8 @@ EMACS ?= emacs
 
 .PHONY: all test testsrc clean init
 all: init build
-init: ${CASK} install
+init:
+	${CASK} install
 build:
 	${CASK} clean-elc
 	${CASK} build

@@ -1,7 +1,8 @@
 (eval-and-compile
   (require 'transient)
-  (require 'eieio-core)
-  (require 'org-glance-views))
+  (require 'eieio-core))
+
+(require 'org-glance-views)
 
 ;; Global glance transient state
 
@@ -50,7 +51,6 @@
 ;;   :reader 'org-glance-read-view
 ;;   :default "false")
 
-;;;###autoload
 (transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
   ;; ["Arguments"
