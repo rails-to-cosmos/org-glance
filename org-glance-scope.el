@@ -7,6 +7,8 @@
   (require 'load-relative)
   (require 'org-glance-db))
 
+(defvar org-glance-org-scope-extensions '("org" "org_archive"))
+
 (defvar org-glance-scope--default-scope-alist
   '((file-with-archives . -org-glance-list-archives)
     (agenda . org-agenda-files)
@@ -40,6 +42,7 @@
 (cl-defmethod org-glance-scope-headlines (scope &optional filter)
   (cl-loop
    for file in (org-glance-scope scope)
+   when (member (file-name-extension file) org-glance-org-scope-extensions)
    do (message "Glance %s" file)
    append (org-glance-read-headlines-from-file file filter)
    into result
