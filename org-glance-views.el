@@ -379,7 +379,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (org-glance-def-action visit (headline) :for all
   "Visit HEADLINE."
-  (message "Register VISIT action...")
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))

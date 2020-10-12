@@ -5,7 +5,7 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* tasks [4/9]
+* Tasks [4/9]
 ** DONE visit headlines instead of materializing (open action, attachments bug)
 :LOGBOOK:
 - State "DONE"       from "TODO"       T:[2020-08-14 Fri 17:57]
