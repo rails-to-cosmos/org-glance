@@ -55,10 +55,10 @@
   "In Glance-View buffer, perform action on selected view"
   ;; ["Arguments"
   ;;  ("-r" "Reread view" org-glance-act.current-view)]
-  ["View"
+  ["Views"
    [("E" "Export" org-glance-export-view)]
    [("R" "Reread" org-glance-reread-view)]]
-  ["Headline"
+  ["Headlines"
    [("e" "Extract" org-glance-action-extract-property)]
    [("j" "Jump" org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
