@@ -57,6 +57,7 @@
   ;;  ("-r" "Reread view" org-glance-act.current-view)]
   ["Views"
    [("E" "Export" org-glance-export-view)]
+   [("M" "Materialize" org-glance-materialize-view)]
    [("R" "Reread" org-glance-reread-view)]]
   ["Headlines"
    [("e" "Extract" org-glance-action-extract-property)]

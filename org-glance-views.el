@@ -237,22 +237,38 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
              (destination (read-directory-name "Export destination: "))
              force)
   (interactive)
-  (let* ((headlines (->> view-id
-                         org-glance-reread-view
-                         org-glance-view-headlines))
-         (filename (format "%s.org" view-id))
+  (let* ((filename (s-downcase (format "%s.org" view-id)))
          (dest-file-name (f-join destination filename)))
     (when (and
            (file-exists-p dest-file-name)
            (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
       (delete-file dest-file-name t))
-    (cl-loop for headline in headlines
+    (cl-loop for headline in (->> view-id
+                                  org-glance-reread-view
+                                  org-glance-view-headlines)
              do (org-glance-with-headline-materialized headline
                   (append-to-file (point-min) (point-max) dest-file-name)
                   (append-to-file "\n" nil dest-file-name)))
     (if force
         dest-file-name
       (find-file dest-file-name))))
+
+(cl-defmethod org-glance-materialize-view
+  (&optional (view-id (org-glance-read-view)))
+  (interactive)
+  (let* ((headlines (->> view-id
+                         org-glance-reread-view
+                         org-glance-view-headlines))
+         (filename (format "%s.org" view-id))
+         (dest-file-name (make-temp-file (s-downcase (format "org-glance-view-%s-" view-id)) nil ".org")))
+    (when (file-exists-p dest-file-name)
+      (delete-file dest-file-name t))
+    (cl-loop for headline in headlines
+             do (org-glance-with-headline-materialized headline
+                  (append-to-file (point-min) (point-max) dest-file-name)
+                  (append-to-file "\n" nil dest-file-name)))
+    (find-file dest-file-name)
+    (org-overview)))
 
 (cl-defmethod org-glance-export-all-views
   (&optional (destination (read-directory-name "Export destination: ")))
@@ -323,10 +339,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (point)))
 
 (defun -element-at-point-equals-headline (headline)
-  (condition-case nil
-      (s-contains? (org-element-property :raw-value (org-element-at-point))
-                   (org-element-property :raw-value headline))
-    (error nil)))
+  (message "Checkout element at point equals headline:")
+  (let ((element-title (org-element-property :raw-value (org-element-at-point)))
+        (headline-title (org-element-property :raw-value headline)))
+    (pp element-title)
+    (pp headline-title)
+    (condition-case nil
+        (s-contains? element-title headline-title)
+      (error nil))))
 
 (cl-defmethod org-glance-read-view (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
@@ -393,9 +413,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (widen)
            (goto-char point)
            (outline-show-subtree))
-          (t (unless buffer
-               (kill-buffer))
-             (org-glance-db-outdated "Cache file is outdated")))))
+          (t (unless buffer (kill-buffer))
+             (message "Unable to visit headline")
+             (pp headline)
+             (org-glance-db-outdated "Visited headline cache corrupted, please reread")))))
 
 (org-glance-def-action materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."

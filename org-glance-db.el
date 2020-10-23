@@ -17,9 +17,7 @@
       (org-element-property :raw-value headline)))
 
 (defun org-glance-choose-headline (choice headlines)
-  (cl-loop for hl in headlines
-           when (string= (org-glance-format hl) choice)
-           do (cl-return hl)))
+  (--first (string= (org-glance-format it) choice) headlines))
 
 (defun org-glance-prompt-headlines (prompt headlines)
   (org-completing-read prompt (mapcar #'org-glance-format headlines)))
@@ -35,14 +33,18 @@
   (message "Database has been initialized: %s" db)
   headlines)
 
-(cl-defun org-glance-db-load (file)
-  (let ((entries
-         (with-temp-buffer (insert-file-contents file)
-                           (->> (buffer-string)
-                                substring-no-properties
-                                read
-                                eval))))
-    (mapcar #'org-glance-db--deserialize entries)))
+(defun org-glance-read-file-headlines (file)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (->> (buffer-string)
+         substring-no-properties
+         read
+         eval)))
+
+(defun org-glance-db-load (file)
+  (-some->> file
+    org-glance-read-file-headlines
+    (mapcar 'org-glance-db--deserialize)))
 
 (cl-defun org-glance-db--serialize (headline)
   (prin1-to-string
@@ -55,8 +57,7 @@
   (cl-destructuring-bind (alias title begin file) input
     (org-element-create
      'headline
-     `(:TITLE
-       ,alias
+     `(:TITLE ,alias
        :raw-value ,title
        :begin ,begin
        :file ,file))))
