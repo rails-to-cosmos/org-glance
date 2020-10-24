@@ -139,6 +139,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
+(defvar org-glance-properties-ignore-patterns '("^ARCHIVE_"))
+
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
@@ -517,9 +519,10 @@ then run `org-completing-read' to open it."
         (org-glance-buffer-properties-to-kill-ring)
       (kill-buffer org-glance-materialized-view-buffer))))
 
-(defun org-glance-buffer-properties-to-kill-ring ()
+(cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
+  "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
   (while t
-    (let* ((properties (org-buffer-property-keys))
+    (let* ((properties (-filter (lambda (key) (not (--any? (s-matches? it key) ignore-patterns))) (org-buffer-property-keys)))
            (property (org-completing-read "Extract property: " properties))
            (values (org-property-values property)))
       (kill-new (cond
