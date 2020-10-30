@@ -14,7 +14,7 @@ Links:
 :LOGBOOK:
 - State "DONE"       from "TODO"       T:[2020-07-24 Fri 13:14]
 :END:
-** TODO view-based materialized view buffers: *materialized-event*
+** TODO view-based materialized view buffer names: *materialized-event*
 ** TODO views github-like dashboards
 
 | #   | Jul | Aug | Sep | Oct | Nov | Dec |

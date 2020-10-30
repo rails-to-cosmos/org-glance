@@ -16,6 +16,7 @@
 ;; macro definition
 
 (cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
+  "Visit HEADLINE, narrow to its subtree and execute FORMS in separate buffer."
   (declare (indent defun))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file))
@@ -24,8 +25,8 @@
      (widen)
      (org-narrow-to-subtree)
      (unwind-protect
-         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-           ,@forms)
+          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+            ,@forms)
        (widen))
      (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
            ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
@@ -33,13 +34,14 @@
            (t (kill-buffer (get-file-buffer file))))))
 
 (cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
+  "Materialize HEADLINE, execute FORMS in materialized buffer."
   (declare (indent defun))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file)))
      (org-glance-call-action 'materialize :on ,headline)
      (unwind-protect
-         (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-           ,@forms)
+          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+            ,@forms)
        (kill-buffer org-glance-materialized-view-buffer))
      (cond (file-buffer (bury-buffer file-buffer))
            (t (kill-buffer (get-file-buffer file))))))
@@ -139,7 +141,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
-(defvar org-glance-properties-ignore-patterns '("^ARCHIVE_"))
+(defvar org-glance-properties-ignore-patterns
+  (append
+   org-special-properties
+   '("^ARCHIVE_" "^TITLE$")))
 
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
@@ -155,7 +160,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (cl-defun org-glance-properties-corrupted (format &rest args) (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
 
 (define-minor-mode org-glance-view-mode
-  "A minor mode to be activated only in materialized view editor."
+    "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
 (defvar org-glance-view-default-type '(all)
@@ -168,7 +173,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (defvar org-glance-views (make-hash-table :test 'equal))
 (defvar org-glance-view-actions (make-hash-table :test 'equal))
-(defvar org-glance-db-directory (concat user-emacs-directory "org-glance"))
+(defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
+(defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
 (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
 
 (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
@@ -221,9 +227,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                             (gethash action)
                             (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
          (view-actions (cl-loop for action-type in action-types
-                                with view-type = (org-glance-view-type view)
-                                when (cl-subsetp action-type view-type)
-                                return action-type)))
+                          with view-type = (org-glance-view-type view)
+                          when (cl-subsetp action-type view-type)
+                          return action-type)))
     (or view-actions
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
@@ -235,9 +241,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (hash-table-keys org-glance-views))
 
 (cl-defmethod org-glance-export-view
-  (&optional (view-id (org-glance-read-view))
-             (destination (read-directory-name "Export destination: "))
-             force)
+    (&optional (view-id (org-glance-read-view))
+       (destination (or org-glance-export-directory
+                        (read-directory-name "Export destination: ")))
+       force)
   (interactive)
   (let* ((filename (s-downcase (format "%s.org" view-id)))
          (dest-file-name (f-join destination filename)))
@@ -248,35 +255,20 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (cl-loop for headline in (->> view-id
                                   org-glance-reread-view
                                   org-glance-view-headlines)
-             do (org-glance-with-headline-materialized headline
-                  (append-to-file (point-min) (point-max) dest-file-name)
-                  (append-to-file "\n" nil dest-file-name)))
+       do (org-glance-with-headline-materialized headline
+              (append-to-file (point-min) (point-max) dest-file-name)
+            (append-to-file "\n" nil dest-file-name)))
     (if force
         dest-file-name
       (find-file dest-file-name))))
 
-(cl-defmethod org-glance-materialize-view
-  (&optional (view-id (org-glance-read-view)))
-  (interactive)
-  (let* ((headlines (->> view-id
-                         org-glance-reread-view
-                         org-glance-view-headlines))
-         (filename (format "%s.org" view-id))
-         (dest-file-name (make-temp-file (s-downcase (format "org-glance-view-%s-" view-id)) nil ".org")))
-    (when (file-exists-p dest-file-name)
-      (delete-file dest-file-name t))
-    (cl-loop for headline in headlines
-             do (org-glance-with-headline-materialized headline
-                  (append-to-file (point-min) (point-max) dest-file-name)
-                  (append-to-file "\n" nil dest-file-name)))
-    (find-file dest-file-name)
-    (org-overview)))
-
 (cl-defmethod org-glance-export-all-views
-  (&optional (destination (read-directory-name "Export destination: ")))
+    (&optional (destination
+                (or org-glance-export-directory
+                    (read-directory-name "Export destination: "))))
   (interactive)
   (cl-loop for view-id being the hash-keys of org-glance-views
-           do (org-glance-export-view view-id destination 'force)))
+     do (org-glance-export-view view-id destination 'force)))
 
 ;; some private helpers
 
@@ -321,13 +313,13 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (cl-loop while (condition-case nil
                        (org-with-limited-levels (org-map-tree 'org-promote) t)
                      (error nil))
-             do (cl-incf promote-level))
+       do (cl-incf promote-level))
     promote-level))
 
 (defun -org-glance-demote-subtree (level)
   (cl-loop repeat level
-           do (org-with-limited-levels
-               (org-map-tree 'org-demote))))
+     do (org-with-limited-levels
+         (org-map-tree 'org-demote))))
 
 (defun -org-glance-first-level-heading ()
   (save-excursion
@@ -388,8 +380,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (cl-defun org-glance-headlines-for-action (action)
   (cl-loop for view being the hash-values of org-glance-views
-           when (org-glance-view-action-resolve view action)
-           append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
+     when (org-glance-view-action-resolve view action)
+     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
 ;; (org-glance-def-type all "Doc string")
 ;; (org-glance-def-type crypt)
@@ -466,19 +458,19 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "Search for `org-any-link-re' under the HEADLINE
 then run `org-completing-read' to open it."
   (org-glance-with-headline-narrowed headline
-    (let* ((links (org-element-map (org-element-parse-buffer) 'link
-                    (lambda (link)
-                      (cons
-                       (substring-no-properties
-                        (or (nth 2 link) ;; link alias
-                            (org-element-property :raw-link link))) ;; full link if alias is none
-                       (org-element-property :begin link)))))
-           (point (cond
-                   ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                   ((= (length links) 1) (cdar links))
-                   (t (user-error "Unable to find links in %s" (buffer-file-name))))))
-      (goto-char point)
-      (org-open-at-point))))
+      (let* ((links (org-element-map (org-element-parse-buffer) 'link
+                      (lambda (link)
+                        (cons
+                         (substring-no-properties
+                          (or (nth 2 link) ;; link alias
+                              (org-element-property :raw-link link))) ;; full link if alias is none
+                         (org-element-property :begin link)))))
+             (point (cond
+                      ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                      ((= (length links) 1) (cdar links))
+                      (t (user-error "Unable to find links in %s" (buffer-file-name))))))
+        (goto-char point)
+        (org-open-at-point))))
 
 (org-glance-def-action extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."
@@ -489,13 +481,13 @@ then run `org-completing-read' to open it."
 (org-glance-def-action materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
-                     (setq-local -org-glance-pwd (read-passwd "Password: "))
-                     (org-glance-decrypt-subtree -org-glance-pwd)))
+              (setq-local -org-glance-pwd (read-passwd "Password: "))
+              (org-glance-decrypt-subtree -org-glance-pwd)))
     (add-hook 'org-glance-after-materialize-hook #'decrypt t)
     (unwind-protect
-        (progn
-          (org-glance-call-action 'materialize :on headline)
-          (org-cycle-hide-drawers 'all))
+         (progn
+           (org-glance-call-action 'materialize :on headline)
+           (org-cycle-hide-drawers 'all))
       (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
@@ -516,7 +508,7 @@ then run `org-completing-read' to open it."
     (org-glance-call-action 'materialize :on headline :for 'crypt)
     (org-cycle-hide-drawers 'all)
     (unwind-protect
-        (org-glance-buffer-properties-to-kill-ring)
+         (org-glance-buffer-properties-to-kill-ring)
       (kill-buffer org-glance-materialized-view-buffer))))
 
 (cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
@@ -526,9 +518,9 @@ then run `org-completing-read' to open it."
            (property (org-completing-read "Extract property: " properties))
            (values (org-property-values property)))
       (kill-new (cond
-                 ((> (length values) 1) (org-completing-read "Choose property value: " values))
-                 ((= (length values) 1) (car values))
-                 (t (user-error "Something went wrong: %s" values)))))))
+                  ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                  ((= (length values) 1) (car values))
+                  (t (user-error "Something went wrong: %s" values)))))))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
@@ -621,7 +613,7 @@ then run `org-completing-read' to open it."
   `(let (result
          (,as (org-glance-def-view (quote ,view-id) :type ,type :scope ,scope)))
      (unwind-protect
-         (setq result (progn ,@forms))
+          (setq result (progn ,@forms))
        (org-glance-remove-view (quote ,view-id)))
      result))
 

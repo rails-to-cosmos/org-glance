@@ -34,32 +34,41 @@
   "Override value format."
   (propertize (oref obj value) 'face 'transient-inactive-value))
 
-;; (defclass org-glance-transient-variable:view (org-glance-transient-variable)
-;;   ())
+(defun org-glance-read-scope ()
+  (completing-read
+   "Scope: "
+   '(agenda
+     agenda-with-archives
+     file)))
 
-;; (cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
-;;   (oset obj value (org-glance-read-view)))
+(setq org-glance-transient--scope "agenda")
 
-;; (cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
-;;   (let* ((val (or (oref obj value) (oref obj default)))
-;;          (val-pretty (propertize val 'face 'transient-argument)))
-;;     (format "(%s)" val-pretty)))
+(defclass org-glance-transient-variable:scope (org-glance-transient-variable)
+  ())
 
-;; (transient-define-infix org-glance-act.current-view ()
-;;   :class 'org-glance-transient-variable:view
-;;   :variable 'org-glance-transient--current-view
-;;   :reader 'org-glance-read-view
-;;   :default "false")
+(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:scope))
+  (oset obj value (org-glance-read-scope)))
+
+(cl-defmethod transient-format-value ((obj org-glance-transient-variable:scope))
+  (let* ((val (or (oref obj value) (oref obj default)))
+         (val-pretty (propertize val 'face 'transient-argument)))
+    (format "(%s)" val-pretty)))
+
+(transient-define-infix org-glance-act.scope ()
+  :class 'org-glance-transient-variable:scope
+  :variable 'org-glance-transient--scope
+  :reader 'org-glance-read-scope
+  :default "false")
 
 (transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
-  ;; ["Arguments"
-  ;;  ("-r" "Reread view" org-glance-act.current-view)]
+  ["Arguments"
+   ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("E" "Export" org-glance-export-view)]
-   [("M" "Materialize" org-glance-materialize-view)]
    [("R" "Reread" org-glance-reread-view)]]
   ["Headlines"
+   [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]
    [("j" "Jump" org-glance-action-open)]
    [("m" "Materialize" org-glance-action-materialize)]
