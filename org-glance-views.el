@@ -285,7 +285,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
 (cl-defun org-glance-show-report ()
   (interactive)
-  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TODO\" \"TAGS\") :block today :fileskip0 t :hidefiles t")
+  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
         (end_src "#+END:")
         (report-buffer (get-buffer-create "*org-glance-report*")))
     (with-current-buffer report-buffer
