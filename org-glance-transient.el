@@ -66,7 +66,7 @@
    ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("E" "Export" org-glance-export-view)]
-   [("R" "Reread" org-glance-reread-view)]]
+   [("R" "Report" org-glance-show-report)]]
   ["Headlines"
    [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]

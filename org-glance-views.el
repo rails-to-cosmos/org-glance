@@ -1,4 +1,14 @@
-;; -*- lexical-binding: t -*-
+;;; org-glance-views.el --- declare tagged org-mode subtrees as views with materialize possibility.     -*- lexical-binding: t -*-
+
+;; Copyright (C) 2018-2020 Dmitry Akatov
+
+;; Author: Dmitry Akatov <akatovda@yandex.com>
+;; Created: 30 October, 2020
+;; Version: 1.0
+
+;;; Commentary:
+
+;;; Code:
 
 (require 'aes)
 (require 'gv)
@@ -177,6 +187,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
 (defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
 
+(defun org-glance-exports ()
+  (org-glance-list-files-recursively org-glance-export-directory))
+
 (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
@@ -269,6 +282,21 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (interactive)
   (cl-loop for view-id being the hash-keys of org-glance-views
      do (org-glance-export-view view-id destination 'force)))
+
+(cl-defun org-glance-show-report ()
+  (interactive)
+  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TODO\" \"TAGS\") :block today :fileskip0 t :hidefiles t")
+        (end_src "#+END:")
+        (report-buffer (get-buffer-create "*org-glance-report*")))
+    (with-current-buffer report-buffer
+      (org-mode)
+      (delete-region (point-min) (point-max))
+      (insert begin_src)
+      (insert "\n")
+      (insert end_src)
+      (goto-char (point-min))
+      (org-ctrl-c-ctrl-c))
+    (switch-to-buffer report-buffer)))
 
 ;; some private helpers
 
