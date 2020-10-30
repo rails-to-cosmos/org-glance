@@ -5,15 +5,8 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* Tasks [4/10]
-** DONE visit headlines instead of materializing (open action, attachments bug)
-:LOGBOOK:
-- State "DONE"       from "TODO"       T:[2020-08-14 Fri 17:57]
-:END:
-** DONE [#A] corrupted views (many newlines)
-:LOGBOOK:
-- State "DONE"       from "TODO"       T:[2020-07-24 Fri 13:14]
-:END:
+* Tasks [0/6]
+** TODO [#A] [bug] unable to visit/materialize subtree with priority
 ** TODO view-based materialized view buffer names: *materialized-event*
 ** TODO views github-like dashboards
 
@@ -29,15 +22,6 @@ Links:
 
 ** TODO read-only flag for materialized views
 ** TODO test sandbox
-** DONE fix rereads
-:LOGBOOK:
-- State "DONE"       from "TODO"       T:[2020-07-14 Tue 20:18]
-:END:
-** DONE act on all proper views by default
-:LOGBOOK:
-- State "DONE"       from "TODO"       T:[2020-07-14 Tue 20:18]
-:END:
-** TODO [bug] unable to materialize subtree with priority
 ** TODO full-text search
 * dist-packages
 ** https://github.com/skeeto/emacsql
