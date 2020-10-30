@@ -5,7 +5,8 @@ Links:
 - [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
-* Tasks [0/7]
+* Tasks [0/8]
+** TODO bulk sync materialized views
 ** TODO [#A] [bug] unable to visit/materialize subtree with priority
 ** TODO export #+TAGS and other options
 ** TODO view-based materialized view buffer names: *materialized-event*
