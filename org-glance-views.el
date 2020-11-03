@@ -636,15 +636,6 @@ then run `org-completing-read' to open it."
 (cl-defmethod org-glance-remove-view ((view-id symbol))
   (remhash view-id org-glance-views))
 
-(cl-defmacro org-glance-let (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
-  (declare (indent defun))
-  `(let (result
-         (,as (org-glance-def-view (quote ,view-id) :type ,type :scope ,scope)))
-     (unwind-protect
-          (setq result (progn ,@forms))
-       (org-glance-remove-view (quote ,view-id)))
-     result))
-
 (defun org-glance-capture-subtree-at-point ()
   (interactive)
   (unless (org-at-heading-p) (org-back-to-heading))

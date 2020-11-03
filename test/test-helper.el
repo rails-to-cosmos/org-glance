@@ -37,6 +37,15 @@
 (defun org-glance-test-get-resource (resource)
   (f-join org-glance-test/test-resources-path resource))
 
+(cl-defmacro org-glance-let (view-id &rest forms &key type scope (as 'view) &allow-other-keys)
+  (declare (indent defun))
+  `(let (result
+         (,as (org-glance-def-view (quote ,view-id) :type ,type :scope ,scope)))
+     (unwind-protect
+          (setq result (progn ,@forms))
+       (org-glance-remove-view (quote ,view-id)))
+     result))
+
 ;; (cl-defmacro with-temp-view (view &rest forms &key type scope &allow-other-keys)
 ;;   (declare (indent defun))
 ;;   `(let* ((scope-file (make-temp-file "org-glance-test-"))

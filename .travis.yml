@@ -1,5 +1,7 @@
 dist: trusty
 language: emacs-lisp
+sudo: required
+group: deprecated-2017Q4
 env:
   - EVM_EMACS=emacs-26.3-travis
 before_install:
