@@ -3,6 +3,6 @@
 * Georgia                                                                       :Country:
 * Ukraine                                                                       :Country:
 * Russia                                                                        :Country:
-** Central                                                                     :Region:
-** Northwestern                                                                :Region:
-** Southern                                                                    :Region:
+** [#A] Central                                                                :Region:
+** [#B] Northwestern                                                           :Region:
+** [#C] Southern                                                               :Region:

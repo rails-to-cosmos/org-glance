@@ -20,6 +20,10 @@
 (require 'org-glance-db)
 (require 'org-glance-scope)
 (require 'transient)
+(require 'with-simulated-input)
+
+(eval-when-compile
+  (require 'cl))
 
 (declare-function org-glance "org-glance")
 
@@ -111,7 +115,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (when scope (setf (org-glance-view-scope view) scope))
     (when type  (setf (org-glance-view-type view) type))
     (puthash view-id view org-glance-views)
-    (message "%s view is now ready to glance" view-id)
+    (message "%s view of type %s is now ready to glance scope %s"
+             view-id (or type "default") scope)
     view))
 
 ;; buffer-locals for materialized views
@@ -361,11 +366,11 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (point)))
 
 (defun -element-at-point-equals-headline (headline)
-  (message "Checkout element at point equals headline:")
+  (message "Element at point equals headline?")
   (let ((element-title (org-element-property :raw-value (org-element-at-point)))
         (headline-title (org-element-property :raw-value headline)))
-    (pp element-title)
-    (pp headline-title)
+    (message "Requested headline: %s" headline-title)
+    (message "Visited headline: %s" element-title)
     (condition-case nil
         (s-contains? element-title headline-title)
       (error nil))))

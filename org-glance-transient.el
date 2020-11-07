@@ -41,7 +41,7 @@
      agenda-with-archives
      file)))
 
-(setq org-glance-transient--scope "agenda")
+(defvar org-glance-transient--scope "agenda")
 
 (defclass org-glance-transient-variable:scope (org-glance-transient-variable)
   ())
@@ -62,8 +62,8 @@
 
 (transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
-  ["Arguments"
-   ("-s" "Scope" org-glance-act.scope)]
+  ;; ["Arguments"
+  ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("E" "Export" org-glance-export-view)]
    [("R" "Report" org-glance-show-report)]]
