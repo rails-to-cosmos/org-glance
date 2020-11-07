@@ -6,12 +6,12 @@ Links:
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
 * Tasks [0/8]
-** TODO bulk sync materialized views
-** STARTED [#A] [bug] unable to visit/materialize subtree with priority
+** TODO [#A] [bug] unable to visit/materialize subtree with priority
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]
-CLOCK: [2020-11-07 Sat 14:48]
+CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 :END:
+** TODO bulk sync materialized views
 ** TODO export #+TAGS and other options
 ** TODO view-based materialized view buffer names: *materialized-event*
 ** TODO views github-like dashboards
