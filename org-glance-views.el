@@ -84,7 +84,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                       (interactive (list (org-glance-act-arguments)))
                       (let* ((action (quote ,name))
                              (headlines (org-glance-headlines-for-action action))
-                             (choice (org-completing-read (format "%s: " action) headlines))
+                             (choice (unwind-protect
+                                          (org-completing-read (format "%s: " action) headlines)
+                                       (pp headlines)))
                              (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
                                                (org-glance-view-action-resolve view)
