@@ -1,25 +1,55 @@
-dist: trusty
 language: emacs-lisp
+dist: trusty
 sudo: required
-group: deprecated-2017Q4
+cache:
+  - directories:
+      # Cache stable Emacs binaries (saves 1min per job)
+      - "$HOME/emacs/"
+# Allow Emacs snapshot builds to fail and don’t wait for these as they can take
+# a looooong time
+matrix:
+  fast_finish: true
+  allow_failures:
+    - env: EMACS_VERSION=snapshot
 env:
+  - EMACS_VERSION=24.3
+  - EMACS_VERSION=25.1-rc2
+  - EMACS_VERSION=25.3
   - EVM_EMACS=emacs-26.3-travis
+  - EMACS_VERSION=26.0.91 PRETEST=yes
+  - EMACS_VERSION=snapshot
 before_install:
-  - sudo mkdir /usr/local/evm
-  - sudo chown travis:travis /usr/local/evm
-  - export PATH="/home/travis/.cask/bin:$PATH"
-  - export PATH="/home/travis/.evm/bin:$PATH"
-  - curl -fsSkL https://raw.github.com/rejeep/evm/master/go | bash
-  - evm install $EVM_EMACS --use
-  - ln -s /usr/local/evm/$EVM_EMACS /tmp/$EVM_EMACS
-  - curl -fsSkL https://raw.github.com/cask/cask/master/go | python
+  # Configure $PATH: Executables are installed to $HOME/bin
+  - export PATH="$HOME/bin:$PATH"
+  # Download the makefile to emacs-travis.mk
+  - wget 'https://raw.githubusercontent.com/flycheck/emacs-travis/master/emacs-travis.mk'
+  # Install Emacs (according to $EMACS_VERSION) and Cask
+  - make -f emacs-travis.mk install_emacs
+  - make -f emacs-travis.mk install_cask
+  # Install Texinfo, if you need to build info manuals for your project
+  - make -f emacs-travis.mk install_texinfo
+
+  # - sudo mkdir /usr/local/evm
+  # - sudo chown travis:travis /usr/local/evm
+  # - export PATH="/home/travis/.cask/bin:$PATH"
+  # - export PATH="/home/travis/.evm/bin:$PATH"
+  # - curl -fsSkL https://raw.github.com/rejeep/evm/master/go | bash
+  # - evm install $EVM_EMACS --use
+  # - ln -s /usr/local/evm/$EVM_EMACS /tmp/$EVM_EMACS
+  # - curl -fsSkL https://raw.github.com/cask/cask/master/go | python
+  # - cask install
+install:
+  # Install your dependencies
   - cask install
 script:
-  - emacs --version
-  - make testsrc
-branches:
-  only:
-    - master
+  # Run your tests
+  - cask exec ert-runner
+# script:
+#   - emacs --version
+#   - make testsrc
+# branches:
+#   only:
+#     - master
 
 #
 # Emacs
