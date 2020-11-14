@@ -20,7 +20,6 @@
 (require 'org-glance-db)
 (require 'org-glance-scope)
 (require 'transient)
-(require 'with-simulated-input)
 
 (eval-when-compile
   (require 'cl))
