@@ -5,8 +5,6 @@ cache:
   - directories:
       # Cache stable Emacs binaries (saves 1min per job)
       - "$HOME/emacs/"
-# Allow Emacs snapshot builds to fail and don’t wait for these as they can take
-# a looooong time
 matrix:
   fast_finish: true
   allow_failures:
@@ -15,39 +13,16 @@ env:
   - EMACS_VERSION=26.3
   - EMACS_VERSION=snapshot
 before_install:
-  # Configure $PATH: Executables are installed to $HOME/bin
   - export PATH="$HOME/bin:$PATH"
-  # Download the makefile to emacs-travis.mk
   - wget 'https://raw.githubusercontent.com/flycheck/emacs-travis/master/emacs-travis.mk'
-  # Install Emacs (according to $EMACS_VERSION) and Cask
   - make -f emacs-travis.mk install_emacs
   - make -f emacs-travis.mk install_gnutls
   - make -f emacs-travis.mk install_cask
-  # Install Texinfo, if you need to build info manuals for your project
   - make -f emacs-travis.mk install_texinfo
-
-  # - export PATH="/home/travis/.cask/bin:$PATH"
-  # - export PATH="/home/travis/.evm/bin:$PATH"
-
-  # - sudo mkdir /usr/local/evm
-  # - sudo chown travis:travis /usr/local/evm
-  # - curl -fsSkL https://raw.github.com/rejeep/evm/master/go | bash
-  # - evm install $EVM_EMACS --use
-  # - ln -s /usr/local/evm/$EVM_EMACS /tmp/$EVM_EMACS
-  # - curl -fsSkL https://raw.github.com/cask/cask/master/go | python
-  # - cask install
 install:
-  # Install your dependencies
-  - cask install
+  - make init
 script:
-  # Run your tests
-  - cask exec ecukes
-# script:
-#   - emacs --version
-#   - make testsrc
-# branches:
-#   only:
-#     - master
+  - make test
 
 #
 # Emacs

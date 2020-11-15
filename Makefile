@@ -10,8 +10,9 @@ build:
 	${CASK} build
 test:
 	${CASK} clean-elc
+	${CASK} exec ecukes --no-win
 	${CASK} build
-	${CASK} exec ert-runner -L . -L test
+	${CASK} exec ecukes --no-win
 testsrc:
 	${CASK} clean-elc
 	${CASK} exec ert-runner -L . -L test
