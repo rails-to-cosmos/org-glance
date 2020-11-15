@@ -11,8 +11,6 @@
 (depends-on "dash")
 (depends-on "eieio")
 (depends-on "eieio-core")
-(depends-on "ert")
-(depends-on "ert-runner")
 (depends-on "f")
 (depends-on "ledger-mode")
 (depends-on "load-relative")
@@ -22,5 +20,8 @@
 (depends-on "ts")
 
 (development
+ (depends-on "ert")
+ (depends-on "ert-runner")
+ (depends-on "ert-async")
  (depends-on "with-simulated-input")
  (depends-on "undercover"))
