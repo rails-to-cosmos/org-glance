@@ -1,5 +1,7 @@
 (source gnu)
 (source melpa-stable)
+(source org)
+(source marmalade)
 
 (package-file "org-glance.el")
 
