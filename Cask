@@ -1,5 +1,5 @@
 (source gnu)
-(source melpa-stable)
+(source melpa)
 (source org)
 (source marmalade)
 

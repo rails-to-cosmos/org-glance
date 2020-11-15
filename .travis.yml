@@ -12,7 +12,6 @@ matrix:
   allow_failures:
     - env: EMACS_VERSION=snapshot
 env:
-  # - EVM_EMACS=emacs-26.3-travis
   - EMACS_VERSION=26.3
   - EMACS_VERSION=snapshot
 before_install:
