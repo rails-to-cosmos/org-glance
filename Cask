@@ -16,6 +16,7 @@
 (depends-on "f")
 (depends-on "ledger-mode")
 (depends-on "load-relative")
+(depends-on "s")
 (depends-on "seq")
 (depends-on "transient")
 (depends-on "ts")
