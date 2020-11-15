@@ -18,10 +18,7 @@
 (depends-on "seq")
 (depends-on "transient")
 (depends-on "ts")
-(depends-on "with-simulated-input")
 
 (development
- (depends-on "ert")
- (depends-on "ert-runner")
- (depends-on "ert-async")
+ (depends-on "ecukes")
  (depends-on "undercover"))

@@ -29,7 +29,7 @@
 ;; macro definition
 
 (cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
-  "Visit HEADLINE, narrow to its subtree and execute FORMS in separate buffer."
+  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent defun))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file))
