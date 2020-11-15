@@ -57,7 +57,6 @@
 (eval-when-compile
   (require 'cl-lib)
   (require 'cl-generic)
-  (require 'cl-lib)
   (require 'org)
   (require 'seq)
   (require 'subr-x))

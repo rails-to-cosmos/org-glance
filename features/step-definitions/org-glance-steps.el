@@ -26,3 +26,12 @@
   (lambda (something)
     ;; ...
     ))
+
+(Given "^I am in the buffer \"\\([^\"]+\\)\"$"
+  (lambda (arg)
+    (switch-to-buffer (get-buffer-create arg))
+    ))
+
+(And "^I insert$"
+  (lambda (arg)
+    (insert arg)))

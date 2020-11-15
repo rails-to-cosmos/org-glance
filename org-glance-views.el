@@ -12,8 +12,6 @@
 
 (require 'aes)
 (require 'gv)
-(require 'cl-lib)
-(require 'cl-macs)
 (require 'load-relative)
 (require 'org)
 (require 'org-element)
@@ -22,7 +20,8 @@
 (require 'transient)
 
 (eval-when-compile
-  (require 'cl))
+  (require 'cl-lib)
+  (require 'cl-macs))
 
 (declare-function org-glance "org-glance")
 

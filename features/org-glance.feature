@@ -9,3 +9,20 @@ Feature: Do Some things
     Then I should have "something"
     And I should have "something"
     But I should not have "something"
+
+Feature: Define Views
+  In order to perform actions on views
+  As a user
+  I want to define org-glance views
+
+  Background:
+    Given
+    And the buffer is empty
+    And I insert
+      """
+      * Netherlands :Country:
+      * Belgium :Country:
+      * Georgia :Country:
+      """
+
+  Scenario: Visit Headline
