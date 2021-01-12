@@ -77,6 +77,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 ** TODO read-only flag for materialized views
 ** TODO test sandbox
 ** TODO full-text search
+** TODO parse encrypted blocks in any point of subtree
 * Thoughts
 - https://grishaev.me/clj-zippers-1/
 - https://github.com/bbatsov/emacs-lisp-style-guide
@@ -85,6 +86,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 - https://www.reddit.com/r/emacs/comments/5yhk1m/gantt_charts_for_orgmode/
 - http://fastcompression.blogspot.com/p/lz4.html
 - https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
+- https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
 
 ** dist-packages
 *** https://github.com/skeeto/emacsql
@@ -113,7 +115,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (require 'gv)
 (require 'transient)
 #+end_src
-** Private variables
+** Privates
 #+begin_src emacs-lisp
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
