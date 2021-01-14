@@ -79,6 +79,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 ** TODO full-text search
 ** TODO parse encrypted blocks in any point of subtree
 * Thoughts
+- [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]
 - https://grishaev.me/clj-zippers-1/
 - https://github.com/bbatsov/emacs-lisp-style-guide
 - https://ctan.org/pkg/pgfgantt
