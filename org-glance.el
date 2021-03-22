@@ -155,7 +155,7 @@
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t         (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(cl-defmethod org-glance-filter-apply (filter headline)
+(cl-defun org-glance-filter-apply (filter headline)
   (or (null filter) (and filter (funcall filter headline))))
 
 (cl-defmethod org-glance-scope-headlines (scope &optional filter)
@@ -183,7 +183,7 @@
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file))
           (visited-buffer (current-buffer)))
-     (org-glance-call-action 'visit :on ,headline)
+     (org-glance-action-call 'visit :on ,headline)
      (widen)
      (org-narrow-to-subtree)
      (unwind-protect
@@ -200,7 +200,7 @@
   (declare (indent defun))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file)))
-     (org-glance-call-action 'materialize :on ,headline)
+     (org-glance-action-call 'materialize :on ,headline)
      (unwind-protect
           (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
             ,@forms)
@@ -346,156 +346,6 @@
     funcall
     org-glance-scope))
 
-(defvar org-glance-transient--scope "agenda")
-
-(defclass org-glance-transient-variable (transient-variable)
-  ((default     :initarg :default     :initform nil)))
-
-(cl-defmethod transient-init-value ((obj org-glance-transient-variable))
-  "Override transient value initialization."
-  (let ((variable (oref obj variable))
-        (default (oref obj default)))
-    (oset obj variable variable)
-    (oset obj value (or (eval variable) default))))
-
-(cl-defmethod transient-infix-set ((obj org-glance-transient-variable) value)
-  "Override setter."
-  (oset obj value value)
-  (set (oref obj variable) value))
-
-(cl-defmethod transient-format-description ((obj org-glance-transient-variable))
-  "Override description format."
-  (or (oref obj description)
-      (oref obj variable)))
-
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable))
-  "Override value format."
-  (propertize (oref obj value) 'face 'transient-inactive-value))
-
-(defun org-glance-read-scope ()
-  (completing-read
-   "Scope: "
-   '(agenda
-     agenda-with-archives
-     file)))
-
-(defclass org-glance-transient-variable:scope (org-glance-transient-variable)
-  ())
-
-(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:scope))
-  (oset obj value (org-glance-read-scope)))
-
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable:scope))
-  (let* ((val (or (oref obj value) (oref obj default)))
-         (val-pretty (propertize val 'face 'transient-argument)))
-    (format "(%s)" val-pretty)))
-
-(transient-define-infix org-glance-act.scope ()
-  :class 'org-glance-transient-variable:scope
-  :variable 'org-glance-transient--scope
-  :reader 'org-glance-read-scope
-  :default "false")
-
-(transient-define-prefix org-glance-act ()
-  "In Glance-View buffer, perform action on selected view"
-  ;; ["Arguments"
-  ;;  ("-s" "Scope" org-glance-act.scope)]
-  ["Views"
-   [("A" "Agenda" org-glance-view-agenda)]
-   [("E" "Export" org-glance-view-export)]
-   [("R" "Reread" org-glance-view-reread)]
-   [("D" "Dashboard" org-glance-show-report)]]
-  ["Headlines"
-   ;; [("c" "Capture" org-glance-action-extract-property)]
-   [("e" "Extract" org-glance-action-extract-property)]
-   [("j" "Jump" org-glance-action-open)]
-   [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit" org-glance-action-visit)]])
-
-(cl-defmethod org-glance-register-action ((name symbol) (type symbol))
-  (org-glance-register-action name (list type)))
-
-(cl-defmethod org-glance-register-action ((name symbol) (type list))
-  (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
-    (puthash name type org-glance-view-actions)))
-
-(defmacro org-glance-def-action (name args _ type &rest body)
-  "Defun method NAME (ARGS) BODY.
-Make it accessible for views of TYPE in `org-glance-view-actions'."
-  (declare (debug
-            ;; Same as defun but use cl-lambda-list.
-            (&define [&or name ("setf" :name setf name)]
-                     cl-lambda-list
-                     symbolp
-                     cl-declarations-or-string
-                     [&optional ("interactive" interactive)]
-                     def-body))
-           (doc-string 6)
-           (indent 4))
-  (org-glance-register-action name type)
-  (let* ((res (cl--transform-lambda (cons args body) name))
-         (generic-func-name (org-glance-generic-method-name name))
-         (concrete-func-name (org-glance-concrete-method-name name type))
-         (action-private-method (intern (format "org-glance--%s--%s" name type)))
-	 (form `(progn
-                  (unless (fboundp (quote ,generic-func-name))
-                    (defun ,generic-func-name (&optional args)
-                      (interactive (list (org-glance-act-arguments)))
-                      (let* ((action (quote ,name))
-                             (headlines (org-glance-headlines-for-action action))
-                             (choice (unwind-protect
-                                          (org-completing-read (format "%s: " action) headlines)
-                                       (pp headlines)))
-                             (view (alist-get choice headlines nil nil #'string=))
-                             (method-name (->> action
-                                               (org-glance-view-action-resolve view)
-                                               (org-glance-concrete-method-name action)))
-                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
-                        (funcall method-name args view headline))))
-
-                  (defun ,concrete-func-name (&optional args view headline)
-                    (interactive (list (org-glance-act-arguments)))
-                    args
-                    (org-glance
-                     :default-choice headline
-                     :scope (org-glance-view-scope view)
-                     :prompt (org-glance-view-prompt view (quote ,name))
-                     :db (org-glance-view-db view)
-                     :filter (org-glance-view-filter view)
-                     :action (function ,action-private-method)))
-
-                  (defun ,action-private-method
-                      ,@(cdr res)))))
-
-    (if (car res) `(progn ,(car res) ,form) form)))
-
-(cl-defun org-glance-view-export-filename
-    (&optional
-       (view-id (org-glance-read-view))
-       (dir org-glance-export-directory))
-  (f-join dir (s-downcase (format "%s.org" view-id))))
-
-(cl-defmethod org-glance-view-export
-    (&optional (view-id (org-glance-read-view))
-       (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: ")))
-       force)
-  (interactive)
-  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-    (when (and
-           (file-exists-p dest-file-name)
-           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
-      (delete-file dest-file-name t))
-    (cl-loop for headline in (->> view-id
-                                  org-glance-view-reread
-                                  org-glance-view-headlines)
-       do (org-glance-with-headline-materialized headline
-              (append-to-file (point-min) (point-max) dest-file-name)
-            (append-to-file "\n" nil dest-file-name)))
-    (if force
-        dest-file-name
-      (find-file dest-file-name))))
-
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
@@ -547,7 +397,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         (downcase (symbol-name (org-glance-view-id view)))))
    view))
 
-(cl-defmethod org-glance-view-reread (&optional (view-id (org-glance-read-view)))
+(cl-defun org-glance-view-reread (&optional (view-id (org-glance-read-view)))
   (interactive)
   (message "Reread view %s" view-id)
   (let* ((view (gethash view-id org-glance-views))
@@ -592,7 +442,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "List registered views."
   (hash-table-keys org-glance-views))
 
-(cl-defmethod org-glance-export-all-views
+(cl-defun org-glance-export-all-views
     (&optional (destination
                 (or org-glance-export-directory
                     (read-directory-name "Export destination: "))))
@@ -600,7 +450,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (cl-loop for view-id being the hash-keys of org-glance-views
      do (org-glance-view-export view-id destination 'force)))
 
-(cl-defun org-glance-show-report ()
+(defun org-glance-show-report ()
   (interactive)
   (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
         (end_src "#+END:")
@@ -626,28 +476,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
              view-id (or type "default") scope)
     view))
 
-(cl-defun org-glance-view-agenda
-    (&optional
-       (view-id (org-glance-read-view)))
-  (interactive)
-  (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
-    (org-agenda-list)))
-
-(cl-defmethod org-glance-read-view (&optional (prompt "Choose view: "))
-  "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-list-views)))
-    (if (> (length views) 1)
-        (intern (org-completing-read prompt views))
-      (car views))))
-
-(cl-defun org-glance-call-action (name &key (on 'current-headline) (for 'all))
-  (when (eq on 'current-headline)
-    (setq on (org-element-at-point)))
-  (let ((fn (intern (format "org-glance--%s--%s" name for))))
-    (unless (fboundp fn)
-      (user-error "Unbound function %s" fn))
-    (funcall fn on)))
-
 (cl-defmethod org-glance-generic-method-name ((name symbol))
   (intern (format "org-glance-action-%s" name)))
 
@@ -662,24 +490,118 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        (format "org-glance-action-%s-%s" name)
        (intern)))
 
-(cl-defun org-glance-headlines-for-action (action)
+(cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
+  (when (eq on 'current-headline)
+    (setq on (org-element-at-point)))
+  (let ((fn (intern (format "org-glance--%s--%s" name for))))
+    (unless (fboundp fn)
+      (user-error "Unbound function %s" fn))
+    (funcall fn on)))
+
+(defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance-views
      when (org-glance-view-action-resolve view action)
      append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
-;; (org-glance-def-type all "Doc string")
-;; (org-glance-def-type crypt)
-;; (org-glance-def-type kvs)
+(cl-defmethod org-glance-action-register ((name symbol) (type symbol))
+  (org-glance-action-register name (list type)))
 
-;; (org-glance-def-action ... for type)
+(cl-defmethod org-glance-action-register ((name symbol) (type list))
+  (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
+    (puthash name type org-glance-view-actions)))
 
-;; (org-glance-def-capture (headline) for type
+(defmacro org-glance-action-define (name args _ type &rest body)
+  "Defun method NAME (ARGS) BODY.
+Make it accessible for views of TYPE in `org-glance-view-actions'."
+  (declare (debug
+            ;; Same as defun but use cl-lambda-list.
+            (&define [&or name ("setf" :name setf name)]
+                     cl-lambda-list
+                     symbolp
+                     cl-declarations-or-string
+                     [&optional ("interactive" interactive)]
+                     def-body))
+           (doc-string 6)
+           (indent 4))
+  (org-glance-action-register name type)
+  (let* ((res (cl--transform-lambda (cons args body) name))
+         (generic-func-name (org-glance-generic-method-name name))
+         (concrete-func-name (org-glance-concrete-method-name name type))
+         (action-private-method (intern (format "org-glance--%s--%s" name type)))
+	 (form `(progn
+                  (unless (fboundp (quote ,generic-func-name))
+                    (defun ,generic-func-name (&optional args)
+                      (interactive (list (org-glance-act-arguments)))
+                      (let* ((action (quote ,name))
+                             (headlines (org-glance-action-headlines action))
+                             (choice (unwind-protect
+                                          (org-completing-read (format "%s: " action) headlines)
+                                       (message "Unwind protected")
+                                       ;; (pp headlines)
+                                       ))
+                             (view (alist-get choice headlines nil nil #'string=))
+                             (method-name (->> action
+                                               (org-glance-view-action-resolve view)
+                                               (org-glance-concrete-method-name action)))
+                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                        (funcall method-name args view headline))))
 
-(org-glance-def-action visit (headline) :for all
+                  (defun ,concrete-func-name (&optional args view headline)
+                    (interactive (list (org-glance-act-arguments)))
+                    args
+                    (org-glance
+                     :default-choice headline
+                     :scope (org-glance-view-scope view)
+                     :prompt (org-glance-view-prompt view (quote ,name))
+                     :db (org-glance-view-db view)
+                     :filter (org-glance-view-filter view)
+                     :action (function ,action-private-method)))
+
+                  (defun ,action-private-method
+                      ,@(cdr res)))))
+
+    (if (car res) `(progn ,(car res) ,form) form)))
+
+(cl-defun org-glance-view-export-filename
+    (&optional
+       (view-id (org-glance-read-view))
+       (dir org-glance-export-directory))
+  (f-join dir (s-downcase (format "%s.org" view-id))))
+
+(cl-defmethod org-glance-view-export
+    (&optional (view-id (org-glance-read-view))
+       (destination (or org-glance-export-directory
+                        (read-directory-name "Export destination: ")))
+       force)
+  (interactive)
+  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+    (when (and
+           (file-exists-p dest-file-name)
+           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+      (delete-file dest-file-name t))
+    (cl-loop for headline in (->> view-id
+                                  org-glance-view-reread
+                                  org-glance-view-headlines)
+       do (org-glance-with-headline-materialized headline
+              (append-to-file (point-min) (point-max) dest-file-name)
+            (append-to-file "\n" nil dest-file-name)))
+    (if force
+        dest-file-name
+      (find-file dest-file-name))))
+
+(cl-defun org-glance-view-agenda
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
+    (org-agenda-list)))
+
+(org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
+    (message "Attempt to visit file %s" file)
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
     (widen)
@@ -692,11 +614,25 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (goto-char point)
            (outline-show-subtree))
           (t (unless buffer (kill-buffer))
-             (message "Unable to visit headline")
-             (pp headline)
+             (message "Unable to visit headline %s" headline)
              (org-glance-db-outdated "Visited headline cache corrupted, please reread")))))
 
-(org-glance-def-action materialize (headline) :for all
+(cl-defun org-glance-read-view (&optional (prompt "Choose view: "))
+  "Run completing read PROMPT on registered views filtered by TYPE."
+  (let ((views (org-glance-list-views)))
+    (if (> (length views) 1)
+        (intern (org-completing-read prompt views))
+      (car views))))
+
+;; (org-glance-def-type all "Doc string")
+;; (org-glance-def-type crypt)
+;; (org-glance-def-type kvs)
+
+;; (org-glance-action-define ... for type)
+
+;; (org-glance-def-capture (headline) for type
+
+(org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
   (cl-labels ((first-level-heading () (save-excursion
                                         (unless (org-at-heading-p) (org-back-to-heading))
@@ -707,7 +643,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                               (s-trim))))
     (let ((buffer org-glance-materialized-view-buffer))
       (save-window-excursion
-        (org-glance-call-action 'visit :on headline)
+        (org-glance-action-call 'visit :on headline)
         (let* ((file (org-element-property :file headline))
                (beg (first-level-heading))
                (end (end-of-subtree))
@@ -738,7 +674,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
           (org-cycle 'contents)))
       (switch-to-buffer buffer))))
 
-(org-glance-def-action open (headline) :for link
+(org-glance-action-define open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE
 then run `org-completing-read' to open it."
   (org-glance-with-headline-narrowed headline
@@ -756,13 +692,13 @@ then run `org-completing-read' to open it."
         (goto-char point)
         (org-open-at-point))))
 
-(org-glance-def-action extract-property (headline) :for kvs
+(org-glance-action-define extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."
   (save-window-excursion
-    (org-glance-call-action 'materialize :on headline)
+    (org-glance-action-call 'materialize :on headline)
     (org-glance-buffer-properties-to-kill-ring)))
 
-(org-glance-def-action materialize (headline) :for crypt
+(org-glance-action-define materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
               (setq-local -org-glance-pwd (read-passwd "Password: "))
@@ -770,7 +706,7 @@ then run `org-completing-read' to open it."
     (add-hook 'org-glance-after-materialize-hook #'decrypt t)
     (unwind-protect
          (progn
-           (org-glance-call-action 'materialize :on headline)
+           (org-glance-action-call 'materialize :on headline)
            (org-cycle-hide-drawers 'all))
       (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
@@ -786,10 +722,10 @@ then run `org-completing-read' to open it."
               (-org-glance-promote-subtree))
             'append 'local))
 
-(org-glance-def-action extract-property (headline) :for (kvs crypt)
+(org-glance-action-define extract-property (headline) :for (kvs crypt)
   "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."
   (save-window-excursion
-    (org-glance-call-action 'materialize :on headline :for 'crypt)
+    (org-glance-action-call 'materialize :on headline :for 'crypt)
     (org-cycle-hide-drawers 'all)
     (unwind-protect
          (org-glance-buffer-properties-to-kill-ring)
@@ -814,7 +750,7 @@ then run `org-completing-read' to open it."
                           :begin -org-glance-beg
                           :raw-value (org-element-property :raw-value (org-element-at-point))))
            (virtual-element (org-element-create 'headline heading)))
-      (org-glance-call-action 'visit :on virtual-element))))
+      (org-glance-action-call 'visit :on virtual-element))))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -905,6 +841,72 @@ then run `org-completing-read' to open it."
   ;;   ;;       do (pp type))
   ;;   )
   )
+
+(defvar org-glance-transient--scope "agenda")
+
+(defclass org-glance-transient-variable (transient-variable)
+  ((default     :initarg :default     :initform nil)))
+
+(cl-defmethod transient-init-value ((obj org-glance-transient-variable))
+  "Override transient value initialization."
+  (let ((variable (oref obj variable))
+        (default (oref obj default)))
+    (oset obj variable variable)
+    (oset obj value (or (eval variable) default))))
+
+(cl-defmethod transient-infix-set ((obj org-glance-transient-variable) value)
+  "Override setter."
+  (oset obj value value)
+  (set (oref obj variable) value))
+
+(cl-defmethod transient-format-description ((obj org-glance-transient-variable))
+  "Override description format."
+  (or (oref obj description)
+      (oref obj variable)))
+
+(cl-defmethod transient-format-value ((obj org-glance-transient-variable))
+  "Override value format."
+  (propertize (oref obj value) 'face 'transient-inactive-value))
+
+(defun org-glance-read-scope ()
+  (completing-read
+   "Scope: "
+   '(agenda
+     agenda-with-archives
+     file)))
+
+(defclass org-glance-transient-variable:scope (org-glance-transient-variable)
+  ())
+
+(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:scope))
+  (oset obj value (org-glance-read-scope)))
+
+(cl-defmethod transient-format-value ((obj org-glance-transient-variable:scope))
+  (let* ((val (or (oref obj value) (oref obj default)))
+         (val-pretty (propertize val 'face 'transient-argument)))
+    (format "(%s)" val-pretty)))
+
+(transient-define-infix org-glance-act.scope ()
+  :class 'org-glance-transient-variable:scope
+  :variable 'org-glance-transient--scope
+  :reader 'org-glance-read-scope
+  :default "false")
+
+(transient-define-prefix org-glance-act ()
+  "In Glance-View buffer, perform action on selected view"
+  ;; ["Arguments"
+  ;;  ("-s" "Scope" org-glance-act.scope)]
+  ["Views"
+   [("A" "Agenda" org-glance-view-agenda)]
+   [("E" "Export" org-glance-view-export)]
+   [("R" "Reread" org-glance-view-reread)]
+   [("D" "Dashboard" org-glance-show-report)]]
+  ["Headlines"
+   ;; [("c" "Capture" org-glance-action-extract-property)]
+   [("e" "Extract" org-glance-action-extract-property)]
+   [("j" "Jump" org-glance-action-open)]
+   [("m" "Materialize" org-glance-action-materialize)]
+   [("v" "Visit" org-glance-action-visit)]])
 
 (cl-defun org-glance
     (&key db
