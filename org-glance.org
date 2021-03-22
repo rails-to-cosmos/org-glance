@@ -97,7 +97,8 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (define-package "org-glance" "1.0" "org-mode traversing. Fast and convenient." 'nil)
 #+end_src
 * Implementation
-** Requirements
+** Defaults
+*** Requirements
 #+begin_src emacs-lisp
 (eval-and-compile
   (require 'org)
@@ -116,7 +117,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (require 'gv)
 (require 'transient)
 #+end_src
-** Privates
+*** Privates
 #+begin_src emacs-lisp
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
@@ -125,7 +126,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 #+end_src
-** Customs
+*** Customs
 #+begin_src emacs-lisp
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -161,7 +162,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   :group 'org-glance
   :type 'list)
 #+end_src
-** Exceptions
+*** Exceptions
 #+begin_src emacs-lisp
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
@@ -424,7 +425,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
        :file ,file))))
 #+end_src
 ** Scope
-*** def
+*** definition
 #+begin_src emacs-lisp
 (cl-defgeneric org-glance-scope (lfob)
   "Adapt list-file-or-buffer to list of files.")
@@ -463,9 +464,8 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
     org-glance-scope))
 #+end_src
 ** Transient
-*** env
+*** environment
 #+begin_src emacs-lisp
-(defvar org-glance-transient--current-view nil)
 (defvar org-glance-transient--scope "agenda")
 #+end_src
 *** base
@@ -527,8 +527,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   ;; ["Arguments"
   ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
-   [("E" "Export" org-glance-export-view)]
-   [("R" "Reread" org-glance-reread-view)]
+   [("A" "Agenda" org-glance-view-agenda)]
+   [("E" "Export" org-glance-view-export)]
+   [("R" "Reread" org-glance-view-reread)]
    [("D" "Dashboard" org-glance-show-report)]]
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
@@ -538,7 +539,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
    [("v" "Visit" org-glance-action-visit)]])
 #+end_src
 ** Actions
-*** def
+*** registration
 #+begin_src emacs-lisp
 (cl-defmethod org-glance-register-action ((name symbol) (type symbol))
   (org-glance-register-action name (list type)))
@@ -546,7 +547,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (cl-defmethod org-glance-register-action ((name symbol) (type list))
   (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
     (puthash name type org-glance-view-actions)))
-
+#+end_src
+*** definition
+#+begin_src emacs-lisp
 (defmacro org-glance-def-action (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
 Make it accessible for views of TYPE in `org-glance-view-actions'."
@@ -598,7 +601,36 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (if (car res) `(progn ,(car res) ,form) form)))
 #+end_src
 ** Views
-*** def
+*** Export
+#+begin_src emacs-lisp
+(cl-defun org-glance-view-export-filename
+    (&optional
+       (view-id (org-glance-read-view))
+       (dir org-glance-export-directory))
+  (f-join dir (s-downcase (format "%s.org" view-id))))
+
+(cl-defmethod org-glance-view-export
+    (&optional (view-id (org-glance-read-view))
+       (destination (or org-glance-export-directory
+                        (read-directory-name "Export destination: ")))
+       force)
+  (interactive)
+  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+    (when (and
+           (file-exists-p dest-file-name)
+           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+      (delete-file dest-file-name t))
+    (cl-loop for headline in (->> view-id
+                                  org-glance-view-reread
+                                  org-glance-view-headlines)
+       do (org-glance-with-headline-materialized headline
+              (append-to-file (point-min) (point-max) dest-file-name)
+            (append-to-file "\n" nil dest-file-name)))
+    (if force
+        dest-file-name
+      (find-file dest-file-name))))
+#+end_src
+*** definition
 #+begin_src emacs-lisp
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -651,7 +683,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         (downcase (symbol-name (org-glance-view-id view)))))
    view))
 
-(cl-defmethod org-glance-reread-view (&optional (view-id (org-glance-read-view)))
+(cl-defmethod org-glance-view-reread (&optional (view-id (org-glance-read-view)))
   (interactive)
   (message "Reread view %s" view-id)
   (let* ((view (gethash view-id org-glance-views))
@@ -696,35 +728,13 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "List registered views."
   (hash-table-keys org-glance-views))
 
-(cl-defmethod org-glance-export-view
-    (&optional (view-id (org-glance-read-view))
-       (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: ")))
-       force)
-  (interactive)
-  (let* ((filename (s-downcase (format "%s.org" view-id)))
-         (dest-file-name (f-join destination filename)))
-    (when (and
-           (file-exists-p dest-file-name)
-           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
-      (delete-file dest-file-name t))
-    (cl-loop for headline in (->> view-id
-                                  org-glance-reread-view
-                                  org-glance-view-headlines)
-       do (org-glance-with-headline-materialized headline
-              (append-to-file (point-min) (point-max) dest-file-name)
-            (append-to-file "\n" nil dest-file-name)))
-    (if force
-        dest-file-name
-      (find-file dest-file-name))))
-
 (cl-defmethod org-glance-export-all-views
     (&optional (destination
                 (or org-glance-export-directory
                     (read-directory-name "Export destination: "))))
   (interactive)
   (cl-loop for view-id being the hash-keys of org-glance-views
-     do (org-glance-export-view view-id destination 'force)))
+     do (org-glance-view-export view-id destination 'force)))
 
 (cl-defun org-glance-show-report ()
   (interactive)
@@ -751,6 +761,15 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (message "%s view of type %s is now ready to glance scope %s"
              view-id (or type "default") scope)
     view))
+#+end_src
+*** agenda
+#+begin_src emacs-lisp
+(cl-defun org-glance-view-agenda
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
+    (org-agenda-list)))
 #+end_src
 *** unsorted
 #+begin_src emacs-lisp

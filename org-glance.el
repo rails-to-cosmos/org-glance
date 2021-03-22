@@ -346,7 +346,6 @@
     funcall
     org-glance-scope))
 
-(defvar org-glance-transient--current-view nil)
 (defvar org-glance-transient--scope "agenda")
 
 (defclass org-glance-transient-variable (transient-variable)
@@ -402,8 +401,9 @@
   ;; ["Arguments"
   ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
-   [("E" "Export" org-glance-export-view)]
-   [("R" "Reread" org-glance-reread-view)]
+   [("A" "Agenda" org-glance-view-agenda)]
+   [("E" "Export" org-glance-view-export)]
+   [("R" "Reread" org-glance-view-reread)]
    [("D" "Dashboard" org-glance-show-report)]]
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
@@ -520,7 +520,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         (downcase (symbol-name (org-glance-view-id view)))))
    view))
 
-(cl-defmethod org-glance-reread-view (&optional (view-id (org-glance-read-view)))
+(cl-defmethod org-glance-view-reread (&optional (view-id (org-glance-read-view)))
   (interactive)
   (message "Reread view %s" view-id)
   (let* ((view (gethash view-id org-glance-views))
@@ -565,20 +565,19 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "List registered views."
   (hash-table-keys org-glance-views))
 
-(cl-defmethod org-glance-export-view
+(cl-defmethod org-glance-view-export
     (&optional (view-id (org-glance-read-view))
        (destination (or org-glance-export-directory
                         (read-directory-name "Export destination: ")))
        force)
   (interactive)
-  (let* ((filename (s-downcase (format "%s.org" view-id)))
-         (dest-file-name (f-join destination filename)))
+  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
     (when (and
            (file-exists-p dest-file-name)
            (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
       (delete-file dest-file-name t))
     (cl-loop for headline in (->> view-id
-                                  org-glance-reread-view
+                                  org-glance-view-reread
                                   org-glance-view-headlines)
        do (org-glance-with-headline-materialized headline
               (append-to-file (point-min) (point-max) dest-file-name)
@@ -593,7 +592,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (read-directory-name "Export destination: "))))
   (interactive)
   (cl-loop for view-id being the hash-keys of org-glance-views
-     do (org-glance-export-view view-id destination 'force)))
+     do (org-glance-view-export view-id destination 'force)))
 
 (cl-defun org-glance-show-report ()
   (interactive)
@@ -620,6 +619,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (message "%s view of type %s is now ready to glance scope %s"
              view-id (or type "default") scope)
     view))
+
+(cl-defmethod org-glance-view-agenda
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  )
 
 (cl-defmethod org-glance-read-view (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
