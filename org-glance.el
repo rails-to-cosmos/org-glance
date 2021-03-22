@@ -469,6 +469,33 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 
     (if (car res) `(progn ,(car res) ,form) form)))
 
+(cl-defun org-glance-view-export-filename
+    (&optional
+       (view-id (org-glance-read-view))
+       (dir org-glance-export-directory))
+  (f-join dir (s-downcase (format "%s.org" view-id))))
+
+(cl-defmethod org-glance-view-export
+    (&optional (view-id (org-glance-read-view))
+       (destination (or org-glance-export-directory
+                        (read-directory-name "Export destination: ")))
+       force)
+  (interactive)
+  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+    (when (and
+           (file-exists-p dest-file-name)
+           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+      (delete-file dest-file-name t))
+    (cl-loop for headline in (->> view-id
+                                  org-glance-view-reread
+                                  org-glance-view-headlines)
+       do (org-glance-with-headline-materialized headline
+              (append-to-file (point-min) (point-max) dest-file-name)
+            (append-to-file "\n" nil dest-file-name)))
+    (if force
+        dest-file-name
+      (find-file dest-file-name))))
+
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
@@ -565,27 +592,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "List registered views."
   (hash-table-keys org-glance-views))
 
-(cl-defmethod org-glance-view-export
-    (&optional (view-id (org-glance-read-view))
-       (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: ")))
-       force)
-  (interactive)
-  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-    (when (and
-           (file-exists-p dest-file-name)
-           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
-      (delete-file dest-file-name t))
-    (cl-loop for headline in (->> view-id
-                                  org-glance-view-reread
-                                  org-glance-view-headlines)
-       do (org-glance-with-headline-materialized headline
-              (append-to-file (point-min) (point-max) dest-file-name)
-            (append-to-file "\n" nil dest-file-name)))
-    (if force
-        dest-file-name
-      (find-file dest-file-name))))
-
 (cl-defmethod org-glance-export-all-views
     (&optional (destination
                 (or org-glance-export-directory
@@ -620,11 +626,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
              view-id (or type "default") scope)
     view))
 
-(cl-defmethod org-glance-view-agenda
+(cl-defun org-glance-view-agenda
     (&optional
        (view-id (org-glance-read-view)))
   (interactive)
-  )
+  (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
+    (org-agenda-list)))
 
 (cl-defmethod org-glance-read-view (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
