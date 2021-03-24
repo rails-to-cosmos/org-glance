@@ -609,10 +609,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (cond ((-element-at-point-equals-headline headline)
            (cl-loop while (org-up-heading-safe)) ;; expand parents
            (org-narrow-to-subtree)
-           (outline-show-branches)
            (widen)
            (goto-char point)
-           (outline-show-subtree))
+           (org-show-children))
           (t (unless buffer (kill-buffer))
              (message "Unable to visit headline %s" headline)
              (org-glance-db-outdated "Visited headline cache corrupted, please reread")))))
