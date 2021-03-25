@@ -735,6 +735,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
     (org-agenda-list)))
 #+end_src
+***** Visit
+#+begin_src emacs-lisp
+(cl-defun org-glance-view-visit
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  (find-file (org-glance-view-export-filename view-id)))
+#+end_src
 **** Per-headline
 ***** Visit headline
 #+begin_src emacs-lisp
@@ -1050,9 +1058,10 @@ then run `org-completing-read' to open it."
   ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("A" "Agenda" org-glance-view-agenda)]
+   [("D" "Dashboard" org-glance-show-report)]
    [("E" "Export" org-glance-view-export)]
    [("R" "Reread" org-glance-view-reread)]
-   [("D" "Dashboard" org-glance-show-report)]]
+   [("V" "Visit" org-glance-view-visit)]]
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]
