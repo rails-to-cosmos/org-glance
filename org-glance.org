@@ -54,6 +54,11 @@ Links:
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
 * Issues [0/8]
+** TODO org-glance immutable exports
+SCHEDULED: <2021-03-27 Sat 20:00>
+** TODO org-glance fix brackets
+SCHEDULED: <2021-03-27 Sat>
+
 ** TODO [#A] [bug] unable to visit/materialize subtree with priority
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]

@@ -596,6 +596,12 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
     (org-agenda-list)))
 
+(cl-defun org-glance-view-visit
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  (find-file (org-glance-view-export-filename view-id)))
+
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
@@ -897,9 +903,10 @@ then run `org-completing-read' to open it."
   ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("A" "Agenda" org-glance-view-agenda)]
+   [("D" "Dashboard" org-glance-show-report)]
    [("E" "Export" org-glance-view-export)]
    [("R" "Reread" org-glance-view-reread)]
-   [("D" "Dashboard" org-glance-show-report)]]
+   [("V" "Visit" org-glance-view-visit)]]
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]
