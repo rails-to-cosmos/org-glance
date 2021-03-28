@@ -440,7 +440,7 @@
 
 (defun org-glance-list-views ()
   "List registered views."
-  (hash-table-keys org-glance-views))
+  (sort (hash-table-keys org-glance-views) #'s-less?))
 
 (cl-defun org-glance-export-all-views
     (&optional (destination
@@ -572,7 +572,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
     (&optional (view-id (org-glance-read-view))
        (destination (or org-glance-export-directory
                         (read-directory-name "Export destination: ")))
-       force)
+       (force t))
   (interactive)
   (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
     (when (and
