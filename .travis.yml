@@ -2,14 +2,10 @@ language: emacs-lisp
 dist: trusty
 sudo: required
 cache:
-  - directories:
-      # Cache stable Emacs binaries (saves 1min per job)
+  - directories:  # Cache stable Emacs binaries (saves 1min per job)
       - "$HOME/emacs/"
-matrix:
-  fast_finish: true
 env:
-  - EMACS_VERSION=27.1
-  - EMACS_VERSION=snapshot
+  - EMACS_VERSION=26.3
 before_install:
   - export PATH="$HOME/bin:$PATH"
   - wget 'https://raw.githubusercontent.com/flycheck/emacs-travis/master/emacs-travis.mk'
