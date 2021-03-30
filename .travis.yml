@@ -7,10 +7,8 @@ cache:
       - "$HOME/emacs/"
 matrix:
   fast_finish: true
-  allow_failures:
-    - env: EMACS_VERSION=snapshot
 env:
-  - EMACS_VERSION=26.3
+  - EMACS_VERSION=27.1
   - EMACS_VERSION=snapshot
 before_install:
   - export PATH="$HOME/bin:$PATH"
