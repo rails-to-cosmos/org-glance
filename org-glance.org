@@ -54,6 +54,7 @@ Links:
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
 * Issues [0/8]
+** TODO test me like https://github.com/flycheck/flycheck
 ** TODO org-glance immutable exports
 SCHEDULED: <2021-03-27 Sat 20:00>
 ** TODO org-glance fix brackets
