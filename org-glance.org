@@ -84,6 +84,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 ** TODO test sandbox
 ** TODO full-text search
 ** TODO parse encrypted blocks in any point of subtree
+** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
 * Thoughts
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]
 - https://grishaev.me/clj-zippers-1/
