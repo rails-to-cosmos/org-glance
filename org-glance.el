@@ -448,7 +448,7 @@
                     (read-directory-name "Export destination: "))))
   (interactive)
   (cl-loop for view-id being the hash-keys of org-glance-views
-     do (org-glance-view-export view-id destination 'force)))
+     do (org-glance-view-export view-id destination)))
 
 (defun org-glance-show-report ()
   (interactive)
@@ -571,13 +571,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
 (cl-defmethod org-glance-view-export
     (&optional (view-id (org-glance-read-view))
        (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: ")))
-       (force t))
+                        (read-directory-name "Export destination: "))))
   (interactive)
   (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-    (when (and
-           (file-exists-p dest-file-name)
-           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+    (when (file-exists-p dest-file-name)
       (delete-file dest-file-name t))
     (cl-loop for headline in (->> view-id
                                   org-glance-view-reread
@@ -585,9 +582,15 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        do (org-glance-with-headline-materialized headline
               (append-to-file (point-min) (point-max) dest-file-name)
             (append-to-file "\n" nil dest-file-name)))
-    (if force
-        dest-file-name
-      (find-file dest-file-name))))
+    (progn  ;; sort headlines by TODO order
+      (find-file dest-file-name)
+      (goto-char (point-min))
+      (set-mark (point-max))
+      (org-sort-entries nil ?o)
+      (org-overview)
+      (save-buffer)
+      (bury-buffer))
+    dest-file-name))
 
 (cl-defun org-glance-view-agenda
     (&optional
