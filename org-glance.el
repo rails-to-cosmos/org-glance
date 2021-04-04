@@ -54,6 +54,9 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
+(defvar org-glance-resources-directory
+  (f-join user-emacs-directory "org-glance" "resources"))
+
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
