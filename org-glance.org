@@ -10,10 +10,11 @@
 #+PROPERTY: header-args:emacs-lisp :noweb yes :tangle org-glance.el :results silent
 
 * Hello
+
 #+begin_src emacs-lisp
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.     -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2020 Dmitry Akatov
+;; Copyright (C) 2018-2021 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -43,6 +44,7 @@
 
 ;;; Code:
 #+end_src
+
 * Service                                                                       :Service:
 :PROPERTIES:
 :TITLE:    org-glance
@@ -54,6 +56,12 @@ Links:
 - [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
 
 * Issues [0/8]
+** TODO test me like https://github.com/flycheck/flycheck
+** TODO org-glance immutable exports
+SCHEDULED: <2021-03-27 Sat 20:00>
+** TODO org-glance fix brackets
+SCHEDULED: <2021-03-27 Sat>
+
 ** TODO [#A] [bug] unable to visit/materialize subtree with priority
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]
@@ -78,6 +86,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 ** TODO test sandbox
 ** TODO full-text search
 ** TODO parse encrypted blocks in any point of subtree
+** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
 * Thoughts
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]
 - https://grishaev.me/clj-zippers-1/
@@ -93,17 +102,21 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 *** https://github.com/skeeto/emacsql
 *** https://magit.vc/manual/transient/
 * Package
+
 #+begin_src emacs-lisp :tangle org-glance-pkg.el
 (define-package "org-glance" "1.0" "org-mode traversing. Fast and convenient." 'nil)
 #+end_src
+
 * Implementation
 ** Defaults
 *** Requirements
+
 #+begin_src emacs-lisp
 (eval-and-compile
   (require 'org)
   (require 'org-element)
-  (require 'eieio-core))
+  (require 'eieio-core)
+  (require 's))
 
 (eval-when-compile
   (require 'cl-lib)
@@ -111,13 +124,17 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   (require 'cl-macs)
   (require 'org)
   (require 'seq)
-  (require 'subr-x))
+  (require 'subr-x)
+  (require 's))
 
 (require 'aes)
 (require 'gv)
 (require 'transient)
+(require 's)
 #+end_src
+
 *** Privates
+
 #+begin_src emacs-lisp
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
@@ -126,7 +143,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 #+end_src
+
 *** Customs
+
 #+begin_src emacs-lisp
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -162,7 +181,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   :group 'org-glance
   :type 'list)
 #+end_src
+
 *** Exceptions
+
 #+begin_src emacs-lisp
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
@@ -180,6 +201,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (define-error 'org-glance-properties-corrupted "Materialized view properties corrupted, please reread" 'user-error)
 (cl-defun org-glance-properties-corrupted (format &rest args) (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
 #+end_src
+
 ** Utils
 *** format
 #+begin_src emacs-lisp
@@ -425,7 +447,8 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
        :file ,file))))
 #+end_src
 ** Scope
-*** definition
+*** Definition
+
 #+begin_src emacs-lisp
 (cl-defgeneric org-glance-scope (lfob)
   "Adapt list-file-or-buffer to list of files.")
@@ -463,8 +486,10 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
     funcall
     org-glance-scope))
 #+end_src
+
 ** Views
 *** Definition
+
 #+begin_src emacs-lisp
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -490,132 +515,138 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   (type org-glance-view-default-type)
   (scope org-glance-default-scope))
 
-(defvar org-glance-views (make-hash-table :test 'equal))
-(defvar org-glance-view-actions (make-hash-table :test 'equal))
-(defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
-(defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
-(defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
+(eval-and-compile
+  (defvar org-glance-views (make-hash-table :test 'equal))
+  (defvar org-glance-view-actions (make-hash-table :test 'equal))
+  (defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
+  (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
+  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*"))
 
-(defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-export-directory))
+  (defun org-glance-exports ()
+    (org-glance-list-files-recursively org-glance-export-directory))
 
-(cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
-(cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
+  (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
+  (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
-(cl-defmethod org-glance-view-db ((view org-glance-view))
-  (->> view
-       (org-glance-view-id)
-       (format "org-glance-%s.el")
-       (downcase)
-       (format "%s/%s" org-glance-db-directory)))
+  (cl-defmethod org-glance-view-db ((view org-glance-view))
+    (->> view
+      (org-glance-view-id)
+      (format "org-glance-%s.el")
+      (downcase)
+      (format "%s/%s" org-glance-db-directory)))
 
-(cl-defmethod org-glance-view-filter ((view org-glance-view))
-  (-partial
-   #'(lambda (view headline)
-       (-contains?
-        (mapcar #'downcase (org-element-property :tags headline))
-        (downcase (symbol-name (org-glance-view-id view)))))
-   view))
+  (cl-defmethod org-glance-view-filter ((view org-glance-view))
+    (-partial
+     #'(lambda (view headline)
+         (-contains?
+          (mapcar #'downcase (org-element-property :tags headline))
+          (downcase (symbol-name (org-glance-view-id view)))))
+     view))
 
-(cl-defun org-glance-view-reread (&optional (view-id (org-glance-read-view)))
-  (interactive)
-  (message "Reread view %s" view-id)
-  (let* ((view (gethash view-id org-glance-views))
-         (db (org-glance-view-db view))
-         (filter (org-glance-view-filter view))
-         (scope (org-glance-view-scope view)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter))
-    view))
+  (cl-defun org-glance-view-reread (&optional (view-id (org-glance-read-view)))
+    (interactive)
+    (message "Reread view %s" view-id)
+    (let* ((view (gethash view-id org-glance-views))
+           (db (org-glance-view-db view))
+           (filter (org-glance-view-filter view))
+           (scope (org-glance-view-scope view)))
+      (org-glance-db-init db (org-glance-scope-headlines scope filter))
+      view))
 
-(cl-defmethod org-glance-view-headlines ((view org-glance-view))
-  "List headlines as org-elements for VIEW."
-  (org-glance-headlines
-   :db (org-glance-view-db view)
-   :scope (org-glance-view-scope view)
-   :filter (org-glance-view-filter view)))
+  (cl-defmethod org-glance-view-headlines ((view org-glance-view))
+    "List headlines as org-elements for VIEW."
+    (org-glance-headlines
+     :db (org-glance-view-db view)
+     :scope (org-glance-view-scope view)
+     :filter (org-glance-view-filter view)))
 
-(cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
-  "List headlines as formatted strings for VIEW."
-  (->> view
-       org-glance-view-headlines
-       (mapcar #'org-glance-format)
-       (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
+  (cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
+    "List headlines as formatted strings for VIEW."
+    (->> view
+      org-glance-view-headlines
+      (mapcar #'org-glance-format)
+      (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
-(cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
-  (s-titleize (format "%s %s: " action (org-glance-view-id view))))
+  (cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
+    (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
-(cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
-  (let* ((action-types (->> org-glance-view-actions
-                            (gethash action)
-                            (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (cl-loop for action-type in action-types
-                          with view-type = (org-glance-view-type view)
-                          when (cl-subsetp action-type view-type)
-                          return action-type)))
-    (or view-actions
-        (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
+  (cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
+    (let* ((action-types (->> org-glance-view-actions
+                           (gethash action)
+                           (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
+           (view-actions (cl-loop for action-type in action-types
+                            with view-type = (org-glance-view-type view)
+                            when (cl-subsetp action-type view-type)
+                            return action-type)))
+      (or view-actions
+          (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
-(defun org-glance-act-arguments nil
-  (transient-args 'org-glance-act))
+  (defun org-glance-act-arguments nil
+    (transient-args 'org-glance-act))
 
-(defun org-glance-list-views ()
-  "List registered views."
-  (hash-table-keys org-glance-views))
+  (defun org-glance-list-views ()
+    "List registered views."
+    (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(cl-defun org-glance-export-all-views
-    (&optional (destination
-                (or org-glance-export-directory
-                    (read-directory-name "Export destination: "))))
-  (interactive)
-  (cl-loop for view-id being the hash-keys of org-glance-views
-     do (org-glance-view-export view-id destination 'force)))
+  (cl-defun org-glance-export-all-views
+      (&optional (destination
+                  (or org-glance-export-directory
+                      (read-directory-name "Export destination: "))))
+    (interactive)
+    (cl-loop for view-id being the hash-keys of org-glance-views
+       do (org-glance-view-export view-id destination)))
 
-(defun org-glance-show-report ()
-  (interactive)
-  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
-        (end_src "#+END:")
-        (report-buffer (get-buffer-create "*org-glance-report*")))
-    (with-current-buffer report-buffer
-      (org-mode)
-      (delete-region (point-min) (point-max))
-      (insert begin_src)
-      (insert "\n")
-      (insert end_src)
-      (goto-char (point-min))
-      (org-ctrl-c-ctrl-c))
-    (switch-to-buffer report-buffer)))
+  (defun org-glance-show-report ()
+    (interactive)
+    (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
+          (end_src "#+END:")
+          (report-buffer (get-buffer-create "*org-glance-report*")))
+      (with-current-buffer report-buffer
+        (org-mode)
+        (delete-region (point-min) (point-max))
+        (insert begin_src)
+        (insert "\n")
+        (insert end_src)
+        (goto-char (point-min))
+        (org-ctrl-c-ctrl-c))
+      (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-def-view (view-id &key type scope)
-  (unless (eq nil (gethash view-id org-glance-views))
-    (user-error "View %s is already registered." view-id))
-  (let ((view (make-org-glance-view :id view-id)))
-    (when scope (setf (org-glance-view-scope view) scope))
-    (when type  (setf (org-glance-view-type view) type))
-    (puthash view-id view org-glance-views)
-    (message "%s view of type %s is now ready to glance scope %s"
-             view-id (or type "default") scope)
-    view))
+  (cl-defun org-glance-def-view (view-id &key type scope)
+    (unless (eq nil (gethash view-id org-glance-views))
+      (user-error "View %s is already registered." view-id))
+    (let ((view (make-org-glance-view :id view-id)))
+      (when scope (setf (org-glance-view-scope view) scope))
+      (when type  (setf (org-glance-view-type view) type))
+      (puthash view-id view org-glance-views)
+      (message "%s view of type %s is now ready to glance scope %s"
+               view-id (or type "default") scope)
+      view))
 #+end_src
+
 ** Actions
 *** Core
 **** Utils
 ***** Method Names
+
 #+begin_src emacs-lisp
-(cl-defmethod org-glance-generic-method-name ((name symbol))
-  (intern (format "org-glance-action-%s" name)))
+(eval-and-compile
+  (cl-defmethod org-glance-generic-method-name ((name symbol))
+    (intern (format "org-glance-action-%s" name)))
 
-(cl-defmethod org-glance-concrete-method-name ((name symbol) (type symbol))
-  (org-glance-concrete-method-name name (list type)))
+  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type symbol))
+    (org-glance-concrete-method-name name (list type)))
 
-(cl-defmethod org-glance-concrete-method-name ((name symbol) (type list))
-  (->> type
-       (-map #'symbol-name)
-       (-sort #'s-less?)
-       (s-join "-")
-       (format "org-glance-action-%s-%s" name)
-       (intern)))
+  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type list))
+    (->> type
+      (-map #'symbol-name)
+      (-sort #'s-less?)
+      (s-join "-")
+      (format "org-glance-action-%s-%s" name)
+      (intern))))
 #+end_src
+
 ***** Calling
+
 #+begin_src emacs-lisp
 (cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
   (when (eq on 'current-headline)
@@ -625,23 +656,30 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
       (user-error "Unbound function %s" fn))
     (funcall fn on)))
 #+end_src
+
 ***** Headline Filter
+
 #+begin_src emacs-lisp
 (defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance-views
      when (org-glance-view-action-resolve view action)
      append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 #+end_src
-***** Registration
-#+begin_src emacs-lisp
-(cl-defmethod org-glance-action-register ((name symbol) (type symbol))
-  (org-glance-action-register name (list type)))
 
-(cl-defmethod org-glance-action-register ((name symbol) (type list))
-  (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
-    (puthash name type org-glance-view-actions)))
+***** Registration
+
+#+begin_src emacs-lisp
+(eval-and-compile
+  (cl-defmethod org-glance-action-register ((name symbol) (type symbol))
+    (org-glance-action-register name (list type)))
+
+  (cl-defmethod org-glance-action-register ((name symbol) (type list))
+    (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
+      (puthash name type org-glance-view-actions))))
 #+end_src
+
 **** Definition
+
 #+begin_src emacs-lisp
 (defmacro org-glance-action-define (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
@@ -656,7 +694,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                      def-body))
            (doc-string 6)
            (indent 4))
-  (org-glance-action-register name type)
+
   (let* ((res (cl--transform-lambda (cons args body) name))
          (generic-func-name (org-glance-generic-method-name name))
          (concrete-func-name (org-glance-concrete-method-name name type))
@@ -674,8 +712,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                        ))
                              (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
-                                               (org-glance-view-action-resolve view)
-                                               (org-glance-concrete-method-name action)))
+                                            (org-glance-view-action-resolve view)
+                                            (org-glance-concrete-method-name action)))
                              (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
                         (funcall method-name args view headline))))
 
@@ -693,11 +731,16 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (defun ,action-private-method
                       ,@(cdr res)))))
 
-    (if (car res) `(progn ,(car res) ,form) form)))
+    (org-glance-action-register name type)
+    (if (car res)
+        `(progn ,(car res) ,form)
+      form)))
 #+end_src
+
 *** Implementations
 **** Per-view
 ***** Export
+
 #+begin_src emacs-lisp
 (cl-defun org-glance-view-export-filename
     (&optional
@@ -705,16 +748,13 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        (dir org-glance-export-directory))
   (f-join dir (s-downcase (format "%s.org" view-id))))
 
-(cl-defmethod org-glance-view-export
+(cl-defun org-glance-view-export
     (&optional (view-id (org-glance-read-view))
        (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: ")))
-       force)
+                        (read-directory-name "Export destination: "))))
   (interactive)
   (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-    (when (and
-           (file-exists-p dest-file-name)
-           (or force (y-or-n-p (format "File %s already exists. Overwrite?" dest-file-name))))
+    (when (file-exists-p dest-file-name)
       (delete-file dest-file-name t))
     (cl-loop for headline in (->> view-id
                                   org-glance-view-reread
@@ -722,10 +762,17 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        do (org-glance-with-headline-materialized headline
               (append-to-file (point-min) (point-max) dest-file-name)
             (append-to-file "\n" nil dest-file-name)))
-    (if force
-        dest-file-name
-      (find-file dest-file-name))))
+    (progn  ;; sort headlines by TODO order
+      (find-file dest-file-name)
+      (goto-char (point-min))
+      (set-mark (point-max))
+      (org-sort-entries nil ?o)
+      (org-overview)
+      (save-buffer)
+      (bury-buffer))
+    dest-file-name))
 #+end_src
+
 ***** Agenda
 #+begin_src emacs-lisp
 (cl-defun org-glance-view-agenda
@@ -734,6 +781,14 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (interactive)
   (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
     (org-agenda-list)))
+#+end_src
+***** Visit
+#+begin_src emacs-lisp
+(cl-defun org-glance-view-visit
+    (&optional
+       (view-id (org-glance-read-view)))
+  (interactive)
+  (find-file (org-glance-view-export-filename view-id)))
 #+end_src
 **** Per-headline
 ***** Visit headline
@@ -1050,9 +1105,10 @@ then run `org-completing-read' to open it."
   ;;  ("-s" "Scope" org-glance-act.scope)]
   ["Views"
    [("A" "Agenda" org-glance-view-agenda)]
+   [("D" "Dashboard" org-glance-show-report)]
    [("E" "Export" org-glance-view-export)]
    [("R" "Reread" org-glance-view-reread)]
-   [("D" "Dashboard" org-glance-show-report)]]
+   [("V" "Visit" org-glance-view-visit)]]
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]
@@ -1061,6 +1117,7 @@ then run `org-completing-read' to open it."
    [("v" "Visit" org-glance-action-visit)]])
 #+end_src
 ** Core
+
 #+begin_src emacs-lisp
 (cl-defun org-glance
     (&key db
