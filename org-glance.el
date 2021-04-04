@@ -370,125 +370,127 @@
   (type org-glance-view-default-type)
   (scope org-glance-default-scope))
 
-(defvar org-glance-views (make-hash-table :test 'equal))
-(defvar org-glance-view-actions (make-hash-table :test 'equal))
-(defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
-(defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
-(defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
+(eval-and-compile
+  (defvar org-glance-views (make-hash-table :test 'equal))
+  (defvar org-glance-view-actions (make-hash-table :test 'equal))
+  (defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
+  (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
+  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*"))
 
-(defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-export-directory))
+  (defun org-glance-exports ()
+    (org-glance-list-files-recursively org-glance-export-directory))
 
-(cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
-(cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
+  (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
+  (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
-(cl-defmethod org-glance-view-db ((view org-glance-view))
-  (->> view
-       (org-glance-view-id)
-       (format "org-glance-%s.el")
-       (downcase)
-       (format "%s/%s" org-glance-db-directory)))
+  (cl-defmethod org-glance-view-db ((view org-glance-view))
+    (->> view
+      (org-glance-view-id)
+      (format "org-glance-%s.el")
+      (downcase)
+      (format "%s/%s" org-glance-db-directory)))
 
-(cl-defmethod org-glance-view-filter ((view org-glance-view))
-  (-partial
-   #'(lambda (view headline)
-       (-contains?
-        (mapcar #'downcase (org-element-property :tags headline))
-        (downcase (symbol-name (org-glance-view-id view)))))
-   view))
+  (cl-defmethod org-glance-view-filter ((view org-glance-view))
+    (-partial
+     #'(lambda (view headline)
+         (-contains?
+          (mapcar #'downcase (org-element-property :tags headline))
+          (downcase (symbol-name (org-glance-view-id view)))))
+     view))
 
-(cl-defun org-glance-view-reread (&optional (view-id (org-glance-read-view)))
-  (interactive)
-  (message "Reread view %s" view-id)
-  (let* ((view (gethash view-id org-glance-views))
-         (db (org-glance-view-db view))
-         (filter (org-glance-view-filter view))
-         (scope (org-glance-view-scope view)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter))
-    view))
+  (cl-defun org-glance-view-reread (&optional (view-id (org-glance-read-view)))
+    (interactive)
+    (message "Reread view %s" view-id)
+    (let* ((view (gethash view-id org-glance-views))
+           (db (org-glance-view-db view))
+           (filter (org-glance-view-filter view))
+           (scope (org-glance-view-scope view)))
+      (org-glance-db-init db (org-glance-scope-headlines scope filter))
+      view))
 
-(cl-defmethod org-glance-view-headlines ((view org-glance-view))
-  "List headlines as org-elements for VIEW."
-  (org-glance-headlines
-   :db (org-glance-view-db view)
-   :scope (org-glance-view-scope view)
-   :filter (org-glance-view-filter view)))
+  (cl-defmethod org-glance-view-headlines ((view org-glance-view))
+    "List headlines as org-elements for VIEW."
+    (org-glance-headlines
+     :db (org-glance-view-db view)
+     :scope (org-glance-view-scope view)
+     :filter (org-glance-view-filter view)))
 
-(cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
-  "List headlines as formatted strings for VIEW."
-  (->> view
-       org-glance-view-headlines
-       (mapcar #'org-glance-format)
-       (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
+  (cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
+    "List headlines as formatted strings for VIEW."
+    (->> view
+      org-glance-view-headlines
+      (mapcar #'org-glance-format)
+      (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
-(cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
-  (s-titleize (format "%s %s: " action (org-glance-view-id view))))
+  (cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
+    (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
-(cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
-  (let* ((action-types (->> org-glance-view-actions
-                            (gethash action)
-                            (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (cl-loop for action-type in action-types
-                          with view-type = (org-glance-view-type view)
-                          when (cl-subsetp action-type view-type)
-                          return action-type)))
-    (or view-actions
-        (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
+  (cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
+    (let* ((action-types (->> org-glance-view-actions
+                           (gethash action)
+                           (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
+           (view-actions (cl-loop for action-type in action-types
+                            with view-type = (org-glance-view-type view)
+                            when (cl-subsetp action-type view-type)
+                            return action-type)))
+      (or view-actions
+          (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
-(defun org-glance-act-arguments nil
-  (transient-args 'org-glance-act))
+  (defun org-glance-act-arguments nil
+    (transient-args 'org-glance-act))
 
-(defun org-glance-list-views ()
-  "List registered views."
-  (sort (hash-table-keys org-glance-views) #'s-less?))
+  (defun org-glance-list-views ()
+    "List registered views."
+    (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(cl-defun org-glance-export-all-views
-    (&optional (destination
-                (or org-glance-export-directory
-                    (read-directory-name "Export destination: "))))
-  (interactive)
-  (cl-loop for view-id being the hash-keys of org-glance-views
-     do (org-glance-view-export view-id destination)))
+  (cl-defun org-glance-export-all-views
+      (&optional (destination
+                  (or org-glance-export-directory
+                      (read-directory-name "Export destination: "))))
+    (interactive)
+    (cl-loop for view-id being the hash-keys of org-glance-views
+       do (org-glance-view-export view-id destination)))
 
-(defun org-glance-show-report ()
-  (interactive)
-  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
-        (end_src "#+END:")
-        (report-buffer (get-buffer-create "*org-glance-report*")))
-    (with-current-buffer report-buffer
-      (org-mode)
-      (delete-region (point-min) (point-max))
-      (insert begin_src)
-      (insert "\n")
-      (insert end_src)
-      (goto-char (point-min))
-      (org-ctrl-c-ctrl-c))
-    (switch-to-buffer report-buffer)))
+  (defun org-glance-show-report ()
+    (interactive)
+    (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
+          (end_src "#+END:")
+          (report-buffer (get-buffer-create "*org-glance-report*")))
+      (with-current-buffer report-buffer
+        (org-mode)
+        (delete-region (point-min) (point-max))
+        (insert begin_src)
+        (insert "\n")
+        (insert end_src)
+        (goto-char (point-min))
+        (org-ctrl-c-ctrl-c))
+      (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-def-view (view-id &key type scope)
-  (unless (eq nil (gethash view-id org-glance-views))
-    (user-error "View %s is already registered." view-id))
-  (let ((view (make-org-glance-view :id view-id)))
-    (when scope (setf (org-glance-view-scope view) scope))
-    (when type  (setf (org-glance-view-type view) type))
-    (puthash view-id view org-glance-views)
-    (message "%s view of type %s is now ready to glance scope %s"
-             view-id (or type "default") scope)
-    view))
+  (cl-defun org-glance-def-view (view-id &key type scope)
+    (unless (eq nil (gethash view-id org-glance-views))
+      (user-error "View %s is already registered." view-id))
+    (let ((view (make-org-glance-view :id view-id)))
+      (when scope (setf (org-glance-view-scope view) scope))
+      (when type  (setf (org-glance-view-type view) type))
+      (puthash view-id view org-glance-views)
+      (message "%s view of type %s is now ready to glance scope %s"
+               view-id (or type "default") scope)
+      view))
 
-(cl-defmethod org-glance-generic-method-name ((name symbol))
-  (intern (format "org-glance-action-%s" name)))
+(eval-and-compile
+  (cl-defmethod org-glance-generic-method-name ((name symbol))
+    (intern (format "org-glance-action-%s" name)))
 
-(cl-defmethod org-glance-concrete-method-name ((name symbol) (type symbol))
-  (org-glance-concrete-method-name name (list type)))
+  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type symbol))
+    (org-glance-concrete-method-name name (list type)))
 
-(cl-defmethod org-glance-concrete-method-name ((name symbol) (type list))
-  (->> type
-       (-map #'symbol-name)
-       (-sort #'s-less?)
-       (s-join "-")
-       (format "org-glance-action-%s-%s" name)
-       (intern)))
+  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type list))
+    (->> type
+      (-map #'symbol-name)
+      (-sort #'s-less?)
+      (s-join "-")
+      (format "org-glance-action-%s-%s" name)
+      (intern))))
 
 (cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
   (when (eq on 'current-headline)
@@ -503,12 +505,13 @@
      when (org-glance-view-action-resolve view action)
      append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
 
-(cl-defmethod org-glance-action-register ((name symbol) (type symbol))
-  (org-glance-action-register name (list type)))
+(eval-and-compile
+  (cl-defmethod org-glance-action-register ((name symbol) (type symbol))
+    (org-glance-action-register name (list type)))
 
-(cl-defmethod org-glance-action-register ((name symbol) (type list))
-  (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
-    (puthash name type org-glance-view-actions)))
+  (cl-defmethod org-glance-action-register ((name symbol) (type list))
+    (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
+      (puthash name type org-glance-view-actions))))
 
 (defmacro org-glance-action-define (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
@@ -523,7 +526,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                      def-body))
            (doc-string 6)
            (indent 4))
-  (org-glance-action-register name type)
+
   (let* ((res (cl--transform-lambda (cons args body) name))
          (generic-func-name (org-glance-generic-method-name name))
          (concrete-func-name (org-glance-concrete-method-name name type))
@@ -541,9 +544,9 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                        ))
                              (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
-                                               (org-glance-view-action-resolve view)
-                                               (org-glance-concrete-method-name action)))
-                             (headline (s-replace-regexp "^\\[.*\\] " "" choice)))
+                                            (org-glance-view-action-resolve view)
+                                            (org-glance-concrete-method-name action)))
+                             (headline (replace-regexp-in-string "^\\[.*\\] " "" choice)))
                         (funcall method-name args view headline))))
 
                   (defun ,concrete-func-name (&optional args view headline)
@@ -560,7 +563,10 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (defun ,action-private-method
                       ,@(cdr res)))))
 
-    (if (car res) `(progn ,(car res) ,form) form)))
+    (org-glance-action-register name type)
+    (if (car res)
+        `(progn ,(car res) ,form)
+      form)))
 
 (cl-defun org-glance-view-export-filename
     (&optional
@@ -568,7 +574,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        (dir org-glance-export-directory))
   (f-join dir (s-downcase (format "%s.org" view-id))))
 
-(cl-defmethod org-glance-view-export
+(cl-defun org-glance-view-export
     (&optional (view-id (org-glance-read-view))
        (destination (or org-glance-export-directory
                         (read-directory-name "Export destination: "))))

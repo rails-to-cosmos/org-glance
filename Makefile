@@ -13,8 +13,5 @@ test:
 	${CASK} exec ecukes
 	${CASK} build
 	${CASK} exec ecukes
-testsrc:
-	${CASK} clean-elc
-	${CASK} exec ert-runner -L . -L test
 clean:
 	${CASK} clean-elc

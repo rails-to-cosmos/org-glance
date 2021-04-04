@@ -4,6 +4,7 @@
 
 (package-file "org-glance.el")
 
+(depends-on "s")
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "ledger-mode")
