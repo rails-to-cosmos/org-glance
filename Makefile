@@ -13,5 +13,6 @@ test:
 	${CASK} exec ecukes
 	${CASK} build
 	${CASK} exec ecukes
+	${CASK} clean-elc
 clean:
 	${CASK} clean-elc

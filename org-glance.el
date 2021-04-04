@@ -1,6 +1,6 @@
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.     -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2020 Dmitry Akatov
+;; Copyright (C) 2018-2021 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -527,13 +527,15 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
            (doc-string 6)
            (indent 4))
 
+  (org-glance-action-register name type)
+
   (let* ((res (cl--transform-lambda (cons args body) name))
-         (generic-func-name (org-glance-generic-method-name name))
-         (concrete-func-name (org-glance-concrete-method-name name type))
+         (generic-fn (org-glance-generic-method-name name))
+         (concrete-fn (org-glance-concrete-method-name name type))
          (action-private-method (intern (format "org-glance--%s--%s" name type)))
 	 (form `(progn
-                  (unless (fboundp (quote ,generic-func-name))
-                    (defun ,generic-func-name (&optional args)
+                  (unless (fboundp (quote ,generic-fn))
+                    (defun ,generic-fn (&optional args)
                       (interactive (list (org-glance-act-arguments)))
                       (let* ((action (quote ,name))
                              (headlines (org-glance-action-headlines action))
@@ -549,7 +551,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                              (headline (replace-regexp-in-string "^\\[.*\\] " "" choice)))
                         (funcall method-name args view headline))))
 
-                  (defun ,concrete-func-name (&optional args view headline)
+                  (defun ,concrete-fn (&optional args view headline)
                     (interactive (list (org-glance-act-arguments)))
                     args
                     (org-glance
@@ -563,7 +565,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                   (defun ,action-private-method
                       ,@(cdr res)))))
 
-    (org-glance-action-register name type)
     (if (car res)
         `(progn ,(car res) ,form)
       form)))
