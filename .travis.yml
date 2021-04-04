@@ -21,7 +21,7 @@ env:
   - JOB="emacs" EMACS_VERSION="master"
   - JOB="emacs" EMACS_VERSION="27.1"
   - JOB="emacs" EMACS_VERSION="26.3"
-  - JOB="emacs" EMACS_VERSION="25.3"
+  # - JOB="emacs" EMACS_VERSION="25.3"
   # A special job to build the manual
   # - JOB="build-manual"
   # And another special job to lint our Python code
