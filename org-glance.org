@@ -10,6 +10,7 @@
 #+PROPERTY: header-args:emacs-lisp :noweb yes :tangle org-glance.el :results silent
 
 * Hello
+
 #+begin_src emacs-lisp
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.     -*- lexical-binding: t -*-
 
@@ -43,6 +44,7 @@
 
 ;;; Code:
 #+end_src
+
 * Service                                                                       :Service:
 :PROPERTIES:
 :TITLE:    org-glance
@@ -100,9 +102,11 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 *** https://github.com/skeeto/emacsql
 *** https://magit.vc/manual/transient/
 * Package
+
 #+begin_src emacs-lisp :tangle org-glance-pkg.el
 (define-package "org-glance" "1.0" "org-mode traversing. Fast and convenient." 'nil)
 #+end_src
+
 * Implementation
 ** Defaults
 *** Requirements
