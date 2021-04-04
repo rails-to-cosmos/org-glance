@@ -134,6 +134,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 #+end_src
 
 *** Privates
+
 #+begin_src emacs-lisp
 (defvar -org-glance-pwd nil)
 (defvar -org-glance-src nil)
@@ -142,7 +143,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 #+end_src
+
 *** Customs
+
 #+begin_src emacs-lisp
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -178,7 +181,9 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
   :group 'org-glance
   :type 'list)
 #+end_src
+
 *** Exceptions
+
 #+begin_src emacs-lisp
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
@@ -196,6 +201,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 (define-error 'org-glance-properties-corrupted "Materialized view properties corrupted, please reread" 'user-error)
 (cl-defun org-glance-properties-corrupted (format &rest args) (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
 #+end_src
+
 ** Utils
 *** format
 #+begin_src emacs-lisp
@@ -441,7 +447,8 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
        :file ,file))))
 #+end_src
 ** Scope
-*** definition
+*** Definition
+
 #+begin_src emacs-lisp
 (cl-defgeneric org-glance-scope (lfob)
   "Adapt list-file-or-buffer to list of files.")
@@ -479,8 +486,10 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
     funcall
     org-glance-scope))
 #+end_src
+
 ** Views
 *** Definition
+
 #+begin_src emacs-lisp
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -613,6 +622,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
                view-id (or type "default") scope)
       view))
 #+end_src
+
 ** Actions
 *** Core
 **** Utils
@@ -1107,6 +1117,7 @@ then run `org-completing-read' to open it."
    [("v" "Visit" org-glance-action-visit)]])
 #+end_src
 ** Core
+
 #+begin_src emacs-lisp
 (cl-defun org-glance
     (&key db
