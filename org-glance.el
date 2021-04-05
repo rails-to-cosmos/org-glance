@@ -55,6 +55,8 @@
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
 
+(defconst org-glance-view-selector:all '!All)
+
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
@@ -444,14 +446,6 @@
     "List registered views."
     (sort (hash-table-keys org-glance-views) #'s-less?))
 
-  (cl-defun org-glance-export-all-views
-      (&optional (destination
-                  (or org-glance-export-directory
-                      (read-directory-name "Export destination: "))))
-    (interactive)
-    (cl-loop for view-id being the hash-keys of org-glance-views
-       do (org-glance-view-export view-id destination)))
-
   (defun org-glance-show-report ()
     (interactive)
     (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
@@ -576,35 +570,41 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
        (dir org-glance-export-directory))
   (f-join dir (s-downcase (format "%s.org" view-id))))
 
-(cl-defun org-glance-view-export
-    (&optional (view-id (org-glance-read-view))
-       (destination (or org-glance-export-directory
-                        (read-directory-name "Export destination: "))))
+(cl-defun org-glance-view-export (&optional
+                                    (view-id (org-glance-read-view))
+                                    (destination org-glance-export-directory))
   (interactive)
-  (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-    (when (file-exists-p dest-file-name)
-      (delete-file dest-file-name t))
-    (cl-loop for headline in (->> view-id
-                                  org-glance-view-reread
-                                  org-glance-view-headlines)
-       do (org-glance-with-headline-materialized headline
-              (append-to-file (point-min) (point-max) dest-file-name)
-            (append-to-file "\n" nil dest-file-name)))
-    (progn  ;; sort headlines by TODO order
-      (find-file dest-file-name)
-      (goto-char (point-min))
-      (set-mark (point-max))
-      (org-sort-entries nil ?o)
-      (org-overview)
-      (save-buffer)
-      (bury-buffer))
-    dest-file-name))
+  ; Make generic?
+  (cond ((string= view-id org-glance-view-selector:all)
+         (loop for view in (org-glance-list-views)
+            do (org-glance-view-export view destination)))
+        (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+             (when (file-exists-p dest-file-name)
+               (delete-file dest-file-name t))
+             (cl-loop for headline in (->> view-id
+                                        org-glance-view-reread
+                                        org-glance-view-headlines)
+                do (org-glance-with-headline-materialized headline
+                       (append-to-file (point-min) (point-max) dest-file-name)
+                     (append-to-file "\n" nil dest-file-name)))
+             (progn ;; sort headlines by TODO order
+               (find-file dest-file-name)
+               (goto-char (point-min))
+               (set-mark (point-max))
+               (org-sort-entries nil ?o)
+               (org-overview)
+               (save-buffer)
+               (bury-buffer))
+             dest-file-name))))
 
-(cl-defun org-glance-view-agenda
-    (&optional
-       (view-id (org-glance-read-view)))
+(cl-defun org-glance-view-agenda (&optional
+                                    (view-id (org-glance-read-view)))
   (interactive)
-  (let ((org-agenda-files (list (org-glance-view-export-filename view-id))))
+  (let ((org-agenda-files
+         (cond ((string= view-id org-glance-view-selector:all)
+                (loop for view in (org-glance-list-views)
+                   collect (org-glance-view-export-filename view)))
+               (t (list (org-glance-view-export-filename view-id))))))
     (org-agenda-list)))
 
 (cl-defun org-glance-view-visit
@@ -637,7 +637,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views)))
     (if (> (length views) 1)
-        (intern (org-completing-read prompt views))
+        (let ((view (org-completing-read prompt (append (list org-glance-view-selector:all) views))))
+          (intern view))
       (car views))))
 
 ;; (org-glance-def-type all "Doc string")
@@ -656,7 +657,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                         (point)))
               (end-of-subtree () (save-excursion (org-end-of-subtree t)))
               (buffer-contents (beg end) (->> (buffer-substring-no-properties beg end)
-                                              (s-trim))))
+                                           (s-trim))))
     (let ((buffer org-glance-materialized-view-buffer))
       (save-window-excursion
         (org-glance-action-call 'visit :on headline)
