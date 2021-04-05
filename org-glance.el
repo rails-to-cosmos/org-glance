@@ -33,7 +33,8 @@
 (eval-and-compile
   (require 'org)
   (require 'org-element)
-  (require 'eieio-core))
+  (require 'eieio-core)
+  (require 'org-glance-resources))
 
 (eval-when-compile
   (require 'cl-lib)
@@ -53,9 +54,6 @@
 (defvar -org-glance-end nil)
 (defvar -org-glance-hash nil)
 (defvar -org-glance-indent nil)
-
-(defvar org-glance-resources-directory
-  (f-join user-emacs-directory "org-glance" "resources"))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
