@@ -30,11 +30,12 @@
 
 ;;; Code:
 
+(require 'org-glance-resources)
+
 (eval-and-compile
   (require 'org)
   (require 'org-element)
-  (require 'eieio-core)
-  (require 'org-glance-resources))
+  (require 'eieio-core))
 
 (eval-when-compile
   (require 'cl-lib)
@@ -577,7 +578,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
   (interactive)
                                         ; Make generic?
   (cond ((string= view-id org-glance-view-selector:all)
-         (loop for view in (org-glance-list-views)
+         (cl-loop for view in (org-glance-list-views)
             do (org-glance-view-export view destination)))
         (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
              (when (file-exists-p dest-file-name)
