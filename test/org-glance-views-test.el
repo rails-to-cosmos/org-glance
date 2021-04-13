@@ -13,7 +13,7 @@
   (with-simulated-input "[Country] SPC Belgium RET"
     (org-glance-action-visit)
     (should (string= (org-entry-title) "Belgium")))
-  (org-glance-remove-view 'Country))
+  (org-glance-view-delete 'Country))
 
 (ert-deftest org-glance-test/should-visit-headlines-with-priority ()
   (message "")
@@ -26,7 +26,7 @@
   (with-simulated-input "[Region] SPC Northwestern RET"
     (org-glance-action-visit)
     (should (string= (org-entry-title) "Northwestern")))
-  (org-glance-remove-view 'Region))
+  (org-glance-view-delete 'Region))
 
 (ert-deftest org-glance-test/should-visit-todos-with-priority ()
   (message "")
@@ -39,4 +39,4 @@
   (with-simulated-input "[Task] SPC Raise SPC a SPC daughter RET"
     (org-glance-action-visit)
     (should (string= (org-entry-title) "Raise a daughter")))
-  (org-glance-remove-view 'Task))
+  (org-glance-view-delete 'Task))

@@ -40,12 +40,12 @@
 ;;      (unwind-protect
 ;;          (with-current-buffer buffer
 ;;            (message "Visit materialized view %s at buffer %s" ,view (current-buffer))
-;;            (message "-org-glance-pwd: %s" -org-glance-pwd)
-;;            (message "-org-glance-src: %s" -org-glance-src)
-;;            (message "-org-glance-beg: %d" -org-glance-beg)
-;;            (message "-org-glance-end: %d" -org-glance-end)
-;;            (message "-org-glance-hash: %s" -org-glance-hash)
-;;            (message "-org-glance-indent: %d" -org-glance-indent)
+;;            (message "--org-glance-view-pwd: %s" --org-glance-view-pwd)
+;;            (message "--org-glance-view-src: %s" --org-glance-view-src)
+;;            (message "--org-glance-view-beg: %d" --org-glance-view-beg)
+;;            (message "--org-glance-view-end: %d" --org-glance-view-end)
+;;            (message "--org-glance-view-hash: %s" --org-glance-view-hash)
+;;            (message "--org-glance-view-indent: %d" --org-glance-view-indent)
 ;;            ,@forms))))
 
 ;; (cl-defmacro follow-link-capture-output (view)

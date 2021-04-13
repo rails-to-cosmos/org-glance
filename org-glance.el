@@ -30,7 +30,12 @@
 
 ;;; Code:
 
-(require 'org-glance-resources)
+(require 'org-glance-helpers)
+
+(require 'org-glance-scope)
+(require 'org-glance-headline)
+(require 'org-glance-db)
+(require 'org-glance-view)
 
 (eval-and-compile
   (require 'org)
@@ -49,168 +54,10 @@
 (require 'gv)
 (require 'transient)
 
-(defvar -org-glance-pwd nil)
-(defvar -org-glance-src nil)
-(defvar -org-glance-beg nil)
-(defvar -org-glance-end nil)
-(defvar -org-glance-hash nil)
-(defvar -org-glance-indent nil)
-
-(defconst org-glance-view-selector:all '!All)
-
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
   :group 'org)
-
-(defvar org-glance-org-scope-extensions '("org" "org_archive"))
-(defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . -org-glance-list-archives)
-    (agenda . org-agenda-files)
-    (agenda-with-archives . -org-glance-agenda-with-archives)))
-
-(defcustom org-glance-after-materialize-hook nil
-  "Normal hook that is run after a buffer is materialized in separate buffer."
-  :options '(copyright-update time-stamp)
-  :type 'hook
-  :group 'org-glance)
-
-(defcustom org-glance-after-materialize-sync-hook nil
-  "Hook that is run after a materialized buffer is synchronized to its source file."
-  :options '(copyright-update time-stamp)
-  :type 'hook
-  :group 'org-glance)
-
-(defcustom org-glance-before-materialize-sync-hook nil
-  "Normal hook that is run before a materialized buffer is synchronized to its source file."
-  :options '(copyright-update time-stamp)
-  :type 'hook
-  :group 'org-glance)
-
-(defcustom org-glance-default-scope '(agenda-with-archives)
-  "Default scope for glancing views."
-  :group 'org-glance
-  :type 'list)
-
-(define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
-
-(defun org-glance-db-outdated (format &rest args)
-  "Raise `org-glance-db-outdated' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-db-outdated
-          (list (apply #'format-message format args))))
-
-(define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-view-not-modified (format &rest args) (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
-
-(define-error 'org-glance-source-file-corrupted "Source file corrupted, please reread" 'user-error)
-(cl-defun org-glance-source-file-corrupted (format &rest args) (signal 'org-glance-source-file-corrupted (list (apply #'format-message format args))))
-
-(define-error 'org-glance-properties-corrupted "Materialized view properties corrupted, please reread" 'user-error)
-(cl-defun org-glance-properties-corrupted (format &rest args) (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
-
-(defun org-glance-format (headline)
-  (or (org-element-property :TITLE headline)
-      (org-element-property :raw-value headline)))
-
-(defun org-glance-read-file-headlines (file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (->> (buffer-string)
-      substring-no-properties
-      read
-      eval)))
-
-(defun org-glance-choose-headline (choice headlines)
-  (--first (string= (org-glance-format it) choice) headlines))
-
-(defun org-glance-prompt-headlines (prompt headlines)
-  (org-completing-read prompt (mapcar #'org-glance-format headlines)))
-
-(defun org-glance-list-files-recursively (dir)
-  (directory-files-recursively dir "\\.*.org\\.*"))
-
-(defun org-glance-list-file-archives (filename)
-  "Return list of org-mode files for FILENAME."
-  (let* ((dir (file-name-directory filename))
-         (base-filename (-some->> filename
-                          file-name-nondirectory
-                          file-name-sans-extension)))
-    (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
-
-(defun -org-glance-list-archives ()
-  (append (list (buffer-file-name))
-          (org-glance-list-file-archives (buffer-file-name))))
-
-(defun -org-glance-agenda-with-archives ()
-  (cl-loop for filename in (org-agenda-files)
-     append (list filename)
-     append (org-glance-list-file-archives filename)))
-
-(cl-defun org-glance-headlines
-    (&key db
-       (scope '(agenda))
-       (filter #'(lambda (_) t))
-       (db-init nil))
-  (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
-         (load-db? (and (not (null db)) (file-exists-p db)))
-         (skip-db? (null db)))
-    (cond (create-db? (org-glance-db-init db (org-glance-scope-headlines scope filter)))
-          (load-db?   (org-glance-db-load db))
-          (skip-db?   (org-glance-scope-headlines scope filter))
-          (t         (user-error "Nothing to glance at (scope: %s)" scope)))))
-
-(cl-defun org-glance-filter-apply (filter headline)
-  (or (null filter) (and filter (funcall filter headline))))
-
-(cl-defmethod org-glance-scope-headlines (scope &optional filter)
-  (cl-loop
-     for file in (org-glance-scope scope)
-     when (member (file-name-extension file) org-glance-org-scope-extensions)
-     do (message "Run org-glance on headlines in file %s" file)
-     append (org-glance-read-headlines-from-file file filter)
-     into result
-     do (redisplay)
-     finally (cl-return result)))
-
-(cl-defmethod org-glance-read-headlines-from-file ((file string) &optional filter)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (headline)
-        (when (org-glance-filter-apply filter headline)
-          (plist-put (cadr headline) :file file)
-          headline)))))
-
-(cl-defmacro org-glance-with-headline-narrowed (headline &rest forms)
-  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
-  (declare (indent defun))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file))
-          (visited-buffer (current-buffer)))
-     (org-glance-action-call 'visit :on ,headline)
-     (widen)
-     (org-narrow-to-subtree)
-     (unwind-protect
-          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-            ,@forms)
-       (widen))
-     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                       (bury-buffer file-buffer)))
-           (t (kill-buffer (get-file-buffer file))))))
-
-(cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE, execute FORMS in materialized buffer."
-  (declare (indent defun))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file)))
-     (org-glance-action-call 'materialize :on ,headline)
-     (unwind-protect
-          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-            ,@forms)
-       (kill-buffer org-glance-materialized-view-buffer))
-     (cond (file-buffer (bury-buffer file-buffer))
-           (t (kill-buffer (get-file-buffer file))))))
 
 (defun org-glance-encrypt-subtree (&optional password)
   "Encrypt subtree at point with PASSWORD."
@@ -248,205 +95,13 @@
       (kill-region beg end)
       (insert plain))))
 
-(defun -org-glance-promote-subtree ()
-  (let ((promote-level 0))
-    (cl-loop while (condition-case nil
-                       (org-with-limited-levels (org-map-tree 'org-promote) t)
-                     (error nil))
-       do (cl-incf promote-level))
-    promote-level))
-
-(defun -org-glance-demote-subtree (level)
-  (cl-loop repeat level
-     do (org-with-limited-levels
-         (org-map-tree 'org-demote))))
-
-(defun -org-glance-first-level-heading ()
-  (save-excursion
-    (unless (org-at-heading-p) (org-back-to-heading))
-    (beginning-of-line)
-    (point)))
-
-(defun -org-glance-end-of-meta-data ()
-  (save-excursion
-    (org-end-of-meta-data)
-    (point)))
-
-(defun -element-at-point-equals-headline (headline)
-  (message "Element at point equals headline?")
-  (let ((element-title (org-element-property :raw-value (org-element-at-point)))
-        (headline-title (org-element-property :raw-value headline)))
-    (message "Requested headline: %s" headline-title)
-    (message "Visited headline: %s" element-title)
-    (condition-case nil
-        (s-contains? element-title headline-title)
-      (error nil))))
-
-(cl-defun org-glance-db-init (db headlines)
-  (unless (file-exists-p (file-name-directory db))
-    (make-directory (file-name-directory db) t))
-  (with-temp-file db
-    (insert "`(")
-    (dolist (headline headlines)
-      (insert (org-glance-db--serialize headline) "\n"))
-    (insert ")"))
-  (message "Database has been initialized: %s" db)
-  headlines)
-
-(defun org-glance-db-load (file)
-  (-some->> file
-    org-glance-read-file-headlines
-    (mapcar 'org-glance-db--deserialize)))
-
-(cl-defun org-glance-db--serialize (headline)
-  (prin1-to-string
-   (list (org-element-property :TITLE headline)
-         (org-element-property :raw-value headline)
-         (org-element-property :begin headline)
-         (org-element-property :file headline))))
-
-(cl-defun org-glance-db--deserialize (input)
-  (cl-destructuring-bind (alias title begin file) input
-    (org-element-create
-     'headline
-     `(:TITLE ,alias
-              :raw-value ,title
-              :begin ,begin
-              :file ,file))))
-
-(cl-defgeneric org-glance-scope (lfob)
-  "Adapt list-file-or-buffer to list of files.")
-
-(cl-defmethod org-glance-scope ((lfob string))
-  "Return list of file LFOB if exists."
-  (let ((file (expand-file-name lfob)))
-    (cond
-      ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
-      ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-      ((f-directory? file) (org-glance-list-files-recursively file))
-      (t file))))
-
-(cl-defmethod org-glance-scope ((lfob sequence))
-  "Adapt each element of LFOB."
-  (-some->> lfob
-    (-keep #'org-glance-scope)
-    -flatten
-    seq-uniq))
-
-(cl-defmethod org-glance-scope ((lfob symbol))
-  "Return extracted LFOB from `org-glance-scope--default-scope-alist'."
-  (funcall (cdr (assoc lfob org-glance-scope--default-scope-alist))))
-
-(cl-defmethod org-glance-scope ((lfob buffer))
-  "Return list of files from LFOB buffer."
-  (list
-   (condition-case nil
-       (get-file-buffer lfob)
-     (error lfob))))
-
-(cl-defmethod org-glance-scope ((lfob function))
-  "Adapt result of LFOB."
-  (-some->> lfob
-    funcall
-    org-glance-scope))
-
-(defvar org-glance-view-mode-map (make-sparse-keymap)
-  "Extend `org-mode' map with sync abilities.")
-
-(define-minor-mode org-glance-view-mode
-    "A minor mode to be activated only in materialized view editor."
-  nil nil org-glance-view-mode-map)
-
-(defvar org-glance-view-default-type '(all)
-  "Default type for all views.")
-
 (defvar org-glance-properties-ignore-patterns
   (append
    org-special-properties
    '("^ARCHIVE_" "^TITLE$")))
 
-(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
-(define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-
-(cl-defstruct org-glance-view
-  id
-  (type org-glance-view-default-type)
-  (scope org-glance-default-scope))
-
-(eval-and-compile
-  (defvar org-glance-views (make-hash-table :test 'equal))
-  (defvar org-glance-view-actions (make-hash-table :test 'equal))
-  (defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
-  (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
-  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*"))
-
-(defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-export-directory))
-
-(cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
-(cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
-
-(cl-defmethod org-glance-view-db ((view org-glance-view))
-  (->> view
-    (org-glance-view-id)
-    (format "org-glance-%s.el")
-    (downcase)
-    (format "%s/%s" org-glance-db-directory)))
-
-(cl-defmethod org-glance-view-filter ((view org-glance-view))
-  (-partial
-   #'(lambda (view headline)
-       (-contains?
-        (mapcar #'downcase (org-element-property :tags headline))
-        (downcase (symbol-name (org-glance-view-id view)))))
-   view))
-
-(cl-defun org-glance-view-reread (&optional
-                                    (view-id (org-glance-read-view)))
-  (interactive)
-  (message "Reread view %s" view-id)
-  (let* ((view (gethash view-id org-glance-views))
-         (db (org-glance-view-db view))
-         (filter (org-glance-view-filter view))
-         (scope (org-glance-view-scope view)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter))
-    view))
-
-(cl-defmethod org-glance-view-headlines ((view org-glance-view))
-  "List headlines as org-elements for VIEW."
-  (org-glance-headlines
-   :db (org-glance-view-db view)
-   :scope (org-glance-view-scope view)
-   :filter (org-glance-view-filter view)))
-
-(cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
-  "List headlines as formatted strings for VIEW."
-  (->> view
-    org-glance-view-headlines
-    (mapcar #'org-glance-format)
-    (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
-
-(cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
-  (s-titleize (format "%s %s: " action (org-glance-view-id view))))
-
-(cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
-  (let* ((action-types (->> org-glance-view-actions
-                         (gethash action)
-                         (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (cl-loop for action-type in action-types
-                          with view-type = (org-glance-view-type view)
-                          when (cl-subsetp action-type view-type)
-                          return action-type)))
-    (or view-actions
-        (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
-
 (defun org-glance-act-arguments nil
   (transient-args 'org-glance-act))
-
-(defun org-glance-list-views ()
-  "List registered views."
-  (sort (hash-table-keys org-glance-views) #'s-less?))
 
 (defun org-glance-show-report ()
   (interactive)
@@ -463,17 +118,6 @@
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-def-view (view-id &key type scope)
-  (unless (eq nil (gethash view-id org-glance-views))
-    (user-error "View %s is already registered." view-id))
-  (let ((view (make-org-glance-view :id view-id)))
-    (when scope (setf (org-glance-view-scope view) scope))
-    (when type  (setf (org-glance-view-type view) type))
-    (puthash view-id view org-glance-views)
-    (message "%s view of type %s is now ready to glance scope %s"
-             view-id (or type "default") scope)
-    view))
-
 (eval-and-compile
   (cl-defmethod org-glance-generic-method-name ((name symbol))
     (intern (format "org-glance-action-%s" name)))
@@ -488,6 +132,35 @@
       (s-join "-")
       (format "org-glance-action-%s-%s" name)
       (intern))))
+
+(cl-defun org-glance-view-export (&optional
+                                    (view-id (org-glance-read-view))
+                                    (destination org-glance-export-directory))
+  (interactive)
+                                        ; Make generic?
+  (cond ((string= view-id org-glance-view-selector:all)
+         (cl-loop for view in (org-glance-list-views)
+            do (org-glance-view-export view destination)))
+        (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+             (when (file-exists-p dest-file-name)
+               (delete-file dest-file-name t))
+             (cl-loop for headline in (->> view-id
+                                        org-glance-view-reread
+                                        org-glance-view-headlines)
+                do (org-glance-with-headline-materialized headline
+                       (append-to-file (point-min) (point-max) dest-file-name)
+                     (append-to-file "\n" nil dest-file-name)))
+             (progn ;; sort headlines by TODO order
+               (find-file dest-file-name)
+               (goto-char (point-min))
+               (set-mark (point-max))
+               (condition-case nil
+                   (org-sort-entries nil ?o)
+                 (error 'nil))
+               (org-overview)
+               (save-buffer)
+               (bury-buffer))
+             dest-file-name))))
 
 (cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
   (when (eq on 'current-headline)
@@ -566,55 +239,6 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         `(progn ,(car res) ,form)
       form)))
 
-(cl-defun org-glance-view-export-filename
-    (&optional
-       (view-id (org-glance-read-view))
-       (dir org-glance-export-directory))
-  (f-join dir (s-downcase (format "%s.org" view-id))))
-
-(cl-defun org-glance-view-export (&optional
-                                    (view-id (org-glance-read-view))
-                                    (destination org-glance-export-directory))
-  (interactive)
-                                        ; Make generic?
-  (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-list-views)
-            do (org-glance-view-export view destination)))
-        (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-             (when (file-exists-p dest-file-name)
-               (delete-file dest-file-name t))
-             (cl-loop for headline in (->> view-id
-                                        org-glance-view-reread
-                                        org-glance-view-headlines)
-                do (org-glance-with-headline-materialized headline
-                       (append-to-file (point-min) (point-max) dest-file-name)
-                     (append-to-file "\n" nil dest-file-name)))
-             (progn ;; sort headlines by TODO order
-               (find-file dest-file-name)
-               (goto-char (point-min))
-               (set-mark (point-max))
-               (org-sort-entries nil ?o)
-               (org-overview)
-               (save-buffer)
-               (bury-buffer))
-             dest-file-name))))
-
-(cl-defun org-glance-view-agenda (&optional
-                                    (view-id (org-glance-read-view)))
-  (interactive)
-  (let ((org-agenda-files
-         (cond ((string= view-id org-glance-view-selector:all)
-                (loop for view in (org-glance-list-views)
-                   collect (org-glance-view-export-filename view)))
-               (t (list (org-glance-view-export-filename view-id))))))
-    (org-agenda-list)))
-
-(cl-defun org-glance-view-visit
-    (&optional
-       (view-id (org-glance-read-view)))
-  (interactive)
-  (find-file (org-glance-view-export-filename view-id)))
-
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
@@ -635,13 +259,17 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
              (message "Unable to visit headline %s" headline)
              (org-glance-db-outdated "Visited headline cache corrupted, please reread")))))
 
-(cl-defun org-glance-read-view (&optional (prompt "Choose view: "))
-  "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-list-views)))
-    (if (> (length views) 1)
-        (let ((view (org-completing-read prompt (append (list org-glance-view-selector:all) views))))
-          (intern view))
-      (car views))))
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
+
+(defun org-glance-view-visit-original-heading ()
+  (interactive)
+  (save-excursion
+    (cl-loop while (org-up-heading-safe))
+    (let* ((heading (list :file --org-glance-view-src
+                          :begin --org-glance-view-beg
+                          :raw-value (org-element-property :raw-value (org-element-at-point))))
+           (virtual-element (org-element-create 'headline heading)))
+      (org-glance-action-call 'visit :on virtual-element))))
 
 ;; (org-glance-def-type all "Doc string")
 ;; (org-glance-def-type crypt)
@@ -681,15 +309,15 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
             (goto-char (point-min))
             (org-content 1)
             (org-cycle-hide-drawers 'all)
-            (setq-local -org-glance-src file)
-            (setq-local -org-glance-beg beg)
-            (setq-local -org-glance-end end)
+            (setq-local --org-glance-view-src file)
+            (setq-local --org-glance-view-beg beg)
+            (setq-local --org-glance-view-end end)
             ;; extract hash from promoted subtree
-            (setq-local -org-glance-hash (org-glance-view-subtree-hash))
+            (setq-local --org-glance-view-hash (org-glance-view-subtree-hash))
             ;; run hooks on original subtree
             (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
             ;; then promote it saving original level
-            (setq-local -org-glance-indent (-org-glance-promote-subtree)))
+            (setq-local --org-glance-view-indent (-org-glance-promote-subtree)))
           (org-cycle 'contents)))
       (switch-to-buffer buffer))))
 
@@ -720,8 +348,8 @@ then run `org-completing-read' to open it."
 (org-glance-action-define materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
   (cl-flet ((decrypt ()
-              (setq-local -org-glance-pwd (read-passwd "Password: "))
-              (org-glance-decrypt-subtree -org-glance-pwd)))
+              (setq-local --org-glance-view-pwd (read-passwd "Password: "))
+              (org-glance-decrypt-subtree --org-glance-view-pwd)))
     (add-hook 'org-glance-after-materialize-hook #'decrypt t)
     (unwind-protect
          (progn
@@ -730,14 +358,14 @@ then run `org-completing-read' to open it."
       (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
-              (-org-glance-demote-subtree -org-glance-indent)
-              (org-glance-encrypt-subtree -org-glance-pwd)
+              (-org-glance-demote-subtree --org-glance-view-indent)
+              (org-glance-encrypt-subtree --org-glance-view-pwd)
               (-org-glance-promote-subtree))
             'append 'local)
   (add-hook 'org-glance-after-materialize-sync-hook
             (lambda ()
-              (-org-glance-demote-subtree -org-glance-indent)
-              (org-glance-decrypt-subtree -org-glance-pwd)
+              (-org-glance-demote-subtree --org-glance-view-indent)
+              (org-glance-decrypt-subtree --org-glance-view-pwd)
               (-org-glance-promote-subtree))
             'append 'local))
 
@@ -760,106 +388,6 @@ then run `org-completing-read' to open it."
                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
-
-(defun org-glance-view-visit-original-heading ()
-  (interactive)
-  (save-excursion
-    (cl-loop while (org-up-heading-safe))
-    (let* ((heading (list :file -org-glance-src
-                          :begin -org-glance-beg
-                          :raw-value (org-element-property :raw-value (org-element-at-point))))
-           (virtual-element (org-element-create 'headline heading)))
-      (org-glance-action-call 'visit :on virtual-element))))
-
-(defun org-glance-view-sync-subtree ()
-  (interactive)
-  (save-excursion
-    (cl-loop while (org-up-heading-safe))
-    (let* ((source -org-glance-src)
-           (beg -org-glance-beg)
-           (end -org-glance-end)
-           (promote-level -org-glance-indent)
-           (glance-hash -org-glance-hash)
-           (mat-hash (org-glance-view-subtree-hash))
-           (src-hash (org-glance-view-source-hash)))
-
-      (unless (string= glance-hash src-hash)
-        (org-glance-source-file-corrupted source))
-
-      (when (string= glance-hash mat-hash)
-        (org-glance-view-not-modified source))
-
-      (when (y-or-n-p "Subtree has been modified. Apply changes?")
-        (with-demoted-errors (run-hooks 'org-glance-before-materialize-sync-hook))
-
-        (let ((new-contents
-               (save-restriction
-                 (org-narrow-to-subtree)
-                 (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-                   (with-temp-buffer
-                     (org-mode)
-                     (insert buffer-contents)
-                     (goto-char (point-min))
-                     (-org-glance-demote-subtree promote-level)
-                     (buffer-substring-no-properties (point-min) (point-max)))))))
-
-          (with-temp-file source
-            (org-mode)
-            (insert-file-contents source)
-            (delete-region beg end)
-            (goto-char beg)
-            (insert new-contents)
-            (setq end (point)))
-
-          (setq-local -org-glance-beg beg)
-          (setq-local -org-glance-end end)
-          (setq-local -org-glance-hash (org-glance-view-source-hash))
-
-          (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook)))))))
-
-(defun org-glance-view-subtree-hash ()
-  (save-restriction
-    (org-narrow-to-subtree)
-    (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-      (with-temp-buffer
-        (org-mode)
-        (insert buffer-contents)
-        (goto-char (point-min))
-        (-org-glance-promote-subtree)
-        (buffer-hash)))))
-
-(defun org-glance-view-source-hash ()
-  (let ((src -org-glance-src)
-        (beg -org-glance-beg)
-        (end -org-glance-end))
-    (with-temp-buffer
-      (insert-file-contents src)
-      (let ((subtree (condition-case nil
-                         (buffer-substring-no-properties beg end)
-                       (error (org-glance-properties-corrupted "Materialized properties corrupted, please reread")))))
-        (with-temp-buffer
-          (org-mode)
-          (insert (s-trim subtree))
-          (cl-loop while (org-up-heading-safe))
-          (-org-glance-promote-subtree)
-          (buffer-hash))))))
-
-(cl-defmethod org-glance-remove-view ((view-id symbol))
-  (remhash view-id org-glance-views))
-
-(defun org-glance-capture-subtree-at-point ()
-  (interactive)
-  (unless (org-at-heading-p) (org-back-to-heading))
-  ;; (let* ((other-views (seq-difference
-  ;;                      (org-glance-list-views)
-  ;;                      (mapcar #'intern (org-get-tags))))
-  ;;        (view-id (org-completing-read "View: " other-views))
-  ;;        (view (org-glance-view view-id)))
-  ;;   (org-toggle-tag view-id)
-  ;;   ;; (loop for type in (org-glance-view-type view)
-  ;;   ;;       do (pp type))
-  ;;   )
-  )
 
 (defvar org-glance-transient--scope "agenda")
 
