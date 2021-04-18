@@ -86,18 +86,19 @@
                                     (view-id (org-glance-read-view))
                                     (destination org-glance-export-directory))
   (interactive)
-                                        ; Make generic?
   (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-list-views)
+         (cl-loop for view in (org-glance-list-views) ; optimize me. O(N * V), should be O(N)
             do (org-glance-view-update view destination)))
         (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
-             (when (file-exists-p dest-file-name)
+             (when (file-exists-p dest-file-name) ; implement merge algorithm instead of delete/create
                (delete-file dest-file-name t))
              (cl-loop for headline in (->> view-id
                                         org-glance-view-reread
                                         org-glance-view-headlines)
                 do (org-glance-with-headline-materialized headline
-                       (append-to-file (point-min) (point-max) dest-file-name)
+                     (org-set-property "ORG_GLANCE_SOURCE" (org-element-property :file headline))
+                     (org-set-property "ORG_GLANCE_OFFSET" (number-to-string (org-element-property :begin headline)))
+                     (append-to-file (point-min) (point-max) dest-file-name)
                      (append-to-file "\n" nil dest-file-name)))
              (progn ;; sort headlines by TODO order
                (find-file dest-file-name)
