@@ -2,6 +2,7 @@
 (require 'load-relative)
 (require 'org)
 (require 'org-element)
+(require 'aes)
 
 (defun org-glance--back-to-heading ()
   (unless (org-at-heading-p)
@@ -99,5 +100,41 @@
     (condition-case nil
         (s-contains? element-title headline-title)
       (error nil))))
+
+(defun org-glance-encrypt-subtree (&optional password)
+  "Encrypt subtree at point with PASSWORD."
+  (interactive)
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (plain (let ((plain (buffer-substring-no-properties beg end)))
+                  (if (with-temp-buffer
+                        (insert plain)
+                        (aes-is-encrypted))
+                      (user-error "Headline is already encrypted")
+                    plain)))
+         (encrypted (aes-encrypt-buffer-or-string plain password)))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert encrypted))))
+
+(defun org-glance-decrypt-subtree (&optional password)
+  "Decrypt subtree at point with PASSWORD."
+  (interactive)
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
+                      (if (not (with-temp-buffer
+                                 (insert encrypted)
+                                 (aes-is-encrypted)))
+                          (user-error "Headline is not encrypted")
+                        encrypted)))
+         (plain (aes-decrypt-buffer-or-string encrypted password)))
+    (unless plain
+      (user-error "Wrong password"))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert plain))))
 
 (provide-me)

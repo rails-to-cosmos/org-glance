@@ -36,6 +36,8 @@
 (require 'org-glance-headline)
 (require 'org-glance-db)
 (require 'org-glance-view)
+(require 'org-glance-action)
+(require 'org-glance-transient)
 
 (eval-and-compile
   (require 'org)
@@ -50,58 +52,20 @@
   (require 'seq)
   (require 'subr-x))
 
-(require 'aes)
 (require 'gv)
-(require 'transient)
+
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
   :group 'org)
 
-(defun org-glance-encrypt-subtree (&optional password)
-  "Encrypt subtree at point with PASSWORD."
-  (interactive)
-  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-         (end (save-excursion (org-end-of-subtree t)))
-         (plain (let ((plain (buffer-substring-no-properties beg end)))
-                  (if (with-temp-buffer
-                        (insert plain)
-                        (aes-is-encrypted))
-                      (user-error "Headline is already encrypted")
-                    plain)))
-         (encrypted (aes-encrypt-buffer-or-string plain password)))
-    (save-excursion
-      (org-end-of-meta-data)
-      (kill-region beg end)
-      (insert encrypted))))
-
-(defun org-glance-decrypt-subtree (&optional password)
-  "Decrypt subtree at point with PASSWORD."
-  (interactive)
-  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-         (end (save-excursion (org-end-of-subtree t)))
-         (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
-                      (if (not (with-temp-buffer
-                                 (insert encrypted)
-                                 (aes-is-encrypted)))
-                          (user-error "Headline is not encrypted")
-                        encrypted)))
-         (plain (aes-decrypt-buffer-or-string encrypted password)))
-    (unless plain
-      (user-error "Wrong password"))
-    (save-excursion
-      (org-end-of-meta-data)
-      (kill-region beg end)
-      (insert plain))))
+(defvar org-glance-prompt "Glance: ")
 
 (defvar org-glance-properties-ignore-patterns
   (append
    org-special-properties
    '("^ARCHIVE_" "^TITLE$")))
-
-(defun org-glance-act-arguments nil
-  (transient-args 'org-glance-act))
 
 (defun org-glance-show-report ()
   (interactive)
@@ -118,29 +82,14 @@
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
 
-(eval-and-compile
-  (cl-defmethod org-glance-generic-method-name ((name symbol))
-    (intern (format "org-glance-action-%s" name)))
-
-  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type symbol))
-    (org-glance-concrete-method-name name (list type)))
-
-  (cl-defmethod org-glance-concrete-method-name ((name symbol) (type list))
-    (->> type
-      (-map #'symbol-name)
-      (-sort #'s-less?)
-      (s-join "-")
-      (format "org-glance-action-%s-%s" name)
-      (intern))))
-
-(cl-defun org-glance-view-export (&optional
+(cl-defun org-glance-view-update (&optional
                                     (view-id (org-glance-read-view))
                                     (destination org-glance-export-directory))
   (interactive)
                                         ; Make generic?
   (cond ((string= view-id org-glance-view-selector:all)
          (cl-loop for view in (org-glance-list-views)
-            do (org-glance-view-export view destination)))
+            do (org-glance-view-update view destination)))
         (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
              (when (file-exists-p dest-file-name)
                (delete-file dest-file-name t))
@@ -161,83 +110,6 @@
                (save-buffer)
                (bury-buffer))
              dest-file-name))))
-
-(cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
-  (when (eq on 'current-headline)
-    (setq on (org-element-at-point)))
-  (let ((fn (intern (format "org-glance--%s--%s" name for))))
-    (unless (fboundp fn)
-      (user-error "Unbound function %s" fn))
-    (funcall fn on)))
-
-(defun org-glance-action-headlines (action)
-  (cl-loop for view being the hash-values of org-glance-views
-     when (org-glance-view-action-resolve view action)
-     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
-
-(eval-and-compile
-  (cl-defmethod org-glance-action-register ((name symbol) (type symbol))
-    (org-glance-action-register name (list type)))
-
-  (cl-defmethod org-glance-action-register ((name symbol) (type list))
-    (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
-      (puthash name type org-glance-view-actions))))
-
-(defmacro org-glance-action-define (name args _ type &rest body)
-  "Defun method NAME (ARGS) BODY.
-Make it accessible for views of TYPE in `org-glance-view-actions'."
-  (declare (debug
-            ;; Same as defun but use cl-lambda-list.
-            (&define [&or name ("setf" :name setf name)]
-                     cl-lambda-list
-                     symbolp
-                     cl-declarations-or-string
-                     [&optional ("interactive" interactive)]
-                     def-body))
-           (doc-string 6)
-           (indent 4))
-
-  (org-glance-action-register name type)
-
-  (let* ((res (cl--transform-lambda (cons args body) name))
-         (generic-fn (org-glance-generic-method-name name))
-         (concrete-fn (org-glance-concrete-method-name name type))
-         (action-private-method (intern (format "org-glance--%s--%s" name type)))
-	 (form `(progn
-                  (unless (fboundp (quote ,generic-fn))
-                    (defun ,generic-fn (&optional args)
-                      (interactive (list (org-glance-act-arguments)))
-                      (let* ((action (quote ,name))
-                             (headlines (org-glance-action-headlines action))
-                             (choice (unwind-protect
-                                          (org-completing-read (format "%s: " action) headlines)
-                                       (message "Unwind protected")
-                                       ;; (pp headlines)
-                                       ))
-                             (view (alist-get choice headlines nil nil #'string=))
-                             (method-name (->> action
-                                            (org-glance-view-action-resolve view)
-                                            (org-glance-concrete-method-name action)))
-                             (headline (replace-regexp-in-string "^\\[.*\\] " "" choice)))
-                        (funcall method-name args view headline))))
-
-                  (defun ,concrete-fn (&optional args view headline)
-                    (interactive (list (org-glance-act-arguments)))
-                    args
-                    (org-glance
-                     :default-choice headline
-                     :scope (org-glance-view-scope view)
-                     :prompt (org-glance-view-prompt view (quote ,name))
-                     :db (org-glance-view-db view)
-                     :filter (org-glance-view-filter view)
-                     :action (function ,action-private-method)))
-
-                  (defun ,action-private-method
-                      ,@(cdr res)))))
-
-    (if (car res)
-        `(progn ,(car res) ,form)
-      form)))
 
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
@@ -339,6 +211,22 @@ then run `org-completing-read' to open it."
         (goto-char point)
         (org-open-at-point))))
 
+(org-glance-action-define insert (headline) :for babel
+  "Visit HEADLINE, get contents and insert it."
+  (insert (save-window-excursion
+            (save-excursion
+              (org-glance-action-call 'visit :on headline)
+              (org-babel-next-src-block)
+              (org-narrow-to-block)
+              (buffer-substring-no-properties
+               (save-excursion (goto-char (point-min))
+                               (forward-line)
+                               (point))
+               (save-excursion (goto-char (point-max))
+                               (previous-line)
+                               (end-of-line)
+                               (point)))))))
+
 (org-glance-action-define extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."
   (save-window-excursion
@@ -389,32 +277,6 @@ then run `org-completing-read' to open it."
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(defvar org-glance-transient--scope "agenda")
-
-(defclass org-glance-transient-variable (transient-variable)
-  ((default     :initarg :default     :initform nil)))
-
-(cl-defmethod transient-init-value ((obj org-glance-transient-variable))
-  "Override transient value initialization."
-  (let ((variable (oref obj variable))
-        (default (oref obj default)))
-    (oset obj variable variable)
-    (oset obj value (or (eval variable) default))))
-
-(cl-defmethod transient-infix-set ((obj org-glance-transient-variable) value)
-  "Override setter."
-  (oset obj value value)
-  (set (oref obj variable) value))
-
-(cl-defmethod transient-format-description ((obj org-glance-transient-variable))
-  "Override description format."
-  (or (oref obj description)
-      (oref obj variable)))
-
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable))
-  "Override value format."
-  (propertize (oref obj value) 'face 'transient-inactive-value))
-
 (defun org-glance-read-scope ()
   (completing-read
    "Scope: "
@@ -422,49 +284,14 @@ then run `org-completing-read' to open it."
      agenda-with-archives
      file)))
 
-(defclass org-glance-transient-variable:scope (org-glance-transient-variable)
-  ())
-
-(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:scope))
-  (oset obj value (org-glance-read-scope)))
-
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable:scope))
-  (let* ((val (or (oref obj value) (oref obj default)))
-         (val-pretty (propertize val 'face 'transient-argument)))
-    (format "(%s)" val-pretty)))
-
-(transient-define-infix org-glance-act.scope ()
-  :class 'org-glance-transient-variable:scope
-  :variable 'org-glance-transient--scope
-  :reader 'org-glance-read-scope
-  :default "false")
-
-(transient-define-prefix org-glance-act ()
-  "In Glance-View buffer, perform action on selected view"
-  ;; ["Arguments"
-  ;;  ("-s" "Scope" org-glance-act.scope)]
-  ["Views"
-   [("A" "Agenda" org-glance-view-agenda)]
-   [("D" "Dashboard" org-glance-show-report)]
-   [("E" "Export" org-glance-view-export)]
-   [("R" "Reread" org-glance-view-reread)]
-   [("V" "Visit" org-glance-view-visit)]]
-  ["Headlines"
-   ;; [("c" "Capture" org-glance-action-extract-property)]
-   [("e" "Extract" org-glance-action-extract-property)]
-   [("j" "Jump" org-glance-action-open)]
-   [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit" org-glance-action-visit)]])
-
 (cl-defun org-glance
     (&key db
        default-choice
        (db-init nil)
        (filter #'(lambda (_) t))
        (scope '(agenda))
-       (action #'org-glance--visit--all)
-       (prompt "Glance: "))
-  "Run completing read on org entries from SCOPE asking a PROMPT.
+       (action #'org-glance--visit--all))
+  "Run completing read on org entries from SCOPE asking a `org-glance-prompt'.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.
@@ -477,14 +304,13 @@ Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u 
            :scope scope
            :filter filter)))
     (unwind-protect
-         (when-let (choice (or default-choice (org-glance-prompt-headlines prompt headlines)))
+         (when-let (choice (or default-choice (org-glance-prompt-headlines org-glance-prompt headlines)))
            (if-let (headline (org-glance-choose-headline choice headlines))
                (condition-case nil (funcall action headline)
                  (org-glance-db-outdated
                   (message "Database %s is outdated, actualizing..." db)
                   (redisplay)
                   (org-glance :scope scope
-                              :prompt prompt
                               :filter filter
                               :action action
                               :db db
