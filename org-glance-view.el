@@ -22,6 +22,11 @@
 (defvar --org-glance-view-hash nil)
 (defvar --org-glance-view-indent nil)
 
+(defvar org-glance-views (make-hash-table :test 'equal))
+(defvar org-glance-view-actions (make-hash-table :test 'equal))
+(defvar org-glance-view-directory (f-join user-emacs-directory "org-glance" "views"))
+(defvar org-glance-materialized-view-buffer "*org-glance materialized view*")
+
 (defconst org-glance-view-selector:all '!All)
 
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
@@ -62,21 +67,14 @@
   (type org-glance-view-default-type)
   (scope org-glance-default-scope))
 
-(eval-and-compile
-  (defvar org-glance-views (make-hash-table :test 'equal))
-  (defvar org-glance-view-actions (make-hash-table :test 'equal))
-  (defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
-  (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
-  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*"))
-
-(cl-defun org-glance-view-export-filename
-    (&optional
-       (view-id (org-glance-read-view))
-       (dir org-glance-export-directory))
-  (f-join dir (s-downcase (format "%s.org" view-id))))
+(cl-defun org-glance-view-export-filename (&optional (view-id (org-glance-read-view)))
+  "Path to file where VIEW-ID exported headlines are stored."
+  (f-join org-glance-view-directory
+          (s-downcase (format "%s" view-id))
+          (s-downcase (format "%s.org" view-id))))
 
 (defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-export-directory))
+  (org-glance-list-files-recursively org-glance-view-directory))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args)
@@ -105,9 +103,6 @@
   (save-excursion
     (org-glance--back-to-view-heading)))
 
-(defvar org-glance-view-directory
-  (f-join user-emacs-directory "org-glance" "resources"))
-
 (defun org-glance-view:specify-attach-directory ()
   "Specify dir and archive paths for current headline."
   (interactive)
@@ -125,11 +120,10 @@
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
 (cl-defmethod org-glance-view-db ((view org-glance-view))
-  (->> view
-    (org-glance-view-id)
-    (format "org-glance-%s.el")
-    (downcase)
-    (format "%s/%s" org-glance-db-directory)))
+  (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
+    (f-join org-glance-view-directory
+            view-id
+            (format "%s.el" view-id))))
 
 (cl-defmethod org-glance-view-filter ((view org-glance-view))
   (-partial

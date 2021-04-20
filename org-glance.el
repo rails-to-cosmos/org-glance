@@ -82,16 +82,17 @@
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-view-update (&optional
-                                    (view-id (org-glance-read-view))
-                                    (destination org-glance-export-directory))
+(cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view)))
   (interactive)
   (cond ((string= view-id org-glance-view-selector:all)
          (cl-loop for view in (org-glance-list-views) ; optimize me. O(N * V), should be O(N)
-            do (org-glance-view-update view destination)))
-        (t (let ((dest-file-name (org-glance-view-export-filename view-id destination)))
+            do (org-glance-view-update view)))
+        (t (let ((dest-file-name (org-glance-view-export-filename view-id)))
+             (mkdir (file-name-directory dest-file-name) t)
+
              (when (file-exists-p dest-file-name) ; implement merge algorithm instead of delete/create
                (delete-file dest-file-name t))
+
              (cl-loop for headline in (->> view-id
                                         org-glance-view-reread
                                         org-glance-view-headlines)
@@ -224,7 +225,7 @@ then run `org-completing-read' to open it."
                                (forward-line)
                                (point))
                (save-excursion (goto-char (point-max))
-                               (previous-line)
+                               (forward-line -1)
                                (end-of-line)
                                (point)))))))
 
