@@ -127,4 +127,15 @@
       (kill-region beg end)
       (insert plain))))
 
+(cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
+  "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
+  (while t
+    (let* ((properties (-filter (lambda (key) (not (--any? (s-matches? it key) ignore-patterns))) (org-buffer-property-keys)))
+           (property (org-completing-read "Extract property: " properties))
+           (values (org-property-values property)))
+      (kill-new (cond
+                  ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                  ((= (length values) 1) (car values))
+                  (t (user-error "Something went wrong: %s" values)))))))
+
 (provide-me)

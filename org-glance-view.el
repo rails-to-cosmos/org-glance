@@ -71,10 +71,11 @@
   :group 'org-glance)
 
 (cl-defstruct (org-glance-view
-                (:constructor org-glance-def-view (id
-                                                   &key
-                                                   (type org-glance-view-default-type)
-                                                   (scope nil))))
+                ;; (:constructor org-glance-def-view (id
+                ;;                                    &key
+                ;;                                    (type org-glance-view-default-type)
+                ;;                                    (scope nil)))
+                )
   id type scope)
 
 (cl-defun org-glance-view-export-filename (&optional (view-id (org-glance-read-view-id)))
@@ -312,5 +313,17 @@
     (message "%s view of type %s is now ready to glance scope %s"
              id (or type "default") scope)
     view))
+
+(defun org-glance-view-visit-original-heading ()
+  (interactive)
+  (save-excursion
+    (cl-loop while (org-up-heading-safe))
+    (let* ((heading (list :file --org-glance-view-src
+                          :begin --org-glance-view-beg
+                          :raw-value (org-element-property :raw-value (org-element-at-point))))
+           (virtual-element (org-element-create 'headline heading)))
+      (org-glance-action-call 'visit :on virtual-element))))
+
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 
 (provide-me)

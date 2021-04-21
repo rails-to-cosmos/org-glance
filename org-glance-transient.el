@@ -2,6 +2,7 @@
 (require 'load-relative)
 (require 'org-glance-transient-variables)
 (require 'org-glance-view)
+(require 'org-glance-action-custom)
 
 (transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
