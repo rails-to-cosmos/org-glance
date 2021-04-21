@@ -1,8 +1,8 @@
+(require 'aes)
 (require 'dash)
 (require 'load-relative)
 (require 'org)
 (require 'org-element)
-(require 'aes)
 
 (defun org-glance--back-to-heading ()
   (unless (org-at-heading-p)
@@ -95,8 +95,6 @@
   (message "Element at point equals headline?")
   (let ((element-title (org-element-property :raw-value (org-element-at-point)))
         (headline-title (org-element-property :raw-value headline)))
-    (message "Requested headline: %s" headline-title)
-    (message "Visited headline: %s" element-title)
     (condition-case nil
         (s-contains? element-title headline-title)
       (error nil))))
