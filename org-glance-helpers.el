@@ -15,12 +15,6 @@
 (defun org-glance--apply-filter (filter headline)
   (or (null filter) (funcall filter headline)))
 
-(defun org-glance--current-date ()
-  (let ((calendar-date-display-form '((format "%s-%.2d-%.2d" year
-                                       (string-to-number month)
-                                       (string-to-number day)))))
-    (calendar-date-string (calendar-current-date) nil)))
-
 (defun org-glance--ensure-path (path)
   (condition-case nil
       (make-directory path t)
@@ -49,8 +43,7 @@
 (defun org-glance-read-file-headlines (file)
   (with-temp-buffer
     (insert-file-contents file)
-    (->> (buffer-string)
-      substring-no-properties
+    (->> (buffer-substring-no-properties (point-min) (point-max))
       read
       eval)))
 
@@ -92,7 +85,6 @@
     (point)))
 
 (defun -element-at-point-equals-headline (headline)
-  (message "Element at point equals headline?")
   (let ((element-title (org-element-property :raw-value (org-element-at-point)))
         (headline-title (org-element-property :raw-value headline)))
     (condition-case nil

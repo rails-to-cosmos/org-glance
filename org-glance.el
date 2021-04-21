@@ -38,6 +38,7 @@
 (require 'org-glance-view)
 (require 'org-glance-action)
 (require 'org-glance-transient)
+(require 'org-glance-view-metadata)
 
 (eval-and-compile
   (require 'org)
@@ -82,7 +83,7 @@
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view)))
+(cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view-id)))
   (interactive)
   (cond ((string= view-id org-glance-view-selector:all)
          (cl-loop for view in (org-glance-list-views) ; optimize me. O(N * V), should be O(N)

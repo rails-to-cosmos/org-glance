@@ -90,7 +90,7 @@
   (cl-loop
      for file in (org-glance-scope scope)
      when (member (file-name-extension file) org-glance-org-scope-extensions)
-     do (message "Run org-glance on headlines in file %s" file)
+     do (message "Glance file %s" file)
      append (org-glance-read-headlines-from-file file filter)
      into result
      do (redisplay)
