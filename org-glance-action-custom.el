@@ -8,7 +8,7 @@
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
-    (message "Attempt to visit file %s" file)
+    (message "Visit file %s" file)
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
     (widen)

@@ -1,28 +1,16 @@
 Feature: Do Some things
-  In order to do something
-  As a user
-  I want to do something
-
-  Scenario: Do Something
-    Given I have "something"
-    When I have "something"
-    Then I should have "something"
-    And I should have "something"
-    But I should not have "something"
-
-Feature: Define Views
-  In order to perform actions on views
+  In order to perform org-glance actions on views
   As a user
   I want to define org-glance views
 
-  Background:
-    Given
-    And the buffer is empty
-    And I insert
+  Scenario: Run org-glance on specific org-mode file
+    Given empty scope
+    And file with contents
       """
       * Netherlands :Country:
-      * Belgium :Country:
-      * Georgia :Country:
+      * Belgium     :Country:
+      * Georgia     :Country:
+      * Ukraine     :Country:
       """
-
-  Scenario: Visit Headline
+    Then I add the file to scope
+    Then I should have 1 file in scope
