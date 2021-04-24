@@ -1,9 +1,9 @@
 Feature: Do Some things
-  In order to register views
+  In order to work with views
   As a user
-  I want to define view scopes
+  I want to define views
 
-  Scenario: Register scope
+  Scenario: Register scope and view
     Given empty default scope
     And org-mode file
       """
@@ -12,12 +12,17 @@ Feature: Do Some things
       * Georgia :Country:
       * Ukraine :Country:
       """
-    Then I add the file to scope
+    When I add the file to scope
     Then I should have 1 file in scope
-    Then I define view "Country" with default scope
-    And I should see message
+    And I should have 0 views registered
+
+    When I define view "Country" with default scope
+    Then I should see message
       """
       View "Country" of default type is now ready to glance default scope
       """
-    # Then I update view "Country"
-    # And I should have 4 headlines in view "Country"
+    And I should have 4 headlines in view "Country"
+    And I should have 1 view registered
+    And I should have a choice of 4 headlines for "visit" action
+    # When I run action "visit" for headlines and type "Bel RET"
+    # Then I should see "* Holland :Country:"

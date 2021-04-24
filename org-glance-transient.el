@@ -13,9 +13,9 @@
 
    [("-v" "View" org-glance-act.view)]]
 
-  ["Actions"
-   [("U" "Update" org-glance-view-update)
-    ("V" "Visit" org-glance-view-visit)]]
+  ["Views"
+   [("U" "Update" org-glance-view-update)]
+   [("V" "Visit" org-glance-view-visit)]]
 
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]

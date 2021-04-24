@@ -41,6 +41,8 @@
 (require 'org-glance-transient)
 (require 'org-glance-view-metadata)
 
+(load-relative "org-glance-action-custom.el")
+
 (eval-and-compile
   (require 'org)
   (require 'org-element)

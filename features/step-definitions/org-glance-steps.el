@@ -3,6 +3,7 @@
 ;; loaded automatically by Ecukes.
 
 (require 'org-glance)
+(require 'with-simulated-input)
 
 (Given "^empty default scope"
        (lambda ()
@@ -26,29 +27,59 @@
                  (string-to-number n)))))
 
 (Then "^I define view \"\\(.+\\)\" with default scope$"
-      (lambda (view) (org-glance-def-view (intern view))))
+      (lambda (view-id) (org-glance-def-view (intern view-id))))
+
+(Then "^I should see$"
+     (lambda (text)
+       (should (string-equal text (s-trim (thing-at-point 'line))))))
 
 (And "^I should see message$"
      (lambda (text)
-       (let ((msg (with-current-buffer "*Messages*"
-                    (goto-char (point-max))
-                    (s-trim (thing-at-point 'line)))))
-         (should (string= text msg)))))
+       (with-current-buffer "*Messages*"
+         (goto-char (point-max))
+         (Then "I should see" text))))
 
-(When "^I have \"\\(.+\\)\"$"
-  (lambda (something)
-    ;; ...
+(And "^I should have \\([[:digit:]]+\\) headlines in view \"\\(.+\\)\"$"
+     (lambda (cardinality view-id)
+       (let ((actual-cardinality (->> org-glance-views
+                                   (gethash (intern view-id))
+                                   (org-glance-view-headlines)
+                                   (length)))
+             (expected-cardinality (->> cardinality
+                                     (string-to-number))))
+         (should (= expected-cardinality actual-cardinality)))))
+
+(And "^I should have \\([[:digit:]]+\\) views? registered$"
+     (lambda (cardinality)
+       (let ((actual-cardinality (->> org-glance-views
+                                   (hash-table-keys)
+                                   (length)))
+             (expected-cardinality (->> cardinality
+                                     (string-to-number))))
+         (should (= expected-cardinality actual-cardinality)))))
+
+(And "^I should have a choice of \\([[:digit:]]+\\) headlines? for \"\\([^\"]+\\)\" action$"
+     (lambda (cardinality action)
+       (let ((actual-cardinality (->> (org-glance-action-headlines 'visit)
+                                   (length)))
+             (expected-cardinality (->> cardinality
+                                     (string-to-number))))
+         (should (= expected-cardinality actual-cardinality)))))
+
+(When "^I run action \"\\(.+\\)\" for headlines and type \"\\(.+\\)\"$"
+  (lambda (action user-input)
+    (pp (org-glance-action-headlines 'visit))
+    ;; (with-simulated-input user-input
+    ;;   (cond ((string-equal action "visit") (org-glance-action-visit))))
     ))
 
-(And "^I have \"\\(.+\\)\"$"
-  (lambda (something)
-    ;; ...
-    ))
+;; (with-simulated-input "Gosuslugi RET"
+;;   (org-glance-action-visit))
 
 (But "^I should not have \"\\(.+\\)\"$"
-  (lambda (something)
-    ;; ...
-    ))
+     (lambda (something)
+       ;; ...
+       ))
 
 (Given "^I am in the buffer \"\\([^\"]+\\)\"$"
   (lambda (arg)
