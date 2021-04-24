@@ -1,3 +1,4 @@
+(require 'aes)
 (require 'dash)
 (require 'load-relative)
 (require 'org)
@@ -13,12 +14,6 @@
 
 (defun org-glance--apply-filter (filter headline)
   (or (null filter) (funcall filter headline)))
-
-(defun org-glance--current-date ()
-  (let ((calendar-date-display-form '((format "%s-%.2d-%.2d" year
-                                       (string-to-number month)
-                                       (string-to-number day)))))
-    (calendar-date-string (calendar-current-date) nil)))
 
 (defun org-glance--ensure-path (path)
   (condition-case nil
@@ -48,8 +43,7 @@
 (defun org-glance-read-file-headlines (file)
   (with-temp-buffer
     (insert-file-contents file)
-    (->> (buffer-string)
-      substring-no-properties
+    (->> (buffer-substring-no-properties (point-min) (point-max))
       read
       eval)))
 
@@ -91,13 +85,57 @@
     (point)))
 
 (defun -element-at-point-equals-headline (headline)
-  (message "Element at point equals headline?")
   (let ((element-title (org-element-property :raw-value (org-element-at-point)))
         (headline-title (org-element-property :raw-value headline)))
-    (message "Requested headline: %s" headline-title)
-    (message "Visited headline: %s" element-title)
     (condition-case nil
         (s-contains? element-title headline-title)
       (error nil))))
+
+(defun org-glance-encrypt-subtree (&optional password)
+  "Encrypt subtree at point with PASSWORD."
+  (interactive)
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (plain (let ((plain (buffer-substring-no-properties beg end)))
+                  (if (with-temp-buffer
+                        (insert plain)
+                        (aes-is-encrypted))
+                      (user-error "Headline is already encrypted")
+                    plain)))
+         (encrypted (aes-encrypt-buffer-or-string plain password)))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert encrypted))))
+
+(defun org-glance-decrypt-subtree (&optional password)
+  "Decrypt subtree at point with PASSWORD."
+  (interactive)
+  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
+         (end (save-excursion (org-end-of-subtree t)))
+         (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
+                      (if (not (with-temp-buffer
+                                 (insert encrypted)
+                                 (aes-is-encrypted)))
+                          (user-error "Headline is not encrypted")
+                        encrypted)))
+         (plain (aes-decrypt-buffer-or-string encrypted password)))
+    (unless plain
+      (user-error "Wrong password"))
+    (save-excursion
+      (org-end-of-meta-data)
+      (kill-region beg end)
+      (insert plain))))
+
+(cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
+  "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
+  (while t
+    (let* ((properties (-filter (lambda (key) (not (--any? (s-matches? it key) ignore-patterns))) (org-buffer-property-keys)))
+           (property (org-completing-read "Extract property: " properties))
+           (values (org-property-values property)))
+      (kill-new (cond
+                  ((> (length values) 1) (org-completing-read "Choose property value: " values))
+                  ((= (length values) 1) (car values))
+                  (t (user-error "Something went wrong: %s" values)))))))
 
 (provide-me)

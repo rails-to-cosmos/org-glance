@@ -19,7 +19,9 @@
 
 (Setup
  ;; Before anything has run
- )
+ (defvar org-glance-test:location)
+ (setq org-glance-test:location (make-temp-file "org-glance-test-" t))
+ (message "Root directory initialized: %s" org-glance-test:location))
 
 (Before
  ;; Before each scenario is run
@@ -31,4 +33,5 @@
 
 (Teardown
  ;; After when everything has been run
- )
+ (delete-directory org-glance-test:location t)
+ (message "Root directory removed on teardown"))

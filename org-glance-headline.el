@@ -75,7 +75,7 @@
 
 (cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
   "Materialize HEADLINE, execute FORMS in materialized buffer."
-  (declare (indent defun))
+  (declare (indent 1) (debug t))
   `(let* ((file (org-element-property :file ,headline))
           (file-buffer (get-file-buffer file)))
      (org-glance-action-call 'materialize :on ,headline)
@@ -90,7 +90,7 @@
   (cl-loop
      for file in (org-glance-scope scope)
      when (member (file-name-extension file) org-glance-org-scope-extensions)
-     do (message "Run org-glance on headlines in file %s" file)
+     do (message "Glance file %s" file)
      append (org-glance-read-headlines-from-file file filter)
      into result
      do (redisplay)

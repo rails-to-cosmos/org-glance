@@ -14,4 +14,5 @@
 
 (development
  (depends-on "ecukes")
- (depends-on "undercover"))
+ (depends-on "undercover")
+ (depends-on "with-simulated-input"))

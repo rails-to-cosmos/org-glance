@@ -1,4 +1,4 @@
-;; View is a set of headlines in filtered scope.
+;; org-glance VIEW means a set of headlines in scope of org-files.
 
 (require 'org)
 (require 'org-element)
@@ -21,6 +21,19 @@
 (defvar --org-glance-view-end nil)
 (defvar --org-glance-view-hash nil)
 (defvar --org-glance-view-indent nil)
+
+(defvar org-glance-views (make-hash-table :test 'equal))
+(defvar org-glance-view-actions (make-hash-table :test 'equal))
+
+(defcustom org-glance-view-location (f-join user-emacs-directory "org-glance" "views")
+  "The location where view metadata should be stored."
+  :group 'org-glance
+  :type 'string)
+
+(defcustom org-glance-materialized-view-buffer "*org-glance materialized view*"
+  "Default buffer name for materialized view."
+  :group 'org-glance
+  :type 'string)
 
 (defconst org-glance-view-selector:all '!All)
 
@@ -57,26 +70,22 @@
   :type 'hook
   :group 'org-glance)
 
-(cl-defstruct org-glance-view
-  id
-  (type org-glance-view-default-type)
-  (scope org-glance-default-scope))
+(cl-defstruct (org-glance-view
+                ;; (:constructor org-glance-def-view (id
+                ;;                                    &key
+                ;;                                    (type org-glance-view-default-type)
+                ;;                                    (scope nil)))
+                )
+  id type scope)
 
-(eval-and-compile
-  (defvar org-glance-views (make-hash-table :test 'equal))
-  (defvar org-glance-view-actions (make-hash-table :test 'equal))
-  (defvar org-glance-db-directory (f-join user-emacs-directory "org-glance" "compiled-views"))
-  (defvar org-glance-export-directory (f-join user-emacs-directory "org-glance" "materialized-views"))
-  (defvar org-glance-materialized-view-buffer "*org-glance materialized view*"))
-
-(cl-defun org-glance-view-export-filename
-    (&optional
-       (view-id (org-glance-read-view))
-       (dir org-glance-export-directory))
-  (f-join dir (s-downcase (format "%s.org" view-id))))
+(cl-defun org-glance-view-export-filename (&optional (view-id (org-glance-read-view-id)))
+  "Path to file where VIEW-ID exported headlines are stored."
+  (f-join org-glance-view-location
+          (s-downcase (format "%s" view-id))
+          (s-downcase (format "%s.org" view-id))))
 
 (defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-export-directory))
+  (org-glance-list-files-recursively org-glance-view-location))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args)
@@ -90,13 +99,13 @@
   (cl-loop for tag in (org-glance-list-views)
      collect (downcase (symbol-name tag))))
 
-(defun org-glance--view-at-point-p ()
+(defun org-glance--views-at-point ()
   (-intersection (org-glance--collect-tags)
                  (org-glance--collect-views)))
 
 (defun org-glance--back-to-view-heading ()
   (org-glance--back-to-heading)
-  (or (org-glance--view-at-point-p)
+  (or (org-glance--views-at-point)
       (progn
         (org-up-element)
         (org-glance--back-to-view-heading))))
@@ -105,16 +114,12 @@
   (save-excursion
     (org-glance--back-to-view-heading)))
 
-(defvar org-glance-view-directory
-  (f-join user-emacs-directory "org-glance" "resources"))
-
 (defun org-glance-view:specify-attach-directory ()
   "Specify dir and archive paths for current headline."
   (interactive)
   (let* ((view (car (org-glance--nearest-view-heading)))
-         (now (org-glance--current-date))
          (path (read-directory-name (format "Specify directory for %s: " view)
-                                    (f-join org-glance-view-directory view)
+                                    (f-join org-glance-view-location view)
                                     nil nil "")))
     (org-glance--ensure-path path)
     (org-set-property "DIR" path)
@@ -125,11 +130,10 @@
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
 (cl-defmethod org-glance-view-db ((view org-glance-view))
-  (->> view
-    (org-glance-view-id)
-    (format "org-glance-%s.el")
-    (downcase)
-    (format "%s/%s" org-glance-db-directory)))
+  (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
+    (f-join org-glance-view-location
+            view-id
+            (format "%s.el" view-id))))
 
 (cl-defmethod org-glance-view-filter ((view org-glance-view))
   (-partial
@@ -140,13 +144,13 @@
    view))
 
 (cl-defun org-glance-view-reread (&optional
-                                    (view-id (org-glance-read-view)))
+                                    (view-id (org-glance-read-view-id)))
   (interactive)
   (message "Reread view %s" view-id)
   (let* ((view (gethash view-id org-glance-views))
          (db (org-glance-view-db view))
          (filter (org-glance-view-filter view))
-         (scope (org-glance-view-scope view)))
+         (scope (or (org-glance-view-scope view) org-glance-default-scope)))
     (org-glance-db-init db (org-glance-scope-headlines scope filter))
     view))
 
@@ -154,7 +158,7 @@
   "List headlines as org-elements for VIEW."
   (org-glance-headlines
    :db (org-glance-view-db view)
-   :scope (org-glance-view-scope view)
+   :scope (or (org-glance-view-scope view) org-glance-default-scope)
    :filter (org-glance-view-filter view)))
 
 (cl-defmethod org-glance-view-headlines/formatted ((view org-glance-view))
@@ -164,8 +168,13 @@
     (mapcar #'org-glance-format)
     (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
+(cl-defgeneric org-glance-view-prompt (view action)
+  "Generate prompt for VIEW. Assume ACTION context.")
+
 (cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
   (s-titleize (format "%s %s: " action (org-glance-view-id view))))
+
+(cl-defgeneric org-glance-view-action-resolve (view action))
 
 (cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
   (let* ((action-types (->> org-glance-view-actions
@@ -177,6 +186,9 @@
                           return action-type)))
     (or view-actions
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
+
+(cl-defmethod org-glance-view-action-resolve ((view null) (action symbol))
+  (user-error "Headline not found."))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -268,7 +280,7 @@
   ;;   )
   )
 
-(cl-defun org-glance-read-view (&optional (prompt "Choose view: "))
+(cl-defun org-glance-read-view-id (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-list-views)))
     (if (> (length views) 1)
@@ -276,8 +288,12 @@
           (intern view))
       (car views))))
 
+(cl-defun org-glance-read-view (&optional (prompt "Choose view: "))
+  "Run completing read PROMPT on registered views filtered by TYPE."
+  (gethash (org-glance-read-view-id prompt) org-glance-views))
+
 (cl-defun org-glance-view-agenda (&optional
-                                    (view-id (org-glance-read-view)))
+                                    (view-id (org-glance-read-view-id)))
   (interactive)
   (let ((org-agenda-files
          (cond ((string= view-id org-glance-view-selector:all)
@@ -288,19 +304,35 @@
 
 (cl-defun org-glance-view-visit
     (&optional
-       (view-id (org-glance-read-view)))
+       (view-id (org-glance-read-view-id)))
   (interactive)
   (find-file (org-glance-view-export-filename view-id)))
 
-(cl-defun org-glance-def-view (view-id &key type scope)
-  (unless (eq nil (gethash view-id org-glance-views))
-    (user-error "View %s is already registered." view-id))
-  (let ((view (make-org-glance-view :id view-id)))
+(cl-defun org-glance-def-view (id &key type scope)
+  (unless (eq nil (gethash id org-glance-views))
+    (user-error "View %s is already registered." id))
+  (let ((view (make-org-glance-view :id id)))
     (when scope (setf (org-glance-view-scope view) scope))
     (when type  (setf (org-glance-view-type view) type))
-    (puthash view-id view org-glance-views)
-    (message "%s view of type %s is now ready to glance scope %s"
-             view-id (or type "default") scope)
+    (puthash id view org-glance-views)
+    (unless scope
+      (message "Default scope is: %s" org-glance-default-scope))
+    (message "View \"%s\"%s is now ready to glance"
+             id
+             (if type (concat " of type \"" type "\"") "")
+             (if scope (concat " over scope \"" scope "\"") ""))
     view))
+
+(defun org-glance-view-visit-original-heading ()
+  (interactive)
+  (save-excursion
+    (cl-loop while (org-up-heading-safe))
+    (let* ((heading (list :file --org-glance-view-src
+                          :begin --org-glance-view-beg
+                          :raw-value (org-element-property :raw-value (org-element-at-point))))
+           (virtual-element (org-element-create 'headline heading)))
+      (org-glance-action-call 'visit :on virtual-element))))
+
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 
 (provide-me)
