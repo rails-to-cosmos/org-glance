@@ -4,11 +4,11 @@
 
 (require 'org-glance)
 
-(Given "^empty scope"
+(Given "^empty default scope"
        (lambda ()
          (setq org-glance-default-scope (list))))
 
-(Given "^file with contents"
+(Given "^org-mode file"
        (lambda (text)
          (let ((temp-file (make-temp-file "org-glance-test-" nil ".org")))
            (message "Create file %s" temp-file)
@@ -18,11 +18,22 @@
            (save-buffer))))
 
 (Then "^I add the file to scope"
-     (lambda ()
-       (cl-pushnew (buffer-file-name) org-glance-default-scope)))
+     (lambda () (cl-pushnew (buffer-file-name) org-glance-default-scope)))
 
-(Then "^I should have \\([[:digit:]]+\\) file in scope$"
-  (lambda (n) (= (length org-glance-default-scope) (string-to-number n))))
+(Then "^I should have \\([[:digit:]]+\\) files? in scope$"
+      (lambda (n) (should
+              (= (length org-glance-default-scope)
+                 (string-to-number n)))))
+
+(Then "^I define view \"\\(.+\\)\" with default scope$"
+      (lambda (view) (org-glance-def-view (intern view))))
+
+(And "^I should see message$"
+     (lambda (text)
+       (let ((msg (with-current-buffer "*Messages*"
+                    (goto-char (point-max))
+                    (s-trim (thing-at-point 'line)))))
+         (should (string= text msg)))))
 
 (When "^I have \"\\(.+\\)\"$"
   (lambda (something)

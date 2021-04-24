@@ -310,8 +310,12 @@
     (when scope (setf (org-glance-view-scope view) scope))
     (when type  (setf (org-glance-view-type view) type))
     (puthash id view org-glance-views)
-    (message "%s view of type %s is now ready to glance scope %s"
-             id (or type "default") scope)
+    (unless scope
+      (message "Default scope is: %s" org-glance-default-scope))
+    (message "View \"%s\" of %s is now ready to glance %s"
+             id
+             (if type (concat "type \"" type "\"") "default type")
+             (if scope (concat "scope \"" scope "\"") "default scope"))
     view))
 
 (defun org-glance-view-visit-original-heading ()
