@@ -9,6 +9,9 @@
        (lambda ()
          (setq org-glance-default-scope (list))))
 
+(Then "^I add the file to scope"
+     (lambda () (cl-pushnew (buffer-file-name) org-glance-default-scope)))
+
 (Given "^org-mode file"
        (lambda (text)
          (let ((temp-file (make-temp-file "org-glance-test-" nil ".org")))
@@ -17,9 +20,6 @@
            (find-file temp-file)
            (insert text)
            (save-buffer))))
-
-(Then "^I add the file to scope"
-     (lambda () (cl-pushnew (buffer-file-name) org-glance-default-scope)))
 
 (Then "^I should have \\([[:digit:]]+\\) files? in scope$"
       (lambda (n) (should
@@ -68,10 +68,8 @@
 
 (When "^I run action \"\\(.+\\)\" for headlines and type \"\\(.+\\)\"$"
   (lambda (action user-input)
-    (pp (org-glance-action-headlines 'visit))
-    ;; (with-simulated-input user-input
-    ;;   (cond ((string-equal action "visit") (org-glance-action-visit))))
-    ))
+    (with-simulated-input user-input
+      (cond ((string-equal action "visit") (org-glance-action-visit))))))
 
 ;; (with-simulated-input "Gosuslugi RET"
 ;;   (org-glance-action-visit))

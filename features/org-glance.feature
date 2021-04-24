@@ -24,5 +24,5 @@ Feature: Do Some things
     And I should have 4 headlines in view "Country"
     And I should have 1 view registered
     And I should have a choice of 4 headlines for "visit" action
-    # When I run action "visit" for headlines and type "Bel RET"
-    # Then I should see "* Holland :Country:"
+    When I run action "visit" for headlines and type "[Country] SPC Holland RET"
+    Then I should see "* Holland"

@@ -30,16 +30,18 @@
 
 ;;; Code:
 
-(require 'org-glance-helpers)
+(require 'load-relative)
+(require 'f)
 
-(require 'org-glance-scope)
-(require 'org-glance-headline)
-(require 'org-glance-db)
-(require 'org-glance-view)
-(require 'org-glance-action)
-(require 'org-glance-action-custom)
-(require 'org-glance-transient)
-(require 'org-glance-view-metadata)
+(require-relative 'org-glance-helpers)
+(require-relative 'org-glance-scope)
+(require-relative 'org-glance-headline)
+(require-relative 'org-glance-db)
+(require-relative 'org-glance-view)
+(require-relative 'org-glance-action)
+(require-relative 'org-glance-action-custom)
+(require-relative 'org-glance-transient)
+(require-relative 'org-glance-view-metadata)
 
 (load-relative "org-glance-action-custom.el")
 
