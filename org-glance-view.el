@@ -319,8 +319,8 @@
       (message "Default scope is: %s" org-glance-default-scope))
     (message "View \"%s\"%s is now ready to glance"
              id
-             (if type (concat " of type \"" type "\"") "")
-             (if scope (concat " over scope \"" scope "\"") ""))
+             (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
+             (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
 
 (defun org-glance-view-visit-original-heading ()
