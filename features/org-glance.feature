@@ -4,7 +4,8 @@ Feature: Initialization
   As a user
   I want to define views
 
-  Scenario: Prerequisites
+  @core
+  Scenario: Directory structure
     Given empty default scope
     Given I'm in a root directory
 
@@ -18,7 +19,7 @@ Feature: Initialization
     And I change directory to parent directory
 
   @scope
-  Scenario: Default scope
+  Scenario: Using the default scope: list of files
     When I change directory to "user-data"
     And I create org-mode file "countries.org"
       """
@@ -32,7 +33,7 @@ Feature: Initialization
     And I change directory to parent directory
 
   @scope @view
-  Scenario: View definition
+  Scenario: Define view
     When I define view "Country" with default scope
     Then I should see message
       """
@@ -42,7 +43,7 @@ Feature: Initialization
     And I should have 1 view registered
 
   @view @action
-  Scenario: Perform VISIT action
+  Scenario: Visit a headline
     When I run action "visit" for headlines and type "[Country] SPC Holland RET"
     Then I should see "Holland"
 
