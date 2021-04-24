@@ -1,8 +1,9 @@
 (require 'org)
 (require 'org-element)
 (require 'load-relative)
-(require 'org-glance-helpers)
 (require 'org-glance-headline)
+
+(require-relative "../utils/helpers.el")
 
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 

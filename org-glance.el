@@ -33,17 +33,31 @@
 (require 'load-relative)
 (require 'f)
 
-(require-relative 'org-glance-helpers)
+(require-relative "lib/utils/helpers.el")
 (require-relative 'org-glance-scope)
 (require-relative 'org-glance-headline)
-(require-relative 'org-glance-db)
+(require-relative "lib/core/serde.el")
 (require-relative 'org-glance-view)
 (require-relative 'org-glance-action)
-(require-relative 'org-glance-action-custom)
-(require-relative 'org-glance-transient)
 (require-relative 'org-glance-view-metadata)
 
-(load-relative "org-glance-action-custom.el")
+;; Preload available actions
+
+(load-relative "lib/actions/base/visit.el")
+(load-relative "lib/actions/base/materialize.el")
+(load-relative "lib/actions/base/open.el")
+
+(load-relative "lib/actions/babel/insert.el")
+
+(load-relative "lib/actions/kvs/extract-property.el")
+
+(load-relative "lib/actions/crypt/extract-property.el")
+(load-relative "lib/actions/crypt/materialize.el")
+
+(require-relative "org-glance-transient.el")
+
+(declare-function org-glance-with-headline-materialized (relative-expand-file-name "actions/base/materialize.el")
+                  (headline &rest forms))
 
 (eval-and-compile
   (require 'org)
@@ -60,18 +74,12 @@
 
 (require 'gv)
 
-
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
   :group 'org)
 
 (defvar org-glance-prompt "Glance: ")
-
-(defvar org-glance-properties-ignore-patterns
-  (append
-   org-special-properties
-   '("^ARCHIVE_" "^TITLE$")))
 
 (defun org-glance-show-report ()
   (interactive)

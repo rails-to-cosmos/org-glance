@@ -3,7 +3,7 @@
 (require 'org)
 (require 'org-element)
 (require 'org-glance-headline)
-(require 'org-glance-db)
+(require-relative "lib/core/serde.el")
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -317,22 +317,10 @@
     (puthash id view org-glance-views)
     (unless scope
       (message "Default scope is: %s" org-glance-default-scope))
-    (message "View \"%s\"%s is now ready to glance"
+    (message "View \"%s\"%s is now ready to glance %s"
              id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
-
-(defun org-glance-view-visit-original-heading ()
-  (interactive)
-  (save-excursion
-    (cl-loop while (org-up-heading-safe))
-    (let* ((heading (list :file --org-glance-view-src
-                          :begin --org-glance-view-beg
-                          :raw-value (org-element-property :raw-value (org-element-at-point))))
-           (virtual-element (org-element-create 'headline heading)))
-      (org-glance-action-call 'visit :on virtual-element))))
-
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 
 (provide-me)
