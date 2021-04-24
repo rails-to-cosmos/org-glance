@@ -174,6 +174,8 @@
 (cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
   (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
+(cl-defgeneric org-glance-view-action-resolve (view action))
+
 (cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
   (let* ((action-types (->> org-glance-view-actions
                          (gethash action)
@@ -184,6 +186,9 @@
                           return action-type)))
     (or view-actions
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
+
+(cl-defmethod org-glance-view-action-resolve ((view null) (action symbol))
+  (user-error "Headline not found."))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -312,7 +317,7 @@
     (puthash id view org-glance-views)
     (unless scope
       (message "Default scope is: %s" org-glance-default-scope))
-    (message "View \"%s\" of %s is now ready to glance %s"
+    (message "View \"%s\" of %s is now ready to glance over %s"
              id
              (if type (concat "type \"" type "\"") "default type")
              (if scope (concat "scope \"" scope "\"") "default scope"))

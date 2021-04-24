@@ -5,23 +5,39 @@
 (require 'org-glance)
 (require 'with-simulated-input)
 
+(Given "^temporary directory with read and write permission$"
+       (lambda ()
+         (let ((dir (make-temp-file "org-glance-test-" t)))
+           (find-file dir))))
+
+(Then "^I create directory \"\\(.+\\)\"$"
+      (lambda (dir) (mkdir dir)))
+
+(Then "^I change directory to \"\\(.+\\)\"$"
+      (lambda (dir) (cd dir)))
+
+(Then "^I change directory to parent directory$"
+      (lambda () (cd "../")))
+
 (Given "^empty default scope"
        (lambda ()
          (setq org-glance-default-scope (list))))
 
-(Then "^I add the file to scope"
-     (lambda () (cl-pushnew (buffer-file-name) org-glance-default-scope)))
+(Given "^I set view location to current directory$"
+       (lambda ()
+         (setq org-glance-view-location default-directory)))
 
-(Given "^org-mode file"
-       (lambda (text)
-         (let ((temp-file (make-temp-file "org-glance-test-" nil ".org")))
-           (message "Create file %s" temp-file)
-           (message "Contents:\n%s" text)
-           (find-file temp-file)
-           (insert text)
-           (save-buffer))))
+(When "^I add the file to default scope"
+  (lambda () (cl-pushnew (buffer-file-name) org-glance-default-scope)))
 
-(Then "^I should have \\([[:digit:]]+\\) files? in scope$"
+(And "^I create org-mode file \"\\(.+\\)\"$"
+     (lambda (filename text)
+       (find-file filename)
+       (insert text)
+       (message "Create file %s" filename)
+       (save-buffer)))
+
+(Then "^I should have \\([[:digit:]]+\\) files? in default scope$"
       (lambda (n) (should
               (= (length org-glance-default-scope)
                  (string-to-number n)))))
@@ -30,8 +46,12 @@
       (lambda (view-id) (org-glance-def-view (intern view-id))))
 
 (Then "^I should see$"
-     (lambda (text)
-       (should (string-equal text (s-trim (thing-at-point 'line))))))
+      (lambda (text)
+        (should (s-contains-p text (s-trim (thing-at-point 'line))))))
+
+(Then "^I should see \"\\(.+\\)\"$"
+      (lambda (text)
+        (Then "I should see" text)))
 
 (And "^I should see message$"
      (lambda (text)
