@@ -4,6 +4,7 @@
 
 (require 'org-glance)
 (require 'with-simulated-input)
+(require 'subr-x)
 
 (Given "^temporary directory with read and write permission$"
        (lambda ()

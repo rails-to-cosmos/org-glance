@@ -2,7 +2,9 @@
 
 (require 'org)
 (require 'org-element)
+(require 'subr-x)
 (require 'org-glance-headline)
+
 (require-relative "lib/core/serde.el")
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
