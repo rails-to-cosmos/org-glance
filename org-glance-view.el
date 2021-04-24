@@ -317,10 +317,10 @@
     (puthash id view org-glance-views)
     (unless scope
       (message "Default scope is: %s" org-glance-default-scope))
-    (message "View \"%s\" of %s is now ready to glance over %s"
+    (message "View \"%s\"%s is now ready to glance"
              id
-             (if type (concat "type \"" type "\"") "default type")
-             (if scope (concat "scope \"" scope "\"") "default scope"))
+             (if type (concat " of type \"" type "\"") "")
+             (if scope (concat " over scope \"" scope "\"") ""))
     view))
 
 (defun org-glance-view-visit-original-heading ()

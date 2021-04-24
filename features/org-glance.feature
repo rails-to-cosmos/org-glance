@@ -6,10 +6,10 @@ Feature: Initialization
 
   Scenario: Prerequisites
     Given empty default scope
+    Given I'm in a root directory
 
     # Implement directory structure for user data and system data
-    Given temporary directory with read and write permission
-    Then I create directory "org-glance-views"
+    And I create directory "org-glance-views"
     And I create directory "user-data"
 
     # Set org-glance-view-location
@@ -36,7 +36,7 @@ Feature: Initialization
     When I define view "Country" with default scope
     Then I should see message
       """
-      View "Country" of default type is now ready to glance over default scope
+      View "Country" is now ready to glance
       """
     And I should have 4 headlines in view "Country"
     And I should have 1 view registered

@@ -16,6 +16,9 @@
 (Then "^I change directory to \"\\(.+\\)\"$"
       (lambda (dir) (cd dir)))
 
+(Then "^I'm in a root directory$"
+      (lambda () (cd org-glance-test:location)))
+
 (Then "^I change directory to parent directory$"
       (lambda () (cd "../")))
 

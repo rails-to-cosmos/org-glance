@@ -76,7 +76,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                              (headlines (org-glance-action-headlines action))
                              (choice (unwind-protect
                                           (org-completing-read (format "%s: " action) headlines)
-                                       (message "Unwind protected")))
+                                       nil))
                              (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
                                             (org-glance-view-action-resolve view)
