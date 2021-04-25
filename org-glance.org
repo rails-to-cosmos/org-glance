@@ -45,16 +45,6 @@
 ;;; Code:
 #+end_src
 
-* Service                                                                       :Service:
-:PROPERTIES:
-:TITLE:    org-glance
-:END:
-
-Links:
-- [[https://github.com/rails-to-cosmos/org-glance][Repository]]
-- [[https://travis-ci.org/github/rails-to-cosmos/org-glance][Build]]
-- [[https://coveralls.io/github/rails-to-cosmos/org-glance][Coverage]]
-
 * Issues [1/13]
 ** DONE test me like https://github.com/flycheck/flycheck
 :LOGBOOK:
