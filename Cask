@@ -11,7 +11,6 @@
 (depends-on "load-relative")
 (depends-on "transient")
 (depends-on "ts")
-(depends-on "subr-x")
 
 (development
  (depends-on "ecukes")
