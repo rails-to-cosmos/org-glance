@@ -4,8 +4,9 @@
 (require 'org-element)
 (require 'subr-x)
 (require 'org-glance-headline)
+(require 'pythonic-import)
 
-(require-relative "lib/core/serde.el")
+(pythonic-import lib.core.serde)
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -87,23 +88,20 @@
           (s-downcase (format "%s.org" view-id))))
 
 (defun org-glance-exports ()
-  (org-glance-list-files-recursively org-glance-view-location))
+  (org-glance--list-files-recursively org-glance-view-location))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args)
   (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
 
-(defun org-glance-list-views ()
+(defun org-glance-list-view-ids ()
   "List registered views."
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(defun org-glance--collect-views ()
-  (cl-loop for tag in (org-glance-list-views)
-     collect (downcase (symbol-name tag))))
-
 (defun org-glance--views-at-point ()
   (-intersection (org-glance--collect-tags)
-                 (org-glance--collect-views)))
+                 (cl-loop for tag in (org-glance-list-view-ids)
+                    collect (downcase (symbol-name tag)))))
 
 (defun org-glance--back-to-view-heading ()
   (org-glance--back-to-heading)
@@ -167,7 +165,7 @@
   "List headlines as formatted strings for VIEW."
   (->> view
     org-glance-view-headlines
-    (mapcar #'org-glance-format)
+    (mapcar #'org-glance--format-headline)
     (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
 (cl-defgeneric org-glance-view-prompt (view action)
@@ -221,7 +219,7 @@
                      (org-mode)
                      (insert buffer-contents)
                      (goto-char (point-min))
-                     (-org-glance-demote-subtree promote-level)
+                     (org-glance--demote-subtree promote-level)
                      (buffer-substring-no-properties (point-min) (point-max)))))))
 
           (with-temp-file source
@@ -246,7 +244,7 @@
         (org-mode)
         (insert buffer-contents)
         (goto-char (point-min))
-        (-org-glance-promote-subtree)
+        (org-glance--promote-subtree)
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash ()
@@ -262,7 +260,7 @@
           (org-mode)
           (insert (s-trim subtree))
           (cl-loop while (org-up-heading-safe))
-          (-org-glance-promote-subtree)
+          (org-glance--promote-subtree)
           (buffer-hash))))))
 
 (cl-defmethod org-glance-view-delete ((view-id symbol))
@@ -272,7 +270,7 @@
   (interactive)
   (unless (org-at-heading-p) (org-back-to-heading))
   ;; (let* ((other-views (seq-difference
-  ;;                      (org-glance-list-views)
+  ;;                      (org-glance-list-view-ids)
   ;;                      (mapcar #'intern (org-get-tags))))
   ;;        (view-id (org-completing-read "View: " other-views))
   ;;        (view (org-glance-view view-id)))
@@ -284,7 +282,7 @@
 
 (cl-defun org-glance-read-view-id (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-list-views)))
+  (let ((views (org-glance-list-view-ids)))
     (if (> (length views) 1)
         (let ((view (org-completing-read prompt (append (list org-glance-view-selector:all) views))))
           (intern view))
@@ -299,7 +297,7 @@
   (interactive)
   (let ((org-agenda-files
          (cond ((string= view-id org-glance-view-selector:all)
-                (cl-loop for view in (org-glance-list-views)
+                (cl-loop for view in (org-glance-list-view-ids)
                    collect (org-glance-view-export-filename view)))
                (t (list (org-glance-view-export-filename view-id))))))
     (org-agenda-list)))

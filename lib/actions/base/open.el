@@ -1,4 +1,5 @@
-(require-relative "lib/core/serde.el")
+(require 'pythonic-import)
+(pythonic-import lib.core.serde)
 (require 'org-glance-view)
 (require 'org-glance-action)
 

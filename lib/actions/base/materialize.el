@@ -1,4 +1,5 @@
-(require-relative "lib/core/serde.el")
+(require 'pythonic-import)
+(pythonic-import lib.core.serde)
 (require 'org-glance-view)
 (require 'org-glance-action)
 
@@ -40,7 +41,7 @@
             ;; run hooks on original subtree
             (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
             ;; then promote it saving original level
-            (setq-local --org-glance-view-indent (-org-glance-promote-subtree)))
+            (setq-local --org-glance-view-indent (org-glance--promote-subtree)))
           (org-cycle 'contents)))
       (switch-to-buffer buffer))))
 

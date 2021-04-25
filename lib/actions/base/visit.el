@@ -1,4 +1,5 @@
-(require-relative "lib/core/serde.el")
+(require 'pythonic-import)
+(pythonic-import lib.core.serde)
 (require 'org-glance-view)
 (require 'org-glance-action)
 
@@ -12,7 +13,7 @@
           (t (org-glance-db-outdated "File not found: %s" file)))
     (widen)
     (goto-char point)
-    (cond ((-element-at-point-equals-headline headline)
+    (cond ((org-glance--element-equals-headline headline)
            (cl-loop while (org-up-heading-safe)) ;; expand parents
            (org-narrow-to-subtree)
            (widen)

@@ -3,7 +3,11 @@
 (require 'load-relative)
 (require 'org-glance-headline)
 
-(require-relative "../utils/helpers.el")
+(require 'pythonic-import)
+
+(pythonic-import lib.utils.helpers)
+
+(message "Project file name: %s" (__FILE__))
 
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
@@ -57,4 +61,4 @@
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t         (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(provide-me)
+(pythonic-module)

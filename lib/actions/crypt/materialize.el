@@ -1,7 +1,9 @@
+(require 'pythonic-import)
+
 (require 'org-glance-view)
 (require 'org-glance-action)
 
-(require-relative "lib/utils/helpers.el")
+(pythonic-import lib.utils.helpers)
 
 (org-glance-action-define materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."
@@ -16,13 +18,13 @@
       (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
-              (-org-glance-demote-subtree --org-glance-view-indent)
+              (org-glance--demote-subtree --org-glance-view-indent)
               (org-glance-encrypt-subtree --org-glance-view-pwd)
-              (-org-glance-promote-subtree))
+              (org-glance--promote-subtree))
             'append 'local)
   (add-hook 'org-glance-after-materialize-sync-hook
             (lambda ()
-              (-org-glance-demote-subtree --org-glance-view-indent)
+              (org-glance--demote-subtree --org-glance-view-indent)
               (org-glance-decrypt-subtree --org-glance-view-pwd)
-              (-org-glance-promote-subtree))
+              (org-glance--promote-subtree))
             'append 'local))

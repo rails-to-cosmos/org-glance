@@ -1,4 +1,5 @@
-(require-relative "lib/utils/helpers.el")
+(require 'pythonic-import)
+(pythonic-import lib.utils.helpers)
 
 (require 'org-glance-action)
 

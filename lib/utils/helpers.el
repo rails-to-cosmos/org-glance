@@ -4,6 +4,8 @@
 (require 'org)
 (require 'org-element)
 
+(message "Project HELPERS file name: %s" (__FILE__))
+
 (defvar org-glance-properties-ignore-patterns
   (append
    org-special-properties
@@ -25,10 +27,10 @@
       (make-directory path t)
     (error nil)))
 
-(defun org-glance-list-files-recursively (dir)
+(defun org-glance--list-files-recursively (dir)
   (directory-files-recursively dir "\\.*.org\\.*"))
 
-(defun org-glance-list-file-archives (filename)
+(defun org-glance--list-file-archives (filename)
   "Return list of org-mode files for FILENAME."
   (let* ((dir (file-name-directory filename))
          (base-filename (-some->> filename
@@ -36,14 +38,14 @@
                           file-name-sans-extension)))
     (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
 
-(defun -org-glance-list-archives ()
+(defun org-glance--list-archives ()
   (append (list (buffer-file-name))
-          (org-glance-list-file-archives (buffer-file-name))))
+          (org-glance--list-file-archives (buffer-file-name))))
 
-(defun -org-glance-agenda-with-archives ()
+(defun org-glance--agenda-with-archives ()
   (cl-loop for filename in (org-agenda-files)
      append (list filename)
-     append (org-glance-list-file-archives filename)))
+     append (org-glance--list-file-archives filename)))
 
 (defun org-glance-read-file-headlines (file)
   (with-temp-buffer
@@ -52,11 +54,11 @@
       read
       eval)))
 
-(defun org-glance-format (headline)
+(defun org-glance--format-headline (headline)
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
 
-(defun org-glance-read-headlines-from-file (file &optional filter)
+(defun org-glance--read-headlines-from-file (file &optional filter)
   (with-temp-buffer
     (insert-file-contents file)
     (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -65,7 +67,7 @@
           (plist-put (cadr headline) :file file)
           headline)))))
 
-(defun -org-glance-promote-subtree ()
+(defun org-glance--promote-subtree ()
   (let ((promote-level 0))
     (cl-loop while (condition-case nil
                        (org-with-limited-levels (org-map-tree 'org-promote) t)
@@ -73,23 +75,12 @@
        do (cl-incf promote-level))
     promote-level))
 
-(defun -org-glance-demote-subtree (level)
+(defun org-glance--demote-subtree (level)
   (cl-loop repeat level
      do (org-with-limited-levels
          (org-map-tree 'org-demote))))
 
-(defun -org-glance-first-level-heading ()
-  (save-excursion
-    (unless (org-at-heading-p) (org-back-to-heading))
-    (beginning-of-line)
-    (point)))
-
-(defun --org-glance-view-end-of-meta-data ()
-  (save-excursion
-    (org-end-of-meta-data)
-    (point)))
-
-(defun -element-at-point-equals-headline (headline)
+(defun org-glance--element-equals-headline (headline)
   (let ((element-title (org-element-property :raw-value (org-element-at-point)))
         (headline-title (org-element-property :raw-value headline)))
     (condition-case nil
@@ -143,4 +134,4 @@
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(provide-me)
+(pythonic-module)

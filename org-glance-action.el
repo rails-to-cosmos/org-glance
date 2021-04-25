@@ -47,7 +47,6 @@ Type can be list of symbols to specify views."
   (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
     (puthash name type org-glance-view-actions)))
 
-
 (defmacro org-glance-action-define (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
 Make it accessible for views of TYPE in `org-glance-view-actions'."

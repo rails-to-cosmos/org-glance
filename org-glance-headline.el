@@ -12,7 +12,7 @@
     (cond
       ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
       ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-      ((f-directory? file) (org-glance-list-files-recursively file))
+      ((f-directory? file) (org-glance--list-files-recursively file))
       (t file))))
 
 (cl-defmethod org-glance-scope ((lfob sequence))
@@ -40,9 +40,9 @@
     org-glance-scope))
 
 (defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . -org-glance-list-archives)
+  '((file-with-archives . org-glance--list-archives)
     (agenda . org-agenda-files)
-    (agenda-with-archives . -org-glance-agenda-with-archives)))
+    (agenda-with-archives . org-glance--agenda-with-archives)))
 
 (defcustom org-glance-default-scope '(agenda-with-archives)
   "Default scope for glancing views."
@@ -50,17 +50,17 @@
   :type 'list)
 
 (defun org-glance-prompt-headlines (prompt headlines)
-  (org-completing-read prompt (mapcar #'org-glance-format headlines)))
+  (org-completing-read prompt (mapcar #'org-glance--format-headline headlines)))
 
 (defun org-glance-choose-headline (choice headlines)
-  (--first (string= (org-glance-format it) choice) headlines))
+  (--first (string= (org-glance--format-headline it) choice) headlines))
 
 (defun org-glance-scope-headlines (scope &optional filter)
   (cl-loop
      for file in (org-glance-scope scope)
      when (member (file-name-extension file) org-glance-org-scope-extensions)
      do (message "Glance file %s" file)
-     append (org-glance-read-headlines-from-file file filter)
+     append (org-glance--read-headlines-from-file file filter)
      into result
      do (redisplay)
      finally (cl-return result)))

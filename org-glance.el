@@ -30,13 +30,13 @@
 
 ;;; Code:
 
-(require 'load-relative)
-(require 'f)
+(require 'pythonic-import)
 
-(require-relative "lib/utils/helpers.el")
+(pythonic-import lib.utils.helpers)
+(pythonic-import lib.core.serde)
+
 (require-relative 'org-glance-scope)
 (require-relative 'org-glance-headline)
-(require-relative "lib/core/serde.el")
 (require-relative 'org-glance-view)
 (require-relative 'org-glance-action)
 (require-relative 'org-glance-view-metadata)
@@ -99,7 +99,7 @@
 (cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view-id)))
   (interactive)
   (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-list-views) ; optimize me. O(N * V), should be O(N)
+         (cl-loop for view in (org-glance-list-view-ids) ; optimize me. O(N * V), should be O(N)
             do (org-glance-view-update view)))
         (t (let ((dest-file-name (org-glance-view-export-filename view-id)))
              (mkdir (file-name-directory dest-file-name) t)
