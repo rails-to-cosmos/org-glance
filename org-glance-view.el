@@ -4,9 +4,9 @@
 (require 'org-element)
 (require 'subr-x)
 (require 'org-glance-headline)
-(require 'pythonic-import)
+(require 'org-glance-module)
 
-(pythonic-import lib.core.serde)
+(org-glance-module-import lib.core.serde)
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")

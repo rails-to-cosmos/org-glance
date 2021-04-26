@@ -30,11 +30,11 @@
 
 ;;; Code:
 
-(require 'pythonic-import)
+(require 'org-glance-module)
 
-(pythonic-import lib.utils.helpers)
-(pythonic-import lib.core.serde)
-(pythonic-import lib.core.actions)
+(org-glance-module-import lib.utils.helpers)
+(org-glance-module-import lib.core.serde)
+(org-glance-module-import lib.core.actions)
 
 (require-relative 'org-glance-scope)
 (require-relative 'org-glance-headline)

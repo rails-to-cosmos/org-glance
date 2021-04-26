@@ -1,8 +1,8 @@
-(require 'pythonic-import)
+(require 'org-glance-module)
 (require 'org-glance-view)
 
-(pythonic-import lib.utils.helpers)
-(pythonic-import lib.core.actions)
+(org-glance-module-import lib.utils.helpers)
+(org-glance-module-import lib.core.actions)
 
 (org-glance-action-define materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."

@@ -3,9 +3,9 @@
 (require 'load-relative)
 (require 'org-glance-headline)
 
-(require 'pythonic-import)
+(require 'org-glance-module)
 
-(pythonic-import lib.utils.helpers)
+(org-glance-module-import lib.utils.helpers)
 
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
@@ -59,4 +59,4 @@
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t         (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(pythonic-module)
+(org-glance-module-provide)

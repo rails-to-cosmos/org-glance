@@ -1,7 +1,7 @@
 (require 'load-relative)
-(require 'pythonic-import)
+(require 'org-glance-module)
 
-(pythonic-import lib.utils.helpers)
+(org-glance-module-import lib.utils.helpers)
 
 (declare-function org-glance--list-files-recursively "lib/utils/helpers.el")
 (declare-function org-glance--read-headlines-from-file "lib/utils/helpers.el")

@@ -1,7 +1,7 @@
-(require 'pythonic-import)
+(require 'org-glance-module)
 
-(pythonic-import lib.core.serde)
-(pythonic-import lib.core.actions)
+(org-glance-module-import lib.core.serde)
+(org-glance-module-import lib.core.actions)
 
 (require 'org-glance-view)
 

@@ -132,4 +132,4 @@
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(pythonic-module)
+(org-glance-module-provide)

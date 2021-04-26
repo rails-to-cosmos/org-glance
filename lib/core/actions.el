@@ -1,4 +1,4 @@
-(require 'pythonic-import)
+(require 'org-glance-module)
 
 (require 'org-element)
 (require 'org-glance-view)
@@ -101,4 +101,4 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         `(progn ,(car res) ,form)
       form)))
 
-(pythonic-module)
+(org-glance-module-provide)
