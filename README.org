@@ -5,7 +5,7 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-[[https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master][https://travis-ci.com/rails-to-cosmos/org-glance.svg?style=svg]]
+[[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
 Fast, clean and convenient way of traversing your org-mode forest.
 
