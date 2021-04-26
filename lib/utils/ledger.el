@@ -1,3 +1,5 @@
+(require 'org-glance-module)
+
 (eval-when-compile
   (require 'cl-lib)
   (require 'cl-macs))
@@ -6,8 +8,7 @@
   (require 'subr-x)
   (require 'org)
   (require 'ts)
-  (require 'ledger-mode)
-  (require 'load-relative))
+  (require 'ledger-mode))
 
 (defun org-make-tag-string (tags)
   "Return string associated to TAGS.
@@ -82,4 +83,4 @@ TAGS is a list of strings."
          (insert "    Assets:Default\n")
          (switch-to-buffer-other-window "*org-glance-ledger-report*"))))))
 
-(provide-me)
+(org-glance-module-provide)

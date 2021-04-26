@@ -10,7 +10,7 @@
    [("A" "Agenda" org-glance-view-agenda)
     ("D" "Dashboard" org-glance-show-report)]
 
-   ;; [("-v" "View" org-glance-act.view)]
+   [("-v" "View" org-glance-act.view)]
    ]
 
   ["Views"
@@ -20,8 +20,8 @@
   ["Headlines"
    ;; [("c" "Capture" org-glance-action-extract-property)]
    [("e" "Extract" org-glance-action-extract-property)]
-   [("j" "Jump" org-glance-action-open)]
-   [("i" "Insert" org-glance-action-insert)]
+   [("j" "Open" org-glance-action-open)]
+   ;; [("i" "Insert" org-glance-action-insert)]
    [("m" "Materialize" org-glance-action-materialize)]
    [("v" "Visit" org-glance-action-visit)]])
 
