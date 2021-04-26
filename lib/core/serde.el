@@ -1,11 +1,11 @@
 (require 'org)
 (require 'org-element)
 (require 'load-relative)
-(require 'org-glance-headline)
 
 (require 'org-glance-module)
 
 (org-glance-module-import lib.utils.helpers)
+(org-glance-module-import lib.core.scope)
 
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 

@@ -58,10 +58,10 @@
   :group 'org-glance
   :type 'list)
 
-(defun org-glance-prompt-headlines (prompt headlines)
+(defun org-glance-scope--prompt-headlines (prompt headlines)
   (org-completing-read prompt (mapcar #'org-glance--format-headline headlines)))
 
-(defun org-glance-choose-headline (choice headlines)
+(defun org-glance-scope--choose-headline (choice headlines)
   (--first (string= (org-glance--format-headline it) choice) headlines))
 
 (defun org-glance-scope-headlines (scope &optional filter)
@@ -74,4 +74,4 @@
      do (redisplay)
      finally (cl-return result)))
 
-(provide-me)
+(org-glance-module-provide)

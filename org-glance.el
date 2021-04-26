@@ -35,9 +35,8 @@
 (org-glance-module-import lib.utils.helpers)
 (org-glance-module-import lib.core.serde)
 (org-glance-module-import lib.core.actions)
+(org-glance-module-import lib.core.scope)
 
-(require-relative 'org-glance-scope)
-(require-relative 'org-glance-headline)
 (require-relative 'org-glance-view)
 (require-relative 'org-glance-view-metadata)
 
@@ -147,8 +146,8 @@ Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u 
            :scope scope
            :filter filter)))
     (unwind-protect
-         (when-let (choice (or default-choice (org-glance-prompt-headlines org-glance-prompt headlines)))
-           (if-let (headline (org-glance-choose-headline choice headlines))
+         (when-let (choice (or default-choice (org-glance-scope--prompt-headlines org-glance-prompt headlines)))
+           (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
                  (org-glance-db-outdated
                   (message "Database %s is outdated, actualizing..." db)

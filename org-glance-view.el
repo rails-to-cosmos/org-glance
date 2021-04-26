@@ -3,9 +3,9 @@
 (require 'org)
 (require 'org-element)
 (require 'subr-x)
-(require 'org-glance-headline)
 (require 'org-glance-module)
 
+(org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.serde)
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
