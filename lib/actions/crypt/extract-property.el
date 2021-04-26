@@ -1,5 +1,8 @@
+(require 'pythonic-import)
+
+(pythonic-import lib.core.actions)
+
 (require 'org-glance-view)
-(require 'org-glance-action)
 
 (org-glance-action-define extract-property (headline) :for (kvs crypt)
   "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."

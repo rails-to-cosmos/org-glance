@@ -9,8 +9,8 @@
           (path (concat (s-replace "." "/" m) ".el")))
      (require (intern m) (f-join org-glance-root-directory path))))
 
-(defmacro pythonic-module ( &optional prefix )
-  `(provide (intern (concat ,prefix (file-name-sans-extension
-                                     (s-replace "/" "." (file-relative-name (__FILE__) org-glance-root-directory)))))))
+(defmacro pythonic-module ()
+  `(provide (intern (file-name-sans-extension
+                     (s-replace "/" "." (file-relative-name (__FILE__) org-glance-root-directory))))))
 
-(provide-me)
+(provide 'pythonic-import)

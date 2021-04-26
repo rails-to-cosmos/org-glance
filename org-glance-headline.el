@@ -1,7 +1,21 @@
 (require 'load-relative)
+(require 'pythonic-import)
+
+(pythonic-import lib.utils.helpers)
+
+(declare-function org-glance--list-files-recursively "lib/utils/helpers.el")
+(declare-function org-glance--read-headlines-from-file "lib/utils/helpers.el")
+(declare-function org-glance--format-headline "lib/utils/helpers.el")
+
+(require 'org)
 
 (defvar org-glance-org-scope-extensions
   '("org" "org_archive"))
+
+(defvar org-glance-scope--default-scope-alist
+  '((file-with-archives . org-glance--list-archives)
+    (agenda . org-agenda-files)
+    (agenda-with-archives . org-glance--agenda-with-archives)))
 
 (cl-defgeneric org-glance-scope (lfob)
   "Adapt list-file-or-buffer to list of files.")
@@ -38,11 +52,6 @@
   (-some->> lfob
     funcall
     org-glance-scope))
-
-(defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . org-glance--list-archives)
-    (agenda . org-agenda-files)
-    (agenda-with-archives . org-glance--agenda-with-archives)))
 
 (defcustom org-glance-default-scope '(agenda-with-archives)
   "Default scope for glancing views."

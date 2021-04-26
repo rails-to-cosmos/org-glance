@@ -4,8 +4,6 @@
 (require 'org)
 (require 'org-element)
 
-(message "Project HELPERS file name: %s" (__FILE__))
-
 (defvar org-glance-properties-ignore-patterns
   (append
    org-special-properties

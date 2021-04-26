@@ -1,7 +1,9 @@
 (require 'pythonic-import)
+
 (pythonic-import lib.core.serde)
+(pythonic-import lib.core.actions)
+
 (require 'org-glance-view)
-(require 'org-glance-action)
 
 (org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."

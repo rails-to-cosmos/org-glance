@@ -1,9 +1,12 @@
+(require 'transient)
 (require 'load-relative)
+
+(require 'org-glance-view)
 
 (defclass org-glance-transient-variable (transient-variable)
   ((default
        :initarg :default
-       :initform nil)))
+     :initform nil)))
 
 (cl-defmethod transient-init-value ((obj org-glance-transient-variable))
   "Override transient value initialization."

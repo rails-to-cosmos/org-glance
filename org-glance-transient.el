@@ -1,7 +1,7 @@
 (require 'transient)
 (require 'load-relative)
-(require 'org-glance-transient-variables)
 (require 'org-glance-view)
+(require 'org-glance-transient-variables)
 
 (transient-define-prefix org-glance-act ()
   "In Glance-View buffer, perform action on selected view"
@@ -10,7 +10,8 @@
    [("A" "Agenda" org-glance-view-agenda)
     ("D" "Dashboard" org-glance-show-report)]
 
-   [("-v" "View" org-glance-act.view)]]
+   ;; [("-v" "View" org-glance-act.view)]
+   ]
 
   ["Views"
    [("U" "Update" org-glance-view-update)]

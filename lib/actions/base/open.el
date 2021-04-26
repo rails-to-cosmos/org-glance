@@ -1,7 +1,9 @@
 (require 'pythonic-import)
+
 (pythonic-import lib.core.serde)
+(pythonic-import lib.core.actions)
+
 (require 'org-glance-view)
-(require 'org-glance-action)
 
 (org-glance-action-define open (headline) :for link
   "Search for `org-any-link-re' under the HEADLINE

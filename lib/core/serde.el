@@ -7,8 +7,6 @@
 
 (pythonic-import lib.utils.helpers)
 
-(message "Project file name: %s" (__FILE__))
-
 (define-error 'org-glance-db-outdated "Material view database is outdated" 'user-error)
 
 (defun org-glance-db-outdated (format &rest args)

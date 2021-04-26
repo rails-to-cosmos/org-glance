@@ -1,7 +1,7 @@
 (require 'pythonic-import)
-(pythonic-import lib.utils.helpers)
 
-(require 'org-glance-action)
+(pythonic-import lib.core.actions)
+(pythonic-import lib.utils.helpers)
 
 (org-glance-action-define extract-property (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."

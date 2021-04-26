@@ -34,11 +34,11 @@
 
 (pythonic-import lib.utils.helpers)
 (pythonic-import lib.core.serde)
+(pythonic-import lib.core.actions)
 
 (require-relative 'org-glance-scope)
 (require-relative 'org-glance-headline)
 (require-relative 'org-glance-view)
-(require-relative 'org-glance-action)
 (require-relative 'org-glance-view-metadata)
 
 ;; Preload available actions
