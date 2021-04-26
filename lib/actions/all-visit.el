@@ -54,3 +54,5 @@
            ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
                                                                        (bury-buffer file-buffer)))
            (t (kill-buffer (get-file-buffer file))))))
+
+(org-glance-module-provide)

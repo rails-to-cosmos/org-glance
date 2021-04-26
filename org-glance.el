@@ -37,26 +37,23 @@
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.scope)
 
+(org-glance-module-import lib.forms.action-form)
+
 (require-relative 'org-glance-view)
 (require-relative 'org-glance-view-metadata)
 
 ;; Preload available actions
 
-(load-relative "lib/actions/base/visit.el")
-(load-relative "lib/actions/base/materialize.el")
-(load-relative "lib/actions/base/open.el")
+(org-glance-module-import lib.actions.all-visit)
 
-(load-relative "lib/actions/babel/insert.el")
+(org-glance-module-import lib.actions.all-materialize)
+(declare-function org-glance-with-headline-materialized (org-glance-module-filename lib.actions.all-materialize))
 
-(load-relative "lib/actions/kvs/extract-property.el")
-
-(load-relative "lib/actions/crypt/extract-property.el")
-(load-relative "lib/actions/crypt/materialize.el")
-
-(require-relative "org-glance-transient.el")
-
-(declare-function org-glance-with-headline-materialized (relative-expand-file-name "actions/base/materialize.el")
-                  (headline &rest forms))
+(org-glance-module-import lib.actions.all-open)
+(org-glance-module-import lib.actions.babel-insert)
+(org-glance-module-import lib.actions.crypt-extract)
+(org-glance-module-import lib.actions.crypt-materialize)
+(org-glance-module-import lib.actions.kvs-extract)
 
 (eval-and-compile
   (require 'org)

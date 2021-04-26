@@ -1,6 +1,6 @@
-(require 'transient)
-(require 'load-relative)
+(require 'org-glance-module)
 
+(require 'transient)
 (require 'org-glance-view)
 
 (defclass org-glance-transient-variable (transient-variable)
@@ -29,23 +29,4 @@
   "Override value format."
   (propertize (oref obj value) 'face 'transient-inactive-value))
 
-
-(defvar org-glance-transient--view "all")
-
-(defclass org-glance-transient-variable:view (org-glance-transient-variable) ())
-
-(cl-defmethod transient-infix-read ((obj org-glance-transient-variable:view))
-  (oset obj value (symbol-name (org-glance-read-view-id))))
-
-(cl-defmethod transient-format-value ((obj org-glance-transient-variable:view))
-  (let* ((val (or (oref obj value) (oref obj default)))
-         (val-pretty (propertize val 'face 'transient-argument)))
-    (format "(%s)" val-pretty)))
-
-(transient-define-infix org-glance-act.view ()
-  :class 'org-glance-transient-variable:view
-  :variable 'org-glance-transient--view
-  :reader 'org-glance-read-view-id
-  :default "all")
-
-(provide-me)
+(org-glance-module-provide)

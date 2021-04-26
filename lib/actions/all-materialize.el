@@ -59,3 +59,5 @@
        (kill-buffer org-glance-materialized-view-buffer))
      (cond (file-buffer (bury-buffer file-buffer))
            (t (kill-buffer (get-file-buffer file))))))
+
+(org-glance-module-provide)

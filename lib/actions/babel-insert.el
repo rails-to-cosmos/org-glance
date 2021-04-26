@@ -3,8 +3,6 @@
 (org-glance-module-import lib.core.serde)
 (org-glance-module-import lib.core.actions)
 
-(require 'org-glance-view)
-
 (org-glance-action-define insert (headline) :for babel
   "Visit HEADLINE, get contents and insert it."
   (insert (save-window-excursion
@@ -20,3 +18,5 @@
                                (forward-line -1)
                                (end-of-line)
                                (point)))))))
+
+(org-glance-module-provide)

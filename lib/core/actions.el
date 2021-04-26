@@ -5,7 +5,7 @@
 (require 'transient)
 
 (defun org-glance-action--transient-args nil
-  (transient-args 'org-glance-act))
+  (transient-args 'org-glance-form-action))
 
 (cl-defmethod org-glance-generic-method-name ((name symbol))
   (intern (format "org-glance-action-%s" name)))

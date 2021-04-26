@@ -4,7 +4,12 @@
 
 (defvar org-glance-module-root-directory (file-name-directory (f-join (__FILE__) "..")))
 
-(defmacro org-glance-module-import (module)
+(defmacro org-glance-module-filename (module)
+  `(let* ((m (format "org-glance.%s" (quote ,module)))
+          (path (concat (s-replace "." "/" m) ".el")))
+     (f-join org-glance-module-root-directory path)))
+
+(defmacro org-glance-module-import (module &rest declarations)
   `(let* ((m (format "org-glance.%s" (quote ,module)))
           (path (concat (s-replace "." "/" m) ".el")))
      (require (intern m) (f-join org-glance-module-root-directory path))))

@@ -27,3 +27,5 @@
               (org-glance-decrypt-subtree --org-glance-view-pwd)
               (org-glance--promote-subtree))
             'append 'local))
+
+(org-glance-module-provide)

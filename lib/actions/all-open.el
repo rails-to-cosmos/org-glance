@@ -22,3 +22,5 @@ then run `org-completing-read' to open it."
                       (t (user-error "Unable to find links in %s" (buffer-file-name))))))
         (goto-char point)
         (org-open-at-point))))
+
+(org-glance-module-provide)
