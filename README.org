@@ -1,13 +1,11 @@
-#+TITLE: org-glance
+#+TITLE: Org-glance: walk in the woods with pleasure
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-* Org-glance: walk in the woods with pleasure
-
-[![Build Status](https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master)](https://travis-ci.com/rails-to-cosmos/org-glance) [![Coverage Status](https://coveralls.io/repos/github/rails-to-cosmos/org-glance/badge.svg)](https://coveralls.io/github/rails-to-cosmos/org-glance)
+[[https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master][https://travis-ci.com/rails-to-cosmos/org-glance.svg?style=svg]]
 
 Fast, clean and convenient way of traversing your org-mode forest.
 
