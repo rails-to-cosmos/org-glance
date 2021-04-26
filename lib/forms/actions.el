@@ -2,8 +2,8 @@
 
 (require 'transient)
 (require 'load-relative)
-(require 'org-glance-view)
 
+(org-glance-module-import lib.core.view)
 (org-glance-module-import lib.forms.transient)
 
 (defvar org-glance-transient--view "all")

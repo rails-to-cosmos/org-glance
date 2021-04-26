@@ -37,12 +37,20 @@
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.scope)
 
-(org-glance-module-import lib.forms.action-form)
+(org-glance-module-import lib.core.view)
+(declare-function org-glance-read-view-id (org-glance-module-filename lib.core.view))
+(declare-function org-glance-list-view-ids (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view-export-filename (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view-headlines (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view-reread (org-glance-module-filename lib.core.view))
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.view))
+(declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
+(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
 
-(require-relative 'org-glance-view)
-(require-relative 'org-glance-view-metadata)
+(org-glance-module-import lib.forms.actions)
+(org-glance-module-import lib.plugins.metadata)
 
-;; Preload available actions
+;; Preload default actions
 
 (org-glance-module-import lib.actions.all-visit)
 

@@ -1,6 +1,6 @@
 (require 'org-glance-module)
-(require 'org-glance-view)
 
+(org-glance-module-import lib.core.view)
 (org-glance-module-import lib.utils.helpers)
 (org-glance-module-import lib.core.actions)
 

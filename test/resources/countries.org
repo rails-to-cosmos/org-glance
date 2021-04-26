@@ -1,8 +1,0 @@
-* Netherlands                                                                   :Country:
-* Belgium                                                                       :Country:
-* Georgia                                                                       :Country:
-* Ukraine                                                                       :Country:
-* Russia                                                                        :Country:
-** [#A] Central                                                                :Region:
-** [#B] Northwestern                                                           :Region:
-** [#C] Southern                                                               :Region:

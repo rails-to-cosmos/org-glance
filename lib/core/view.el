@@ -1,9 +1,10 @@
-;; org-glance VIEW means a set of headlines in scope of org-files.
+;; org-glance view means a set of headlines in scope of org-files
+
+(require 'org-glance-module)
 
 (require 'org)
 (require 'org-element)
 (require 'subr-x)
-(require 'org-glance-module)
 
 (org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.serde)
@@ -323,4 +324,4 @@
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
 
-(provide-me)
+(org-glance-module-provide)

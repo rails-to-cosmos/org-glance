@@ -1,3 +1,0 @@
-* TODO [#A] Build a house                                                       :Task:
-* TODO [#B] Raise a daughter                                                    :Task:
-* TODO [#C] Plant a tree                                                        :Task:

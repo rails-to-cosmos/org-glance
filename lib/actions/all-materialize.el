@@ -2,8 +2,7 @@
 
 (org-glance-module-import lib.core.serde)
 (org-glance-module-import lib.core.actions)
-
-(require 'org-glance-view)
+(org-glance-module-import lib.core.view)
 
 (org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."

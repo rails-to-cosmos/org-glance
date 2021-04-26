@@ -9,7 +9,7 @@
           (path (concat (s-replace "." "/" m) ".el")))
      (f-join org-glance-module-root-directory path)))
 
-(defmacro org-glance-module-import (module &rest declarations)
+(defmacro org-glance-module-import (module)
   `(let* ((m (format "org-glance.%s" (quote ,module)))
           (path (concat (s-replace "." "/" m) ".el")))
      (require (intern m) (f-join org-glance-module-root-directory path))))

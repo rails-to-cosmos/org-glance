@@ -1,8 +1,8 @@
 (require 'org-glance-module)
-
 (require 'org-element)
-(require 'org-glance-view)
 (require 'transient)
+
+(org-glance-module-import lib.core.view)
 
 (defun org-glance-action--transient-args nil
   (transient-args 'org-glance-form-action))

@@ -1,6 +1,7 @@
-(require 'load-relative)
+(require 'org-glance-module)
+
 (require 'nadvice)
-(require 'org-glance-view)
+(org-glance-module-import lib.core.view)
 
 (defun org-glance-view-metadata-write-visit (&rest args)
   (let* ((headline (org-element-at-point))
@@ -12,4 +13,4 @@
 
 (advice-add 'org-glance-action-visit :after #'org-glance-view-metadata-write-visit)
 
-(provide-me)
+(org-glance-module-provide)
