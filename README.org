@@ -1,5 +1,3 @@
-# -*- lexical-binding: t; -*-
-
 #+TITLE: org-glance
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
@@ -7,43 +5,14 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-#+PROPERTY: header-args:emacs-lisp :noweb yes :tangle org-glance.el :results silent
+* Org-glance: walk in the woods with pleasure
 
-* Hello
+[![Build Status](https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master)](https://travis-ci.com/rails-to-cosmos/org-glance) [![Coverage Status](https://coveralls.io/repos/github/rails-to-cosmos/org-glance/badge.svg)](https://coveralls.io/github/rails-to-cosmos/org-glance)
 
-#+begin_src emacs-lisp
-;;; org-glance.el --- org-mode traversing. Fast and convenient.     -*- lexical-binding: t -*-
+Fast, clean and convenient way of traversing your org-mode forest.
 
-;; Copyright (C) 2018-2021 Dmitry Akatov
-
-;; Author: Dmitry Akatov <akatovda@yandex.com>
-;; Created: 29 September, 2018
-;; Version: 1.0
-
-;; Keywords: org-mode tools
-;; Homepage: https://github.com/rails-to-cosmos/org-glance
-
-;; This file is not part of GNU Emacs.
-
-;; This program is free software: you can redistribute it and/or modify
-;; it under the terms of the GNU General Public License as published by
-;; the Free Software Foundation, either version 3 of the License, or
-;; (at your option) any later version.
-
-;; This program is distributed in the hope that it will be useful,
-;; but WITHOUT ANY WARRANTY; without even the implied warranty of
-;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-;; GNU General Public License for more details.
-
-;; You should have received a copy of the GNU General Public License
-;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-;;; Commentary:
-;; This package allows you to manage bookmarks and travel around the
-;; digital world with an org-mode power behind your shoulders.
-
-;;; Code:
-#+end_src
+Turn org-mode into context-aware bookmark storage, password manager,
+flexible build system or whatever you can imagine with ease.
 
 * Issues [1/13]
 ** DONE test me like https://github.com/flycheck/flycheck
@@ -54,7 +23,6 @@
 SCHEDULED: <2021-03-27 Sat 20:00>
 ** TODO org-glance fix brackets
 SCHEDULED: <2021-03-27 Sat>
-
 ** TODO [#A] [bug] unable to visit/materialize subtree with priority
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]
@@ -91,6 +59,6 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 - https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
 - https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
 
-** dist-packages
-*** https://github.com/skeeto/emacsql
-*** https://magit.vc/manual/transient/
+* dist-packages
+- https://github.com/skeeto/emacsql
+- https://magit.vc/manual/transient/
