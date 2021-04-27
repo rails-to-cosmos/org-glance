@@ -34,10 +34,12 @@ Feature: System init
   @view
   Scenario: Compile org-glance view to collect headlines and metadata
     Given I'm in a view directory
-    And I compile view "Country"
-    Then I should see directory "country"
-    And I change directory to "country"
-    Then I should see file "country.el" with contents
+    And directory "country" does not exist
+    Then I compile view "Country"
+    And directory "country" should appear
+    Then I change directory to "country"
+    And I should see 2 files there
+    And I should see file "country.el" with contents
       """
       `((nil nil nil))
       """
