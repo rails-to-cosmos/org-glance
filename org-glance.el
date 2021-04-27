@@ -105,7 +105,8 @@
   (cond ((string= view-id org-glance-view-selector:all)
          (cl-loop for view in (org-glance-list-view-ids) ; optimize me. O(N * V), should be O(N)
             do (org-glance-view-update view)))
-        (t (let ((dest-file-name (org-glance-view-export-filename view-id)))
+        (t (let ((dest-file-name (org-glance-view-export-filename view-id))
+                 (file-offsets (make-hash-table :test 'equal)))
              (mkdir (file-name-directory dest-file-name) t)
 
              (when (file-exists-p dest-file-name) ; implement merge algorithm instead of delete/create
@@ -114,11 +115,62 @@
              (cl-loop for headline in (->> view-id
                                         org-glance-view-reread
                                         org-glance-view-headlines)
-                do (org-glance-with-headline-materialized headline
-                     (org-set-property "ORG_GLANCE_SOURCE" (org-element-property :file headline))
-                     (org-set-property "ORG_GLANCE_OFFSET" (number-to-string (org-element-property :begin headline)))
-                     (append-to-file (point-min) (point-max) dest-file-name)
-                     (append-to-file "\n" nil dest-file-name)))
+                do (let* ((file (org-element-property :file headline))
+                          (init-offset (org-element-property :begin headline))
+                          (file-offset (or (gethash file file-offsets) 0))
+                          (save-silently t))
+                     ;; consider offset
+
+                     (message "******")
+                     (message "Considering offsets of new element")
+                     (message "File offset: %d" file-offset)
+                     (message "Original element: %s" headline)
+                     (message "Was: %d" init-offset)
+                     (message "Now: %d" (+ (org-element-property :begin headline)
+                                           file-offset))
+
+                     ;; Mutate headline
+                     ;; (when (not (eq 0 file-offset))
+                     ;;   (org-element-put-property headline :begin (+ init-offset
+                     ;;                                                file-offset
+                     ;;                                                1)))
+
+                     (message "Processed element: %s" headline)
+
+                     (org-glance-with-headline-materialized headline
+                       (org-set-property "ORG_GLANCE_ID" (or (org-element-property :ORG_GLANCE_ID headline)
+                                                             (secure-hash 'sha512 (buffer-string))))
+                       (let* ((original-length (- --org-glance-view-end --org-glance-view-beg))
+                              (current-length (length (s-trim (buffer-string))))
+                              (indent-offset --org-glance-view-indent)
+                              (diff-length (+ (- current-length original-length) indent-offset))
+                              (src --org-glance-view-src)
+                              (beg --org-glance-view-beg)
+                              (end --org-glance-view-beg))
+                         (when (not (eq diff-length 0))
+                           (message "*** LENGTH DIFFERS ***")
+                           (message "MATERIALIZED: ")
+                           (pp (s-trim (buffer-substring-no-properties (point-min) (point-max))))
+                           (message "-----")
+                           (message "ORIGINAL: ")
+                           (with-temp-buffer
+                                 (insert-file-contents-literally src nil beg end)
+                                 (pp (buffer-substring-no-properties (point-min) (point-max))))
+                           (message "-----")
+                           (puthash file (+ diff-length file-offset) file-offsets)
+                           (message "Indent: %d" indent-offset)
+                           (message "Original length: %d" original-length)
+                           (message "Current length: %d" current-length)
+                           (message "Diff length: %d" diff-length)
+                           (message "Overall offset: %d" (gethash file file-offsets))))
+
+                       ;; (message "Sync file %s" file)
+                       ;; (condition-case nil
+                       ;;     (org-glance-view-sync-subtree)
+                       ;;   (org-glance-view-not-modified nil))
+
+                       (append-to-file (point-min) (point-max) dest-file-name)
+                       (append-to-file "\n" nil dest-file-name))))
              (progn ;; sort headlines by TODO order
                (find-file dest-file-name)
                (goto-char (point-min))

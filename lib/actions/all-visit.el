@@ -9,15 +9,13 @@
   (let* ((file (org-element-property :file headline))
          (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
-    (message "Visit file %s" file)
+
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
     (widen)
     (goto-char point)
     (cond ((org-glance--element-equals-headline headline)
            (cl-loop while (org-up-heading-safe)) ;; expand parents
-           (org-narrow-to-subtree)
-           (widen)
            (goto-char point)
            (org-show-children))
           (t (unless buffer (kill-buffer))

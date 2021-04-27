@@ -26,7 +26,7 @@ Feature: Initialization
       * Holland :Country:
       * Belgium :Country:
       * Georgia :Country:
-      * Ukraine :Country:
+      * TODO [#B] Ukraine :Country:
       """
     When I add the file to default scope
     Then I should have 1 file in default scope
@@ -47,5 +47,7 @@ Feature: Initialization
     When I run action "visit" for headlines and type "[Country] SPC Holland RET"
     Then I should see "Holland"
 
+  @view @action
+  Scenario: Visit a headline with priority
     When I run action "visit" for headlines and type "[Country] SPC Ukraine RET"
     Then I should see "Ukraine"

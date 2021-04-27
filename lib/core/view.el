@@ -189,7 +189,7 @@
         (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
 
 (cl-defmethod org-glance-view-action-resolve ((view null) (action symbol))
-  (user-error "Headline not found."))
+  (user-error "Assertion error: unable to resolve action when view is null"))
 
 (defun org-glance-view-sync-subtree ()
   (interactive)
@@ -209,7 +209,7 @@
       (when (string= glance-hash mat-hash)
         (org-glance-view-not-modified source))
 
-      (when (y-or-n-p "Subtree has been modified. Apply changes?")
+      (when t ;; (y-or-n-p "Subtree has been modified. Apply changes?")
         (with-demoted-errors (run-hooks 'org-glance-before-materialize-sync-hook))
 
         (let ((new-contents

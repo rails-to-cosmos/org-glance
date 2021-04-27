@@ -35,16 +35,19 @@
    (list (org-element-property :TITLE headline)
          (org-element-property :raw-value headline)
          (org-element-property :begin headline)
-         (org-element-property :file headline))))
+         (org-element-property :file headline)
+         (or (org-element-property :ORG_GLANCE_ID headline)
+             (secure-hash 'sha512 (org-element-property :raw-value headline))))))
 
 (cl-defun org-glance-db--deserialize (input)
-  (cl-destructuring-bind (alias title begin file) input
+  (cl-destructuring-bind (alias title begin file hash) input
     (org-element-create
      'headline
      `(:TITLE ,alias
-              :raw-value ,title
-              :begin ,begin
-              :file ,file))))
+       :raw-value ,title
+       :begin ,begin
+       :file ,file
+       :ORG_GLANCE_ID ,hash))))
 
 (cl-defun org-glance-headlines
     (&key db
