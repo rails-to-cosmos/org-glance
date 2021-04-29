@@ -235,7 +235,8 @@
           (setq-local --org-glance-view-end end)
           (setq-local --org-glance-view-hash (org-glance-view-source-hash))
 
-          (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook)))))))
+          (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook))
+          (message "Materialized view synchronized successfully"))))))
 
 (defun org-glance-view-subtree-hash ()
   (save-restriction

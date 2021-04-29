@@ -132,4 +132,20 @@
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
+(defun org-glance:recreate-folder-structure-in-subtree-at-point ()
+  (interactive)
+  (save-excursion
+    (org-back-to-heading)
+    (loop for directory in (directory-files-recursively (org-attach-dir-get-create) ".*" t)
+       if (file-directory-p directory)
+       do (save-excursion
+            (save-restriction
+              (org-narrow-to-subtree)
+              (condition-case nil
+                  (save-excursion (search-forward directory))
+                (error (org-insert-heading '(4))
+                       (insert (file-name-nondirectory directory))
+                       (org-set-property "DIR" directory)
+                       (org-demote))))))))
+
 (org-glance-module-provide)
