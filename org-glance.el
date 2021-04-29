@@ -119,8 +119,8 @@
                           (init-offset (org-element-property :begin headline))
                           (file-offset (or (gethash file file-offsets) 0))
                           (save-silently t))
-                     ;; consider offset
 
+                     ;; consider offset
                      ;; (message "******")
                      ;; (message "Considering offsets of new element")
                      ;; (message "File offset: %d" file-offset)
@@ -136,8 +136,6 @@
                      ;; (message "Processed element: %s" headline)
 
                      (org-glance-with-headline-materialized headline
-                       (org-set-property "ORG_GLANCE_ID" (or (org-element-property :ORG_GLANCE_ID headline)
-                                                             (secure-hash 'sha512 (buffer-string))))
                        (let* ((original-length (- --org-glance-view-end --org-glance-view-beg))
                               (current-length (length (s-trim (buffer-string))))
                               (indent-offset --org-glance-view-indent)

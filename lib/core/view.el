@@ -136,11 +136,11 @@
 (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
-(cl-defmethod org-glance-view-db ((view org-glance-view))
+(cl-defmethod org-glance-view-metadata-filename ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
     (f-join org-glance-view-location
             view-id
-            (format "%s.el" view-id))))
+            (format "metadata.el" view-id))))
 
 (cl-defmethod org-glance-view-filter ((view org-glance-view))
   (-partial
@@ -155,7 +155,7 @@
   (interactive)
   (message "Reread view %s" view-id)
   (let* ((view (gethash view-id org-glance-views))
-         (db (org-glance-view-db view))
+         (db (org-glance-view-metadata-filename view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope)))
     (org-glance-db-init db (org-glance-scope-headlines scope filter))
@@ -164,7 +164,7 @@
 (defun org-glance-view-headlines (view)
   "List headlines as org-elements for VIEW."
   (org-glance-headlines
-   :db (org-glance-view-db view)
+   :db (org-glance-view-metadata-filename view)
    :scope (or (org-glance-view-scope view) org-glance-default-scope)
    :filter (org-glance-view-filter view)))
 

@@ -93,7 +93,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                       (org-glance
                        :default-choice headline
                        :scope (or (org-glance-view-scope view) org-glance-default-scope)
-                       :db (org-glance-view-db view)
+                       :db (org-glance-view-metadata-filename view)
                        :filter (org-glance-view-filter view)
                        :action (function ,action-private-method))))
 
