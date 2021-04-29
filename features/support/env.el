@@ -18,6 +18,10 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
+ )
+
+(Before
+ ;; Before each scenario is run
  (setq org-glance-default-scope (list))
 
  ;; Implement directory structure for user and system data
@@ -30,15 +34,11 @@
 
  (message "Root directory initialized: %s" org-glance-test:root-location))
 
-(Before
- ;; Before each scenario is run
- )
-
 (After
  ;; After each scenario is run
- )
+ (delete-directory org-glance-test:root-location t)
+ (message "Root directory removed on teardown"))
 
 (Teardown
  ;; After when everything has been run
- (delete-directory org-glance-test:root-location t)
- (message "Root directory removed on teardown"))
+ )
