@@ -47,7 +47,7 @@
 (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
 
-(org-glance-module-import lib.forms.actions)
+(org-glance-module-import lib.forms.action-form)
 (org-glance-module-import lib.plugins.metadata)
 
 ;; Preload default actions
@@ -121,21 +121,19 @@
                           (save-silently t))
                      ;; consider offset
 
-                     (message "******")
-                     (message "Considering offsets of new element")
-                     (message "File offset: %d" file-offset)
-                     (message "Original element: %s" headline)
-                     (message "Was: %d" init-offset)
-                     (message "Now: %d" (+ (org-element-property :begin headline)
-                                           file-offset))
-
+                     ;; (message "******")
+                     ;; (message "Considering offsets of new element")
+                     ;; (message "File offset: %d" file-offset)
+                     ;; (message "Original element: %s" headline)
+                     ;; (message "Was: %d" init-offset)
+                     ;; (message "Now: %d" (+ (org-element-property :begin headline)
+                     ;;                       file-offset))
                      ;; Mutate headline
                      ;; (when (not (eq 0 file-offset))
                      ;;   (org-element-put-property headline :begin (+ init-offset
                      ;;                                                file-offset
                      ;;                                                1)))
-
-                     (message "Processed element: %s" headline)
+                     ;; (message "Processed element: %s" headline)
 
                      (org-glance-with-headline-materialized headline
                        (org-set-property "ORG_GLANCE_ID" (or (org-element-property :ORG_GLANCE_ID headline)
@@ -146,23 +144,29 @@
                               (diff-length (+ (- current-length original-length) indent-offset))
                               (src --org-glance-view-src)
                               (beg --org-glance-view-beg)
-                              (end --org-glance-view-beg))
-                         (when (not (eq diff-length 0))
-                           (message "*** LENGTH DIFFERS ***")
-                           (message "MATERIALIZED: ")
-                           (pp (s-trim (buffer-substring-no-properties (point-min) (point-max))))
-                           (message "-----")
-                           (message "ORIGINAL: ")
-                           (with-temp-buffer
-                                 (insert-file-contents-literally src nil beg end)
-                                 (pp (buffer-substring-no-properties (point-min) (point-max))))
-                           (message "-----")
-                           (puthash file (+ diff-length file-offset) file-offsets)
-                           (message "Indent: %d" indent-offset)
-                           (message "Original length: %d" original-length)
-                           (message "Current length: %d" current-length)
-                           (message "Diff length: %d" diff-length)
-                           (message "Overall offset: %d" (gethash file file-offsets))))
+                              (end --org-glance-view-end)
+                              (bs (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+
+                         ;; (when (not (eq diff-length 0))
+                         ;;   (message "*** LENGTH DIFFERS: %d ***" diff-length)
+
+                         ;;   (with-temp-file "/tmp/org-glance-materialized.org"
+                         ;;     (insert bs))
+
+                         ;;   (with-temp-file "/tmp/org-glance-original.org"
+                         ;;     (insert-file-contents-literally src nil beg end))
+
+                         ;;   (diff "/tmp/org-glance-materialized.org"
+                         ;;         "/tmp/org-glance-original.org")
+
+                         ;;   (puthash file (+ diff-length file-offset) file-offsets)
+                         ;;   (message "Indent: %d" indent-offset)
+                         ;;   (message "Original length: %d" original-length)
+                         ;;   (message "Current length: %d" current-length)
+                         ;;   (message "Diff length: %d" diff-length)
+                         ;;   (message "Overall offset: %d" (gethash file file-offsets))
+                         ;;   (user-error "Length differs"))
+                         )
 
                        ;; (message "Sync file %s" file)
                        ;; (condition-case nil

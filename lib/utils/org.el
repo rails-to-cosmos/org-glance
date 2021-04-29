@@ -16,17 +16,61 @@
                        (org-set-property "DIR" directory)
                        (org-demote))))))))
 
-;; (defun org-glance-view:ensure-directory (view-id)
-;;   ((and (member view-id (org-get-tags nil t)) (not (org-element-property "ORG_GLANCE_ID" )))
-;;    (let* ((event-dir-abs
-;;            (let ((default-directory (f-join default-directory "~/sync/resources/stories")))
-;;              (read-directory-name "Specify story directory: ")))
-;;           (event-dir-rel (file-relative-name event-dir-abs)))
-;;      (condition-case nil
-;;          (make-directory event-dir-abs)
-;;        (error nil))
-;;      (org-set-property "DIR" event-dir-rel)
-;;      (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
-;;      (org-set-property "COOKIE_DATA" "todo recursive"))))
+(defun org-glance-view:ensure-directory (view-id)
+  ((and (member view-id (org-get-tags nil t)) (not (org-element-property "ORG_GLANCE_ID" )))
+   (let* ((event-dir-abs
+           (let ((default-directory (f-join default-directory "~/sync/resources/stories")))
+             (read-directory-name "Specify story directory: ")))
+          (event-dir-rel (file-relative-name event-dir-abs)))
+     (condition-case nil
+         (make-directory event-dir-abs)
+       (error nil))
+     (org-set-property "DIR" event-dir-rel)
+     (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
+     (org-set-property "COOKIE_DATA" "todo recursive"))))
+
+(cl-defun org-glance:generate-id-for-subtree-at-point (&optional (view-id (org-glance-read-view-id)))
+  (save-excursion
+    (org-glance--back-to-heading)
+    (save-restriction
+      (org-narrow-to-subtree)
+      (org-set-property "ORG_GLANCE_ID"
+                        (or (org-element-property :ORG_GLANCE_ID (org-element-at-point))
+                            (secure-hash 'sha512 (buffer-string)))))))
+
+(cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-read-view-id)))
+  (save-excursion
+    (org-glance--back-to-heading)
+    (save-restriction
+      (org-narrow-to-subtree)
+      (let* ((hl-name (->> (org-element-property :raw-value (org-element-at-point))
+                        (s-replace-regexp "[^a-z0-9A-Z_]" "-")
+                        (s-replace-regexp "\\-+" "-")
+                        (s-replace-regexp "\\-+$" "")))
+
+             (dir (f-join (org-glance-view-resource-location view-id)
+                          (format-time-string "date=%Y-%m-%d")
+                          hl-name)))
+
+        (org-set-property "DIR"
+                          (or (org-element-property :DIR (org-element-at-point))
+                              dir))
+
+        (org-set-property "ARCHIVE"
+                          (or (org-element-property :ARCHIVE (org-element-at-point))
+                              (f-join dir (s-downcase (format "%s.org::" view-id)))))))))
+
+(defun org-glance-capture-subtree-at-point ()
+  (interactive)
+  (save-excursion
+    (org-glance--back-to-heading)
+    (let* ((other-views (seq-difference
+                         (org-glance-list-view-ids)
+                         (mapcar #'intern (org-get-tags))))
+           (view-id (org-completing-read "Capture subtree for view: " other-views))
+           (view (org-glance-view view-id)))
+      (org-glance:generate-id-for-subtree-at-point view-id)
+      (org-glance:generate-dir-for-subtree-at-point view-id)
+      (org-toggle-tag view-id))))
 
 (org-glance-module-provide)

@@ -82,6 +82,12 @@
                 )
   id type scope)
 
+(cl-defun org-glance-view-resource-location (&optional (view-id (org-glance-read-view-id)))
+  "Path to directory where VIEW-ID resources and metadata are stored."
+  (f-join org-glance-view-location
+          (s-downcase (format "%s" view-id))
+          "resources"))
+
 (cl-defun org-glance-view-export-filename (&optional (view-id (org-glance-read-view-id)))
   "Path to file where VIEW-ID exported headlines are stored."
   (f-join org-glance-view-location
@@ -267,20 +273,6 @@
 
 (cl-defmethod org-glance-view-delete ((view-id symbol))
   (remhash view-id org-glance-views))
-
-(defun org-glance-capture-subtree-at-point ()
-  (interactive)
-  (unless (org-at-heading-p) (org-back-to-heading))
-  ;; (let* ((other-views (seq-difference
-  ;;                      (org-glance-list-view-ids)
-  ;;                      (mapcar #'intern (org-get-tags))))
-  ;;        (view-id (org-completing-read "View: " other-views))
-  ;;        (view (org-glance-view view-id)))
-  ;;   (org-toggle-tag view-id)
-  ;;   ;; (loop for type in (org-glance-view-type view)
-  ;;   ;;       do (pp type))
-  ;;   )
-  )
 
 (cl-defun org-glance-read-view-id (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
