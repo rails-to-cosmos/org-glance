@@ -92,7 +92,7 @@
   "Path to file where VIEW-ID exported headlines are stored."
   (f-join org-glance-view-location
           (s-downcase (format "%s" view-id))
-          (s-downcase (format "%s.org" view-id))))
+          (format "overview.org" view-id)))
 
 (defun org-glance-exports ()
   (org-glance--list-files-recursively org-glance-view-location))

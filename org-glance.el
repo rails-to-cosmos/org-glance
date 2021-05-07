@@ -33,6 +33,8 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.utils.helpers)
+(org-glance-module-import lib.utils.org)
+
 (org-glance-module-import lib.core.serde)
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.scope)
@@ -105,85 +107,59 @@
   (cond ((string= view-id org-glance-view-selector:all)
          (cl-loop for view in (org-glance-list-view-ids) ; optimize me. O(N * V), should be O(N)
             do (org-glance-view-update view)))
-        (t (let ((dest-file-name (org-glance-view-export-filename view-id))
-                 (file-offsets (make-hash-table :test 'equal)))
-             (mkdir (file-name-directory dest-file-name) t)
+        (t (let ((overview-file-location (org-glance-view-export-filename view-id))
+                 (file-offsets (make-hash-table :test 'equal))
+                 (headlines (->> view-id
+                              org-glance-view-reread
+                              org-glance-view-headlines)))
 
-             (when (file-exists-p dest-file-name) ; implement merge algorithm instead of delete/create
-               (delete-file dest-file-name t))
+             (mkdir (file-name-directory overview-file-location) t)
+             (when (file-exists-p overview-file-location) ; implement merge algorithm instead of delete/create
+               (delete-file overview-file-location t))
 
-             (cl-loop for headline in (->> view-id
-                                        org-glance-view-reread
-                                        org-glance-view-headlines)
-                do (let* ((file (org-element-property :file headline))
-                          (init-offset (org-element-property :begin headline))
-                          (file-offset (or (gethash file file-offsets) 0))
-                          (save-silently t))
+             (append-to-file (format "#+CATEGORY: %s\n" view-id) nil overview-file-location)
+             (append-to-file "#+STARTUP: overview\n\n" nil overview-file-location)
+             (append-to-file "#+LINK: org-glance elisp:(org-glance-headline-visit \"%s\")\n\n" nil overview-file-location)
 
-                     ;; consider offset
-                     ;; (message "******")
-                     ;; (message "Considering offsets of new element")
-                     ;; (message "File offset: %d" file-offset)
-                     ;; (message "Original element: %s" headline)
-                     ;; (message "Was: %d" init-offset)
-                     ;; (message "Now: %d" (+ (org-element-property :begin headline)
-                     ;;                       file-offset))
-                     ;; Mutate headline
-                     ;; (when (not (eq 0 file-offset))
-                     ;;   (org-element-put-property headline :begin (+ init-offset
-                     ;;                                                file-offset
-                     ;;                                                1)))
-                     ;; (message "Processed element: %s" headline)
+             (cl-loop for headline in headlines
+                do (org-glance-with-headline-materialized headline
+                     (let* ((heading (org-heading-components))
+                            (id (org-element-property :ORG_GLANCE_ID (org-element-at-point)))
+                            (todo (if (nth 2 heading)
+                                      (format " %s" (nth 2 heading))
+                                    ""))
 
-                     (org-glance-with-headline-materialized headline
-                       (let* ((original-length (- --org-glance-view-end --org-glance-view-beg))
-                              (current-length (length (s-trim (buffer-string))))
-                              (indent-offset --org-glance-view-indent)
-                              (diff-length (+ (- current-length original-length) indent-offset))
-                              (src --org-glance-view-src)
-                              (beg --org-glance-view-beg)
-                              (end --org-glance-view-end)
-                              (bs (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                            ;; (tags (nth 5 heading))
+                            (title-pure (->> (or (nth 4 heading) "")
+                                          (s-replace-regexp org-any-link-re "\\3") ;; replace org-links with its title
+                                          (s-replace-regexp "\\W*\\[.*\\]" "") ;; remove org statistics brackets
+                                          (s-trim)))
 
-                         ;; (when (not (eq diff-length 0))
-                         ;;   (message "*** LENGTH DIFFERS: %d ***" diff-length)
+                            (title (or title-pure (nth 4 heading))))
 
-                         ;;   (with-temp-file "/tmp/org-glance-materialized.org"
-                         ;;     (insert bs))
+                       (when title
+                         (if id
+                             (append-to-file (format
+                                              "*%s [[org-glance:%s][%s]]\n"
+                                              todo id title)
+                                             nil overview-file-location)
+                           (append-to-file (format
+                                            "*%s %s\n"
+                                            todo title)
+                                           nil overview-file-location))))))
 
-                         ;;   (with-temp-file "/tmp/org-glance-original.org"
-                         ;;     (insert-file-contents-literally src nil beg end))
-
-                         ;;   (diff "/tmp/org-glance-materialized.org"
-                         ;;         "/tmp/org-glance-original.org")
-
-                         ;;   (puthash file (+ diff-length file-offset) file-offsets)
-                         ;;   (message "Indent: %d" indent-offset)
-                         ;;   (message "Original length: %d" original-length)
-                         ;;   (message "Current length: %d" current-length)
-                         ;;   (message "Diff length: %d" diff-length)
-                         ;;   (message "Overall offset: %d" (gethash file file-offsets))
-                         ;;   (user-error "Length differs"))
-                         )
-
-                       ;; (message "Sync file %s" file)
-                       ;; (condition-case nil
-                       ;;     (org-glance-view-sync-subtree)
-                       ;;   (org-glance-view-not-modified nil))
-
-                       (append-to-file (point-min) (point-max) dest-file-name)
-                       (append-to-file "\n" nil dest-file-name))))
              (progn ;; sort headlines by TODO order
-               (find-file dest-file-name)
+               (find-file overview-file-location)
                (goto-char (point-min))
                (set-mark (point-max))
                (condition-case nil
                    (org-sort-entries nil ?o)
                  (error 'nil))
                (org-overview)
+               (org-align-tags t)
                (save-buffer)
                (bury-buffer))
-             dest-file-name))))
+             overview-file-location))))
 
 (cl-defun org-glance
     (&key db
