@@ -123,30 +123,8 @@
 
              (cl-loop for headline in headlines
                 do (org-glance-with-headline-materialized headline
-                     (let* ((heading (org-heading-components))
-                            (id (org-element-property :ORG_GLANCE_ID (org-element-at-point)))
-                            (todo (if (nth 2 heading)
-                                      (format " %s" (nth 2 heading))
-                                    ""))
-
-                            ;; (tags (nth 5 heading))
-                            (title-pure (->> (or (nth 4 heading) "")
-                                          (s-replace-regexp org-any-link-re "\\3") ;; replace org-links with its title
-                                          (s-replace-regexp "\\W*\\[.*\\]" "") ;; remove org statistics brackets
-                                          (s-trim)))
-
-                            (title (or title-pure (nth 4 heading))))
-
-                       (when title
-                         (if id
-                             (append-to-file (format
-                                              "*%s [[org-glance:%s][%s]]\n"
-                                              todo id title)
-                                             nil overview-file-location)
-                           (append-to-file (format
-                                            "*%s %s\n"
-                                            todo title)
-                                           nil overview-file-location))))))
+                     (append-to-file (buffer-substring-no-properties (point-min) (point-max)) nil overview-file-location)
+                     (append-to-file "\n" nil overview-file-location)))
 
              (progn ;; sort headlines by TODO order
                (find-file overview-file-location)
