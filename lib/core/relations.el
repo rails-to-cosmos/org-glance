@@ -7,9 +7,13 @@
          (headlines (org-glance-view:headlines view))
          ;; TODO extract headline id
          (headline (org-glance-scope--prompt-headlines "Headline: " headlines)))
-    ;; (beginning-of-line)
-    ;; (kill-line)
-    (insert (format "- [[Relates]] to =%s=: [[%s]]" view-id headline)))
+    (unless (looking-at "^\\W*$")
+      (end-of-line)
+      (newline))
+    (insert (format "- [[Relates to]] =%s=: [[%s]]" view-id headline)))
+
+  ;; relates to / depends on / etc?
+  ;; maybe implement directed graph in a future
 
   ;; (when (and (string= major-mode "org-mode")
   ;;            (eq this-command 'org-self-insert-command)
