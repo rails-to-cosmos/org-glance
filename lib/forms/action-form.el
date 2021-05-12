@@ -43,6 +43,6 @@
     ("m" "Materialize" org-glance-action-materialize)
     ("v" "Visit" org-glance-action-visit)]
    [("c" "Capture" org-glance-capture-subtree-at-point)
-    ("r" "Add relation" org-glance:add-relation)]])
+    ("r" "Refer" org-glance:add-relation)]])
 
 (org-glance-module-provide)
