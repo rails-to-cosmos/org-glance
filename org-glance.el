@@ -52,7 +52,7 @@
 (declare-function org-glance-view:overview-location (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
 
-(org-glance-module-import lib.core.completion)
+(org-glance-module-import lib.core.relations)
 
 (org-glance-module-import lib.forms.action-form)
 (org-glance-module-import lib.plugins.metadata)

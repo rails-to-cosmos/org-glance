@@ -39,11 +39,14 @@
    [("V" "Visit" org-glance-view-visit)]]
 
   ["Headlines"
-   ;; [("c" "Capture" org-glance-action-extract)]
    [("e" "Extract" org-glance-action-extract)]
    [("j" "Open" org-glance-action-open)]
-   ;; [("i" "Insert" org-glance-action-insert)]
    [("m" "Materialize" org-glance-action-materialize)]
-   [("v" "Visit" org-glance-action-visit)]])
+   [("v" "Visit" org-glance-action-visit)]]
+
+  ["Subtree"
+   [("c" "Capture" org-glance-capture-subtree-at-point)]
+   [("r" "Relation" org-glance:add-relation)]
+   ])
 
 (org-glance-module-provide)
