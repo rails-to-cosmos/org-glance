@@ -34,8 +34,8 @@
    [("-v" "View" org-glance-form-action-view)]]
 
   ["View"
-   [("U" "Update" org-glance-view-update)]
-   [("V" "Visit" org-glance-view-visit)]]
+   [("u" "Update" org-glance-view-update)
+    ("s" "Summary" org-glance-view-visit)]]
 
   ["Headline"
    [("e" "Extract" org-glance-action-extract)
