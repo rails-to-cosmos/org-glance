@@ -109,40 +109,43 @@
 
 (cl-defun org-glance-view-update (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
-  (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-view:list-view-ids) ; optimize me. O(N * V), should be O(N)
-            do (org-glance-view-update view)))
-        (t (let ((overview-file-location (org-glance-view:overview-location view-id))
-                 (file-offsets (make-hash-table :test 'equal))
-                 (headlines (->> view-id
-                              org-glance-view:update
-                              org-glance-view:headlines)))
+  (cond
+    ;; optimize me. O(N * V), should be O(N)
+    ;; ((string= view-id org-glance-view-selector:all)
+    ;;  (cl-loop for view in (org-glance-view:list-view-ids)
+    ;;     do (org-glance-view-update view)))
 
-             (mkdir (file-name-directory overview-file-location) t)
-             (when (file-exists-p overview-file-location) ; implement merge algorithm instead of delete/create
-               (delete-file overview-file-location t))
+    (t (let ((overview-file-location (org-glance-view:overview-location view-id))
+             (file-offsets (make-hash-table :test 'equal))
+             (headlines (->> view-id
+                          org-glance-view:update
+                          org-glance-view:headlines)))
 
-             (append-to-file (format "#+CATEGORY: %s\n" view-id) nil overview-file-location)
-             (append-to-file "#+STARTUP: overview\n\n" nil overview-file-location)
-             (append-to-file "#+LINK: org-glance elisp:(org-glance-headline-visit \"%s\")\n\n" nil overview-file-location)
+         (mkdir (file-name-directory overview-file-location) t)
+         (when (file-exists-p overview-file-location) ; implement merge algorithm instead of delete/create
+           (delete-file overview-file-location t))
 
-             (cl-loop for headline in headlines
-                do (org-glance-with-headline-materialized headline
-                     (append-to-file (buffer-substring-no-properties (point-min) (point-max)) nil overview-file-location)
-                     (append-to-file "\n" nil overview-file-location)))
+         (append-to-file (format "#+CATEGORY: %s\n" view-id) nil overview-file-location)
+         (append-to-file "#+STARTUP: overview\n\n" nil overview-file-location)
+         (append-to-file "#+LINK: org-glance elisp:(org-glance-headline-visit \"%s\")\n\n" nil overview-file-location)
 
-             (progn ;; sort headlines by TODO order
-               (find-file overview-file-location)
-               (goto-char (point-min))
-               (set-mark (point-max))
-               (condition-case nil
-                   (org-sort-entries nil ?o)
-                 (error 'nil))
-               (org-overview)
-               (org-align-tags t)
-               (save-buffer)
-               (bury-buffer))
-             overview-file-location))))
+         (cl-loop for headline in headlines
+            do (org-glance-with-headline-materialized headline
+                 (append-to-file (buffer-substring-no-properties (point-min) (point-max)) nil overview-file-location)
+                 (append-to-file "\n" nil overview-file-location)))
+
+         (progn ;; sort headlines by TODO order
+           (find-file overview-file-location)
+           (goto-char (point-min))
+           (set-mark (point-max))
+           (condition-case nil
+               (org-sort-entries nil ?o)
+             (error 'nil))
+           (org-overview)
+           (org-align-tags t)
+           (save-buffer)
+           (bury-buffer))
+         overview-file-location))))
 
 (cl-defun org-glance
     (&key db

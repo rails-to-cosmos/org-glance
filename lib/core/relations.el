@@ -2,15 +2,15 @@
 
 (defun org-glance:add-relation ()
   (interactive)
-  (let* ((view-id (org-glance-view:completing-read))
-         (view (org-glance-view:get-view-by-id view-id))
-         (headlines (org-glance-view:headlines view))
+  (let* ((headlines
+          (cl-loop for view being the hash-values of org-glance-views
+             append (org-glance-view:headlines/formatted view)))
          ;; TODO extract headline id
-         (headline (org-glance-scope--prompt-headlines "Headline: " headlines)))
+         (headline (org-completing-read "Headline: " (sort headlines #'s-less?))))
     (unless (looking-at "^\\W*$")
       (end-of-line)
       (newline))
-    (insert (format "- [[Relates to]] =%s=: [[%s]]" view-id headline)))
+    (insert (format "- Relates to [[%s]]" headline)))
 
   ;; relates to / depends on / etc?
   ;; maybe implement directed graph in a future

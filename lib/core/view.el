@@ -40,8 +40,6 @@
   :group 'org-glance
   :type 'string)
 
-(defconst org-glance-view-selector:all '!All)
-
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 
@@ -267,7 +265,7 @@
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-view:list-view-ids)))
     (if (> (length views) 1)
-        (let ((view (org-completing-read prompt (append (list org-glance-view-selector:all) views))))
+        (let ((view (org-completing-read prompt views)))
           (intern view))
       (car views))))
 
@@ -279,9 +277,9 @@
                                     (view-id (org-glance-view:completing-read)))
   (interactive)
   (let ((org-agenda-files
-         (cond ((string= view-id org-glance-view-selector:all)
-                (cl-loop for view in (org-glance-view:list-view-ids)
-                   collect (org-glance-view:overview-location view)))
+         (cond ;; ((string= view-id org-glance-view-selector:all)
+               ;;  (cl-loop for view in (org-glance-view:list-view-ids)
+               ;;     collect (org-glance-view:overview-location view)))
                (t (list (org-glance-view:overview-location view-id))))))
     (org-agenda-list)))
 
