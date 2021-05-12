@@ -35,19 +35,24 @@
 (org-glance-module-import lib.utils.helpers)
 (org-glance-module-import lib.utils.org)
 
-(org-glance-module-import lib.core.serde)
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.core.scope)
+(org-glance-module-import lib.core.serde)  ;; TODO refactor to headline structure
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.serde))
 
-(org-glance-module-import lib.core.view)
-(declare-function org-glance-read-view-id (org-glance-module-filename lib.core.view))
-(declare-function org-glance-list-view-ids (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-export-filename (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-headlines (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-reread (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.view))
+(org-glance-module-import lib.core.actions)
+
+(org-glance-module-import lib.core.scope) ;; TODO refactor
 (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
+
+(org-glance-module-import lib.core.view)
+(declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:list-view-ids (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:overview-location (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
+
+(org-glance-module-import lib.core.completion)
 
 (org-glance-module-import lib.forms.action-form)
 (org-glance-module-import lib.plugins.metadata)
@@ -102,16 +107,16 @@
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
 
-(cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view-id)))
+(cl-defun org-glance-view-update (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-list-view-ids) ; optimize me. O(N * V), should be O(N)
+         (cl-loop for view in (org-glance-view:list-view-ids) ; optimize me. O(N * V), should be O(N)
             do (org-glance-view-update view)))
-        (t (let ((overview-file-location (org-glance-view-export-filename view-id))
+        (t (let ((overview-file-location (org-glance-view:overview-location view-id))
                  (file-offsets (make-hash-table :test 'equal))
                  (headlines (->> view-id
-                              org-glance-view-reread
-                              org-glance-view-headlines)))
+                              org-glance-view:update
+                              org-glance-view:headlines)))
 
              (mkdir (file-name-directory overview-file-location) t)
              (when (file-exists-p overview-file-location) ; implement merge algorithm instead of delete/create

@@ -16,7 +16,7 @@
      (lambda (cardinality view-id)
        (let ((actual-cardinality (->> org-glance-views
                                    (gethash (intern view-id))
-                                   (org-glance-view-headlines)
+                                   (org-glance-view:headlines)
                                    (length)))
              (expected-cardinality (->> cardinality
                                      (string-to-number))))

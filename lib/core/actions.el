@@ -32,7 +32,7 @@
 (defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance-views
      when (org-glance-view-action-resolve view action)
-     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view-headlines/formatted view))))
+     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view:headlines/formatted view))))
 
 (cl-defgeneric org-glance-action-register (name type)
   "Register action NAME and limit access to it for view of specific TYPE.")

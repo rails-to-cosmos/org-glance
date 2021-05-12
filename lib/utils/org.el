@@ -29,16 +29,22 @@
      (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
      (org-set-property "COOKIE_DATA" "todo recursive"))))
 
-(cl-defun org-glance:generate-id-for-subtree-at-point (&optional (view-id (org-glance-read-view-id)))
+(cl-defun org-glance:generate-id (&optional (view-id (org-glance-view:completing-read)))
+  (format "%s-%s-%s"
+          view-id
+          (format-time-string "%Y%m%d")
+          (secure-hash 'md5 (buffer-string))))
+
+(cl-defun org-glance:generate-id-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
     (org-glance--back-to-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (org-set-property "ORG_GLANCE_ID"
                         (or (org-element-property :ORG_GLANCE_ID (org-element-at-point))
-                            (secure-hash 'sha512 (buffer-string)))))))
+                            (org-glance:generate-id view-id))))))
 
-(cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-read-view-id)))
+(cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
     (org-glance--back-to-heading)
     (save-restriction
@@ -65,7 +71,7 @@
   (save-excursion
     (org-glance--back-to-heading)
     (let* ((other-views (seq-difference
-                         (org-glance-list-view-ids)
+                         (org-glance-view:list-view-ids)
                          (mapcar #'intern (org-get-tags))))
            (view-id (org-completing-read "Capture subtree for view: " other-views))
            (view (org-glance-view view-id)))
