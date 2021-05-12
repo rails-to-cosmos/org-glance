@@ -28,8 +28,8 @@
   "Perform action on selected view/headlines"
 
   ["Analytics"
-   [("A" "Agenda" org-glance-view-agenda)
-    ("D" "Dashboard" org-glance-show-report)]
+   [("a" "Agenda" org-glance-view-agenda)
+    ("d" "Dashboard" org-glance-show-report)]
 
    [("-v" "View" org-glance-form-action-view)]]
 
