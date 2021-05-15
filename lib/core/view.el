@@ -20,6 +20,13 @@
 (defvar org-glance-view-default-type '(all)
   "Default type for all views.")
 
+(defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-view -*-
+
+#+CATEGORY: {:category}
+#+STARTUP: overview
+
+")
+
 (defvar --org-glance-view-pwd nil)
 (defvar --org-glance-view-src nil)
 (defvar --org-glance-view-beg nil)
@@ -75,11 +82,11 @@
           (s-downcase (format "%s" view-id))
           "resources"))
 
-(cl-defun org-glance-view:overview-location (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view:summary-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID exported headlines are stored."
   (f-join org-glance-view-location
           (s-downcase (format "%s" view-id))
-          (format "overview.org" view-id)))
+          (format "summary.org" view-id)))
 
 (defun org-glance-exports ()
   (org-glance--list-files-recursively org-glance-view-location))
@@ -137,16 +144,60 @@
         (downcase (symbol-name (org-glance-view-id view)))))
    view))
 
-(cl-defun org-glance-view:update (&optional
+(cl-defun org-glance-view:reread (&optional
                                     (view-id (org-glance-view:completing-read)))
   (interactive)
   (message "Reread view %s" view-id)
-  (let* ((view (gethash view-id org-glance-views))
+  (let* ((view (org-glance-view:get-view-by-id view-id))
          (db (org-glance-view-metadata-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope)))
     (org-glance-db-init db (org-glance-scope-headlines scope filter))
     view))
+
+(cl-defun org-glance-view:update (&optional (view-id (org-glance-view:completing-read)))
+  (interactive)
+  (cond
+    ;; optimize me. O(N * V), should be O(N)
+    ;; ((string= view-id org-glance-view-selector:all)
+    ;;  (cl-loop for view in (org-glance-view:list-view-ids)
+    ;;     do (org-glance-view:update view)))
+
+    (t (let ((summary-orig-file (org-glance-view:summary-location view-id))
+             (summary-temp-file (make-temp-file "org-glance-view-summary-"))
+             (file-offsets (make-hash-table :test 'equal))
+             (headlines (->> view-id
+                          org-glance-view:reread
+                          org-glance-view:headlines)))
+
+         (append-to-file
+          (org-glance-expand-template org-glance-view-summary-header-template `(:category ,view-id))
+          nil summary-temp-file)
+
+         (cl-loop for headline in headlines
+            do (org-glance-with-headline-materialized headline
+                 (append-to-file (buffer-substring-no-properties (point-min) (point-max)) nil summary-temp-file)
+                 (append-to-file "\n" nil summary-temp-file)))
+
+         (progn ;; sort headlines by TODO order
+           (find-file summary-temp-file)
+           (goto-char (point-min))
+           (set-mark (point-max))
+           (condition-case nil
+               (org-sort-entries nil ?o)
+             (error 'nil))
+           (org-overview)
+           (org-align-tags t)
+           (save-buffer)
+           (kill-buffer))
+
+         ;; apply changes to original file
+         (mkdir (file-name-directory summary-orig-file) t)
+         (when (file-exists-p summary-orig-file) ; implement merge algorithm instead of delete/create
+           (delete-file summary-orig-file t))
+         (rename-file summary-temp-file summary-orig-file)
+
+         summary-orig-file))))
 
 (defun org-glance-view:headlines (view)
   "List headlines as org-elements for VIEW."
@@ -279,15 +330,15 @@
   (let ((org-agenda-files
          (cond ;; ((string= view-id org-glance-view-selector:all)
                ;;  (cl-loop for view in (org-glance-view:list-view-ids)
-               ;;     collect (org-glance-view:overview-location view)))
-               (t (list (org-glance-view:overview-location view-id))))))
+               ;;     collect (org-glance-view:summary-location view)))
+               (t (list (org-glance-view:summary-location view-id))))))
     (org-agenda-list)))
 
 (cl-defun org-glance-view-visit
     (&optional
        (view-id (org-glance-view:completing-read)))
   (interactive)
-  (find-file (org-glance-view:overview-location view-id)))
+  (find-file (org-glance-view:summary-location view-id)))
 
 (cl-defun org-glance-def-view (id &key type scope)
   (unless (eq nil (gethash id org-glance-views))

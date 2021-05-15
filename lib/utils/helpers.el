@@ -9,6 +9,13 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$")))
 
+(defun org-glance-expand-template (s plist)
+  "expand a template containing {:keyword} with the definitions in plist"
+  (replace-regexp-in-string "{\\(:[^}]+\\)}"
+                            (lambda (arg)
+                              (let ((keyword (intern (substring arg 1 -1))))
+                                (format "%s" (plist-get plist keyword)))) s))
+
 (defun org-glance--back-to-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading)))
