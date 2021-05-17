@@ -35,8 +35,8 @@
 (org-glance-module-import lib.utils.helpers)
 (org-glance-module-import lib.utils.org)
 
-(org-glance-module-import lib.core.serde)  ;; TODO refactor to headline structure
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.serde))
+(org-glance-module-import lib.core.metastore)  ;; TODO refactor to headline structure
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 
 (org-glance-module-import lib.core.actions)
 

@@ -7,7 +7,7 @@
 (require 'subr-x)
 
 (org-glance-module-import lib.core.scope)
-(org-glance-module-import lib.core.serde)
+(org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.exceptions)
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
@@ -153,7 +153,7 @@
          (db (org-glance-view-metadata-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope)))
-    (org-glance-db-init db (org-glance-scope-headlines scope filter))
+    (org-glance-metastore:init db (org-glance-scope-headlines scope filter))
     view))
 
 (cl-defun org-glance-view:update (&optional (view-id (org-glance-view:completing-read)))

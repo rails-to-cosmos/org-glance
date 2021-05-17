@@ -1,13 +1,12 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.serde)
+(org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.view)
 
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
-         ;; (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
 
     (cond ((file-exists-p file) (find-file file))
@@ -35,7 +34,6 @@
   (save-excursion
     (org-glance-headline:expand-parents)
     (let* ((heading (list :file --org-glance-view-src
-                          :begin --org-glance-view-beg
                           :raw-value (org-element-property :raw-value (org-element-at-point))))
            (virtual-element (org-element-create 'headline heading)))
       (org-glance-action-call 'visit :on virtual-element))))

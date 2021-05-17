@@ -1,6 +1,6 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.serde)
+(org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.view)
 
