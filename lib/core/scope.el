@@ -4,8 +4,8 @@
 (org-glance-module-import lib.utils.helpers)
 
 (declare-function org-glance--list-files-recursively "lib/utils/helpers.el")
-(declare-function org-glance--read-headlines-from-file "lib/utils/helpers.el")
-(declare-function org-glance--format-headline "lib/utils/helpers.el")
+(declare-function org-glance-headline:scan-file "lib/utils/helpers.el")
+(declare-function org-glance-headline:format "lib/utils/helpers.el")
 
 (require 'org)
 
@@ -59,19 +59,17 @@
   :type 'list)
 
 (defun org-glance-scope--prompt-headlines (prompt headlines)
-  (org-completing-read prompt (mapcar #'org-glance--format-headline headlines)))
+  (org-completing-read prompt (mapcar #'org-glance-headline:format headlines)))
 
 (defun org-glance-scope--choose-headline (choice headlines)
-  (--first (string= (org-glance--format-headline it) choice) headlines))
+  (--first (string= (org-glance-headline:format it) choice) headlines))
 
 (defun org-glance-scope-headlines (scope &optional filter)
   (cl-loop
      for file in (org-glance-scope scope)
      when (member (file-name-extension file) org-glance-org-scope-extensions)
-     do (message "Glance file %s" file)
-     append (org-glance--read-headlines-from-file file filter)
+     append (org-glance-headline:scan-file file filter)
      into result
-     do (redisplay)
      finally (cl-return result)))
 
 (org-glance-module-provide)

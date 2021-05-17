@@ -9,6 +9,12 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$")))
 
+(cl-defun org-glance-headline:id (headline)
+  (let ((id (org-element-property :ORG_GLANCE_ID headline)))
+    (if (null id)
+        nil
+      (format "%s" id))))
+
 (defun org-glance-expand-template (s plist)
   "expand a template containing {:keyword} with the definitions in plist"
   (replace-regexp-in-string "{\\(:[^}]+\\)}"
@@ -16,7 +22,12 @@
                               (let ((keyword (intern (substring arg 1 -1))))
                                 (format "%s" (plist-get plist keyword)))) s))
 
-(defun org-glance--back-to-heading ()
+(defun org-glance--make-file-directory (file)
+  (let ((dir (file-name-directory file)))
+    (unless (file-exists-p dir)
+    (make-directory dir t))))
+
+(defun org-glance-headline:back-to-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading)))
 
@@ -24,7 +35,7 @@
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
 
-(defun org-glance--apply-filter (filter headline)
+(defun org-glance-headline:filter (filter headline)
   (or (null filter) (funcall filter headline)))
 
 (defun org-glance--ensure-path (path)
@@ -52,47 +63,41 @@
      append (list filename)
      append (org-glance--list-file-archives filename)))
 
-(defun org-glance-read-file-headlines (file)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (->> (buffer-substring-no-properties (point-min) (point-max))
-      read
-      eval)))
-
-(defun org-glance--format-headline (headline)
+(defun org-glance-headline:format (headline)
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
 
-(defun org-glance--read-headlines-from-file (file &optional filter)
+(defun org-glance-headline:scan-file (file &optional filter)
   (with-temp-buffer
     (insert-file-contents file)
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (headline)
-        (when (org-glance--apply-filter filter headline)
+        (when (and (org-glance-headline-p headline)
+                   (org-glance-headline:filter filter headline))
           (plist-put (cadr headline) :file file)
           headline)))))
 
-(defun org-glance--promote-subtree ()
-  (let ((promote-level 0))
-    (cl-loop while (condition-case nil
-                       (org-with-limited-levels (org-map-tree 'org-promote) t)
-                     (error nil))
-       do (cl-incf promote-level))
-    promote-level))
+(defun org-glance-headline:promote ()
+  (cl-loop while (condition-case nil
+                     (org-with-limited-levels (org-map-tree 'org-promote) t)
+                   (error nil))
+     with promote-level = 0
+     do (cl-incf promote-level)
+     finally (return promote-level)))
 
-(defun org-glance--demote-subtree (level)
+(defun org-glance-headline:demote (level)
   (cl-loop repeat level
      do (org-with-limited-levels
          (org-map-tree 'org-demote))))
 
-(defun org-glance--element-equals-headline (headline)
-  (let ((element-title (org-element-property :raw-value (org-element-at-point)))
-        (headline-title (org-element-property :raw-value headline)))
-    (condition-case nil
-        (s-contains? element-title headline-title)
-      (error nil))))
+(cl-defun org-glance-headline-p (headline)
+  (not (null (org-glance-headline:id headline))))
 
-(defun org-glance-encrypt-subtree (&optional password)
+(cl-defun org-glance-headline:eq (headline &optional (other (org-element-at-point)))
+  (string= (org-glance-headline:id headline)
+           (org-glance-headline:id other)))
+
+(defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
   (interactive)
   (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
@@ -109,7 +114,7 @@
       (kill-region beg end)
       (insert encrypted))))
 
-(defun org-glance-decrypt-subtree (&optional password)
+(defun org-glance-headline:decrypt (&optional password)
   "Decrypt subtree at point with PASSWORD."
   (interactive)
   (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
@@ -138,5 +143,8 @@
                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
+
+(cl-defun org-glance-headline:expand-parents ()
+  (cl-loop while (org-up-heading-safe)))
 
 (org-glance-module-provide)

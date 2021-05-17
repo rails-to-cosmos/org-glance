@@ -37,7 +37,7 @@
 
 (cl-defun org-glance:generate-id-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
-    (org-glance--back-to-heading)
+    (org-glance-headline:back-to-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (org-set-property "ORG_GLANCE_ID"
@@ -46,7 +46,7 @@
 
 (cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
-    (org-glance--back-to-heading)
+    (org-glance-headline:back-to-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((hl-name (->> (org-element-property :raw-value (org-element-at-point))
@@ -66,17 +66,19 @@
                           (or (org-element-property :ARCHIVE (org-element-at-point))
                               (f-join dir (s-downcase (format "%s.org::" view-id)))))))))
 
-(defun org-glance-capture-subtree-at-point ()
+(defun org-glance-capture-subtree-at-point (&optional view-id)
   (interactive)
   (save-excursion
-    (org-glance--back-to-heading)
-    (let* ((other-views (seq-difference
-                         (org-glance-view:list-view-ids)
-                         (mapcar #'intern (org-get-tags))))
-           (view-id (org-completing-read "Capture subtree for view: " other-views))
+    (org-glance-headline:back-to-heading)
+    (let* ((view-id (if view-id
+                        (symbol-name view-id)
+                      (org-completing-read "Capture subtree for view: " (seq-difference
+                                                                         (org-glance-view:list-view-ids)
+                                                                         (mapcar #'intern (org-get-tags))))))
            (view (org-glance-view view-id)))
       (org-glance:generate-id-for-subtree-at-point view-id)
       (org-glance:generate-dir-for-subtree-at-point view-id)
-      (org-toggle-tag view-id))))
+      (unless (member (downcase view-id) (org-glance--collect-tags))
+        (org-toggle-tag view-id)))))
 
 (org-glance-module-provide)
