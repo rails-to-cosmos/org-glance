@@ -367,9 +367,10 @@
     (let ((org-agenda-files org-glance-view-agenda-files))
       (org-agenda-list))
 
-    (with-current-buffer org-agenda-buffer
-      (make-local-variable 'org-agenda-files)
-      (setq-local org-agenda-files org-glance-view-agenda-files))))
+    ;; (with-current-buffer org-agenda-buffer
+    ;;   (make-local-variable 'org-agenda-files)
+    ;;   (setq-local org-agenda-files org-glance-view-agenda-files))
+    ))
 
 (cl-defun org-glance-view-visit
     (&optional
