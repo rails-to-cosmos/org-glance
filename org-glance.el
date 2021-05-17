@@ -33,21 +33,28 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.utils.helpers)
-(org-glance-module-import lib.core.serde)
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.core.scope)
+(org-glance-module-import lib.utils.org)
 
-(org-glance-module-import lib.core.view)
-(declare-function org-glance-read-view-id (org-glance-module-filename lib.core.view))
-(declare-function org-glance-list-view-ids (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-export-filename (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-headlines (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view-reread (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.view))
+(org-glance-module-import lib.core.serde)  ;; TODO refactor to headline structure
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.serde))
+
+(org-glance-module-import lib.core.actions)
+
+(org-glance-module-import lib.core.scope) ;; TODO refactor
 (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
 
-(org-glance-module-import lib.forms.actions)
+(org-glance-module-import lib.core.view)
+(declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:list-view-ids (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:summary-location (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:reread (org-glance-module-filename lib.core.view))
+
+(org-glance-module-import lib.core.relations)
+
+(org-glance-module-import lib.forms.action-form)
 (org-glance-module-import lib.plugins.metadata)
 
 ;; Preload default actions
@@ -99,37 +106,6 @@
       (goto-char (point-min))
       (org-ctrl-c-ctrl-c))
     (switch-to-buffer report-buffer)))
-
-(cl-defun org-glance-view-update (&optional (view-id (org-glance-read-view-id)))
-  (interactive)
-  (cond ((string= view-id org-glance-view-selector:all)
-         (cl-loop for view in (org-glance-list-view-ids) ; optimize me. O(N * V), should be O(N)
-            do (org-glance-view-update view)))
-        (t (let ((dest-file-name (org-glance-view-export-filename view-id)))
-             (mkdir (file-name-directory dest-file-name) t)
-
-             (when (file-exists-p dest-file-name) ; implement merge algorithm instead of delete/create
-               (delete-file dest-file-name t))
-
-             (cl-loop for headline in (->> view-id
-                                        org-glance-view-reread
-                                        org-glance-view-headlines)
-                do (org-glance-with-headline-materialized headline
-                     (org-set-property "ORG_GLANCE_SOURCE" (org-element-property :file headline))
-                     (org-set-property "ORG_GLANCE_OFFSET" (number-to-string (org-element-property :begin headline)))
-                     (append-to-file (point-min) (point-max) dest-file-name)
-                     (append-to-file "\n" nil dest-file-name)))
-             (progn ;; sort headlines by TODO order
-               (find-file dest-file-name)
-               (goto-char (point-min))
-               (set-mark (point-max))
-               (condition-case nil
-                   (org-sort-entries nil ?o)
-                 (error 'nil))
-               (org-overview)
-               (save-buffer)
-               (bury-buffer))
-             dest-file-name))))
 
 (cl-defun org-glance
     (&key db

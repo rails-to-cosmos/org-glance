@@ -60,3 +60,4 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 * dist-packages
 - https://github.com/skeeto/emacsql
 - https://magit.vc/manual/transient/
+- https://altair-viz.github.io/getting_started/overview.html

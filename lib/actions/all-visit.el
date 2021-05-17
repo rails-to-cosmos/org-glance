@@ -7,27 +7,33 @@
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
   (let* ((file (org-element-property :file headline))
-         (point (org-element-property :begin headline))
+         ;; (point (org-element-property :begin headline))
          (buffer (get-file-buffer file)))
-    (message "Visit file %s" file)
+
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
+
     (widen)
-    (goto-char point)
-    (cond ((org-glance--element-equals-headline headline)
-           (cl-loop while (org-up-heading-safe)) ;; expand parents
-           (org-narrow-to-subtree)
-           (widen)
-           (goto-char point)
-           (org-show-children))
-          (t (unless buffer (kill-buffer))
-             (message "Unable to visit headline %s" headline)
-             (org-glance-db-outdated "Visited headline cache corrupted, please reread")))))
+
+    (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
+                    (lambda (hl) (and (org-glance-headline:eq hl headline)
+                                 (org-element-property :begin hl))))))
+
+      (unless points
+        (org-glance-db-outdated "Headline not found in file %s: %s" file headline))
+
+      (when (> (length points) 1)
+        (warn "Headline ID %s not unique" (org-glance-headline:id headline)))
+
+      (goto-char (car points))
+      (save-excursion
+        (org-glance-headline:expand-parents))
+      (org-show-children))))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
   (save-excursion
-    (cl-loop while (org-up-heading-safe))
+    (org-glance-headline:expand-parents)
     (let* ((heading (list :file --org-glance-view-src
                           :begin --org-glance-view-beg
                           :raw-value (org-element-property :raw-value (org-element-at-point))))
