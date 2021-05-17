@@ -355,8 +355,7 @@
   "Run completing read PROMPT on registered views filtered by TYPE."
   (gethash (org-glance-view:completing-read prompt) org-glance-views))
 
-(cl-defun org-glance-view-agenda (&optional
-                                    (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view-agenda (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (let ((org-glance-view-agenda-files
          (cond ;; ((string= view-id org-glance-view-selector:all)
