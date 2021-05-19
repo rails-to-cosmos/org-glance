@@ -7,7 +7,7 @@
 (defvar org-glance-properties-ignore-patterns
   (append
    org-special-properties
-   '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE")))
+   '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
 (cl-defun org-glance-headline:id (headline)
   (let ((id (org-element-property :ORG_GLANCE_ID headline)))
