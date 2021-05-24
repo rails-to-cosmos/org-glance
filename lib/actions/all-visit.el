@@ -33,10 +33,9 @@
   (interactive)
   (save-excursion
     (org-glance-headline:expand-parents)
-    (let* ((heading (list :file --org-glance-view-src
-                          :raw-value (org-element-property :raw-value (org-element-at-point))))
-           (virtual-element (org-element-create 'headline heading)))
-      (org-glance-action-call 'visit :on virtual-element))))
+    (let* ((id (org-element-property :ORG_GLANCE_ID (org-element-at-point)))
+           (hl (org-glance-headline:by-id id)))
+      (org-glance-action-call 'visit :on hl))))
 
 (define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-view-visit-original-heading)
 

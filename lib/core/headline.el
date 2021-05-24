@@ -11,6 +11,6 @@
                        org-glance-metastore:read)
      for headline = (gethash id metastore)
      when headline
-     collect (org-glance-metastore:deserialize headline)))
+     do (return (org-glance-metastore:deserialize headline))))
 
 (org-glance-module-provide)
