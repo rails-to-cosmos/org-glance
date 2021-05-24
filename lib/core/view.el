@@ -100,14 +100,14 @@
   "List registered views."
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(defun org-glance-view:headline-at-point-view-ids ()
+(cl-defun org-glance-view:headline-view-ids (&optional headline)
   (-intersection (org-glance--collect-tags)
                  (cl-loop for tag in (org-glance-view:list-view-ids)
                     collect (downcase (symbol-name tag)))))
 
 (defun org-glance-view:back-to-heading ()
   (org-glance-headline:back-to-heading)
-  (or (org-glance-view:headline-at-point-view-ids)
+  (or (org-glance-view:headline-view-ids)
       (progn
         (org-up-element)
         (org-glance-view:back-to-heading))))
@@ -206,7 +206,6 @@
          (modified 0))
     (cl-loop
        for file in (org-glance-scope scope)
-       when (member (file-name-extension file) org-glance-org-scope-extensions)
        do (save-window-excursion
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -217,7 +216,7 @@
                   (org-glance-capture-subtree-at-point view-id)
                   (message "Patch file %s headline %s" file headline)
                   (cl-incf modified))))))
-    (message "%d files successfully modified" modified)))
+    (message "%d headlines successfully modified" modified)))
 
 (cl-defgeneric org-glance-view:headlines (view))
 

@@ -15,8 +15,8 @@
     (widen)
 
     (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                    (lambda (hl) (and (org-glance-headline:eq hl headline)
-                                 (org-element-property :begin hl))))))
+                    (lambda (hl) (when (org-glance-headline:eq hl headline)
+                              (org-element-property :begin hl))))))
 
       (unless points
         (org-glance-db-outdated "Headline not found in file %s: %s" file headline))

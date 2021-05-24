@@ -9,7 +9,7 @@
 
 (require 'org)
 
-(defvar org-glance-org-scope-extensions
+(defvar org-glance-scope:extensions
   '("org" "org_archive"))
 
 (defvar org-glance-scope--default-scope-alist
@@ -22,12 +22,15 @@
 
 (cl-defmethod org-glance-scope ((lfob string))
   "Return list of file LFOB if exists."
-  (let ((file (expand-file-name lfob)))
-    (cond
-      ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
-      ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-      ((f-directory? file) (org-glance--list-files-recursively file))
-      (t file))))
+  (let* ((file (expand-file-name lfob))
+         (files (cond
+                  ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
+                  ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
+                  ((f-directory? file) (org-glance--list-files-recursively file))
+                  (t (list file)))))
+    (cl-loop for file in files
+       when (member (file-name-extension file) org-glance-scope:extensions)
+       collect file)))
 
 (cl-defmethod org-glance-scope ((lfob sequence))
   "Adapt each element of LFOB."
@@ -67,7 +70,6 @@
 (defun org-glance-scope-headlines (scope &optional filter)
   (cl-loop
      for file in (org-glance-scope scope)
-     when (member (file-name-extension file) org-glance-org-scope-extensions)
      append (org-glance-headline:scan-file file filter)
      into result
      finally (cl-return result)))

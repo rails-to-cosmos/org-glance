@@ -79,6 +79,7 @@
       (org-glance:generate-id-for-subtree-at-point view-id)
       (org-glance:generate-dir-for-subtree-at-point view-id)
       (unless (member (downcase view-id) (org-glance--collect-tags))
-        (org-toggle-tag view-id)))))
+        (org-toggle-tag view-id))
+      (org-archive-subtree))))
 
 (org-glance-module-provide)
