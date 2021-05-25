@@ -27,6 +27,7 @@
       (goto-char (car points))
       (save-excursion
         (org-glance-headline:expand-parents))
+      (org-overview)
       (org-show-children))))
 
 (defun org-glance-view-visit-original-heading ()
