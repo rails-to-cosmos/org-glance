@@ -195,17 +195,14 @@
 
     summary-orig-file))
 
-(cl-defun org-glance-view:patch (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view:doctor (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
-  (message "Patch view %s" view-id)
-
   (let* ((view (org-glance-view:get-view-by-id view-id))
          (db (org-glance-view-metadata-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope))
          (modified 0))
-    (cl-loop
-       for file in (org-glance-scope scope)
+    (cl-loop for file in (org-glance-scope scope)
        do (save-window-excursion
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -213,10 +210,16 @@
                 (when (and (not (org-glance-headline-p headline))
                            (org-glance-headline:filter filter headline))
                   (goto-char (org-element-property :begin headline))
-                  (org-glance-capture-subtree-at-point view-id)
-                  (message "Patch file %s headline %s" file headline)
-                  (cl-incf modified))))))
-    (message "%d headlines successfully modified" modified)))
+                  (save-restriction
+                    (org-narrow-to-subtree)
+                    (hlt-highlight-region (point-min) (point-max))
+                    (when (y-or-n-p "Broken properties detected. Capture headline?")
+                      (org-glance-capture-subtree-at-point view-id)
+                      (message "Patch file %s headline %s" file headline)
+                      (cl-incf modified))))))))
+    (if (> modified 0)
+        (message "%d headlines modified" modified)
+      (message "View %s is up-to-date" view-id))))
 
 (cl-defgeneric org-glance-view:headlines (view))
 
