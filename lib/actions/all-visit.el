@@ -11,7 +11,7 @@
 (defun org-glance-view-visit-original-heading ()
   (interactive)
   (save-excursion
-    (org-glance-headline:move-top-level)
+    (org-glance-headline:goto-first-level-headline)
     (let* ((id (org-element-property :ORG_GLANCE_ID (org-element-at-point)))
            (hl (org-glance-headline:by-id id)))
       (org-glance-action-call 'visit :on hl))))

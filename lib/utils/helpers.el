@@ -15,6 +15,23 @@
         nil
       (format "%s" id))))
 
+(cl-defun org-glance-headline:title (hl)
+  (org-element-property :raw-value hl))
+
+(cl-defun org-glance-headline:view-id (hl)
+  (org-element-property :ORG_GLANCE_VIEW_ID hl))
+
+(cl-defun org-glance-headline:view-ids (&optional hl)
+  (when hl
+    (org-glance-headline:visit hl))
+
+  (save-excursion
+    (org-glance-headline:beginning-of-nearest-headline)
+    (cl-loop for tag in (org-glance-view:ids)
+       for org-tags = (mapcar #'downcase (org-get-tags nil t))
+       when (member (downcase (symbol-name tag)) org-tags)
+       collect tag)))
+
 (defun org-glance-expand-template (s plist)
   "expand a template containing {:keyword} with the definitions in plist"
   (replace-regexp-in-string "{\\(:[^}]+\\)}"
@@ -144,18 +161,21 @@
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(cl-defun org-glance-headline:move-top-level ()
+(cl-defun org-glance-headline:goto-first-level-headline ()
   (cl-loop while (org-up-heading-safe)))
 
 (cl-defun org-glance-headline:expand-parents ()
   (save-excursion
-    (org-glance-headline:move-top-level)))
+    (org-glance-headline:goto-first-level-headline)))
 
 (cl-defun org-glance-headline:beginning-of-nearest-headline ()
   (save-excursion
-    (unless (org-at-heading-p) (org-back-to-heading))
-    (beginning-of-line)
+    (org-glance-headline:goto-beginning-of-nearest-headline)
     (point)))
+
+(cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
+  (unless (org-at-heading-p) (org-back-to-heading))
+  (beginning-of-line))
 
 (cl-defun org-glance-headline:end-of-subtree ()
   (save-excursion

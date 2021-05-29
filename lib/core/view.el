@@ -104,14 +104,9 @@
   "List registered views."
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(cl-defun org-glance-view:headline-view-ids (&optional headline)
-  (-intersection (org-glance--collect-tags)
-                 (cl-loop for tag in (org-glance-view:ids)
-                    collect (downcase (symbol-name tag)))))
-
 (defun org-glance-view:back-to-heading ()
   (org-glance-headline:back-to-heading)
-  (or (org-glance-view:headline-view-ids)
+  (or (org-glance-headline:view-ids)
       (progn
         (org-up-element)
         (org-glance-view:back-to-heading))))
@@ -285,7 +280,7 @@
 (defun org-glance-view-sync-subtree ()
   (interactive)
   (save-excursion
-    (org-glance-headline:move-top-level)
+    (org-glance-headline:goto-first-level-headline)
     (let* ((source --org-glance-view-src)
            (beg --org-glance-view-beg)
            (end --org-glance-view-end)
@@ -355,7 +350,7 @@
         (with-temp-buffer
           (org-mode)
           (insert (s-trim subtree))
-          (org-glance-headline:move-top-level)
+          (org-glance-headline:goto-first-level-headline)
           (org-glance-headline:promote)
           (buffer-hash))))))
 

@@ -16,6 +16,13 @@
    ;; headline not found
    (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id)))
 
+(cl-defun org-glance-headline:at-point ()
+  "Get org-glance-headline from subtree at point.
+Subtree must satisfy the requirements of `org-glance-headline-p'"
+  (save-excursion
+    (org-glance-headline:goto-beginning-of-nearest-headline)
+    (org-glance-headline:by-id (org-glance-headline:id (org-element-at-point)))))
+
 (cl-defun org-glance-headline:search-buffer (headline)
   "Search buffer for HEADLINE and return its point.
 Raise `org-glance-headline-not-found` error on fail.''"
