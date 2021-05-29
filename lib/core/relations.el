@@ -16,19 +16,30 @@
   (goto-char (org-log-beginning t))
   (insert (format "%s\n" note)))
 
+(s-replace-regexp "^TODO\\W+" "" "TODO Hello there")
+
 (cl-defun org-glance:add-relation (&optional (hl (org-glance-headline:choose))
                                      (relstate "Related to")
                                      (bidirectional t))
   (interactive)
-  (org-glance-headline:add-log-note
-   (format "- [ ] %s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s"
-           relstate
-           (org-glance-headline:view-id hl)
-           (org-glance-headline:id hl)
-           (org-glance-headline:title hl)
-           (format-time-string
-	    (org-time-stamp-format 'long 'inactive)
-	    org-log-note-effective-time)))
+
+  (let* ((todo-state (org-glance-headline:state hl))
+         (todo-label (if todo-state (format " *%s*" todo-state) ""))
+         (title (s-replace-regexp (format "^%s\\W*" todo-state) "" (org-glance-headline:title hl)))
+         (id (org-glance-headline:id hl))
+         (view-id (org-glance-headline:view-id hl))
+         (now (format-time-string
+	       (org-time-stamp-format 'long 'inactive)
+	       org-log-note-effective-time)))
+    (org-glance-headline:add-log-note
+     (format "- [ ] %s%s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s"
+             relstate
+             todo-label
+             view-id
+             id
+             title
+             now)))
+
 
   (when bidirectional
     (let* ((source-view-ids (org-glance-headline:view-ids))

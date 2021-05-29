@@ -18,6 +18,12 @@
 (cl-defun org-glance-headline:title (hl)
   (org-element-property :raw-value hl))
 
+(cl-defun org-glance-headline:state (hl)
+  (save-window-excursion
+    (save-excursion
+      (org-glance-headline:visit (org-glance-headline:id hl))
+      (org-get-todo-state))))
+
 (cl-defun org-glance-headline:view-id (hl)
   (org-element-property :ORG_GLANCE_VIEW_ID hl))
 
