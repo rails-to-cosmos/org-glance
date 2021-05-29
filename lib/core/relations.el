@@ -11,20 +11,24 @@
                                (org-element-put-property hl :ORG_GLANCE_VIEW_ID vid))))))
     (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
 
+(cl-defun org-glance-headline:add-log-note (note)
+  (org-glance-headline:goto-beginning-of-nearest-headline)
+  (goto-char (org-log-beginning t))
+  (insert (format "%s\n" note)))
+
 (cl-defun org-glance:add-relation (&optional (hl (org-glance-headline:choose))
                                      (relstate "Related to")
                                      (bidirectional t))
   (interactive)
-  (org-glance-headline:goto-beginning-of-nearest-headline)
-  (goto-char (org-log-beginning t))
-  (insert (format "- %s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s\n"
-                  relstate
-                  (org-glance-headline:view-id hl)
-                  (org-glance-headline:id hl)
-                  (org-glance-headline:title hl)
-                  (format-time-string
-		   (org-time-stamp-format 'long 'inactive)
-		   org-log-note-effective-time)))
+  (org-glance-headline:add-log-note
+   (format "- [ ] %s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s"
+           relstate
+           (org-glance-headline:view-id hl)
+           (org-glance-headline:id hl)
+           (org-glance-headline:title hl)
+           (format-time-string
+	    (org-time-stamp-format 'long 'inactive)
+	    org-log-note-effective-time)))
 
   (when bidirectional
     (let* ((source-view-ids (org-glance-headline:view-ids))
