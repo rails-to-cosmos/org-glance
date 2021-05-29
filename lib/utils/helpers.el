@@ -147,4 +147,18 @@
 (cl-defun org-glance-headline:expand-parents ()
   (cl-loop while (org-up-heading-safe)))
 
+(cl-defun org-glance-headline:beginning-of-nearest-headline ()
+  (save-excursion
+    (unless (org-at-heading-p) (org-back-to-heading))
+    (beginning-of-line)
+    (point)))
+
+(cl-defun org-glance-headline:end-of-subtree ()
+  (save-excursion
+    (org-end-of-subtree t)))
+
+(cl-defun org-glance-headline:buffer-contents (beg end)
+  (->> (buffer-substring-no-properties beg end)
+    (s-trim)))
+
 (org-glance-module-provide)

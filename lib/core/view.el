@@ -359,6 +359,8 @@
 
 (cl-defun org-glance-view-agenda (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
+
+  (cond (()))
   (let ((org-glance-view-agenda-files
          (cond ;; ((string= view-id org-glance-view-selector:all)
            ;;  (cl-loop for view in (org-glance-view:list-view-ids)
