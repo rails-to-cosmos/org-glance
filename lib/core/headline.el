@@ -4,14 +4,17 @@
 
 (cl-defun org-glance-headline:by-id (id)
   "Get org-element headline by ID."
-  (cl-loop for vid in (org-glance-view:ids)
-     for metastore = (->> vid
-                       org-glance-view
-                       org-glance-view-metadata-location
-                       org-glance-metastore:read)
-     for headline = (gethash id metastore)
-     when headline
-     do (return (org-glance-metastore:deserialize headline))))
+  (or
+   (cl-loop for vid in (org-glance-view:ids)
+      for metastore = (->> vid
+                        org-glance-view
+                        org-glance-view-metadata-location
+                        org-glance-metastore:read)
+      for headline = (gethash id metastore)
+      when headline
+      do (return (org-glance-metastore:deserialize headline)))
+   ;; headline not found
+   (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id)))
 
 (cl-defun org-glance-headline:search-buffer (headline)
   "Search buffer for HEADLINE and return its point.
