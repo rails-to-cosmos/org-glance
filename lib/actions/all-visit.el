@@ -6,34 +6,12 @@
 
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."
-  (let* ((file (org-element-property :file headline))
-         (buffer (get-file-buffer file)))
-
-    (cond ((file-exists-p file) (find-file file))
-          (t (org-glance-db-outdated "File not found: %s" file)))
-
-    (widen)
-
-    (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                    (lambda (hl) (when (org-glance-headline:eq hl headline)
-                              (org-element-property :begin hl))))))
-
-      (unless points
-        (org-glance-db-outdated "Headline not found in file %s: %s" file headline))
-
-      (when (> (length points) 1)
-        (warn "Headline ID %s not unique" (org-glance-headline:id headline)))
-
-      (goto-char (car points))
-      (save-excursion
-        (org-glance-headline:expand-parents))
-      (org-overview)
-      (org-cycle 'contents))))
+  (org-glance-headline:visit (org-element-property :ORG_GLANCE_ID headline)))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)
   (save-excursion
-    (org-glance-headline:expand-parents)
+    (org-glance-headline:move-top-level)
     (let* ((id (org-element-property :ORG_GLANCE_ID (org-element-at-point)))
            (hl (org-glance-headline:by-id id)))
       (org-glance-action-call 'visit :on hl))))

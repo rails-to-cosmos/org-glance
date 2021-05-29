@@ -32,7 +32,7 @@
 (defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance-views
      when (org-glance-view-action-resolve view action)
-     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view:headlines/formatted view))))
+     append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view:headlines* view))))
 
 (cl-defgeneric org-glance-action-register (name type)
   "Register action NAME and limit access to it for view of specific TYPE.")
@@ -77,10 +77,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                              (choice (unwind-protect
                                           (org-completing-read (format "%s: " action) headlines)
                                        nil))
-                             (view (progn
-                                     ;; (message "Choice: %s" choice)
-                                     ;; (message "Headlines: %s" headlines)
-                                     (alist-get choice headlines nil nil #'string=)))
+                             (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
                                             (org-glance-view-action-resolve view)
                                             (org-glance-concrete-method-name action)))

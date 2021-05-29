@@ -49,7 +49,7 @@
 (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:list-view-ids (org-glance-module-filename lib.core.view))
+(declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:summary-location (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:reread (org-glance-module-filename lib.core.view))
 

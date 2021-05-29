@@ -144,8 +144,12 @@
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(cl-defun org-glance-headline:expand-parents ()
+(cl-defun org-glance-headline:move-top-level ()
   (cl-loop while (org-up-heading-safe)))
+
+(cl-defun org-glance-headline:expand-parents ()
+  (save-excursion
+    (org-glance-headline:move-top-level)))
 
 (cl-defun org-glance-headline:beginning-of-nearest-headline ()
   (save-excursion

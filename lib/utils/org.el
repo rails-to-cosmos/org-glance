@@ -73,13 +73,17 @@
     (let* ((view-id (if view-id
                         (symbol-name view-id)
                       (org-completing-read "Capture subtree for view: " (seq-difference
-                                                                         (org-glance-view:list-view-ids)
+                                                                         (org-glance-view:ids)
                                                                          (mapcar #'intern (org-get-tags))))))
            (view (org-glance-view view-id)))
       (org-glance:generate-id-for-subtree-at-point view-id)
       (org-glance:generate-dir-for-subtree-at-point view-id)
       (unless (member (downcase view-id) (org-glance--collect-tags))
         (org-toggle-tag view-id))
-      (org-archive-subtree))))
+      (let ((archive-location (car (org-archive--compute-location
+                                    (or (org-entry-get nil "ARCHIVE" 'inherit)
+	                                org-archive-location)))))
+        (org-archive-subtree)
+        (find-file archive-location)))))
 
 (org-glance-module-provide)

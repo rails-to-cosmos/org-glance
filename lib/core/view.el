@@ -100,13 +100,13 @@
 (cl-defun org-glance-view-not-modified (format &rest args)
   (signal 'org-glance-view-not-modified (list (apply #'format-message format args))))
 
-(defun org-glance-view:list-view-ids ()
+(defun org-glance-view:ids ()
   "List registered views."
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
 (cl-defun org-glance-view:headline-view-ids (&optional headline)
   (-intersection (org-glance--collect-tags)
-                 (cl-loop for tag in (org-glance-view:list-view-ids)
+                 (cl-loop for tag in (org-glance-view:ids)
                     collect (downcase (symbol-name tag)))))
 
 (defun org-glance-view:back-to-heading ()
@@ -157,7 +157,7 @@
     (message "Update view %s" vid))
 
   (org-glance-view:if-all? vid
-      (cl-loop for vid in (org-glance-view:list-view-ids)
+      (cl-loop for vid in (org-glance-view:ids)
          append (org-glance-view:reread vid))
     (let* ((view (org-glance-view:get-view-by-id vid))
            (db (org-glance-view-metadata-location view))
@@ -253,7 +253,7 @@
    :scope (or (org-glance-view-scope view) org-glance-default-scope)
    :filter (org-glance-view-filter view)))
 
-(cl-defmethod org-glance-view:headlines/formatted ((view org-glance-view))
+(cl-defmethod org-glance-view:headlines* ((view org-glance-view))
   "List headlines as formatted strings for VIEW."
   (->> view
     org-glance-view:headlines
@@ -285,7 +285,7 @@
 (defun org-glance-view-sync-subtree ()
   (interactive)
   (save-excursion
-    (org-glance-headline:expand-parents)
+    (org-glance-headline:move-top-level)
     (let* ((source --org-glance-view-src)
            (beg --org-glance-view-beg)
            (end --org-glance-view-end)
@@ -355,7 +355,7 @@
         (with-temp-buffer
           (org-mode)
           (insert (s-trim subtree))
-          (org-glance-headline:expand-parents)
+          (org-glance-headline:move-top-level)
           (org-glance-headline:promote)
           (buffer-hash))))))
 
@@ -364,7 +364,7 @@
 
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-view:list-view-ids)))
+  (let ((views (org-glance-view:ids)))
     (if (> (length views) 1)
         (let ((view (org-completing-read prompt views)))
           (intern view))
@@ -375,7 +375,7 @@
   (gethash (org-glance-view:completing-read prompt) org-glance-views))
 
 (cl-defun org-glance-view:summary-locations ()
-  (cl-loop for view in (org-glance-view:list-view-ids)
+  (cl-loop for view in (org-glance-view:ids)
      collect (org-glance-view:summary-location view)))
 
 (cl-defmacro org-glance-view:if-all? (vid do-for-all-forms &rest do-for-specific-view-forms)
