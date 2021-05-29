@@ -37,10 +37,12 @@
     ("j" "Jump" org-glance-action-open)]]
 
   ["Manage views"
-   [("v a" "Agenda" org-glance-view-agenda)
-    ("v d" "Dashboard" org-glance-show-report)]
+   [("v a" "Agenda" org-glance-view:agenda)
+    ;; ("v d" "Dashboard" org-glance-show-report)
+    ("v d" "Doctor" org-glance-view:doctor)
+    ]
    [("v u" "Update" org-glance-view:update)
-    ("v s" "Summary" org-glance-view-visit)]]
+    ("v m" "Materialize" org-glance-view-visit)]]
 
   ["Manage headlines"
    [("h m" "Materialize" org-glance-action-materialize)

@@ -149,16 +149,22 @@
         (downcase (symbol-name (org-glance-view-id view)))))
    view))
 
-(cl-defun org-glance-view:reread (&optional
-                                    (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view:reread (&optional (vid org-glance-form:view))
   (interactive)
-  (message "Reread view %s" view-id)
-  (let* ((view (org-glance-view:get-view-by-id view-id))
-         (db (org-glance-view-metadata-location view))
-         (filter (org-glance-view-filter view))
-         (scope (or (org-glance-view-scope view) org-glance-default-scope)))
-    (org-glance-metastore:init db (org-glance-scope-headlines scope filter))
-    view))
+
+  (org-glance-view:if-all? vid
+      (message "Update all views")
+    (message "Update view %s" vid))
+
+  (org-glance-view:if-all? vid
+      (cl-loop for vid in (org-glance-view:list-view-ids)
+         append (org-glance-view:reread vid))
+    (let* ((view (org-glance-view:get-view-by-id vid))
+           (db (org-glance-view-metadata-location view))
+           (filter (org-glance-view-filter view))
+           (scope (or (org-glance-view-scope view) org-glance-default-scope)))
+      (org-glance-metastore:init db (org-glance-scope-headlines scope filter))
+      (list view))))
 
 (cl-defun org-glance-view:update (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
@@ -228,13 +234,20 @@
 (cl-defgeneric org-glance-view:headlines (view))
 
 (cl-defmethod org-glance-view:headlines ((view symbol))
+  "When VIEW is a symbol, extract org-glance-view from `org-glance-view` hashmap by key."
   (org-glance-view:headlines (org-glance-view:get-view-by-id view)))
 
 (cl-defmethod org-glance-view:headlines ((view string))
+  "When VIEW is a string, extract org-glance-view from `org-glance-view` hashmap by key intern."
   (org-glance-view:headlines (org-glance-view:get-view-by-id (intern view))))
 
+(cl-defmethod org-glance-view:headlines ((view list))
+  "When VIEW is a list, apply org-glance-view:headlines for each element of it."
+  (cl-loop for v in view
+     append (org-glance-view:headlines v)))
+
 (cl-defmethod org-glance-view:headlines ((view org-glance-view))
-  "List headlines as org-elements for VIEW."
+  "Browse each file of a VIEW scope, run org-element-map and collect headlines as org-elements."
   (org-glance-headlines
    :db (org-glance-view-metadata-location view)
    :scope (or (org-glance-view-scope view) org-glance-default-scope)
@@ -361,23 +374,22 @@
   "Run completing read PROMPT on registered views filtered by TYPE."
   (gethash (org-glance-view:completing-read prompt) org-glance-views))
 
-(cl-defun org-glance-view-agenda (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view:summary-locations ()
+  (cl-loop for view in (org-glance-view:list-view-ids)
+     collect (org-glance-view:summary-location view)))
+
+(cl-defmacro org-glance-view:if-all? (vid do-for-all-forms &rest do-for-specific-view-forms)
+  (declare (indent 2) (debug t))
+  `(cond
+     ((string= ,vid org-glance-view:all) ,do-for-all-forms)
+     (t ,@do-for-specific-view-forms)))
+
+(cl-defun org-glance-view:agenda (&optional (vid org-glance-form:view))
   (interactive)
-
-  (cond (()))
-  (let ((org-glance-view-agenda-files
-         (cond ;; ((string= view-id org-glance-view-selector:all)
-           ;;  (cl-loop for view in (org-glance-view:list-view-ids)
-           ;;     collect (org-glance-view:summary-location view)))
-           (t (list (org-glance-view:summary-location view-id))))))
-
-    (let ((org-agenda-files org-glance-view-agenda-files))
-      (org-agenda-list))
-
-    ;; (with-current-buffer org-agenda-buffer
-    ;;   (make-local-variable 'org-agenda-files)
-    ;;   (setq-local org-agenda-files org-glance-view-agenda-files))
-    ))
+  (let ((org-agenda-files (org-glance-view:if-all? vid
+                              (org-glance-view:summary-locations)
+                            (list (org-glance-view:summary-location org-glance-form:view)))))
+    (org-agenda-list)))
 
 (cl-defun org-glance-view-visit
     (&optional
