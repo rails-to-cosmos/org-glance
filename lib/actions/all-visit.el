@@ -28,7 +28,7 @@
       (save-excursion
         (org-glance-headline:expand-parents))
       (org-overview)
-      (org-show-children))))
+      (org-cycle 'contents))))
 
 (defun org-glance-view-visit-original-heading ()
   (interactive)

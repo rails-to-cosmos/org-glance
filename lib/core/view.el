@@ -10,6 +10,10 @@
 (org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.exceptions)
 
+(defconst org-glance-view:all "All")  ;; do not apply any filtering to views/headlines datasets
+
+(defvar org-glance-form:view org-glance-view:all)
+
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
