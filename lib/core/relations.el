@@ -32,7 +32,7 @@
 	       (org-time-stamp-format 'long 'inactive)
 	       org-log-note-effective-time)))
     (org-glance-headline:add-log-note
-     (format "- [ ] %s%s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s"
+     (format "- %s%s =%s= [[elisp:(org-glance-headline:visit \"%s\")][%s]] on %s"
              relstate
              todo-label
              view-id

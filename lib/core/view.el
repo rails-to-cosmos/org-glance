@@ -200,6 +200,9 @@
 
     summary-orig-file))
 
+;; (cl-defun org-glance-headline:doctor (hl)
+;;   )
+
 (cl-defun org-glance-view:doctor (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (let* ((view (org-glance-view:get-view-by-id view-id))
@@ -212,13 +215,17 @@
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
               (lambda (headline)
+                ;; - [ ] check if there is an org-link in title
+                ;; - [ ] check if visited file is not headline archive file
+
+                ;; check for corrupted properties
                 (when (and (not (org-glance-headline-p headline))
                            (org-glance-headline:filter filter headline))
                   (goto-char (org-element-property :begin headline))
                   (save-restriction
                     (org-narrow-to-subtree)
                     (hlt-highlight-region (point-min) (point-max))
-                    (when (y-or-n-p "Broken properties detected. Capture headline?")
+                    (when (y-or-n-p "Some properties are corrupted. Recapture the headline?")
                       (org-glance-capture-subtree-at-point view-id)
                       (message "Patch file %s headline %s" file headline)
                       (cl-incf modified))))))))

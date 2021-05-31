@@ -1,4 +1,6 @@
+(require 'org-archive)
 (require 'org-glance-module)
+
 
 (defun org-glance:recreate-folder-structure-in-subtree-at-point ()
   (interactive)
