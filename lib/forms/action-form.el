@@ -30,7 +30,7 @@
   "Perform action on selected view/headlines"
 
   ["Filters"
-   [("V" "Specific view" org-glance-form-action-view)]]
+   [("-v" "Filter results by VIEW" org-glance-form-action-view)]]
 
   ["Actions"
    [("e" "Extract" org-glance-action-extract)
@@ -42,7 +42,7 @@
     ("v d" "Doctor" org-glance-view:doctor)
     ]
    [("v u" "Update" org-glance-view:update)
-    ("v m" "Materialize" org-glance-view-visit)]]
+    ("v v" "Visit" org-glance-view-visit)]]
 
   ["Manage headlines"
    [("h m" "Materialize" org-glance-action-materialize)
