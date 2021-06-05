@@ -9,11 +9,9 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
-(cl-defun org-glance-headline:id (headline)
-  (let ((id (org-element-property :ORG_GLANCE_ID headline)))
-    (if (null id)
-        nil
-      (format "%s" id))))
+(cl-defun org-glance-headline:id (&optional (headline (org-element-at-point)))
+  (when-let (id (org-element-property :ORG_GLANCE_ID headline))
+    (format "%s" id)))
 
 (cl-defun org-glance-headline:title (hl)
   (org-element-property :raw-value hl))

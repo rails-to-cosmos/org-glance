@@ -1,5 +1,6 @@
 (require 'org-glance-module)
 
+(org-glance-module-import lib.utils.helpers)
 (org-glance-module-import lib.core.metastore)
 
 (cl-defun org-glance-headline:by-id (id)
@@ -21,7 +22,7 @@
 Subtree must satisfy the requirements of `org-glance-headline-p'"
   (save-excursion
     (org-glance-headline:goto-beginning-of-nearest-headline)
-    (org-glance-headline:by-id (org-glance-headline:id (org-element-at-point)))))
+    (org-glance-headline:by-id (org-glance-headline:id))))
 
 (cl-defun org-glance-headline:search-buffer (headline)
   "Search buffer for HEADLINE and return its point.
@@ -37,8 +38,20 @@ Raise `org-glance-headline-not-found` error on fail.''"
 
     (car points)))
 
-(cl-defun org-glance-headline:visit (id)
-  (let* ((headline (org-glance-headline:by-id id))
+(cl-defgeneric org-glance-headline:visit (headline)
+  "Visit HEADLINE.")
+
+(cl-defmethod org-glance-headline:visit ((headline symbol))
+  "Visit HEADLINE by headline id symbol name."
+  (org-glance-headline:visit (symbol-name headline)))
+
+(cl-defmethod org-glance-headline:visit ((headline list))
+  "Visit HEADLINE by headline id symbol name."
+  (org-glance-headline:visit (org-glance-headline:id headline)))
+
+(cl-defmethod org-glance-headline:visit ((headline string))
+  "Visit HEADLINE by id."
+  (let* ((headline (org-glance-headline:by-id headline))
          ;; extract headline filename
          (file (org-element-property :file headline))
          ;; cache file buffer
@@ -55,5 +68,29 @@ Raise `org-glance-headline-not-found` error on fail.''"
     (org-glance-headline:expand-parents)
     (org-overview)
     (org-cycle 'contents)))
+
+(cl-defun org-glance-headline:visit-headline-at-point ()
+  (interactive)
+  (save-excursion
+    (org-glance-headline:goto-first-level-headline)
+    (org-glance-headline:visit (org-glance-headline:id))))
+
+(defmacro org-glance-with-headline-narrowed (headline &rest forms)
+  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
+  (declare (indent defun))
+  `(let* ((file (org-element-property :file ,headline))
+          (file-buffer (get-file-buffer file))
+          (visited-buffer (current-buffer)))
+     (org-glance-headline:visit ,headline)
+     (widen)
+     (org-narrow-to-subtree)
+     (unwind-protect
+          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+            ,@forms)
+       (widen))
+     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                       (bury-buffer file-buffer)))
+           (t (kill-buffer (get-file-buffer file))))))
 
 (org-glance-module-provide)

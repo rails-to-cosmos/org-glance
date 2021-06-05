@@ -39,7 +39,11 @@
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 
 (org-glance-module-import lib.core.headline)
+(declare-function org-glance-with-headline-materialized (org-glance-module-filename lib.core.headline))
+
 (org-glance-module-import lib.core.actions)
+
+(org-glance-module-import lib.minor-modes.summary-mode)
 
 (org-glance-module-import lib.core.scope) ;; TODO refactor
 (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
@@ -61,16 +65,14 @@
 
 ;; Preload default actions
 
-(org-glance-module-import lib.actions.all-visit)
+(org-glance-module-import lib.actions.main.materialize)
+(org-glance-module-import lib.actions.main.open)
+(org-glance-module-import lib.actions.main.visit)
 
-(org-glance-module-import lib.actions.all-materialize)
-(declare-function org-glance-with-headline-materialized (org-glance-module-filename lib.actions.all-materialize))
-
-(org-glance-module-import lib.actions.all-open)
-(org-glance-module-import lib.actions.babel-insert)
-(org-glance-module-import lib.actions.crypt-extract)
-(org-glance-module-import lib.actions.crypt-materialize)
-(org-glance-module-import lib.actions.kvs-extract)
+(org-glance-module-import lib.actions.babel.insert)
+(org-glance-module-import lib.actions.crypt.extract)
+(org-glance-module-import lib.actions.crypt.materialize)
+(org-glance-module-import lib.actions.key-value-storage.extract)
 
 (eval-and-compile
   (require 'org)

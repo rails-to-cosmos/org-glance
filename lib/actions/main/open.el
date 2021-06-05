@@ -5,8 +5,8 @@
 (org-glance-module-import lib.core.view)
 
 (org-glance-action-define open (headline) :for link
-  "Search for `org-any-link-re' under the HEADLINE
-then run `org-completing-read' to open it."
+  "Visit HEADLINE, then search for all `org-any-link-re' in its subtree.
+Ask with `org-completing-read' and apply `org-open-at-point' on it."
   (org-glance-with-headline-narrowed headline
       (let* ((links (org-element-map (org-element-parse-buffer) 'link
                       (lambda (link)

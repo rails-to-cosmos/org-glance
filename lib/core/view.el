@@ -9,10 +9,16 @@
 (org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.exceptions)
+(org-glance-module-import lib.core.headline)
+
+(org-glance-module-import lib.utils.helpers)
 
 (defconst org-glance-view:all "All")  ;; do not apply any filtering to views/headlines datasets
 
 (defvar org-glance-form:view org-glance-view:all)
+
+(defvar org-glance-view-default-type '(all)
+  "Default type for all views.")
 
 (defvar org-glance-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -21,10 +27,7 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-view-mode-map)
 
-(defvar org-glance-view-default-type '(all)
-  "Default type for all views.")
-
-(defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-view -*-
+(defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-summary -*-
 
 #+CATEGORY: {:category}
 #+STARTUP: overview
@@ -53,6 +56,7 @@
 
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-headline:visit-headline-at-point)
 
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -182,6 +186,7 @@
 
     (progn ;; sort headlines by TODO order
       (find-file summary-temp-file)
+      (read-only-mode -1)
       (goto-char (point-min))
       (set-mark (point-max))
       (condition-case nil
@@ -198,7 +203,7 @@
       (delete-file summary-orig-file t))
     (rename-file summary-temp-file summary-orig-file)
 
-    summary-orig-file))
+    (find-file summary-orig-file)))
 
 ;; (cl-defun org-glance-headline:doctor (hl)
 ;;   )
