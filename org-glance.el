@@ -53,6 +53,7 @@
 (declare-function org-glance-view:summary-location (org-glance-module-filename lib.core.view))
 (declare-function org-glance-view:reread (org-glance-module-filename lib.core.view))
 
+(org-glance-module-import lib.links.visit)
 (org-glance-module-import lib.core.relations)
 
 (org-glance-module-import lib.forms.action-form)

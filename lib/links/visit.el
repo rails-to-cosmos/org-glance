@@ -1,4 +1,4 @@
-;;; ol-visit.el - Support for links to org-glance headliens
+;;; visit.el - Support for links to org-glance headliens
 (require 'org-glance-module)
 (require 'ol)
 
@@ -49,4 +49,4 @@
 ;;       (t path))))
 
 (org-glance-module-provide)
-;;; ol-visit.el ends here
+;;; visit.el ends here
