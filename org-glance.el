@@ -43,7 +43,7 @@
 
 (org-glance-module-import lib.core.actions)
 
-(org-glance-module-import lib.minor-modes.summary-mode)
+(org-glance-module-import lib.modes.summary-mode)
 
 (org-glance-module-import lib.core.scope) ;; TODO refactor
 (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
@@ -60,7 +60,7 @@
 (org-glance-module-import lib.links.visit)
 (org-glance-module-import lib.core.relations)
 
-(org-glance-module-import lib.forms.action-form)
+(org-glance-module-import lib.transient.headlines)
 (org-glance-module-import lib.plugins.metadata)
 
 ;; Preload default actions
@@ -70,9 +70,13 @@
 (org-glance-module-import lib.actions.main.visit)
 
 (org-glance-module-import lib.actions.babel.insert)
-(org-glance-module-import lib.actions.crypt.extract)
-(org-glance-module-import lib.actions.crypt.materialize)
-(org-glance-module-import lib.actions.key-value-storage.extract)
+
+;; Actions for encrypted headlines
+(org-glance-module-import lib.actions.encrypted-headlines.extract)
+(org-glance-module-import lib.actions.encrypted-headlines.materialize)
+
+;; When headline is defined as a key-value storage, one can extract properties in efficient manner
+(org-glance-module-import lib.actions.key-value-headlines.extract)
 
 (eval-and-compile
   (require 'org)

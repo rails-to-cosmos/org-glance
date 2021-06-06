@@ -234,6 +234,7 @@
                       (org-glance-capture-subtree-at-point view-id)
                       (message "Patch file %s headline %s" file headline)
                       (cl-incf modified))))))))
+    (org-glance-view:update view-id)
     (if (> modified 0)
         (message "%d headlines modified" modified)
       (message "View %s is up-to-date" view-id))))

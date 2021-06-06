@@ -5,17 +5,30 @@
 
 (cl-defun org-glance-headline:by-id (id)
   "Get org-element headline by ID."
-  (or
-   (cl-loop for vid in (org-glance-view:ids)
-      for metastore = (->> vid
-                        org-glance-view
-                        org-glance-view-metadata-location
-                        org-glance-metastore:read)
-      for headline = (gethash id metastore)
-      when headline
-      do (return (org-glance-metastore:deserialize headline)))
-   ;; headline not found
-   (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id)))
+  (let ((matched-headlines (cl-loop for vid in (org-glance-view:ids)
+                              for metastore = (->> vid
+                                                org-glance-view
+                                                org-glance-view-metadata-location
+                                                org-glance-metastore:read)
+                              for headline = (gethash id metastore)
+                              when headline
+                              collect (org-glance-metastore:deserialize headline))))
+    (unless matched-headlines
+      (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
+    (if (= (length matched-headlines) 1)
+        (car matched-headlines)
+      (let ((conflicting-headlines (cl-loop for headline in matched-headlines
+                                      collect (cons (format "%s at pos %d in file %s"
+                                                            (org-glance-headline:title headline)
+                                                            (org-glance-headline:begin headline)
+                                                            (org-glance-headline:file headline))
+                                                    headline))))
+        (alist-get
+         (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
+         conflicting-headlines
+         nil
+         nil
+         #'string=)))))
 
 (cl-defun org-glance-headline:at-point ()
   "Get org-glance-headline from subtree at point.

@@ -4,7 +4,7 @@
 (require 'load-relative)
 
 (org-glance-module-import lib.core.view)
-(org-glance-module-import lib.forms.base)
+(org-glance-module-import lib.transient.base)
 
 (defclass org-glance-transient-variable:view (org-glance-transient-variable) ())
 

@@ -13,14 +13,20 @@
   (when-let (id (org-element-property :ORG_GLANCE_ID headline))
     (format "%s" id)))
 
-(cl-defun org-glance-headline:title (hl)
-  (org-element-property :raw-value hl))
+(cl-defun org-glance-headline:title (headline)
+  (org-element-property :raw-value headline))
 
-(cl-defun org-glance-headline:state (hl)
+(cl-defun org-glance-headline:state (headline)
   (save-window-excursion
     (save-excursion
-      (org-glance-headline:visit (org-glance-headline:id hl))
+      (org-glance-headline:visit headline)
       (org-get-todo-state))))
+
+(cl-defun org-glance-headline:file (headline)
+  (org-element-property :file headline))
+
+(cl-defun org-glance-headline:begin (headline)
+  (org-element-property :begin headline))
 
 (cl-defun org-glance-headline:view-id (hl)
   (org-element-property :ORG_GLANCE_VIEW_ID hl))
