@@ -42,7 +42,7 @@
 (cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
   "Materialize HEADLINE, execute FORMS in materialized buffer."
   (declare (indent 1) (debug t))
-  `(let* ((file (org-element-property :file ,headline))
+  `(let* ((file (or (org-glance-headline:file ,headline) (buffer-file-name)))
           (file-buffer (get-file-buffer file)))
      (org-glance-action-call 'materialize :on ,headline)
      (unwind-protect

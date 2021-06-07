@@ -180,9 +180,7 @@
                     nil summary-temp-file)
 
     (cl-loop for headline in headlines
-       do (org-glance-with-headline-materialized headline
-            (append-to-file (concat (buffer-substring-no-properties (point-min) (point-max))
-                                    "\n") nil summary-temp-file)))
+       do (append-to-file (format "%s\n"(org-glance-headline:contents headline)) nil summary-temp-file))
 
     (progn ;; sort headlines by TODO order
       (find-file summary-temp-file)
@@ -208,37 +206,6 @@
 
 ;; (cl-defun org-glance-headline:doctor (hl)
 ;;   )
-
-(cl-defun org-glance-view:doctor (&optional (view-id (org-glance-view:completing-read)))
-  (interactive)
-  (let* ((view (org-glance-view:get-view-by-id view-id))
-         (db (org-glance-view-metadata-location view))
-         (filter (org-glance-view-filter view))
-         (scope (or (org-glance-view-scope view) org-glance-default-scope))
-         (modified 0))
-    (cl-loop for file in (org-glance-scope scope)
-       do (save-window-excursion
-            (find-file file)
-            (org-element-map (org-element-parse-buffer 'headline) 'headline
-              (lambda (headline)
-                ;; - [ ] check if there is an org-link in title
-                ;; - [ ] check if visited file is not headline archive file
-
-                ;; check for corrupted properties
-                (when (and (not (org-glance-headline-p headline))
-                           (org-glance-headline:filter filter headline))
-                  (goto-char (org-element-property :begin headline))
-                  (save-restriction
-                    (org-narrow-to-subtree)
-                    (hlt-highlight-region (point-min) (point-max))
-                    (when (y-or-n-p "Some properties are corrupted. Recapture the headline?")
-                      (org-glance-capture-subtree-at-point view-id)
-                      (message "Patch file %s headline %s" file headline)
-                      (cl-incf modified))))))))
-    (org-glance-view:update view-id)
-    (if (> modified 0)
-        (message "%d headlines modified" modified)
-      (message "View %s is up-to-date" view-id))))
 
 (cl-defgeneric org-glance-view:headlines (view))
 

@@ -17,18 +17,22 @@
       (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
     (if (= (length matched-headlines) 1)
         (car matched-headlines)
-      (let ((conflicting-headlines (cl-loop for headline in matched-headlines
-                                      collect (cons (format "%s at pos %d in file %s"
-                                                            (org-glance-headline:title headline)
-                                                            (org-glance-headline:begin headline)
-                                                            (org-glance-headline:file headline))
-                                                    headline))))
-        (alist-get
-         (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
-         conflicting-headlines
-         nil
-         nil
-         #'string=)))))
+      (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
+
+      ;; (let ((conflicting-headlines (cl-loop for headline in matched-headlines
+      ;;                                 collect (cons (format "%s at %d in file %s %s"
+      ;;                                                       (org-glance-headline:title headline)
+      ;;                                                       (org-glance-headline:begin headline)
+      ;;                                                       (org-glance-headline:file headline)
+      ;;                                                       headline)
+      ;;                                               headline))))
+      ;;   (alist-get
+      ;;    (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
+      ;;    conflicting-headlines
+      ;;    nil
+      ;;    nil
+      ;;    #'string=))
+      )))
 
 (cl-defun org-glance-headline:at-point ()
   "Get org-glance-headline from subtree at point.
@@ -47,7 +51,9 @@ Raise `org-glance-headline-not-found` error on fail.''"
       (org-glance-headline-not-found "Headline not found in file %s: %s" file headline))
 
     (when (> (length points) 1)
-      (warn "Headline ID %s not unique" (org-glance-headline:id headline)))
+      (warn "Headline ID %s is not unique in file %s"
+            (org-glance-headline:id headline)
+            (org-glance-headline:file headline)))
 
     (car points)))
 
@@ -105,5 +111,12 @@ Raise `org-glance-headline-not-found` error on fail.''"
            ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
                                                                        (bury-buffer file-buffer)))
            (t (kill-buffer (get-file-buffer file))))))
+
+(cl-defun org-glance-headline:contents (headline)
+  (save-window-excursion
+    (save-excursion
+      (org-glance-headline:visit headline)
+      (org-narrow-to-subtree)
+      (buffer-substring-no-properties (point-min) (point-max)))))
 
 (org-glance-module-provide)

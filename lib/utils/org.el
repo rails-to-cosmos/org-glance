@@ -1,7 +1,6 @@
 (require 'org-archive)
 (require 'org-glance-module)
 
-
 (defun org-glance:recreate-folder-structure-in-subtree-at-point ()
   (interactive)
   (save-excursion
@@ -57,7 +56,7 @@
                             (s-replace-regexp "[^a-z0-9A-Z_]" "-")
                             (s-replace-regexp "\\-+" "-")
                             (s-replace-regexp "\\-+$" "")
-                            (s-truncate 15)))))
+                            (s-truncate 30)))))
 
         (org-set-property "DIR"
                           (or (org-element-property :DIR (org-element-at-point))
@@ -67,7 +66,7 @@
                           (or (org-element-property :ARCHIVE (org-element-at-point))
                               (f-join dir (s-downcase (format "%s.org::" view-id)))))))))
 
-(defun org-glance-capture-subtree-at-point (&optional view-id)
+(cl-defun org-glance-capture-subtree-at-point (&optional view-id)
   (interactive)
   (save-excursion
     (org-glance-headline:back-to-heading)

@@ -28,12 +28,12 @@
 (cl-defun org-glance-headline:begin (headline)
   (org-element-property :begin headline))
 
-(cl-defun org-glance-headline:view-id (hl)
-  (org-element-property :ORG_GLANCE_VIEW_ID hl))
+(cl-defun org-glance-headline:view-id (headline)
+  (org-element-property :ORG_GLANCE_VIEW_ID headline))
 
-(cl-defun org-glance-headline:view-ids (&optional hl)
-  (when hl
-    (org-glance-headline:visit hl))
+(cl-defun org-glance-headline:view-ids (&optional headline)
+  (when headline
+    (org-glance-headline:visit headline))
 
   (save-excursion
     (org-glance-headline:beginning-of-nearest-headline)
