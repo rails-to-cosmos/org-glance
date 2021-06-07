@@ -39,7 +39,6 @@
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 
 (org-glance-module-import lib.core.headline)
-(declare-function org-glance-with-headline-materialized (org-glance-module-filename lib.core.headline))
 
 (org-glance-module-import lib.core.actions)
 

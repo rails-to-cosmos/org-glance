@@ -39,17 +39,4 @@
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))
 
-(cl-defmacro org-glance-with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE, execute FORMS in materialized buffer."
-  (declare (indent 1) (debug t))
-  `(let* ((file (or (org-glance-headline:file ,headline) (buffer-file-name)))
-          (file-buffer (get-file-buffer file)))
-     (org-glance-action-call 'materialize :on ,headline)
-     (unwind-protect
-          (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-            ,@forms)
-       (kill-buffer org-glance-materialized-view-buffer))
-     (cond (file-buffer (bury-buffer file-buffer))
-           (t (kill-buffer (get-file-buffer file))))))
-
 (org-glance-module-provide)
