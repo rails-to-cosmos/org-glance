@@ -51,14 +51,13 @@
     (org-glance-headline:back-to-heading)
     (save-restriction
       (org-narrow-to-subtree)
-      (let* ((hl-name (->> (org-element-property :raw-value (org-element-at-point))
-                        (s-replace-regexp "[^a-z0-9A-Z_]" "-")
-                        (s-replace-regexp "\\-+" "-")
-                        (s-replace-regexp "\\-+$" "")))
-
-             (dir (f-join (org-glance-view-resource-location view-id)
+      (let* ((dir (f-join (org-glance-view-resource-location view-id)
                           (format-time-string "date=%Y-%m-%d")
-                          hl-name)))
+                          (->> (org-element-property :raw-value (org-element-at-point))
+                            (s-replace-regexp "[^a-z0-9A-Z_]" "-")
+                            (s-replace-regexp "\\-+" "-")
+                            (s-replace-regexp "\\-+$" "")
+                            (s-truncate 15)))))
 
         (org-set-property "DIR"
                           (or (org-element-property :DIR (org-element-at-point))

@@ -195,4 +195,44 @@
   (->> (buffer-substring-no-properties beg end)
     (s-trim)))
 
+(cl-defun org-glance:sort-buffer-headlines (&optional (start (point-min)))
+  "Perform time sorting of headlines grouped by todo state.
+
+TODO: implement unit tests."
+  (interactive)
+
+  (goto-char start)
+
+  (unless (org-at-heading-p)
+    (org-next-visible-heading 1))
+
+  (flet ((current-todo-state () (condition-case nil
+                                    (substring-no-properties (org-get-todo-state))
+                                  (error ""))))
+    (let* ((region-todo-state (current-todo-state))
+           (beginning-of-region (point))
+           (end-of-region beginning-of-region))
+
+      (cl-loop while (and (string= (current-todo-state) region-todo-state)
+                          (< (point) (point-max)))
+         do
+           (message "Sort %s headlines" region-todo-state)
+           (org-next-visible-heading 1)
+           (setq end-of-region (point)))
+
+      (save-restriction
+        (narrow-to-region beginning-of-region end-of-region)
+        (goto-char (point-min))
+        (insert "\n")
+        (backward-char)
+        (org-sort-entries nil ?T)
+        (goto-char (point-min))
+        (delete-char 1)
+        (goto-char (point-max)))
+
+      (org-overview)
+
+      (unless (= (point) (point-max))
+        (org-glance:sort-buffer-headlines (point))))))
+
 (org-glance-module-provide)

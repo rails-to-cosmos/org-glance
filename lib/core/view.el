@@ -192,6 +192,7 @@
       (condition-case nil
           (org-sort-entries nil ?o)
         (error 'nil))
+      (org-glance:sort-buffer-headlines)
       (org-overview)
       (org-align-tags t)
       (save-buffer)
