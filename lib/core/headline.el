@@ -117,6 +117,6 @@ Raise `org-glance-headline-not-found` error on fail.''"
     (save-excursion
       (org-glance-headline:visit headline)
       (org-narrow-to-subtree)
-      (buffer-substring-no-properties (point-min) (point-max)))))
+      (s-replace-regexp "^\\*+" "*" (buffer-substring-no-properties (point-min) (point-max))))))
 
 (org-glance-module-provide)

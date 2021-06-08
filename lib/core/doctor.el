@@ -11,6 +11,13 @@
 
 ")
 
+(cl-defun org-glance-view:doctor-location (&optional (view-id (org-glance-view:completing-read)))
+  "Path to file where VIEW-ID exported headlines are stored."
+  (let ((view-name (s-downcase (format "%s" view-id))))
+    (f-join org-glance-view-location
+            view-name
+            (format "%s.org_doctor" view-name))))
+
 (cl-defun org-glance-view-doctor:check-for-corrupted-properties (file view headline)
   "Fix `org-glance' VIEW HEADLINE and return `t' if fix has been succeeded or nil otherwise."
   (not (org-glance-headline-p headline))
@@ -86,9 +93,9 @@
       (goto-char (point-min))
       (insert (org-glance-expand-template
                org-glance-view-doctor-header-template
-               `(:category ,view-id
-                 :error_count ,err-count)))
-      (insert (format "" err-count)))
+               `(:category ,view-id :error_count ,err-count)))
+      (insert (format "" err-count))
+      (write-file (org-glance-view:doctor-location view-id)))
 
     (switch-to-buffer report-buffer)
     ;; (if (> err-count 0)
