@@ -113,12 +113,22 @@ Raise `org-glance-headline-not-found` error on fail.''"
            (t (kill-buffer (get-file-buffer file))))
      res))
 
+(cl-defun org-glance-headline:beginning-of-the-first-level ()
+  "Beginning of headline as a first-level heading."
+  (when (org-at-heading-p)
+    (save-excursion
+      (org-beginning-of-line)
+      (while (looking-at "*")
+        (forward-char))
+      (- (point) 1))))
+
 (cl-defun org-glance-headline:contents (headline)
   (save-window-excursion
     (save-excursion
       (org-glance-headline:visit headline)
-      (org-narrow-to-subtree)
-      (s-replace-regexp "^\\*+" "*" (buffer-substring-no-properties (point-min) (point-max))))))
+      (save-restriction
+        (org-narrow-to-subtree)
+        (buffer-substring-no-properties (org-glance-headline:beginning-of-the-first-level) (point-max))))))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-with-headline-narrowed headline
@@ -126,7 +136,7 @@ Raise `org-glance-headline-not-found` error on fail.''"
       (lambda (link)
         (cons
          (substring-no-properties
-          (or (nth 2 link) ;; link alias
+          (or (nth 2 link)                            ;; link alias
               (org-element-property :raw-link link))) ;; full link if alias is none
          (org-element-property :begin link))))))
 

@@ -180,7 +180,7 @@
                     nil summary-temp-file)
 
     (cl-loop for headline in headlines
-       do (append-to-file (format "%s\n"(org-glance-headline:contents headline)) nil summary-temp-file))
+       do (append-to-file (format "%s\n" (org-glance-headline:contents headline)) nil summary-temp-file))
 
     (progn ;; sort headlines by TODO order
       (find-file summary-temp-file)
