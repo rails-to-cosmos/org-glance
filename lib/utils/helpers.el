@@ -9,28 +9,6 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
-(cl-defun org-glance-headline:id (&optional (headline (org-element-at-point)))
-  (when-let (id (org-element-property :ORG_GLANCE_ID headline))
-    (format "%s" id)))
-
-(cl-defun org-glance-headline:title (headline)
-  (org-element-property :raw-value headline))
-
-(cl-defun org-glance-headline:state (headline)
-  (save-window-excursion
-    (save-excursion
-      (org-glance-headline:visit headline)
-      (org-get-todo-state))))
-
-(cl-defun org-glance-headline:file (headline)
-  (org-element-property :file headline))
-
-(cl-defun org-glance-headline:begin (headline)
-  (org-element-property :begin headline))
-
-(cl-defun org-glance-headline:view-id (headline)
-  (org-element-property :ORG_GLANCE_VIEW_ID headline))
-
 (cl-defun org-glance-headline:view-ids (&optional headline)
   (when headline
     (org-glance-headline:visit headline))

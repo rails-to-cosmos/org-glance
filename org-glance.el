@@ -38,7 +38,9 @@
 (org-glance-module-import lib.core.metastore)  ;; TODO refactor to headline structure
 ;; (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 
-(org-glance-module-import lib.core.headline)
+(org-glance-module-import lib.core.headline.def)
+(org-glance-module-import lib.core.headline.helpers)
+(org-glance-module-import lib.core.headline.visit)
 
 (org-glance-module-import lib.core.actions)
 

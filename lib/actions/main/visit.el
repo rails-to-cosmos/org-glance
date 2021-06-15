@@ -1,6 +1,6 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.headline)
+(org-glance-module-import lib.core.headline.def)
 
 (org-glance-action-define visit (headline) :for all
   "Visit HEADLINE."

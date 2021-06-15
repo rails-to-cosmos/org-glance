@@ -3,6 +3,7 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.utils.helpers)
+
 (org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.exceptions)
 
@@ -12,12 +13,7 @@
         (file-tmp (make-temp-file "org-glance-view-metadata-")))
 
     (dolist (headline headlines)
-      (puthash (org-glance-headline:id headline)
-               (list (or (org-element-property :TITLE headline)
-                         (org-element-property :raw-value headline))
-                     (org-element-property :begin headline)
-                     (org-element-property :file headline))
-               table))
+      (puthash (org-glance-headline:id headline) (org-glance-headline:serialize headline) table))
 
     (append-to-file (prin1-to-string table) nil file-tmp)
 
@@ -26,7 +22,7 @@
     (when (file-exists-p file)
       (delete-file file t))
     (rename-file file-tmp file)
-    (message "Database has been initialized: %s" file)
+    (message "Metastore has been initialized: %s" file)
     headlines))
 
 (defun org-glance-metastore:read (file)
@@ -62,5 +58,36 @@
           (load-db?   (org-glance-metastore:load db))
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
+
+(cl-defun org-glance-metastore:headline (id)
+  "Get org-element headline by ID."
+  (let ((matched-headlines (cl-loop for vid in (org-glance-view:ids)
+                              for metastore = (->> vid
+                                                org-glance-view
+                                                org-glance-view-metadata-location
+                                                org-glance-metastore:read)
+                              for headline = (gethash id metastore)
+                              when headline
+                              collect (org-glance-metastore:deserialize headline))))
+    (unless matched-headlines
+      (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
+    (if (= (length matched-headlines) 1)
+        (car matched-headlines)
+      (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
+
+      ;; (let ((conflicting-headlines (cl-loop for headline in matched-headlines
+      ;;                                 collect (cons (format "%s at %d in file %s %s"
+      ;;                                                       (org-glance-headline:title headline)
+      ;;                                                       (org-glance-headline:begin headline)
+      ;;                                                       (org-glance-headline:file headline)
+      ;;                                                       headline)
+      ;;                                               headline))))
+      ;;   (alist-get
+      ;;    (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
+      ;;    conflicting-headlines
+      ;;    nil
+      ;;    nil
+      ;;    #'string=))
+      )))
 
 (org-glance-module-provide)
