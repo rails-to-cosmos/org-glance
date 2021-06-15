@@ -140,4 +140,11 @@ Raise `org-glance-headline-not-found` error on fail.''"
               (org-element-property :raw-link link))) ;; full link if alias is none
          (org-element-property :begin link))))))
 
+(cl-defun org-glance-headline:modtime (headline)
+  (org-glance-with-headline-narrowed headline
+    (visited-file-modtime)))
+
+(cl-defun org-glance-headline:modtime* (headline)
+  (format-time-string "%Y-%m-%d %H:%M:%S" (org-glance-headline:modtime headline)))
+
 (org-glance-module-provide)

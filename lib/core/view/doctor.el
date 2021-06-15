@@ -86,8 +86,6 @@
                       )
                     (incf err-count)))))))
 
-    ;; (org-glance-view:update view-id)
-
     (with-current-buffer report-buffer
       (org-mode)
       (goto-char (point-min))
@@ -97,10 +95,6 @@
       (insert (format "" err-count))
       (write-file (org-glance-view:doctor-location view-id)))
 
-    (switch-to-buffer report-buffer)
-    ;; (if (> err-count 0)
-    ;;     (message "%d headlines err-count" err-count)
-    ;;   (message "View %s is up-to-date" view-id))
-    ))
+    (switch-to-buffer report-buffer)))
 
 (org-glance-module-provide)

@@ -36,7 +36,7 @@
 (org-glance-module-import lib.utils.org)
 
 (org-glance-module-import lib.core.metastore)  ;; TODO refactor to headline structure
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
+;; (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 
 (org-glance-module-import lib.core.headline)
 
@@ -45,18 +45,22 @@
 (org-glance-module-import lib.modes.summary-mode)
 
 (org-glance-module-import lib.core.scope) ;; TODO refactor
-(declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
-(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
+
+;; (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
 
 (org-glance-module-import lib.core.view)
-(declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:summary-location (org-glance-module-filename lib.core.view))
-(declare-function org-glance-view:reread (org-glance-module-filename lib.core.view))
+(org-glance-module-import lib.core.view.agenda)
+(org-glance-module-import lib.core.view.doctor)
+(org-glance-module-import lib.core.view.summary)
 
-(org-glance-module-import lib.core.doctor)
+;; (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
+
+(org-glance-module-import lib.core.view.doctor)
 
 (org-glance-module-import lib.links.visit)
 (org-glance-module-import lib.core.relations)

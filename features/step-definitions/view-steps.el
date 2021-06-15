@@ -10,7 +10,7 @@
       (lambda (view-id) (org-glance-def-view (intern view-id))))
 
 (Then "^I compile view \"\\(.+\\)\"$"
-      (lambda (view-id) (org-glance-view:update (intern view-id))))
+      (lambda (view-id) (org-glance-view:summary (intern view-id))))
 
 (And "^I should have \\([[:digit:]]+\\) headlines in view \"\\(.+\\)\"$"
      (lambda (cardinality view-id)

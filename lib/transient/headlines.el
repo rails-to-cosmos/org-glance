@@ -41,7 +41,7 @@
     ;; ("v d" "Dashboard" org-glance-show-report)
     ("v d" "Doctor" org-glance-view:doctor)
     ]
-   [("v u" "Update" org-glance-view:update)
+   [("v u" "Update" org-glance-view:summary)
     ("v v" "Visit" org-glance-view-visit)]]
 
   ["Manage headlines"
