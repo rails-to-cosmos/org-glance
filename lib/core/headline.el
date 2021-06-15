@@ -117,7 +117,7 @@ Raise `org-glance-headline-not-found` error on fail.''"
   "Beginning of headline as a first-level heading."
   (when (org-at-heading-p)
     (save-excursion
-      (org-beginning-of-line)
+      (beginning-of-line)
       (while (looking-at "*")
         (forward-char))
       (- (point) 1))))
