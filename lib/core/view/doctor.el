@@ -67,6 +67,7 @@
                 ;; - [ ] check if visited file is not headline archive file
                 ;; - [ ] check for view data structure: no empty directories etc
                 ;; - [ ] check for view data structure: proper partitioning
+                ;; - [ ] check for nested views and ask to flatten them
 
                 (when (org-glance-headline:filter (org-glance-view-filter view) headline)
 
