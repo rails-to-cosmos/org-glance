@@ -29,23 +29,18 @@
 
 (cl-defun org-glance-view:summary (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
-  (let ((summary-orig-file (org-glance-view:summary-location view-id))
-        (summary-temp-file (make-temp-file "org-glance-view-summary-"))
-        (file-offsets (make-hash-table :test 'equal))
+  (let ((summary-file (org-glance-view:summary-location view-id))
         (headlines (->> view-id
                      org-glance-view:update
                      org-glance-view:headlines)))
-
-    (append-to-file (org-glance-expand-template
-                     org-glance-view-summary-header-template
-                     `(:category ,view-id))
-                    nil summary-temp-file)
-
-    (cl-loop for headline in headlines
-       do (append-to-file (format "%s\n" (org-glance-headline:contents headline)) nil summary-temp-file))
-
-    (progn ;; sort headlines by TODO order
-      (find-file summary-temp-file)
+    (org-glance--make-file-directory summary-file)
+    (with-temp-file summary-file
+      (insert (org-glance-expand-template org-glance-view-summary-header-template :category view-id))
+      (insert "\n")
+      (cl-loop for headline in headlines
+         do (insert (org-glance-headline:contents headline))
+           (insert "\n"))
+      (org-mode)
       (read-only-mode -1)
       (goto-char (point-min))
       (set-mark (point-max))
@@ -53,17 +48,7 @@
           (org-sort-entries nil ?o)
         (error 'nil))
       (org-glance:sort-buffer-headlines)
-      (org-overview)
-      (org-align-tags t)
-      (save-buffer)
-      (kill-buffer))
-
-    ;; apply changes to original file
-    (org-glance--make-file-directory summary-orig-file)
-    (when (file-exists-p summary-orig-file)
-      (delete-file summary-orig-file t))
-    (rename-file summary-temp-file summary-orig-file)
-
-    (find-file summary-orig-file)))
+      (org-align-tags t))
+    (find-file summary-file)))
 
 (org-glance-module-provide)

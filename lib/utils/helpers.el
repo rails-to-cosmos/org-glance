@@ -20,17 +20,17 @@
        when (member (downcase (symbol-name tag)) org-tags)
        collect tag)))
 
-(defun org-glance-expand-template (s plist)
-  "expand a template containing {:keyword} with the definitions in plist"
+(defun org-glance-expand-template (s &rest kwargs)
+  "expand a template containing {:keyword} with the definitions in KWARGS."
   (replace-regexp-in-string "{\\(:[^}]+\\)}"
                             (lambda (arg)
                               (let ((keyword (intern (substring arg 1 -1))))
-                                (format "%s" (plist-get plist keyword)))) s))
+                                (format "%s" (kwargs-get kwargs keyword)))) s))
 
 (defun org-glance--make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
-    (make-directory dir t))))
+      (make-directory dir t))))
 
 (defun org-glance-headline:back-to-heading ()
   (unless (org-at-heading-p)
@@ -79,7 +79,7 @@
       (lambda (headline)
         (when (and (org-glance-headline-p headline)
                    (org-glance-headline:filter filter headline))
-          (plist-put (cadr headline) :file file)
+          (kwargs-put (cadr headline) :file file)
           headline)))))
 
 (defun org-glance-headline:promote ()

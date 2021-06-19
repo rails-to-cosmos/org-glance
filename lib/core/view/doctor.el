@@ -90,9 +90,9 @@
     (with-current-buffer report-buffer
       (org-mode)
       (goto-char (point-min))
-      (insert (org-glance-expand-template
-               org-glance-view-doctor-header-template
-               `(:category ,view-id :error_count ,err-count)))
+      (insert (org-glance-expand-template org-glance-view-doctor-header-template
+                                          :category view-id
+                                          :error_count err-count))
       (insert (format "" err-count))
       (write-file (org-glance-view:doctor-location view-id)))
 
