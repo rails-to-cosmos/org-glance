@@ -19,21 +19,31 @@ Raise `org-glance-headline-not-found` error on fail.''"
             (org-glance-headline:id headline)
             (org-glance-headline:file headline)))
 
-    (car points)))
+    (goto-char (car points))))
 
 (cl-defgeneric org-glance-headline:visit (headline)
   "Visit HEADLINE.")
 
+(cl-defmethod org-glance-headline:visit ((headline null))
+  "Visit HEADLINE, grab headline id from headline at point. Grab source file from metastore."
+  (let ((original-point (point))
+        offset)
+    (save-excursion
+      (org-glance-headline:goto-first-level-headline)
+      (setq offset (- original-point (point)))
+      (org-glance-headline:visit (org-glance-headline:id))
+      (forward-char offset))))
+
 (cl-defmethod org-glance-headline:visit ((id symbol))
-  "Visit HEADLINE by headline id symbol name."
+  "Visit HEADLINE by headline id symbol name. Grab source file from metastore."
   (org-glance-headline:visit (symbol-name id)))
 
 (cl-defmethod org-glance-headline:visit ((id list))
-  "Visit HEADLINE by headline id symbol name."
+  "Visit HEADLINE by headline id symbol name. Grab source file from metastore."
   (org-glance-headline:visit (org-glance-headline:id id)))
 
 (cl-defmethod org-glance-headline:visit ((id string))
-  "Visit HEADLINE by id."
+  "Visit HEADLINE by id. Grab source file from metastore."
   (let* ((headline (org-glance-metastore:headline id))
          ;; extract headline filename
          (file (org-element-property :file headline))
@@ -47,15 +57,13 @@ Raise `org-glance-headline-not-found` error on fail.''"
     (widen)
 
     ;; search for headline in buffer
-    (goto-char (org-glance-headline:search-buffer headline))
+    (org-glance-headline:search-buffer headline)
     (org-glance-headline:expand-parents)
     (org-overview)
     (org-cycle 'contents)))
 
 (cl-defun org-glance-headline:visit-headline-at-point ()
   (interactive)
-  (save-excursion
-    (org-glance-headline:goto-first-level-headline)
-    (org-glance-headline:visit (org-glance-headline:id))))
+  (org-glance-headline:visit nil))
 
 (org-glance-module-provide)

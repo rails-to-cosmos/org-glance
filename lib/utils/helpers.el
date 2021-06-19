@@ -25,7 +25,7 @@
   (replace-regexp-in-string "{\\(:[^}]+\\)}"
                             (lambda (arg)
                               (let ((keyword (intern (substring arg 1 -1))))
-                                (format "%s" (kwargs-get kwargs keyword)))) s))
+                                (format "%s" (plist-get kwargs keyword)))) s))
 
 (defun org-glance--make-file-directory (file)
   (let ((dir (file-name-directory file)))
@@ -79,7 +79,7 @@
       (lambda (headline)
         (when (and (org-glance-headline-p headline)
                    (org-glance-headline:filter filter headline))
-          (kwargs-put (cadr headline) :file file)
+          (plist-put (cadr headline) :file file)
           headline)))))
 
 (defun org-glance-headline:promote ()
@@ -94,6 +94,20 @@
   (cl-loop repeat level
      do (org-with-limited-levels
          (org-map-tree 'org-demote))))
+
+(defun org-glance-headline:normalize-indentation ()
+  (let (demote-level
+        (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
+        (demote (lambda (s)
+                  (cond ((null demote-level) (setq demote-level (- (length s) 1)) "*")
+                        (t (s-repeat (- (length s) demote-level) "*"))))))
+    (loop for line in lines
+       if (string-match "^\\*+.*" line)
+       collect (s-replace-regexp "^\\*+" demote line)
+       into demoted
+       else
+       collect line into demoted
+       finally return (s-join "\n" demoted))))
 
 (cl-defun org-glance-headline-p (headline)
   (not (null (org-glance-headline:id headline))))
@@ -174,43 +188,35 @@
     (s-trim)))
 
 (cl-defun org-glance:sort-buffer-headlines (&optional (start (point-min)))
-  "Perform time sorting of headlines grouped by todo state.
+  "Sort headlines by todo state, then sort each group by time.
 
 TODO: implement unit tests."
   (interactive)
-
   (goto-char start)
-
   (unless (org-at-heading-p)
     (org-next-visible-heading 1))
+  (let* ((state (org-glance-headline:state))
+         (beginning-of-region (point))
+         (end-of-region beginning-of-region))
 
-  (flet ((current-todo-state () (condition-case nil
-                                    (substring-no-properties (org-get-todo-state))
-                                  (error ""))))
-    (let* ((region-todo-state (current-todo-state))
-           (beginning-of-region (point))
-           (end-of-region beginning-of-region))
+    (cl-loop while (and (string= (org-glance-headline:state) state)
+                        (< (point) (point-max)))
+       do
+         (message "Sort %s headlines" state)
+         (org-next-visible-heading 1)
+         (setq end-of-region (point)))
 
-      (cl-loop while (and (string= (current-todo-state) region-todo-state)
-                          (< (point) (point-max)))
-         do
-           (message "Sort %s headlines" region-todo-state)
-           (org-next-visible-heading 1)
-           (setq end-of-region (point)))
-
-      (save-restriction
-        (narrow-to-region beginning-of-region end-of-region)
-        (goto-char (point-min))
-        (insert "\n")
-        (backward-char)
-        (org-sort-entries nil ?T)
-        (goto-char (point-min))
-        (delete-char 1)
-        (goto-char (point-max)))
-
-      (org-overview)
-
-      (unless (= (point) (point-max))
-        (org-glance:sort-buffer-headlines (point))))))
+    (save-restriction
+      (narrow-to-region beginning-of-region end-of-region)
+      (goto-char (point-min))
+      (insert "\n")
+      (backward-char)
+      (org-sort-entries nil ?T)
+      (goto-char (point-min))
+      (delete-char 1)
+      (goto-char (point-max)))
+    (org-overview)
+    (unless (= (point) (point-max))
+      (org-glance:sort-buffer-headlines (point)))))
 
 (org-glance-module-provide)

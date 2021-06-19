@@ -3,8 +3,7 @@
 (require 'org-glance-module)
 
 (cl-defun org-glance-headline:id (&optional (headline (org-element-at-point)))
-  (when-let (id (org-element-property :ORG_GLANCE_ID headline))
-    (format "%s" id)))
+  (org-element-property :ORG_GLANCE_ID headline))
 
 (cl-defun org-glance-headline:title (headline)
   (or (org-element-property :TITLE headline)

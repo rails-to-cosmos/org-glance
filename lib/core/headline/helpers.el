@@ -30,22 +30,13 @@ Subtree must satisfy the requirements of `org-glance-headline-p'"
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:beginning-of-the-first-level ()
-  "Beginning of headline as a first-level heading."
-  (when (org-at-heading-p)
-    (save-excursion
-      (beginning-of-line)
-      (while (looking-at "*")
-        (forward-char))
-      (- (point) 1))))
-
 (cl-defun org-glance-headline:contents (headline)
   (save-window-excursion
     (save-excursion
       (org-glance-headline:visit headline)
       (save-restriction
         (org-narrow-to-subtree)
-        (buffer-substring-no-properties (org-glance-headline:beginning-of-the-first-level) (point-max))))))
+        (org-glance-headline:normalize-indentation)))))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-with-headline-narrowed headline
@@ -64,10 +55,13 @@ Subtree must satisfy the requirements of `org-glance-headline-p'"
 (cl-defun org-glance-headline:modtime* (headline)
   (format-time-string "%Y-%m-%d %H:%M:%S" (org-glance-headline:modtime headline)))
 
-(cl-defun org-glance-headline:state (headline)
+(cl-defun org-glance-headline:state (&optional headline)
   (save-window-excursion
     (save-excursion
-      (org-glance-headline:visit headline)
-      (org-get-todo-state))))
+      (when headline
+        (org-glance-headline:visit headline))
+      (condition-case nil
+          (substring-no-properties (org-get-todo-state))
+        (error "")))))
 
 (org-glance-module-provide)
