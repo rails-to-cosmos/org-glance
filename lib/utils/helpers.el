@@ -20,14 +20,15 @@
        when (member (downcase (symbol-name tag)) org-tags)
        collect tag)))
 
-(defun org-glance-expand-template (s &rest kwargs)
+(defun org-glance:f (s &rest kwargs)
   "expand a template containing {:keyword} with the definitions in KWARGS."
-  (replace-regexp-in-string "{\\(:[^}]+\\)}"
+  (replace-regexp-in-string "\\($[A-Za-z_-]+\\)"
                             (lambda (arg)
-                              (let ((keyword (intern (substring arg 1 -1))))
+                              (let ((keyword (intern (format ":%s" (substring arg 1)))))
+                                (pp keyword)
                                 (format "%s" (plist-get kwargs keyword)))) s))
 
-(defun org-glance--make-file-directory (file)
+(defun --org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
       (make-directory dir t))))
@@ -40,7 +41,7 @@
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
 
-(defun org-glance-headline:filter (filter headline)
+(defun org-glance-headline:matches-filter? (filter headline)
   (or (null filter) (funcall filter headline)))
 
 (defun org-glance--ensure-path (path)
@@ -78,7 +79,7 @@
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (headline)
         (when (and (org-glance-headline-p headline)
-                   (org-glance-headline:filter filter headline))
+                   (org-glance-headline:matches-filter? filter headline))
           (plist-put (cadr headline) :file file)
           headline)))))
 
@@ -96,11 +97,11 @@
          (org-map-tree 'org-demote))))
 
 (defun org-glance-headline:normalize-indentation ()
-  (let (demote-level
-        (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
-        (demote (lambda (s)
-                  (cond ((null demote-level) (setq demote-level (- (length s) 1)) "*")
-                        (t (s-repeat (- (length s) demote-level) "*"))))))
+  (let* (demote-level
+         (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
+         (demote (lambda (s)
+                   (cond ((null demote-level) (setq demote-level (- (length s) 1)) "*")
+                         (t (s-repeat (- (length s) demote-level) "*"))))))
     (loop for line in lines
        if (string-match "^\\*+.*" line)
        collect (s-replace-regexp "^\\*+" demote line)

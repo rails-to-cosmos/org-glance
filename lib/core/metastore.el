@@ -18,7 +18,7 @@
     (append-to-file (prin1-to-string table) nil file-tmp)
 
     ;; apply changes to original file
-    (org-glance--make-file-directory file)
+    (--org-glance:make-file-directory file)
     (when (file-exists-p file)
       (delete-file file t))
     (rename-file file-tmp file)

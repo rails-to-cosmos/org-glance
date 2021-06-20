@@ -12,6 +12,9 @@
 (cl-defun org-glance-headline:file (headline)
   (org-element-property :file headline))
 
+(cl-defun org-glance-headline:buffer (headline)
+  (get-file-buffer (org-glance-headline:file headline)))
+
 (cl-defun org-glance-headline:begin (headline)
   (org-element-property :begin headline))
 

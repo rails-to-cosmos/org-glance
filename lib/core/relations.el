@@ -41,7 +41,7 @@
 
   (when bidirectional
     (let* ((source-view-ids (org-glance-headline:view-ids))
-           (source-headline (org-element-put-property (org-glance-headline:at-point)
+           (source-headline (org-element-put-property (org-glance-headline nil)
                                                       :ORG_GLANCE_VIEW_ID
                                                       (s-join ", " (mapcar #'symbol-name source-view-ids)))))
       (save-window-excursion

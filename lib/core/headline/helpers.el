@@ -2,14 +2,8 @@
 
 (org-glance-module-import lib.core.headline.def)
 (org-glance-module-import lib.core.headline.visit)
+(org-glance-module-import lib.core.headline.factory)
 (org-glance-module-import lib.core.metastore)
-
-(cl-defun org-glance-headline:at-point ()
-  "Get org-glance-headline from subtree at point.
-Subtree must satisfy the requirements of `org-glance-headline-p'"
-  (save-excursion
-    (org-glance-headline:goto-beginning-of-nearest-headline)
-    (org-glance-metastore:headline (org-glance-headline:id))))
 
 (defmacro org-glance-with-headline-narrowed (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
@@ -30,13 +24,13 @@ Subtree must satisfy the requirements of `org-glance-headline-p'"
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:contents (headline)
-  (save-window-excursion
-    (save-excursion
-      (org-glance-headline:visit headline)
-      (save-restriction
-        (org-narrow-to-subtree)
-        (org-glance-headline:normalize-indentation)))))
+(cl-defun org-glance-headline:contents (id)
+  (with-temp-buffer
+    (let* ((headline (org-glance-headline id)))
+      (insert-file-contents (org-glance-headline:file headline))
+      (org-glance-headline:search headline)
+      (org-narrow-to-subtree)
+      (org-glance-headline:normalize-indentation))))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-with-headline-narrowed headline

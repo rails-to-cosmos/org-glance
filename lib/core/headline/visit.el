@@ -2,10 +2,9 @@
 
 (org-glance-module-import lib.core.headline.def)
 (org-glance-module-import lib.core.metastore)
-
 (org-glance-module-import lib.utils.helpers)
 
-(cl-defun org-glance-headline:search-buffer (headline)
+(cl-defun org-glance-headline:search (headline)
   "Search buffer for HEADLINE and return its point.
 Raise `org-glance-headline-not-found` error on fail.''"
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -45,10 +44,8 @@ Raise `org-glance-headline-not-found` error on fail.''"
 (cl-defmethod org-glance-headline:visit ((id string))
   "Visit HEADLINE by id. Grab source file from metastore."
   (let* ((headline (org-glance-metastore:headline id))
-         ;; extract headline filename
-         (file (org-element-property :file headline))
-         ;; cache file buffer
-         (buffer (get-file-buffer file)))
+         (file (org-glance-headline:file headline))
+         (buffer (org-glance-headline:buffer headline)))
 
     (cond ((file-exists-p file) (find-file file))
           (t (org-glance-db-outdated "File not found: %s" file)))
@@ -57,7 +54,7 @@ Raise `org-glance-headline-not-found` error on fail.''"
     (widen)
 
     ;; search for headline in buffer
-    (org-glance-headline:search-buffer headline)
+    (org-glance-headline:search headline)
     (org-glance-headline:expand-parents)
     (org-overview)
     (org-cycle 'contents)))

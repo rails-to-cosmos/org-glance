@@ -29,8 +29,8 @@
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"
 
-  ["Filters"
-   [("-v" "Filter results by VIEW" org-glance-form-action-view)]]
+  ;; ["Filters"
+  ;;  [("-v" "Filter results by VIEW" org-glance-form-action-view)]]
 
   ["Actions"
    [("e" "Extract" org-glance-action-extract)

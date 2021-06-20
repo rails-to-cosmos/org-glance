@@ -4,10 +4,10 @@
 
 (defvar org-glance-view-doctor-header-template "#    -*- mode: org; mode: org-glance-summary -*-
 
-#+CATEGORY: {:category}
+#+CATEGORY: $category
 #+STARTUP: overview
 
-={:error_count} warnings found=
+=$error_count warnings found=
 
 ")
 
@@ -23,7 +23,7 @@
   (not (org-glance-headline-p headline))
 
   ;; (when (and (not (org-glance-headline-p headline)) ;; current headline can't be identified as org-glance-headline
-  ;;            (org-glance-headline:filter (org-glance-view-filter view) headline) ;; but it has required tags
+  ;;            (org-glance-headline:matches-filter? (org-glance-view-filter view) headline) ;; but it has required tags
   ;;            )
   ;;   (goto-char (org-glance-headline:begin headline))
   ;;   (save-restriction
@@ -43,12 +43,12 @@
   ;;   (when (y-or-n-p "Headline contains org-link in title. Replace it with the raw-value?")))
   )
 
-(cl-defun org-glance-view:doctor (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-view:doctor (&optional (vid (org-glance-view:completing-read)))
   (interactive)
-  (let* ((view (org-glance-view:get-view-by-id view-id))
+  (let* ((view (org-glance-view:get-view-by-id vid))
          (db (org-glance-view-metadata-location view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope))
-         (report-buffer (format "*org-glance-doctor:%s*" view-id))
+         (report-buffer (format "*org-glance-doctor:%s*" vid))
          (err-count 0))
 
     (if (get-buffer report-buffer)
@@ -69,12 +69,12 @@
                 ;; - [ ] check for view data structure: proper partitioning
                 ;; - [ ] check for nested views and ask to flatten them
 
-                (when (org-glance-headline:filter (org-glance-view-filter view) headline)
+                (when (org-glance-headline:matches-filter? (org-glance-view-filter view) headline)
 
                   (when (org-glance-view-doctor:check-for-corrupted-properties file view headline)
                     (with-current-buffer report-buffer
                       (goto-char (point-max))
-                      (insert (format "%s\n" (org-glance-headline:contents headline)))
+                      ;; (insert (org-glance-headline:contents headline) "\n")
                       ;; (insert (format "* Uncaptured headline\n%s\n" (org-glance-headline:title headline)))
                       )
                     (incf err-count))
@@ -82,7 +82,7 @@
                   (when (org-glance-view-doctor:check-for-links-in-title file view headline)
                     (with-current-buffer report-buffer
                       (goto-char (point-max))
-                      (insert (format "%s\n" (org-glance-headline:contents headline)))
+                      ;; (insert (org-glance-headline:contents headline) "\n")
                       ;; (insert (format "* Link in title\n%s\n" (org-glance-headline:title headline)))
                       )
                     (incf err-count)))))))
@@ -90,11 +90,12 @@
     (with-current-buffer report-buffer
       (org-mode)
       (goto-char (point-min))
-      (insert (org-glance-expand-template org-glance-view-doctor-header-template
-                                          :category view-id
-                                          :error_count err-count))
-      (write-file (org-glance-view:doctor-location view-id)))
+      (insert (org-glance:f org-glance-view-doctor-header-template
+                            :category vid
+                            :error_count err-count))
+      (write-file (org-glance-view:doctor-location vid)))
 
-    (switch-to-buffer report-buffer)))
+    ;; (switch-to-buffer report-buffer)
+    ))
 
 (org-glance-module-provide)
