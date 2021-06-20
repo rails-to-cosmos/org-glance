@@ -63,38 +63,32 @@
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
               (lambda (el)
-                ;; - [ ] check if there is an org-link in title
-                ;; - [ ] check if visited file is not headline archive file
-                ;; - [ ] check for view data structure: no empty directories etc
-                ;; - [ ] check for view data structure: proper partitioning
-                ;; - [ ] check for nested views and ask to flatten them
-                (let ((headline (org-glance-headline el)))
-                  (when (org-glance-headline:matches-filter? (org-glance-view-filter view) headline)
-                    (when (org-glance-view-doctor:check-for-corrupted-properties file view headline)
-                      (with-current-buffer report-buffer
-                        (goto-char (point-max))
-                        (insert (org-glance-headline:contents headline) "\n")
-                        ;; (insert (format "* Uncaptured headline\n%s\n" (org-glance-headline:title headline)))
-                        )
-                      (incf err-count))
+                (when (org-glance-headline:matches-filter? (org-glance-view-filter view) el)
+                  (let ((headline (org-glance-headline el)))
+                    (loop for check in '(org-glance-view-doctor:check-for-corrupted-properties
+                                         org-glance-view-doctor:check-for-links-in-title
+                                         ;; - [ ] check if visited file is not headline archive file
+                                         ;; - [ ] check for view data structure: no empty directories etc
+                                         ;; - [ ] check for view data structure: proper partitioning
+                                         ;; - [ ] check for nested views and ask to flatten them
+                                         )
+                       for failed? = (apply check (list file view headline))
+                       when failed? collect check into failed-checks
+                       count failed? into failed-counts
+                       finally (unless (null failed-checks)
+                                 (incf err-count failed-counts)
+                                 (with-current-buffer report-buffer
+                                   (goto-char (point-max))
+                                   (insert (org-glance-headline:contents* headline))
+                                   (loop for check in failed-checks
+                                      do (insert "- " (symbol-name check) "\n")))))))))))
 
-                    (when (org-glance-view-doctor:check-for-links-in-title file view headline)
-                      (with-current-buffer report-buffer
-                        (goto-char (point-max))
-                        (insert (org-glance-headline:contents headline) "\n")
-                        ;; (insert (format "* Link in title\n%s\n" (org-glance-headline:title headline)))
-                        )
-                      (incf err-count))))))))
-
-    (with-current-buffer report-buffer
-      (org-mode)
-      (goto-char (point-min))
-      (insert (org-glance:f org-glance-view-doctor-header-template
-                            :category vid
-                            :error_count err-count))
-      (write-file (org-glance-view:doctor-location vid)))
-
-    ;; (switch-to-buffer report-buffer)
-    ))
+    (with-temp-file (org-glance-view:doctor-location vid)
+      (org-glance:f> org-glance-view-doctor-header-template
+                     :category vid
+                     :error_count err-count)
+      (insert (with-current-buffer report-buffer (buffer-string))))
+    (kill-buffer report-buffer)
+    (find-file (org-glance-view:doctor-location vid))))
 
 (org-glance-module-provide)

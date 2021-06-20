@@ -20,13 +20,23 @@
        when (member (downcase (symbol-name tag)) org-tags)
        collect tag)))
 
-(defun org-glance:f (s &rest kwargs)
-  "expand a template containing {:keyword} with the definitions in KWARGS."
+(cl-defun org-glance:f (s &rest kwargs)
+  "expand a template containing $keyword with the definitions in KWARGS."
   (replace-regexp-in-string "\\($[A-Za-z_-]+\\)"
                             (lambda (arg)
                               (let ((keyword (intern (format ":%s" (substring arg 1)))))
-                                (pp keyword)
                                 (format "%s" (plist-get kwargs keyword)))) s))
+
+(cl-defun org-glance:f* (s &rest kwargs)
+  "Same as `org-glance:f' but strips margins (scala style)."
+  (cl-loop
+     with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
+     for line in (s-split "\n" s)
+     concat (apply #'org-glance:f (append (list (funcall stripMargin line)) kwargs))
+     concat "\n"))
+
+(cl-defun org-glance:f> (s &rest kwargs)
+  (insert (apply 'org-glance:f (append (list s) kwargs))))
 
 (defun --org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))

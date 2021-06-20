@@ -24,13 +24,22 @@
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:contents (obj)
-  (let* ((headline (org-glance-headline obj)))
+(cl-defun org-glance-headline:contents (hl)
+  (let* ((headline (org-glance-headline hl)))
     (with-temp-buffer
       (insert-file-contents (org-glance-headline:file headline))
       (org-glance-headline:search headline)
       (org-narrow-to-subtree)
       (org-glance-headline:normalize-indentation))))
+
+(cl-defun org-glance-headline:contents* (hl)
+  (org-glance:f*
+   "* $title
+      |:PROPERTIES:
+      |:ORG_GLANCE_ID: $id
+      |:END:"
+   :title (org-glance-headline:title hl)
+   :id (org-glance-headline:id hl)))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-headline:narrow* headline
