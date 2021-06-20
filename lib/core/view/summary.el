@@ -2,7 +2,7 @@
 
 (org-glance-module-import lib.core.view)
 
-(defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-summary -*-
+(defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-overview -*-
 
 #+CATEGORY: $category
 #+STARTUP: overview

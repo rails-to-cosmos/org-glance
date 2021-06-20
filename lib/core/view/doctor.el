@@ -2,7 +2,7 @@
 
 (org-glance-module-import lib.core.view)
 
-(defvar org-glance-view-doctor-header-template "#    -*- mode: org; mode: org-glance-summary -*-
+(defvar org-glance-view-doctor-header-template "#    -*- mode: org; mode: org-glance-overview -*-
 
 #+CATEGORY: $category
 #+STARTUP: overview
@@ -58,34 +58,33 @@
 
     (cl-loop for file in (org-glance-scope scope)
        do (save-window-excursion
-            (message "Working with %s" file)
+            (message "Staring at %s" file)
             (redisplay)
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
-              (lambda (headline)
+              (lambda (el)
                 ;; - [ ] check if there is an org-link in title
                 ;; - [ ] check if visited file is not headline archive file
                 ;; - [ ] check for view data structure: no empty directories etc
                 ;; - [ ] check for view data structure: proper partitioning
                 ;; - [ ] check for nested views and ask to flatten them
+                (let ((headline (org-glance-headline el)))
+                  (when (org-glance-headline:matches-filter? (org-glance-view-filter view) headline)
+                    (when (org-glance-view-doctor:check-for-corrupted-properties file view headline)
+                      (with-current-buffer report-buffer
+                        (goto-char (point-max))
+                        (insert (org-glance-headline:contents headline) "\n")
+                        ;; (insert (format "* Uncaptured headline\n%s\n" (org-glance-headline:title headline)))
+                        )
+                      (incf err-count))
 
-                (when (org-glance-headline:matches-filter? (org-glance-view-filter view) headline)
-
-                  (when (org-glance-view-doctor:check-for-corrupted-properties file view headline)
-                    (with-current-buffer report-buffer
-                      (goto-char (point-max))
-                      ;; (insert (org-glance-headline:contents headline) "\n")
-                      ;; (insert (format "* Uncaptured headline\n%s\n" (org-glance-headline:title headline)))
-                      )
-                    (incf err-count))
-
-                  (when (org-glance-view-doctor:check-for-links-in-title file view headline)
-                    (with-current-buffer report-buffer
-                      (goto-char (point-max))
-                      ;; (insert (org-glance-headline:contents headline) "\n")
-                      ;; (insert (format "* Link in title\n%s\n" (org-glance-headline:title headline)))
-                      )
-                    (incf err-count)))))))
+                    (when (org-glance-view-doctor:check-for-links-in-title file view headline)
+                      (with-current-buffer report-buffer
+                        (goto-char (point-max))
+                        (insert (org-glance-headline:contents headline) "\n")
+                        ;; (insert (format "* Link in title\n%s\n" (org-glance-headline:title headline)))
+                        )
+                      (incf err-count))))))))
 
     (with-current-buffer report-buffer
       (org-mode)

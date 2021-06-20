@@ -11,9 +11,11 @@
   (org-glance-metastore:headline obj))
 
 (cl-defmethod org-glance-headline ((obj symbol))
-  (org-glance-metastore:headline (symbol-name obj)))
+  (org-glance-headline (symbol-name obj)))
 
 (cl-defmethod org-glance-headline ((obj list))
+  (unless (org-element-property :file obj)
+    (org-element-put-property obj :file (buffer-file-name)))
   obj)
 
 (cl-defmethod org-glance-headline ((obj null))
@@ -21,5 +23,13 @@
   (save-excursion
     (org-glance-headline:goto-beginning-of-nearest-headline)
     (org-glance-headline (org-glance-headline:id))))
+
+;; (progn
+;;   (let ((hl (org-glance-headline "Location-20210515-70018c32c7ccff963dc80983481a4557")))
+;;     (save-window-excursion
+;;       (org-glance-headline:visit hl)
+;;       ;; (org-glance-headline:file (org-glance-headline (org-element-at-point)))
+;;       (org-glance-headline:contents (org-glance-headline (org-element-at-point)))
+;;       )))
 
 (org-glance-module-provide)

@@ -5,7 +5,7 @@
 (org-glance-module-import lib.core.headline.factory)
 (org-glance-module-import lib.core.metastore)
 
-(defmacro org-glance-with-headline-narrowed (headline &rest forms)
+(defmacro org-glance-headline:narrow* (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
   `(let* ((file (org-element-property :file ,headline))
@@ -24,16 +24,16 @@
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:contents (id)
-  (with-temp-buffer
-    (let* ((headline (org-glance-headline id)))
+(cl-defun org-glance-headline:contents (obj)
+  (let* ((headline (org-glance-headline obj)))
+    (with-temp-buffer
       (insert-file-contents (org-glance-headline:file headline))
       (org-glance-headline:search headline)
       (org-narrow-to-subtree)
       (org-glance-headline:normalize-indentation))))
 
 (cl-defun org-glance-headline:links (headline)
-  (org-glance-with-headline-narrowed headline
+  (org-glance-headline:narrow* headline
     (org-element-map (org-element-parse-buffer) 'link
       (lambda (link)
         (cons
@@ -43,7 +43,7 @@
          (org-element-property :begin link))))))
 
 (cl-defun org-glance-headline:modtime (headline)
-  (org-glance-with-headline-narrowed headline
+  (org-glance-headline:narrow* headline
     (visited-file-modtime)))
 
 (cl-defun org-glance-headline:modtime* (headline)

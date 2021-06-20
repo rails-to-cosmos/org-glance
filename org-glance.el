@@ -44,7 +44,7 @@
 
 (org-glance-module-import lib.core.actions)
 
-(org-glance-module-import lib.modes.summary-mode)
+(org-glance-module-import lib.modes.overview-mode)
 
 (org-glance-module-import lib.core.scope) ;; TODO refactor
 
