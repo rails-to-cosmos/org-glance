@@ -32,14 +32,14 @@
       (org-narrow-to-subtree)
       (org-glance-headline:normalize-indentation))))
 
-(cl-defun org-glance-headline:contents* (hl)
+(cl-defun org-glance-headline:contents* (headline)
   (org-glance:f*
    "* $title
       |:PROPERTIES:
       |:ORG_GLANCE_ID: $id
       |:END:"
-   :title (org-glance-headline:title hl)
-   :id (org-glance-headline:id hl)))
+   :title (org-glance-headline:title headline)
+   :id (org-glance-headline:id headline)))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-headline:narrow* headline
@@ -67,21 +67,29 @@
           (substring-no-properties (org-get-todo-state))
         (error "")))))
 
-(cl-defun org-glance-headline:sync-headline-at-point ()
+(cl-defun org-glance-headline:sync ()
   (interactive)
-  (let ((curpos (point)))
+  (let ((initial-point (point))
+        (inhibit-read-only t))
     (org-glance-headline:goto-beginning-of-nearest-headline)
-    (let ((original-headline (org-glance-headline nil))
-          (current-headline (org-glance-headline:at-point))
-          (inhibit-read-only t))
-      (save-restriction
-        (org-narrow-to-subtree)
-        (goto-char (point-min))
-        (insert (org-glance-headline:contents original-headline))
-        (delete-region (point) (point-max))
-        (goto-char (point-min))
-        (cl-loop for i from 2 to (org-glance-headline:indent current-headline)
-           do (org-demote-subtree)))
-      (goto-char curpos))))
+    (if-let (original-contents (condition-case nil
+                                   (org-glance-headline:contents (org-glance-headline nil))
+                                 (error nil)))
+        (when-let (current-headline (org-glance-headline:at-point))
+          (save-restriction
+            (org-narrow-to-subtree)
+            (goto-char (point-min))
+            (insert original-contents)
+            (delete-region (point) (point-max))
+            (goto-char (point-min))
+            (cl-loop
+               for i from 1 to (1- (org-glance-headline:indent current-headline))
+               do (org-demote-subtree)))
+          (goto-char initial-point)
+          (if (org-glance-headline:at?)
+              (org-overview)
+            (org-cycle-hide-drawers 'all)))
+      (when (y-or-n-p "Original heading not found. Remove it?")
+        (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
 
 (org-glance-module-provide)

@@ -29,12 +29,15 @@
         (org-glance-headline:begin headline)
         (org-glance-headline:file headline)))
 
+(cl-defun org-glance-headline:at? ()
+  (and (org-at-heading-p) (not (null (org-glance-headline:id)))))
+
 (cl-defun org-glance-headline:at-point ()
   (interactive)
   (save-excursion
     (unless (org-at-heading-p) (org-back-to-heading-or-point-min))
 
-    (while (and (null (org-glance-headline:id))
+    (while (and (not (org-glance-headline:at?))
                 (> (point) (point-min)))
       (org-up-heading-or-point-min))
 

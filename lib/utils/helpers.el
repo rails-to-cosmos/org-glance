@@ -110,7 +110,7 @@
   (let* (demote-level
          (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
          (demote (lambda (s)
-                   (cond ((null demote-level) (setq demote-level (- (length s) 1)) "*")
+                   (cond ((null demote-level) (setq demote-level (1- (length s))) "*")
                          (t (s-repeat (- (length s) demote-level) "*"))))))
     (loop for line in lines
        if (string-match "^\\*+.*" line)
