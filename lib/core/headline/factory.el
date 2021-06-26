@@ -4,6 +4,8 @@
 (org-glance-module-import lib.core.headline.def)
 (org-glance-module-import lib.utils.helpers)
 
+;; Refactor with explicit metastore
+
 (cl-defgeneric org-glance-headline (obj)
   "Headline factory.")
 
@@ -20,9 +22,9 @@
 
 (cl-defmethod org-glance-headline ((obj null))
   "Extract headline from point."
-  (save-excursion
-    (org-glance-headline:goto-beginning-of-nearest-headline)
-    (org-glance-headline (org-glance-headline:id))))
+  (-some->> (org-glance-headline:at-point)
+    (org-glance-headline:id)
+    (org-glance-metastore:headline)))
 
 ;; (progn
 ;;   (let ((hl (org-glance-headline "Location-20210515-70018c32c7ccff963dc80983481a4557")))

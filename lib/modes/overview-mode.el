@@ -7,6 +7,7 @@
 
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "v") #'org-glance-headline:visit-headline-at-point)
+(define-key org-glance-overview-mode-map (kbd "g") #'org-glance-headline:sync-headline-at-point)
 (define-key org-glance-overview-mode-map (kbd "m") #'org-glance-view-materialize-original-heading)
 (define-key org-glance-overview-mode-map (kbd "n") #'next-line)
 (define-key org-glance-overview-mode-map (kbd "p") #'previous-line)

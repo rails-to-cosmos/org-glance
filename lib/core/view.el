@@ -13,7 +13,7 @@
 
 (org-glance-module-import lib.utils.helpers)
 
-(defconst org-glance-view:all "All")  ;; do not apply any filtering to views/headlines datasets
+(defconst org-glance-view:all "All views")  ;; do not apply any filtering to views/headlines datasets
 
 (defvar org-glance-form:view org-glance-view:all)
 

@@ -67,4 +67,21 @@
           (substring-no-properties (org-get-todo-state))
         (error "")))))
 
+(cl-defun org-glance-headline:sync-headline-at-point ()
+  (interactive)
+  (let ((curpos (point)))
+    (org-glance-headline:goto-beginning-of-nearest-headline)
+    (let ((original-headline (org-glance-headline nil))
+          (current-headline (org-glance-headline:at-point))
+          (inhibit-read-only t))
+      (save-restriction
+        (org-narrow-to-subtree)
+        (goto-char (point-min))
+        (insert (org-glance-headline:contents original-headline))
+        (delete-region (point) (point-max))
+        (goto-char (point-min))
+        (cl-loop for i from 2 to (org-glance-headline:indent current-headline)
+           do (org-demote-subtree)))
+      (goto-char curpos))))
+
 (org-glance-module-provide)

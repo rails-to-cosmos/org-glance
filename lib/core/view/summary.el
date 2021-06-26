@@ -33,14 +33,14 @@
       (mapc #'org-glance-view:summary (org-glance-view:ids))
     (let ((filename (org-glance-view:summary-location vid))
           (header (org-glance:f org-glance-view-summary-header-template :category vid))
-          (headlines (->> vid org-glance-view:update org-glance-view:headlines)))
+          (headlines (->> vid org-glance-view:update org-glance-view:headlines))
+          (inhibit-read-only t))
       (--org-glance:make-file-directory filename)
       (with-temp-file filename
         (insert header)
         (cl-loop for headline in headlines
            do (insert (org-glance-headline:contents headline) "\n"))
         (org-mode)
-        (read-only-mode -1)
         (goto-char (point-min))
         (set-mark (point-max))
         (condition-case nil

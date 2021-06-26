@@ -181,14 +181,17 @@
   (save-excursion
     (org-glance-headline:goto-first-level-headline)))
 
+(cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
+  (org-glance-headline:back-to-heading)
+
+  (while (and (null (org-glance-headline:id))
+              (> (point) (point-min)))
+    (org-up-heading-or-point-min)))
+
 (cl-defun org-glance-headline:beginning-of-nearest-headline ()
   (save-excursion
     (org-glance-headline:goto-beginning-of-nearest-headline)
     (point)))
-
-(cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
-  (unless (org-at-heading-p) (org-back-to-heading))
-  (beginning-of-line))
 
 (cl-defun org-glance-headline:end-of-subtree ()
   (save-excursion
