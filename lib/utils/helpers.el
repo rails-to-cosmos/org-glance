@@ -107,21 +107,26 @@
          (org-map-tree 'org-demote))))
 
 (defun org-glance-headline:normalize-indentation ()
-  (let* (demote-level
-         (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
-         (demote (lambda (s)
-                   (cond ((null demote-level) (setq demote-level (1- (length s))) "*")
-                         (t (s-repeat (- (length s) demote-level) "*"))))))
-    (loop for line in lines
-       if (string-match "^\\*+.*" line)
-       collect (s-replace-regexp "^\\*+" demote line)
-       into demoted
-       else
-       collect line into demoted
-       finally return (s-join "\n" demoted))))
-
-(cl-defun org-glance-headline-p (headline)
-  (not (null (org-glance-headline:id headline))))
+  (interactive)
+  (org-promote-subtree)
+  ;; (while
+  ;;     (condition-case nil
+  ;;         (and (org-promote-subtree) t)
+  ;;       (error nil))
+  ;;   t)
+  ;; (let* (demote-level
+  ;;        (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
+  ;;        (demote (lambda (s)
+  ;;                  (cond ((null demote-level) (setq demote-level (1- (length s))) "*")
+  ;;                        (t (s-repeat (- (length s) demote-level) "*"))))))
+  ;;   (loop for line in lines
+  ;;      if (string-match "^\\*+.*" line)
+  ;;      collect (s-replace-regexp "^\\*+" demote line)
+  ;;      into demoted
+  ;;      else
+  ;;      collect line into demoted
+  ;;      finally return (s-join "\n" demoted)))
+  )
 
 (cl-defun org-glance-headline:eq (headline &optional (other (org-element-at-point)))
   (string= (org-glance-headline:id headline)

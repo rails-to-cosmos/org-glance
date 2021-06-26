@@ -4,22 +4,6 @@
 (org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.utils.helpers)
 
-(cl-defun org-glance-headline:search (headline)
-  "Search buffer for HEADLINE and return its point.
-Raise `org-glance-headline-not-found` error on fail.''"
-  (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                  (lambda (hl) (when (org-glance-headline:eq hl headline)
-                            (org-element-property :begin hl))))))
-    (unless points
-      (org-glance-headline-not-found "Headline not found in file %s: %s" file headline))
-
-    (when (> (length points) 1)
-      (warn "Headline ID %s is not unique in file %s"
-            (org-glance-headline:id headline)
-            (org-glance-headline:file headline)))
-
-    (goto-char (car points))))
-
 (cl-defgeneric org-glance-headline:visit (headline)
   "Visit HEADLINE.")
 
@@ -54,7 +38,7 @@ Raise `org-glance-headline-not-found` error on fail.''"
     (widen)
 
     ;; search for headline in buffer
-    (org-glance-headline:search headline)
+    (org-glance-headline:search-buffer headline)
     (org-glance-headline:expand-parents)
     (org-overview)
     (org-cycle 'contents)))

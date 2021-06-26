@@ -24,13 +24,20 @@
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:contents (hl)
-  (let* ((headline (org-glance-headline hl)))
+(cl-defun org-glance-headline:promote ()
+  (while (and (org-at-heading-p) (looking-at "^\\*\\*"))
+    (org-promote-subtree)))
+
+(cl-defun org-glance-headline:contents (headline)
+  (let* ((headline (org-glance-headline headline)))
     (with-temp-buffer
+      (org-mode)
       (insert-file-contents (org-glance-headline:file headline))
-      (org-glance-headline:search headline)
+      (org-glance-headline:search-buffer headline)
       (org-narrow-to-subtree)
-      (org-glance-headline:normalize-indentation))))
+      (goto-char (point-min))
+      (org-glance-headline:promote)
+      (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defun org-glance-headline:contents* (headline)
   (org-glance:f*

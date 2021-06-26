@@ -19,11 +19,11 @@
   "Raise `org-glance-db-outdated' exception formatted with FORMAT ARGS."
   (signal 'org-glance-db-outdated (list (apply #'format-message format args))))
 
-(define-error 'org-glance-headline-not-found
+(define-error 'org-glance-exception:headline-not-found
     "Headline not found" 'user-error)
 
-(defun org-glance-headline-not-found (format &rest args)
-  "Raise `org-glance-headline-not-found' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-headline-not-found (list (apply #'format-message format args))))
+(defun org-glance-exception:headline-not-found (format &rest args)
+  "Raise `org-glance-exception:headline-not-found' exception formatted with FORMAT ARGS."
+  (signal 'org-glance-exception:headline-not-found (list (apply #'format-message format args))))
 
 (org-glance-module-provide)

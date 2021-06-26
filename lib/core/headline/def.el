@@ -29,8 +29,33 @@
         (org-glance-headline:begin headline)
         (org-glance-headline:file headline)))
 
+(cl-defun org-glance-headline-p (headline)
+  (not (null (org-glance-headline:id headline))))
+
 (cl-defun org-glance-headline:at? ()
-  (and (org-at-heading-p) (not (null (org-glance-headline:id)))))
+  (and (org-at-heading-p) (org-glance-headline-p (org-element-at-point))))
+
+(cl-defun org-glance-headline:in? ()
+  (save-excursion
+    (unless (org-at-heading-p) (org-back-to-heading-or-point-min))
+    (while (and (not (org-glance-headline:at?))
+                (> (point) (point-min)))
+      (org-up-heading-or-point-min))
+    (org-glance-headline:at?)))
+
+(cl-defun org-glance-headline:search-buffer (headline)
+  (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
+                  (lambda (hl) (when (org-glance-headline:eq hl headline)
+                            (org-element-property :begin hl))))))
+    (unless points
+      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" file headline))
+
+    (when (> (length points) 1)
+      (warn "Headline ID %s is not unique in file %s"
+            (org-glance-headline:id headline)
+            (org-glance-headline:file headline)))
+
+    (goto-char (car points))))
 
 (cl-defun org-glance-headline:at-point ()
   (interactive)

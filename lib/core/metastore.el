@@ -70,7 +70,7 @@
                               when headline
                               collect (org-glance-metastore:deserialize headline))))
     (unless matched-headlines
-      (org-glance-headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
+      (org-glance-exception:headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
     (if (= (length matched-headlines) 1)
         (car matched-headlines)
       (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
