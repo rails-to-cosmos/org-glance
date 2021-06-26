@@ -95,7 +95,7 @@
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
 (defun org-glance-view:back-to-heading ()
-  (org-glance-headline:back-to-heading)
+  (org-glance-headline:ensure-at-heading)
   (or (org-glance-headline:view-ids)
       (progn
         (org-up-element)
@@ -260,7 +260,7 @@
         (org-mode)
         (insert buffer-contents)
         (goto-char (point-min))
-        (org-glance-headline:promote)
+        (--org-glance-headline:promote.deprecated)
         (buffer-hash)))))
 
 (defun org-glance-view-source-hash ()
@@ -276,7 +276,7 @@
           (org-mode)
           (insert (s-trim subtree))
           (org-glance-headline:goto-first-level-headline)
-          (org-glance-headline:promote)
+          (--org-glance-headline:promote.deprecated)
           (buffer-hash))))))
 
 (cl-defmethod org-glance-view-delete ((view-id symbol))

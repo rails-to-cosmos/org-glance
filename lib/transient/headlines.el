@@ -34,7 +34,8 @@
 
   ["Actions"
    [("e" "Extract" org-glance-action-extract)
-    ("j" "Jump" org-glance-action-open)]]
+    ("j" "Jump" org-glance-action-open)
+    ("m" "Materialize" org-glance-action-materialize)]]
 
   ["Manage views"
    [("v a" "Agenda" org-glance-view:agenda)
@@ -45,8 +46,7 @@
     ("v v" "Visit" org-glance-view-visit)]]
 
   ["Manage headlines"
-   [("h m" "Materialize" org-glance-action-materialize)
-    ("h v" "Visit" org-glance-action-visit)]
+   [("h v" "Visit" org-glance-action-visit)]
    [("h c" "Capture" org-glance-capture-subtree-at-point)
     ("h r" "Refer" org-glance:add-relation)]])
 

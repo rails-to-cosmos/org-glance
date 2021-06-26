@@ -24,8 +24,9 @@
            (t (kill-buffer (get-file-buffer file))))
      res))
 
-(cl-defun org-glance-headline:promote ()
-  (while (and (org-at-heading-p) (looking-at "^\\*\\*"))
+(cl-defun org-glance-headline:promote-to-first-level ()
+  (org-glance-headline:ensure-at-heading)
+  (while (and (org-glance-headline:at?) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (headline)
@@ -36,7 +37,7 @@
       (org-glance-headline:search-buffer headline)
       (org-narrow-to-subtree)
       (goto-char (point-min))
-      (org-glance-headline:promote)
+      (org-glance-headline:promote-to-first-level)
       (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defun org-glance-headline:contents* (headline)

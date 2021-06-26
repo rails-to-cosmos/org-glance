@@ -4,6 +4,15 @@
 (org-glance-module-import lib.core.actions)
 (org-glance-module-import lib.core.view)
 
+(defun --org-glance-headline:promote.deprecated ()
+  "Deprecated because of side-effects."
+  (cl-loop while (condition-case nil
+                     (org-with-limited-levels (org-map-tree 'org-promote) t)
+                   (error nil))
+     with promote-level = 0
+     do (cl-incf promote-level)
+     finally (return promote-level)))
+
 (org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
   (let ((buffer org-glance-materialized-view-buffer))
@@ -35,7 +44,7 @@
           ;; run hooks on original subtree
           (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
-          (setq-local --org-glance-view-indent (org-glance-headline:promote))
+          (setq-local --org-glance-view-indent (--org-glance-headline:promote.deprecated))
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))
 

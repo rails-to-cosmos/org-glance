@@ -38,7 +38,7 @@
 
 (cl-defun org-glance:generate-id-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
-    (org-glance-headline:back-to-heading)
+    (org-glance-headline:ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (org-set-property "ORG_GLANCE_ID"
@@ -47,7 +47,7 @@
 
 (cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
-    (org-glance-headline:back-to-heading)
+    (org-glance-headline:ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((dir (f-join (org-glance-view-resource-location view-id)
@@ -69,7 +69,7 @@
 (cl-defun org-glance-capture-subtree-at-point (&optional view-id)
   (interactive)
   (save-excursion
-    (org-glance-headline:back-to-heading)
+    (org-glance-headline:ensure-at-heading)
     (let* ((view-id (if view-id
                         (symbol-name view-id)
                       (org-completing-read "Capture subtree for view: " (seq-difference

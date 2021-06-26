@@ -43,10 +43,6 @@
     (unless (file-exists-p dir)
       (make-directory dir t))))
 
-(defun org-glance-headline:back-to-heading ()
-  (unless (org-at-heading-p)
-    (org-back-to-heading)))
-
 (defun org-glance--collect-tags ()
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
@@ -93,40 +89,10 @@
           (plist-put (cadr headline) :file file)
           headline)))))
 
-(defun org-glance-headline:promote ()
-  (cl-loop while (condition-case nil
-                     (org-with-limited-levels (org-map-tree 'org-promote) t)
-                   (error nil))
-     with promote-level = 0
-     do (cl-incf promote-level)
-     finally (return promote-level)))
-
 (defun org-glance-headline:demote (level)
   (cl-loop repeat level
      do (org-with-limited-levels
          (org-map-tree 'org-demote))))
-
-(defun org-glance-headline:normalize-indentation ()
-  (interactive)
-  (org-promote-subtree)
-  ;; (while
-  ;;     (condition-case nil
-  ;;         (and (org-promote-subtree) t)
-  ;;       (error nil))
-  ;;   t)
-  ;; (let* (demote-level
-  ;;        (lines (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n"))
-  ;;        (demote (lambda (s)
-  ;;                  (cond ((null demote-level) (setq demote-level (1- (length s))) "*")
-  ;;                        (t (s-repeat (- (length s) demote-level) "*"))))))
-  ;;   (loop for line in lines
-  ;;      if (string-match "^\\*+.*" line)
-  ;;      collect (s-replace-regexp "^\\*+" demote line)
-  ;;      into demoted
-  ;;      else
-  ;;      collect line into demoted
-  ;;      finally return (s-join "\n" demoted)))
-  )
 
 (cl-defun org-glance-headline:eq (headline &optional (other (org-element-at-point)))
   (string= (org-glance-headline:id headline)
@@ -187,7 +153,7 @@
     (org-glance-headline:goto-first-level-headline)))
 
 (cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
-  (org-glance-headline:back-to-heading)
+  (org-glance-headline:ensure-at-heading)
 
   (while (and (null (org-glance-headline:id))
               (> (point) (point-min)))

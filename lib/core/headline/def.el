@@ -75,4 +75,8 @@
                                                for i from 0 do (forward-char)
                                                finally (return i))))))))
 
+(cl-defun org-glance-headline:ensure-at-heading ()
+  (unless (org-at-heading-p)
+    (org-back-to-heading)))
+
 (org-glance-module-provide)
