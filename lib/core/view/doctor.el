@@ -71,6 +71,7 @@
                                          ;; - [ ] check for view data structure: no empty directories etc
                                          ;; - [ ] check for view data structure: proper partitioning
                                          ;; - [ ] check for nested views and ask to flatten them
+                                         ;; - [ ] check if original headline is stored in archive
                                          )
                        for failed? = (apply check (list file view headline))
                        when failed? collect check into failed-checks

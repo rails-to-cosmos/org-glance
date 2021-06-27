@@ -98,6 +98,7 @@
               (org-overview)
             (org-cycle-hide-drawers 'all)))
       (when (y-or-n-p "Original heading not found. Remove it?")
-        (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
+        (kill-region (org-entry-beginning-position) (org-entry-end-position))))
+    (save-buffer)))
 
 (org-glance-module-provide)
