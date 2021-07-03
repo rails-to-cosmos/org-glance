@@ -35,8 +35,33 @@
      concat (apply #'org-glance:f (append (list (funcall stripMargin line)) kwargs))
      concat "\n"))
 
+(cl-defun org-glance:f! (s args)
+  "Applies template format to S and ARGS."
+  (apply 'org-glance:f (append (list s) args)))
+
 (cl-defun org-glance:f> (s &rest kwargs)
-  (insert (apply 'org-glance:f (append (list s) kwargs))))
+  (insert (org-glance:f! s kwargs)))
+
+(defmacro org-glance:f** (fmt)
+  "Like `s-format' but with format fields in it.
+FMT is a string to be expanded against the current lexical
+environment. It is like what is used in `s-lex-format', but has
+an expanded syntax to allow format-strings. For example:
+${user-full-name 20s} will be expanded to the current value of
+the variable `user-full-name' in a field 20 characters wide.
+  (let ((f (sqrt 5)))  (org-glance:f \"${f 1.2f}\"))
+  will render as: 2.24
+This function is inspired by the f-strings in Python 3.6, which I
+enjoy using a lot.
+"
+  (let* ((matches (s-match-strings-all"${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
+         (agetter (cl-loop for (m0 m1 m2 m3) in matches
+                        collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                      (if s-lex-value-as-lisp "S" "s")
+                                                                   ,m2))
+                                                  (symbol-value (intern ,m1)))))))
+
+    `(s-format ,fmt 'aget (list ,@agetter))))
 
 (defun --org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))

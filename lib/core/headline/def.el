@@ -66,7 +66,7 @@
                 (> (point) (point-min)))
       (org-up-heading-or-point-min))
 
-    (when (> (point) (point-min))
+    (when (org-glance-headline:at?)
       (-> (org-element-at-point)
         (org-element-put-property :file (buffer-file-name))
         (org-element-put-property :indent (save-excursion

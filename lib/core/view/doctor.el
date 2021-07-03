@@ -2,12 +2,12 @@
 
 (org-glance-module-import lib.core.view)
 
-(defvar org-glance-view-doctor-header-template "#    -*- mode: org; mode: org-glance-overview -*-
+(defconst org-glance-view-doctor-header-template "#    -*- mode: org; mode: org-glance-overview -*-
 
-#+CATEGORY: $category
+#+CATEGORY: ${vid}
 #+STARTUP: overview
 
-=$error_count warnings found=
+=${error-count} warnings found=
 
 ")
 
@@ -49,7 +49,7 @@
          (db (org-glance-view-metadata-location view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope))
          (report-buffer (format "*org-glance-doctor:%s*" vid))
-         (err-count 0))
+         (error-count 0))
 
     (if (get-buffer report-buffer)
         (with-current-buffer report-buffer
@@ -77,7 +77,7 @@
                        when failed? collect check into failed-checks
                        count failed? into failed-counts
                        finally (unless (null failed-checks)
-                                 (incf err-count failed-counts)
+                                 (incf error-count failed-counts)
                                  (with-current-buffer report-buffer
                                    (goto-char (point-max))
                                    (insert (org-glance-headline:contents* headline))
@@ -85,10 +85,8 @@
                                       do (insert "- " (symbol-name check) "\n")))))))))))
 
     (with-temp-file (org-glance-view:doctor-location vid)
-      (org-glance:f> org-glance-view-doctor-header-template
-                     :category vid
-                     :error_count err-count)
-      (insert (with-current-buffer report-buffer (buffer-string))))
+      (insert (org-glance:f** org-glance-view-doctor-header-template)
+              (with-current-buffer report-buffer (buffer-string))))
     (kill-buffer report-buffer)
     (find-file (org-glance-view:doctor-location vid))))
 

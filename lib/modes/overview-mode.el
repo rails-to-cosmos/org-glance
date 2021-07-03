@@ -3,8 +3,7 @@
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Show read-only outlines for `org-glance' views.")
 
-;; (define-key org-glance-overview-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
-
+(define-key org-glance-overview-mode-map (kbd "a") 'org-attach)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-headline:visit-headline-at-point)
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-headline:visit-headline-at-point)
