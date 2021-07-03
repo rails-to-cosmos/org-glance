@@ -43,8 +43,4 @@
     (org-overview)
     (org-cycle 'contents)))
 
-(cl-defun org-glance-headline:visit-headline-at-point ()
-  (interactive)
-  (org-glance-headline:visit nil))
-
 (org-glance-module-provide)

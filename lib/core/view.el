@@ -49,7 +49,7 @@
 
 (define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
 (define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-headline:visit-headline-at-point)
+(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-overview:visit)
 
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
