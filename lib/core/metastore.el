@@ -3,27 +3,21 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.utils.helpers)
-
 (org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.exceptions)
 
-(cl-defun org-glance-metastore:init (file headlines)
+(cl-defun org-glance-metastore:create (file &optional headlines)
   "Create FILE and save HEADLINES metadata to it."
-  (let ((table (make-hash-table :test 'equal))
-        (file-tmp (make-temp-file "org-glance-view-metadata-")))
-
-    (dolist (headline headlines)
-      (puthash (org-glance-headline:id headline) (org-glance-headline:serialize headline) table))
-
-    (append-to-file (prin1-to-string table) nil file-tmp)
-
-    ;; apply changes to original file
-    (--org-glance:make-file-directory file)
-    (when (file-exists-p file)
-      (delete-file file t))
-    (rename-file file-tmp file)
-    (message "Metastore has been initialized: %s" file)
-    headlines))
+  (with-temp-file file
+    (->>
+        (cl-loop for headline in headlines
+           with table = (make-hash-table :test 'equal)
+           do (puthash (org-glance-headline:id headline) (org-glance-headline:serialize headline) table)
+           finally (return table))
+      prin1-to-string
+      insert))
+  (message "Metastore has been initialized: %s" file)
+  headlines)
 
 (defun org-glance-metastore:read (file)
   "Read metastore FILE to memory."
@@ -31,19 +25,10 @@
     (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun org-glance-metastore:deserialize (headline)
-  "Convert metastore value HEADLINE to org-element enriched with metadata."
-  (cl-destructuring-bind (title begin file) headline
-    (org-element-create 'headline
-                        `(:raw-value ,title
-                          :begin ,begin
-                          :file ,file
-                          :ORG_GLANCE_ID ,id))))
-
-(defun org-glance-metastore:load (file)
+(defun org-glance-metastore:read-headlines (file)
   (let ((metastore (org-glance-metastore:read file)))
     (cl-loop for id being the hash-keys of metastore
-       collect (org-glance-metastore:deserialize (gethash id metastore)))))
+       collect (org-glance-headline:deserialize id (gethash id metastore)))))
 
 (cl-defun org-glance-headlines
     (&key db
@@ -54,8 +39,8 @@
   (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
          (load-db? (and (not (null db)) (file-exists-p db)))
          (skip-db? (null db)))
-    (cond (create-db? (org-glance-metastore:init db (org-glance-scope-headlines scope filter)))
-          (load-db?   (org-glance-metastore:load db))
+    (cond (create-db? (org-glance-metastore:create db (org-glance-scope-headlines scope filter)))
+          (load-db?   (org-glance-metastore:read-headlines db))
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
@@ -68,7 +53,7 @@
                                                 org-glance-metastore:read)
                               for headline = (gethash id metastore)
                               when headline
-                              collect (org-glance-metastore:deserialize headline))))
+                              collect (org-glance-headline:deserialize id headline))))
     (unless matched-headlines
       (org-glance-exception:headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
     (if (= (length matched-headlines) 1)

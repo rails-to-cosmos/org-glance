@@ -29,6 +29,16 @@
         (org-glance-headline:begin headline)
         (org-glance-headline:file headline)))
 
+(defun org-glance-headline:deserialize (id headline)
+  "Convert metastore value HEADLINE to org-element enriched with metadata."
+  (cl-destructuring-bind (title begin file) headline
+    (org-element-create
+     'headline
+     (list :raw-value title
+           :begin begin
+           :file file
+           :ORG_GLANCE_ID id))))
+
 (cl-defun org-glance-headline-p (headline)
   (not (null (org-glance-headline:id headline))))
 

@@ -148,7 +148,7 @@
            (db (org-glance-view-metadata-location view))
            (filter (org-glance-view-filter view))
            (scope (or (org-glance-view-scope view) org-glance-default-scope)))
-      (org-glance-metastore:init db (org-glance-scope-headlines scope filter))
+      (org-glance-metastore:create db (org-glance-scope-headlines scope filter))
       (list view))))
 
 (cl-defgeneric org-glance-view:headlines (view))
