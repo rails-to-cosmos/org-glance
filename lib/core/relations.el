@@ -10,9 +10,12 @@
     (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
 
 (cl-defun org-glance-headline:add-log-note (note)
-  (org-glance-headline:goto-beginning-of-nearest-headline)
-  (goto-char (org-log-beginning t))
-  (insert note "\n"))
+  (save-window-excursion
+    (save-excursion
+      (org-glance-headline:goto-beginning-of-nearest-headline)
+      (org-glance-headline:visit (org-glance-headline nil))
+      (goto-char (org-log-beginning t))
+      (insert note "\n"))))
 
 (cl-defun org-glance-link:visit ()
   (error "Not implemented yet."))
@@ -36,11 +39,7 @@
                                                       :ORG_GLANCE_VIEW_ID
                                                       (s-join ", " (mapcar #'symbol-name source-view-ids)))))
       (save-window-excursion
-        (org-glance-headline:visit (org-glance-headline:id hl))
+        (org-glance-headline:visit (org-glance-headline hl))
         (org-glance:add-relation source-headline "Referred from" nil)))))
-
-
-(let ((a 1))
-  (f-string "hey: ${a}"))
 
 (org-glance-module-provide)

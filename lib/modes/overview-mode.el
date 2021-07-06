@@ -4,6 +4,8 @@
   "Show read-only outlines for `org-glance' views.")
 
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
+(define-key org-glance-overview-mode-map (kbd "r") 'org-glance:add-relation)
+(define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
@@ -28,5 +30,12 @@
   (if (org-before-first-heading-p)
       (message "not implemented yet")
     (org-glance-headline:visit nil)))
+
+(cl-defun org-glance-overview:doctor ()
+  (interactive)
+  (if (org-before-first-heading-p)
+      (let ((category (org-get-category)))
+        (org-glance-view:doctor (intern category)))
+    (message "not implemented yet")))
 
 (org-glance-module-provide)

@@ -29,13 +29,14 @@
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"
   ["Actions"
-   [("a" "Agenda" org-glance-view:agenda)
-    ("c" "Capture" org-glance-capture-subtree-at-point)
-    ("d" "Doctor" org-glance-view:doctor)
+   [
     ("e" "Extract" org-glance-action-extract)
     ("j" "Jump" org-glance-action-open)
     ("m" "Materialize" org-glance-action-materialize)
-    ("v" "Visit" org-glance-view-visit)
-    ("r" "Refer" org-glance:add-relation)]])
+    ("v" "Visit" org-glance-view-visit)]
+   ]
+
+  ["Capture"
+   ("c" "Capture" org-glance-capture-subtree-at-point)])
 
 (org-glance-module-provide)

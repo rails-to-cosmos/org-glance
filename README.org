@@ -12,11 +12,7 @@ Fast, clean and convenient way of traversing your org-mode forest.
 Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
-* Issues [1/13]
-** DONE test me like https://github.com/flycheck/flycheck
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-04-04 Sun 22:13]
-:END:
+* Issues [0/12]
 ** TODO org-glance immutable exports
 SCHEDULED: <2021-03-27 Sat 20:00>
 ** TODO org-glance fix brackets

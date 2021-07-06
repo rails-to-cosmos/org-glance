@@ -284,7 +284,7 @@
 
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (append (list org-glance-view:all) (org-glance-view:ids))))
+  (let ((views (org-glance-view:ids)))
     (if (> (length views) 1)
         (intern (org-completing-read prompt views))
       (car views))))
