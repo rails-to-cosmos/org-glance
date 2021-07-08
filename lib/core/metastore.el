@@ -25,10 +25,9 @@
     (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun org-glance-metastore:read-headlines (file)
-  (let ((metastore (org-glance-metastore:read file)))
-    (cl-loop for id being the hash-keys of metastore
-       collect (org-glance-headline:deserialize id (gethash id metastore)))))
+(defun org-glance-metastore:headlines (metastore)
+  (cl-loop for id being the hash-keys of metastore
+     collect (org-glance-headline:deserialize id (gethash id metastore))))
 
 (cl-defun org-glance-headlines
     (&key db
@@ -40,7 +39,7 @@
          (load-db? (and (not (null db)) (file-exists-p db)))
          (skip-db? (null db)))
     (cond (create-db? (org-glance-metastore:create db (org-glance-scope-headlines scope filter)))
-          (load-db?   (org-glance-metastore:read-headlines db))
+          (load-db?   (org-glance-metastore:headlines (org-glance-metastore:read db)))
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
