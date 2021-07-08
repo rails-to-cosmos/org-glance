@@ -43,6 +43,15 @@
   ;;   (when (y-or-n-p "Headline contains org-link in title. Replace it with the raw-value?")))
   )
 
+(cl-defun org-glance-headline:contents* (headline)
+  (org-glance:f*
+   "* $title
+      |:PROPERTIES:
+      |:ORG_GLANCE_ID: $id
+      |:END:"
+   :title (org-glance-headline:title headline)
+   :id (org-glance-headline:id headline)))
+
 (cl-defun org-glance-view:doctor (&optional (vid (org-glance-view:completing-read)))
   (interactive)
   (let* ((view (org-glance-view:get-view-by-id vid))
@@ -62,27 +71,27 @@
             (redisplay)
             (find-file file)
             (org-element-map (org-element-parse-buffer 'headline) 'headline
-              (lambda (el)
-                (when (org-glance-headline:matches-filter? (org-glance-view-filter view) el)
-                  (let ((headline (org-glance-headline el)))
-                    (loop for check in '(org-glance-view-doctor:check-for-corrupted-properties
-                                         org-glance-view-doctor:check-for-links-in-title
-                                         ;; - [ ] check if visited file is not headline archive file
-                                         ;; - [ ] check for view data structure: no empty directories etc
-                                         ;; - [ ] check for view data structure: proper partitioning
-                                         ;; - [ ] check for nested views and ask to flatten them
-                                         ;; - [ ] check if original headline is stored in archive
-                                         )
-                       for failed? = (apply check (list file view headline))
-                       when failed? collect check into failed-checks
-                       count failed? into failed-counts
-                       finally (unless (null failed-checks)
-                                 (incf error-count failed-counts)
-                                 (with-current-buffer report-buffer
-                                   (goto-char (point-max))
-                                   (insert (org-glance-headline:contents* headline))
-                                   (loop for check in failed-checks
-                                      do (insert "- " (symbol-name check) "\n")))))))))))
+              (lambda (headline)
+                ;; maybe enrich headline with :file property?
+                (when (org-glance-headline:matches-filter? (org-glance-view-filter view) headline)
+                  (loop for check in '(org-glance-view-doctor:check-for-corrupted-properties
+                                       org-glance-view-doctor:check-for-links-in-title
+                                       ;; - [ ] check if visited file is not headline archive file
+                                       ;; - [ ] check for view data structure: no empty directories etc
+                                       ;; - [ ] check for view data structure: proper partitioning
+                                       ;; - [ ] check for nested views and ask to flatten them
+                                       ;; - [ ] check if original headline is stored in archive
+                                       )
+                     for failed? = (apply check (list file view headline))
+                     when failed? collect check into failed-checks
+                     count failed? into failed-counts
+                     finally (unless (null failed-checks)
+                               (incf error-count failed-counts)
+                               (with-current-buffer report-buffer
+                                 (goto-char (point-max))
+                                 (insert (org-glance-headline:contents* headline))
+                                 (loop for check in failed-checks
+                                    do (insert "- " (symbol-name check) "\n"))))))))))
 
     (with-temp-file (org-glance-view:doctor-location vid)
       (insert (org-glance:f** org-glance-view-doctor-header-template)
