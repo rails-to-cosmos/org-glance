@@ -29,7 +29,7 @@
   (interactive)
   (if (org-before-first-heading-p)
       (message "not implemented yet")
-    (org-glance-headline:visit nil)))
+    (org-glance-headline:visit (org-glance-headline:at-point))))
 
 (cl-defun org-glance-overview:doctor ()
   (interactive)

@@ -9,7 +9,7 @@
 (org-glance-module-import lib.core.scope)
 (org-glance-module-import lib.core.metastore)
 (org-glance-module-import lib.core.exceptions)
-(org-glance-module-import lib.core.headline.def)
+(org-glance-module-import lib.core.headline)
 
 (org-glance-module-import lib.utils.helpers)
 

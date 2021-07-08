@@ -67,26 +67,31 @@
 
     (goto-char (car points))))
 
-(cl-defun org-glance-headline:at-point ()
-  (interactive)
-  (save-excursion
-    (unless (org-at-heading-p) (org-back-to-heading-or-point-min))
+(cl-defun org-glance-headline:search-backward ()
+  "Return first proper `org-glance-headline' by searching backward."
+  (unless (org-at-heading-p)
+    (org-back-to-heading-or-point-min))
 
-    (while (and (not (org-glance-headline:at?))
-                (> (point) (point-min)))
-      (org-up-heading-or-point-min))
+  (while (and (not (org-glance-headline:at?))
+              (> (point) (point-min)))
+    (org-up-heading-or-point-min))
 
-    (when (org-glance-headline:at?)
-      (-> (org-element-at-point)
-        (org-element-put-property :file (buffer-file-name))
-        (org-element-put-property :indent (save-excursion
-                                            (beginning-of-line)
-                                            (cl-loop while (looking-at "\\*")
-                                               for i from 0 do (forward-char)
-                                               finally (return i))))))))
+  (when (org-glance-headline:at?)
+    (org-element-at-point)))
 
 (cl-defun org-glance-headline:ensure-at-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading)))
+
+(cl-defun org-glance-headline:at-point ()
+  "Build `org-glance-headline' from `org-element' at point."
+  (save-excursion
+    (-some-> (org-glance-headline:search-backward)
+      (org-element-put-property :file (buffer-file-name))
+      (org-element-put-property :indent (save-excursion
+                                          (beginning-of-line)
+                                          (cl-loop while (looking-at "\\*")
+                                             for i from 0 do (forward-char)
+                                             finally (return i)))))))
 
 (org-glance-module-provide)

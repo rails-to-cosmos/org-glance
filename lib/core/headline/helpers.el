@@ -1,6 +1,6 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.headline.def)
+(org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.core.headline.visit)
 (org-glance-module-import lib.core.metastore)
 
