@@ -55,7 +55,7 @@
 (cl-defun org-glance-view:doctor (&optional (vid (org-glance-view:completing-read)))
   (interactive)
   (let* ((view (org-glance-view:get-view-by-id vid))
-         (db (org-glance-view-metadata-location view))
+         (db (org-glance-view-metastore-location view))
          (scope (or (org-glance-view-scope view) org-glance-default-scope))
          (report-buffer (format "*org-glance-doctor:%s*" vid))
          (error-count 0))

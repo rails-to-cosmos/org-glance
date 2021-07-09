@@ -40,7 +40,6 @@
 
 (org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.core.headline.helpers)
-(org-glance-module-import lib.core.headline.visit)
 
 (org-glance-module-import lib.core.actions)
 

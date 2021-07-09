@@ -120,7 +120,7 @@
 (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
-(cl-defmethod org-glance-view-metadata-location ((view org-glance-view))
+(cl-defmethod org-glance-view-metastore-location ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
     (f-join org-glance-view-location
             view-id
@@ -145,7 +145,7 @@
       (cl-loop for id in (org-glance-view:ids)
          append (org-glance-view:update id))
     (let* ((view (org-glance-view:get-view-by-id vid))
-           (db (org-glance-view-metadata-location view))
+           (db (org-glance-view-metastore-location view))
            (filter (org-glance-view-filter view))
            (scope (or (org-glance-view-scope view) org-glance-default-scope)))
       (org-glance-metastore:create db (org-glance-scope-headlines scope filter))
@@ -169,7 +169,7 @@
 (cl-defmethod org-glance-view:headlines ((view org-glance-view))
   "Browse each file of a VIEW scope, run org-element-map and collect headlines as org-elements."
   (org-glance-headlines
-   :db (org-glance-view-metadata-location view)
+   :db (org-glance-view-metastore-location view)
    :scope (or (org-glance-view-scope view) org-glance-default-scope)
    :filter (org-glance-view-filter view)))
 
