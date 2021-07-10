@@ -9,17 +9,6 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
-(cl-defun org-glance-headline:view-ids (&optional headline)
-  (when headline
-    (org-glance-headline:visit headline))
-
-  (save-excursion
-    (org-glance-headline:beginning-of-nearest-headline)
-    (cl-loop for tag in (org-glance-view:ids)
-       for org-tags = (mapcar #'downcase (org-get-tags nil t))
-       when (member (downcase (symbol-name tag)) org-tags)
-       collect tag)))
-
 (cl-defun org-glance:f (s &rest kwargs)
   "expand a template containing $keyword with the definitions in KWARGS."
   (replace-regexp-in-string "\\($[A-Za-z_-]+\\)"
@@ -178,7 +167,7 @@ enjoy using a lot.
     (org-glance-headline:goto-first-level-headline)))
 
 (cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
-  (org-glance-headline:ensure-at-heading)
+  (org-glance:ensure-at-heading)
 
   (while (and (null (org-glance-headline:id))
               (> (point) (point-min)))

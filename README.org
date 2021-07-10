@@ -12,13 +12,18 @@ Fast, clean and convenient way of traversing your org-mode forest.
 Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
-* Issues [0/12]
+* Issues [2/12]
 ** TODO org-glance immutable exports
 SCHEDULED: <2021-03-27 Sat 20:00>
-** TODO org-glance fix brackets
-SCHEDULED: <2021-03-27 Sat>
-** TODO [#A] [bug] unable to visit/materialize subtree with priority
+** DONE org-glance fix brackets
+CLOSED: [2021-07-10 Sat 14:02] SCHEDULED: <2021-03-27 Sat>
 :LOGBOOK:
+- State "DONE"       from "TODO"       [2021-07-10 Sat 14:02]
+:END:
+** DONE [#A] [bug] unable to visit/materialize subtree with priority
+CLOSED: [2021-07-10 Sat 14:03]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-07-10 Sat 14:03]
 - State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]
 CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 :END:

@@ -16,7 +16,7 @@
 
 (cl-defmethod org-glance-headline:visit ((id string))
   "Visit HEADLINE by id. Grab source file from metastore."
-  (let* ((headline (org-glance-metastore:headline id))
+  (let* ((headline (org-glance-metastore:get-headline-by-id id))
          (file (org-glance-headline:file headline))
          (buffer (org-glance-headline:buffer headline)))
 
@@ -52,8 +52,8 @@
      res))
 
 (cl-defun org-glance-headline:promote-to-first-level ()
-  (org-glance-headline:ensure-at-heading)
-  (while (and (org-glance-headline:at?) (looking-at "^\\*\\*"))
+  (org-glance:ensure-at-heading)
+  (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (headline)
@@ -76,22 +76,6 @@
               (org-element-property :raw-link link))) ;; full link if alias is none
          (org-element-property :begin link))))))
 
-(cl-defun org-glance-headline:modtime (headline)
-  (org-glance-headline:narrow headline
-    (visited-file-modtime)))
-
-(cl-defun org-glance-headline:modtime* (headline)
-  (format-time-string "%Y-%m-%d %H:%M:%S" (org-glance-headline:modtime headline)))
-
-(cl-defun org-glance-headline:state (&optional headline)
-  (save-window-excursion
-    (save-excursion
-      (when headline
-        (org-glance-headline:visit headline))
-      (condition-case nil
-          (substring-no-properties (org-get-todo-state))
-        (error "")))))
-
 (cl-defun org-glance-headline:sync ()
   (interactive)
   (if (org-before-first-heading-p)
@@ -101,7 +85,7 @@
     (let* ((initial-point (point))
            (inhibit-read-only t)
            (current-headline (org-glance-headline:at-point))
-           (original-headline (org-glance-metastore:headline (org-glance-headline:id current-headline)))
+           (original-headline (org-glance-metastore:get-headline-by-id (org-glance-headline:id current-headline)))
            (original-contents (condition-case nil
                                   (org-glance-headline:contents original-headline)
                                 (error nil))))
@@ -117,7 +101,7 @@
                for i from 1 to (1- (org-glance-headline:indent current-headline))
                do (org-demote-subtree)))
         (goto-char initial-point)
-        (if (org-glance-headline:at?)
+        (if (org-glance-headline-p)
             (org-overview)
           (org-cycle-hide-drawers 'all))
         (when (y-or-n-p "Original heading not found. Remove it?")

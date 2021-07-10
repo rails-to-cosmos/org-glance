@@ -3,6 +3,7 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.core.scope)
+(org-glance-module-import lib.core.view)
 (org-glance-module-import lib.core.exceptions)
 (org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.utils.helpers)
@@ -24,6 +25,7 @@
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defun org-glance-metastore:serialize-headline (headline)
+  "Serialize HEADLINE to store it on disk."
   (list (org-glance-headline:title headline)
         (org-glance-headline:begin headline)
         (org-glance-headline:file headline)))
@@ -59,7 +61,7 @@
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(cl-defun org-glance-metastore:headline (id)
+(cl-defun org-glance-metastore:get-headline-by-id (id)
   "Get org-element headline by ID."
   (let ((matched-headlines (cl-loop for vid in (org-glance-view:ids)
                               for metastore = (->> vid
@@ -89,5 +91,22 @@
       ;;    nil
       ;;    #'string=))
       )))
+
+(cl-defun org-glance-metastore:choose-headline ()
+  (let* ((headlines (cl-loop for vid in (org-glance-view:ids)
+                       append (cl-loop for headline in (org-glance-view:headlines vid)
+                                 collect (cons ;; duplication of format*
+                                          (format "[%s] %s" vid (org-glance-headline:format headline))
+                                          headline))))
+         (headline (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
+    (org-glance-headline:narrow headline
+      (org-glance-headline:at-point))))
+
+(cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (cl-loop for tag in (org-glance-view:ids)
+       for org-tags = (mapcar #'downcase (org-get-tags nil t))
+       when (member (downcase (symbol-name tag)) org-tags)
+       collect tag)))
 
 (org-glance-module-provide)

@@ -94,29 +94,6 @@
   "List registered views."
   (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(defun org-glance-view:back-to-heading ()
-  (org-glance-headline:ensure-at-heading)
-  (or (org-glance-headline:view-ids)
-      (progn
-        (org-up-element)
-        (org-glance-view:back-to-heading))))
-
-(defun org-glance-view:nearest-heading ()
-  (save-excursion
-    (org-glance-view:back-to-heading)))
-
-(defun org-glance-view:specify-attach-directory ()
-  "Specify dir and archive paths for current headline."
-  (interactive)
-  (let* ((view (car (org-glance-view:nearest-heading)))
-         (path (read-directory-name (format "Specify directory for %s: " view)
-                                    (f-join org-glance-view-location view)
-                                    nil nil "")))
-    (org-glance--ensure-path path)
-    (org-set-property "DIR" path)
-    (org-set-property "ARCHIVE" (f-join path (format "%s.org::" view)))
-    (org-set-property "COOKIE_DATA" "todo recursive")))
-
 (cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
 (cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
 
