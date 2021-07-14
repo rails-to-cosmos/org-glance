@@ -2,6 +2,7 @@
 (require 'org-element)
 (require 'org-glance-module)
 
+(org-glance-module-import lib.core.exceptions)
 (org-glance-module-import lib.utils.org)
 
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
@@ -58,7 +59,11 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
-(cl-defun org-glance-headline:search-buffer (headline)
+(cl-defun org-glance-headline:eq (headline &optional (other (org-glance-headline:at-point)))
+  (string= (org-glance-headline:id headline)
+           (org-glance-headline:id other)))
+
+(cl-defun org-glance-headline:search-buffer (&optional (headline (org-glance-headline:at-point)))
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
                   (lambda (elem) (when (org-glance-headline:eq elem headline)
                               (org-element-property :begin elem))))))
@@ -71,5 +76,23 @@ If point is inside subtree, search backward for the first occurence of `org-glan
             (org-glance-headline:file headline)))
 
     (goto-char (car points))))
+
+(cl-defun org-glance-headline:visit* (&optional (headline (org-glance-headline:at-point)))
+  "Visit HEADLINE by id. Grab source file from metastore."
+  (let* ((file (org-glance-headline:file headline))
+         (buffer (org-glance-headline:buffer headline)))
+
+    (if (file-exists-p file)
+        (find-file file)
+      (org-glance-db-outdated "File not found: %s" file))
+
+    ;; we are now visiting headline file, let's remove restrictions
+    (widen)
+
+    ;; search for headline in buffer
+    (org-glance-headline:search-buffer headline)
+    (org-glance-headline:expand-parents)
+    (org-overview)
+    (org-cycle 'contents)))
 
 (org-glance-module-provide)

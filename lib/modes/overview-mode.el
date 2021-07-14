@@ -29,7 +29,10 @@
   (interactive)
   (if (org-before-first-heading-p)
       (message "not implemented yet")
-    (org-glance-headline:visit (org-glance-headline:at-point))))
+    (->> (org-glance-headline:at-point)
+      org-glance-headline:id
+      org-glance-metastore:get-headline-by-id
+      org-glance-headline:visit*)))
 
 (cl-defun org-glance-overview:doctor ()
   (interactive)

@@ -108,10 +108,6 @@ enjoy using a lot.
      do (org-with-limited-levels
          (org-map-tree 'org-demote))))
 
-(cl-defun org-glance-headline:eq (headline &optional (other (org-element-at-point)))
-  (string= (org-glance-headline:id headline)
-           (org-glance-headline:id other)))
-
 (defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
   (interactive)

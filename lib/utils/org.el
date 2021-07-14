@@ -63,12 +63,12 @@
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((dir (f-join (org-glance-view-resource-location view-id)
-                          (format-time-string "date=%Y-%m-%d")
                           (->> (org-element-property :raw-value (org-element-at-point))
                             (s-replace-regexp "[^a-z0-9A-Z_]" "-")
                             (s-replace-regexp "\\-+" "-")
                             (s-replace-regexp "\\-+$" "")
-                            (s-truncate 30)))))
+                            (s-truncate 30)
+                            (concat (format-time-string "%Y-%m-%d_"))))))
 
         (org-set-property "DIR"
                           (or (org-element-property :DIR (org-element-at-point))

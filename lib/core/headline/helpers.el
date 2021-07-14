@@ -16,21 +16,7 @@
 
 (cl-defmethod org-glance-headline:visit ((id string))
   "Visit HEADLINE by id. Grab source file from metastore."
-  (let* ((headline (org-glance-metastore:get-headline-by-id id))
-         (file (org-glance-headline:file headline))
-         (buffer (org-glance-headline:buffer headline)))
-
-    (cond ((file-exists-p file) (find-file file))
-          (t (org-glance-db-outdated "File not found: %s" file)))
-
-    ;; we are now visiting headline file, let's remove restrictions
-    (widen)
-
-    ;; search for headline in buffer
-    (org-glance-headline:search-buffer headline)
-    (org-glance-headline:expand-parents)
-    (org-overview)
-    (org-cycle 'contents)))
+  (org-glance-headline:visit* (org-glance-metastore:get-headline-by-id id)))
 
 (defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."

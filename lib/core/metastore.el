@@ -3,7 +3,6 @@
 (require 'org-glance-module)
 
 (org-glance-module-import lib.core.scope)
-(org-glance-module-import lib.core.view)
 (org-glance-module-import lib.core.exceptions)
 (org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.utils.helpers)
