@@ -162,18 +162,6 @@ enjoy using a lot.
   (save-excursion
     (org-glance-headline:goto-first-level-headline)))
 
-(cl-defun org-glance-headline:goto-beginning-of-nearest-headline ()
-  (org-glance:ensure-at-heading)
-
-  (while (and (null (org-glance-headline:id))
-              (> (point) (point-min)))
-    (org-up-heading-or-point-min)))
-
-(cl-defun org-glance-headline:beginning-of-nearest-headline ()
-  (save-excursion
-    (org-glance-headline:goto-beginning-of-nearest-headline)
-    (point)))
-
 (cl-defun org-glance-headline:end-of-subtree ()
   (save-excursion
     (org-end-of-subtree t)))

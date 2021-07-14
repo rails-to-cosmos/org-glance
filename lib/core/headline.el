@@ -33,12 +33,15 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (cl-defun org-glance-headline:state (&optional (headline (org-glance-headline:at-point)))
   (substring-no-properties (org-element-property :todo-keyword headline)))
 
+(cl-defun org-glance-headline:commented? (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :commentedp headline))
+
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
 
 (cl-defun org-glance-headline:modtime (&optional (headline (org-glance-headline:at-point)))
-  (--> headline
+  (-> headline
     org-glance-headline:file
     file-attributes
     file-attribute-modification-time

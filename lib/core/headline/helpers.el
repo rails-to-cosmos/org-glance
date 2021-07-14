@@ -43,14 +43,16 @@
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (headline)
-  (with-temp-buffer
-    (org-mode)
-    (insert-file-contents (org-glance-headline:file headline))
-    (org-glance-headline:search-buffer headline)
-    (org-narrow-to-subtree)
-    (goto-char (point-min))
-    (org-glance-headline:promote-to-first-level)
-    (buffer-substring-no-properties (point-min) (point-max))))
+  (condition-case nil
+      (with-temp-buffer
+        (org-mode)
+        (insert-file-contents (org-glance-headline:file headline))
+        (org-glance-headline:search-buffer headline)
+        (org-narrow-to-subtree)
+        (goto-char (point-min))
+        (org-glance-headline:promote-to-first-level)
+        (buffer-substring-no-properties (point-min) (point-max)))
+    (error nil)))
 
 (cl-defun org-glance-headline:links (headline)
   (org-glance-headline:narrow headline
@@ -61,37 +63,5 @@
           (or (nth 2 link)                            ;; link alias
               (org-element-property :raw-link link))) ;; full link if alias is none
          (org-element-property :begin link))))))
-
-(cl-defun org-glance-headline:sync ()
-  (interactive)
-  (if (org-before-first-heading-p)
-      (let ((category (org-get-category)))
-        (when (y-or-n-p (org-glance:f** "Update view ${category}?"))
-          (org-glance-view:summary (intern category))))
-    (let* ((initial-point (point))
-           (inhibit-read-only t)
-           (current-headline (org-glance-headline:at-point))
-           (original-headline (org-glance-metastore:get-headline-by-id (org-glance-headline:id current-headline)))
-           (original-contents (condition-case nil
-                                  (org-glance-headline:contents original-headline)
-                                (error nil))))
-      (if original-contents
-          (save-restriction
-            (org-glance-headline:goto-beginning-of-nearest-headline)
-            (org-narrow-to-subtree)
-            (goto-char (point-min))
-            (insert original-contents)
-            (delete-region (point) (point-max))
-            (goto-char (point-min))
-            (cl-loop
-               for i from 1 to (1- (org-glance-headline:indent current-headline))
-               do (org-demote-subtree)))
-        (goto-char initial-point)
-        (if (org-glance-headline-p)
-            (org-overview)
-          (org-cycle-hide-drawers 'all))
-        (when (y-or-n-p "Original heading not found. Remove it?")
-          (kill-region (org-entry-beginning-position) (org-entry-end-position))))
-      (save-buffer))))
 
 (org-glance-module-provide)
