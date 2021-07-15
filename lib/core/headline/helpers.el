@@ -3,21 +3,6 @@
 (org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.core.metastore)
 
-(cl-defgeneric org-glance-headline:visit (headline)
-  "Visit HEADLINE.")
-
-(cl-defmethod org-glance-headline:visit ((id symbol))
-  "Visit HEADLINE by headline id symbol name. Grab source file from metastore."
-  (org-glance-headline:visit (symbol-name id)))
-
-(cl-defmethod org-glance-headline:visit ((id list))
-  "Visit HEADLINE by headline id symbol name. Grab source file from metastore."
-  (org-glance-headline:visit (org-glance-headline:id id)))
-
-(cl-defmethod org-glance-headline:visit ((id string))
-  "Visit HEADLINE by id. Grab source file from metastore."
-  (org-glance-headline:visit* (org-glance-metastore:get-headline-by-id id)))
-
 (defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))

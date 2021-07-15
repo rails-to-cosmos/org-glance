@@ -80,7 +80,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 
     (goto-char (car points))))
 
-(cl-defun org-glance-headline:visit* (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE by id. Grab source file from metastore."
   (let* ((file (org-glance-headline:file headline))
          (buffer (org-glance-headline:buffer headline)))
@@ -94,7 +94,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 
     ;; search for headline in buffer
     (org-glance-headline:search-buffer headline)
-    (org-glance-headline:expand-parents)
+    (org-glance:expand-parents)
     (org-overview)
     (org-cycle 'contents)))
 

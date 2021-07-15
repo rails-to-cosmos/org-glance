@@ -2,7 +2,7 @@
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (save-window-excursion
-    (org-glance-headline:visit (org-glance-headline:id headline))
+    (org-glance-headline:visit (org-glance-metastore:get-headline-by-id (org-glance-headline:id headline)))
     (goto-char (org-log-beginning t))
     (insert note "\n")))
 
@@ -24,7 +24,7 @@
 
   (when bidirectional
     (save-window-excursion
-      (org-glance-headline:visit (org-glance-headline:id headline))
+      (org-glance-headline:visit (org-glance-metastore:get-headline-by-id (org-glance-headline:id headline)))
       (org-glance:add-relation (org-glance-headline:at-point) "Referred from" nil))))
 
 (org-glance-module-provide)
