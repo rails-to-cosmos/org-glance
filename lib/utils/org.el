@@ -105,4 +105,9 @@
   (save-excursion
     (org-glance:first-level-headline)))
 
+(cl-defun org-glance:promote-to-first-level ()
+  (org-glance:ensure-at-heading)
+  (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
+    (org-promote-subtree)))
+
 (org-glance-module-provide)
