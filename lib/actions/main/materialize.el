@@ -17,10 +17,10 @@
   "Materialize HEADLINE in separate buffer."
   (let ((buffer org-glance-materialized-view-buffer))
     (save-window-excursion
-      (org-glance-action-call 'visit :on headline)
+      (org-glance-headline:visit* headline)
       (let* ((file (org-element-property :file headline))
-             (beg (org-glance-headline:beginning-of-nearest-headline))
-             (end (org-glance-headline:end-of-subtree))
+             (beg (org-glance-headline:begin))
+             (end (save-excursion (org-end-of-subtree t)))
              (contents (org-glance-headline:buffer-contents beg end)))
         (when (get-buffer buffer)
           (switch-to-buffer buffer)

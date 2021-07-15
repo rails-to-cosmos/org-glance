@@ -182,7 +182,7 @@
 (defun org-glance-view-sync-subtree ()
   (interactive)
   (save-excursion
-    (org-glance-headline:goto-first-level-headline)
+    (org-glance:first-level-headline)
     (let* ((source --org-glance-view-src)
            (beg --org-glance-view-beg)
            (end --org-glance-view-end)
@@ -252,7 +252,7 @@
         (with-temp-buffer
           (org-mode)
           (insert (s-trim subtree))
-          (org-glance-headline:goto-first-level-headline)
+          (org-glance:first-level-headline)
           (--org-glance-headline:promote.deprecated)
           (buffer-hash))))))
 

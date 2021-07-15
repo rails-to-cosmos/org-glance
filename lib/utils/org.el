@@ -98,4 +98,11 @@
         (org-archive-subtree)
         (find-file archive-location)))))
 
+(cl-defun org-glance:first-level-headline ()
+  (cl-loop while (org-up-heading-safe)))
+
+(cl-defun org-glance:expand-parents ()
+  (save-excursion
+    (org-glance:first-level-headline)))
+
 (org-glance-module-provide)

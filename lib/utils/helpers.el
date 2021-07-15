@@ -155,17 +155,6 @@ enjoy using a lot.
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
 
-(cl-defun org-glance-headline:goto-first-level-headline ()
-  (cl-loop while (org-up-heading-safe)))
-
-(cl-defun org-glance-headline:expand-parents ()
-  (save-excursion
-    (org-glance-headline:goto-first-level-headline)))
-
-(cl-defun org-glance-headline:end-of-subtree ()
-  (save-excursion
-    (org-end-of-subtree t)))
-
 (cl-defun org-glance-headline:buffer-contents (beg end)
   (->> (buffer-substring-no-properties beg end)
     (s-trim)))
