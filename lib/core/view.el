@@ -106,9 +106,10 @@
 (cl-defmethod org-glance-view-filter ((view org-glance-view))
   (-partial
    #'(lambda (view headline)
-       (-contains?
-        (mapcar #'downcase (org-element-property :tags headline))
-        (downcase (symbol-name (org-glance-view-id view)))))
+       (when (-contains?
+              (mapcar #'downcase (org-element-property :tags headline))
+              (downcase (symbol-name (org-glance-view-id view))))
+         headline))
    view))
 
 (cl-defun org-glance-view:update (&optional (vid org-glance-form:view))
@@ -154,7 +155,7 @@
   "List headlines as formatted strings for VIEW."
   (->> view
     org-glance-view:headlines
-    (mapcar #'org-glance-headline:format)
+    (mapcar #'org-glance-headline:title)
     (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
 (cl-defgeneric org-glance-view-prompt (view action)

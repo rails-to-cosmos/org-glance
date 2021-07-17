@@ -1,11 +1,12 @@
 (require 'load-relative)
 (require 'org-glance-module)
+(require 'dash)
 
 (org-glance-module-import lib.utils.helpers)
+(org-glance-module-import lib.core.headline)
 
 (declare-function org-glance--list-files-recursively "lib/utils/helpers.el")
 (declare-function org-glance-headline:scan-file "lib/utils/helpers.el")
-(declare-function org-glance-headline:format "lib/utils/helpers.el")
 
 (require 'org)
 
@@ -67,11 +68,14 @@
 (defun org-glance-scope--choose-headline (choice headlines)
   (--first (string= (org-glance-headline:format it) choice) headlines))
 
-(defun org-glance-scope-headlines (scope &optional filter)
-  (cl-loop
-     for file in (org-glance-scope scope)
-     append (org-glance-headline:scan-file file filter)
-     into result
-     finally (cl-return result)))
+(cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
+  (cl-loop for file in (org-glance-scope scope)
+     for headlines = (org-glance-headline:scan-file file)
+     append (-non-nil (mapcar filter headlines))))
+
+;; (org-glance-scope--prompt-headlines "Hey: "
+;;  (org-glance-scope-headlines
+;;   (org-glance-scope "/home/akatovda/sync/archives")
+;;   (org-glance-view-filter (org-glance-view "Article"))))
 
 (org-glance-module-provide)

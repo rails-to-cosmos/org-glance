@@ -5,14 +5,6 @@
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))
 
-(cl-defun org-glance:indent-level ()
-  (save-excursion
-    (org-glance:ensure-at-heading)
-    (beginning-of-line)
-    (cl-loop while (looking-at "\\*")
-       for i from 0 do (forward-char)
-       finally (return i))))
-
 (defun org-glance:recreate-folder-structure-in-subtree-at-point ()
   (interactive)
   (save-excursion

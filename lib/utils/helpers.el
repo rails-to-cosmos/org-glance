@@ -61,9 +61,6 @@ enjoy using a lot.
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
 
-(defun org-glance-headline:matches-filter? (filter headline)
-  (or (null filter) (funcall filter headline)))
-
 (defun org-glance--ensure-path (path)
   (condition-case nil
       (make-directory path t)
@@ -88,20 +85,6 @@ enjoy using a lot.
   (cl-loop for filename in (org-agenda-files)
      append (list filename)
      append (org-glance--list-file-archives filename)))
-
-(defun org-glance-headline:format (headline)
-  (or (org-element-property :TITLE headline)
-      (org-element-property :raw-value headline)))
-
-(defun org-glance-headline:scan-file (file &optional filter)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (headline)
-        (when (and (org-glance-headline-p headline)
-                   (org-glance-headline:matches-filter? filter headline))
-          (plist-put (cadr headline) :file file)
-          headline)))))
 
 (defun org-glance-headline:demote (level)
   (cl-loop repeat level

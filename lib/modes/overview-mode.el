@@ -3,17 +3,18 @@
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Show read-only outlines for `org-glance' views.")
 
+(define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
 (define-key org-glance-overview-mode-map (kbd "g") 'org-glance-overview:pull)
+(define-key org-glance-overview-mode-map (kbd "i") 'org-glance-overview:edit)
 (define-key org-glance-overview-mode-map (kbd "n") 'next-line)
 (define-key org-glance-overview-mode-map (kbd "o") 'org-open-at-point)
 (define-key org-glance-overview-mode-map (kbd "p") 'previous-line)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance:add-relation)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
-(define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_* files."
@@ -38,8 +39,8 @@
 (cl-defun org-glance-overview:doctor ()
   (interactive)
   (if (org-before-first-heading-p)
-      (let ((category (org-get-category)))
-        (org-glance-view:doctor (intern category)))
+      (let* ((view-id (intern (org-get-category))))
+        (org-glance-view:doctor view-id))
     (message "not implemented yet")))
 
 (cl-defun org-glance-overview:comment ()
@@ -52,6 +53,9 @@
     (org-toggle-comment)
     (save-buffer))
   (org-glance-overview:pull))
+
+(cl-defun org-glance-overview:edit ()
+  (interactive))
 
 (cl-defun org-glance-overview:pull ()
   (interactive)

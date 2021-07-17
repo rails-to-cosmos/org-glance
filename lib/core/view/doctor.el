@@ -81,6 +81,7 @@
                                        ;; - [ ] check for view data structure: proper partitioning
                                        ;; - [ ] check for nested views and ask to flatten them
                                        ;; - [ ] check if original headline is stored in archive
+                                       ;; - [ ] check for PROPERTIES drawer indentation
                                        )
                      for failed? = (apply check (list file view headline))
                      when failed? collect check into failed-checks
