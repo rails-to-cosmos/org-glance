@@ -12,22 +12,10 @@ Fast, clean and convenient way of traversing your org-mode forest.
 Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
-* Issues [2/12]
-** TODO org-glance immutable exports
-SCHEDULED: <2021-03-27 Sat 20:00>
-** DONE org-glance fix brackets
-CLOSED: [2021-07-10 Sat 14:02] SCHEDULED: <2021-03-27 Sat>
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-07-10 Sat 14:02]
-:END:
-** DONE [#A] [bug] unable to visit/materialize subtree with priority
-CLOSED: [2021-07-10 Sat 14:03]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-07-10 Sat 14:03]
-- State "STARTED"    from "TODO"       [2020-11-07 Sat 14:48]
-CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
-:END:
-** TODO bulk sync materialized views
+* Issues
+** TODO org-overview-mode: add headline feature
+** TODO org-overview-mode: modify-sync headline feature
+** TODO headline API: add unit tests
 ** TODO export #+TAGS and other options
 ** TODO view-based materialized view buffer names: *materialized-event*
 ** TODO views github-like dashboards
@@ -43,11 +31,11 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 | Sun | ### | ### | ### | ### | ### | ### |
 
 ** TODO read-only flag for materialized views
-** TODO test sandbox
 ** TODO full-text search
 ** TODO parse encrypted blocks in any point of subtree
 ** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
 * Thoughts
+
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]
 - https://grishaev.me/clj-zippers-1/
 - https://github.com/bbatsov/emacs-lisp-style-guide
@@ -59,6 +47,7 @@ CLOCK: [2020-11-07 Sat 14:48]--[2020-11-07 Sat 16:15] =>  1:27
 - https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
 
 * dist-packages
+
 - https://github.com/skeeto/emacsql
 - https://magit.vc/manual/transient/
 - https://altair-viz.github.io/getting_started/overview.html
