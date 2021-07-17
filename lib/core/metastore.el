@@ -62,14 +62,15 @@
 
 (cl-defun org-glance-metastore:get-headline-by-id (id)
   "Get org-element headline by ID."
-  (let ((matched-headlines (cl-loop for vid in (org-glance-view:ids)
-                              for metastore = (->> vid
-                                                org-glance-view
-                                                org-glance-view-metastore-location
-                                                org-glance-metastore:read)
-                              for headline = (gethash id metastore)
-                              when headline
-                              collect (org-glance-metastore:deserialize-headline id headline))))
+  (let ((matched-headlines
+         (cl-loop for vid in (org-glance-view:ids)
+            for metastore = (->> vid
+                              org-glance-view
+                              org-glance-view-metastore-location
+                              org-glance-metastore:read)
+            for headline = (gethash id metastore)
+            when headline
+            collect (org-glance-metastore:deserialize-headline id headline))))
     (unless matched-headlines
       (org-glance-exception:headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
     (if (= (length matched-headlines) 1)
@@ -100,12 +101,5 @@
          (headline (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
     (org-glance-headline:narrow headline
       (org-glance-headline:at-point))))
-
-(cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:narrow headline
-    (cl-loop for tag in (org-glance-view:ids)
-       for org-tags = (mapcar #'downcase (org-get-tags nil t))
-       when (member (downcase (symbol-name tag)) org-tags)
-       collect tag)))
 
 (org-glance-module-provide)

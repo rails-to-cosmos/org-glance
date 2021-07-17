@@ -34,7 +34,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
   (org-element-property :ORG_GLANCE_ID headline))
 
 (cl-defun org-glance-headline:state (&optional (headline (org-glance-headline:at-point)))
-  (substring-no-properties (org-element-property :todo-keyword headline)))
+  (substring-no-properties (or (org-element-property :todo-keyword headline) "")))
 
 (cl-defun org-glance-headline:commented? (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :commentedp headline))
@@ -53,7 +53,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (cl-defun org-glance-headline:file (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :file headline))
 
-(cl-defun org-glance-headline:indent (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:level (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :level headline))
 
 (cl-defun org-glance-headline:buffer (&optional (headline (org-glance-headline:at-point)))
@@ -108,6 +108,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
           (file-buffer (get-file-buffer file))
           (visited-buffer (current-buffer))
           result)
+
      (org-glance-headline:visit ,headline)
 
      (save-restriction
@@ -118,7 +119,8 @@ If point is inside subtree, search backward for the first occurence of `org-glan
      (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
            ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
                                                                        (bury-buffer file-buffer)))
-           (t (kill-buffer (get-file-buffer file))))
+           (t (save-buffer)
+              (kill-buffer (get-file-buffer file))))
 
      result))
 
