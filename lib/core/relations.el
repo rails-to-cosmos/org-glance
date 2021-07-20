@@ -3,7 +3,8 @@
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (goto-char (org-log-beginning t))
-    (insert note "\n")))
+    (insert note "\n")
+    (save-buffer)))
 
 (cl-defun org-glance:add-relation (&optional
                                      (source (org-glance-headline:at-point))

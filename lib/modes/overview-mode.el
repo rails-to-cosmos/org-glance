@@ -1,25 +1,47 @@
+(require 'highlight)
 (require 'org-glance-module)
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
-  "Show read-only outlines for `org-glance' views.")
+  "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
 (define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
 (define-key org-glance-overview-mode-map (kbd "g") 'org-glance-overview:pull)
-(define-key org-glance-overview-mode-map (kbd "i") 'org-glance-overview:edit)
 (define-key org-glance-overview-mode-map (kbd "n") 'next-line)
 (define-key org-glance-overview-mode-map (kbd "o") 'org-open-at-point)
 (define-key org-glance-overview-mode-map (kbd "p") 'previous-line)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:add-relation)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
+(define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
 
 (define-minor-mode org-glance-overview-mode
-    "A minor read-only mode to use in .org_* files."
+    "A minor read-only mode to use in .org_summary files."
   nil nil org-glance-overview-mode-map
   (read-only-mode 'toggle))
+
+(defvar org-glance-edit-mode-map (make-sparse-keymap)
+  "Edit entries in `org-glance-edit-mode'.")
+
+(define-key org-glance-edit-mode-map (kbd "C-c C-c") 'org-glance-edit-mode:apply)
+
+(define-minor-mode org-glance-edit-mode
+    "A minor mode to edit and sync .org_summary files."
+  nil nil org-glance-edit-mode-map)
+
+(cl-defun org-glance-edit-mode:start ()
+  (interactive)
+  (org-glance-edit-mode +1)
+  (org-glance-overview-mode -1)
+  (message "Edit mode is now enabled."))
+
+(cl-defun org-glance-edit-mode:apply ()
+  (interactive)
+  (org-glance-edit-mode -1)
+  (org-glance-overview-mode +1)
+  (message "All changes have been applied."))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
@@ -54,7 +76,9 @@
   (interactive)
   (org-glance-overview:for-all view-id
       (when (y-or-n-p (org-glance:f** "Update view ${view-id}?"))
-        (org-glance-view:summary view-id))
+        (kill-buffer)
+        (org-glance-view:summary view-id)
+        (message (org-glance:f** "View ${view-id} is now up to date")))
     (let* ((inhibit-read-only t)
            (initial-point (point))
            (current-headline (org-glance-headline:at-point))
@@ -69,17 +93,16 @@
                (kill-region (org-entry-beginning-position) (org-entry-end-position))))
             ((string= current-headline-contents original-headline-contents)
              (message (org-glance:f** "Headline \"${current-headline-title}\" is up to date")))
-            (t (when (y-or-n-p "Original heading has been changed. Update current headline?")
-                 (save-excursion
-                   (save-restriction
-                     (org-glance-headline:search-backward)
-                     (org-narrow-to-subtree)
-                     (delete-region (point-min) (point-max))
-                     (insert original-headline-contents)
-                     (goto-char (point-min))
-                     (cl-loop for i from 1 to (1- current-headline-indent)
-                        do (org-demote-subtree))
-                     (org-content))))
+            (t (save-excursion
+                 (save-restriction
+                   (org-glance-headline:search-backward)
+                   (org-narrow-to-subtree)
+                   (delete-region (point-min) (point-max))
+                   (insert original-headline-contents)
+                   (goto-char (point-min))
+                   (cl-loop for i from 1 to (1- current-headline-indent)
+                      do (org-demote-subtree))
+                   (org-content)))
                (goto-char initial-point)
                (save-buffer))))))
 
@@ -94,8 +117,17 @@
     (save-buffer))
   (org-glance-overview:pull))
 
-(cl-defun org-glance-overview:edit ()
-  (interactive))
+(cl-defun org-glance-overview:edit-mode ()
+  (interactive)
+
+  (org-glance-overview:for-all view-id
+      nil
+    (let* ((headline (org-glance-headline:at-point))
+           (beg (org-element-property :begin (org-glance-headline:at-point)))
+           (end (org-element-property :end (org-glance-headline:at-point))))
+      (hlt-unhighlight-region beg end)
+      ;; (hlt-highlight-region beg end 'expal-block-hover-face)
+      (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
   (org-glance-headline:narrow

@@ -166,7 +166,7 @@ TODO: implement unit tests."
       (goto-char (point-min))
       (insert "\n")
       (backward-char)
-      (org-sort-entries nil ?T)
+      (org-sort-entries nil ?t)
       (goto-char (point-min))
       (delete-char 1)
       (goto-char (point-max)))

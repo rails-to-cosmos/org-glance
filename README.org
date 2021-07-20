@@ -13,8 +13,8 @@ Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
 * Issues
-** TODO org-overview-mode: add headline feature
 ** TODO org-overview-mode: modify-sync headline feature
+** TODO org-overview-mode: add headline feature
 ** TODO headline API: add unit tests
 ** TODO export #+TAGS and other options
 ** TODO view-based materialized view buffer names: *materialized-event*
