@@ -18,7 +18,7 @@
          (target-views (s-join ", " (org-glance-headline:view-ids target)))
          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
     (org-glance-headline:add-log-note
-     (org-glance:f**
+     (org-glance:format
       "- ${relation}${target-label} =${target-views}= [[org-glance-visit:${target-id}][${target-title}]] on ${now}")
      source)))
 

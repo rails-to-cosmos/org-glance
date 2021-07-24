@@ -4,9 +4,9 @@
 
 (defvar org-glance-view-summary-header-template "#    -*- mode: org; mode: org-glance-overview -*-
 
-#+CATEGORY: $category
+#+CATEGORY: ${category}
 #+STARTUP: overview
-#+LATEST_CHANGE: $latest_change
+#+LATEST_CHANGE: ?
 
 ")
 
@@ -25,10 +25,11 @@
   (interactive)
   (org-glance-view:if-all? view-id
       (mapc #'org-glance-view:summary (org-glance-view:ids))
-    (let ((filename (org-glance-view:summary-location view-id))
-          (header (org-glance:f org-glance-view-summary-header-template :category view-id))
-          (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
-          (inhibit-read-only t))
+    (let* ((filename (org-glance-view:summary-location view-id))
+           (category view-id)
+           (header (org-glance:format org-glance-view-summary-header-template))
+           (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
+           (inhibit-read-only t))
       (--org-glance:make-file-directory filename)
       (with-temp-file filename
         (insert header)

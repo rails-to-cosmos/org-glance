@@ -9,48 +9,31 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
-(cl-defun org-glance:f (s &rest kwargs)
-  "expand a template containing $keyword with the definitions in KWARGS."
-  (replace-regexp-in-string "\\($[A-Za-z_-]+\\)"
-                            (lambda (arg)
-                              (let ((keyword (intern (format ":%s" (substring arg 1)))))
-                                (format "%s" (plist-get kwargs keyword)))) s))
-
-(cl-defun org-glance:f* (s &rest kwargs)
-  "Same as `org-glance:f' but strips margins (scala style)."
-  (cl-loop
-     with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
-     for line in (s-split "\n" s)
-     concat (apply #'org-glance:f (append (list (funcall stripMargin line)) kwargs))
-     concat "\n"))
-
-(cl-defun org-glance:f! (s args)
-  "Applies template format to S and ARGS."
-  (apply 'org-glance:f (append (list s) args)))
-
-(cl-defun org-glance:f> (s &rest kwargs)
-  (insert (org-glance:f! s kwargs)))
-
-(defmacro org-glance:f** (fmt)
+(defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
 FMT is a string to be expanded against the current lexical
 environment. It is like what is used in `s-lex-format', but has
 an expanded syntax to allow format-strings. For example:
 ${user-full-name 20s} will be expanded to the current value of
 the variable `user-full-name' in a field 20 characters wide.
-  (let ((f (sqrt 5)))  (org-glance:f \"${f 1.2f}\"))
+  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
   will render as: 2.24
 This function is inspired by the f-strings in Python 3.6, which I
 enjoy using a lot.
 "
   (let* ((matches (s-match-strings-all"${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
-         (agetter (cl-loop for (m0 m1 m2 m3) in matches
-                        collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
-                                                                      (if s-lex-value-as-lisp "S" "s")
-                                                                   ,m2))
-                                                  (symbol-value (intern ,m1)))))))
-
-    `(s-format ,fmt 'aget (list ,@agetter))))
+         (agetter (cl-loop
+                     for (m0 m1 m2 m3) in matches
+                     collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                    (if s-lex-value-as-lisp "S" "s")
+                                                                  ,m2))
+                                                 (symbol-value (intern ,m1))))))
+         (result `(s-format ,fmt 'aget (list ,@agetter))))
+    `(s-join "\n"
+             (cl-loop
+                with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
+                for line in (s-split "\n" ,result)
+                collect (funcall stripMargin line)))))
 
 (defun --org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))

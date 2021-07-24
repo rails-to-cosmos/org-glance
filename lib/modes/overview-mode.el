@@ -75,10 +75,10 @@
 (cl-defun org-glance-overview:pull ()
   (interactive)
   (org-glance-overview:for-all view-id
-      (when (y-or-n-p (org-glance:f** "Update view ${view-id}?"))
+      (when (y-or-n-p (org-glance:format "Update view ${view-id}?"))
         (kill-buffer)
         (org-glance-view:summary view-id)
-        (message (org-glance:f** "View ${view-id} is now up to date")))
+        (message (org-glance:format "View ${view-id} is now up to date")))
     (let* ((inhibit-read-only t)
            (initial-point (point))
            (current-headline (org-glance-headline:at-point))
@@ -92,7 +92,7 @@
              (when (y-or-n-p "Original heading not found. Remove it?")
                (kill-region (org-entry-beginning-position) (org-entry-end-position))))
             ((string= current-headline-contents original-headline-contents)
-             (message (org-glance:f** "Headline \"${current-headline-title}\" is up to date")))
+             (message (org-glance:format "Headline \"${current-headline-title}\" is up to date")))
             (t (save-excursion
                  (save-restriction
                    (org-glance-headline:search-backward)

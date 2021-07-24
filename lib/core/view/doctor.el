@@ -44,13 +44,13 @@
   )
 
 (cl-defun org-glance-headline:contents* (headline)
-  (org-glance:f*
-   "* $title
+  (let ((title (org-glance-headline:title headline))
+        (id (org-glance-headline:id headline)))
+    (org-glance:format
+     "* ${title}
       |:PROPERTIES:
-      |:ORG_GLANCE_ID: $id
-      |:END:"
-   :title (org-glance-headline:title headline)
-   :id (org-glance-headline:id headline)))
+      |:ORG_GLANCE_ID: ${id}
+      |:END:")))
 
 (cl-defun org-glance-view:doctor (&optional (vid (org-glance-view:completing-read)))
   (interactive)
@@ -95,7 +95,7 @@
                                     do (insert "- " (symbol-name check) "\n"))))))))))
 
     (with-temp-file (org-glance-view:doctor-location vid)
-      (insert (org-glance:f** org-glance-view-doctor-header-template)
+      (insert (org-glance:format org-glance-view-doctor-header-template)
               (with-current-buffer report-buffer (buffer-string))))
     (kill-buffer report-buffer)
     (find-file (org-glance-view:doctor-location vid))))
