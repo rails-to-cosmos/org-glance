@@ -4,13 +4,17 @@
 
 (package-file "org-glance.el")
 
-(depends-on "s")
-(depends-on "aes")
+;; core deps
 (depends-on "dash")
-(depends-on "ledger-mode")
+(depends-on "highlight")
 (depends-on "load-relative")
+(depends-on "s")
 (depends-on "transient")
 (depends-on "ts")
+
+;; plugin deps
+(depends-on "aes")
+(depends-on "ledger-mode")
 
 (development
  (depends-on "ecukes")
