@@ -18,15 +18,25 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
     (org-up-heading-or-point-min))
   (org-glance-headline-p))
 
-(cl-defun org-glance-headline:enrich-element (element)
-  (-some-> element
-    (org-element-put-property :file (buffer-file-name))))
+(cl-defun org-glance-headline:from-element
+    (element &rest rest
+     &key (file (buffer-file-name))
+       &allow-other-keys)
+  "Enrich `org-element' ELEMENT with REST properties.
+
+Default enrichment is as follows:
+- Add FILE property to `org-element'."
+  (cl-loop
+     for (key value) on rest by #'cddr
+     do (org-element-put-property element key value)
+     finally (return (-some-> element
+                       (org-element-put-property :file file)))))
 
 (cl-defun org-glance-headline:at-point ()
   "Build `org-glance-headline' from `org-element' at point.
 If point is inside subtree, search backward for the first occurence of `org-glance-headline'."
   (save-excursion
-    (org-glance-headline:enrich-element
+    (org-glance-headline:from-element
      (org-glance-headline:search-backward))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
@@ -150,9 +160,9 @@ If point is inside subtree, search backward for the first occurence of `org-glan
   (with-temp-buffer
     (insert-file-contents file)
     (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (headline)
-        (when (org-glance-headline-p headline)
-          (org-element-put-property headline :file file))))))
+      (lambda (el)
+        (when (org-glance-headline-p el)
+          (org-glance-headline:from-element el :file file))))))
 
 (cl-defun org-glance-headline:format (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:title headline))
