@@ -1,10 +1,45 @@
 (require 'org-glance-module)
 
-(cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
+(defconst org-glance-relation-re
+  (rx (seq bol
+           (0+ (any "\t -"))
+           "Related to"
+           (0+ (any "\t *"))
+           (group (0+ word))
+           (0+ (any "\t *"))
+           "="
+           (group (1+ (any word)))
+           "="
+           (0+ (any "\t "))
+           "[[org-glance-visit:"
+           (group (1+ (not "]")))
+           "]["
+           (group (1+ (not "]")))
+           "]]"
+           (0+ (any "\t "))
+           "on"
+           (0+ (any "\t "))
+           (regexp org-ts-regexp-inactive)
+           (0+ (any "\t "))
+           eol))
+  "Matches relation.")
+
+(cl-defun org-glance-headline:next-relation ()
+  (condition-case nil
+      (re-search-forward org-glance-relation-re)
+    (error nil)))
+
+(cl-defun org-glance-headline:relations (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
-    (goto-char (org-log-beginning t))
-    (insert note "\n")
-    (save-buffer)))
+    (org-glance-headline:get-or-search-backward)
+    (cl-loop
+       while (org-glance-headline:next-relation)
+       for view-id = (substring-no-properties (match-string 3))
+       for relation = (condition-case nil
+                          (org-glance-metastore:get-headline-by-id view-id)
+                        (error nil))
+       when relation
+       collect relation)))
 
 (cl-defun org-glance:add-relation (&optional
                                      (source (org-glance-headline:at-point))

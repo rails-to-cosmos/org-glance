@@ -23,27 +23,24 @@
 
 (cl-defun org-glance-view:summary (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
-  (org-glance-view:if-all? view-id
-      (mapc #'org-glance-view:summary (org-glance-view:ids))
-    (let* ((filename (org-glance-view:summary-location view-id))
-           (category view-id)
-           (header (org-glance:format org-glance-view-summary-header-template))
-           (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
-           (inhibit-read-only t))
-      (--org-glance:make-file-directory filename)
-      (with-temp-file filename
-        (insert header)
-        (cl-loop for headline in headlines
-           do (insert (org-glance-headline:contents headline) "\n"))
-        (org-mode)
-        (goto-char (point-min))
-        (set-mark (point-max))
-        (condition-case nil
-            (org-sort-entries nil ?o)
-          (error 'nil))
-        (org-glance:sort-buffer-headlines)
-        (org-align-tags t))
-      (find-file filename))))
+  (let* ((filename (org-glance-view:summary-location view-id))
+         (category view-id)
+         (header (org-glance:format org-glance-view-summary-header-template))
+         (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
+         (inhibit-read-only t))
+    (--org-glance:make-file-directory filename)
+    (with-temp-file filename
+      (insert header)
+      (insert (s-join "\n" (mapcar #'org-glance-headline:contents headlines)))
+      (org-mode)
+      (goto-char (point-min))
+      (set-mark (point-max))
+      (condition-case nil
+          (org-sort-entries nil ?o)
+        (error 'nil))
+      (org-glance:sort-buffer-headlines)
+      (org-align-tags t))
+    (find-file filename)))
 
 (cl-defun org-glance-view:visit (&optional (view-id (org-glance-view:completing-read)))
   (interactive)

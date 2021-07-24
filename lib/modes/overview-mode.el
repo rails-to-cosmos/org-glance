@@ -144,4 +144,21 @@
     (org-glance:add-relation target "Referred from" source)
     (org-glance-overview:pull)))
 
+(cl-defun org-glance-overview:vizualize ()
+  (interactive)
+  (let ((relations (cl-loop
+                      for headline in (org-glance-headline:scan-file)
+                      for relations = (org-glance-headline:relations headline)
+                      ;; when relations
+                      collect (cons (org-glance-headline:title headline)
+                                    (mapcar #'org-glance-headline:title relations)))))
+    (with-temp-file "graphviz.json"
+      (insert "["
+              (s-join "," (cl-loop
+                             for rel in relations
+                             for name = (car rel)
+                             for imports = (s-join "," (mapcar (-rpartial #'s-wrap "\"") (cdr rel)))
+                             collect (org-glance:format "{\"name\":\"${name}\",\"imports\":[${imports}]}")))
+              "]"))))
+
 (org-glance-module-provide)

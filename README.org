@@ -13,8 +13,9 @@ Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
 * Issues
-** TODO Visualization Chapter [0/1]
+** TODO Visualization [0/2]
 *** TODO [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
+*** TODO [[https://www.data-to-viz.com/graph/edge_bundling.html][Hierarchical edge bundling – from Data to Viz]]
 ** TODO Overview Mode [0/2]
 *** TODO org-overview-mode: modify-sync headline feature
 *** TODO org-overview-mode: add headline feature

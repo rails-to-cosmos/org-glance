@@ -169,4 +169,10 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (cl-defun org-glance-headline:format (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:title headline))
 
+(cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (goto-char (org-log-beginning t))
+    (insert note "\n")
+    (save-buffer)))
+
 (org-glance-module-provide)
