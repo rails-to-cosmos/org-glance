@@ -13,12 +13,17 @@ Turn org-mode into context-aware bookmark storage, password manager,
 flexible build system or whatever you can imagine with ease.
 
 * Issues
-** TODO org-overview-mode: modify-sync headline feature
-** TODO org-overview-mode: add headline feature
-** TODO headline API: add unit tests
-** TODO export #+TAGS and other options
-** TODO view-based materialized view buffer names: *materialized-event*
-** TODO views github-like dashboards
+** TODO Visualization Chapter [0/1]
+*** TODO [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
+** TODO Overview Mode [0/2]
+*** TODO org-overview-mode: modify-sync headline feature
+*** TODO org-overview-mode: add headline feature
+** TODO Headline API [0/1]
+*** TODO headline API: add unit tests
+** Unsorted [0/7]
+*** TODO export #+TAGS and other options
+*** TODO view-based materialized view buffer names: *materialized-event*
+*** TODO views github-like dashboards
 
 | #   | Jul | Aug | Sep | Oct | Nov | Dec |
 |-----+-----+-----+-----+-----+-----+-----|
@@ -30,10 +35,10 @@ flexible build system or whatever you can imagine with ease.
 | Sat | ### | ### | ### | ### | ### | ### |
 | Sun | ### | ### | ### | ### | ### | ### |
 
-** TODO read-only flag for materialized views
-** TODO full-text search
-** TODO parse encrypted blocks in any point of subtree
-** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
+*** TODO read-only flag for materialized views
+*** TODO full-text search
+*** TODO parse encrypted blocks in any point of subtree
+*** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
 * Thoughts
 
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]
