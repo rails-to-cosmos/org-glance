@@ -11,7 +11,7 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
   (when (not (null (org-element-property :ORG_GLANCE_ID headline)))
     headline))
 
-(cl-defun org-glance-headline:search-backward ()
+(cl-defun org-glance-headline:get-or-search-backward ()
   (org-glance:ensure-at-heading)
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
@@ -19,15 +19,16 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
   (org-glance-headline-p))
 
 (cl-defun org-glance-headline:from-element
-    (element &rest rest
+    (element
+     &rest kwargs
      &key (file (buffer-file-name))
        &allow-other-keys)
-  "Enrich `org-element' ELEMENT with REST properties.
+  "Enrich `org-element' ELEMENT with KWARGS properties.
 
 Default enrichment is as follows:
 - Add FILE property to `org-element'."
   (cl-loop
-     for (key value) on rest by #'cddr
+     for (key value) on kwargs by #'cddr
      do (org-element-put-property element key value)
      finally (return (-some-> element
                        (org-element-put-property :file file)))))
@@ -37,7 +38,7 @@ Default enrichment is as follows:
 If point is inside subtree, search backward for the first occurence of `org-glance-headline'."
   (save-excursion
     (org-glance-headline:from-element
-     (org-glance-headline:search-backward))))
+     (org-glance-headline:get-or-search-backward))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
@@ -114,25 +115,26 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(let* ((file (org-element-property :file ,headline))
-          (file-buffer (get-file-buffer file))
-          (visited-buffer (current-buffer))
-          result)
+  `(save-excursion
+     (let* ((file (org-element-property :file ,headline))
+            (file-buffer (get-file-buffer file))
+            (visited-buffer (current-buffer))
+            result)
 
-     (org-glance-headline:visit ,headline)
+       (org-glance-headline:visit ,headline)
 
-     (save-restriction
-       (org-narrow-to-subtree)
-       (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-                   ,@forms)))
+       (save-restriction
+         (org-narrow-to-subtree)
+         (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                        ,@forms)))
 
-     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                       (bury-buffer file-buffer)))
-           (t (save-buffer)
-              (kill-buffer (get-file-buffer file))))
+       (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+             ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                         (bury-buffer file-buffer)))
+             (t (save-buffer)
+                (kill-buffer (get-file-buffer file))))
 
-     result))
+       result)))
 
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
   (condition-case nil
@@ -146,7 +148,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
         (buffer-substring-no-properties (point-min) (point-max)))
     (error nil)))
 
-(cl-defun org-glance-headline:links (headline)
+(cl-defun org-glance-headline:links (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (org-element-map (org-element-parse-buffer) 'link
       (lambda (link)

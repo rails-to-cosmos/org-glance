@@ -95,7 +95,7 @@
              (message (org-glance:format "Headline \"${current-headline-title}\" is up to date")))
             (t (save-excursion
                  (save-restriction
-                   (org-glance-headline:search-backward)
+                   (org-glance-headline:get-or-search-backward)
                    (org-narrow-to-subtree)
                    (delete-region (point-min) (point-max))
                    (insert original-headline-contents)
