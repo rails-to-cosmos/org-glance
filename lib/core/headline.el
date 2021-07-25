@@ -110,7 +110,8 @@ If point is inside subtree, search backward for the first occurence of `org-glan
     (org-glance-headline:search-buffer headline)
     (org-glance:expand-parents)
     (org-overview)
-    (org-cycle 'contents)))
+    (org-cycle 'contents)
+    (org-glance-headline:at-point)))
 
 (defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
@@ -160,6 +161,7 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 
 (cl-defun org-glance-headline:scan-file (&optional (file (buffer-file-name)))
   (with-temp-buffer
+    (org-mode)
     (insert-file-contents file)
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (el)

@@ -3,7 +3,7 @@
 (defconst org-glance-relation-re
   (rx (seq bol
            (0+ (any "\t -"))
-           "Related to"
+           (or "Related to" "Referred from")
            (0+ (any "\t *"))
            (group (0+ word))
            (0+ (any "\t *"))
@@ -30,8 +30,8 @@
     (error nil)))
 
 (cl-defun org-glance-headline:relations (&optional (headline (org-glance-headline:at-point)))
+  "Get all first-level relations of HEADLINE."
   (org-glance-headline:narrow headline
-    (org-glance-headline:get-or-search-backward)
     (cl-loop
        while (org-glance-headline:next-relation)
        for view-id = (substring-no-properties (match-string 3))
@@ -40,6 +40,31 @@
                         (error nil))
        when relation
        collect relation)))
+
+(cl-defun org-glance-headline:relations* (&optional (headline (org-glance-headline:at-point)))
+  "Get all relations of HEADLINE recursive."
+  (let* ((visited (make-hash-table :test 'equal))
+         (headlines (list headline)))
+    (cl-loop
+       while headlines
+       for headline = (pop headlines)
+       for relations = (org-glance-headline:relations headline)
+       for id = (org-glance-headline:id headline)
+       for title = (org-glance-headline:title headline)
+       for rel-titles = (mapcar #'org-glance-headline:title relations)
+       unless (gethash id visited nil)
+       collect (cons title rel-titles)
+       into result
+       do
+         (puthash id t visited)
+         (cl-loop
+            for relation in relations
+            for relation-id = (org-glance-headline:id relation)
+            unless (gethash relation-id visited nil)
+            do
+              (push relation headlines)
+              (pp (mapcar #'org-glance-headline:title headlines)))
+       finally (return result))))
 
 (cl-defun org-glance:add-relation (&optional
                                      (source (org-glance-headline:at-point))

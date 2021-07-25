@@ -73,24 +73,28 @@
             collect (org-glance-metastore:deserialize-headline id headline))))
     (unless matched-headlines
       (org-glance-exception:headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
-    (if (= (length matched-headlines) 1)
-        (car matched-headlines)
-      (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
+    (save-window-excursion
+      (save-excursion
+        (org-glance-headline:visit (car matched-headlines))))
 
-      ;; (let ((conflicting-headlines (cl-loop for headline in matched-headlines
-      ;;                                 collect (cons (format "%s at %d in file %s %s"
-      ;;                                                       (org-glance-headline:title headline)
-      ;;                                                       (org-glance-headline:begin headline)
-      ;;                                                       (org-glance-headline:file headline)
-      ;;                                                       headline)
-      ;;                                               headline))))
-      ;;   (alist-get
-      ;;    (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
-      ;;    conflicting-headlines
-      ;;    nil
-      ;;    nil
-      ;;    #'string=))
-      )))
+    ;; (if (= (length matched-headlines) 1)
+    ;;   (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
+
+    ;;   ;; (let ((conflicting-headlines (cl-loop for headline in matched-headlines
+    ;;   ;;                                 collect (cons (format "%s at %d in file %s %s"
+    ;;   ;;                                                       (org-glance-headline:title headline)
+    ;;   ;;                                                       (org-glance-headline:begin headline)
+    ;;   ;;                                                       (org-glance-headline:file headline)
+    ;;   ;;                                                       headline)
+    ;;   ;;                                               headline))))
+    ;;   ;;   (alist-get
+    ;;   ;;    (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
+    ;;   ;;    conflicting-headlines
+    ;;   ;;    nil
+    ;;   ;;    nil
+    ;;   ;;    #'string=))
+    ;;   )
+    ))
 
 (cl-defun org-glance-metastore:choose-headline ()
   (let* ((headlines (cl-loop for vid in (org-glance-view:ids)

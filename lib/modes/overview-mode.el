@@ -15,6 +15,7 @@
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:add-relation)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
+(define-key org-glance-overview-mode-map (kbd "V") 'org-glance-overview:vizualize)
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
 
 (define-minor-mode org-glance-overview-mode
@@ -146,19 +147,16 @@
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
-  (let ((relations (cl-loop
-                      for headline in (org-glance-headline:scan-file)
-                      for relations = (org-glance-headline:relations headline)
-                      ;; when relations
-                      collect (cons (org-glance-headline:title headline)
-                                    (mapcar #'org-glance-headline:title relations)))))
-    (with-temp-file "graphviz.json"
-      (insert "["
-              (s-join "," (cl-loop
-                             for rel in relations
-                             for name = (car rel)
-                             for imports = (s-join "," (mapcar (-rpartial #'s-wrap "\"") (cdr rel)))
-                             collect (org-glance:format "{\"name\":\"${name}\",\"imports\":[${imports}]}")))
-              "]"))))
+  (org-glance-overview:for-all view-id
+      (error "not implemented yet") ;; org-glance-headline:scan-file
+    (let ((relations (org-glance-headline:relations*)))
+      (with-temp-file "relations.js"
+        (insert "var relations = ["
+                (s-join "," (cl-loop
+                               for rel in relations
+                               for name = (car rel)
+                               for relations = (s-join "," (mapcar (-rpartial #'s-wrap "\"") (cdr rel)))
+                               collect (org-glance:format "{\"name\":\"${name}\",\"relations\":[${relations}]}")))
+                "];")))))
 
 (org-glance-module-provide)
