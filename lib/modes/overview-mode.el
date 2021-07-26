@@ -122,7 +122,8 @@
                    (delete-region (point-min) (point-max))
                    (insert original-headline-contents)
                    (goto-char (point-min))
-                   (cl-loop for i from 1 to (1- current-headline-indent)
+                   (cl-loop
+                      for i from 1 to (1- current-headline-indent)
                       do (org-demote-subtree))
                    (org-content)))
                (goto-char initial-point)
@@ -141,7 +142,6 @@
 
 (cl-defun org-glance-overview:edit-mode ()
   (interactive)
-
   (org-glance-overview:for-all view-id
       nil
     (let* ((headline (org-glance-headline:at-point))
