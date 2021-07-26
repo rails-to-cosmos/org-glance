@@ -1,6 +1,14 @@
 (require 'highlight)
 (require 'org-glance-module)
 
+(defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
+
+#+CATEGORY: ${category}
+#+STARTUP: overview
+#+LATEST_CHANGE: ?
+
+")
+
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
@@ -58,6 +66,39 @@
   (org-glance-overview-mode +1)
   (message "All changes have been applied."))
 
+(cl-defun org-glance-overview:location (&optional (vid (org-glance-view:completing-read)))
+  "Path to file where VIEW-ID exported headlines are stored."
+  (let ((view-name (s-downcase (format "%s" vid))))
+    (f-join org-glance-view-location
+            view-name
+            (format "%s.org_summary" view-name))))
+
+(cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
+  (interactive)
+  (let* ((filename (org-glance-overview:location view-id))
+         (category view-id)
+         (header (org-glance:format org-glance-overview:header))
+         (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
+         (inhibit-read-only t))
+    (--org-glance:make-file-directory filename)
+    (with-temp-file filename
+      (insert header)
+      (insert (s-join "\n" (mapcar #'org-glance-headline:contents headlines)))
+      (org-mode)
+      (goto-char (point-min))
+      (set-mark (point-max))
+      (org-sort-entries nil ?o)
+      (org-glance-headline:sort-buffer)
+      (org-align-tags t))
+    (find-file filename)))
+
+(cl-defun org-glance-overview:visit (&optional (view-id (org-glance-view:completing-read)))
+  (interactive)
+  (let ((location (org-glance-overview:location view-id)))
+    (if (file-exists-p location)
+        (find-file location)
+      (org-glance-overview:create view-id))))
+
 (cl-defun org-glance-overview:agenda ()
   (interactive)
   (let ((org-agenda-files (list (buffer-file-name))))
@@ -66,7 +107,7 @@
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (let ((org-agenda-files (mapcar #'org-glance-view:summary-location (org-glance-view:ids))))
+  (let ((org-agenda-files (mapcar #'org-glance-overview:location (org-glance-view:ids))))
     (org-agenda-list)
     (org-agenda-month-view)))
 
@@ -98,7 +139,7 @@
   (let ((view-id (intern (org-get-category))))
     (when (y-or-n-p (org-glance:format "Update view ${view-id}?"))
       (kill-buffer)
-      (org-glance-view:summary view-id)
+      (org-glance-overview:create view-id)
       (message (org-glance:format "View ${view-id} is now up to date")))))
 
 (cl-defun org-glance-overview:pull ()
