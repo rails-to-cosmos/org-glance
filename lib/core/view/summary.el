@@ -17,10 +17,6 @@
             view-name
             (format "%s.org_summary" view-name))))
 
-(cl-defun org-glance-view:summary-locations ()
-  (cl-loop for view in (org-glance-view:ids)
-     collect (org-glance-view:summary-location view)))
-
 (cl-defun org-glance-view:summary (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (let* ((filename (org-glance-view:summary-location view-id))
