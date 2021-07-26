@@ -171,6 +171,11 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 
        result)))
 
+(cl-defun org-glance-headline:promote-to-the-first-level ()
+  (org-glance:ensure-at-heading)
+  (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
+    (org-promote-subtree)))
+
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
   (condition-case nil
       (with-temp-buffer
@@ -211,32 +216,5 @@ If point is inside subtree, search backward for the first occurence of `org-glan
     (goto-char (org-log-beginning t))
     (insert note "\n")
     (save-buffer)))
-
-(cl-defun org-glance-headline:promote-to-the-first-level ()
-  (org-glance:ensure-at-heading)
-  (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
-    (org-promote-subtree)))
-
-(cl-defun org-glance-headline:sort-buffer (&optional (start (point-min)))
-  "Sort headlines by todo state, then sort each group by time.
-
-TODO: implement unit tests."
-  (org-save-outline-visibility nil
-    (save-excursion
-      (goto-char start)
-      (unless (org-glance-headline-p) (org-glance-headline:search-forward))
-      (let* ((state (org-glance-headline:state))
-             (beginning-of-region (point))
-             (end-of-region (cl-loop
-                               initially (org-glance-headline:search-forward)
-                               while (< (point) (point-max))
-                               while (string= (org-glance-headline:state) state)
-                               do (org-glance-headline:search-forward)
-                               finally (return (point)))))
-        (set-mark beginning-of-region)
-        (goto-char end-of-region)
-        (org-sort-entries nil ?p)
-        (when (< end-of-region (point-max))
-          (org-glance-headline:sort-buffer end-of-region))))))
 
 (org-glance-module-provide)

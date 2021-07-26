@@ -73,6 +73,28 @@
             view-name
             (format "%s.org_summary" view-name))))
 
+(cl-defun org-glance-overview:sort-buffer (&optional (start (point-min)))
+  "Sort headlines by todo state, then sort each group by time.
+
+TODO: implement unit tests."
+  (org-save-outline-visibility nil
+    (save-excursion
+      (goto-char start)
+      (unless (org-glance-headline-p) (org-glance-headline:search-forward))
+      (let* ((state (org-glance-headline:state))
+             (beginning-of-region (point))
+             (end-of-region (cl-loop
+                               initially (org-glance-headline:search-forward)
+                               while (< (point) (point-max))
+                               while (string= (org-glance-headline:state) state)
+                               do (org-glance-headline:search-forward)
+                               finally (return (point)))))
+        (set-mark beginning-of-region)
+        (goto-char end-of-region)
+        (org-sort-entries nil ?p)
+        (when (< end-of-region (point-max))
+          (org-glance-overview:sort-buffer end-of-region))))))
+
 (cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (let* ((filename (org-glance-overview:location view-id))
@@ -88,7 +110,7 @@
       (goto-char (point-min))
       (set-mark (point-max))
       (org-sort-entries nil ?o)
-      (org-glance-headline:sort-buffer)
+      (org-glance-overview:sort-buffer)
       (org-align-tags t))
     (find-file filename)))
 
