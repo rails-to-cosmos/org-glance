@@ -35,7 +35,7 @@
 (define-key org-glance-overview-mode-map (kbd "p") 'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:refer)
-(define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
+(define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "z") 'org-glance-overview:vizualize)
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
@@ -133,7 +133,7 @@ TODO: implement unit tests."
     (org-agenda-list)
     (org-agenda-month-view)))
 
-(cl-defun org-glance-overview:visit ()
+(cl-defun org-glance-overview:visit-headline ()
   (interactive)
   (if (org-before-first-heading-p)
       (message "not implemented yet")
