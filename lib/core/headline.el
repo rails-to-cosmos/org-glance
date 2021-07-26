@@ -11,6 +11,20 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
   (when (not (null (org-element-property :ORG_GLANCE_ID headline)))
     headline))
 
+(cl-defun org-glance-headline:serialize (headline)
+  "Serialize HEADLINE to store it on disk."
+  (list (org-glance-headline:title headline)
+        (org-glance-headline:begin headline)
+        (org-glance-headline:file headline)))
+
+(cl-defun org-glance-headline:deserialize (dump)
+  "Deserialize DUMP to minimal headline."
+  (cl-destructuring-bind (title begin file) dump
+    (org-element-create 'headline
+                        (list :raw-value title
+                              :begin begin
+                              :file file))))
+
 (cl-defun org-glance-headline:get-or-search-backward ()
   (org-glance:ensure-at-heading)
   (while (and (not (org-glance-headline-p))
@@ -18,27 +32,31 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
     (org-up-heading-or-point-min))
   (org-glance-headline-p))
 
-(cl-defun org-glance-headline:from-element
-    (element
-     &rest kwargs
-     &key (file (buffer-file-name))
-       &allow-other-keys)
+(cl-defun org-glance-headline:enrich (element &rest kwargs)
   "Enrich `org-element' ELEMENT with KWARGS properties.
-
 Default enrichment is as follows:
 - Add FILE property to `org-element'."
   (cl-loop
      for (key value) on kwargs by #'cddr
      do (org-element-put-property element key value)
-     finally (return (-some-> element
-                       (org-element-put-property :file file)))))
+     finally (return element)))
+
+(cl-defun org-glance-headline:fetch (&optional (headline (org-glance-headline:at-point)))
+  (let ((id (org-glance-headline:id headline))
+        (file (org-glance-headline:file headline)))
+    (when (file-exists-p file)
+      (with-temp-buffer
+        (org-mode)
+        (insert-file-contents file)
+        (-> (org-glance-headline:search-by-id id)
+          (org-glance-headline:enrich :file file))))))
 
 (cl-defun org-glance-headline:at-point ()
   "Build `org-glance-headline' from `org-element' at point.
 If point is inside subtree, search backward for the first occurence of `org-glance-headline'."
   (save-excursion
-    (org-glance-headline:from-element
-     (org-glance-headline:get-or-search-backward))))
+    (-> (org-glance-headline:get-or-search-backward)
+      (org-glance-headline:enrich :file (buffer-file-name)))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
@@ -76,28 +94,25 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 (cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
-(cl-defun org-glance-headline:eq (headline &optional (other (org-glance-headline:at-point)))
-  (string= (org-glance-headline:id headline)
-           (org-glance-headline:id other)))
-
-(cl-defun org-glance-headline:search-buffer (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:search-by-id (id)
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                  (lambda (elem) (when (org-glance-headline:eq elem headline)
+                  (lambda (elem) (when (string= (org-glance-headline:id elem) id)
                               (org-element-property :begin elem))))))
     (unless points
-      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" file headline))
+      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" (buffer-file-name) id))
 
     (when (> (length points) 1)
-      (warn "Headline ID %s is not unique in file %s"
-            (org-glance-headline:id headline)
-            (org-glance-headline:file headline)))
+      (warn "Headline ID %s is not unique in file %s" id (buffer-file-name)))
 
-    (goto-char (car points))))
+    (goto-char (car points))
+    (org-glance-headline:at-point)))
+
+(cl-defun org-glance-headline:search-buffer (&optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:search-by-id (org-glance-headline:id headline)))
 
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE by id. Grab source file from metastore."
-  (let* ((file (org-glance-headline:file headline))
-         (buffer (org-glance-headline:buffer headline)))
+  (let* ((file (org-glance-headline:file headline)))
 
     (if (file-exists-p file)
         (find-file file)
@@ -108,9 +123,12 @@ If point is inside subtree, search backward for the first occurence of `org-glan
 
     ;; search for headline in buffer
     (org-glance-headline:search-buffer headline)
+
+    ;; for interactive usage only
     (org-glance:expand-parents)
     (org-overview)
     (org-cycle 'contents)
+
     (org-glance-headline:at-point)))
 
 (defmacro org-glance-headline:narrow (headline &rest forms)
@@ -166,7 +184,8 @@ If point is inside subtree, search backward for the first occurence of `org-glan
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (el)
         (when (org-glance-headline-p el)
-          (org-glance-headline:from-element el :file file))))))
+          (-> el
+            (org-glance-headline:enrich :file file)))))))
 
 (cl-defun org-glance-headline:format (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:title headline))

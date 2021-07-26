@@ -9,10 +9,13 @@
 
 (cl-defun org-glance-metastore:create (file &optional headlines)
   "Write HEADLINES to FILE."
-  (let ((metastore (cl-loop for headline in headlines
-                      with table = (make-hash-table :test 'equal)
-                      do (puthash (org-glance-headline:id headline) (org-glance-metastore:serialize-headline headline) table)
-                      finally (return table))))
+  (let ((metastore (cl-loop
+                      with metastore = (make-hash-table :test 'equal)
+                      for headline in headlines
+                      for id = (org-glance-headline:id headline)
+                      for serialized = (org-glance-headline:serialize headline)
+                      do (puthash id serialized metastore)
+                      finally (return metastore))))
     (with-temp-file file
       (insert (prin1-to-string metastore)))
     metastore))
@@ -23,33 +26,19 @@
     (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(cl-defun org-glance-metastore:serialize-headline (headline)
-  "Serialize HEADLINE to store it on disk."
-  (list (org-glance-headline:title headline)
-        (org-glance-headline:begin headline)
-        (org-glance-headline:file headline)))
-
-(defun org-glance-metastore:deserialize-headline (id headline)
-  "Convert metastore value HEADLINE to org-element enriched with metadata."
-  (cl-destructuring-bind (title begin file) headline
-    (org-element-create
-     'headline
-     (list :raw-value title
-           :begin begin
-           :file file
-           :ORG_GLANCE_ID id))))
-
 (defun org-glance-metastore:headlines (metastore)
-  (cl-loop for id being the hash-keys of metastore
-     for value = (gethash id metastore)
-     collect (org-glance-metastore:deserialize-headline id value)))
+  (cl-loop
+     for id being the hash-keys of metastore using (hash-value value)
+     collect (-> value
+               (org-glance-headline:deserialize)
+               (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
 (cl-defun org-glance-headlines
     (&key db
        (scope '(agenda))
        (filter #'(lambda (_) t))
        (db-init nil))
-  "Deprecated method, refactor needed."
+  "Deprecated method, refactor is needed."
   (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
          (load-db? (and (not (null db)) (file-exists-p db)))
          (skip-db? (null db)))
@@ -58,42 +47,24 @@
                         headlines))
           (load-db?   (org-glance-metastore:headlines (org-glance-metastore:read db)))
           (skip-db?   (org-glance-scope-headlines scope filter))
-          (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
+          (t          (user-error "Nothing to glance at (scope: %s)" scope)))
+    ))
 
 (cl-defun org-glance-metastore:get-headline (id)
-  "Get org-element headline by ID."
-  (let ((matched-headlines
-         (cl-loop for vid in (org-glance-view:ids)
-            for metastore = (->> vid
-                              org-glance-view
-                              org-glance-view-metastore-location
-                              org-glance-metastore:read)
-            for headline = (gethash id metastore)
-            when headline
-            collect (org-glance-metastore:deserialize-headline id headline))))
-    (when matched-headlines
-      (save-window-excursion
-        (save-excursion
-          (org-glance-headline:visit (car matched-headlines)))))
-
-    ;; (if (= (length matched-headlines) 1)
-    ;;   (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
-
-    ;;   ;; (let ((conflicting-headlines (cl-loop for headline in matched-headlines
-    ;;   ;;                                 collect (cons (format "%s at %d in file %s %s"
-    ;;   ;;                                                       (org-glance-headline:title headline)
-    ;;   ;;                                                       (org-glance-headline:begin headline)
-    ;;   ;;                                                       (org-glance-headline:file headline)
-    ;;   ;;                                                       headline)
-    ;;   ;;                                               headline))))
-    ;;   ;;   (alist-get
-    ;;   ;;    (org-completing-read "ID collision detected. Please resolve it: " conflicting-headlines nil 'require-match)
-    ;;   ;;    conflicting-headlines
-    ;;   ;;    nil
-    ;;   ;;    nil
-    ;;   ;;    #'string=))
-    ;;   )
-    ))
+  "Get full headline by ID."
+  (cl-loop
+     for vid in (org-glance-view:ids)
+     for metastore = (->> vid
+                       org-glance-view
+                       org-glance-view-metastore-location
+                       org-glance-metastore:read)
+     for headline = (gethash id metastore)
+     when headline
+     collect (-> headline
+               (org-glance-headline:deserialize)
+               (org-glance-headline:enrich :ORG_GLANCE_ID id))
+     into result
+     finally (return (first result))))
 
 (cl-defun org-glance-metastore:choose-headline ()
   (let* ((headlines (cl-loop for vid in (org-glance-view:ids)
