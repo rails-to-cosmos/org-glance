@@ -31,9 +31,7 @@
       (org-mode)
       (goto-char (point-min))
       (set-mark (point-max))
-      (condition-case nil
-          (org-sort-entries nil ?o)
-        (error 'nil))
+      (org-sort-entries nil ?o)
       (org-glance:sort-buffer-headlines)
       (org-align-tags t))
     (find-file filename)))

@@ -125,36 +125,4 @@ enjoy using a lot.
   (->> (buffer-substring-no-properties beg end)
     (s-trim)))
 
-(cl-defun org-glance:sort-buffer-headlines (&optional (start (point-min)))
-  "Sort headlines by todo state, then sort each group by time.
-
-TODO: implement unit tests."
-  (interactive)
-  (goto-char start)
-  (unless (org-at-heading-p)
-    (org-next-visible-heading 1))
-  (let* ((state (org-glance-headline:state))
-         (beginning-of-region (point))
-         (end-of-region beginning-of-region))
-
-    (cl-loop while (and (string= (org-glance-headline:state) state)
-                        (< (point) (point-max)))
-       do
-         (message "Sort %s headlines" state)
-         (org-next-visible-heading 1)
-         (setq end-of-region (point)))
-
-    (save-restriction
-      (narrow-to-region beginning-of-region end-of-region)
-      (goto-char (point-min))
-      (insert "\n")
-      (backward-char)
-      (org-sort-entries nil ?t)
-      (goto-char (point-min))
-      (delete-char 1)
-      (goto-char (point-max)))
-    (org-overview)
-    (unless (= (point) (point-max))
-      (org-glance:sort-buffer-headlines (point)))))
-
 (org-glance-module-provide)

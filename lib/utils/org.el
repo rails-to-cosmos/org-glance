@@ -1,6 +1,8 @@
 (require 'org-archive)
 (require 'org-glance-module)
 
+(org-glance-module-import lib.core.headline)
+
 (cl-defun org-glance:ensure-at-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))
@@ -102,5 +104,27 @@
   (org-glance:ensure-at-heading)
   (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
+
+(cl-defun org-glance:sort-buffer-headlines (&optional (start (point-min)))
+  "Sort headlines by todo state, then sort each group by time.
+
+TODO: implement unit tests."
+  (org-save-outline-visibility nil
+    (save-excursion
+      (goto-char start)
+      (unless (org-glance-headline-p) (org-glance-headline:search-forward))
+      (let* ((state (org-glance-headline:state))
+             (beginning-of-region (point))
+             (end-of-region (cl-loop
+                               initially (org-glance-headline:search-forward)
+                               while (< (point) (point-max))
+                               while (string= (org-glance-headline:state) state)
+                               do (org-glance-headline:search-forward)
+                               finally (return (point)))))
+        (set-mark beginning-of-region)
+        (goto-char end-of-region)
+        (org-sort-entries nil ?p)
+        (when (< end-of-region (point-max))
+          (org-glance:sort-buffer-headlines end-of-region))))))
 
 (org-glance-module-provide)

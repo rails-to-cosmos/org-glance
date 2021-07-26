@@ -32,6 +32,22 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
     (org-up-heading-or-point-min))
   (org-glance-headline-p))
 
+(cl-defun org-glance-headline:search-backward ()
+  (interactive)
+  (outline-previous-heading)
+  (if (org-glance-headline-p)
+      (org-glance-headline:at-point)
+    (when (> (point) (point-min))
+      (org-glance-headline:search-backward))))
+
+(cl-defun org-glance-headline:search-forward ()
+  (interactive)
+  (outline-next-heading)
+  (if (org-glance-headline-p)
+      (org-glance-headline:at-point)
+    (when (< (point) (point-max))
+      (org-glance-headline:search-forward))))
+
 (cl-defun org-glance-headline:enrich (element &rest kwargs)
   "Enrich `org-element' ELEMENT with KWARGS properties.
 Default enrichment is as follows:

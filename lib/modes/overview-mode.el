@@ -17,12 +17,14 @@
 
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
+(define-key org-glance-overview-mode-map (kbd "<") 'beginning-of-buffer)
+(define-key org-glance-overview-mode-map (kbd ">") 'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
-(define-key org-glance-overview-mode-map (kbd "n") 'next-line)
+(define-key org-glance-overview-mode-map (kbd "n") 'org-glance-headline:search-forward)
 (define-key org-glance-overview-mode-map (kbd "o") 'org-open-at-point)
-(define-key org-glance-overview-mode-map (kbd "p") 'previous-line)
+(define-key org-glance-overview-mode-map (kbd "p") 'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:refer)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit)
