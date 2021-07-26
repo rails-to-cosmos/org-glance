@@ -84,6 +84,7 @@
       (org-glance:generate-dir-for-subtree-at-point view-id)
       (unless (member (downcase view-id) (org-glance--collect-tags))
         (org-toggle-tag view-id))
+      (org-set-property "CATEGORY" view-id)
       (let ((archive-location (car (org-archive--compute-location
                                     (or (org-entry-get nil "ARCHIVE" 'inherit)
 	                                org-archive-location)))))
