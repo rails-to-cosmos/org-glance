@@ -9,48 +9,31 @@
    org-special-properties
    '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
 
-(cl-defun org-glance:f (s &rest kwargs)
-  "expand a template containing $keyword with the definitions in KWARGS."
-  (replace-regexp-in-string "\\($[A-Za-z_-]+\\)"
-                            (lambda (arg)
-                              (let ((keyword (intern (format ":%s" (substring arg 1)))))
-                                (format "%s" (plist-get kwargs keyword)))) s))
-
-(cl-defun org-glance:f* (s &rest kwargs)
-  "Same as `org-glance:f' but strips margins (scala style)."
-  (cl-loop
-     with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
-     for line in (s-split "\n" s)
-     concat (apply #'org-glance:f (append (list (funcall stripMargin line)) kwargs))
-     concat "\n"))
-
-(cl-defun org-glance:f! (s args)
-  "Applies template format to S and ARGS."
-  (apply 'org-glance:f (append (list s) args)))
-
-(cl-defun org-glance:f> (s &rest kwargs)
-  (insert (org-glance:f! s kwargs)))
-
-(defmacro org-glance:f** (fmt)
+(defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
 FMT is a string to be expanded against the current lexical
 environment. It is like what is used in `s-lex-format', but has
 an expanded syntax to allow format-strings. For example:
 ${user-full-name 20s} will be expanded to the current value of
 the variable `user-full-name' in a field 20 characters wide.
-  (let ((f (sqrt 5)))  (org-glance:f \"${f 1.2f}\"))
+  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
   will render as: 2.24
 This function is inspired by the f-strings in Python 3.6, which I
 enjoy using a lot.
 "
   (let* ((matches (s-match-strings-all"${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
-         (agetter (cl-loop for (m0 m1 m2 m3) in matches
-                        collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
-                                                                      (if s-lex-value-as-lisp "S" "s")
-                                                                   ,m2))
-                                                  (symbol-value (intern ,m1)))))))
-
-    `(s-format ,fmt 'aget (list ,@agetter))))
+         (agetter (cl-loop
+                     for (m0 m1 m2 m3) in matches
+                     collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                    (if s-lex-value-as-lisp "S" "s")
+                                                                  ,m2))
+                                                 (symbol-value (intern ,m1))))))
+         (result `(s-format ,fmt 'aget (list ,@agetter))))
+    `(s-join "\n"
+             (cl-loop
+                with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
+                for line in (s-split "\n" ,result)
+                collect (funcall stripMargin line)))))
 
 (defun --org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))
@@ -60,9 +43,6 @@ enjoy using a lot.
 (defun org-glance--collect-tags ()
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
-
-(defun org-glance-headline:matches-filter? (filter headline)
-  (or (null filter) (funcall filter headline)))
 
 (defun org-glance--ensure-path (path)
   (condition-case nil
@@ -88,20 +68,6 @@ enjoy using a lot.
   (cl-loop for filename in (org-agenda-files)
      append (list filename)
      append (org-glance--list-file-archives filename)))
-
-(defun org-glance-headline:format (headline)
-  (or (org-element-property :TITLE headline)
-      (org-element-property :raw-value headline)))
-
-(defun org-glance-headline:scan-file (file &optional filter)
-  (with-temp-buffer
-    (insert-file-contents file)
-    (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (headline)
-        (when (and (org-glance-headline-p headline)
-                   (org-glance-headline:matches-filter? filter headline))
-          (plist-put (cadr headline) :file file)
-          headline)))))
 
 (defun org-glance-headline:demote (level)
   (cl-loop repeat level
@@ -158,37 +124,5 @@ enjoy using a lot.
 (cl-defun org-glance-headline:buffer-contents (beg end)
   (->> (buffer-substring-no-properties beg end)
     (s-trim)))
-
-(cl-defun org-glance:sort-buffer-headlines (&optional (start (point-min)))
-  "Sort headlines by todo state, then sort each group by time.
-
-TODO: implement unit tests."
-  (interactive)
-  (goto-char start)
-  (unless (org-at-heading-p)
-    (org-next-visible-heading 1))
-  (let* ((state (org-glance-headline:state))
-         (beginning-of-region (point))
-         (end-of-region beginning-of-region))
-
-    (cl-loop while (and (string= (org-glance-headline:state) state)
-                        (< (point) (point-max)))
-       do
-         (message "Sort %s headlines" state)
-         (org-next-visible-heading 1)
-         (setq end-of-region (point)))
-
-    (save-restriction
-      (narrow-to-region beginning-of-region end-of-region)
-      (goto-char (point-min))
-      (insert "\n")
-      (backward-char)
-      (org-sort-entries nil ?T)
-      (goto-char (point-min))
-      (delete-char 1)
-      (goto-char (point-max)))
-    (org-overview)
-    (unless (= (point) (point-max))
-      (org-glance:sort-buffer-headlines (point)))))
 
 (org-glance-module-provide)

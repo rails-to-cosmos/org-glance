@@ -5,14 +5,6 @@
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))
 
-(cl-defun org-glance:indent-level ()
-  (save-excursion
-    (org-glance:ensure-at-heading)
-    (beginning-of-line)
-    (cl-loop while (looking-at "\\*")
-       for i from 0 do (forward-char)
-       finally (return i))))
-
 (defun org-glance:recreate-folder-structure-in-subtree-at-point ()
   (interactive)
   (save-excursion
@@ -92,6 +84,7 @@
       (org-glance:generate-dir-for-subtree-at-point view-id)
       (unless (member (downcase view-id) (org-glance--collect-tags))
         (org-toggle-tag view-id))
+      (org-set-property "CATEGORY" view-id)
       (let ((archive-location (car (org-archive--compute-location
                                     (or (org-entry-get nil "ARCHIVE" 'inherit)
 	                                org-archive-location)))))

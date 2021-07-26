@@ -33,7 +33,7 @@
     ("e" "Extract" org-glance-action-extract)
     ("j" "Jump" org-glance-action-open)
     ("m" "Materialize" org-glance-action-materialize)
-    ("v" "Visit" org-glance-view-visit)]
+    ("v" "Visit" org-glance-overview:visit)]
    ]
 
   ["Capture"

@@ -39,9 +39,7 @@
        ))
 
 (Given "^I am in the buffer \"\\([^\"]+\\)\"$"
-  (lambda (arg)
-    (switch-to-buffer (get-buffer-create arg))
-    ))
+       (lambda (arg) (switch-to-buffer (get-buffer-create arg))))
 
 (And "^I insert$"
   (lambda (arg)

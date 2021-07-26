@@ -32,28 +32,33 @@
 
 (require 'org-glance-module)
 
-(org-glance-module-import lib.utils.helpers)
-(org-glance-module-import lib.utils.org)
+(org-glance-module-import lib.utils.helpers)  ;; unsorted, deprecated
+(org-glance-module-import lib.utils.org) ;; some org-mode helpers and shortcuts
 
-(org-glance-module-import lib.core.metastore)  ;; TODO refactor to headline structure
-;; (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
+;;; Core APIs
+;; Description of high-level org-glance entities: Headline, View,
+;; Scope and Metastore.
 
+;;; Headline API
+;; Org-glance headline is an org-element headline enriched by some
+;; shortcuts and helper methods.
 (org-glance-module-import lib.core.headline)
-(org-glance-module-import lib.core.headline.helpers)
 
-(org-glance-module-import lib.core.actions)
+(org-glance-module-import lib.core.metastore)  ;; TODO refactor me
 
-(org-glance-module-import lib.modes.overview-mode)
+(org-glance-module-import lib.core.actions) ;; get rid of me
+
+(org-glance-module-import lib.modes.overview-mode)  ;; good one, support and improve me
 
 (org-glance-module-import lib.core.scope) ;; TODO refactor
 
 ;; (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
 
+;; All of these views should become part of overview-mode
 (org-glance-module-import lib.core.view)
-(org-glance-module-import lib.core.view.agenda)
 (org-glance-module-import lib.core.view.doctor)
-(org-glance-module-import lib.core.view.summary)
+(org-glance-module-import lib.core.relations) ;; good one, should be part of overview-mode
 
 ;; (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
@@ -61,11 +66,7 @@
 ;; (declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
 
-(org-glance-module-import lib.core.view.doctor)
-
 (org-glance-module-import lib.links.visit)
-(org-glance-module-import lib.core.relations)
-
 (org-glance-module-import lib.transient.headlines)
 (org-glance-module-import lib.plugins.metadata)
 
