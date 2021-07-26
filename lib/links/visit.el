@@ -16,7 +16,7 @@
 
 (defun org-glance-link:open (id _)
   "Visit org-glance headline identified by ID."
-  (org-glance-headline:visit (org-glance-metastore:get-headline-by-id id)))
+  (org-glance-headline:visit (org-glance-metastore:get-headline id)))
 
 ;; (defun org-glance-link:store-link ()
 ;;   "Store a link to a man page."

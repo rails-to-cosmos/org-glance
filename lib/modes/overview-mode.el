@@ -56,7 +56,7 @@
       (message "not implemented yet")
     (->> (org-glance-headline:at-point)
       org-glance-headline:id
-      org-glance-metastore:get-headline-by-id
+      org-glance-metastore:get-headline
       org-glance-headline:visit)))
 
 (cl-defun org-glance-overview:doctor ()
@@ -87,7 +87,7 @@
            (current-headline-title (org-glance-headline:format current-headline))
            (current-headline-indent (org-glance-headline:level current-headline))
            (current-headline-contents (org-glance-headline:contents current-headline))
-           (original-headline (org-glance-metastore:get-headline-by-id current-headline-id))
+           (original-headline (org-glance-metastore:get-headline current-headline-id))
            (original-headline-contents (org-glance-headline:contents original-headline)))
       (cond ((string-empty-p original-headline-contents)
              (when (y-or-n-p "Original heading not found. Remove it?")
@@ -112,7 +112,7 @@
   (save-window-excursion
     (->> (org-glance-headline:at-point)
       (org-glance-headline:id)
-      (org-glance-metastore:get-headline-by-id)
+      (org-glance-metastore:get-headline)
       (org-glance-headline:visit))
     (org-toggle-comment)
     (save-buffer))
@@ -134,7 +134,7 @@
   (org-glance-headline:narrow
       (->> (org-glance-headline:at-point)
         org-glance-headline:id
-        org-glance-metastore:get-headline-by-id)
+        org-glance-metastore:get-headline)
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:add-relation ()

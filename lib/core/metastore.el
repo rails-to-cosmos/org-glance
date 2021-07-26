@@ -60,7 +60,7 @@
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(cl-defun org-glance-metastore:get-headline-by-id (id)
+(cl-defun org-glance-metastore:get-headline (id)
   "Get org-element headline by ID."
   (let ((matched-headlines
          (cl-loop for vid in (org-glance-view:ids)
@@ -71,11 +71,10 @@
             for headline = (gethash id metastore)
             when headline
             collect (org-glance-metastore:deserialize-headline id headline))))
-    (unless matched-headlines
-      (org-glance-exception:headline-not-found "%s. Try to update view or make sure the headline was not deleted" id))
-    (save-window-excursion
-      (save-excursion
-        (org-glance-headline:visit (car matched-headlines))))
+    (when matched-headlines
+      (save-window-excursion
+        (save-excursion
+          (org-glance-headline:visit (car matched-headlines)))))
 
     ;; (if (= (length matched-headlines) 1)
     ;;   (car matched-headlines) ;; TODO Fix conflicts in DOCTOR method
