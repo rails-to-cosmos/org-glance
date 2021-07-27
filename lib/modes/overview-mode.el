@@ -27,7 +27,7 @@
 (define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") 'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") 'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
+(define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
 (define-key org-glance-overview-mode-map (kbd "n") 'org-glance-headline:search-forward)
@@ -37,6 +37,7 @@
 (define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:refer)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "z") 'org-glance-overview:vizualize)
+(define-key org-glance-overview-mode-map (kbd "g") 'org-glance-overview:pull)
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
 
