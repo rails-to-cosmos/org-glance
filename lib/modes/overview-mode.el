@@ -188,7 +188,7 @@ TODO: implement unit tests."
            (original-headline (org-glance-metastore:get-headline current-headline-id))
            (original-headline-contents (org-glance-headline:contents original-headline)))
       (cond ((null original-headline-contents)
-             (when (y-or-n-p (org-glance:format "Original heading for \"${current-headline-title}\" not found. Remove it?"))
+             (when (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
                (kill-region (org-entry-beginning-position) (org-entry-end-position))))
             ((string= current-headline-contents original-headline-contents)
              (condition-case nil
@@ -196,6 +196,9 @@ TODO: implement unit tests."
                (error (message "Headline is up to date"))))
             (t (save-excursion
                  (save-restriction
+                   (condition-case nil
+                       (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
+                     (error (message "Original headline has been changed")))
                    (org-glance-headline:get-or-search-backward)
                    (org-narrow-to-subtree)
                    (delete-region (point-min) (point-max))

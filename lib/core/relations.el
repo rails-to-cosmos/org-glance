@@ -77,7 +77,7 @@
   (interactive)
   (let* ((target-id (org-glance-headline:id target))
          (target-state (org-glance-headline:state target))
-         (target-label (if (string-empty-p target-state) "" (format " *%s* " target-state)))
+         (target-label (if (string-empty-p target-state) " " (format " *%s* " target-state)))
          (target-title (s-replace-regexp (format "^%s\\W*" target-state) "" (org-glance-headline:format target)))
          (target-views (s-join ", " (org-glance-headline:view-ids target)))
          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
