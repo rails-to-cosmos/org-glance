@@ -34,19 +34,13 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
-  (outline-previous-heading)
-  (if (org-glance-headline-p)
-      (org-glance-headline:at-point)
-    (when (> (point) (point-min))
-      (org-glance-headline:search-backward))))
+  (while (and (outline-previous-heading) (not (org-glance-headline-p))))
+  (when (org-glance-headline-p) (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:search-forward ()
   (interactive)
-  (outline-next-heading)
-  (while (and (< (point) (point-max))
-              (not (org-glance-headline-p)))
-    (outline-next-heading))
-  (org-glance-headline:at-point))
+  (while (and (outline-next-heading) (not (org-glance-headline-p))))
+  (when (org-glance-headline-p) (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:enrich (element &rest kwargs)
   "Enrich `org-element' ELEMENT with KWARGS properties.
