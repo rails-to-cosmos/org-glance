@@ -19,7 +19,7 @@
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
 ;; rebuild view and reread all files from view's scope
-(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull*)
+(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -27,14 +27,15 @@
 (define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") 'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") 'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit)
+(define-key org-glance-overview-mode-map (kbd "@") 'org-glance-overview:refer)
+(define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
+(define-key org-glance-overview-mode-map (kbd "g") 'org-glance-overview:pull)
 (define-key org-glance-overview-mode-map (kbd "n") 'org-glance-headline:search-forward)
 (define-key org-glance-overview-mode-map (kbd "o") 'org-open-at-point)
 (define-key org-glance-overview-mode-map (kbd "p") 'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
-(define-key org-glance-overview-mode-map (kbd "r") 'org-glance-overview:refer)
 (define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "z") 'org-glance-overview:vizualize)
 
@@ -156,7 +157,8 @@ TODO: implement unit tests."
          ,if-form)
      ,@else-forms))
 
-(cl-defun org-glance-overview:pull* ()
+(cl-defun org-glance-overview:pull! ()
+  "Completely rebuild current overview file."
   (interactive)
   (let ((view-id (intern (org-get-category))))
     (when (y-or-n-p (org-glance:format "Update view ${view-id}?"))
@@ -164,10 +166,18 @@ TODO: implement unit tests."
       (org-glance-overview:create view-id)
       (message (org-glance:format "View ${view-id} is now up to date")))))
 
-(cl-defun org-glance-overview:pull ()
+(cl-defun org-glance-overview:pull* ()
+  "Apply `org-glance-overview:pull' to each headline in current overview file."
   (interactive)
-  (org-glance-overview:for-all view-id
-      nil
+  (save-excursion
+    (goto-char (point-min))
+    (while (org-glance-headline:search-forward)
+      (org-glance-overview:pull))))
+
+(cl-defun org-glance-overview:pull ()
+  "Pull any modifications from original headline to it's overview clone at point."
+  (interactive)
+  (org-glance-overview:for-all view-id (org-glance-overview:pull*)
     (let* ((inhibit-read-only t)
            (initial-point (point))
            (current-headline (org-glance-headline:at-point))
@@ -177,11 +187,18 @@ TODO: implement unit tests."
            (current-headline-contents (org-glance-headline:contents current-headline))
            (original-headline (org-glance-metastore:get-headline current-headline-id))
            (original-headline-contents (org-glance-headline:contents original-headline)))
-      (cond ((null original-headline-contents) (when (y-or-n-p "Original heading not found. Remove it?")
-                                                 (kill-region (org-entry-beginning-position) (org-entry-end-position))))
-            ((string= current-headline-contents original-headline-contents) (message (org-glance:format "Headline \"${current-headline-title}\" is up to date")))
+      (cond ((null original-headline-contents)
+             (when (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
+               (kill-region (org-entry-beginning-position) (org-entry-end-position))))
+            ((string= current-headline-contents original-headline-contents)
+             (condition-case nil
+                 (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
+               (error (message "Headline is up to date"))))
             (t (save-excursion
                  (save-restriction
+                   (condition-case nil
+                       (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
+                     (error (message "Original headline has been changed")))
                    (org-glance-headline:get-or-search-backward)
                    (org-narrow-to-subtree)
                    (delete-region (point-min) (point-max))
