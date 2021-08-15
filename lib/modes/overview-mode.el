@@ -199,7 +199,7 @@ TODO: implement unit tests."
                    (condition-case nil
                        (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
                      (error (message "Original headline has been changed")))
-                   (org-glance-headline:get-or-search-backward)
+                   (org-glance-headline:get-up)
                    (org-narrow-to-subtree)
                    (delete-region (point-min) (point-max))
                    (insert original-headline-contents)

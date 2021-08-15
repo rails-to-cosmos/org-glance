@@ -25,7 +25,9 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
                               :begin begin
                               :file file))))
 
-(cl-defun org-glance-headline:get-or-search-backward ()
+(cl-defun org-glance-headline:get-up ()
+  "Return headline at point.
+If headline at point is not an `org-glance-headline', traverse parents."
   (org-glance:ensure-at-heading)
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
@@ -65,7 +67,7 @@ Default enrichment is as follows:
   "Build `org-glance-headline' from `org-element' at point.
 If point is inside subtree, search backward for the first occurence of `org-glance-headline'."
   (save-excursion
-    (-> (org-glance-headline:get-or-search-backward)
+    (-> (org-glance-headline:get-up)
       (org-glance-headline:enrich :file (buffer-file-name)))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
