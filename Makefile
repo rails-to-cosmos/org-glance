@@ -10,7 +10,6 @@ init:
 build:
 	${CASK} clean-elc
 	${CASK} build
-	npm run build
 
 test_src:
 	${CASK} clean-elc
