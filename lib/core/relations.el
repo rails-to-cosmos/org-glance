@@ -1,11 +1,14 @@
 (require 'org-glance-module)
 
+(defconst org-glance-relation:forward "Related to")
+(defconst org-glance-relation:backward "Referred from")
 (defconst org-glance-relation-re
   (rx (seq bol
            (0+ (any "\t -"))
-           (or "Related to" "Referred from")
+           (or (literal org-glance-relation:forward)
+               (literal org-glance-relation:backward))
            (0+ (any "\t *"))
-           (group-n 1 (0+ word))  ;; state
+           (group-n 1 (0+ word)) ;; state
            (0+ (any "\t *"))
            "="
            (group-n 2 (1+ (any word))) ;; category
@@ -72,7 +75,7 @@
 
 (cl-defun org-glance:add-relation (&optional
                                      (source (org-glance-headline:at-point))
-                                     (relation "Related to")
+                                     (relation org-glance-relation:forward)
                                      (target (org-glance-metastore:choose-headline)))
   (interactive)
   (let* ((target-id (org-glance-headline:id target))
@@ -96,7 +99,7 @@
            (target-views (s-join ", " (org-glance-headline:view-ids target))))
       (insert (org-glance:format
                "${target-label}=${target-views}= [[org-glance-visit:${target-id}][${target-title}]]"))
-      (org-glance:add-relation (org-glance-headline:at-point) "Related to" target)
-      (org-glance:add-relation target "Referred from" (org-glance-headline:at-point)))))
+      (org-glance:add-relation (org-glance-headline:at-point) org-glance-relation:forward target)
+      (org-glance:add-relation target org-glance-relation:backward (org-glance-headline:at-point)))))
 
 (org-glance-module-provide)

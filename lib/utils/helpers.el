@@ -21,7 +21,7 @@ the variable `user-full-name' in a field 20 characters wide.
 This function is inspired by the f-strings in Python 3.6, which I
 enjoy using a lot.
 "
-  (let* ((matches (s-match-strings-all"${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
+  (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
          (agetter (cl-loop
                      for (m0 m1 m2 m3) in matches
                      collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")

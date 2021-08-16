@@ -1,4 +1,5 @@
 (require 'highlight)
+(require 'org-attach)
 (require 'org-glance-module)
 
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
@@ -34,7 +35,7 @@
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
 (define-key org-glance-overview-mode-map (kbd "g") #'(lambda ()
                                                        (interactive)
-                                                       (org-glance-overview:for-all _
+                                                       (org-glance-overview:for-all
                                                            (org-glance-overview:pull*)
                                                          (org-glance-overview:pull))))
 (define-key org-glance-overview-mode-map (kbd "n") 'org-glance-headline:search-forward)
@@ -155,12 +156,11 @@ TODO: implement unit tests."
         (org-glance-view:doctor view-id))
     (message "not implemented yet")))
 
-(cl-defmacro org-glance-overview:for-all (view-id if-form &rest else-forms)
-  (declare (indent 2) (debug t))
+(cl-defmacro org-glance-overview:for-all (then &rest else)
+  (declare (indent 1) (debug t))
   `(if (org-before-first-heading-p)
-       (let ((,view-id (intern (org-get-category))))
-         ,if-form)
-     ,@else-forms))
+       ,then
+     ,@else))
 
 (cl-defun org-glance-overview:pull! ()
   "Completely rebuild current overview file."
@@ -228,8 +228,8 @@ TODO: implement unit tests."
 
 (cl-defun org-glance-overview:edit-mode ()
   (interactive)
-  (org-glance-overview:for-all view-id
-      nil
+  (org-glance-overview:for-all
+      (error "not implemented yet")
     (let* ((headline (org-glance-headline:at-point))
            (beg (org-element-property :begin (org-glance-headline:at-point)))
            (end (org-element-property :end (org-glance-headline:at-point))))
@@ -248,13 +248,13 @@ TODO: implement unit tests."
   (interactive)
   (let ((source (org-glance-overview:original-headline))
         (target (org-glance-metastore:choose-headline)))
-    (org-glance:add-relation source "Related to" target)
-    (org-glance:add-relation target "Referred from" source)
+    (org-glance:add-relation source org-glance-relation:forward target)
+    (org-glance:add-relation target org-glance-relation:backward source)
     (org-glance-overview:pull)))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
-  (org-glance-overview:for-all view-id
+  (org-glance-overview:for-all
       (error "not implemented yet") ;; org-glance-headline:scan-file
     (let ((relations (org-glance-headline:relations*)))
       (with-temp-file "relations.js"
