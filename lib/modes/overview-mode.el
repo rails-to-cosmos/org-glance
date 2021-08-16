@@ -142,12 +142,16 @@ TODO: implement unit tests."
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
-  (if (org-before-first-heading-p)
-      (message "not implemented yet")
-    (->> (org-glance-headline:at-point)
-      org-glance-headline:id
-      org-glance-metastore:get-headline
-      org-glance-headline:visit)))
+  (org-glance-overview:for-all
+      (error "not implemented")
+    (let ((offset (- (point) (save-excursion
+                               (org-glance-headline:goto-beginning-of-current-headline)
+                               (point)))))
+      (-some->> (org-glance-headline:at-point)
+        org-glance-headline:id
+        org-glance-metastore:get-headline
+        org-glance-headline:visit)
+      (forward-char offset))))
 
 (cl-defun org-glance-overview:doctor ()
   (interactive)
