@@ -32,7 +32,15 @@ If headline at point is not an `org-glance-headline', traverse parents."
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (org-glance-headline-p))
+  (-some-> (org-glance-headline-p)
+    (org-glance-headline:enrich :file (buffer-file-name))))
+
+(cl-defun org-glance-headline:at-point ()
+  "Build `org-glance-headline' from `org-element' at point.
+If point is inside subtree, search backward for the first
+occurence of `org-glance-headline'."
+  (save-excursion
+    (org-glance-headline:get-up)))
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
@@ -62,13 +70,6 @@ Default enrichment is as follows:
         (insert-file-contents file)
         (-> (org-glance-headline:search-by-id id)
           (org-glance-headline:enrich :file file))))))
-
-(cl-defun org-glance-headline:at-point ()
-  "Build `org-glance-headline' from `org-element' at point.
-If point is inside subtree, search backward for the first occurence of `org-glance-headline'."
-  (save-excursion
-    (-> (org-glance-headline:get-up)
-      (org-glance-headline:enrich :file (buffer-file-name)))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
