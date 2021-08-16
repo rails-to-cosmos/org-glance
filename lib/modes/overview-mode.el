@@ -31,6 +31,7 @@
 (define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
+(define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
 (define-key org-glance-overview-mode-map (kbd "g") #'(lambda ()
                                                        (interactive)
                                                        (org-glance-overview:for-all _
