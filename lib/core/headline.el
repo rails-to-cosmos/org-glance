@@ -29,6 +29,7 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
   "Jump to headline at point and build `org-glance-headline' object from `org-element' at point.
 If headline is not an `org-glance-headline', traverse parents."
   (org-glance:ensure-at-heading)
+  (beginning-of-line)
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
