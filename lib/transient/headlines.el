@@ -37,6 +37,6 @@
    ]
 
   ["Capture"
-   ("c" "Capture" org-glance-capture-subtree-at-point)])
+   ("c" "Capture" org-glance-view:capture-headline-at-point)])
 
 (org-glance-module-provide)

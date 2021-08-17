@@ -30,7 +30,7 @@
   ;;     (org-narrow-to-subtree)
   ;;     (hlt-highlight-region (point-min) (point-max))
   ;;     (when (y-or-n-p "Some properties are corrupted. Recapture the headline?")
-  ;;       (org-glance-capture-subtree-at-point view-id)
+  ;;       (org-glance-view:capture-headline-at-point view-id)
   ;;       (message "Patch headline %s in file %s" headline file)
   ;;       t)))
   )

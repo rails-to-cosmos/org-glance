@@ -47,6 +47,27 @@
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
 
+(define-key org-glance-overview-mode-map (kbd "+")
+  #'(lambda ()
+      (interactive)
+      (let* ((inhibit-read-only t)
+             (view-id (intern (org-get-category)))
+             (captured-headline (org-glance-view:capture-headline view-id))
+             (metastore-location (-some->> view-id
+                                   org-glance-view:get-view-by-id
+                                   org-glance-view-metastore-location))
+             (metastore (org-glance-metastore:read metastore-location)))
+
+        ;; modify metastore
+        (org-glance-metastore:add-headline captured-headline metastore)
+        (org-glance-metastore:write metastore-location metastore)
+
+        ;; modify overview
+        (beginning-of-buffer)
+        (org-glance-headline:search-forward)
+        (insert (org-glance-headline:contents captured-headline) "\n")
+        (save-buffer))))
+
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
   nil nil org-glance-overview-mode-map

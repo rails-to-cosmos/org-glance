@@ -7,18 +7,23 @@
 (org-glance-module-import lib.core.headline)
 (org-glance-module-import lib.utils.helpers)
 
+(cl-defun org-glance-metastore:write (file metastore)
+  (with-temp-file file
+    (insert (prin1-to-string metastore)))
+  metastore)
+
+(cl-defun org-glance-metastore:add-headline (headline metastore)
+  (puthash (org-glance-headline:id headline)
+           (org-glance-headline:serialize headline)
+           metastore))
+
 (cl-defun org-glance-metastore:create (file &optional headlines)
-  "Write HEADLINES to FILE."
-  (let ((metastore (cl-loop
-                      with metastore = (make-hash-table :test 'equal)
-                      for headline in headlines
-                      for id = (org-glance-headline:id headline)
-                      for serialized = (org-glance-headline:serialize headline)
-                      do (puthash id serialized metastore)
-                      finally (return metastore))))
-    (with-temp-file file
-      (insert (prin1-to-string metastore)))
-    metastore))
+  "Create metastore from HEADLINES and write it to FILE."
+  (org-glance-metastore:write file (cl-loop
+                                      with metastore = (make-hash-table :test 'equal)
+                                      for headline in headlines
+                                      do (org-glance-metastore:add-headline headline metastore)
+                                      finally (return metastore))))
 
 (defun org-glance-metastore:read (file)
   "Read metastore from FILE."
