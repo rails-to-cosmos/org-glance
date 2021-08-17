@@ -66,6 +66,8 @@
         (beginning-of-buffer)
         (org-glance-headline:search-forward)
         (insert (org-glance-headline:contents captured-headline) "\n")
+        (beginning-of-buffer)
+        (org-glance-overview:sort* '(?o ?p))
         (save-buffer))))
 
 (define-minor-mode org-glance-overview-mode
@@ -101,27 +103,56 @@
             view-name
             (format "%s.org_summary" view-name))))
 
-(cl-defun org-glance-overview:sort-buffer (&optional (start (point-min)))
-  "Sort headlines by todo state, then sort each group by time.
+(cl-defun org-glance-overview:sort* (order &optional group)
+  (interactive)
+  ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
+  ;; c   By creation time, which is assumed to be the first inactive time stamp
+  ;;     at the beginning of a line.
+  ;; d   By deadline date/time.
+  ;; k   By clocking time.
+  ;; n   Numerically, by converting the beginning of the entry/item to a number.
+  ;; o   By order of TODO keywords.
+  ;; p   By priority according to the cookie.
+  ;; r   By the value of a property.
+  ;; s   By scheduled date/time.
+  ;; t   By date/time, either the first active time stamp in the entry, or, if
+  ;;     none exist, by the first inactive one.
 
-TODO: implement unit tests."
-  (org-save-outline-visibility nil
-    (save-excursion
-      (goto-char start)
-      (unless (org-glance-headline-p) (org-glance-headline:search-forward))
-      (let* ((state (org-glance-headline:state))
-             (beginning-of-region (point))
-             (end-of-region (cl-loop
-                               initially (org-glance-headline:search-forward)
-                               while (< (point) (point-max))
-                               while (string= (org-glance-headline:state) state)
-                               do (org-glance-headline:search-forward)
-                               finally (return (point)))))
-        (set-mark beginning-of-region)
-        (goto-char end-of-region)
-        (org-sort-entries nil ?p)
-        (when (< end-of-region (point-max))
-          (org-glance-overview:sort-buffer end-of-region))))))
+  (save-excursion
+    (org-save-outline-visibility nil
+      (cond ((null order) nil)
+            ((null group) (progn
+                            (org-sort-entries nil (car order))
+                            (org-glance-overview:sort* (cdr order) (car order))))
+            (t (let ((group-fn (case group
+                                 (?a #'org-glance-headline:title)
+                                 (?p #'org-glance-headline:priority)
+                                 (?c #'org-glance-headline:creation-time)
+                                 (?o #'org-glance-headline:state)
+                                 (?t #'org-glance-headline:creation-time)
+                                 (t nil)))
+                     (comp-fn (case group
+                                (?a #'string=)
+                                (?p #'eql)
+                                (?c #'string=)
+                                (?o #'string=)
+                                (?t #'string=)
+                                (t nil))))
+                 (beginning-of-buffer)
+                 (org-glance-headline:search-forward)
+                 (while (< (point) (point-max))
+                   (let* ((group-state (funcall group-fn))
+                          (beginning-of-group (point))
+                          (end-of-group (cl-loop
+                                           while (and (< (point) (point-max))
+                                                      (funcall comp-fn group-state (funcall group-fn)))
+                                           do (org-glance-headline:search-forward)
+                                           finally (return (point)))))
+                     (set-mark beginning-of-group)
+                     (goto-char end-of-group)
+                     (org-sort-entries nil (car order))
+                     (goto-char end-of-group)))
+                 (org-glance-overview:sort* (cdr order) (car order))))))))
 
 (cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
@@ -137,8 +168,7 @@ TODO: implement unit tests."
       (org-mode)
       (goto-char (point-min))
       (set-mark (point-max))
-      (org-sort-entries nil ?o)
-      (org-glance-overview:sort-buffer)
+      (org-glance-overview:sort* '(?o ?p))
       (org-align-tags t))
     (find-file filename)))
 
@@ -251,16 +281,16 @@ TODO: implement unit tests."
     (save-buffer))
   (org-glance-overview:pull))
 
-(cl-defun org-glance-overview:edit-mode ()
-  (interactive)
-  (org-glance-overview:for-all
-      (error "not implemented yet")
-    (let* ((headline (org-glance-headline:at-point))
-           (beg (org-element-property :begin (org-glance-headline:at-point)))
-           (end (org-element-property :end (org-glance-headline:at-point))))
-      (hlt-unhighlight-region beg end)
-      ;; (hlt-highlight-region beg end 'expal-block-hover-face)
-      (remove-text-properties beg end '(read-only t)))))
+;; (cl-defun org-glance-overview:edit-mode ()
+;;   (interactive)
+;;   (org-glance-overview:for-all
+;;       (error "not implemented yet")
+;;     (let* ((headline (org-glance-headline:at-point))
+;;            (beg (org-element-property :begin (org-glance-headline:at-point)))
+;;            (end (org-element-property :end (org-glance-headline:at-point))))
+;;       (hlt-unhighlight-region beg end)
+;;       ;; (hlt-highlight-region beg end 'expal-block-hover-face)
+;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
   (org-glance-headline:narrow

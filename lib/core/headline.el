@@ -84,6 +84,12 @@ Default enrichment is as follows:
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
 
+(cl-defun org-glance-headline:priority (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :priority headline))
+
+(cl-defun org-glance-headline:creation-time (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :ORG_GLANCE_CREATION_TIME headline))
+
 (cl-defun org-glance-headline:modtime (&optional (headline (org-glance-headline:at-point)))
   (-> headline
     org-glance-headline:file

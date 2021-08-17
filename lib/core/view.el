@@ -310,6 +310,10 @@
            (dir (org-glance:generate-dir-for-subtree-at-point view-id))
            (output-file (f-join dir (org-glance:format "${view-id}.org"))))
       (org-set-property "CATEGORY" view-id)
+      (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
+                                                     (let ((current-prefix-arg '(16)))
+                                                       (call-interactively #'org-time-stamp-inactive)
+                                                       (buffer-substring-no-properties (point-min) (point-max)))))
       (unless (member (downcase view-id) (org-glance--collect-tags))
         (org-toggle-tag view-id))
       (save-restriction
