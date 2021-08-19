@@ -277,23 +277,23 @@
      ((string= ,vid org-glance-view:all) ,do-for-all-forms)
      (t ,@do-for-specific-view-forms)))
 
-(cl-defun org-glance-def-view (id &key type scope)
-  (unless (eq nil (gethash id org-glance-views))
-    (user-error "View %s is already registered." id))
-  (let ((view (make-org-glance-view :id id)))
+(defun org-glance-view:get-view-by-id (view-id)
+  (gethash view-id org-glance-views))
+
+(cl-defun org-glance-def-view (view-id &key type scope &allow-other-keys)
+  (when (org-glance-view:get-view-by-id view-id)
+    (user-error "View %s is already registered." view-id))
+  (let ((view (make-org-glance-view :id view-id)))
     (when scope (setf (org-glance-view-scope view) scope))
     (when type  (setf (org-glance-view-type view) type))
-    (puthash id view org-glance-views)
+    (puthash view-id view org-glance-views)
     (unless scope
       (message "Default scope is: %s" org-glance-default-scope))
     (message "View \"%s\"%s is now ready to glance %s"
-             id
+             view-id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
-
-(defun org-glance-view:get-view-by-id (id)
-  (gethash id org-glance-views))
 
 (cl-defun org-glance-view:capture-headline-at-point (&optional view-id)
   (interactive)
