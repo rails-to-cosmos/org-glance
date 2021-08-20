@@ -62,7 +62,8 @@
                                (s-replace-regexp "\\-+" "-")
                                (s-replace-regexp "\\-+$" "")
                                (s-truncate 30)
-                               (s-join "_" (format-time-string "%Y-%m-%d")))))))
+                               (list (format-time-string "%Y-%m-%d"))
+                               (s-join "_"))))))
         (org-set-property "DIR" dir)
         dir))))
 
