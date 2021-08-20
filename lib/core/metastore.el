@@ -75,7 +75,7 @@
   (let* ((headlines (cl-loop for vid in (org-glance-view:ids)
                        append (cl-loop for headline in (org-glance-view:headlines vid)
                                  collect (cons ;; duplication of format*
-                                          (format "[%s] %s" vid (org-glance-headline:format headline))
+                                          (format "[%s] %s" vid (org-glance-headline:title headline))
                                           headline))))
          (headline (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
     (org-glance-headline:narrow headline

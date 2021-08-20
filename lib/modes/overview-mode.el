@@ -241,7 +241,7 @@
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
          (current-headline-id (org-glance-headline:id current-headline))
-         (current-headline-title (org-glance-headline:format current-headline))
+         (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-metastore:get-headline current-headline-id))

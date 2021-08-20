@@ -63,10 +63,10 @@
   :type 'list)
 
 (defun org-glance-scope--prompt-headlines (prompt headlines)
-  (org-completing-read prompt (mapcar #'org-glance-headline:format headlines)))
+  (org-completing-read prompt (mapcar #'org-glance-headline:title headlines)))
 
 (defun org-glance-scope--choose-headline (choice headlines)
-  (--first (string= (org-glance-headline:format it) choice) headlines))
+  (--first (string= (org-glance-headline:title it) choice) headlines))
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
   (cl-loop for file in (org-glance-scope scope)

@@ -210,9 +210,6 @@ Default enrichment is as follows:
           (-> el
             (org-glance-headline:enrich :file file)))))))
 
-(cl-defun org-glance-headline:format (&optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:title headline))
-
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (goto-char (org-log-beginning t))
