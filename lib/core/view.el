@@ -309,6 +309,8 @@
            (id (org-glance:generate-id-for-subtree-at-point view-id))
            (dir (org-glance:generate-dir-for-subtree-at-point view-id))
            (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+      ;; (y-or-n-p (org-glance:format "Refile ${view-id} to ${dir}?"))
+      (org-set-property "DIR" dir)
       (org-set-property "CATEGORY" view-id)
       (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
                                                      (let ((current-prefix-arg '(16)))

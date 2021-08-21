@@ -162,6 +162,15 @@ Default enrichment is as follows:
 
        (save-restriction
          (org-narrow-to-subtree)
+         (message "Point max = %d" (point-max))
+         (message "Subtree max = %d" (save-excursion
+                                       (org-end-of-meta-data)
+                                       (point)))
+         (when (= (point-max) (save-excursion
+                                (org-end-of-meta-data)
+                                (point)))
+           (goto-char (point-max))
+           (insert "\n"))
          (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
                         ,@forms)))
 
@@ -211,7 +220,7 @@ Default enrichment is as follows:
             (org-glance-headline:enrich :file file)))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:narrow headline
+  (org-glance-headline:narrow (org-glance-headline:at-point)
     (goto-char (org-log-beginning t))
     (insert note "\n")
     (save-buffer)))

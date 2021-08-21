@@ -47,28 +47,33 @@
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+")
-  #'(lambda ()
-      (interactive)
-      (let* ((inhibit-read-only t)
-             (view-id (intern (org-get-category)))
-             (captured-headline (org-glance-view:capture-headline view-id))
-             (metastore-location (-some->> view-id
-                                   org-glance-view:get-view-by-id
-                                   org-glance-view-metastore-location))
-             (metastore (org-glance-metastore:read metastore-location)))
+(define-key org-glance-overview-mode-map (kbd "+") 'org-glance-overview:capture-headline)
 
-        ;; modify metastore
-        (org-glance-metastore:add-headline captured-headline metastore)
-        (org-glance-metastore:write metastore-location metastore)
+(cl-defun org-glance-overview:register-headline (headline view-id)
+  "Register HEADLINE in metastore and overview file."
+  (let* ((inhibit-read-only t)
+         (metastore-location (-some->> view-id
+                               org-glance-view:get-view-by-id
+                               org-glance-view-metastore-location))
+         (metastore (org-glance-metastore:read metastore-location)))
 
-        ;; modify overview
-        (beginning-of-buffer)
-        (org-glance-headline:search-forward)
-        (insert (org-glance-headline:contents captured-headline) "\n")
-        (beginning-of-buffer)
-        (org-glance-overview:sort* '(?o ?p))
-        (save-buffer))))
+    ;; modify metastore
+    (org-glance-metastore:add-headline headline metastore)
+    (org-glance-metastore:write metastore-location metastore)
+
+    ;; modify overview
+    (beginning-of-buffer)
+    (org-glance-headline:search-forward)
+    (insert (org-glance-headline:contents headline) "\n")
+    (beginning-of-buffer)
+    (org-glance-overview:sort* '(?o ?p))
+    (save-buffer)))
+
+(cl-defun org-glance-overview:capture-headline ()
+  (interactive)
+  (let* ((view-id (intern (org-get-category)))
+         (headline (org-glance-view:capture-headline view-id)))
+    (org-glance-overview:register-headline headline view-id)))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
@@ -206,10 +211,43 @@
 
 (cl-defun org-glance-overview:doctor ()
   (interactive)
-  (if (org-before-first-heading-p)
-      (let* ((view-id (intern (org-get-category))))
-        (org-glance-view:doctor view-id))
-    (message "not implemented yet")))
+  (org-glance-overview:for-all
+      (save-excursion
+        (goto-char (point-min))
+        (while (org-glance-headline:search-forward)
+          (org-glance-overview:doctor)))
+    (save-window-excursion
+      (org-glance-overview:pull)
+      (let* ((view-id (intern (org-get-category)))
+             (original-headline (org-glance-overview:original-headline))
+             (original-headline-location (org-glance-headline:file original-headline))
+             (overview-file-name (org-glance-overview:location view-id))
+             (overview-location (file-name-directory overview-file-name))
+             (common-location (f-common-parent (list overview-location original-headline-location)))
+             (title (org-glance-headline:title))
+             (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
+        (when (s-matches? org-link-any-re title)
+          (when (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in title. Move link to the body of headline?"))
+            (org-glance-headline:narrow original-headline
+              (org-glance-headline:add-log-note (org-glance:format "- Link captured: ${title} on ${now}"))
+              (org-glance-headline:goto-beginning-of-current-headline)
+              (org-beginning-of-line)
+              (org-kill-line)
+              (insert (with-temp-buffer
+                        (insert title)
+                        (goto-char (point-min))
+                        (let* ((link (org-element-link-parser))
+                               (contents-begin (org-element-property :contents-begin link))
+                               (contents-end (org-element-property :contents-end link)))
+                          (if (and contents-begin contents-end)
+                              (buffer-substring-no-properties contents-begin contents-end)
+                            (read-string "New title: ")))))
+              (save-buffer))
+            (org-glance-overview:pull)))
+        (unless (string= overview-location common-location)
+          (when (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))
+            (org-glance-headline:visit original-headline)
+            (org-glance-overview:register-headline (org-glance-view:capture-headline-at-point view-id) view-id)))))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
@@ -240,11 +278,10 @@
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
-         (current-headline-id (org-glance-headline:id current-headline))
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
-         (original-headline (org-glance-metastore:get-headline current-headline-id))
+         (original-headline (org-glance-overview:original-headline))
          (original-headline-contents (org-glance-headline:contents original-headline)))
     (cond ((null original-headline-contents)
            (when (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
