@@ -63,12 +63,16 @@
 
     ;; modify overview
     (find-file (org-glance-overview:location view-id))
-    (beginning-of-buffer)
-    (org-glance-headline:search-forward)
-    (insert (org-glance-headline:contents headline) "\n")
-    (beginning-of-buffer)
-    (org-glance-overview:sort* '(?o ?p))
-    (save-buffer)))
+    (condition-case nil
+        (progn
+          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+          (org-glance-overview:pull))
+      (error (beginning-of-buffer)
+             (org-glance-headline:search-forward)
+             (insert (org-glance-headline:contents headline) "\n")
+             (beginning-of-buffer)
+             (org-glance-overview:sort* '(?o ?p))
+             (save-buffer)))))
 
 (cl-defun org-glance-overview:capture-headline ()
   (interactive)
@@ -231,7 +235,7 @@
              (title (org-glance-headline:title))
              (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
         (when (s-matches? org-link-any-re title)
-          (when (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in title. Move link to the body of headline?"))
+          (when (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in title. Move it to the logbook?"))
             (org-glance-headline:narrow original-headline
               (org-glance-headline:add-log-note (org-glance:format "- Link captured: ${title} on ${now}"))
               (org-glance-headline:goto-beginning-of-current-headline)
@@ -253,9 +257,10 @@
             (org-glance-overview:pull)))
         (unless (string= overview-location common-location)
           (when (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))
-            (org-glance-headline:visit original-headline)
-            (let ((captured-headline (org-glance-view:capture-headline-at-point view-id)))
-              (org-glance-overview:register-headline captured-headline view-id))))))))
+            (org-glance-overview:register-headline
+             (org-glance-headline:narrow original-headline
+               (org-glance-view:capture-headline-at-point view-id))
+             view-id)))))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))

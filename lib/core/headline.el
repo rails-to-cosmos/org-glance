@@ -67,7 +67,7 @@ Default enrichment is as follows:
       (with-temp-buffer
         (org-mode)
         (insert-file-contents file)
-        (-> (org-glance-headline:search-by-id id)
+        (-> (org-glance-headline:search-buffer-by-id id)
           (org-glance-headline:enrich :file file))))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
@@ -112,7 +112,7 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
-(cl-defun org-glance-headline:search-by-id (id)
+(cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
                   (lambda (elem) (when (string= (org-glance-headline:id elem) id)
                               (org-element-property :begin elem))))))
@@ -126,7 +126,7 @@ Default enrichment is as follows:
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:search-buffer (&optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:search-by-id (org-glance-headline:id headline)))
+  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline)))
 
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE by id. Grab source file from metastore."
@@ -152,31 +152,32 @@ Default enrichment is as follows:
 (defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(save-excursion
-     (let* ((file (org-element-property :file ,headline))
-            (file-buffer (get-file-buffer file))
-            (visited-buffer (current-buffer))
-            result)
+  `(save-window-excursion
+     (save-excursion
+       (let* ((file (org-element-property :file ,headline))
+              (file-buffer (get-file-buffer file))
+              (visited-buffer (current-buffer))
+              result)
 
-       (org-glance-headline:visit ,headline)
+         (org-glance-headline:visit ,headline)
 
-       (save-restriction
-         (org-narrow-to-subtree)
-         (when (= (point-max) (save-excursion
-                                (org-end-of-meta-data)
-                                (point)))
-           (goto-char (point-max))
-           (insert "\n"))
-         (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-                        ,@forms)))
+         (save-restriction
+           (org-narrow-to-subtree)
+           (when (= (point-max) (save-excursion
+                                  (org-end-of-meta-data)
+                                  (point)))
+             (goto-char (point-max))
+             (insert "\n"))
+           (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                          ,@forms)))
 
-       (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-             ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                         (bury-buffer file-buffer)))
-             (t (save-buffer)
-                (kill-buffer (get-file-buffer file))))
+         (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+               ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                           (bury-buffer file-buffer)))
+               (t (save-buffer)
+                  (kill-buffer (get-file-buffer file))))
 
-       result)))
+         result))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance:ensure-at-heading)
