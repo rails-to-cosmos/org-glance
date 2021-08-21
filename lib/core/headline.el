@@ -162,10 +162,6 @@ Default enrichment is as follows:
 
        (save-restriction
          (org-narrow-to-subtree)
-         (message "Point max = %d" (point-max))
-         (message "Subtree max = %d" (save-excursion
-                                       (org-end-of-meta-data)
-                                       (point)))
          (when (= (point-max) (save-excursion
                                 (org-end-of-meta-data)
                                 (point)))

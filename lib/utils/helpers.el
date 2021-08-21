@@ -125,4 +125,16 @@ enjoy using a lot.
   (->> (buffer-substring-no-properties beg end)
     (s-trim)))
 
+(cl-defun org-glance:title-from-url (url)
+  "Return content in <title> tag."
+  (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
+    (save-excursion
+      (set-buffer download-buffer)
+      (beginning-of-buffer)
+      (setq x1 (progn (search-forward "<title")
+                      (search-forward ">")))
+      (search-forward "</title>")
+      (setq x2 (search-backward "<"))
+      (decode-coding-string (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)) 'utf-8))))
+
 (org-glance-module-provide)

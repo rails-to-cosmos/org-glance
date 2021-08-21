@@ -62,6 +62,7 @@
     (org-glance-metastore:write metastore-location metastore)
 
     ;; modify overview
+    (find-file (org-glance-overview:location view-id))
     (beginning-of-buffer)
     (org-glance-headline:search-forward)
     (insert (org-glance-headline:contents headline) "\n")
@@ -215,10 +216,13 @@
       (save-excursion
         (goto-char (point-min))
         (while (org-glance-headline:search-forward)
-          (org-glance-overview:doctor)))
+          (when (= (org-glance-headline:level) 1)
+            (org-glance-overview:doctor))))
     (save-window-excursion
       (org-glance-overview:pull)
-      (let* ((view-id (intern (org-get-category)))
+      (let* ((view-id (save-excursion
+                        (goto-char (point-min))
+                        (intern (org-get-category))))
              (original-headline (org-glance-overview:original-headline))
              (original-headline-location (org-glance-headline:file original-headline))
              (overview-file-name (org-glance-overview:location view-id))
@@ -241,13 +245,17 @@
                                (contents-end (org-element-property :contents-end link)))
                           (if (and contents-begin contents-end)
                               (buffer-substring-no-properties contents-begin contents-end)
-                            (read-string "New title: ")))))
+                            (let ((webpage-title (org-glance:title-from-url (org-element-property :raw-link link))))
+                              (if (string-empty-p webpage-title)
+                                  (read-string "New title: ")
+                                webpage-title))))))
               (save-buffer))
             (org-glance-overview:pull)))
         (unless (string= overview-location common-location)
           (when (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))
             (org-glance-headline:visit original-headline)
-            (org-glance-overview:register-headline (org-glance-view:capture-headline-at-point view-id) view-id)))))))
+            (let ((captured-headline (org-glance-view:capture-headline-at-point view-id)))
+              (org-glance-overview:register-headline captured-headline view-id))))))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))

@@ -45,10 +45,8 @@
     (org-glance:ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
-      (let ((id (or (org-element-property :ORG_GLANCE_ID (org-element-at-point))
-                    (org-glance:generate-id view-id))))
-        (org-set-property "ORG_GLANCE_ID" id)
-        id))))
+      (or (org-element-property :ORG_GLANCE_ID (org-element-at-point))
+          (org-glance:generate-id view-id)))))
 
 (cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion

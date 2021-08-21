@@ -297,39 +297,40 @@
 
 (cl-defun org-glance-view:capture-headline-at-point (&optional view-id)
   (interactive)
-  (save-excursion
-    (org-glance:ensure-at-heading)
-    (let* ((view-id (cond ((symbolp view-id) (symbol-name view-id))
-                          ((stringp view-id) view-id)
-                          (t (org-completing-read "Capture subtree for view: "
-                                                  (seq-difference
-                                                   (org-glance-view:ids)
-                                                   (mapcar #'intern (org-get-tags)))))))
-           (view (org-glance-view view-id))
-           (id (org-glance:generate-id-for-subtree-at-point view-id))
-           (dir (org-glance:generate-dir-for-subtree-at-point view-id))
-           (output-file (f-join dir (org-glance:format "${view-id}.org"))))
-      ;; (y-or-n-p (org-glance:format "Refile ${view-id} to ${dir}?"))
-      (org-set-property "DIR" dir)
-      (org-set-property "CATEGORY" view-id)
-      (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
-                                                     (let ((current-prefix-arg '(16)))
-                                                       (call-interactively #'org-time-stamp-inactive)
-                                                       (buffer-substring-no-properties (point-min) (point-max)))))
-      (unless (member (downcase view-id) (org-glance--collect-tags))
-        (org-toggle-tag view-id))
-      (save-restriction
-        (org-narrow-to-subtree)
-        (let ((contents (buffer-substring-no-properties (point-min) (point-max))))
-          (delete-region (point-min) (point-max))
-          (mkdir dir 'parents)
-          (find-file output-file)
-          (widen)
-          (end-of-buffer)
-          (insert contents)
-          (org-glance-headline:goto-beginning-of-current-headline)
-          (save-buffer)
-          (org-glance-headline:at-point))))))
+  (save-window-excursion
+    (save-excursion
+      (org-glance:ensure-at-heading)
+      (let* ((view-id (cond ((symbolp view-id) (symbol-name view-id))
+                            ((stringp view-id) view-id)
+                            (t (org-completing-read "Capture subtree for view: "
+                                                    (seq-difference
+                                                     (org-glance-view:ids)
+                                                     (mapcar #'intern (org-get-tags)))))))
+             (id (org-glance:generate-id-for-subtree-at-point view-id))
+             (dir (org-glance:generate-dir-for-subtree-at-point view-id))
+             (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+        (org-set-property "ORG_GLANCE_ID" id)
+        (org-set-property "DIR" dir)
+        (org-set-property "CATEGORY" view-id)
+        (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
+                                                       (let ((current-prefix-arg '(16)))
+                                                         (call-interactively #'org-time-stamp-inactive)
+                                                         (buffer-substring-no-properties (point-min) (point-max)))))
+        (unless (member (downcase view-id) (org-glance--collect-tags))
+          (org-toggle-tag view-id))
+        (save-restriction
+          (org-narrow-to-subtree)
+          (let ((contents (buffer-substring-no-properties (point-min) (point-max))))
+            (delete-region (point-min) (point-max))
+            (mkdir dir 'parents)
+            (find-file output-file)
+            (widen)
+            (end-of-buffer)
+            (save-excursion
+              (insert contents))
+            (org-glance-headline:promote-to-the-first-level)
+            (save-buffer)
+            (org-glance-headline:at-point)))))))
 
 (cl-defun org-glance-view:capture-headline
     (&optional
