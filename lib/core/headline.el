@@ -80,6 +80,9 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:commented? (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :commentedp headline))
 
+(cl-defun org-glance-headline:raw-value (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :raw-value headline))
+
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)))
@@ -175,6 +178,8 @@ Default enrichment is as follows:
            (t (save-buffer)
               (kill-buffer (get-file-buffer file))))
 
+     (save-buffer)
+
      result))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
@@ -219,5 +224,15 @@ Default enrichment is as follows:
     (goto-char (org-log-beginning t))
     (insert note "\n")
     (save-buffer)))
+
+(cl-defun org-glance-headline:rename (new-title &optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (let ((old-title (org-glance-headline:raw-value headline)))
+      (org-glance-headline:add-log-note
+       (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}")))
+    (org-glance-headline:goto-beginning-of-current-headline)
+    (org-beginning-of-line)
+    (org-kill-line)
+    (insert new-title)))
 
 (org-glance-module-provide)

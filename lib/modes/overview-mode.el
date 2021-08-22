@@ -25,29 +25,36 @@
 ;;; medium methods applied for all first-level headlines in current file
 
 ;; lightweight methods applied for current headline
-(define-key org-glance-overview-mode-map (kbd ";") 'org-glance-overview:comment)
-(define-key org-glance-overview-mode-map (kbd "<") 'beginning-of-buffer)
-(define-key org-glance-overview-mode-map (kbd ">") 'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "@") 'org-glance-overview:refer)
-(define-key org-glance-overview-mode-map (kbd "RET") 'org-glance-overview:visit-headline)
-(define-key org-glance-overview-mode-map (kbd "a") 'org-glance-overview:agenda)
-(define-key org-glance-overview-mode-map (kbd "d") 'org-glance-overview:doctor)
+(define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:comment)
+(define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
+(define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
+(define-key org-glance-overview-mode-map (kbd "^") #'(lambda ()
+                                                       (interactive)
+                                                       (let ((inhibit-read-only t))
+                                                         (save-excursion
+                                                           (goto-char (point-min))
+                                                           (org-glance-overview:sort*))
+                                                         (save-buffer))))
+(define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:refer)
+(define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:visit-headline)
+(define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
+(define-key org-glance-overview-mode-map (kbd "d") #'org-glance-overview:doctor)
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
 (define-key org-glance-overview-mode-map (kbd "g") #'(lambda ()
                                                        (interactive)
                                                        (org-glance-overview:for-all
                                                            (org-glance-overview:pull*)
                                                          (org-glance-overview:pull))))
-(define-key org-glance-overview-mode-map (kbd "n") 'org-glance-headline:search-forward)
-(define-key org-glance-overview-mode-map (kbd "o") 'org-open-at-point)
-(define-key org-glance-overview-mode-map (kbd "p") 'org-glance-headline:search-backward)
-(define-key org-glance-overview-mode-map (kbd "q") 'bury-buffer)
-(define-key org-glance-overview-mode-map (kbd "v") 'org-glance-overview:visit-headline)
-(define-key org-glance-overview-mode-map (kbd "z") 'org-glance-overview:vizualize)
+(define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
+(define-key org-glance-overview-mode-map (kbd "o") #'org-open-at-point)
+(define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
+(define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
+(define-key org-glance-overview-mode-map (kbd "v") #'org-glance-overview:visit-headline)
+(define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
-(define-key org-glance-overview-mode-map (kbd "C-c C-p") 'org-glance-edit-mode:start)
+(define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+") 'org-glance-overview:capture-headline)
+(define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture-headline)
 
 (cl-defun org-glance-overview:register-headline (headline view-id)
   "Register HEADLINE in metastore and overview file."
@@ -76,7 +83,7 @@
 
 (cl-defun org-glance-overview:capture-headline ()
   (interactive)
-  (let* ((view-id (intern (org-get-category)))
+  (let* ((view-id (org-glance-overview:category))
          (headline (org-glance-view:capture-headline view-id)))
     (org-glance-overview:register-headline headline view-id)))
 
@@ -113,8 +120,7 @@
             view-name
             (format "%s.org_summary" view-name))))
 
-(cl-defun org-glance-overview:sort* (order &optional group)
-  (interactive)
+(cl-defun org-glance-overview:sort* (&optional (order '(?o ?p)) group)
   ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
   ;; c   By creation time, which is assumed to be the first inactive time stamp
   ;;     at the beginning of a line.
@@ -214,6 +220,11 @@
         org-glance-headline:visit)
       (forward-char offset))))
 
+(cl-defun org-glance-overview:category ()
+  (save-excursion
+    (goto-char (point-min))
+    (intern (org-get-category))))
+
 (cl-defun org-glance-overview:doctor ()
   (interactive)
   (org-glance-overview:for-all
@@ -224,39 +235,51 @@
             (org-glance-overview:doctor))))
     (save-window-excursion
       (org-glance-overview:pull)
-      (let* ((view-id (save-excursion
-                        (goto-char (point-min))
-                        (intern (org-get-category))))
+      (let* ((view-id (org-glance-overview:category))
              (original-headline (org-glance-overview:original-headline))
              (original-headline-location (org-glance-headline:file original-headline))
-             (overview-file-name (org-glance-overview:location view-id))
-             (overview-location (file-name-directory overview-file-name))
-             (common-location (f-common-parent (list overview-location original-headline-location)))
+             (located-in-view-dir-p (cl-loop
+                                       for view-id in (org-glance-headline:view-ids)
+                                       for overview-file-name = (org-glance-overview:location view-id)
+                                       for overview-location = (file-name-directory overview-file-name)
+                                       for common-parent = (f-common-parent (list overview-location original-headline-location))
+                                       when (string= common-parent overview-location)
+                                       do (return t)))
              (title (org-glance-headline:title))
+             (raw-value (org-glance-headline:raw-value))
              (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-        (when (s-matches? org-link-any-re title)
-          (when (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in title. Move it to the logbook?"))
-            (org-glance-headline:narrow original-headline
-              (org-glance-headline:add-log-note (org-glance:format "- Link captured: ${title} on ${now}"))
-              (org-glance-headline:goto-beginning-of-current-headline)
-              (org-beginning-of-line)
-              (org-kill-line)
-              (insert (with-temp-buffer
-                        (insert title)
-                        (goto-char (point-min))
-                        (let* ((link (org-element-link-parser))
-                               (contents-begin (org-element-property :contents-begin link))
-                               (contents-end (org-element-property :contents-end link)))
-                          (if (and contents-begin contents-end)
-                              (buffer-substring-no-properties contents-begin contents-end)
-                            (let ((webpage-title (org-glance:title-from-url (org-element-property :raw-link link))))
-                              (if (string-empty-p webpage-title)
-                                  (read-string "New title: ")
-                                webpage-title))))))
-              (save-buffer))
+        (when (s-matches? org-link-any-re raw-value)
+          (when (or
+                 current-prefix-arg
+                 (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in raw value. Move it to the logbook?")))
+            (org-glance-headline:rename
+             (with-temp-buffer
+               (save-excursion (insert raw-value))
+               (cl-loop
+                  with links = (org-element-map (org-element-parse-buffer) 'link (lambda (link) link))
+                  for link in links
+                  for contents-begin = (org-element-property :contents-begin link)
+                  for contents-end = (org-element-property :contents-end link)
+                  if (and contents-begin contents-end)
+                  collect (buffer-substring-no-properties contents-begin contents-end)
+                  into titles
+                  else
+                  collect (let ((webpage-title (org-glance:title-from-url (org-element-property :raw-link link))))
+                            (if (string-empty-p webpage-title)
+                                (read-string "New title: ")
+                              webpage-title))
+                  into titles
+                  finally (return (cl-loop
+                                     initially (goto-char (point-min))
+                                     for title in titles
+                                     do (replace-regexp org-link-any-re title)
+                                     finally (return (buffer-substring-no-properties (point-min) (point-max)))))))
+             original-headline)
             (org-glance-overview:pull)))
-        (unless (string= overview-location common-location)
-          (when (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))
+        (unless located-in-view-dir-p
+          (when (or
+                 current-prefix-arg
+                 (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?")))
             (org-glance-overview:register-headline
              (org-glance-headline:narrow original-headline
                (org-glance-view:capture-headline-at-point view-id))
@@ -271,7 +294,7 @@
 (cl-defun org-glance-overview:pull! ()
   "Completely rebuild current overview file."
   (interactive)
-  (let ((view-id (intern (org-get-category))))
+  (let ((view-id (org-glance-overview:category)))
     (when (y-or-n-p (org-glance:format "Update view ${view-id}?"))
       (kill-buffer)
       (org-glance-overview:create view-id)
@@ -318,7 +341,8 @@
                     do (org-demote-subtree))
                  (org-content)))
              (goto-char initial-point)
-             (save-buffer)))))
+             (save-buffer)))
+    (org-align-tags t)))
 
 (cl-defun org-glance-overview:comment ()
   (interactive)
