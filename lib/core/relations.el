@@ -78,16 +78,17 @@
                                      (relation org-glance-relation:forward)
                                      (target (org-glance-metastore:choose-headline)))
   (interactive)
-  (let* ((target-id (org-glance-headline:id target))
-         (target-state (org-glance-headline:state target))
-         (target-label (if (string-empty-p target-state) " " (format " *%s* " target-state)))
-         (target-title (s-replace-regexp (format "^%s\\W*" target-state) "" (org-glance-headline:title target)))
-         (target-views (s-join ", " (org-glance-headline:view-ids target)))
-         (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-    (org-glance-headline:add-log-note
-     (org-glance:format
-      "- ${relation}${target-label}=${target-views}= [[org-glance-visit:${target-id}][${target-title}]] on ${now}")
-     source)))
+  (org-glance-headline:narrow source
+    (let* ((target-id (org-glance-headline:id target))
+           (target-state (org-glance-headline:state target))
+           (target-label (if (string-empty-p target-state) " " (format " *%s* " target-state)))
+           (target-title (s-replace-regexp (format "^%s[[:space:]]*" target-state) "" (org-glance-headline:title target)))
+           (target-views (s-join ", " (org-glance-headline:view-ids target)))
+           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
+      (org-glance-headline:add-log-note
+       (org-glance:format
+        "- ${relation}${target-label}=${target-views}= [[org-glance-visit:${target-id}][${target-title}]] on ${now}")
+       source))))
 
 (cl-defun org-glance:insert-relation (&optional (target (org-glance-metastore:choose-headline)))
   (interactive)
