@@ -191,15 +191,17 @@
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
-  (let ((org-agenda-files (list (buffer-file-name))))
+  (let ((org-agenda-files (list (org-glance-overview:for-all
+                                    (buffer-file-name)
+                                  (org-glance-headline:file (org-glance-overview:original-headline))))))
     (org-agenda-list)
-    (org-agenda-day-view)))
+    (org-agenda-fortnight-view)))
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
   (let ((org-agenda-files (mapcar #'org-glance-overview:location (org-glance-view:ids))))
     (org-agenda-list)
-    (org-agenda-month-view)))
+    (org-agenda-fortnight-view)))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
