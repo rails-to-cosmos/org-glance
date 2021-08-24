@@ -44,6 +44,7 @@
 (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "v") #'org-glance-overview:visit-headline)
+(define-key org-glance-overview-mode-map (kbd "k") #'org-glance-overview:kill-headline)
 (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
@@ -264,9 +265,8 @@
             (let ((captured-headline (org-glance-headline:narrow original-headline (org-glance-view:capture-headline-at-point view-id))))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id)))
-
-          (org-glance-overview:pull)
-          (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))))))
+          (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)
+          (org-glance-overview:pull))))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
@@ -291,6 +291,18 @@
     (while (org-glance-headline:search-forward)
       (org-glance-overview:pull))))
 
+(cl-defun org-glance-overview:kill-headline (&optional force)
+  "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
+  (interactive)
+  (org-glance-headline:goto-beginning-of-current-headline)
+  (let ((inhibit-read-only t)
+        (view-id (org-glance-overview:category))
+        (current-headline-title (org-glance-headline:title)))
+    (when (and (org-glance-headline-p)
+               (or force
+                   (y-or-n-p (org-glance:format "Remove headline \"${current-headline-title}\" from ${view-id} overview?"))))
+      (kill-region (org-entry-beginning-position) (org-entry-end-position)))))
+
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
   (interactive)
@@ -306,7 +318,7 @@
     (cond
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
-           (kill-region (org-entry-beginning-position) (org-entry-end-position))
+           (org-glance-overview:kill-headline 'force)
          (org-glance-exception:headline-not-found "Original headline not found"))
        nil)
       ((string= current-headline-contents original-headline-contents)
@@ -314,20 +326,18 @@
        t)
       (t (save-excursion
            (save-restriction
-             (condition-case nil
-                 (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
-               (error (message "Original headline has been changed")))
              (org-glance-headline:goto-beginning-of-current-headline)
              (org-narrow-to-subtree)
              (delete-region (point-min) (point-max))
              (insert original-headline-contents)
              (goto-char (point-min))
              (cl-loop for i from 1 to (1- current-headline-indent)
-                do (org-demote-subtree))
-             (org-content)))
+                do (org-demote-subtree))))
+         (org-overview)
          (goto-char initial-point)
          (org-align-tags t)
          (save-buffer)
+         (message (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
          t))))
 
 (cl-defun org-glance-overview:comment ()
