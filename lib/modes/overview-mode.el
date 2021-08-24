@@ -57,35 +57,40 @@
                                org-glance-view-metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
-    (org-glance-metastore:write metastore-location metastore)
-    headline))
+    (org-glance-metastore:write metastore-location metastore)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
   "Register HEADLINE in metastore and overview file."
-  (find-file (org-glance-overview:location view-id))
-  (let ((inhibit-read-only t))
-    (condition-case nil
-        (progn
-          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-          (org-glance-overview:pull))
-      (error (beginning-of-buffer)
-             (org-glance-headline:search-forward)
-             (insert (org-glance-headline:contents headline) "\n")
-             (beginning-of-buffer)
-             (org-glance-overview:sort*)
-             (save-buffer)))
-    headline))
+  (save-window-excursion
+    (org-glance-overview:visit view-id)
+    (save-excursion
+      (condition-case nil
+          (progn
+            (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+            (org-glance-overview:pull))
+        (error (let ((inhibit-read-only t))
+                 (beginning-of-buffer)
+                 (org-glance-headline:search-forward)
+                 (insert (org-glance-headline:contents headline) "\n")
+                 (beginning-of-buffer)
+                 (org-glance-overview:sort*)
+                 (save-buffer))))))
+  headline)
 
-(cl-defun org-glance-overview:capture-headline ()
+(cl-defun org-glance-overview:capture-headline
+    (&optional
+       (view-id (org-glance-overview:category))
+       (title (read-string (format "Title for new %s: " view-id))))
   (interactive)
-  (let ((view-id (org-glance-overview:category)))
-    (-> (org-glance-view:capture-headline view-id)
-      (org-glance-overview:register-headline-in-metastore view-id)
-      (org-glance-overview:register-headline-in-overview view-id)
-      (org-glance-headline:id)
-      (org-glance-headline:search-buffer-by-id)))
-  (org-overview)
-  (org-cycle 'contents))
+  (save-window-excursion
+    (org-glance-overview:visit view-id)
+    (save-excursion
+      (let ((captured-headline (org-glance-view:capture-headline view-id title)))
+        (org-glance-overview:register-headline-in-metastore captured-headline view-id)
+        (org-glance-overview:register-headline-in-overview captured-headline view-id)
+        (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
+        (org-overview)
+        captured-headline))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
@@ -372,7 +377,12 @@
 (cl-defun org-glance-overview:refer ()
   (interactive)
   (let ((source (org-glance-overview:original-headline))
-        (target (org-glance-metastore:choose-headline)))
+        (target (condition-case choice
+                    (org-glance-metastore:choose-headline)
+                  (org-glance-exception:headline-not-found
+                   (org-glance-overview:capture-headline
+                    (org-glance-view:choose "Unknown entry. Please, choose category to capture it: ")
+                    (cadr choice))))))
     (org-glance:add-relation source org-glance-relation:forward target)
     (org-glance:add-relation target org-glance-relation:backward source)
     (org-glance-overview:pull)))

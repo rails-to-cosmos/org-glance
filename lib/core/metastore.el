@@ -78,7 +78,10 @@
                                  collect (cons ;; duplication of format*
                                           (format "[%s] %s" vid (org-glance-headline:title headline))
                                           headline))))
-         (headline (alist-get (org-completing-read "Headline: " headlines) headlines nil nil #'string=)))
+         (choice (org-completing-read "Headline: " headlines))
+         (headline (alist-get choice headlines nil nil #'string=)))
+    (unless headline
+      (org-glance-exception:headline-not-found choice))
     (org-glance-headline:narrow headline
       (org-glance-headline:at-point))))
 

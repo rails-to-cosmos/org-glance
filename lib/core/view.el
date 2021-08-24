@@ -271,7 +271,10 @@
      (t ,@do-for-specific-view-forms)))
 
 (defun org-glance-view:get-view-by-id (view-id)
-  (gethash view-id org-glance-views))
+  (cond
+    ((symbolp view-id) (gethash view-id org-glance-views))
+    ((stringp view-id) (gethash (intern view-id) org-glance-views))
+    (t (org-glance-exception:view-not-found view-id))))
 
 (cl-defun org-glance-def-view (view-id &key type scope &allow-other-keys)
   (when (org-glance-view:get-view-by-id view-id)
@@ -325,9 +328,12 @@
             (save-buffer)
             (org-glance-headline:at-point)))))))
 
+(cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))
+  (org-completing-read prompt (org-glance-view:ids)))
+
 (cl-defun org-glance-view:capture-headline
     (&optional
-       (view-id (org-completing-read "Capture new entry for view: " (org-glance-view:ids)))
+       (view-id (org-glance-view:choose "Capture new entry for view: "))
        (title (read-string (format "Title for new %s: " view-id))))
   (interactive)
   (with-temp-buffer

@@ -26,4 +26,8 @@
   "Raise `org-glance-exception:headline-not-found' exception formatted with FORMAT ARGS."
   (signal 'org-glance-exception:headline-not-found (list (apply #'format-message format args))))
 
+(defun org-glance-exception:view-not-found (format &rest args)
+  "Raise `org-glance-exception:view-not-found' exception formatted with FORMAT ARGS."
+  (signal 'org-glance-exception:view-not-found (list (apply #'format-message format args))))
+
 (org-glance-module-provide)
