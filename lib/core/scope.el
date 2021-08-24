@@ -73,9 +73,4 @@
      for headlines = (org-glance-headline:scan-file file)
      append (-non-nil (mapcar filter headlines))))
 
-;; (org-glance-scope--prompt-headlines "Hey: "
-;;  (org-glance-scope-headlines
-;;   (org-glance-scope "/home/akatovda/sync/archives")
-;;   (org-glance-view-filter (org-glance-view "Article"))))
-
 (org-glance-module-provide)

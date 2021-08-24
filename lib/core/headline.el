@@ -225,15 +225,18 @@ Default enrichment is as follows:
     (insert note "\n")
     (save-buffer)))
 
-(cl-defun org-glance-headline:rename (title &optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:narrow headline
-    (let ((old-title (org-glance-headline:raw-value headline))
-          (new-title (s-replace-regexp "[[:space:]]" " " title)))
-      (org-glance-headline:add-log-note
-       (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}"))
-      (org-glance-headline:goto-beginning-of-current-headline)
-      (org-beginning-of-line)
-      (org-kill-line)
-      (insert new-title))))
+(cl-defun org-glance-headline:rename (headline title)
+  (declare (indent 1) (debug t))
+  (save-window-excursion
+    (org-glance-headline:narrow headline
+      (let ((old-title (org-glance-headline:raw-value headline))
+            (new-title (s-replace-regexp "[[:space:]]" " " title)))
+        (org-glance-headline:add-log-note
+         (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}"))
+        (org-glance-headline:goto-beginning-of-current-headline)
+        (org-beginning-of-line)
+        (org-kill-line)
+        (insert new-title)
+        (org-align-tags)))))
 
 (org-glance-module-provide)

@@ -29,14 +29,9 @@
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"
   ["Actions"
-   [
-    ("e" "Extract" org-glance-action-extract)
+   [("e" "Extract" org-glance-action-extract)
     ("j" "Jump" org-glance-action-open)
     ("m" "Materialize" org-glance-action-materialize)
-    ("v" "Visit" org-glance-overview:visit)]
-   ]
-
-  ["Capture"
-   ("c" "Capture" org-glance-view:capture-headline-at-point)])
+    ("v" "Visit" org-glance-overview:visit)]])
 
 (org-glance-module-provide)

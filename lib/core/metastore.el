@@ -8,6 +8,7 @@
 (org-glance-module-import lib.utils.helpers)
 
 (cl-defun org-glance-metastore:write (file metastore)
+  (mkdir (file-name-directory file) 'parents)
   (with-temp-file file
     (insert (prin1-to-string metastore)))
   metastore)

@@ -114,20 +114,13 @@
 
 (cl-defun org-glance-view:update (&optional (vid org-glance-form:view))
   (interactive)
-
-  (org-glance-view:if-all? vid
-      (message "Update all views")
-    (message "Update view %s" vid))
-
-  (org-glance-view:if-all? vid
-      (cl-loop for id in (org-glance-view:ids)
-         append (org-glance-view:update id))
-    (let* ((view (org-glance-view:get-view-by-id vid))
-           (db (org-glance-view-metastore-location view))
-           (filter (org-glance-view-filter view))
-           (scope (or (org-glance-view-scope view) org-glance-default-scope)))
-      (org-glance-metastore:create db (org-glance-scope-headlines scope filter))
-      (list view))))
+  (message "Update view %s" vid)
+  (let* ((view (org-glance-view:get-view-by-id vid))
+         (db (org-glance-view-metastore-location view))
+         (filter (org-glance-view-filter view))
+         (scope (or (org-glance-view-scope view) org-glance-default-scope)))
+    (org-glance-metastore:create db (org-glance-scope-headlines scope filter))
+    (list view)))
 
 (cl-defgeneric org-glance-view:headlines (view))
 

@@ -6,7 +6,6 @@
 
 #+CATEGORY: ${category}
 #+STARTUP: overview
-#+LATEST_CHANGE: ?
 
 ")
 
@@ -57,7 +56,8 @@
                                org-glance-view-metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
-    (org-glance-metastore:write metastore-location metastore)))
+    (org-glance-metastore:write metastore-location metastore)
+    headline))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
   "Register HEADLINE in metastore and overview file."
@@ -72,14 +72,19 @@
              (insert (org-glance-headline:contents headline) "\n")
              (beginning-of-buffer)
              (org-glance-overview:sort*)
-             (save-buffer)))))
+             (save-buffer)))
+    headline))
 
 (cl-defun org-glance-overview:capture-headline ()
   (interactive)
-  (let* ((view-id (org-glance-overview:category))
-         (headline (org-glance-view:capture-headline view-id)))
-    (org-glance-overview:register-headline-in-metastore headline view-id)
-    (org-glance-overview:register-headline-in-overview headline view-id)))
+  (let ((view-id (org-glance-overview:category)))
+    (-> (org-glance-view:capture-headline view-id)
+      (org-glance-overview:register-headline-in-metastore view-id)
+      (org-glance-overview:register-headline-in-overview view-id)
+      (org-glance-headline:id)
+      (org-glance-headline:search-buffer-by-id)))
+  (org-overview)
+  (org-cycle 'contents))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
@@ -178,7 +183,9 @@
       (org-mode)
       (goto-char (point-min))
       (set-mark (point-max))
-      (org-glance-overview:sort* '(?o ?p))
+      (condition-case nil
+          (org-glance-overview:sort* '(?o ?p))
+        (error nil))
       (org-align-tags t))
     (find-file filename)))
 
@@ -223,70 +230,43 @@
 
 (cl-defun org-glance-overview:doctor ()
   (interactive)
-  (org-glance-overview:for-all
-      (save-excursion
-        (goto-char (point-min))
-        (while (org-glance-headline:search-forward)
-          (when (= (org-glance-headline:level) 1)
-            (org-glance-overview:doctor))))
+  (org-glance-overview:for-all (save-excursion
+                                 (goto-char (point-min))
+                                 (while (org-glance-headline:search-forward)
+                                   (when (= (org-glance-headline:level) 1)
+                                     (org-glance-overview:doctor))))
+    (when (org-glance-overview:pull)
+      (save-window-excursion
+        (let* ((view-id (org-glance-overview:category))
+               (original-headline (org-glance-overview:original-headline))
+               (original-headline-location (org-glance-headline:file original-headline))
+               (located-in-view-dir-p (cl-loop
+                                         for view-id in (org-glance-headline:view-ids)
+                                         for overview-file-name = (org-glance-overview:location view-id)
+                                         for overview-location = (file-name-directory overview-file-name)
+                                         for common-parent = (f-common-parent (list overview-location original-headline-location))
+                                         when (string= common-parent overview-location)
+                                         do (return t)))
+               (title (org-glance-headline:title))
+               (raw-value (org-glance-headline:raw-value))
+               (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
 
-    (save-window-excursion
-      (org-glance-overview:pull)
+          ;; (org-glance:fix-unless (s-matches? org-link-any-re raw-value)
+          ;;   "Headline \"${title}\" contains link in raw value. Move it to the logbook?"
+          ;;   (repair-forms))
 
-      (let* ((view-id (org-glance-overview:category))
-             (original-headline (org-glance-overview:original-headline))
-             (original-headline-location (org-glance-headline:file original-headline))
-             (located-in-view-dir-p (cl-loop
-                                       for view-id in (org-glance-headline:view-ids)
-                                       for overview-file-name = (org-glance-overview:location view-id)
-                                       for overview-location = (file-name-directory overview-file-name)
-                                       for common-parent = (f-common-parent (list overview-location original-headline-location))
-                                       when (string= common-parent overview-location)
-                                       do (return t)))
-             (title (org-glance-headline:title))
-             (raw-value (org-glance-headline:raw-value))
-             (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
+          (when (and (s-matches? org-link-any-re raw-value)
+                     (or current-prefix-arg (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in raw value. Move it to the logbook?"))))
+            (org-glance-headline:rename original-headline (org-glance:clean-title raw-value)))
 
-        (org-glance-overview:pull)
-
-        (when (s-matches? org-link-any-re raw-value)
-          (when (or
-                 current-prefix-arg
-                 (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in raw value. Move it to the logbook?")))
-            (org-glance-headline:rename
-             (with-temp-buffer
-               (save-excursion (insert raw-value))
-               (cl-loop
-                  with links = (org-element-map (org-element-parse-buffer) 'link (lambda (link) link))
-                  for link in links
-                  for contents-begin = (org-element-property :contents-begin link)
-                  for contents-end = (org-element-property :contents-end link)
-                  if (and contents-begin contents-end)
-                  collect (buffer-substring-no-properties contents-begin contents-end)
-                  into titles
-                  else
-                  collect (let ((webpage-title (org-glance:title-from-url (org-element-property :raw-link link))))
-                            (if (string-empty-p webpage-title)
-                                (read-string "New title: ")
-                              webpage-title))
-                  into titles
-                  finally (return (cl-loop
-                                     initially (goto-char (point-min))
-                                     for title in titles
-                                     do (replace-regexp org-link-any-re title)
-                                     finally (return (buffer-substring-no-properties (point-min) (point-max)))))))
-             original-headline)))
-
-        (unless located-in-view-dir-p
-          (when (or
-                 current-prefix-arg
-                 (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?")))
-            (let ((captured-headline (org-glance-headline:narrow original-headline
-                                       (org-glance-view:capture-headline-at-point view-id))))
+          (when (and (not located-in-view-dir-p)
+                     (or current-prefix-arg (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))))
+            (let ((captured-headline (org-glance-headline:narrow original-headline (org-glance-view:capture-headline-at-point view-id))))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-              (org-glance-overview:register-headline-in-overview captured-headline view-id))))
+              (org-glance-overview:register-headline-in-overview captured-headline view-id)))
 
-        (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)))))
+          (org-glance-overview:pull)
+          (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
@@ -320,32 +300,35 @@
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
-         (original-headline (org-glance-overview:original-headline))
-         (original-headline-contents (org-glance-headline:contents original-headline)))
-    (cond ((null original-headline-contents)
-           (when (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
-             (kill-region (org-entry-beginning-position) (org-entry-end-position))))
-          ((string= current-headline-contents original-headline-contents)
-           (condition-case nil
-               (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
-             (error (message "Headline is up to date"))))
-          (t (save-excursion
-               (save-restriction
-                 (condition-case nil
-                     (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
-                   (error (message "Original headline has been changed")))
-                 (org-glance-headline:goto-beginning-of-current-headline)
-                 (org-narrow-to-subtree)
-                 (delete-region (point-min) (point-max))
-                 (insert original-headline-contents)
-                 (goto-char (point-min))
-                 (cl-loop
-                    for i from 1 to (1- current-headline-indent)
-                    do (org-demote-subtree))
-                 (org-content)))
-             (goto-char initial-point)
-             (save-buffer)))
-    (org-align-tags t)))
+         (original-headline-contents (condition-case nil
+                                         (org-glance-headline:contents (org-glance-overview:original-headline))
+                                       (error nil))))
+    (cond
+      ((null original-headline-contents)
+       (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
+           (kill-region (org-entry-beginning-position) (org-entry-end-position))
+         (org-glance-exception:headline-not-found "Original headline not found"))
+       nil)
+      ((string= current-headline-contents original-headline-contents)
+       (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
+       t)
+      (t (save-excursion
+           (save-restriction
+             (condition-case nil
+                 (message (org-glance:format "Headline \"${current-headline-title}\" has been changed"))
+               (error (message "Original headline has been changed")))
+             (org-glance-headline:goto-beginning-of-current-headline)
+             (org-narrow-to-subtree)
+             (delete-region (point-min) (point-max))
+             (insert original-headline-contents)
+             (goto-char (point-min))
+             (cl-loop for i from 1 to (1- current-headline-indent)
+                do (org-demote-subtree))
+             (org-content)))
+         (goto-char initial-point)
+         (org-align-tags t)
+         (save-buffer)
+         t))))
 
 (cl-defun org-glance-overview:comment ()
   (interactive)

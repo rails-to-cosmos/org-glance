@@ -69,4 +69,30 @@
   (save-excursion
     (org-glance:first-level-headline)))
 
+(cl-defun org-glance:parse-links (raw-value)
+  (-filter
+   (lambda (it) (condition-case nil (eql (car it) 'link) (error nil)))
+   (org-element-parse-secondary-string raw-value '(link))))
+
+(cl-defun org-glance:clean-title (raw-value)
+  (cl-loop
+     with links = (org-glance:parse-links raw-value)
+     for link in links
+     for contents-begin = (org-element-property :contents-begin link)
+     for contents-end = (org-element-property :contents-end link)
+     if (and contents-begin contents-end)
+     collect (substring raw-value (1- contents-begin) (1- contents-end))
+     into titles
+     else
+     collect (let ((webpage-title (org-glance:title-from-url (org-element-property :raw-link link))))
+               (if (string-empty-p webpage-title)
+                   (read-string "New title: ")
+                 webpage-title))
+     into titles
+     finally (return (cl-loop
+                        with result = raw-value
+                        for title in titles
+                        do (setq result (s-replace-regexp org-link-any-re title result))
+                        finally (return result)))))
+
 (org-glance-module-provide)
