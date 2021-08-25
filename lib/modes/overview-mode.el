@@ -29,11 +29,12 @@
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "^") #'(lambda ()
                                                        (interactive)
-                                                       (let ((inhibit-read-only t))
-                                                         (save-excursion
+                                                       (save-excursion
+                                                         (let ((inhibit-read-only t))
                                                            (goto-char (point-min))
-                                                           (org-glance-overview:sort*))
-                                                         (save-buffer))))
+                                                           (org-glance-overview:sort*)
+                                                           (org-overview)
+                                                           (save-buffer)))))
 (define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:refer)
 (define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
@@ -139,41 +140,39 @@
   ;; t   By date/time, either the first active time stamp in the entry, or, if
   ;;     none exist, by the first inactive one.
 
-  (save-excursion
-    (org-save-outline-visibility nil
-      (cond ((null order) nil)
-            ((null group) (progn
-                            (org-sort-entries nil (car order))
-                            (org-glance-overview:sort* (cdr order) (car order))))
-            (t (let ((group-fn (case group
-                                 (?a #'org-glance-headline:title)
-                                 (?p #'org-glance-headline:priority)
-                                 (?c #'org-glance-headline:creation-time)
-                                 (?o #'org-glance-headline:state)
-                                 (?t #'org-glance-headline:creation-time)
-                                 (t nil)))
-                     (comp-fn (case group
-                                (?a #'string=)
-                                (?p #'eql)
-                                (?c #'string=)
-                                (?o #'string=)
-                                (?t #'string=)
-                                (t nil))))
-                 (beginning-of-buffer)
-                 (org-glance-headline:search-forward)
-                 (while (< (point) (point-max))
-                   (let* ((group-state (funcall group-fn))
-                          (beginning-of-group (point))
-                          (end-of-group (cl-loop
-                                           while (and (< (point) (point-max))
-                                                      (funcall comp-fn group-state (funcall group-fn)))
-                                           do (org-glance-headline:search-forward)
-                                           finally (return (point)))))
-                     (set-mark beginning-of-group)
-                     (goto-char end-of-group)
-                     (org-sort-entries nil (car order))
-                     (goto-char end-of-group)))
-                 (org-glance-overview:sort* (cdr order) (car order))))))))
+  (cond ((null order) nil)
+        ((null group) (progn
+                        (org-sort-entries nil (car order))
+                        (org-glance-overview:sort* (cdr order) (car order))))
+        (t (let ((group-fn (case group
+                             (?a #'org-glance-headline:title)
+                             (?p #'org-glance-headline:priority)
+                             (?c #'org-glance-headline:creation-time)
+                             (?o #'org-glance-headline:state)
+                             (?t #'org-glance-headline:creation-time)
+                             (t nil)))
+                 (comp-fn (case group
+                            (?a #'string=)
+                            (?p #'eql)
+                            (?c #'string=)
+                            (?o #'string=)
+                            (?t #'string=)
+                            (t nil))))
+             (beginning-of-buffer)
+             (org-glance-headline:search-forward)
+             (while (< (point) (point-max))
+               (let* ((group-state (funcall group-fn))
+                      (beginning-of-group (point))
+                      (end-of-group (cl-loop
+                                       while (and (< (point) (point-max))
+                                                  (funcall comp-fn group-state (funcall group-fn)))
+                                       do (org-glance-headline:search-forward)
+                                       finally (return (point)))))
+                 (set-mark beginning-of-group)
+                 (goto-char end-of-group)
+                 (org-sort-entries nil (car order))
+                 (goto-char end-of-group)))
+             (org-glance-overview:sort* (cdr order) (car order))))))
 
 (cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
