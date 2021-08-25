@@ -37,7 +37,7 @@
 (defvar org-glance-views (make-hash-table :test 'equal))
 (defvar org-glance-view-actions (make-hash-table :test 'equal))
 
-(defcustom org-glance-view-location (f-join user-emacs-directory "org-glance" "views")
+(defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
   "The location where view metadata should be stored."
   :group 'org-glance
   :type 'string)
@@ -79,12 +79,12 @@
 
 (cl-defun org-glance-view-resource-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to directory where VIEW-ID resources and metadata are stored."
-  (f-join org-glance-view-location
+  (f-join org-glance-directory
           (s-downcase (format "%s" view-id))
           "resources"))
 
 (defun org-glance-exports ()
-  (org-glance--list-files-recursively org-glance-view-location))
+  (org-glance--list-files-recursively org-glance-directory))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args)
@@ -99,7 +99,7 @@
 
 (cl-defmethod org-glance-view-metastore-location ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
-    (f-join org-glance-view-location
+    (f-join org-glance-directory
             view-id
             (format "%s.metadata.el" view-id))))
 

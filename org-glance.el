@@ -107,21 +107,6 @@
 
 (defvar org-glance-prompt "Glance: ")
 
-(defun org-glance-show-report ()
-  (interactive)
-  (let ((begin_src "#+BEGIN: clocktable :maxlevel 9 :scope org-glance-exports :link yes :narrow 100 :formula % :properties (\"TAGS\") :block today :fileskip0 t :hidefiles t")
-        (end_src "#+END:")
-        (report-buffer (get-buffer-create "*org-glance-report*")))
-    (with-current-buffer report-buffer
-      (org-mode)
-      (delete-region (point-min) (point-max))
-      (insert begin_src)
-      (insert "\n")
-      (insert end_src)
-      (goto-char (point-min))
-      (org-ctrl-c-ctrl-c))
-    (switch-to-buffer report-buffer)))
-
 (cl-defun org-glance
     (&key db
        default-choice

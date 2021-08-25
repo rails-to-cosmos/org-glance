@@ -12,7 +12,7 @@
 #     And I create directory "org-glance-views"
 #     And I create directory "user-data"
 
-#     # Set org-glance-view-location
+#     # Set org-glance-directory
 #     When I change directory to "org-glance-views"
 #     And I set view location to current directory
 #     And I change directory to parent directory

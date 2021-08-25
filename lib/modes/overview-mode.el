@@ -119,12 +119,32 @@
   (org-glance-overview-mode +1)
   (message "All changes have been applied."))
 
-(cl-defun org-glance-overview:location (&optional (vid (org-glance-view:completing-read)))
-  "Path to file where VIEW-ID exported headlines are stored."
-  (let ((view-name (s-downcase (format "%s" vid))))
-    (f-join org-glance-view-location
+(cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
+  "Path to file where VIEW-ID headlines are stored."
+  (let ((view-name (s-downcase (format "%s" view-id))))
+    (f-join org-glance-directory
             view-name
             (format "%s.org_summary" view-name))))
+
+(cl-defun org-glance-overview:sorting-by-type (sorting-type)
+  "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
+  (case sorting-type
+    (?a #'org-glance-headline:title)
+    (?p #'org-glance-headline:priority)
+    (?c #'org-glance-headline:creation-time)
+    (?o #'org-glance-headline:state)
+    (?t #'org-glance-headline:creation-time)
+    (t nil)))
+
+(cl-defun org-glance-overview:comparator-by-type (sorting-type)
+  "Determine how to compare entries by `org-sort-entries' SORTING-TYPE."
+  (case sorting-type
+    (?a #'string=)
+    (?p #'eql)
+    (?c #'string=)
+    (?o #'string=)
+    (?t #'string=)
+    (t nil)))
 
 (cl-defun org-glance-overview:sort* (&optional (order '(?o ?p)) group)
   ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
@@ -144,28 +164,16 @@
         ((null group) (progn
                         (org-sort-entries nil (car order))
                         (org-glance-overview:sort* (cdr order) (car order))))
-        (t (let ((group-fn (case group
-                             (?a #'org-glance-headline:title)
-                             (?p #'org-glance-headline:priority)
-                             (?c #'org-glance-headline:creation-time)
-                             (?o #'org-glance-headline:state)
-                             (?t #'org-glance-headline:creation-time)
-                             (t nil)))
-                 (comp-fn (case group
-                            (?a #'string=)
-                            (?p #'eql)
-                            (?c #'string=)
-                            (?o #'string=)
-                            (?t #'string=)
-                            (t nil))))
+        (t (let ((grouper (org-glance-overview:sorting-by-type group))
+                 (comparator (org-glance-overview:comparator-by-type group)))
              (beginning-of-buffer)
              (org-glance-headline:search-forward)
              (while (< (point) (point-max))
-               (let* ((group-state (funcall group-fn))
+               (let* ((group-state (funcall grouper))
                       (beginning-of-group (point))
                       (end-of-group (cl-loop
                                        while (and (< (point) (point-max))
-                                                  (funcall comp-fn group-state (funcall group-fn)))
+                                                  (funcall comparator group-state (funcall grouper)))
                                        do (org-glance-headline:search-forward)
                                        finally (return (point)))))
                  (set-mark beginning-of-group)
@@ -240,6 +248,12 @@
                                  (while (org-glance-headline:search-forward)
                                    (when (= (org-glance-headline:level) 1)
                                      (org-glance-overview:doctor))))
+    ;; - [ ] check if visited file is not headline archive file
+    ;; - [ ] check for view data structure: no empty directories etc
+    ;; - [x] check for view data structure: proper partitioning
+    ;; - [ ] check for nested views and ask to flatten them
+    ;; - [ ] check if original headline is stored in archive
+    ;; - [ ] check for PROPERTIES drawer indentation
     (when (org-glance-overview:pull)
       (save-window-excursion
         (let* ((view-id (org-glance-overview:category))
