@@ -178,8 +178,6 @@ Default enrichment is as follows:
            (t (save-buffer)
               (kill-buffer (get-file-buffer file))))
 
-     (save-buffer)
-
      result))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
