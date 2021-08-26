@@ -57,7 +57,6 @@
 
 ;; All of these views should become part of overview-mode
 (org-glance-module-import lib.core.view)
-(org-glance-module-import lib.core.view.doctor)
 (org-glance-module-import lib.core.relations) ;; good one, should be part of overview-mode
 
 ;; (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
