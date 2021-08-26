@@ -92,14 +92,13 @@
 
 (cl-defun org-glance:insert-relation (&optional (target (org-glance-metastore:choose-headline)))
   (interactive)
-  (when (org-glance-headline:at-point)
-    (let* ((target-id (org-glance-headline:id target))
-           (target-state (org-glance-headline:state target))
-           (target-label (if (string-empty-p target-state) "" (format "*%s* " target-state)))
-           (target-title (s-replace-regexp (format "^%s\\W*" target-state) "" (org-glance-headline:title target)))
-           (target-views (s-join ", " (org-glance-headline:view-ids target))))
-      (insert (org-glance:format
-               "${target-label}=${target-views}= [[org-glance-visit:${target-id}][${target-title}]]"))
+  (let* ((target-id (org-glance-headline:id target))
+         (target-state (org-glance-headline:state target))
+         (target-label (if (string-empty-p target-state) "" (format "*%s* " target-state)))
+         (target-title (s-replace-regexp (format "^%s\\W*" target-state) "" (org-glance-headline:title target)))
+         (target-views (s-join ", " (org-glance-headline:view-ids target))))
+    (insert (org-glance:format "${target-label}=${target-views}= [[org-glance-visit:${target-id}][${target-title}]]"))
+    (when (org-glance-headline:at-point)
       (org-glance:add-relation (org-glance-headline:at-point) org-glance-relation:forward target)
       (org-glance:add-relation target org-glance-relation:backward (org-glance-headline:at-point)))))
 

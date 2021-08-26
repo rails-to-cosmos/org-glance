@@ -14,6 +14,8 @@ flexible build system or whatever you can imagine with ease.
 
 * Issues
 ** Anchor Modeling
+- =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
+- =Article= [[org-glance-visit:Article-20210826-9b1d041ca0c9581606151a2ae496115d][Modeling Conflicting, Unreliable, and Varying Information]]
 - Implement anchormodeling logbook management (store appearance sets in logbook drawer).
 - Reserve posit, ascertains, thing, and class.
 - Implement transactions.
