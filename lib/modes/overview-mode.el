@@ -23,6 +23,20 @@
 
 ;;; medium methods applied for all first-level headlines in current file
 
+(defmacro org-glance-overview:context-aware-lambda (&rest forms)
+  "Eval FORMS on headline at point.
+If point is before first heading, eval forms on each headline."
+  (declare (indent 0) (debug t))
+  `(lambda ()
+     (interactive)
+     (if (org-before-first-heading-p)
+         (save-excursion
+           (goto-char (point-min))
+           (while (org-glance-headline:search-forward)
+             (when (= (org-glance-headline:level) 1)
+               ,@forms)))
+       ,@forms)))
+
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
@@ -32,14 +46,16 @@
                                                        (save-excursion
                                                          (let ((inhibit-read-only t))
                                                            (goto-char (point-min))
-                                                           (org-glance-overview:sort*)
+                                                           (org-glance-overview:sort)
                                                            (org-overview)
                                                            (save-buffer)))))
 (define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:refer)
 (define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
-(define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:doctor)
+(define-key org-glance-overview-mode-map (kbd "g")
+  (org-glance-overview:context-aware-lambda
+    (org-glance-overview:doctor)))
 (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
 (define-key org-glance-overview-mode-map (kbd "o") #'org-open-at-point)
 (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
@@ -74,24 +90,24 @@
                  (org-glance-headline:search-forward)
                  (insert (org-glance-headline:contents headline) "\n")
                  (beginning-of-buffer)
-                 (org-glance-overview:sort*)
+                 (org-glance-overview:sort)
                  (save-buffer))))))
   headline)
 
 (cl-defun org-glance-overview:capture-headline
     (&optional
        (view-id (org-glance-overview:category))
-       (title (read-string (format "Title for new %s: " view-id))))
+       (title (read-string (format "New thing of class %s: " view-id))))
   (interactive)
   (save-window-excursion
     (org-glance-overview:visit view-id)
-    (save-excursion
-      (let ((captured-headline (org-glance-view:capture-headline view-id title)))
+    (let ((captured-headline (org-glance-view:capture-headline view-id title)))
+      (save-excursion
         (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-        (org-glance-overview:register-headline-in-overview captured-headline view-id)
-        (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-        (org-overview)
-        captured-headline))))
+        (org-glance-overview:register-headline-in-overview captured-headline view-id))
+      (org-overview)
+      (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
+      captured-headline)))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
@@ -146,7 +162,7 @@
     (?t #'string=)
     (t nil)))
 
-(cl-defun org-glance-overview:sort* (&optional (order '(?o ?p)) group)
+(cl-defun org-glance-overview:sort (&optional (order '(?o ?p)) group)
   ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
   ;; c   By creation time, which is assumed to be the first inactive time stamp
   ;;     at the beginning of a line.
@@ -163,7 +179,7 @@
   (cond ((null order) nil)
         ((null group) (progn
                         (org-sort-entries nil (car order))
-                        (org-glance-overview:sort* (cdr order) (car order))))
+                        (org-glance-overview:sort (cdr order) (car order))))
         (t (let ((grouper (org-glance-overview:sorting-by-type group))
                  (comparator (org-glance-overview:comparator-by-type group)))
              (beginning-of-buffer)
@@ -180,7 +196,7 @@
                  (goto-char end-of-group)
                  (org-sort-entries nil (car order))
                  (goto-char end-of-group)))
-             (org-glance-overview:sort* (cdr order) (car order))))))
+             (org-glance-overview:sort (cdr order) (car order))))))
 
 (cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
@@ -197,7 +213,7 @@
       (goto-char (point-min))
       (set-mark (point-max))
       (condition-case nil
-          (org-glance-overview:sort* '(?o ?p))
+          (org-glance-overview:sort '(?o ?p))
         (error nil))
       (org-align-tags t))
     (find-file filename)))
@@ -241,50 +257,45 @@
     (goto-char (point-min))
     (intern (org-get-category))))
 
+(defmacro org-glance-doctor:fix-when (predicate prompt &rest forms)
+  (declare (indent 2) (debug t))
+  `(when (and ,predicate (or current-prefix-arg (y-or-n-p (org-glance:format ,prompt))))
+     ,@forms))
+
 (cl-defun org-glance-overview:doctor ()
-  (interactive)
-  (org-glance-overview:for-all (save-excursion
-                                 (goto-char (point-min))
-                                 (while (org-glance-headline:search-forward)
-                                   (when (= (org-glance-headline:level) 1)
-                                     (org-glance-overview:doctor))))
-    ;; - [ ] check if visited file is not headline archive file
-    ;; - [ ] check for view data structure: no empty directories etc
-    ;; - [x] check for view data structure: proper partitioning
-    ;; - [ ] check for nested views and ask to flatten them
-    ;; - [ ] check if original headline is stored in archive
-    ;; - [ ] check for PROPERTIES drawer indentation
-    (when (org-glance-overview:pull)
-      (save-window-excursion
-        (let* ((view-id (org-glance-overview:category))
-               (original-headline (org-glance-overview:original-headline))
-               (original-headline-location (org-glance-headline:file original-headline))
-               (located-in-view-dir-p (cl-loop
-                                         for view-id in (org-glance-headline:view-ids)
-                                         for overview-file-name = (org-glance-overview:location view-id)
-                                         for overview-location = (file-name-directory overview-file-name)
-                                         for common-parent = (f-common-parent (list overview-location original-headline-location))
-                                         when (string= common-parent overview-location)
-                                         do (return t)))
-               (title (org-glance-headline:title))
-               (raw-value (org-glance-headline:raw-value))
-               (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
+  ;; - [ ] check if visited file is not headline archive file
+  ;; - [ ] check for view data structure: no empty directories etc
+  ;; - [x] check for view data structure: proper partitioning
+  ;; - [ ] check for nested views and ask to flatten them
+  ;; - [ ] check if original headline is stored in archive
+  ;; - [ ] check for PROPERTIES drawer indentation
 
-          ;; (org-glance:fix-unless (s-matches? org-link-any-re raw-value)
-          ;;   "Headline \"${title}\" contains link in raw value. Move it to the logbook?"
-          ;;   (repair-forms))
+  (when (org-glance-overview:pull)
+    (let* ((view-id (org-glance-overview:category))
+           (original-headline (org-glance-overview:original-headline))
+           (original-headline-location (org-glance-headline:file original-headline))
+           (located-in-view-dir-p (cl-loop
+                                     for view-id in (org-glance-headline:view-ids)
+                                     for overview-file-name = (org-glance-overview:location view-id)
+                                     for overview-location = (file-name-directory overview-file-name)
+                                     for common-parent = (f-common-parent (list overview-location original-headline-location))
+                                     when (string= common-parent overview-location)
+                                     do (return t)))
+           (title (org-glance-headline:title))
+           (raw-value (org-glance-headline:raw-value))
+           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
 
-          (when (and (s-matches? org-link-any-re raw-value)
-                     (or current-prefix-arg (y-or-n-p (org-glance:format "Headline \"${title}\" contains link in raw value. Move it to the logbook?"))))
-            (org-glance-headline:rename original-headline (org-glance:clean-title raw-value)))
+      (org-glance-doctor:fix-when (s-matches? org-link-any-re raw-value)
+          "Headline \"${title}\" contains link in raw value. Move it to the logbook?"
+        (org-glance-headline:rename original-headline (org-glance:clean-title raw-value)))
 
-          (when (and (not located-in-view-dir-p)
-                     (or current-prefix-arg (y-or-n-p (org-glance:format "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"))))
-            (let ((captured-headline (org-glance-headline:narrow original-headline (org-glance-view:capture-headline-at-point view-id))))
-              (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-              (org-glance-overview:register-headline-in-overview captured-headline view-id)))
-          (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)
-          (org-glance-overview:pull))))))
+      (org-glance-doctor:fix-when (not located-in-view-dir-p)
+          "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
+        (let ((captured-headline (org-glance-headline:narrow original-headline (org-glance-view:capture-headline-at-point view-id))))
+          (org-glance-overview:register-headline-in-metastore captured-headline view-id)
+          (org-glance-overview:register-headline-in-overview captured-headline view-id))
+        (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)
+        (org-glance-overview:pull)))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
