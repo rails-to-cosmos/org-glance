@@ -22,6 +22,14 @@ flexible build system or whatever you can imagine with ease.
 - Distinguish data, metadata and peridata (peripheral data, domain classifications).
 - Think about how to implement metadata.
 - [[https://github.com/Roenbaeck/bareclad][GitHub - Roenbaeck/bareclad: Based on transitional modeling, bareclad is a new type of database that provides features from relational, graph, columnar, and name-value pair databases.]]
+
+Use posits in logbook drawer: [
+  {(thing 1, role 1), ..., (thing n, role n)},
+  appearing value,
+  time of appearance
+]
+
+Cache roles: employee/employer, contact/task
 ** Visualization
 *** [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
 - [[http://bl.ocks.org/NPashaP/96447623ef4d342ee09b][DashBoard - bl.ocks.org]]

@@ -405,7 +405,7 @@ If point is before first heading, eval forms on each headline."
                     (org-glance-metastore:choose-headline)
                   (org-glance-exception:headline-not-found
                    (org-glance-overview:capture-headline
-                    (org-glance-view:choose "Unknown entry. Please, choose category to capture it: ")
+                    (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
                     (cadr choice))))))
     (org-glance:add-relation source org-glance-relation:forward target)
     (org-glance:add-relation target org-glance-relation:backward source)
