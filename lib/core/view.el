@@ -290,7 +290,7 @@
     view))
 
 (cl-defun org-glance-view:capture-headline-at-point
-    (&optional (view-id (org-completing-read "Capture subtree for view: "
+    (&optional (view-id (org-completing-read "Capture headline for view: "
                                              (seq-difference
                                               (org-glance-view:ids)
                                               (mapcar #'intern (org-get-tags))))))
@@ -331,14 +331,5 @@
 
 (cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))
-
-(cl-defun org-glance-view:capture-headline
-    (&optional
-       (view-id (org-glance-view:choose "Capture new entry for view: "))
-       (title (read-string (format "Title for new %s: " view-id))))
-  (interactive)
-  (with-temp-buffer
-    (insert "* " title)
-    (org-glance-view:capture-headline-at-point view-id)))
 
 (org-glance-module-provide)

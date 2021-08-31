@@ -101,7 +101,9 @@ If point is before first heading, eval forms on each headline."
   (interactive)
   (save-window-excursion
     (org-glance-overview:visit view-id)
-    (let ((captured-headline (org-glance-view:capture-headline view-id title)))
+    (let ((captured-headline (with-temp-buffer
+                               (insert "* " title)
+                               (org-glance-view:capture-headline-at-point view-id))))
       (save-excursion
         (org-glance-overview:register-headline-in-metastore captured-headline view-id)
         (org-glance-overview:register-headline-in-overview captured-headline view-id))
@@ -286,8 +288,11 @@ If point is before first heading, eval forms on each headline."
            (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
 
       (org-glance-doctor:fix-when (s-matches? org-link-any-re raw-value)
-          "Headline \"${title}\" contains link in raw value. Move it to the logbook?"
-        (org-glance-headline:rename original-headline (org-glance:clean-title raw-value)))
+          "Headline \"${title}\" contains link in raw value. Move it to the body?"
+        (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
+        (org-glance-headline:narrow original-headline
+          (org-end-of-meta-data t)
+          (insert raw-value "\n")))
 
       (org-glance-doctor:fix-when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
