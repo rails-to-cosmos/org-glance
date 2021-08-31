@@ -86,8 +86,12 @@
 (cl-defun org-glance:insert-relation (&optional (target (org-glance-metastore:choose-headline)))
   (interactive)
   (insert (org-glance-headline:format target))
-  (when-let (source (org-glance-headline:at-point))
-    (org-glance:add-relation source org-glance-relation:forward target)
-    (org-glance:add-relation target org-glance-relation:backward source)))
+  (save-excursion
+    (save-restriction
+      (org-save-outline-visibility
+          (when-let (source (org-glance-headline:at-point))
+            (org-glance:add-relation source org-glance-relation:forward target)
+            (unless (eql source target)
+              (org-glance:add-relation target org-glance-relation:backward source)))))))
 
 (org-glance-module-provide)

@@ -199,6 +199,8 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:links (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
+    (org-end-of-meta-data t)
+    (narrow-to-region (point) (point-max))
     (org-element-map (org-element-parse-buffer) 'link
       (lambda (link)
         (cons
