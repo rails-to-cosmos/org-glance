@@ -21,7 +21,8 @@
       (let* ((file (org-element-property :file headline))
              (beg (org-glance-headline:begin))
              (end (save-excursion (org-end-of-subtree t)))
-             (contents (org-glance-headline:buffer-contents beg end)))
+             (contents (->> (buffer-substring-no-properties beg end)
+                         (s-trim))))
         (when (get-buffer buffer)
           (switch-to-buffer buffer)
           (condition-case nil

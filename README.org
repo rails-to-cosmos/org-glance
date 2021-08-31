@@ -7,10 +7,8 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-Fast, clean and convenient way of traversing your org-mode forest.
-
-Turn org-mode into context-aware bookmark storage, password manager,
-flexible build system or whatever you can imagine with ease.
+This repository is still work in progress: I implement some ideas in
+graph data management area.
 
 * Issues
 ** Anchor Modeling
@@ -52,7 +50,19 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Headline API
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications
-** Unsorted [0/7]
+** Unsorted [2/9]
+*** DONE encrypt regions
+CLOSED: [2021-08-31 Tue 23:46]
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2021-08-31 Tue 23:46]
+- State "STARTED"    from "TODO"       [2021-08-31 Tue 23:00]
+CLOCK: [2021-08-31 Tue 23:00]--[2021-08-31 Tue 23:46] =>  0:46
+:END:
+*** DONE abbreviate files
+CLOSED: [2021-08-31 Tue 23:57]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-08-31 Tue 23:57]
+:END:
 *** TODO export #+TAGS and other options
 *** TODO view-based materialized view buffer names: *materialized-event*
 *** TODO views github-like dashboards
@@ -70,7 +80,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 *** TODO read-only flag for materialized views
 *** TODO full-text search
 *** TODO parse encrypted blocks in any point of subtree
-*** TODO make ARCHIVED entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
+*** TODO make ARCHIVED/Commented entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
 * Thoughts
 
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]

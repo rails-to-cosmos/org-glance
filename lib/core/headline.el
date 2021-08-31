@@ -4,6 +4,7 @@
 
 (org-glance-module-import lib.core.exceptions)
 (org-glance-module-import lib.utils.org)
+(org-glance-module-import lib.utils.helpers)
 
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property.
@@ -34,7 +35,7 @@ If headline is not an `org-glance-headline', traverse parents."
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
   (-some-> (org-glance-headline-p)
-    (org-glance-headline:enrich :file (buffer-file-name))))
+    (org-glance-headline:enrich :file (abbreviate-file-name (buffer-file-name)))))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -68,7 +69,7 @@ Default enrichment is as follows:
         (org-mode)
         (insert-file-contents file)
         (-> (org-glance-headline:search-buffer-by-id id)
-          (org-glance-headline:enrich :file file))))))
+          (org-glance-headline:enrich :file (abbreviate-file-name file)))))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
@@ -217,7 +218,7 @@ Default enrichment is as follows:
       (lambda (el)
         (when (org-glance-headline-p el)
           (-> el
-            (org-glance-headline:enrich :file file)))))))
+            (org-glance-headline:enrich :file (abbreviate-file-name file))))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow (org-glance-headline:at-point)
@@ -248,5 +249,24 @@ Default enrichment is as follows:
           (classes (s-join ", " (org-glance-headline:view-ids ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (org-glance:format ,format)))
+
+(cl-defun org-glance-headline:encrypt (&optional password)
+  "Encrypt subtree at point with PASSWORD."
+  (interactive)
+  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+        (end (save-excursion (org-end-of-subtree t))))
+    (org-glance:encrypt-region beg end password)))
+
+(cl-defun org-glance-headline:decrypt (&optional password)
+  "Decrypt subtree at point with PASSWORD."
+  (interactive)
+  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+        (end (save-excursion (org-end-of-subtree t))))
+    (org-glance:decrypt-region beg end password)))
+
+(cl-defun org-glance-headline:demote (level)
+  (cl-loop repeat level
+     do (org-with-limited-levels
+         (org-map-tree 'org-demote))))
 
 (org-glance-module-provide)

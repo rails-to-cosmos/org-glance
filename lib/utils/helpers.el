@@ -69,46 +69,26 @@ enjoy using a lot.
      append (list filename)
      append (org-glance--list-file-archives filename)))
 
-(defun org-glance-headline:demote (level)
-  (cl-loop repeat level
-     do (org-with-limited-levels
-         (org-map-tree 'org-demote))))
+(defun org-glance:encrypt-region (beg end &optional password)
+  "Encrypt region from BEG to END using PASSWORD."
+  (interactive "r")
+  (kill-region beg end)
+  (insert (aes-encrypt-buffer-or-string (buffer-substring-no-properties beg end) password)))
 
-(defun org-glance-headline:encrypt (&optional password)
-  "Encrypt subtree at point with PASSWORD."
-  (interactive)
-  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-         (end (save-excursion (org-end-of-subtree t)))
-         (plain (let ((plain (buffer-substring-no-properties beg end)))
-                  (if (with-temp-buffer
-                        (insert plain)
-                        (aes-is-encrypted))
-                      (user-error "Headline is already encrypted")
-                    plain)))
-         (encrypted (aes-encrypt-buffer-or-string plain password)))
-    (save-excursion
-      (org-end-of-meta-data)
-      (kill-region beg end)
-      (insert encrypted))))
-
-(defun org-glance-headline:decrypt (&optional password)
-  "Decrypt subtree at point with PASSWORD."
-  (interactive)
-  (let* ((beg (save-excursion (org-end-of-meta-data) (point)))
-         (end (save-excursion (org-end-of-subtree t)))
-         (encrypted (let ((encrypted (buffer-substring-no-properties beg end)))
-                      (if (not (with-temp-buffer
-                                 (insert encrypted)
-                                 (aes-is-encrypted)))
-                          (user-error "Headline is not encrypted")
-                        encrypted)))
-         (plain (aes-decrypt-buffer-or-string encrypted password)))
-    (unless plain
-      (user-error "Wrong password"))
-    (save-excursion
-      (org-end-of-meta-data)
-      (kill-region beg end)
-      (insert plain))))
+(defun org-glance:decrypt-region (beg end &optional password)
+  "Decrypt region from BEG to END using PASSWORD."
+  (interactive "r")
+  (if-let (decrypted-text (let ((encrypted (buffer-substring-no-properties beg end)))
+                            (if (with-temp-buffer
+                                  (insert encrypted)
+                                  (aes-is-encrypted))
+                                (aes-decrypt-buffer-or-string encrypted password)
+                              (user-error "Headline is not encrypted"))))
+      (save-excursion
+        (kill-region beg end)
+        (goto-char beg)
+        (insert decrypted-text))
+    (user-error "Wrong password")))
 
 (cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
   "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
@@ -120,10 +100,6 @@ enjoy using a lot.
                   ((> (length values) 1) (org-completing-read "Choose property value: " values))
                   ((= (length values) 1) (car values))
                   (t (user-error "Something went wrong: %s" values)))))))
-
-(cl-defun org-glance-headline:buffer-contents (beg end)
-  (->> (buffer-substring-no-properties beg end)
-    (s-trim)))
 
 (cl-defun org-glance:title-from-url (url)
   "Return content in <title> tag."

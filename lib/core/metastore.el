@@ -53,8 +53,7 @@
                         headlines))
           (load-db?   (org-glance-metastore:headlines (org-glance-metastore:read db)))
           (skip-db?   (org-glance-scope-headlines scope filter))
-          (t          (user-error "Nothing to glance at (scope: %s)" scope)))
-    ))
+          (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
 (cl-defun org-glance-metastore:get-headline (id)
   "Get full headline by ID."
