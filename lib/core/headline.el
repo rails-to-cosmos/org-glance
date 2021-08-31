@@ -254,14 +254,14 @@ Default enrichment is as follows:
   "Encrypt subtree at point with PASSWORD."
   (interactive)
   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-        (end (save-excursion (org-end-of-subtree t))))
+        (end (save-excursion (org-end-of-subtree t) (point))))
     (org-glance:encrypt-region beg end password)))
 
 (cl-defun org-glance-headline:decrypt (&optional password)
   "Decrypt subtree at point with PASSWORD."
   (interactive)
   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-        (end (save-excursion (org-end-of-subtree t))))
+        (end (save-excursion (org-end-of-subtree t) (point))))
     (org-glance:decrypt-region beg end password)))
 
 (cl-defun org-glance-headline:demote (level)

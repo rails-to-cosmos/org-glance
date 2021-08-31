@@ -277,34 +277,33 @@
     (t (org-glance-exception:view-not-found view-id))))
 
 (cl-defun org-glance-def-view (view-id &key type scope &allow-other-keys)
-  (when (org-glance-view:get-view-by-id view-id)
-    (user-error "View %s is already registered." view-id))
-  (let ((view (make-org-glance-view :id view-id)))
-    (when scope (setf (org-glance-view-scope view) scope))
-    (when type  (setf (org-glance-view-type view) type))
+  (let ((view (or
+               (org-glance-view:get-view-by-id view-id)
+               (make-org-glance-view :id view-id))))
+    (setf (org-glance-view-scope view) scope)
+    (setf (org-glance-view-type view) type)
     (puthash view-id view org-glance-views)
-    (unless scope
-      (message "Default scope is: %s" org-glance-default-scope))
     (message "View \"%s\"%s is now ready to glance %s"
              view-id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
 
-(cl-defun org-glance-view:capture-headline-at-point (&optional view-id)
+(cl-defun org-glance-view:capture-headline-at-point
+    (&optional (view-id (org-completing-read "Capture subtree for view: "
+                                             (seq-difference
+                                              (org-glance-view:ids)
+                                              (mapcar #'intern (org-get-tags))))))
   (interactive)
   (save-window-excursion
     (save-excursion
       (org-glance:ensure-at-heading)
       (let* ((view-id (cond ((symbolp view-id) (symbol-name view-id))
-                            ((stringp view-id) view-id)
-                            (t (org-completing-read "Capture subtree for view: "
-                                                    (seq-difference
-                                                     (org-glance-view:ids)
-                                                     (mapcar #'intern (org-get-tags)))))))
+                            ((stringp view-id) view-id)))
              (id (org-glance:generate-id-for-subtree-at-point view-id))
              (dir (org-glance:generate-dir-for-subtree-at-point view-id))
              (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+        (mkdir dir 'parents)
         (org-set-property "ORG_GLANCE_ID" id)
         (org-set-property "DIR" dir)
         (org-set-property "CATEGORY" view-id)
@@ -316,17 +315,19 @@
           (org-toggle-tag view-id))
         (save-restriction
           (org-narrow-to-subtree)
-          (let ((contents (buffer-substring-no-properties (point-min) (point-max))))
+          (let* ((contents (buffer-substring-no-properties (point-min) (point-max)))
+                 (result (save-window-excursion
+                           (find-file output-file)
+                           (save-restriction
+                             (widen)
+                             (end-of-buffer)
+                             (save-excursion
+                               (insert contents))
+                             (org-glance-headline:promote-to-the-first-level)
+                             (save-buffer)
+                             (org-glance-headline:at-point)))))
             (delete-region (point-min) (point-max))
-            (mkdir dir 'parents)
-            (find-file output-file)
-            (widen)
-            (end-of-buffer)
-            (save-excursion
-              (insert contents))
-            (org-glance-headline:promote-to-the-first-level)
-            (save-buffer)
-            (org-glance-headline:at-point)))))))
+            result))))))
 
 (cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))

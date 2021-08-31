@@ -72,8 +72,12 @@ enjoy using a lot.
 (defun org-glance:encrypt-region (beg end &optional password)
   "Encrypt region from BEG to END using PASSWORD."
   (interactive "r")
-  (kill-region beg end)
-  (insert (aes-encrypt-buffer-or-string (buffer-substring-no-properties beg end) password)))
+  (let* ((original-text (buffer-substring-no-properties beg end))
+         (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
+    (save-excursion
+      (kill-region beg end)
+      (goto-char beg)
+      (insert encrypted-text))))
 
 (defun org-glance:decrypt-region (beg end &optional password)
   "Decrypt region from BEG to END using PASSWORD."
