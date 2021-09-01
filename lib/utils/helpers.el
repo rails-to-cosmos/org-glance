@@ -4,11 +4,6 @@
 (require 'org)
 (require 'org-element)
 
-(defvar org-glance-properties-ignore-patterns
-  (append
-   org-special-properties
-   '("^ARCHIVE_" "^TITLE$" "^ORG_GLANCE" "DIR" "LAST_REPEAT" "ARCHIVE")))
-
 (defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
 FMT is a string to be expanded against the current lexical
@@ -94,16 +89,19 @@ enjoy using a lot.
         (insert decrypted-text))
     (user-error "Wrong password")))
 
-(cl-defun org-glance-buffer-properties-to-kill-ring (&optional (ignore-patterns org-glance-properties-ignore-patterns))
+(cl-defun org-glance-buffer-properties-to-kill-ring ()
   "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
-  (while t
-    (let* ((properties (-filter (lambda (key) (not (--any? (s-matches? it key) ignore-patterns))) (org-buffer-property-keys)))
-           (property (org-completing-read "Extract property: " properties))
-           (values (org-property-values property)))
-      (kill-new (cond
-                  ((> (length values) 1) (org-completing-read "Choose property value: " values))
-                  ((= (length values) 1) (car values))
-                  (t (user-error "Something went wrong: %s" values)))))))
+  (let* ((properties (save-excursion
+                       (goto-char (point-min))
+                       (cl-loop
+                          while (condition-case nil
+                                    (re-search-forward "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+                                  (search-failed nil))
+                          collect (s-trim (substring-no-properties (match-string 1))) into keys
+                          collect (s-trim (substring-no-properties (match-string 2))) into vals
+                          finally (return (-zip keys vals)))))
+         (choice (org-completing-read "Extract property: " properties)))
+    (kill-new (alist-get choice properties nil nil #'string=))))
 
 (cl-defun org-glance:title-from-url (url)
   "Return content in <title> tag."

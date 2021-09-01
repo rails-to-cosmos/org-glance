@@ -9,12 +9,12 @@
   (cl-flet ((decrypt ()
               (setq-local --org-glance-view-pwd (read-passwd "Password: "))
               (org-glance-headline:decrypt --org-glance-view-pwd)))
-    (add-hook 'org-glance-after-materialize-hook #'decrypt 0 'local)
+    (add-hook 'org-glance-after-materialize-hook #'decrypt)
     (unwind-protect
          (progn
            (org-glance-action-call 'materialize :on headline)
            (org-cycle-hide-drawers 'all))
-      (remove-hook 'org-glance-after-materialize-hook #'decrypt 'local)))
+      (remove-hook 'org-glance-after-materialize-hook #'decrypt)))
   (add-hook 'org-glance-before-materialize-sync-hook
             (lambda ()
               (org-glance-headline:demote --org-glance-view-indent)

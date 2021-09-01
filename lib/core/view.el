@@ -112,14 +112,15 @@
          headline))
    view))
 
-(cl-defun org-glance-view:update (&optional (vid org-glance-form:view))
+(cl-defun org-glance-view:update (&optional (view-id org-glance-form:view))
   (interactive)
-  (message "Update view %s" vid)
-  (let* ((view (org-glance-view:get-view-by-id vid))
+  (message "Update view %s" view-id)
+  (let* ((view (org-glance-view:get-view-by-id view-id))
          (db (org-glance-view-metastore-location view))
          (filter (org-glance-view-filter view))
-         (scope (or (org-glance-view-scope view) org-glance-default-scope)))
-    (org-glance-metastore:create db (org-glance-scope-headlines scope filter))
+         (scope (or (org-glance-view-scope view) org-glance-default-scope))
+         (headlines (org-glance-scope-headlines scope filter)))
+    (org-glance-metastore:create db headlines)
     (list view)))
 
 (cl-defgeneric org-glance-view:headlines (view))
@@ -276,7 +277,11 @@
     ((stringp view-id) (gethash (intern view-id) org-glance-views))
     (t (org-glance-exception:view-not-found view-id))))
 
-(cl-defun org-glance-def-view (view-id &key type scope &allow-other-keys)
+(cl-defun org-glance-def-view (view-id
+                               &key
+                                 type
+                                 scope
+                                 &allow-other-keys)
   (let ((view (or
                (org-glance-view:get-view-by-id view-id)
                (make-org-glance-view :id view-id))))

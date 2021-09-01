@@ -34,8 +34,8 @@ If headline is not an `org-glance-headline', traverse parents."
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (-some-> (org-glance-headline-p)
-    (org-glance-headline:enrich :file (abbreviate-file-name (buffer-file-name)))))
+  (when-let (file-name (buffer-file-name))
+    (org-glance-headline:enrich (org-element-at-point) :file (abbreviate-file-name file-name))))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -187,16 +187,14 @@ Default enrichment is as follows:
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
-  (condition-case nil
-      (with-temp-buffer
-        (org-mode)
-        (insert-file-contents (org-glance-headline:file headline))
-        (org-glance-headline:search-buffer headline)
-        (org-narrow-to-subtree)
-        (goto-char (point-min))
-        (org-glance-headline:promote-to-the-first-level)
-        (buffer-substring-no-properties (point-min) (point-max)))
-    (error nil)))
+  (with-temp-buffer
+    (org-mode)
+    (insert-file-contents (org-glance-headline:file headline))
+    (org-glance-headline:search-buffer headline)
+    (org-narrow-to-subtree)
+    (goto-char (point-min))
+    (org-glance-headline:promote-to-the-first-level)
+    (buffer-substring-no-properties (point-min) (point-max))))
 
 (cl-defun org-glance-headline:links (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
@@ -217,8 +215,8 @@ Default enrichment is as follows:
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (el)
         (when (org-glance-headline-p el)
-          (-> el
-            (org-glance-headline:enrich :file (abbreviate-file-name file))))))))
+          (when file
+            (org-glance-headline:enrich el :file (abbreviate-file-name file))))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow (org-glance-headline:at-point)
