@@ -242,7 +242,7 @@ Default enrichment is as follows:
   (declare (indent 1) (debug t))
   `(let* ((id (org-glance-headline:id ,headline))
           (state (org-glance-headline:state ,headline))
-          (label (if (string-empty-p state) " " (format " *%s* " state)))
+          (label (if (string-empty-p state) "" (format " *%s* " state)))
           (title (s-replace-regexp (format "^%s[[:space:]]*" state) "" (org-glance-headline:title ,headline)))
           (classes (s-join ", " (org-glance-headline:view-ids ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
