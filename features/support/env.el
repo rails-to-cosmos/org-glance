@@ -18,7 +18,6 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
- (setq org-glance-default-scope (list))
 
  ;; Implement directory structure for user and system data
  (defvar org-glance-test:root-location (make-temp-file "org-glance-test-" t))

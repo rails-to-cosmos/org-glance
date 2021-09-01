@@ -118,8 +118,9 @@
   (let* ((view (org-glance-view:get-view-by-id view-id))
          (db (org-glance-view-metastore-location view))
          (filter (org-glance-view-filter view))
-         (scope (or (org-glance-view-scope view) org-glance-default-scope))
+         (scope (or (org-glance-view-scope view) (list org-glance-directory)))
          (headlines (org-glance-scope-headlines scope filter)))
+    (pp (org-glance:format "Scope: ${scope}"))
     (org-glance-metastore:create db headlines)
     (list view)))
 
@@ -142,7 +143,7 @@
   "Browse each file of a VIEW scope, run org-element-map and collect headlines as org-elements."
   (org-glance-headlines
    :db (org-glance-view-metastore-location view)
-   :scope (or (org-glance-view-scope view) org-glance-default-scope)
+   :scope (or (org-glance-view-scope view) (list org-glance-directory))
    :filter (org-glance-view-filter view)))
 
 (cl-defmethod org-glance-view:headlines* ((view org-glance-view))

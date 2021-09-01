@@ -89,7 +89,7 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                     (let ((org-glance-prompt (org-glance-view-prompt view (quote ,name))))
                       (org-glance
                        :default-choice headline
-                       :scope (or (org-glance-view-scope view) org-glance-default-scope)
+                       :scope (or (org-glance-view-scope view) (list org-glance-directory))
                        :db (org-glance-view-metastore-location view)
                        :filter (org-glance-view-filter view)
                        :action (function ,action-private-method))))

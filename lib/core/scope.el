@@ -57,11 +57,6 @@
     funcall
     org-glance-scope))
 
-(defcustom org-glance-default-scope '(agenda-with-archives)
-  "Default scope for glancing views."
-  :group 'org-glance
-  :type 'list)
-
 (defun org-glance-scope--prompt-headlines (prompt headlines)
   (org-completing-read prompt (mapcar #'org-glance-headline:title headlines)))
 

@@ -140,9 +140,10 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
   (let ((view-name (s-downcase (format "%s" view-id))))
-    (f-join org-glance-directory
-            view-name
-            (format "%s.org_summary" view-name))))
+    (abbreviate-file-name
+     (f-join org-glance-directory
+             view-name
+             (format "%s.org_summary" view-name)))))
 
 (cl-defun org-glance-overview:sorting-by-type (sorting-type)
   "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
@@ -282,7 +283,8 @@ If point is before first heading, eval forms on each headline."
                                      for overview-file-name = (org-glance-overview:location view-id)
                                      for overview-location = (file-name-directory overview-file-name)
                                      for common-parent = (f-common-parent (list overview-location original-headline-location))
-                                     when (string= common-parent overview-location)
+                                     when (string= (abbreviate-file-name common-parent)
+                                                   (abbreviate-file-name overview-location))
                                      do (return t)))
            (title (org-glance-headline:title))
            (raw-value (org-glance-headline:raw-value))
@@ -348,8 +350,9 @@ If point is before first heading, eval forms on each headline."
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
+         (original-headline (org-glance-overview:original-headline))
          (original-headline-contents (condition-case nil
-                                         (org-glance-headline:contents (org-glance-overview:original-headline))
+                                         (org-glance-headline:contents original-headline)
                                        (error nil))))
     (cond
       ((null original-headline-contents)
