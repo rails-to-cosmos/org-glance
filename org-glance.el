@@ -112,9 +112,11 @@
                           (org-glance-overview:capture-headline
                            (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
                            (cadr choice))))))
-  "Insert relation from `org-glance-headline' at point to TARGET."
+  "Insert relation from `org-glance-headline' at point to TARGET.
+C-u means not to insert relation at point, but register it in logbook."
   (interactive)
-  (insert (org-glance-headline:format target))
+  (unless current-prefix-arg
+    (insert (org-glance-headline:format target)))
   (when-let (source (org-glance-headline:at-point))
     (org-glance-headline:add-biconnected-relation source target)))
 
