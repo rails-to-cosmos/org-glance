@@ -50,7 +50,8 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Headline API
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications
-** Unsorted [2/9]
+** Unsorted [2/10]
+*** TODO lexical binding breaks formatting
 *** DONE encrypt regions
 CLOSED: [2021-08-31 Tue 23:46]
 :LOGBOOK:

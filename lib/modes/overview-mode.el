@@ -348,9 +348,7 @@ If point is before first heading, eval forms on each headline."
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (original-headline-contents (condition-case nil
-                                         (org-glance-headline:contents original-headline)
-                                       (error nil))))
+         (original-headline-contents (org-glance-headline:contents original-headline)))
     (cond
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
@@ -418,19 +416,6 @@ If point is before first heading, eval forms on each headline."
   (interactive)
   (org-glance-headline:add-biconnected-relation source target)
   (org-glance-overview:pull))
-
-(cl-defun org-glance:insert-relation
-    (&optional (target (condition-case choice
-                           (org-glance-metastore:choose-headline)
-                         (org-glance-exception:headline-not-found
-                          (org-glance-overview:capture-headline
-                           (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                           (cadr choice))))))
-  "Insert relation from headline at point to TARGET."
-  (interactive)
-  (insert (org-glance-headline:format target))
-  (when-let (source (org-glance-headline:at-point))
-    (org-glance-headline:add-biconnected-relation source target)))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

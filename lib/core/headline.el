@@ -215,8 +215,7 @@ Default enrichment is as follows:
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (el)
         (when (org-glance-headline-p el)
-          (when file
-            (org-glance-headline:enrich el :file (abbreviate-file-name file))))))))
+          (org-glance-headline:enrich el :file (abbreviate-file-name file)))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow (org-glance-headline:at-point)
@@ -242,7 +241,7 @@ Default enrichment is as follows:
   (declare (indent 1) (debug t))
   `(let* ((id (org-glance-headline:id ,headline))
           (state (org-glance-headline:state ,headline))
-          (label (if (string-empty-p state) "" (format " *%s* " state)))
+          (label (if (string-empty-p state) " " (format " *%s* " state)))
           (title (s-replace-regexp (format "^%s[[:space:]]*" state) "" (org-glance-headline:title ,headline)))
           (classes (s-join ", " (org-glance-headline:view-ids ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))

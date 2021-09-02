@@ -1,4 +1,4 @@
-;;; org-glance.el --- org-mode traversing. Fast and convenient.     -*- lexical-binding: t -*-
+;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
 ;; Copyright (C) 2018-2021 Dmitry Akatov
 
@@ -104,6 +104,19 @@
   :group 'org)
 
 (defvar org-glance-prompt "Glance: ")
+
+(cl-defun org-glance:insert-relation
+    (&optional (target (condition-case choice
+                           (org-glance-metastore:choose-headline)
+                         (org-glance-exception:headline-not-found
+                          (org-glance-overview:capture-headline
+                           (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+                           (cadr choice))))))
+  "Insert relation from `org-glance-headline' at point to TARGET."
+  (interactive)
+  (insert (org-glance-headline:format target))
+  (when-let (source (org-glance-headline:at-point))
+    (org-glance-headline:add-biconnected-relation source target)))
 
 (cl-defun org-glance
     (&key db
