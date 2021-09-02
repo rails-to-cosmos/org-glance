@@ -405,18 +405,32 @@ If point is before first heading, eval forms on each headline."
         org-glance-metastore:get-headline)
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:refer ()
+(cl-defun org-glance-overview:refer
+    (&optional
+       (source (org-glance-overview:original-headline))
+       (target (condition-case choice
+                   (org-glance-metastore:choose-headline)
+                 (org-glance-exception:headline-not-found
+                  (org-glance-overview:capture-headline
+                   (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+                   (cadr choice))))))
+  "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (let ((source (org-glance-overview:original-headline))
-        (target (condition-case choice
-                    (org-glance-metastore:choose-headline)
-                  (org-glance-exception:headline-not-found
-                   (org-glance-overview:capture-headline
-                    (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                    (cadr choice))))))
-    (org-glance:add-relation source org-glance-relation:forward target)
-    (org-glance:add-relation target org-glance-relation:backward source)
-    (org-glance-overview:pull)))
+  (org-glance-headline:add-biconnected-relation source target)
+  (org-glance-overview:pull))
+
+(cl-defun org-glance:insert-relation
+    (&optional (target (condition-case choice
+                           (org-glance-metastore:choose-headline)
+                         (org-glance-exception:headline-not-found
+                          (org-glance-overview:capture-headline
+                           (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+                           (cadr choice))))))
+  "Insert relation from headline at point to TARGET."
+  (interactive)
+  (insert (org-glance-headline:format target))
+  (when-let (source (org-glance-headline:at-point))
+    (org-glance-headline:add-biconnected-relation source target)))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

@@ -91,17 +91,18 @@ enjoy using a lot.
 
 (cl-defun org-glance-buffer-properties-to-kill-ring ()
   "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
-  (let* ((properties (save-excursion
-                       (goto-char (point-min))
-                       (cl-loop
-                          while (condition-case nil
-                                    (re-search-forward "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
-                                  (search-failed nil))
-                          collect (s-trim (substring-no-properties (match-string 1))) into keys
-                          collect (s-trim (substring-no-properties (match-string 2))) into vals
-                          finally (return (-zip keys vals)))))
-         (choice (org-completing-read "Extract property: " properties)))
-    (kill-new (alist-get choice properties nil nil #'string=))))
+  (while t
+    (let* ((properties (save-excursion
+                         (goto-char (point-min))
+                         (cl-loop
+                            while (condition-case nil
+                                      (re-search-forward "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+                                    (search-failed nil))
+                            collect (s-trim (substring-no-properties (match-string 1))) into keys
+                            collect (s-trim (substring-no-properties (match-string 2))) into vals
+                            finally (return (-zip keys vals)))))
+           (choice (org-completing-read "Extract property: " properties)))
+      (kill-new (alist-get choice properties nil nil #'string=)))))
 
 (cl-defun org-glance:title-from-url (url)
   "Return content in <title> tag."
