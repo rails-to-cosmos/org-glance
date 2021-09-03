@@ -12,9 +12,6 @@
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
-;; display global agenda: too global to use in overview mode
-(define-key org-glance-overview-mode-map (kbd "A") 'org-glance-overview:agenda*)
-
 ;;; heavy methods applied to all headlines from current view's scope
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
@@ -147,25 +144,34 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defun org-glance-overview:sorting-by-type (sorting-type)
   "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
-  (case sorting-type
+  (case (if (listp sorting-type) (car sorting-type) sorting-type)
     (?a #'org-glance-headline:title)
     (?p #'org-glance-headline:priority)
     (?c #'org-glance-headline:creation-time)
     (?o #'org-glance-headline:state)
     (?t #'org-glance-headline:creation-time)
+    (?f (cadr sorting-type))
     (t nil)))
 
 (cl-defun org-glance-overview:comparator-by-type (sorting-type)
   "Determine how to compare entries by `org-sort-entries' SORTING-TYPE."
-  (case sorting-type
+  (case (if (listp sorting-type) (car sorting-type) sorting-type)
     (?a #'string=)
     (?p #'eql)
     (?c #'string=)
     (?o #'string=)
     (?t #'string=)
+    (?f #'eql)
     (t nil)))
 
-(cl-defun org-glance-overview:sort (&optional (order '(?o ?p)) group)
+(cl-defun org-glance-overview:sort (&optional
+                                      (order '(
+                                               (?f ;; move commented headings down
+                                                (lambda () (or (org-in-commented-heading-p t) -1))
+                                                <)
+                                               ?o
+                                               ?p))
+                                      group)
   ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
   ;; c   By creation time, which is assumed to be the first inactive time stamp
   ;;     at the beginning of a line.
@@ -181,7 +187,9 @@ If point is before first heading, eval forms on each headline."
 
   (cond ((null order) nil)
         ((null group) (progn
-                        (org-sort-entries nil (car order))
+                        (apply #'org-sort-entries
+                               (append '(nil)
+                                       (if (listp (car order)) (car order) (list (car order)))))
                         (org-glance-overview:sort (cdr order) (car order))))
         (t (let ((grouper (org-glance-overview:sorting-by-type group))
                  (comparator (org-glance-overview:comparator-by-type group)))
@@ -197,7 +205,9 @@ If point is before first heading, eval forms on each headline."
                                        finally (return (point)))))
                  (set-mark beginning-of-group)
                  (goto-char end-of-group)
-                 (org-sort-entries nil (car order))
+                 (apply #'org-sort-entries
+                        (append '(nil)
+                                (if (listp (car order)) (car order) (list (car order)))))
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
