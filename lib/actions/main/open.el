@@ -1,7 +1,7 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.core.headline)
+(org-glance:import lib.core.actions)
+(org-glance:import lib.core.headline)
 
 (org-glance-action-define open (headline) :for link
   "Visit HEADLINE, then search for all `org-any-link-re' in its subtree.

@@ -6,16 +6,12 @@
 (require 'org-element)
 (require 'subr-x)
 
-(org-glance-module-import lib.core.scope)
-(org-glance-module-import lib.core.metastore)
-(org-glance-module-import lib.core.exceptions)
-(org-glance-module-import lib.core.headline)
+(org-glance:import lib.core.scope)
+(org-glance:import lib.core.metastore)
+(org-glance:import lib.core.exceptions)
+(org-glance:import lib.core.headline)
 
-(org-glance-module-import lib.utils.helpers)
-
-(defconst org-glance-view:all "All views")  ;; do not apply any filtering to views/headlines datasets
-
-(defvar org-glance-form:view org-glance-view:all)
+(org-glance:import lib.utils.helpers)
 
 (defvar org-glance-view-default-type '(all)
   "Default type for all views.")
@@ -36,11 +32,6 @@
 
 (defvar org-glance-views (make-hash-table :test 'equal))
 (defvar org-glance-view-actions (make-hash-table :test 'equal))
-
-(defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
-  "The location where view metadata should be stored."
-  :group 'org-glance
-  :type 'string)
 
 (defcustom org-glance-materialized-view-buffer "*org-glance materialized view*"
   "Default buffer name for materialized view."
@@ -84,7 +75,7 @@
           "resources"))
 
 (defun org-glance-exports ()
-  (org-glance--list-files-recursively org-glance-directory))
+  (-org-glance:list-files-recursively org-glance-directory))
 
 (define-error 'org-glance-view-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-view-not-modified (format &rest args)
@@ -112,7 +103,7 @@
          headline))
    view))
 
-(cl-defun org-glance-view:update (&optional (view-id org-glance-form:view))
+(cl-defun org-glance-view:update (&optional (view-id (org-glance-view:choose)))
   (interactive)
   (message "Update view %s" view-id)
   (let* ((view (org-glance-view:get-view-by-id view-id))
@@ -266,12 +257,6 @@
   "Run completing read PROMPT on registered views filtered by TYPE."
   (gethash (org-glance-view:completing-read prompt) org-glance-views))
 
-(cl-defmacro org-glance-view:if-all? (vid do-for-all-forms &rest do-for-specific-view-forms)
-  (declare (indent 2) (debug t))
-  `(cond
-     ((string= ,vid org-glance-view:all) ,do-for-all-forms)
-     (t ,@do-for-specific-view-forms)))
-
 (defun org-glance-view:get-view-by-id (view-id)
   (cond
     ((symbolp view-id) (gethash view-id org-glance-views))
@@ -317,7 +302,7 @@
                                                        (let ((current-prefix-arg '(16)))
                                                          (call-interactively #'org-time-stamp-inactive)
                                                          (buffer-substring-no-properties (point-min) (point-max)))))
-        (unless (member (downcase view-id) (org-glance--collect-tags))
+        (unless (member (downcase view-id) (-org-glance:collect-tags))
           (org-toggle-tag view-id))
         (save-restriction
           (org-narrow-to-subtree)

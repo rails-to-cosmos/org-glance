@@ -1,8 +1,8 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.view)
-(org-glance-module-import lib.utils.helpers)
-(org-glance-module-import lib.core.actions)
+(org-glance:import lib.core.view)
+(org-glance:import lib.utils.helpers)
+(org-glance:import lib.core.actions)
 
 (org-glance-action-define materialize (headline) :for crypt
   "Decrypt encrypted HEADLINE, then call MATERIALIZE action on it."

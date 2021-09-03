@@ -351,7 +351,7 @@ If point is before first heading, eval forms on each headline."
          (original-headline-contents (org-glance-headline:contents original-headline)))
     (cond
       ((null original-headline-contents)
-       (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it?"))
+       (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
            (org-glance-overview:kill-headline 'force)
          (org-glance-exception:headline-not-found "Original headline not found"))
        nil)

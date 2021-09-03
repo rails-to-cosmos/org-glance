@@ -2,7 +2,7 @@
 (require 'org-element)
 (require 'transient)
 
-(org-glance-module-import lib.core.view)
+(org-glance:import lib.core.view)
 
 (defun org-glance-action--transient-args nil
   (transient-args 'org-glance-form-action))

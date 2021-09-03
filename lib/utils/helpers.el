@@ -1,8 +1,9 @@
 (require 'aes)
 (require 'dash)
-(require 'load-relative)
 (require 'org)
 (require 'org-element)
+
+(require 'org-glance-module)
 
 (defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
@@ -35,19 +36,14 @@ enjoy using a lot.
     (unless (file-exists-p dir)
       (make-directory dir t))))
 
-(defun org-glance--collect-tags ()
+(defun -org-glance:collect-tags ()
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
 
-(defun org-glance--ensure-path (path)
-  (condition-case nil
-      (make-directory path t)
-    (error nil)))
-
-(defun org-glance--list-files-recursively (dir)
+(defun -org-glance:list-files-recursively (dir)
   (directory-files-recursively dir "\\.*.org\\.*"))
 
-(defun org-glance--list-file-archives (filename)
+(defun -org-glance:list-file-archives (filename)
   "Return list of org-mode files for FILENAME."
   (let* ((dir (file-name-directory filename))
          (base-filename (-some->> filename
@@ -55,39 +51,14 @@ enjoy using a lot.
                           file-name-sans-extension)))
     (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
 
-(defun org-glance--list-archives ()
+(defun -org-glance:file-with-archives ()
   (append (list (buffer-file-name))
-          (org-glance--list-file-archives (buffer-file-name))))
+          (-org-glance:list-file-archives (buffer-file-name))))
 
-(defun org-glance--agenda-with-archives ()
+(defun -org-glance:agenda-with-archives ()
   (cl-loop for filename in (org-agenda-files)
      append (list filename)
-     append (org-glance--list-file-archives filename)))
-
-(defun org-glance:encrypt-region (beg end &optional password)
-  "Encrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (let* ((original-text (buffer-substring-no-properties beg end))
-         (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
-    (save-excursion
-      (kill-region beg end)
-      (goto-char beg)
-      (insert encrypted-text))))
-
-(defun org-glance:decrypt-region (beg end &optional password)
-  "Decrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (if-let (decrypted-text (let ((encrypted (buffer-substring-no-properties beg end)))
-                            (if (with-temp-buffer
-                                  (insert encrypted)
-                                  (aes-is-encrypted))
-                                (aes-decrypt-buffer-or-string encrypted password)
-                              (user-error "Headline is not encrypted"))))
-      (save-excursion
-        (kill-region beg end)
-        (goto-char beg)
-        (insert decrypted-text))
-    (user-error "Wrong password")))
+     append (-org-glance:list-file-archives filename)))
 
 (cl-defun org-glance-buffer-properties-to-kill-ring ()
   "Extract buffer org-properties, run completing read on keys, copy values to kill ring."

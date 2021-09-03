@@ -1,7 +1,7 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.utils.helpers)
+(org-glance:import lib.core.actions)
+(org-glance:import lib.utils.helpers)
 
 (org-glance-action-define extract (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."

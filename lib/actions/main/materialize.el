@@ -1,8 +1,8 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.metastore)
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.core.view)
+(org-glance:import lib.core.metastore)
+(org-glance:import lib.core.actions)
+(org-glance:import lib.core.view)
 
 (defun --org-glance-headline:promote.deprecated ()
   "Deprecated because of side-effects."

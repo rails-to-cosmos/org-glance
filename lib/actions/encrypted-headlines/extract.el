@@ -1,7 +1,7 @@
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.actions)
-(org-glance-module-import lib.core.view)
+(org-glance:import lib.core.actions)
+(org-glance:import lib.core.view)
 
 (org-glance-action-define extract (headline) :for (kvs crypt)
   "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."

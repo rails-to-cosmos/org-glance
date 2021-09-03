@@ -1,10 +1,11 @@
-(require 'org)
-(require 'org-element)
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.exceptions)
-(org-glance-module-import lib.utils.org)
-(org-glance-module-import lib.utils.helpers)
+(org-glance:import
+  org
+  org-element
+  lib.core.exceptions
+  lib.utils.helpers
+  lib.utils.org)
 
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property.

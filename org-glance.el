@@ -30,33 +30,37 @@
 
 ;;; Code:
 
+(require 'f)
+
 (require 'org-glance-module)
 
-(org-glance-module-import lib.utils.helpers)  ;; unsorted, deprecated
-(org-glance-module-import lib.utils.org) ;; some org-mode helpers and shortcuts
+(defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
+  "The location where view metadata should be stored."
+  :group 'org-glance
+  :type 'string)
+
+(org-glance:import
+  lib.utils.encryption ; encryption utils
+  lib.utils.helpers ; unsorted, deprecated
+  lib.utils.org ; org-mode shortcuts
 
 ;;; Core APIs
-;; Description of high-level org-glance entities: Headline, View,
-;; Scope and Metastore.
+  ;; Description of high-level org-glance entities: Headline, View,
+  ;; Scope and Metastore.
 
 ;;; Headline API
-;; Org-glance headline is an org-element headline enriched by some
-;; shortcuts and helper methods.
-(org-glance-module-import lib.core.headline)
+  ;; Org-glance headline is an org-element headline enriched by some
+  ;; shortcuts and helper methods.
+  lib.core.headline ; good
+  lib.core.metastore ; ok
+  lib.core.scope ; ? deprecated
+  lib.core.view ; migrate to overview
+  lib.core.actions ; deprecated
 
-(org-glance-module-import lib.core.metastore)  ;; TODO refactor me
-
-(org-glance-module-import lib.core.actions) ;; get rid of me
-
-(org-glance-module-import lib.modes.overview-mode)  ;; good one, support and improve me
-
-(org-glance-module-import lib.core.scope) ;; TODO refactor
-
+  lib.modes.overview-mode ; good one, improve
+  )
 ;; (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
-
-;; All of these views should become part of overview-mode
-(org-glance-module-import lib.core.view)
 
 ;; (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
@@ -64,24 +68,24 @@
 ;; (declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
 ;; (declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
 
-(org-glance-module-import lib.links.visit)
-(org-glance-module-import lib.transient.headlines)
-(org-glance-module-import lib.plugins.metadata)
+(org-glance:import lib.links.visit)
+(org-glance:import lib.transient.headlines)
+(org-glance:import lib.plugins.metadata)
 
 ;; Preload default actions
 
-(org-glance-module-import lib.actions.main.materialize)
-(org-glance-module-import lib.actions.main.open)
-(org-glance-module-import lib.actions.main.visit)
+(org-glance:import lib.actions.main.materialize)
+(org-glance:import lib.actions.main.open)
+(org-glance:import lib.actions.main.visit)
 
-(org-glance-module-import lib.actions.babel.insert)
+(org-glance:import lib.actions.babel.insert)
 
 ;; Actions for encrypted headlines
-(org-glance-module-import lib.actions.encrypted-headlines.extract)
-(org-glance-module-import lib.actions.encrypted-headlines.materialize)
+(org-glance:import lib.actions.encrypted-headlines.extract)
+(org-glance:import lib.actions.encrypted-headlines.materialize)
 
 ;; When headline is defined as a key-value storage, one can extract properties in efficient manner
-(org-glance-module-import lib.actions.key-value-headlines.extract)
+(org-glance:import lib.actions.key-value-headlines.extract)
 
 (eval-and-compile
   (require 'org)

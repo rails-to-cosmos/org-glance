@@ -2,10 +2,10 @@
 (require 'org-glance-module)
 (require 'dash)
 
-(org-glance-module-import lib.utils.helpers)
-(org-glance-module-import lib.core.headline)
+(org-glance:import lib.utils.helpers)
+(org-glance:import lib.core.headline)
 
-(declare-function org-glance--list-files-recursively "lib/utils/helpers.el")
+(declare-function -org-glance:list-files-recursively "lib/utils/helpers.el")
 (declare-function org-glance-headline:scan-file "lib/utils/helpers.el")
 
 (require 'org)
@@ -14,9 +14,9 @@
   '("org" "org_archive"))
 
 (defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . org-glance--list-archives)
+  '((file-with-archives . -org-glance:file-with-archives)
     (agenda . org-agenda-files)
-    (agenda-with-archives . org-glance--agenda-with-archives)))
+    (agenda-with-archives . -org-glance:agenda-with-archives)))
 
 (cl-defgeneric org-glance-scope (lfob)
   "Adapt list-file-or-buffer to list of files.")
@@ -27,7 +27,7 @@
          (files (cond
                   ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
                   ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-                  ((f-directory? file) (org-glance--list-files-recursively file))
+                  ((f-directory? file) (-org-glance:list-files-recursively file))
                   (t (list file)))))
     (cl-loop for file in files
        when (member (file-name-extension file) org-glance-scope:extensions)

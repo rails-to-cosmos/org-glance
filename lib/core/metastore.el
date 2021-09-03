@@ -2,10 +2,10 @@
 (require 'org-element)
 (require 'org-glance-module)
 
-(org-glance-module-import lib.core.scope)
-(org-glance-module-import lib.core.exceptions)
-(org-glance-module-import lib.core.headline)
-(org-glance-module-import lib.utils.helpers)
+(org-glance:import lib.core.scope)
+(org-glance:import lib.core.exceptions)
+(org-glance:import lib.core.headline)
+(org-glance:import lib.utils.helpers)
 
 (cl-defun org-glance-metastore:write (file metastore)
   (mkdir (file-name-directory file) 'parents)

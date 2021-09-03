@@ -9,10 +9,15 @@
           (path (concat (s-replace "." "/" m) ".el")))
      (f-join org-glance-module-root-directory path)))
 
-(defmacro org-glance-module-import (module)
-  `(let* ((m (format "org-glance.%s" (quote ,module)))
-          (path (concat (s-replace "." "/" m) ".el")))
-     (require (intern m) (f-join org-glance-module-root-directory path))))
+(defmacro org-glance:import (&rest modules)
+  (declare (indent 0) (debug t))
+  `(cl-loop
+      for module in (quote ,modules)
+      for module-name = (format "org-glance.%s" module)
+      for module-path = (f-join org-glance-module-root-directory (concat (s-replace "." "/" module-name) ".el"))
+      collect (condition-case nil
+                  (require (intern module-name) module-path)
+                (file-missing (require module)))))
 
 (defmacro org-glance-module-provide ()
   `(provide (intern (file-name-sans-extension
