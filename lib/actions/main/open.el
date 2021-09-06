@@ -1,10 +1,10 @@
 (require 'org-glance-module)
 
-(org-glance:import lib.core.actions)
-(org-glance:import lib.core.headline)
+(org-glance:require lib.core.actions)
+(org-glance:require lib.core.headline)
 
 (org-glance-action-define open (headline) :for link
-  "Visit HEADLINE, then search for all `org-any-link-re' in its subtree.
+  "Visit HEADLINE, then search for all occuriences of `org-any-link-re' in its subtree.
 Ask with `org-completing-read' and apply `org-open-at-point' on it."
   (let* ((links (org-glance-headline:links headline))
          (pos (cond
@@ -15,4 +15,4 @@ Ask with `org-completing-read' and apply `org-open-at-point' on it."
       (goto-char pos)
       (org-open-at-point))))
 
-(org-glance-module-provide)
+(org-glance:provide)

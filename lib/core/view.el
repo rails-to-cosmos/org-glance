@@ -1,27 +1,25 @@
-;; org-glance view means a set of headlines in scope of org-files
-
 (require 'org-glance-module)
 
-(require 'org)
-(require 'org-element)
-(require 'subr-x)
+(org-glance:require
+  org
+  org-element
+  subr-x
 
-(org-glance:import lib.core.scope)
-(org-glance:import lib.core.metastore)
-(org-glance:import lib.core.exceptions)
-(org-glance:import lib.core.headline)
-
-(org-glance:import lib.utils.helpers)
+  lib.core.scope
+  lib.core.metastore
+  lib.core.exceptions
+  lib.core.headline
+  lib.utils.helpers)
 
 (defvar org-glance-view-default-type '(all)
   "Default type for all views.")
 
-(defvar org-glance-view-mode-map (make-sparse-keymap)
+(defvar org-glance-materialized-view-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
-(define-minor-mode org-glance-view-mode
+(define-minor-mode org-glance-materialized-view-mode
     "A minor mode to be activated only in materialized view editor."
-  nil nil org-glance-view-mode-map)
+  nil nil org-glance-materialized-view-mode-map)
 
 (defvar --org-glance-view-pwd nil)
 (defvar --org-glance-view-src nil)
@@ -30,17 +28,14 @@
 (defvar --org-glance-view-hash nil)
 (defvar --org-glance-view-indent nil)
 
-(defvar org-glance-views (make-hash-table :test 'equal))
-(defvar org-glance-view-actions (make-hash-table :test 'equal))
-
 (defcustom org-glance-materialized-view-buffer "*org-glance materialized view*"
   "Default buffer name for materialized view."
   :group 'org-glance
   :type 'string)
 
-(define-key org-glance-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
-(define-key org-glance-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-(define-key org-glance-view-mode-map (kbd "C-c C-v") #'org-glance-overview:visit)
+(define-key org-glance-materialized-view-mode-map (kbd "C-x C-s") #'org-glance-view-sync-subtree)
+(define-key org-glance-materialized-view-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-materialized-view-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -60,14 +55,6 @@
   :type 'hook
   :group 'org-glance)
 
-(cl-defstruct (org-glance-view
-                ;; (:constructor org-glance-def-view (id
-                ;;                                    &key
-                ;;                                    (type org-glance-view-default-type)
-                ;;                                    (scope nil)))
-                )
-  id type scope)
-
 (cl-defun org-glance-view-resource-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to directory where VIEW-ID resources and metadata are stored."
   (f-join org-glance-directory
@@ -83,10 +70,7 @@
 
 (defun org-glance-view:ids ()
   "List registered views."
-  (sort (hash-table-keys org-glance-views) #'s-less?))
-
-(cl-defmethod org-glance-view ((view-id symbol)) (gethash view-id org-glance-views))
-(cl-defmethod org-glance-view ((view-id string)) (org-glance-view (intern view-id)))
+  (sort (hash-table-keys org-glance:views) #'s-less?))
 
 (cl-defmethod org-glance-view-metastore-location ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
@@ -153,15 +137,16 @@
 (cl-defgeneric org-glance-view-action-resolve (view action))
 
 (cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
-  (let* ((action-types (->> org-glance-view-actions
-                         (gethash action)
-                         (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (cl-loop for action-type in action-types
+  (let* ((action-types (->> org-glance:actions
+                            (alist-get action)
+                            (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
+         (view-actions (cl-loop
+                          for action-type in action-types
                           with view-type = (org-glance-view-type view)
                           when (cl-subsetp action-type view-type)
                           return action-type)))
     (or view-actions
-        (car (member org-glance-view-default-type (gethash action org-glance-view-actions))))))
+        (car (member org-glance-view-default-type (alist-get action org-glance:actions))))))
 
 (cl-defmethod org-glance-view-action-resolve ((view null) (action symbol))
   (user-error "Assertion error: unable to resolve action when view is null"))
@@ -244,7 +229,7 @@
           (buffer-hash))))))
 
 (cl-defmethod org-glance-view-delete ((view-id symbol))
-  (remhash view-id org-glance-views))
+  (remhash view-id org-glance:views))
 
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
@@ -255,27 +240,27 @@
 
 (cl-defun org-glance-read-view (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (gethash (org-glance-view:completing-read prompt) org-glance-views))
+  (gethash (org-glance-view:completing-read prompt) org-glance:views))
 
 (defun org-glance-view:get-view-by-id (view-id)
   (cond
-    ((symbolp view-id) (gethash view-id org-glance-views))
-    ((stringp view-id) (gethash (intern view-id) org-glance-views))
+    ((symbolp view-id) (gethash view-id org-glance:views))
+    ((stringp view-id) (gethash (intern view-id) org-glance:views))
     (t (org-glance-exception:view-not-found view-id))))
 
-(cl-defun org-glance-def-view (view-id
-                               &key
+(cl-defun org-glance-def-view (&key
+                                 id
                                  type
                                  scope
                                  &allow-other-keys)
-  (let ((view (or
-               (org-glance-view:get-view-by-id view-id)
-               (make-org-glance-view :id view-id))))
-    (setf (org-glance-view-scope view) scope)
-    (setf (org-glance-view-type view) type)
-    (puthash view-id view org-glance-views)
+  (let ((view (or (org-glance-view:get-view-by-id id)
+                  (org-glance-view:create
+                   :id id
+                   :type type
+                   :scope scope))))
+    (puthash id view org-glance:views)
     (message "View \"%s\"%s is now ready to glance %s"
-             view-id
+             id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
@@ -323,4 +308,4 @@
 (cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))
 
-(org-glance-module-provide)
+(org-glance:provide)

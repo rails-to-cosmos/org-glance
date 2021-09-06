@@ -51,6 +51,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications
 ** Unsorted [0/8]
+*** TODO [#C] If summary is unregistered, prompt to register it before any user action
 *** TODO Read views from directory to minimize config
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2021-09-03 Fri 09:46]

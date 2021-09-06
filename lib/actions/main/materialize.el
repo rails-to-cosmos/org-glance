@@ -1,8 +1,8 @@
 (require 'org-glance-module)
 
-(org-glance:import lib.core.metastore)
-(org-glance:import lib.core.actions)
-(org-glance:import lib.core.view)
+(org-glance:require lib.core.metastore)
+(org-glance:require lib.core.actions)
+(org-glance:require lib.core.view)
 
 (defun --org-glance-headline:promote.deprecated ()
   "Deprecated because of side-effects."
@@ -32,7 +32,7 @@
         (with-current-buffer (get-buffer-create buffer)
           (delete-region (point-min) (point-max))
           (org-mode)
-          (org-glance-view-mode)
+          (org-glance-materialized-view-mode)
           (insert contents)
           (goto-char (point-min))
           (org-content 1)
@@ -49,4 +49,4 @@
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))
 
-(org-glance-module-provide)
+(org-glance:provide)

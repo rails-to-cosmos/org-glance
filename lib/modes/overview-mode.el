@@ -76,7 +76,7 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
   "Register HEADLINE in metastore and overview file."
   (save-window-excursion
-    (org-glance-overview:visit view-id)
+    (org-glance-overview view-id)
     (save-excursion
       (condition-case nil
           (progn
@@ -97,7 +97,7 @@ If point is before first heading, eval forms on each headline."
        (title (read-string (format "New thing of class %s: " view-id))))
   (interactive)
   (save-window-excursion
-    (org-glance-overview:visit view-id)
+    (org-glance-overview view-id)
     (let ((captured-headline (with-temp-buffer
                                (insert "* " title)
                                (org-glance-view:capture-headline-at-point view-id))))
@@ -134,13 +134,21 @@ If point is before first heading, eval forms on each headline."
   (org-glance-overview-mode +1)
   (message "All changes have been applied."))
 
-(cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:directory (&optional (view-id (org-glance-view:completing-read)))
+  "Path to file where VIEW-ID headlines are stored."
+  (let ((view-name (s-downcase (format "%s" view-id))))
+    (abbreviate-file-name
+     (f-join org-glance-directory view-name))))
+
+(cl-defun org-glance-overview:location (&optional
+                                          (view-id (org-glance-view:completing-read))
+                                          (extension "org_summary"))
   "Path to file where VIEW-ID headlines are stored."
   (let ((view-name (s-downcase (format "%s" view-id))))
     (abbreviate-file-name
      (f-join org-glance-directory
              view-name
-             (format "%s.org_summary" view-name)))))
+             (org-glance:format "${view-name}.${extension}")))))
 
 (cl-defun org-glance-overview:sorting-by-type (sorting-type)
   "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
@@ -229,7 +237,7 @@ If point is before first heading, eval forms on each headline."
       (org-align-tags t))
     (find-file filename)))
 
-(cl-defun org-glance-overview:visit (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
   (let ((location (org-glance-overview:location view-id)))
     (if (file-exists-p location)
@@ -441,4 +449,4 @@ If point is before first heading, eval forms on each headline."
                                collect (org-glance:format "{\"name\":\"${name}\",\"relations\":[${relations}]}")))
                 "];")))))
 
-(org-glance-module-provide)
+(org-glance:provide)

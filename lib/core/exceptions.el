@@ -30,4 +30,4 @@
   "Raise `org-glance-exception:view-not-found' exception formatted with FORMAT ARGS."
   (signal 'org-glance-exception:view-not-found (list (apply #'format-message format args))))
 
-(org-glance-module-provide)
+(org-glance:provide)

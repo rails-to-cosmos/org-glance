@@ -21,7 +21,7 @@
 
  ;; Implement directory structure for user and system data
  (defvar org-glance-test:root-location (make-temp-file "org-glance-test-" t))
- (defvar org-glance-test:view-location (f-join org-glance-test:root-location "org-glance-views"))
+ (defvar org-glance-test:view-location (f-join org-glance-test:root-location "org-glance:views"))
  (defvar org-glance-test:user-location (f-join org-glance-test:root-location "user-data"))
 
  (mkdir org-glance-test:view-location)

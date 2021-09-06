@@ -83,4 +83,4 @@ TAGS is a list of strings."
          (insert "    Assets:Default\n")
          (switch-to-buffer-other-window "*org-glance-ledger-report*"))))))
 
-(org-glance-module-provide)
+(org-glance:provide)

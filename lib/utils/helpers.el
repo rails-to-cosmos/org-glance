@@ -87,4 +87,4 @@ enjoy using a lot.
       (setq x2 (search-backward "<"))
       (decode-coding-string (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)) 'utf-8))))
 
-(org-glance-module-provide)
+(org-glance:provide)

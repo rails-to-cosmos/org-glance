@@ -30,8 +30,6 @@
 
 ;;; Code:
 
-(require 'f)
-
 (require 'org-glance-module)
 
 (defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
@@ -39,10 +37,38 @@
   :group 'org-glance
   :type 'string)
 
-(org-glance:import
-  lib.utils.encryption ; encryption utils
-  lib.utils.helpers ; unsorted, deprecated
-  lib.utils.org ; org-mode shortcuts
+(cl-defstruct (org-glance-view (:constructor org-glance-view:create))
+  "This structure contains metadata about categorized `org-mode' headlines."
+  (id nil '(:read-only t
+            :documentation "ID slot is a primary key that uniqly identifies `org-glance-view'."
+            :type 'symbol))
+  (type nil '(:read-only nil
+              :documentation "List of actions allowed to use on headlines of this view."
+              :type 'list))
+  (scope nil '(:read-only nil
+               :documentation "List of files/directories where org-glance should search for headlines for this view."
+               :type 'list)))
+
+(defvar org-glance:views (make-hash-table))
+(defvar org-glance:actions nil)
+
+(defvar -org-glance-initialized-views (make-hash-table :test #'equal))
+
+(eval-and-compile
+  (org-glance:require org
+                      org-element))
+
+(eval-when-compile
+  (org-glance:require cl-generic
+                      cl-lib
+                      cl-macs
+                      seq
+                      subr-x))
+
+(org-glance:require
+  lib.utils.encryption                  ; encryption utils
+  lib.utils.helpers                     ; unsorted, deprecated
+  lib.utils.org                         ; org-mode shortcuts
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -51,56 +77,27 @@
 ;;; Headline API
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
-  lib.core.headline ; good
-  lib.core.metastore ; ok
-  lib.core.scope ; ? deprecated
-  lib.core.view ; migrate to overview
-  lib.core.actions ; deprecated
+  lib.core.headline                     ; good
+  lib.core.metastore                    ; ok
+  lib.core.scope                        ; ? deprecated
+  lib.core.view                         ; migrate to overview
+  lib.core.actions                      ; deprecated
 
-  lib.modes.overview-mode ; good one, improve
-  )
-;; (declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.view))
-;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.view))
+  lib.modes.overview-mode               ; good one, improve
 
-;; (declare-function org-glance-view:completing-read (org-glance-module-filename lib.core.view))
-;; (declare-function org-glance-view:get-view-by-id (org-glance-module-filename lib.core.view))
-;; (declare-function org-glance-view:headlines (org-glance-module-filename lib.core.view))
-;; (declare-function org-glance-view:ids (org-glance-module-filename lib.core.view))
-;; (declare-function org-glance-view:update (org-glance-module-filename lib.core.view))
+  lib.links.visit
 
-(org-glance:import lib.links.visit)
-(org-glance:import lib.transient.headlines)
-(org-glance:import lib.plugins.metadata)
+  lib.transient.headlines
 
-;; Preload default actions
+  lib.plugins.metadata
 
-(org-glance:import lib.actions.main.materialize)
-(org-glance:import lib.actions.main.open)
-(org-glance:import lib.actions.main.visit)
-
-(org-glance:import lib.actions.babel.insert)
-
-;; Actions for encrypted headlines
-(org-glance:import lib.actions.encrypted-headlines.extract)
-(org-glance:import lib.actions.encrypted-headlines.materialize)
-
-;; When headline is defined as a key-value storage, one can extract properties in efficient manner
-(org-glance:import lib.actions.key-value-headlines.extract)
-
-(eval-and-compile
-  (require 'org)
-  (require 'org-element)
-  (require 'eieio-core))
-
-(eval-when-compile
-  (require 'cl-lib)
-  (require 'cl-generic)
-  (require 'cl-macs)
-  (require 'org)
-  (require 'seq)
-  (require 'subr-x))
-
-(require 'gv)
+  lib.actions.babel.insert
+  lib.actions.encrypted-headlines.extract
+  lib.actions.encrypted-headlines.materialize
+  lib.actions.key-value-headlines.extract
+  lib.actions.main.materialize
+  lib.actions.main.open
+  lib.actions.main.visit)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -131,7 +128,7 @@ C-u means not to insert relation at point, but register it in logbook."
        (filter #'(lambda (_) t))
        (scope '(agenda))
        (action #'org-glance--visit--all))
-  "Run completing read on org entries from SCOPE asking a `org-glance-prompt'.
+  "Run completing read on org entries from SCOPE asking an `org-glance-prompt'.
 Scope can be file name or list of file names.
 Filter headlines by FILTER method.
 Call ACTION method on selected headline.

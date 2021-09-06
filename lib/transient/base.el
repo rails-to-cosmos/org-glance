@@ -1,6 +1,6 @@
 (require 'transient)
 (require 'org-glance-module)
-(org-glance:import lib.core.view)
+(org-glance:require lib.core.view)
 
 (defclass org-glance-transient-variable (transient-variable)
   ((default
@@ -28,4 +28,4 @@
   "Override value format."
   (propertize (oref obj value) 'face 'transient-inactive-value))
 
-(org-glance-module-provide)
+(org-glance:provide)

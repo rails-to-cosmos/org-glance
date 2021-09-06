@@ -9,11 +9,11 @@
 #     Given I'm in a root directory
 
 #     # Implement directory structure for user data and system data
-#     And I create directory "org-glance-views"
+#     And I create directory "org-glance:views"
 #     And I create directory "user-data"
 
 #     # Set org-glance-directory
-#     When I change directory to "org-glance-views"
+#     When I change directory to "org-glance:views"
 #     And I set view location to current directory
 #     And I change directory to parent directory
 

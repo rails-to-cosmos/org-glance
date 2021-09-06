@@ -1,6 +1,6 @@
 (require 'org-glance-module)
 
-(org-glance:import
+(org-glance:require
   org
   org-element
   lib.core.exceptions
@@ -225,7 +225,6 @@ Default enrichment is as follows:
     (save-buffer)))
 
 (cl-defun org-glance-headline:rename (headline title)
-  (declare (indent 1) (debug t))
   (save-window-excursion
     (org-glance-headline:narrow headline
       (let ((old-title (org-glance-headline:raw-value headline))
@@ -362,4 +361,4 @@ Default enrichment is as follows:
           (unless (eql source target)
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
-(org-glance-module-provide)
+(org-glance:provide)

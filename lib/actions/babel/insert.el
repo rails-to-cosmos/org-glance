@@ -1,7 +1,7 @@
 (require 'org-glance-module)
 
-(org-glance:import lib.core.metastore)
-(org-glance:import lib.core.actions)
+(org-glance:require lib.core.metastore)
+(org-glance:require lib.core.actions)
 
 (org-glance-action-define insert (headline) :for babel
   "Visit HEADLINE, get contents and insert it."
@@ -19,4 +19,4 @@
                                (end-of-line)
                                (point)))))))
 
-(org-glance-module-provide)
+(org-glance:provide)

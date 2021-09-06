@@ -2,7 +2,7 @@
 (require 'org-element)
 (require 'transient)
 
-(org-glance:import lib.core.view)
+(org-glance:require lib.core.view)
 
 (defun org-glance-action--transient-args nil
   (transient-args 'org-glance-form-action))
@@ -30,7 +30,7 @@
     (funcall fn headline)))
 
 (defun org-glance-action-headlines (action)
-  (cl-loop for view being the hash-values of org-glance-views
+  (cl-loop for view being the hash-values of org-glance:views
      when (org-glance-view-action-resolve view action)
      append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view:headlines* view))))
 
@@ -45,12 +45,12 @@ Type can be symbol that specifies 'all views or specific view."
 (cl-defmethod org-glance-action-register ((name symbol) (type list))
   "Register action NAME for views of specific TYPEs.
 Type can be list of symbols to specify views."
-  (let ((type (cl-pushnew type (gethash name org-glance-view-actions) :test #'seq-set-equal-p)))
-    (puthash name type org-glance-view-actions)))
+  (let ((type (cl-pushnew type (alist-get name org-glance:actions) :test #'seq-set-equal-p)))
+    (push (cons name type) org-glance:actions)))
 
 (defmacro org-glance-action-define (name args _ type &rest body)
   "Defun method NAME (ARGS) BODY.
-Make it accessible for views of TYPE in `org-glance-view-actions'."
+Make it accessible for views of TYPE in `org-glance:actions'."
   (declare (debug
             ;; Same as defun but use cl-lambda-list.
             (&define [&or name ("setf" :name setf name)]
@@ -79,8 +79,8 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
                                        nil))
                              (view (alist-get choice headlines nil nil #'string=))
                              (method-name (->> action
-                                            (org-glance-view-action-resolve view)
-                                            (org-glance-concrete-method-name action)))
+                                               (org-glance-view-action-resolve view)
+                                               (org-glance-concrete-method-name action)))
                              (headline (replace-regexp-in-string "^\\[.*\\] " "" choice)))
                         (funcall method-name args view headline))))
 
@@ -101,4 +101,4 @@ Make it accessible for views of TYPE in `org-glance-view-actions'."
         `(progn ,(car res) ,form)
       form)))
 
-(org-glance-module-provide)
+(org-glance:provide)

@@ -95,4 +95,4 @@
                         do (setq result (s-replace-regexp org-link-any-re title result))
                         finally (return result)))))
 
-(org-glance-module-provide)
+(org-glance:provide)

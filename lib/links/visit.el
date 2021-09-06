@@ -48,5 +48,5 @@
 ;;       (`ascii (format "%s (%s)" desc path))
 ;;       (t path))))
 
-(org-glance-module-provide)
+(org-glance:provide)
 ;;; visit.el ends here

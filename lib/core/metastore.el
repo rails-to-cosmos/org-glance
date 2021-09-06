@@ -2,10 +2,10 @@
 (require 'org-element)
 (require 'org-glance-module)
 
-(org-glance:import lib.core.scope)
-(org-glance:import lib.core.exceptions)
-(org-glance:import lib.core.headline)
-(org-glance:import lib.utils.helpers)
+(org-glance:require lib.core.scope)
+(org-glance:require lib.core.exceptions)
+(org-glance:require lib.core.headline)
+(org-glance:require lib.utils.helpers)
 
 (cl-defun org-glance-metastore:write (file metastore)
   (mkdir (file-name-directory file) 'parents)
@@ -84,4 +84,4 @@
     (org-glance-headline:narrow headline
       (org-glance-headline:at-point))))
 
-(org-glance-module-provide)
+(org-glance:provide)

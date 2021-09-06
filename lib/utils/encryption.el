@@ -25,4 +25,4 @@
         (insert decrypted-text))
     (user-error "Wrong password")))
 
-(org-glance-module-provide)
+(org-glance:provide)

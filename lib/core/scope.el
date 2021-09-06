@@ -2,8 +2,8 @@
 (require 'org-glance-module)
 (require 'dash)
 
-(org-glance:import lib.utils.helpers)
-(org-glance:import lib.core.headline)
+(org-glance:require lib.utils.helpers)
+(org-glance:require lib.core.headline)
 
 (declare-function -org-glance:list-files-recursively "lib/utils/helpers.el")
 (declare-function org-glance-headline:scan-file "lib/utils/helpers.el")
@@ -68,4 +68,4 @@
      for headlines = (org-glance-headline:scan-file file)
      append (-non-nil (mapcar filter headlines))))
 
-(org-glance-module-provide)
+(org-glance:provide)
