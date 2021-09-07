@@ -114,9 +114,10 @@
     (&optional (target (condition-case choice
                            (org-glance-metastore:choose-headline)
                          (org-glance-exception:headline-not-found
-                          (org-glance-overview:capture-headline
-                           (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                           (cadr choice))))))
+                          (save-window-excursion
+                            (org-glance-overview:capture-headline
+                             (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+                             (cadr choice)))))))
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook."
   (interactive)

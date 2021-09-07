@@ -51,6 +51,8 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Headline API
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications
+** Completing Read [0/1]
+*** TODO build titles from all direct relations
 ** Unsorted [0/8]
 *** TODO [#C] If summary is unregistered, prompt to register it before any user action
 *** TODO Read views from directory to minimize config

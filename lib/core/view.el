@@ -128,10 +128,8 @@
     (mapcar #'org-glance-headline:title)
     (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
-(cl-defgeneric org-glance-view-prompt (view action)
-  "Generate prompt for VIEW. Assume ACTION context.")
-
-(cl-defmethod org-glance-view-prompt ((view org-glance-view) (action symbol))
+(cl-defun org-glance-view-prompt (view action)
+  "Generate prompt for VIEW. Assume ACTION context."
   (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
 (cl-defgeneric org-glance-view-action-resolve (view action))

@@ -68,6 +68,7 @@ If point is before first heading, eval forms on each headline."
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture-headline)
+(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id
@@ -126,6 +127,15 @@ If point is before first heading, eval forms on each headline."
                                        (org-glance-view:capture-headline-at-point view-id :remove-original nil))))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
+
+(cl-defun org-glance-overview:select-headline
+    (&optional (view-id (org-glance-overview:category)))
+  (interactive)
+  (let ((headlines (org-glance-view:headlines view-id)))
+    (org-glance-headline:search-buffer-by-id
+     (org-glance-headline:id (org-glance-scope--choose-headline
+                              (org-glance-scope--prompt-headlines "Choose: " headlines)
+                              headlines)))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."

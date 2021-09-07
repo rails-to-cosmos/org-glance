@@ -72,10 +72,10 @@
      finally (return (first result))))
 
 (cl-defun org-glance-metastore:choose-headline ()
-  (let* ((headlines (cl-loop for vid in (org-glance-view:ids)
-                       append (cl-loop for headline in (org-glance-view:headlines vid)
+  (let* ((headlines (cl-loop for view-id in (org-glance-view:ids)
+                       append (cl-loop for headline in (org-glance-view:headlines view-id)
                                  collect (cons ;; duplication of format*
-                                          (format "[%s] %s" vid (org-glance-headline:title headline))
+                                          (format "[%s] %s" view-id (org-glance-headline:title headline))
                                           headline))))
          (choice (org-completing-read "Headline: " headlines))
          (headline (alist-get choice headlines nil nil #'string=)))
