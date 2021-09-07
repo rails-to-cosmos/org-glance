@@ -65,7 +65,9 @@
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
   (cl-loop for file in (org-glance-scope scope)
-     for headlines = (org-glance-headline:scan-file file)
-     append (-non-nil (mapcar filter headlines))))
+     append (-non-nil (mapcar filter (progn
+                                       (message "Scan file %s" file)
+                                       (redisplay)
+                                       (org-glance-headline:scan-file file))))))
 
 (org-glance:provide)

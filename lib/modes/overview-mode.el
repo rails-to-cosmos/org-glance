@@ -68,6 +68,7 @@ If point is before first heading, eval forms on each headline."
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture-headline)
+(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
@@ -79,21 +80,20 @@ If point is before first heading, eval forms on each headline."
     (org-glance-metastore:write metastore-location metastore)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
-  "Register HEADLINE in metastore and overview file."
-  (save-window-excursion
-    (org-glance-overview view-id)
-    (save-excursion
-      (condition-case nil
-          (progn
-            (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-            (org-glance-overview:pull))
-        (error (let ((inhibit-read-only t))
-                 (beginning-of-buffer)
-                 (org-glance-headline:search-forward)
-                 (insert (org-glance-headline:contents headline) "\n")
-                 (beginning-of-buffer)
-                 (org-glance-overview:sort)
-                 (save-buffer))))))
+  "Add HEADLINE clone in overview VIEW-ID file."
+  (org-glance-overview view-id)
+  (condition-case nil
+      (progn
+        (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+        (org-glance-overview:pull))
+    (error (let ((inhibit-read-only t)
+                 (contents (org-glance-headline:contents headline)))
+             (unless (string-empty-p contents)
+               (beginning-of-buffer)
+               (org-glance-headline:search-forward)
+               (insert contents "\n")
+               ;; (org-glance-overview:sort)
+               (save-buffer)))))
   headline)
 
 (cl-defun org-glance-overview:capture-headline
@@ -118,13 +118,25 @@ If point is before first heading, eval forms on each headline."
        (view-id (org-glance-overview:category)))
   (interactive "fChoose file or directory to import: ")
   (when (y-or-n-p (org-glance:format "Import headlines of class ${view-id} from ${path}?"))
-    (let* ((view (org-glance-view:get-view-by-id view-id))
-           (scope (list path))
-           (filter (org-glance-view-filter view)))
-      (cl-loop
-         for original-headline in (org-glance-scope-headlines scope filter)
-         do (let ((captured-headline (org-glance-headline:narrow original-headline
-                                       (org-glance-view:capture-headline-at-point view-id :remove-original nil))))
+    (cl-loop
+       for original-headline in (cl-loop
+                                   for file in (org-glance-scope path)
+                                   append (-non-nil (mapcar (org-glance-view-filter (org-glance-view:get-view-by-id view-id))
+                                                            (progn
+                                                              (message "Scan file %s" file)
+                                                              (redisplay)
+                                                              (with-temp-buffer
+                                                                (org-mode)
+                                                                (insert-file-contents file)
+                                                                (let ((filename (abbreviate-file-name file)))
+                                                                  (org-element-map (org-element-parse-buffer 'headline) 'headline
+                                                                    (lambda (el)
+                                                                      (org-glance-headline:enrich el :file filename)))))))))
+       do (let ((pos (org-glance-headline:begin original-headline))
+                (file (org-glance-headline:file original-headline)))
+            (find-file file)
+            (goto-char pos)
+            (let ((captured-headline (org-glance-view:capture-headline-at-point view-id :remove-original nil)))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
 
@@ -262,7 +274,9 @@ If point is before first heading, eval forms on each headline."
       (insert header)
       (insert contents)
       (goto-char (point-min))
-      (org-glance-overview:sort)
+      (condition-case nil
+          (org-glance-overview:sort)
+        (user-error nil))
       (org-align-tags t))
     (find-file filename)))
 

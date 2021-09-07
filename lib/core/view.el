@@ -95,7 +95,6 @@
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) (list org-glance-directory)))
          (headlines (org-glance-scope-headlines scope filter)))
-    (pp (org-glance:format "Scope: ${scope}"))
     (org-glance-metastore:create db headlines)
     (list view)))
 
@@ -124,7 +123,7 @@
 (cl-defmethod org-glance-view:headlines* ((view org-glance-view))
   "List headlines as formatted strings for VIEW."
   (->> view
-    org-glance-view:headlines
+    (org-glance-view:headlines)
     (mapcar #'org-glance-headline:title)
     (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-view-id view) hl)))))
 
@@ -264,10 +263,7 @@
     view))
 
 (cl-defun org-glance-view:capture-headline-at-point
-    (&optional (view-id (org-completing-read "Capture headline for view: "
-                                             (seq-difference
-                                              (org-glance-view:ids)
-                                              (mapcar #'intern (org-get-tags)))))
+    (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
      &key (remove-original t))
   (interactive)
   (save-window-excursion
@@ -279,15 +275,7 @@
              (dir (org-glance:generate-dir-for-subtree-at-point view-id))
              (output-file (f-join dir (org-glance:format "${view-id}.org"))))
         (mkdir dir 'parents)
-        (org-set-property "ORG_GLANCE_ID" id)
-        (org-set-property "DIR" dir)
-        (org-set-property "CATEGORY" view-id)
-        (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
-                                                       (let ((current-prefix-arg '(16)))
-                                                         (call-interactively #'org-time-stamp-inactive)
-                                                         (buffer-substring-no-properties (point-min) (point-max)))))
-        (unless (member (downcase view-id) (-org-glance:collect-tags))
-          (org-toggle-tag view-id))
+
         (save-restriction
           (org-narrow-to-subtree)
           (let* ((contents (buffer-substring-no-properties (point-min) (point-max)))
@@ -299,6 +287,15 @@
                              (save-excursion
                                (insert contents))
                              (org-glance-headline:promote-to-the-first-level)
+                             (org-set-property "ORG_GLANCE_ID" id)
+                             (org-set-property "DIR" dir)
+                             (org-set-property "CATEGORY" view-id)
+                             (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
+                                                                            (let ((current-prefix-arg '(16)))
+                                                                              (call-interactively #'org-time-stamp-inactive)
+                                                                              (buffer-substring-no-properties (point-min) (point-max)))))
+                             (unless (member (downcase view-id) (-org-glance:collect-tags))
+                               (org-toggle-tag view-id))
                              (save-buffer)
                              (org-glance-headline:at-point)))))
             (when remove-original
