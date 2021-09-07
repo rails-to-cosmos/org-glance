@@ -55,10 +55,14 @@
    :documentation "List of files/directories where org-glance should search for headlines for this view."
    :type 'list))
 
-(defvar org-glance:views (make-hash-table))
-(defvar org-glance:actions nil)
+(defvar org-glance:views (make-hash-table)
+  "Hash table (id->view) lists all registered classes of things.")
 
-(defvar -org-glance-initialized-views nil)
+(defvar org-glance:actions nil
+  "Alist containing registered actions.")
+
+(defvar -org-glance-initialized-views nil
+  "Alist of views registered in current emacs session.")
 
 (org-glance:require
   cl-generic
@@ -108,18 +112,20 @@
   :tag "Org Glance"
   :group 'org)
 
-(defvar org-glance-prompt "Glance: ")
+(cl-defun org-glance:get-headline-or-capture ()
+  "Choose thing from metastore or capture it if not found."
+  (condition-case choice
+      (org-glance-metastore:choose-headline)
+    (org-glance-exception:headline-not-found
+     (save-window-excursion
+       (org-glance-overview:capture-headline
+        (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+        (cadr choice))))))
 
 (cl-defun org-glance:insert-relation
-    (&optional (target (condition-case choice
-                           (org-glance-metastore:choose-headline)
-                         (org-glance-exception:headline-not-found
-                          (save-window-excursion
-                            (org-glance-overview:capture-headline
-                             (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                             (cadr choice)))))))
+    (&optional (target (org-glance:get-headline-or-capture)))
   "Insert relation from `org-glance-headline' at point to TARGET.
-C-u means not to insert relation at point, but register it in logbook."
+C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
   (unless current-prefix-arg
     (insert (org-glance-headline:format target)))
@@ -132,21 +138,15 @@ C-u means not to insert relation at point, but register it in logbook."
        (db-init nil)
        (filter #'(lambda (_) t))
        (scope '(agenda))
-       (action #'org-glance--visit--all))
-  "Run completing read on org entries from SCOPE asking an `org-glance-prompt'.
-Scope can be file name or list of file names.
-Filter headlines by FILTER method.
-Call ACTION method on selected headline.
-Specify DB to save headlines in read-optimized el-file.
-Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u prefix."
-  (let* ((headlines
-          (org-glance-headlines
-           :db db
-           :db-init db-init
-           :scope scope
-           :filter filter)))
+       (action #'org-glance--visit--all)
+       (prompt "Glance: "))
+  "Deprecated main method, refactoring needed."
+  (let ((headlines (org-glance-headlines :db db
+                                         :db-init db-init
+                                         :scope scope
+                                         :filter filter)))
     (unwind-protect
-         (when-let (choice (or default-choice (org-glance-scope--prompt-headlines org-glance-prompt headlines)))
+         (when-let (choice (or default-choice (org-glance-scope--prompt-headlines prompt headlines)))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
                  (org-glance-db-outdated
@@ -157,7 +157,8 @@ Specify DB-INIT predicate to reread cache file. Usually this flag is set by C-u 
                               :action action
                               :db db
                               :db-init t
-                              :default-choice choice)))
+                              :default-choice choice
+                              :prompt prompt)))
              (user-error "Headline not found"))))))
 
 (provide 'org-glance)

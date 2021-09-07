@@ -29,7 +29,7 @@
       (user-error "Unbound function %s" fn))
     (funcall fn headline)))
 
-(defun org-glance-action-headlines (action)
+(cl-defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance:views
      when (org-glance-view-action-resolve view action)
      append (mapcar #'(lambda (headline) (cons headline view)) (org-glance-view:headlines* view))))
@@ -86,13 +86,13 @@ Make it accessible for views of TYPE in `org-glance:actions'."
 
                   (defun ,concrete-fn (&optional args view headline)
                     (interactive (list (org-glance-action--transient-args)))
-                    (let ((org-glance-prompt (org-glance-view-prompt view (quote ,name))))
-                      (org-glance
-                       :default-choice headline
-                       :scope (or (org-glance-view-scope view) (list org-glance-directory))
-                       :db (org-glance-view-metastore-location view)
-                       :filter (org-glance-view-filter view)
-                       :action (function ,action-private-method))))
+                    (org-glance
+                     :default-choice headline
+                     :scope (or (org-glance-view-scope view) (list org-glance-directory))
+                     :db (org-glance-view-metastore-location view)
+                     :filter (org-glance-view-filter view)
+                     :action (function ,action-private-method)
+                     :prompt (org-glance-view-prompt view (quote ,name))))
 
                   (defun ,action-private-method
                       ,@(cdr res)))))
