@@ -39,6 +39,7 @@ Cache roles: employee/employer, contact/task
 *** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
 *** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
 ** TODO Overview Mode
+*** TODO commented headlines restrictions
 *** TODO org-overview-mode: modify-sync headline feature
 *** DONE org-overview-mode: add headline feature
 CLOSED: [2021-08-26 Thu 10:40]

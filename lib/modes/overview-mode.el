@@ -363,8 +363,9 @@ If point is before first heading, eval forms on each headline."
   (interactive)
   (save-excursion
     (goto-char (point-min))
-    (while (org-glance-headline:search-forward)
-      (org-glance-overview:pull))))
+    (while (and (org-glance-headline:search-forward))
+      (unless (org-glance-headline:commented?)
+        (org-glance-overview:pull)))))
 
 (cl-defun org-glance-overview:kill-headline (&optional force)
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
