@@ -7,8 +7,7 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-This repository is still work in progress: I implement some ideas in
-graph data management area.
+This repository is nothing more than a sandbox for brainstorming ideas in the field of graph processing.
 
 * Issues
 ** Anchor Modeling
