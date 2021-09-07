@@ -269,7 +269,8 @@
     (&optional (view-id (org-completing-read "Capture headline for view: "
                                              (seq-difference
                                               (org-glance-view:ids)
-                                              (mapcar #'intern (org-get-tags))))))
+                                              (mapcar #'intern (org-get-tags)))))
+     &key (remove-original t))
   (interactive)
   (save-window-excursion
     (save-excursion
@@ -302,7 +303,8 @@
                              (org-glance-headline:promote-to-the-first-level)
                              (save-buffer)
                              (org-glance-headline:at-point)))))
-            (delete-region (point-min) (point-max))
+            (when remove-original
+              (delete-region (point-min) (point-max)))
             result))))))
 
 (cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))

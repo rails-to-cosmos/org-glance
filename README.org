@@ -46,6 +46,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 - State "DONE"       from "TODO"       [2021-08-26 Thu 10:40]
 :END:
 *** TODO overview of all views registered with view-scoped actions
+*** TODO org-glance:format issue for strings containing % symbol
 ** TODO Headline API
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications

@@ -112,6 +112,22 @@ If point is before first heading, eval forms on each headline."
       (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
       captured-headline)))
 
+(cl-defun org-glance-overview:import-headlines
+    (path
+     &optional
+       (view-id (org-glance-overview:category)))
+  (interactive "fChoose file or directory to import: ")
+  (when (y-or-n-p (org-glance:format "Import headlines of class ${view-id} from ${path}?"))
+    (let* ((view (org-glance-view:get-view-by-id view-id))
+           (scope (list path))
+           (filter (org-glance-view-filter view)))
+      (cl-loop
+         for original-headline in (org-glance-scope-headlines scope filter)
+         do (let ((captured-headline (org-glance-headline:narrow original-headline
+                                       (org-glance-view:capture-headline-at-point view-id :remove-original nil))))
+              (org-glance-overview:register-headline-in-metastore captured-headline view-id)
+              (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
+
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in .org_summary files."
   nil nil org-glance-overview-mode-map
@@ -306,7 +322,7 @@ If point is before first heading, eval forms on each headline."
                                                    (abbreviate-file-name overview-location))
                                      do (return t)))
            (title (org-glance-headline:title))
-           (raw-value (org-glance-headline:raw-value))
+           (raw-value (org-glance-headline:raw-value original-headline))
            (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
 
       (org-glance-doctor:fix-when (s-matches? org-link-any-re raw-value)
@@ -314,7 +330,8 @@ If point is before first heading, eval forms on each headline."
         (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
         (org-glance-headline:narrow original-headline
           (org-end-of-meta-data t)
-          (insert raw-value "\n")))
+          (insert raw-value "\n")
+          (save-buffer)))
 
       (org-glance-doctor:fix-when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
@@ -322,8 +339,9 @@ If point is before first heading, eval forms on each headline."
                                    (org-glance-view:capture-headline-at-point view-id))))
           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
           (org-glance-overview:register-headline-in-overview captured-headline view-id))
-        (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)
-        (org-glance-overview:pull)))))
+        (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))
+
+      (org-glance-overview:pull))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
