@@ -11,7 +11,7 @@ Ask with `org-completing-read' and apply `org-open-at-point' on it."
                 ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
                 ((= (length links) 1) (cdar links))
                 (t (user-error "Unable to find links in %s" (org-glance-headline:file headline))))))
-    (org-glance-headline:narrow headline
+    (org-glance-headline:narrow headline :save-excursion nil
       (goto-char pos)
       (org-open-at-point))))
 

@@ -100,17 +100,16 @@ If point is before first heading, eval forms on each headline."
        (view-id (org-glance-overview:category))
        (title (read-string (format "New thing of class %s: " view-id))))
   (interactive)
-  (save-window-excursion
-    (org-glance-overview view-id)
-    (let ((captured-headline (with-temp-buffer
-                               (insert "* " title)
-                               (org-glance-view:capture-headline-at-point view-id))))
-      (save-excursion
-        (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-        (org-glance-overview:register-headline-in-overview captured-headline view-id))
-      (org-overview)
-      (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-      captured-headline)))
+  (org-glance-overview view-id)
+  (let ((captured-headline (with-temp-buffer
+                             (insert "* " title)
+                             (org-glance-view:capture-headline-at-point view-id))))
+    (org-glance-overview:register-headline-in-metastore captured-headline view-id)
+    (org-glance-overview:register-headline-in-overview captured-headline view-id)
+    (org-overview)
+    (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
+    (org-glance-overview:visit-headline)
+    captured-headline))
 
 (cl-defun org-glance-overview:import-headlines
     (path

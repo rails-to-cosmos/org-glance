@@ -154,7 +154,7 @@ Default enrichment is as follows:
 
     (org-glance-headline:at-point)))
 
-(defmacro org-glance-headline:narrow (headline &rest forms)
+(cl-defmacro org-glance-headline:narrow (headline &rest forms &key (save-excursion t) &allow-other-keys)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
   `(let* ((file (org-element-property :file ,headline))
@@ -162,24 +162,43 @@ Default enrichment is as follows:
           (visited-buffer (current-buffer))
           result)
 
-     (save-window-excursion
-       (org-glance-headline:visit ,headline)
+     (if ,save-excursion ;; fixme
+         (save-window-excursion
+           (org-glance-headline:visit ,headline)
 
-       (save-restriction
-         (org-narrow-to-subtree)
-         (when (= (point-max) (save-excursion
-                                (org-end-of-meta-data)
-                                (point)))
-           (goto-char (point-max))
-           (insert "\n"))
-         (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-                        ,@forms)))
+           (save-restriction
+             (org-narrow-to-subtree)
+             (when (= (point-max) (save-excursion
+                                    (org-end-of-meta-data)
+                                    (point)))
+               (goto-char (point-max))
+               (insert "\n"))
+             (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                            ,@forms)))
 
-       (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-             ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                         (bury-buffer file-buffer)))
-             (t (save-buffer)
-                (kill-buffer (get-file-buffer file)))))
+           (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+                 ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                             (bury-buffer file-buffer)))
+                 (t (save-buffer)
+                    (kill-buffer (get-file-buffer file)))))
+       (progn
+         (org-glance-headline:visit ,headline)
+
+         (save-restriction
+           (org-narrow-to-subtree)
+           (when (= (point-max) (save-excursion
+                                  (org-end-of-meta-data)
+                                  (point)))
+             (goto-char (point-max))
+             (insert "\n"))
+           (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                          ,@forms)))
+
+         (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+               ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                           (bury-buffer file-buffer)))
+               (t (save-buffer)
+                  (kill-buffer (get-file-buffer file))))))
 
      result))
 
