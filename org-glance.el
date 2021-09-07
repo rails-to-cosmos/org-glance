@@ -39,15 +39,21 @@
 
 (cl-defstruct (org-glance-view (:constructor org-glance-view:create))
   "This structure contains metadata about categorized `org-mode' headlines."
-  (id nil '(:read-only t
-            :documentation "ID slot is a primary key that uniqly identifies `org-glance-view'."
-            :type 'symbol))
-  (type nil '(:read-only nil
-              :documentation "List of actions allowed to use on headlines of this view."
-              :type 'list))
-  (scope nil '(:read-only nil
-               :documentation "List of files/directories where org-glance should search for headlines for this view."
-               :type 'list)))
+  (id
+   nil
+   :read-only t
+   :documentation "ID slot is a primary key that uniqly identifies `org-glance-view'."
+   :type 'symbol)
+  (type
+   nil
+   :read-only nil
+   :documentation "List of actions allowed to use on headlines of this view."
+   :type 'list)
+  (scope
+   nil
+   :read-only nil
+   :documentation "List of files/directories where org-glance should search for headlines for this view."
+   :type 'list))
 
 (defvar org-glance:views (make-hash-table))
 (defvar org-glance:actions nil)

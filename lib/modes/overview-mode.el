@@ -2,6 +2,10 @@
 (require 'org-attach)
 (require 'org-glance-module)
 
+(org-glance:require
+  highlight
+  org-attach)
+
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
 #+CATEGORY: ${category}
