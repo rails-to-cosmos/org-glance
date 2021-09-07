@@ -162,23 +162,24 @@ Default enrichment is as follows:
           (visited-buffer (current-buffer))
           result)
 
-     (org-glance-headline:visit ,headline)
+     (save-window-excursion
+       (org-glance-headline:visit ,headline)
 
-     (save-restriction
-       (org-narrow-to-subtree)
-       (when (= (point-max) (save-excursion
-                              (org-end-of-meta-data)
-                              (point)))
-         (goto-char (point-max))
-         (insert "\n"))
-       (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-                      ,@forms)))
+       (save-restriction
+         (org-narrow-to-subtree)
+         (when (= (point-max) (save-excursion
+                                (org-end-of-meta-data)
+                                (point)))
+           (goto-char (point-max))
+           (insert "\n"))
+         (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                        ,@forms)))
 
-     (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-           ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                       (bury-buffer file-buffer)))
-           (t (save-buffer)
-              (kill-buffer (get-file-buffer file))))
+       (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+             ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
+                                                                         (bury-buffer file-buffer)))
+             (t (save-buffer)
+                (kill-buffer (get-file-buffer file)))))
 
      result))
 

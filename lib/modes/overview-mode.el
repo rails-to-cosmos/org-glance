@@ -318,7 +318,8 @@ If point is before first heading, eval forms on each headline."
 
       (org-glance-doctor:fix-when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
-        (let ((captured-headline (org-glance-headline:narrow original-headline (org-glance-view:capture-headline-at-point view-id))))
+        (let ((captured-headline (org-glance-headline:narrow original-headline
+                                   (org-glance-view:capture-headline-at-point view-id))))
           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
           (org-glance-overview:register-headline-in-overview captured-headline view-id))
         (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id)

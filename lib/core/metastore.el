@@ -58,9 +58,9 @@
 (cl-defun org-glance-metastore:get-headline (id)
   "Get full headline by ID."
   (cl-loop
-     for vid in (org-glance-view:ids)
-     for metastore = (->> vid
-                       org-glance-view
+     for view-id in (org-glance-view:ids)
+     for metastore = (->> view-id
+                       org-glance-view:get-view-by-id
                        org-glance-view-metastore-location
                        org-glance-metastore:read)
      for headline = (gethash id metastore)

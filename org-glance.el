@@ -58,20 +58,18 @@
 (defvar org-glance:views (make-hash-table))
 (defvar org-glance:actions nil)
 
-(defvar -org-glance-initialized-views (make-hash-table :test #'equal))
-
-(eval-and-compile
-  (org-glance:require org
-                      org-element))
-
-(eval-when-compile
-  (org-glance:require cl-generic
-                      cl-lib
-                      cl-macs
-                      seq
-                      subr-x))
+(defvar -org-glance-initialized-views nil)
 
 (org-glance:require
+  cl-generic
+  cl-lib
+  cl-macs
+  json
+  org
+  org-element
+  seq
+  subr-x
+
   lib.utils.encryption                  ; encryption utils
   lib.utils.helpers                     ; unsorted, deprecated
   lib.utils.org                         ; org-mode shortcuts

@@ -1,9 +1,9 @@
 (require 'org-glance-module)
 
-(require 'transient)
-
-(org-glance:require lib.core.view)
-(org-glance:require lib.transient.base)
+(org-glance:require
+  transient
+  lib.core.view
+  lib.transient.base)
 
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"
@@ -17,7 +17,7 @@
   (interactive)
   (cl-loop
      for view-dir-name in (directory-files org-glance-directory nil "^[[:word:]]+")
-     unless (gethash view-dir-name -org-glance-initialized-views)
+     unless (alist-get view-dir-name -org-glance-initialized-views nil nil #'string=)
      do (let ((view-config-file (org-glance-overview:location view-dir-name "config.json")))
           (when (file-exists-p view-config-file)
             (apply 'org-glance-def-view
@@ -28,7 +28,7 @@
                                      (t (intern v)))
                       when pk
                       append (list pk pv)))
-            (puthash view-dir-name (current-time) -org-glance-initialized-views))))
+            (push (cons view-dir-name (current-time)) -org-glance-initialized-views))))
   (transient-setup 'org-glance-form-action))
 
 ;; migration script
@@ -40,7 +40,5 @@
 ;;    do (with-temp-file file
 ;;         (insert (json-encode-alist config))
 ;;         (json-pretty-print-buffer)))
-
-(json-read-from-string (json-encode-alist '((a . 1))))
 
 (org-glance:provide)
