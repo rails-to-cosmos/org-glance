@@ -67,7 +67,7 @@ If point is before first heading, eval forms on each headline."
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture-headline)
+(define-key org-glance-overview-mode-map (kbd "+") #'(lambda () (interactive) (org-glance-overview:capture (org-glance-overview:category))) )
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
 
@@ -134,10 +134,10 @@ If point is before first heading, eval forms on each headline."
               (delete-region (point-min) (point-max)))
             result))))))
 
-(cl-defun org-glance-overview:capture-headline
+(cl-defun org-glance-overview:capture
     (&optional
-       (view-id (org-glance-overview:category))
-       (title (read-string (format "New thing of class %s: " view-id))))
+       (view-id (org-glance-view:choose))
+       (title (read-string (format "New %s: " view-id))))
   (interactive)
   (org-glance-overview view-id)
   (let ((captured-headline (with-temp-buffer
@@ -527,7 +527,7 @@ If point is before first heading, eval forms on each headline."
        (target (condition-case choice
                    (org-glance-metastore:choose-headline)
                  (org-glance-exception:headline-not-found
-                  (org-glance-overview:capture-headline
+                  (org-glance-overview:capture
                    (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
                    (cadr choice))))))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."

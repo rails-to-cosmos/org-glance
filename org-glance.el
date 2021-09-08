@@ -92,7 +92,7 @@
   lib.core.actions                      ; deprecated
 
   lib.modes.overview-mode               ; good one, improve
-  lib.modes.materialized-view-mode
+  lib.modes.materialized-headline-mode
 
   lib.links.visit
 
@@ -113,18 +113,18 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance:get-headline-or-capture ()
+(cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."
   (condition-case choice
       (org-glance-metastore:choose-headline)
     (org-glance-exception:headline-not-found
      (save-window-excursion
-       (org-glance-overview:capture-headline
+       (org-glance-overview:capture
         (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
         (cadr choice))))))
 
 (cl-defun org-glance:insert-relation
-    (&optional (target (org-glance:get-headline-or-capture)))
+    (&optional (target (org-glance:get-or-capture)))
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)

@@ -11,7 +11,8 @@
    [("a" "Agenda" org-glance-overview:agenda*)
     ("o" "Overview" org-glance-overview)]]
   ["Headline actions"
-   [("e" "Extract" org-glance-action-extract)
+   [("+" "Capture" org-glance-overview:capture)
+    ("e" "Extract" org-glance-action-extract)
     ("j" "Jump" org-glance-action-open)
     ("m" "Materialize" org-glance-action-materialize)]]
   (interactive)

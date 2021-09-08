@@ -1,11 +1,12 @@
-(require 'aes)
-(require 'dash)
-(require 'org)
-(require 'org-element)
-
 (require 'org-glance-module)
 
-(defmacro org-glance:format (fmt)
+(org-glance:require
+  aes
+  dash
+  org
+  org-element)
+
+(cl-defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
 FMT is a string to be expanded against the current lexical
 environment. It is like what is used in `s-lex-format', but has
@@ -61,19 +62,19 @@ enjoy using a lot.
      append (-org-glance:list-file-archives filename)))
 
 (cl-defun org-glance-buffer-properties-to-kill-ring ()
-  "Extract buffer org-properties, run completing read on keys, copy values to kill ring."
-  (while t
-    (let* ((properties (save-excursion
-                         (goto-char (point-min))
-                         (cl-loop
-                            while (condition-case nil
-                                      (re-search-forward "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
-                                    (search-failed nil))
-                            collect (s-trim (substring-no-properties (match-string 1))) into keys
-                            collect (s-trim (substring-no-properties (match-string 2))) into vals
-                            finally (return (-zip keys vals)))))
-           (choice (org-completing-read "Extract property: " properties)))
-      (kill-new (alist-get choice properties nil nil #'string=)))))
+  "Extract key-value pairs from buffer that match pattern (key: value), run completing read on keys, copy values to kill ring."
+  (let* ((property-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+         (properties (save-excursion
+                       (goto-char (point-min))
+                       (cl-loop
+                          while (condition-case nil
+                                    (re-search-forward property-re)
+                                  (search-failed nil))
+                          collect (s-trim (substring-no-properties (match-string 1))) into keys
+                          collect (s-trim (substring-no-properties (match-string 2))) into vals
+                          finally (return (-zip keys vals))))))
+    (while t
+      (kill-new (alist-get (org-completing-read "Extract property: " properties) properties nil nil #'string=)))))
 
 (cl-defun org-glance:title-from-url (url)
   "Return content in <title> tag."
