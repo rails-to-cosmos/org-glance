@@ -35,8 +35,10 @@ If headline is not an `org-glance-headline', traverse parents."
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (when-let (file-name (buffer-file-name))
-    (org-glance-headline:enrich (org-element-at-point) :file (abbreviate-file-name file-name))))
+
+  (org-glance-headline:enrich (org-element-at-point)
+    :file (if-let (file-name (buffer-file-name)) (abbreviate-file-name file-name))
+    :buffer (current-buffer)))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -62,20 +64,11 @@ If headline is not an `org-glance-headline', traverse parents."
   "Enrich `org-element' ELEMENT with KWARGS properties.
 Default enrichment is as follows:
 - Add FILE property to `org-element'."
+  (declare (indent 1) (debug t))
   (cl-loop
      for (key value) on kwargs by #'cddr
      do (org-element-put-property element key value)
      finally (return element)))
-
-(cl-defun org-glance-headline:fetch (&optional (headline (org-glance-headline:at-point)))
-  (let ((id (org-glance-headline:id headline))
-        (file (org-glance-headline:file headline)))
-    (when (file-exists-p file)
-      (with-temp-buffer
-        (org-mode)
-        (insert-file-contents file)
-        (-> (org-glance-headline:search-buffer-by-id id)
-          (org-glance-headline:enrich :file (abbreviate-file-name file)))))))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
@@ -117,7 +110,8 @@ Default enrichment is as follows:
   (org-element-property :level headline))
 
 (cl-defun org-glance-headline:buffer (&optional (headline (org-glance-headline:at-point)))
-  (get-file-buffer (org-glance-headline:file headline)))
+  (or (org-element-property :buffer headline)
+      (get-file-buffer (org-glance-headline:file headline))))
 
 (cl-defun org-glance-headline:begin (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :begin headline))
@@ -143,11 +137,16 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE by id. Grab source file from metastore."
-  (let* ((file (org-glance-headline:file headline)))
+  (let* ((file (org-glance-headline:file headline))
+         (buffer (org-glance-headline:buffer headline)))
 
-    (if (file-exists-p file)
-        (find-file file)
-      (org-glance-db-outdated "File not found: %s" file))
+    (cond
+      (file (if (file-exists-p file)
+                (find-file file)
+              (org-glance-db-outdated "File not found: %s" file)))
+      (buffer (if (bufferp buffer)
+                  (switch-to-buffer buffer)
+                (org-glance-db-outdated "Buffer not found: %s" (buffer-name buffer)))))
 
     ;; we are now visiting headline file, let's remove restrictions
     (widen)
@@ -165,7 +164,8 @@ Default enrichment is as follows:
 (cl-defmacro org-glance-headline:narrow (headline &rest forms &key (save-excursion t) &allow-other-keys)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(let* ((file (org-element-property :file ,headline))
+  `(let* ((file (org-glance-headline:file ,headline))
+          (buffer (org-glance-headline:buffer ,headline))
           (file-buffer (get-file-buffer file))
           (visited-buffer (current-buffer))
           result)
@@ -185,10 +185,8 @@ Default enrichment is as follows:
                             ,@forms)))
 
            (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-                 ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
-                                                                             (bury-buffer file-buffer)))
-                 (t (save-buffer)
-                    (kill-buffer (get-file-buffer file)))))
+                 ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer) (bury-buffer file-buffer)))
+                 (t (save-buffer) (kill-buffer (get-file-buffer file)))))
        (progn
          (org-glance-headline:visit ,headline)
 
@@ -216,14 +214,26 @@ Default enrichment is as follows:
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
-  (with-temp-buffer
-    (org-mode)
-    (insert-file-contents (org-glance-headline:file headline))
-    (org-glance-headline:search-buffer headline)
-    (org-narrow-to-subtree)
-    (goto-char (point-min))
-    (org-glance-headline:promote-to-the-first-level)
-    (buffer-substring-no-properties (point-min) (point-max))))
+  (let ((file (org-glance-headline:file headline))
+        (buffer (org-glance-headline:buffer headline)))
+    (cond (file (with-temp-buffer
+                  (org-mode)
+                  (insert-file-contents file)
+                  (org-glance-headline:search-buffer headline)
+                  (org-narrow-to-subtree)
+                  (goto-char (point-min))
+                  (org-glance-headline:promote-to-the-first-level)
+                  (buffer-substring-no-properties (point-min) (point-max))))
+          (buffer (with-current-buffer buffer
+                    (save-window-excursion
+                      (save-excursion
+                        (save-restriction
+                          (widen)
+                          (org-glance-headline:search-buffer headline)
+                          (org-narrow-to-subtree)
+                          (org-glance-headline:promote-to-the-first-level)
+                          (buffer-substring-no-properties (point-min) (point-max)))))))
+          (t (org-glance-exception:headline-not-found "Unable to determine headline location.")))))
 
 (cl-defun org-glance-headline:links (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
@@ -244,7 +254,9 @@ Default enrichment is as follows:
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (el)
         (when (org-glance-headline-p el)
-          (org-glance-headline:enrich el :file (abbreviate-file-name file)))))))
+          (org-glance-headline:enrich el
+            :file (abbreviate-file-name file)
+            :buffer (get-file-buffer file)))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow (org-glance-headline:at-point)
@@ -253,17 +265,16 @@ Default enrichment is as follows:
     (save-buffer)))
 
 (cl-defun org-glance-headline:rename (headline title)
-  (save-window-excursion
-    (org-glance-headline:narrow headline
-      (let ((old-title (org-glance-headline:raw-value headline))
-            (new-title (s-replace-regexp "[[:space:]]" " " title)))
-        (org-glance-headline:add-log-note
-         (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}"))
-        (org-glance-headline:goto-beginning-of-current-headline)
-        (org-beginning-of-line)
-        (org-kill-line)
-        (insert new-title)
-        (org-align-tags)))))
+  (org-glance-headline:narrow headline
+    (let ((old-title (org-glance-headline:raw-value headline))
+          (new-title (s-replace-regexp "[[:space:]]" " " title)))
+      (org-glance-headline:add-log-note
+       (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}"))
+      (org-glance-headline:goto-beginning-of-current-headline)
+      (org-beginning-of-line)
+      (org-kill-line)
+      (insert new-title)
+      (org-align-tags))))
 
 (cl-defmacro org-glance-headline:format (headline &key (format "${label}=${classes}= [[org-glance-visit:${id}][${title}]]"))
   (declare (indent 1) (debug t))
@@ -368,6 +379,12 @@ Default enrichment is as follows:
               (push relation headlines)
               (pp (mapcar #'org-glance-headline:title headlines)))
        finally (return result))))
+
+(cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
+  (let ((contents (org-glance-headline:contents headline)))
+    (with-temp-buffer
+      (insert (s-trim contents))
+      (buffer-hash))))
 
 (cl-defun org-glance-headline:add-relation
     (source target &key (rel org-glance-relation:forward))

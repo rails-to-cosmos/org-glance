@@ -40,15 +40,15 @@
           (goto-char (point-min))
           (org-content 1)
           (org-cycle-hide-drawers 'all)
-          (setq-local --org-glance-view-src file)
-          (setq-local --org-glance-view-beg beg)
-          (setq-local --org-glance-view-end end)
+          (setq-local --org-glance-materialized-headline:file file)
+          (setq-local --org-glance-materialized-headline:begin beg)
+          (setq-local --org-glance-materialized-headline:end end)
           ;; extract hash from promoted subtree
-          (setq-local --org-glance-view-hash (org-glance-materialized-headline:hash))
+          (setq-local --org-glance-materialized-headline:hash (org-glance-headline:hash))
           ;; run hooks on original subtree
           (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
-          (setq-local --org-glance-view-indent (--org-glance-headline:promote.deprecated))
+          (setq-local --org-glance-materialized-headline:indent (--org-glance-headline:promote.deprecated))
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))
 

@@ -7,12 +7,12 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-materialized-headline-mode-map)
 
-(defvar --org-glance-view-pwd nil)
-(defvar --org-glance-view-src nil)
-(defvar --org-glance-view-beg nil)
-(defvar --org-glance-view-end nil)
-(defvar --org-glance-view-hash nil)
-(defvar --org-glance-view-indent nil)
+(defvar --org-glance-materialized-headline:password nil)
+(defvar --org-glance-materialized-headline:file nil)
+(defvar --org-glance-materialized-headline:begin nil)
+(defvar --org-glance-materialized-headline:end nil)
+(defvar --org-glance-materialized-headline:hash nil)
+(defvar --org-glance-materialized-headline:indent nil)
 
 (defcustom org-glance-materialized-headline-buffer "*org-glance materialized view*"
   "Default buffer name for materialized view."
@@ -48,19 +48,19 @@
 (cl-defun org-glance-materialized-headline:sync ()
   (interactive)
   (save-excursion
-    (org-glance:first-level-headline)
-    (let* ((source --org-glance-view-src)
-           (beg --org-glance-view-beg)
-           (end --org-glance-view-end)
-           (promote-level --org-glance-view-indent)
-           (glance-hash --org-glance-view-hash)
-           (mat-hash (org-glance-materialized-headline:hash))
-           (src-hash (org-glance-materialized-headline:source-hash)))
+    (org-glance-headline:goto-beginning-of-current-headline)
+    (let* ((source --org-glance-materialized-headline:file)
+           (beg --org-glance-materialized-headline:begin)
+           (end --org-glance-materialized-headline:end)
+           (indent-level --org-glance-materialized-headline:indent)
+           (glance-hash --org-glance-materialized-headline:hash)
+           (current-hash (org-glance-headline:hash))
+           (source-hash (org-glance-materialized-headline:source-hash)))
 
-      (unless (string= glance-hash src-hash)
+      (unless (string= glance-hash source-hash)
         (org-glance-exception:source-file-corrupted source))
 
-      (when (string= glance-hash mat-hash)
+      (when (string= glance-hash current-hash)
         (org-glance-exception:headline-not-modified source))
 
       (with-demoted-errors (run-hooks 'org-glance-before-materialize-sync-hook))
@@ -71,7 +71,7 @@
                                 (org-mode)
                                 (insert buffer-contents)
                                 (goto-char (point-min))
-                                (org-glance-headline:demote promote-level)
+                                (org-glance-headline:demote indent-level)
                                 (buffer-substring-no-properties (point-min) (point-max)))))))
 
         (with-temp-file source
@@ -82,38 +82,20 @@
           (insert new-contents)
           (setq end (point)))
 
-        (setq-local --org-glance-view-beg beg)
-        (setq-local --org-glance-view-end end)
-        (setq-local --org-glance-view-hash (org-glance-materialized-headline:source-hash))
+        (setq-local --org-glance-materialized-headline:begin beg)
+        (setq-local --org-glance-materialized-headline:end end)
+        (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
         (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook))
         (message "Materialized headline successfully synchronized")))))
 
-(defun org-glance-materialized-headline:hash ()
-  (save-restriction
-    (org-narrow-to-subtree)
-    (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-      (with-temp-buffer
-        (org-mode)
-        (insert buffer-contents)
-        (goto-char (point-min))
-        (--org-glance-headline:promote.deprecated)
-        (buffer-hash)))))
-
 (defun org-glance-materialized-headline:source-hash ()
-  (let ((src --org-glance-view-src)
-        (beg --org-glance-view-beg)
-        (end --org-glance-view-end))
+  (let ((src --org-glance-materialized-headline:file)
+        (beg --org-glance-materialized-headline:begin))
     (with-temp-buffer
+      (org-mode)
       (insert-file-contents src)
-      (let ((subtree (condition-case nil
-                         (buffer-substring-no-properties beg end)
-                       (error (org-glance-properties-corrupted "Materialized properties corrupted, please reread")))))
-        (with-temp-buffer
-          (org-mode)
-          (insert (s-trim subtree))
-          (org-glance:first-level-headline)
-          (--org-glance-headline:promote.deprecated)
-          (buffer-hash))))))
+      (goto-char beg)
+      (org-glance-headline:hash))))
 
 (org-glance:provide)
