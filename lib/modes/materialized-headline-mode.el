@@ -38,6 +38,13 @@
   :type 'hook
   :group 'org-glance)
 
+
+;; todo: improve metastore extraction
+(add-hook 'org-glance-after-materialize-sync-hook
+          (lambda ()
+            (let ((headline (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
+              (pp headline))))
+
 (define-key org-glance-materialized-headline-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-materialized-headline-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 (define-key org-glance-materialized-headline-mode-map (kbd "C-c C-v") #'org-glance-overview)
