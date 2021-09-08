@@ -19,13 +19,13 @@
             (lambda ()
               (org-glance-headline:demote --org-glance-materialized-headline:indent)
               (org-glance-headline:encrypt --org-glance-materialized-headline:password)
-              (--org-glance-headline:promote.deprecated))
+              (org-glance-headline:promote-to-the-first-level))
             0 'local)
   (add-hook 'org-glance-after-materialize-sync-hook
             (lambda ()
               (org-glance-headline:demote --org-glance-materialized-headline:indent)
               (org-glance-headline:decrypt --org-glance-materialized-headline:password)
-              (--org-glance-headline:promote.deprecated))
+              (org-glance-headline:promote-to-the-first-level))
             0 'local))
 
 (org-glance:provide)

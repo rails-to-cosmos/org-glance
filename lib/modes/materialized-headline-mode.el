@@ -7,12 +7,13 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-materialized-headline-mode-map)
 
-(defvar --org-glance-materialized-headline:password nil)
-(defvar --org-glance-materialized-headline:file nil)
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
+(defvar --org-glance-materialized-headline:file nil)
 (defvar --org-glance-materialized-headline:hash nil)
+(defvar --org-glance-materialized-headline:id nil)
 (defvar --org-glance-materialized-headline:indent nil)
+(defvar --org-glance-materialized-headline:password nil)
 
 (defcustom org-glance-materialized-headline-buffer "*org-glance materialized view*"
   "Default buffer name for materialized view."

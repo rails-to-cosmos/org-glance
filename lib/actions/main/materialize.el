@@ -7,25 +7,16 @@
 
   lib.modes.materialized-headline-mode)
 
-(defun --org-glance-headline:promote.deprecated ()
-  "Deprecated because of side-effects."
-  (cl-loop while (condition-case nil
-                     (org-with-limited-levels (org-map-tree 'org-promote) t)
-                   (error nil))
-     with promote-level = 0
-     do (cl-incf promote-level)
-     finally (return promote-level)))
-
 (org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
   (let ((buffer org-glance-materialized-headline-buffer))
     (save-window-excursion
       (org-glance-headline:visit headline)
-      (let* ((file (org-glance-headline:file headline))
+      (let* ((id (org-glance-headline:id headline))
+             (file (org-glance-headline:file headline))
              (beg (org-glance-headline:begin headline))
              (end (save-excursion (org-end-of-subtree t)))
-             (contents (->> (buffer-substring-no-properties beg end)
-                         (s-trim))))
+             (contents (org-glance-headline:contents headline)))
         (when (get-buffer buffer)
           (switch-to-buffer buffer)
           (condition-case nil
@@ -40,6 +31,7 @@
           (goto-char (point-min))
           (org-content 1)
           (org-cycle-hide-drawers 'all)
+          (setq-local --org-glance-materialized-headline:id id)
           (setq-local --org-glance-materialized-headline:file file)
           (setq-local --org-glance-materialized-headline:begin beg)
           (setq-local --org-glance-materialized-headline:end end)
@@ -48,7 +40,8 @@
           ;; run hooks on original subtree
           (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
-          (setq-local --org-glance-materialized-headline:indent (--org-glance-headline:promote.deprecated))
+          (setq-local --org-glance-materialized-headline:indent (1- (org-glance-headline:level)))
+          (org-glance-headline:promote-to-the-first-level)
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))
 
