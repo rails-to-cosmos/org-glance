@@ -43,15 +43,20 @@ If headline is not an `org-glance-headline', traverse parents."
   (save-excursion
     (org-glance-headline:goto-beginning-of-current-headline)))
 
+(cl-defun org-glance-headline:active? (&optional (headline (org-element-at-point)))
+  (and (org-glance-headline-p headline)
+       (not (org-glance-headline:commented? headline))
+       (not (org-glance-headline:archived? headline))))
+
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
-  (while (and (outline-previous-heading) (not (org-glance-headline-p))))
-  (when (org-glance-headline-p) (org-glance-headline:at-point)))
+  (while (and (outline-previous-heading) (not (org-glance-headline:active?))))
+  (when (org-glance-headline:active?) (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:search-forward ()
   (interactive)
-  (while (and (outline-next-heading) (not (org-glance-headline-p))))
-  (when (org-glance-headline-p) (org-glance-headline:at-point)))
+  (while (and (outline-next-heading) (not (org-glance-headline:active?))))
+  (when (org-glance-headline:active?) (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:enrich (element &rest kwargs)
   "Enrich `org-element' ELEMENT with KWARGS properties.
@@ -81,6 +86,9 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:commented? (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :commentedp headline))
+
+(cl-defun org-glance-headline:archived? (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :archivedp headline))
 
 (cl-defun org-glance-headline:raw-value (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :raw-value headline))
@@ -364,7 +372,9 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:add-relation
     (source target &key (rel org-glance-relation:forward))
   (interactive)
-  (let ((log-entry (s-join " " (list "-" rel (org-glance-headline:format target)))))
+  (let* ((target-title (org-glance-headline:format target))
+         (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
+         (log-entry (org-glance:format "- ${rel} ${target-title} on ${now}")))
     (org-glance-headline:narrow source
       (org-glance-headline:add-log-note log-entry source))))
 

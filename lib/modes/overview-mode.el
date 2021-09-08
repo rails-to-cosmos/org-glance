@@ -31,15 +31,15 @@ If point is before first heading, eval forms on each headline."
   `(lambda ()
      (interactive)
      (if (org-before-first-heading-p)
-         (save-excursion
+         (progn
            (goto-char (point-min))
-           (while (org-glance-headline:search-forward)
+           (while (and (org-glance-headline:search-forward) (sit-for 0.1))
              (when (= (org-glance-headline:level) 1)
                ,@forms)))
        ,@forms)))
 
 ;; lightweight methods applied for current headline
-(define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:comment)
+(define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "^") #'(lambda ()
@@ -92,7 +92,6 @@ If point is before first heading, eval forms on each headline."
                (beginning-of-buffer)
                (org-glance-headline:search-forward)
                (insert contents "\n")
-               ;; (org-glance-overview:sort)
                (save-buffer)))))
   headline)
 
@@ -216,7 +215,10 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:sort (&optional
                                       (order '(
                                                (?f ;; move commented headings down
-                                                (lambda () (or (org-in-commented-heading-p t) -1))
+                                                (lambda () (if (org-in-commented-heading-p t) 1 -1))
+                                                <)
+                                               (?f ;; move archived headings down
+                                                (lambda () (if (org-in-archived-heading-p) 1 -1))
                                                 <)
                                                ?o
                                                ?p))
@@ -388,8 +390,7 @@ If point is before first heading, eval forms on each headline."
   (save-excursion
     (goto-char (point-min))
     (while (and (org-glance-headline:search-forward))
-      (unless (org-glance-headline:commented?)
-        (org-glance-overview:pull)))))
+      (org-glance-overview:pull))))
 
 (cl-defun org-glance-overview:kill-headline (&optional force)
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
@@ -450,6 +451,17 @@ If point is before first heading, eval forms on each headline."
     (save-buffer))
   (org-glance-overview:pull))
 
+(cl-defun org-glance-overview:archive ()
+  (interactive)
+  (save-window-excursion
+    (->> (org-glance-headline:at-point)
+      (org-glance-headline:id)
+      (org-glance-metastore:get-headline)
+      (org-glance-headline:visit))
+    (org-toggle-archive-tag)
+    (save-buffer))
+  (org-glance-overview:pull))
+
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)
 ;;   (org-glance-overview:for-all
@@ -464,8 +476,8 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:original-headline ()
   (org-glance-headline:narrow
       (->> (org-glance-headline:at-point)
-        org-glance-headline:id
-        org-glance-metastore:get-headline)
+           org-glance-headline:id
+           org-glance-metastore:get-headline)
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:refer
