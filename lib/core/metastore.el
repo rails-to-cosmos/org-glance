@@ -61,7 +61,7 @@
      for view-id in (org-glance-view:ids)
      for metastore = (->> view-id
                        org-glance-view:get-view-by-id
-                       org-glance-view-metastore-location
+                       org-glance-view:metastore-location
                        org-glance-metastore:read)
      for headline = (gethash id metastore)
      when headline

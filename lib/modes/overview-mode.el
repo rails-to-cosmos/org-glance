@@ -33,7 +33,7 @@ If point is before first heading, eval forms on each headline."
      (if (org-before-first-heading-p)
          (progn
            (goto-char (point-min))
-           (while (and (org-glance-headline:search-forward) (sit-for 0.1))
+           (while (and (org-glance-headline:search-forward) (sit-for 0.01))
              (when (= (org-glance-headline:level) 1)
                ,@forms)))
        ,@forms)))
@@ -50,7 +50,7 @@ If point is before first heading, eval forms on each headline."
                                                            (org-glance-overview:sort)
                                                            (org-overview)
                                                            (save-buffer)))))
-(define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:refer)
+(define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:add-relation)
 (define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
@@ -74,7 +74,7 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id
                                org-glance-view:get-view-by-id
-                               org-glance-view-metastore-location))
+                               org-glance-view:metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
     (org-glance-metastore:write metastore-location metastore)))
@@ -95,6 +95,45 @@ If point is before first heading, eval forms on each headline."
                (save-buffer)))))
   headline)
 
+(cl-defun org-glance:capture-headline-at-point
+    (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
+     &key (remove-original t))
+  (save-window-excursion
+    (save-excursion
+      (org-glance:ensure-at-heading)
+      (let* ((view-id (cond ((symbolp view-id) (symbol-name view-id))
+                            ((stringp view-id) view-id)))
+             (id (org-glance-view:generate-id-for-subtree-at-point view-id))
+             (dir (org-glance:generate-dir-for-subtree-at-point view-id))
+             (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+        (mkdir dir 'parents)
+
+        (save-restriction
+          (org-narrow-to-subtree)
+          (let* ((contents (buffer-substring-no-properties (point-min) (point-max)))
+                 (result (save-window-excursion
+                           (find-file output-file)
+                           (save-restriction
+                             (widen)
+                             (end-of-buffer)
+                             (save-excursion
+                               (insert contents))
+                             (org-glance-headline:promote-to-the-first-level)
+                             (org-set-property "ORG_GLANCE_ID" id)
+                             (org-set-property "DIR" dir)
+                             (org-set-property "CATEGORY" view-id)
+                             (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
+                                                                            (let ((current-prefix-arg '(16)))
+                                                                              (call-interactively #'org-time-stamp-inactive)
+                                                                              (buffer-substring-no-properties (point-min) (point-max)))))
+                             (unless (member (downcase view-id) (-org-glance:collect-tags))
+                               (org-toggle-tag view-id))
+                             (save-buffer)
+                             (org-glance-headline:at-point)))))
+            (when remove-original
+              (delete-region (point-min) (point-max)))
+            result))))))
+
 (cl-defun org-glance-overview:capture-headline
     (&optional
        (view-id (org-glance-overview:category))
@@ -103,7 +142,7 @@ If point is before first heading, eval forms on each headline."
   (org-glance-overview view-id)
   (let ((captured-headline (with-temp-buffer
                              (insert "* " title)
-                             (org-glance-view:capture-headline-at-point view-id))))
+                             (org-glance:capture-headline-at-point view-id))))
     (org-glance-overview:register-headline-in-metastore captured-headline view-id)
     (org-glance-overview:register-headline-in-overview captured-headline view-id)
     (org-overview)
@@ -135,7 +174,7 @@ If point is before first heading, eval forms on each headline."
                 (file (org-glance-headline:file original-headline)))
             (find-file file)
             (goto-char pos)
-            (let ((captured-headline (org-glance-view:capture-headline-at-point view-id :remove-original nil)))
+            (let ((captured-headline (org-glance:capture-headline-at-point view-id :remove-original nil)))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
 
@@ -361,7 +400,7 @@ If point is before first heading, eval forms on each headline."
       (org-glance-doctor:fix-when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
         (let ((captured-headline (org-glance-headline:narrow original-headline
-                                   (org-glance-view:capture-headline-at-point view-id))))
+                                   (org-glance:capture-headline-at-point view-id))))
           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
           (org-glance-overview:register-headline-in-overview captured-headline view-id))
         (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))
@@ -441,6 +480,7 @@ If point is before first heading, eval forms on each headline."
          t))))
 
 (cl-defun org-glance-overview:comment ()
+  "Toggle comment headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -452,6 +492,7 @@ If point is before first heading, eval forms on each headline."
   (org-glance-overview:pull))
 
 (cl-defun org-glance-overview:archive ()
+  "Toggle archive headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -480,7 +521,7 @@ If point is before first heading, eval forms on each headline."
            org-glance-metastore:get-headline)
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:refer
+(cl-defun org-glance-overview:add-relation
     (&optional
        (source (org-glance-overview:original-headline))
        (target (condition-case choice

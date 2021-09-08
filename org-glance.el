@@ -56,7 +56,7 @@
    :type 'list))
 
 (defvar org-glance:views (make-hash-table)
-  "Hash table (id->view) lists all registered classes of things.")
+  "Hash table (id->view) that lists all registered classes of things.")
 
 (defvar org-glance:actions nil
   "Alist containing registered actions.")
@@ -92,6 +92,7 @@
   lib.core.actions                      ; deprecated
 
   lib.modes.overview-mode               ; good one, improve
+  lib.modes.materialized-view-mode
 
   lib.links.visit
 

@@ -1,8 +1,11 @@
 (require 'org-glance-module)
 
-(org-glance:require lib.core.metastore)
-(org-glance:require lib.core.actions)
-(org-glance:require lib.core.view)
+(org-glance:require
+  lib.core.actions
+  lib.core.metastore
+  lib.core.view
+
+  lib.modes.materialized-view-mode)
 
 (defun --org-glance-headline:promote.deprecated ()
   "Deprecated because of side-effects."
@@ -26,7 +29,7 @@
         (when (get-buffer buffer)
           (switch-to-buffer buffer)
           (condition-case nil
-              (org-glance-view-sync-subtree)
+              (org-glance-materialized-view:sync)
             (org-glance-view-not-modified nil))
           (kill-buffer buffer))
         (with-current-buffer (get-buffer-create buffer)
@@ -41,7 +44,7 @@
           (setq-local --org-glance-view-beg beg)
           (setq-local --org-glance-view-end end)
           ;; extract hash from promoted subtree
-          (setq-local --org-glance-view-hash (org-glance-view-subtree-hash))
+          (setq-local --org-glance-view-hash (org-glance-materialized-view:hash))
           ;; run hooks on original subtree
           (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
