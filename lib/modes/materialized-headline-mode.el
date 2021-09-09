@@ -15,11 +15,6 @@
 (defvar --org-glance-materialized-headline:indent nil)
 (defvar --org-glance-materialized-headline:password nil)
 
-(defcustom org-glance-materialized-headline-buffer "*org-glance materialized view*"
-  "Default buffer name for materialized view."
-  :group 'org-glance
-  :type 'string)
-
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
   :options '(copyright-update time-stamp)
@@ -38,12 +33,17 @@
   :type 'hook
   :group 'org-glance)
 
+(cl-defun --sync-overviews ()
+  (when-let (headlines (org-glance-metastore:get-headlines --org-glance-materialized-headline:id))
+    (cl-loop
+       for headline in headlines
+       for class = (org-glance-headline:class headline)
+       do
+         (message "Update %s overview" class)
+         (org-glance-overview:register-headline-in-overview headline class)
+         (redisplay))))
 
-;; todo: improve metastore extraction
-(add-hook 'org-glance-after-materialize-sync-hook
-          (lambda ()
-            (let ((headline (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
-              (pp headline))))
+(add-hook 'org-glance-after-materialize-sync-hook '--sync-overviews)
 
 (define-key org-glance-materialized-headline-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-materialized-headline-mode-map (kbd "C-c C-q") #'kill-current-buffer)

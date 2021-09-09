@@ -116,6 +116,9 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:begin (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :begin headline))
 
+(cl-defun org-glance-headline:class (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :ORG_GLANCE_CLASS headline))
+
 (cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
@@ -223,7 +226,7 @@ Default enrichment is as follows:
                   (org-narrow-to-subtree)
                   (goto-char (point-min))
                   (org-glance-headline:promote-to-the-first-level)
-                  (buffer-substring-no-properties (point-min) (point-max))))
+                  (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
           (buffer (with-current-buffer buffer
                     (save-window-excursion
                       (save-excursion
@@ -232,7 +235,7 @@ Default enrichment is as follows:
                           (org-glance-headline:search-buffer headline)
                           (org-narrow-to-subtree)
                           (org-glance-headline:promote-to-the-first-level)
-                          (buffer-substring-no-properties (point-min) (point-max)))))))
+                          (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
           (t (org-glance-exception:headline-not-found "Unable to determine headline location.")))))
 
 (cl-defun org-glance-headline:links (&optional (headline (org-glance-headline:at-point)))
@@ -407,5 +410,8 @@ Default enrichment is as follows:
           (org-glance-headline:add-relation source target :rel source->target)
           (unless (eql source target)
             (org-glance-headline:add-relation target source :rel target->source)))))))
+
+(cl-defun org-glance-headline:materialized-buffer-name (&optional (headline (org-glance-headline:at-point)))
+  (concat "*org-glance-materialized-headline:<" (org-glance-headline:title headline) ">"))
 
 (org-glance:provide)

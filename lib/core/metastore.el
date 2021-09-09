@@ -71,6 +71,21 @@
      into result
      finally (return (first result))))
 
+(cl-defun org-glance-metastore:get-headlines (id)
+  "Get full headline by ID."
+  (cl-loop
+     for view-id in (org-glance-view:ids)
+     for metastore = (->> view-id
+                          org-glance-view:get-view-by-id
+                          org-glance-view:metastore-location
+                          org-glance-metastore:read)
+     for headline = (gethash id metastore)
+     when headline
+     collect (-> headline
+                 (org-glance-headline:deserialize)
+                 (org-glance-headline:enrich :ORG_GLANCE_ID id)
+                 (org-glance-headline:enrich :ORG_GLANCE_CLASS view-id))))
+
 (cl-defun org-glance-metastore:choose-headline ()
   (let* ((headlines (cl-loop for view-id in (org-glance-view:ids)
                        append (cl-loop for headline in (org-glance-view:headlines view-id)

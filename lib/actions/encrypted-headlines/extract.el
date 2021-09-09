@@ -11,6 +11,6 @@
     (org-cycle-hide-drawers 'all)
     (unwind-protect
          (org-glance-buffer-properties-to-kill-ring)
-      (kill-buffer org-glance-materialized-headline-buffer))))
+      (kill-buffer (org-glance-headline:materialized-buffer-name headline)))))
 
 (org-glance:provide)

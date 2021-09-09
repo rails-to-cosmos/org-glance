@@ -81,18 +81,21 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
   "Add HEADLINE clone in overview VIEW-ID file."
-  (org-glance-overview view-id)
-  (condition-case nil
-      (progn
-        (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-        (org-glance-overview:pull))
-    (error (let ((inhibit-read-only t)
-                 (contents (org-glance-headline:contents headline)))
-             (unless (string-empty-p contents)
-               (beginning-of-buffer)
-               (org-glance-headline:search-forward)
-               (insert contents "\n")
-               (save-buffer)))))
+  (save-window-excursion
+    (org-glance-overview view-id)
+    (condition-case nil
+        (progn
+          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+          (org-glance-overview:pull))
+      (error (let ((inhibit-read-only t)
+                   (contents (org-glance-headline:contents headline)))
+               (unless (string-empty-p contents)
+                 (beginning-of-buffer)
+                 (org-glance-headline:search-forward)
+                 (insert contents "\n")
+                 (save-buffer))))))
+
+
   headline)
 
 (cl-defun org-glance:capture-headline-at-point
@@ -346,14 +349,20 @@ If point is before first heading, eval forms on each headline."
   (interactive)
   (org-glance-overview:for-all
       (error "not implemented")
-    (let ((offset (- (point) (save-excursion
-                               (org-glance-headline:goto-beginning-of-current-headline)
-                               (point)))))
-      (-some->> (org-glance-headline:at-point)
-        org-glance-headline:id
-        org-glance-metastore:get-headline
-        org-glance-headline:visit)
-      (forward-char offset))))
+    (org-glance-action-call
+     'materialize
+     :on (org-glance-overview:original-headline)
+     :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category))))
+
+    ;; (let ((offset (- (point) (save-excursion
+    ;;                            (org-glance-headline:goto-beginning-of-current-headline)
+    ;;                            (point)))))
+    ;;   (-some->> (org-glance-headline:at-point)
+    ;;     org-glance-headline:id
+    ;;     org-glance-metastore:get-headline
+    ;;     org-glance-headline:visit)
+    ;;   (forward-char offset))
+    ))
 
 (cl-defun org-glance-overview:category ()
   (save-excursion
@@ -453,7 +462,8 @@ If point is before first heading, eval forms on each headline."
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (original-headline-contents (org-glance-headline:contents original-headline)))
+         (original-headline-contents (org-glance-headline:contents original-headline))
+         )
     (cond
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
@@ -477,7 +487,8 @@ If point is before first heading, eval forms on each headline."
          (org-align-tags t)
          (save-buffer)
          (message (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
-         t))))
+         t))
+    ))
 
 (cl-defun org-glance-overview:comment ()
   "Toggle comment headline at point."
@@ -515,11 +526,7 @@ If point is before first heading, eval forms on each headline."
 ;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance-headline:narrow
-      (->> (org-glance-headline:at-point)
-           org-glance-headline:id
-           org-glance-metastore:get-headline)
-    (org-glance-headline:at-point)))
+  (org-glance-metastore:get-headline (org-glance-headline:id)))
 
 (cl-defun org-glance-overview:add-relation
     (&optional

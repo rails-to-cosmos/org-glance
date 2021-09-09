@@ -9,7 +9,7 @@
 
 (org-glance-action-define materialize (headline) :for all
   "Materialize HEADLINE in separate buffer."
-  (let ((buffer org-glance-materialized-headline-buffer))
+  (let ((buffer (org-glance-headline:materialized-buffer-name headline)))
     (save-window-excursion
       (org-glance-headline:visit headline)
       (let* ((id (org-glance-headline:id headline))
