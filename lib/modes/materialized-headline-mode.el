@@ -58,8 +58,7 @@
   (save-excursion
     (org-glance-headline:goto-beginning-of-current-headline)
     (let* ((source --org-glance-materialized-headline:file)
-           (beg --org-glance-materialized-headline:begin)
-           (end --org-glance-materialized-headline:end)
+           (id --org-glance-materialized-headline:id)
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash))
@@ -85,25 +84,19 @@
         (with-temp-file source
           (org-mode)
           (insert-file-contents source)
-          (delete-region beg end)
-          (goto-char beg)
-          (insert new-contents)
-          (setq end (point)))
+          (org-glance-headline:search-buffer-by-id id)
+          (let ((beg (org-glance-headline:begin))
+                (end (org-glance-headline:end)))
+            (delete-region beg end)
+            (goto-char beg)
+            (insert new-contents)))
 
-        (setq-local --org-glance-materialized-headline:begin beg)
-        (setq-local --org-glance-materialized-headline:end end)
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (let ((src --org-glance-materialized-headline:file)
-        (beg --org-glance-materialized-headline:begin))
-    (with-temp-buffer
-      (org-mode)
-      (insert-file-contents src)
-      (goto-char beg)
-      (org-glance-headline:hash))))
+  (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
 
 (org-glance:provide)

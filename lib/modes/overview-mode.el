@@ -51,7 +51,7 @@ If point is before first heading, eval forms on each headline."
                                                            (org-overview)
                                                            (save-buffer)))))
 (define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:add-relation)
-(define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:visit-headline)
+(define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:materialize-headline)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
 (define-key org-glance-overview-mode-map (kbd "g")
@@ -345,24 +345,27 @@ If point is before first heading, eval forms on each headline."
     (org-agenda-list)
     (org-agenda-fortnight-view)))
 
-(cl-defun org-glance-overview:visit-headline ()
+(cl-defun org-glance-overview:materialize-headline ()
   (interactive)
   (org-glance-overview:for-all
       (error "not implemented")
     (org-glance-action-call
      'materialize
      :on (org-glance-overview:original-headline)
-     :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category))))
+     :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category))))))
 
-    ;; (let ((offset (- (point) (save-excursion
-    ;;                            (org-glance-headline:goto-beginning-of-current-headline)
-    ;;                            (point)))))
-    ;;   (-some->> (org-glance-headline:at-point)
-    ;;     org-glance-headline:id
-    ;;     org-glance-metastore:get-headline
-    ;;     org-glance-headline:visit)
-    ;;   (forward-char offset))
-    ))
+(cl-defun org-glance-overview:visit-headline ()
+  (interactive)
+  (org-glance-overview:for-all
+      (error "not implemented")
+    (let ((offset (- (point) (save-excursion
+                               (org-glance-headline:goto-beginning-of-current-headline)
+                               (point)))))
+      (-some->> (org-glance-headline:at-point)
+        org-glance-headline:id
+        org-glance-metastore:get-headline
+        org-glance-headline:visit)
+      (forward-char offset))))
 
 (cl-defun org-glance-overview:category ()
   (save-excursion

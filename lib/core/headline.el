@@ -116,6 +116,9 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:begin (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :begin headline))
 
+(cl-defun org-glance-headline:end (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :end headline))
+
 (cl-defun org-glance-headline:class (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :ORG_GLANCE_CLASS headline))
 
@@ -386,8 +389,9 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
+    (message "Calculate hash over contents: %s" (prin1-to-string contents))
     (with-temp-buffer
-      (insert (s-trim contents))
+      (insert contents)
       (buffer-hash))))
 
 (cl-defun org-glance-headline:add-relation
