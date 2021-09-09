@@ -71,7 +71,7 @@
       (when (string= glance-hash current-hash)
         (org-glance-exception:headline-not-modified source))
 
-      (with-demoted-errors (run-hooks 'org-glance-before-materialize-sync-hook))
+      (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
       (let ((new-contents (save-restriction
                             (org-narrow-to-subtree)
                             (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -94,7 +94,7 @@
         (setq-local --org-glance-materialized-headline:end end)
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
-        (with-demoted-errors (run-hooks 'org-glance-after-materialize-sync-hook))
+        (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()

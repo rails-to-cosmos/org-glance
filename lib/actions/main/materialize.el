@@ -38,7 +38,7 @@
           ;; extract hash from promoted subtree
           (setq-local --org-glance-materialized-headline:hash (org-glance-headline:hash))
           ;; run hooks on original subtree
-          (with-demoted-errors (run-hooks 'org-glance-after-materialize-hook))
+          (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
           (setq-local --org-glance-materialized-headline:indent (1- (org-glance-headline:level)))
           (org-glance-headline:promote-to-the-first-level)

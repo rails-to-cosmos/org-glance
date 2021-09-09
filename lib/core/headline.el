@@ -168,8 +168,9 @@ Default enrichment is as follows:
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
   `(let* ((file (org-glance-headline:file ,headline))
-          (buffer (org-glance-headline:buffer ,headline))
-          (file-buffer (get-file-buffer file))
+          (file-buffer (condition-case nil
+                           (get-file-buffer file)
+                         (wrong-type-argument (org-glance-headline:buffer ,headline))))
           (visited-buffer (current-buffer))
           result)
 
@@ -189,7 +190,7 @@ Default enrichment is as follows:
 
            (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
                  ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer) (bury-buffer file-buffer)))
-                 (t (save-buffer) (kill-buffer (get-file-buffer file)))))
+                 (file (save-buffer) (kill-buffer (get-file-buffer file)))))
        (progn
          (org-glance-headline:visit ,headline)
 
@@ -206,8 +207,7 @@ Default enrichment is as follows:
          (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
                ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer)
                                                                            (bury-buffer file-buffer)))
-               (t (save-buffer)
-                  (kill-buffer (get-file-buffer file))))))
+               (file (save-buffer) (kill-buffer (get-file-buffer file))))))
 
      result))
 
@@ -265,7 +265,8 @@ Default enrichment is as follows:
   (org-glance-headline:narrow (org-glance-headline:at-point)
     (goto-char (org-log-beginning t))
     (insert note "\n")
-    (save-buffer)))
+    (when (buffer-file-name)
+      (save-buffer))))
 
 (cl-defun org-glance-headline:rename (headline title)
   (org-glance-headline:narrow headline
@@ -395,8 +396,7 @@ Default enrichment is as follows:
   (let* ((target-title (org-glance-headline:format target))
          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
          (log-entry (org-glance:format "- ${rel} ${target-title} on ${now}")))
-    (org-glance-headline:narrow source
-      (org-glance-headline:add-log-note log-entry source))))
+    (org-glance-headline:add-log-note log-entry source)))
 
 (cl-defun org-glance-headline:add-biconnected-relation
     (source target

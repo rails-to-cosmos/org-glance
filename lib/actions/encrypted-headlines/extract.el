@@ -11,6 +11,6 @@
     (org-cycle-hide-drawers 'all)
     (unwind-protect
          (org-glance-buffer-properties-to-kill-ring)
-      (kill-buffer (org-glance-headline:materialized-buffer-name headline)))))
+      (with-demoted-errors "Unable to kill buffer: %s" (kill-buffer (org-glance-headline:materialized-buffer-name headline))))))
 
 (org-glance:provide)
