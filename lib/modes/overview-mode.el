@@ -101,6 +101,7 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
      &key (remove-original t))
+  (interactive)
   (save-window-excursion
     (save-excursion
       (org-glance:ensure-at-heading)
