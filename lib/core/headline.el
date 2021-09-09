@@ -265,7 +265,7 @@ Default enrichment is as follows:
             :buffer (get-file-buffer file)))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:narrow (org-glance-headline:at-point)
+  (org-glance-headline:narrow headline
     (goto-char (org-log-beginning t))
     (insert note "\n")
     (when (buffer-file-name)
@@ -416,6 +416,6 @@ Default enrichment is as follows:
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:materialized-buffer-name (&optional (headline (org-glance-headline:at-point)))
-  (concat "*org-glance-materialized-headline:<" (org-glance-headline:title headline) ">"))
+  (concat "org-glance:<" (org-glance-headline:title headline) ">"))
 
 (org-glance:provide)
