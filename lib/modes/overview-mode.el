@@ -150,7 +150,7 @@ If point is before first heading, eval forms on each headline."
     (org-glance-overview:register-headline-in-overview captured-headline view-id)
     (org-overview)
     (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-    (org-glance-overview:visit-headline)
+    (org-glance-overview:materialize-headline)
     captured-headline))
 
 (cl-defun org-glance-overview:import-headlines
@@ -348,7 +348,7 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
   (org-glance-overview:for-all
-      (error "not implemented")
+      nil
     (org-glance-action-call
      'materialize
      :on (org-glance-overview:original-headline)
@@ -357,7 +357,7 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
   (org-glance-overview:for-all
-      (error "not implemented")
+      nil
     (let ((offset (- (point) (save-excursion
                                (org-glance-headline:goto-beginning-of-current-headline)
                                (point)))))
