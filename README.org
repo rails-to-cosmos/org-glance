@@ -54,7 +54,13 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Agenda and Notifications
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** Unsorted [0/8]
+** Unsorted [0/13]
+*** TODO capture templates support
+*** TODO change metastore serialization format (elisp → json)
+*** TODO mutable states → publish-subscribe model
+- implement write ahead log
+- store initial state and diffs, then apply compaction
+- subscribe on changes
 *** TODO register headlines in metastore & overview on materialized sync
 *** TODO refactor capture with org-refile
 *** TODO [#C] If summary is unregistered, prompt to register it before any user action

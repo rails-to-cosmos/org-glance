@@ -407,7 +407,7 @@ If point is before first heading, eval forms on each headline."
         (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
         (org-glance-headline:narrow original-headline
           (org-end-of-meta-data t)
-          (insert raw-value "\n")
+          (insert "\n- " raw-value "\n")
           (save-buffer)))
 
       (org-glance-doctor:fix-when (not located-in-view-dir-p)
