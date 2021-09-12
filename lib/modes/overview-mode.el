@@ -67,7 +67,9 @@ If point is before first heading, eval forms on each headline."
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+") #'(lambda () (interactive) (org-glance-overview:capture (org-glance-overview:category))) )
+(define-key org-glance-overview-mode-map (kbd "+") #'(lambda () (interactive)
+                                                       (org-glance-overview:capture
+                                                        (org-glance-overview:category))))
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
 
@@ -158,7 +160,7 @@ If point is before first heading, eval forms on each headline."
     (path
      &optional
        (view-id (org-glance-overview:category)))
-  (interactive "fChoose file or directory to import: ")
+  (interactive "fImport from location: ")
   (when (y-or-n-p (org-glance:format "Import headlines of class ${view-id} from ${path}?"))
     (cl-loop
        for original-headline in (cl-loop
@@ -192,7 +194,7 @@ If point is before first heading, eval forms on each headline."
                               headlines)))))
 
 (define-minor-mode org-glance-overview-mode
-    "A minor read-only mode to use in .org_summary files."
+    "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
   (read-only-mode 'toggle))
 
@@ -202,7 +204,7 @@ If point is before first heading, eval forms on each headline."
 (define-key org-glance-edit-mode-map (kbd "C-c C-c") 'org-glance-edit-mode:apply)
 
 (define-minor-mode org-glance-edit-mode
-    "A minor mode to edit and sync .org_summary files."
+    "A minor mode to edit and sync overview files."
   nil nil org-glance-edit-mode-map)
 
 (cl-defun org-glance-edit-mode:start ()
@@ -223,15 +225,10 @@ If point is before first heading, eval forms on each headline."
     (abbreviate-file-name
      (f-join org-glance-directory view-name))))
 
-(cl-defun org-glance-overview:location (&optional
-                                          (view-id (org-glance-view:completing-read))
-                                          (extension "org_summary"))
+(cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
   (let ((view-name (s-downcase (format "%s" view-id))))
-    (abbreviate-file-name
-     (f-join org-glance-directory
-             view-name
-             (org-glance:format "${view-name}.${extension}")))))
+    (f-join org-glance-directory view-name (concat view-name ".org"))))
 
 (cl-defun org-glance-overview:sorting-by-type (sorting-type)
   "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
@@ -327,10 +324,11 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defun org-glance-overview (&optional (view-id (org-glance-view:completing-read)))
   (interactive)
-  (let ((location (org-glance-overview:location view-id)))
-    (if (file-exists-p location)
-        (find-file location)
-      (org-glance-overview:create view-id))))
+  (when view-id
+    (let ((location (org-glance-overview:location view-id)))
+      (if (file-exists-p location)
+          (find-file location)
+        (org-glance-overview:create view-id)))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
@@ -342,7 +340,7 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (let ((org-agenda-files (mapcar #'org-glance-overview:location (org-glance-view:ids))))
+  (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids))))
     (org-agenda-list)
     (org-agenda-fortnight-view)))
 
@@ -392,11 +390,12 @@ If point is before first heading, eval forms on each headline."
            (original-headline-location (org-glance-headline:file original-headline))
            (located-in-view-dir-p (cl-loop
                                      for view-id in (org-glance-headline:view-ids)
-                                     for overview-file-name = (org-glance-overview:location view-id)
-                                     for overview-location = (file-name-directory overview-file-name)
-                                     for common-parent = (f-common-parent (list overview-location original-headline-location))
-                                     when (string= (abbreviate-file-name common-parent)
-                                                   (abbreviate-file-name overview-location))
+                                     for overview-location = (->> view-id
+                                                               org-glance-overview:location
+                                                               file-name-directory
+                                                               abbreviate-file-name)
+                                     for common-parent = (abbreviate-file-name (f-common-parent (list overview-location original-headline-location)))
+                                     when (string= common-parent overview-location)
                                      do (return t)))
            (title (org-glance-headline:title))
            (raw-value (org-glance-headline:raw-value original-headline))
@@ -430,7 +429,7 @@ If point is before first heading, eval forms on each headline."
   "Completely rebuild current overview file."
   (interactive)
   (let ((view-id (org-glance-overview:category)))
-    (when (y-or-n-p (org-glance:format "Update view ${view-id}?"))
+    (when (y-or-n-p (org-glance:format "Rebuild ${view-id}?"))
       (save-buffer)
       (kill-buffer)
       (org-glance-overview:create view-id)

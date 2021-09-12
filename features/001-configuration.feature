@@ -1,6 +1,6 @@
 @core
-Feature: System init
-  In order to manage org-glance views
+Feature: System Init
+  In order to manage things
   As a user
   I want to create org-mode files and register org-glance views
 

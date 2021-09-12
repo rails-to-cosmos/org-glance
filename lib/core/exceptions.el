@@ -6,18 +6,18 @@
 (cl-defun org-glance-exception:source-file-corrupted (format &rest args)
   (signal 'org-glance-exception:source-file-corrupted (list (apply #'format-message format args))))
 
-(define-error 'org-glance-properties-corrupted
+(define-error 'org-glance-exception:properties-corrupted
     "Materialized view properties corrupted, please reread" 'user-error)
 
-(cl-defun org-glance-properties-corrupted (format &rest args)
-  (signal 'org-glance-properties-corrupted (list (apply #'format-message format args))))
+(cl-defun org-glance-exception:properties-corrupted (format &rest args)
+  (signal 'org-glance-exception:properties-corrupted (list (apply #'format-message format args))))
 
-(define-error 'org-glance-db-outdated
-    "Material view database is outdated" 'user-error)
+(define-error 'org-glance-exception:metastore-outdated
+    "Metastore is outdated" 'user-error)
 
-(defun org-glance-db-outdated (format &rest args)
-  "Raise `org-glance-db-outdated' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-db-outdated (list (apply #'format-message format args))))
+(defun org-glance-exception:metastore-outdated (format &rest args)
+  "Raise `org-glance-exception:metastore-outdated' exception formatted with FORMAT ARGS."
+  (signal 'org-glance-exception:metastore-outdated (list (apply #'format-message format args))))
 
 (define-error 'org-glance-exception:headline-not-found
     "Headline not found" 'user-error)

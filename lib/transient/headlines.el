@@ -16,30 +16,7 @@
     ("j" "Jump" org-glance-action-open)
     ("m" "Materialize" org-glance-action-materialize)]]
   (interactive)
-  (cl-loop
-     for view-dir-name in (directory-files org-glance-directory nil "^[[:word:]]+")
-     unless (alist-get view-dir-name -org-glance-initialized-views nil nil #'string=)
-     do (let ((view-config-file (org-glance-overview:location view-dir-name "config.json")))
-          (when (file-exists-p view-config-file)
-            (apply 'org-glance-def-view
-                   (cl-loop
-                      for (k . v) in (json-read-file view-config-file)
-                      for pk = (intern (org-glance:format ":${k}"))
-                      for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                                     (t (intern v)))
-                      when pk
-                      append (list pk pv)))
-            (push (cons view-dir-name (current-time)) -org-glance-initialized-views))))
+  (org-glance:system-init)
   (transient-setup 'org-glance-form-action))
-
-;; migration script
-;; (cl-loop
-;;    for id being the hash-keys of org-glance:views using (hash-value view)
-;;    for config = (list (cons 'id (org-glance-view-id view))
-;;                       (cons 'type (org-glance-view-type view)))
-;;    for file = (org-glance-overview:location id "config.json")
-;;    do (with-temp-file file
-;;         (insert (json-encode-alist config))
-;;         (json-pretty-print-buffer)))
 
 (org-glance:provide)

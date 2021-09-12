@@ -40,6 +40,12 @@ Cache roles: employee/employer, contact/task
 *** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
 *** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
 ** TODO Overview Mode
+*** TODO overview of all views registered with view-scoped actions
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2021-09-12 Sun 14:06]
+CLOCK: [2021-09-12 Sun 14:06]--[2021-09-12 Sun 16:28] =>  2:22
+- Clocked out on [2021-09-12 Sun 16:28]
+:END:
 *** TODO commented headlines restrictions
 *** TODO org-overview-mode: modify-sync headline feature
 *** DONE org-overview-mode: add headline feature
@@ -47,21 +53,24 @@ CLOSED: [2021-08-26 Thu 10:40]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-08-26 Thu 10:40]
 :END:
-*** TODO overview of all views registered with view-scoped actions
 *** TODO org-glance:format issue for strings containing % symbol
 ** TODO Headline API
 *** TODO headline API: add unit tests
 ** TODO Agenda and Notifications
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** Unsorted [0/13]
+** Unsorted [1/14]
 *** TODO capture templates support
 *** TODO change metastore serialization format (elisp → json)
 *** TODO mutable states → publish-subscribe model
 - implement write ahead log
 - store initial state and diffs, then apply compaction
 - subscribe on changes
-*** TODO register headlines in metastore & overview on materialized sync
+*** DONE register headlines in metastore & overview on materialized sync
+CLOSED: [2021-09-12 Sun 13:45]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-09-12 Sun 13:45]
+:END:
 *** TODO refactor capture with org-refile
 *** TODO [#C] If summary is unregistered, prompt to register it before any user action
 *** TODO Read views from directory to minimize config

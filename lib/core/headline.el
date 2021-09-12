@@ -35,10 +35,10 @@ If headline is not an `org-glance-headline', traverse parents."
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-
-  (org-glance-headline:enrich (org-element-at-point)
-    :file (if-let (file-name (buffer-file-name)) (abbreviate-file-name file-name))
-    :buffer (current-buffer)))
+  (when (org-glance-headline-p)
+    (org-glance-headline:enrich (org-element-at-point)
+      :file (if-let (file-name (buffer-file-name)) (abbreviate-file-name file-name))
+      :buffer (current-buffer))))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -88,7 +88,8 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
   (or (org-element-property :TITLE headline)
-      (org-element-property :raw-value headline)))
+      (org-element-property :raw-value headline)
+      ""))
 
 (cl-defun org-glance-headline:priority (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :priority headline))
@@ -146,13 +147,11 @@ Default enrichment is as follows:
   (let* ((file (org-glance-headline:file headline))
          (buffer (org-glance-headline:buffer headline)))
 
-    (cond
-      (file (if (file-exists-p file)
-                (find-file file)
-              (org-glance-db-outdated "File not found: %s" file)))
-      (buffer (if (bufferp buffer)
-                  (switch-to-buffer buffer)
-                (org-glance-db-outdated "Buffer not found: %s" (buffer-name buffer)))))
+    (cond (file (if (file-exists-p file) (find-file file)
+                  (org-glance-exception:metastore-outdated "File not found: %s" file)))
+          (buffer (if (bufferp buffer)
+                      (switch-to-buffer buffer)
+                    (org-glance-exception:metastore-outdated "Buffer not found: %s" (buffer-name buffer)))))
 
     ;; we are now visiting headline file, let's remove restrictions
     (widen)
@@ -255,14 +254,17 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:scan-file (&optional (file (buffer-file-name)))
   (with-temp-buffer
-    (org-mode)
     (insert-file-contents file)
-    (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (el)
-        (when (org-glance-headline-p el)
-          (org-glance-headline:enrich el
-            :file (abbreviate-file-name file)
-            :buffer (get-file-buffer file)))))))
+    (hack-local-variables)
+    (unless (alist-get 'org-glance-overview-mode (buffer-local-variables))
+      (org-mode)
+      (org-element-map (org-element-parse-buffer 'headline) 'headline
+        (lambda (el)
+          (-some-> el
+            (org-glance-headline-p)
+            (org-glance-headline:enrich
+                :file (abbreviate-file-name file)
+                :buffer (get-file-buffer file))))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
@@ -283,12 +285,13 @@ Default enrichment is as follows:
       (insert new-title)
       (org-align-tags))))
 
-(cl-defmacro org-glance-headline:format (headline &key (format "${label}=${classes}= [[org-glance-visit:${id}][${title}]]"))
+(cl-defmacro org-glance-headline:format (headline &key (format "${label}=${classes}= [[org-glance-visit:${id}][${stateful-title}]]"))
   (declare (indent 1) (debug t))
   `(let* ((id (org-glance-headline:id ,headline))
           (state (org-glance-headline:state ,headline))
           (label (if (string-empty-p state) " " (format " *%s* " state)))
-          (title (s-replace-regexp (format "^%s[[:space:]]*" state) "" (org-glance-headline:title ,headline)))
+          (original-title (org-glance-headline:title ,headline))
+          (stateful-title (s-replace-regexp (format "^%s[[:space:]]*" state) "" original-title))
           (classes (s-join ", " (org-glance-headline:view-ids ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim (org-glance:format ,format))))
@@ -389,7 +392,6 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
-    (message "Calculate hash over contents: %s" (prin1-to-string contents))
     (with-temp-buffer
       (insert contents)
       (buffer-hash))))

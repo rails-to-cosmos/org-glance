@@ -58,11 +58,11 @@
 (defvar org-glance:views (make-hash-table)
   "Hash table (id->view) that lists all registered classes of things.")
 
+(defvar org-glance:views-loaded nil
+  "Alist of views registered in current emacs session.")
+
 (defvar org-glance:actions nil
   "Alist containing registered actions.")
-
-(defvar -org-glance-initialized-views nil
-  "Alist of views registered in current emacs session.")
 
 (org-glance:require
   cl-generic
@@ -113,6 +113,32 @@
   :tag "Org Glance"
   :group 'org)
 
+(cl-defun org-glance:use-@-for-relations ()
+  "Rebind `@' key in `org-mode' buffers for relation management."
+  (define-key org-mode-map (kbd "@")
+    #'(lambda () (interactive)
+        (if (or (looking-back "^" 1)
+                (looking-back "[[:space:]]" 1))
+            (org-glance:insert-relation)
+          (insert "@")))))
+
+(cl-defun org-glance:system-init ()
+  "Update all changed entities from `org-glance-directory'."
+  (cl-loop
+     for view-directory in (directory-files org-glance-directory nil "^[[:word:]]+")
+     unless (alist-get view-directory org-glance:views-loaded nil nil #'string=)
+     do (let ((view-config-file (f-join org-glance-directory view-directory (concat view-directory ".config.json"))))
+          (when (file-exists-p view-config-file)
+            (apply 'org-glance-def-view
+                   (cl-loop
+                      for (k . v) in (json-read-file view-config-file)
+                      for pk = (intern (org-glance:format ":${k}"))
+                      for pv = (cond ((member k '(type)) (mapcar 'intern v))
+                                     (t (intern v)))
+                      when pk
+                      append (list pk pv)))
+            (push (cons view-directory (current-time)) org-glance:views-loaded)))))
+
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."
   (condition-case choice
@@ -123,8 +149,7 @@
         (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
         (cadr choice))))))
 
-(cl-defun org-glance:insert-relation
-    (&optional (target (org-glance:get-or-capture)))
+(cl-defun org-glance:insert-relation (&optional (target (org-glance:get-or-capture)))
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
@@ -150,7 +175,7 @@ C-u means not to insert relation at point, but register it in logbook instead."
          (when-let (choice (or default-choice (org-glance-scope--prompt-headlines prompt headlines)))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
-                 (org-glance-db-outdated
+                 (org-glance-exception:metastore-outdated
                   (message "Database %s is outdated, actualizing..." db)
                   (redisplay)
                   (org-glance :scope scope
