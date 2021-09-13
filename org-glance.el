@@ -142,16 +142,20 @@
      for view-directory in (directory-files org-glance-directory nil "^[[:word:]]+")
      unless (alist-get view-directory org-glance:views-loaded nil nil #'string=)
      do (let ((view-config-file (f-join org-glance-directory view-directory (concat view-directory ".config.json"))))
-          (when (file-exists-p view-config-file)
-            (apply 'org-glance-def-view
-                   (cl-loop
-                      for (k . v) in (json-read-file view-config-file)
-                      for pk = (intern (org-glance:format ":${k}"))
-                      for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                                     (t (intern v)))
-                      when pk
-                      append (list pk pv)))
-            (push (cons view-directory (current-time)) org-glance:views-loaded)))))
+          (unless (file-exists-p view-config-file)
+            (with-temp-file view-config-file
+              (insert (json-encode `((id . ,(s-titleize view-directory)))))
+              (json-pretty-print-buffer)))
+          (message "Read directory %s" view-directory)
+          (apply 'org-glance-def-view
+                 (cl-loop
+                    for (k . v) in (json-read-file view-config-file)
+                    for pk = (intern (org-glance:format ":${k}"))
+                    for pv = (cond ((member k '(type)) (mapcar 'intern v))
+                                   (t (intern v)))
+                    when pk
+                    append (list pk pv)))
+          (push (cons view-directory (current-time)) org-glance:views-loaded))))
 
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."

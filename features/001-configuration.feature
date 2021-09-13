@@ -4,15 +4,21 @@ Feature: System Init
   As a user
   I want to define things, classes and domains
 
-  Scenario: User configures org-glance
-    Given `org-glance-directory' = view location
-    And I change directory to a view location
+  Scenario: Let's start from scratch
+    When I visit my forest
+    Then I am in the buffer "*org-mode-forest*"
+    And I should see
+      """
+      #    -*- mode: org; mode: org-glance-overview -*-
 
-  Scenario: User manually defines new category
-    When I define view "Country"
-    Then I should see message
+      #+CATEGORY: Ground
+      #+STARTUP: overview
+
+      YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
+      AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
+      DOWN A GULLY.
+
+      PRESS + TO BREAK A NEW GROUND.
       """
-      View "Country" is now ready to glance
-      """
-    And I should have 1 view registered
-    And I should have 0 headlines in view "Country"
+    And I should have 0 grounds owned
+    And I should have 0 trees planted

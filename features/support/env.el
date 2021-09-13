@@ -28,14 +28,16 @@
  (mkdir org-glance-test:user-location)
 
  (message "\n= Test suite has been started =")
- (message "Root directory initialized: %s" org-glance-test:root-location))
+ (message "Sandbox root directory initialized: %s" org-glance-test:root-location))
 
 (Before
  ;; Before each scenario is run
  (message "\n== Run new scenario ==")
 
  (message "Environment:")
- (message " `org-glance-directory': %s" org-glance-directory)
+
+ (setq org-glance-directory org-glance-test:view-location)
+ (message " org-glance-directory: %s" org-glance-directory)
 
  (message "\nStdOut:"))
 
@@ -47,4 +49,4 @@
  ;; After when everything has been run
  (message "= Teardown =")
  (delete-directory org-glance-test:root-location t)
- (message "Root directory \"%s\" has been removed on teardown" org-glance-test:root-location))
+ (message "Sandbox root directory \"%s\" has been removed on teardown" org-glance-test:root-location))
