@@ -32,6 +32,9 @@
 
 (require 'org-glance-module)
 
+(eval-when-compile
+  (org-glance:require org))
+
 (defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
   "The location where view metadata should be stored."
   :group 'org-glance
@@ -107,6 +110,17 @@
   lib.actions.main.materialize
   lib.actions.main.open
   lib.actions.main.visit)
+
+(declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
+(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
+(declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
+(declare-function org-glance-view:choose (org-glance-module-filename lib.core.view))
+(declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.scope))
+(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

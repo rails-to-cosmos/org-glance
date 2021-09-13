@@ -6,11 +6,8 @@
 (require 'with-simulated-input)
 (require 'subr-x)
 
-(Then "^I define view \"\\(.+\\)\" in default scope$"
-      (lambda (view-id) (org-glance-def-view (intern view-id))))
-
-(Then "^I compile view \"\\(.+\\)\"$"
-      (lambda (view-id) (org-glance-overview:create (intern view-id))))
+(Then "^I define view \"\\(.+\\)\"$"
+      (lambda (view-id) (org-glance-def-view :id (intern view-id))))
 
 (And "^I should have \\([[:digit:]]+\\) headlines in view \"\\(.+\\)\"$"
      (lambda (cardinality view-id)

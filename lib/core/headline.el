@@ -64,7 +64,7 @@ If headline is not an `org-glance-headline', traverse parents."
   "Enrich `org-element' ELEMENT with KWARGS properties.
 Default enrichment is as follows:
 - Add FILE property to `org-element'."
-  (declare (indent 1) (debug t))
+  (declare (indent 1))
   (cl-loop
      for (key value) on kwargs by #'cddr
      do (org-element-put-property element key value)
