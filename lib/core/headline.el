@@ -123,7 +123,7 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:class (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :ORG_GLANCE_CLASS headline))
 
-(cl-defun org-glance-headline:view-ids (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:tags (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
 (cl-defun org-glance-headline:search-buffer-by-id (id)
@@ -292,7 +292,7 @@ Default enrichment is as follows:
           (label (if (string-empty-p state) " " (format " *%s* " state)))
           (original-title (org-glance-headline:title ,headline))
           (stateful-title (s-replace-regexp (format "^%s[[:space:]]*" state) "" original-title))
-          (classes (s-join ", " (org-glance-headline:view-ids ,headline)))
+          (classes (s-join ", " (org-glance-headline:tags ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim (org-glance:format ,format))))
 

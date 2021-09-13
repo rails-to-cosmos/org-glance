@@ -389,7 +389,7 @@ If point is before first heading, eval forms on each headline."
            (original-headline (org-glance-overview:original-headline))
            (original-headline-location (org-glance-headline:file original-headline))
            (located-in-view-dir-p (cl-loop
-                                     for view-id in (org-glance-headline:view-ids)
+                                     for view-id in (org-glance-headline:tags)
                                      for overview-location = (->> view-id
                                                                org-glance-overview:location
                                                                file-name-directory

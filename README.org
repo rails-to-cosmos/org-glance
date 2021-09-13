@@ -60,6 +60,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
 ** Unsorted [1/14]
+*** TODO remove headline feature
 *** TODO capture templates support
 *** TODO change metastore serialization format (elisp → json)
 *** TODO mutable states → publish-subscribe model
