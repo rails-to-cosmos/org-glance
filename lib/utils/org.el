@@ -50,9 +50,10 @@
 
 (cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to directory where VIEW-ID resources and metadata are stored."
-  (f-join org-glance-directory
-          (s-downcase (format "%s" view-id))
-          "resources"))
+  (abbreviate-file-name
+   (f-join org-glance-directory
+           (s-downcase (format "%s" view-id))
+           "resources")))
 
 (cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion

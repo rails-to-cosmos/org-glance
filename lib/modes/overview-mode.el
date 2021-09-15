@@ -383,6 +383,7 @@ If point is before first heading, eval forms on each headline."
   ;; - [ ] check for nested views and ask to flatten them
   ;; - [ ] check if original headline is stored in archive
   ;; - [ ] check for PROPERTIES drawer indentation
+  ;; - [ ] fix non-relative DIR properties
 
   (when (org-glance-overview:pull)
     (let* ((view-id (org-glance-overview:category))
