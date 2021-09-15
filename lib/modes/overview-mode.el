@@ -67,9 +67,12 @@ If point is before first heading, eval forms on each headline."
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+") #'(lambda () (interactive)
-                                                       (org-glance-overview:capture
-                                                        (org-glance-overview:category))))
+(define-key org-glance-overview-mode-map (kbd "+")
+  #'(lambda () (interactive)
+      (org-glance-overview:capture (org-glance-overview:category))
+      (org-glance-overview:materialize-headline)
+      (org-end-of-meta-data)
+      (insert "\n")))
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
 
@@ -153,7 +156,6 @@ If point is before first heading, eval forms on each headline."
     (org-glance-overview:register-headline-in-overview captured-headline view-id)
     (org-overview)
     (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-    (org-glance-overview:materialize-headline)
     captured-headline))
 
 (cl-defun org-glance-overview:import-headlines
@@ -543,8 +545,7 @@ If point is before first heading, eval forms on each headline."
                    (cadr choice))))))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (org-glance-headline:add-biconnected-relation source target)
-  (org-glance-overview:pull))
+  (org-glance-headline:add-biconnected-relation source target))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
