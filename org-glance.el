@@ -32,6 +32,9 @@
 
 (require 'org-glance-module)
 
+(eval-when-compile
+  (org-glance:require org))
+
 (defcustom org-glance-directory (f-join user-emacs-directory "org-glance" "views")
   "The location where view metadata should be stored."
   :group 'org-glance
@@ -108,6 +111,17 @@
   lib.actions.main.open
   lib.actions.main.visit)
 
+(declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
+(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
+(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
+(declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
+(declare-function org-glance-view:choose (org-glance-module-filename lib.core.view))
+(declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.scope))
+(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
+
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
@@ -128,16 +142,20 @@
      for view-directory in (directory-files org-glance-directory nil "^[[:word:]]+")
      unless (alist-get view-directory org-glance:views-loaded nil nil #'string=)
      do (let ((view-config-file (f-join org-glance-directory view-directory (concat view-directory ".config.json"))))
-          (when (file-exists-p view-config-file)
-            (apply 'org-glance-def-view
-                   (cl-loop
-                      for (k . v) in (json-read-file view-config-file)
-                      for pk = (intern (org-glance:format ":${k}"))
-                      for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                                     (t (intern v)))
-                      when pk
-                      append (list pk pv)))
-            (push (cons view-directory (current-time)) org-glance:views-loaded)))))
+          ;; (unless (file-exists-p view-config-file)
+          ;;   (with-temp-file view-config-file
+          ;;     (insert (json-encode `((id . ,(s-titleize view-directory)))))
+          ;;     (json-pretty-print-buffer)))
+          (message "Read directory %s" view-directory)
+          (apply 'org-glance-def-view
+                 (cl-loop
+                    for (k . v) in (json-read-file view-config-file)
+                    for pk = (intern (org-glance:format ":${k}"))
+                    for pv = (cond ((member k '(type)) (mapcar 'intern v))
+                                   (t (intern v)))
+                    when pk
+                    append (list pk pv)))
+          (push (cons view-directory (current-time)) org-glance:views-loaded))))
 
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."

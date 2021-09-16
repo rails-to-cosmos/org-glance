@@ -6,10 +6,13 @@
 
 (org-glance-action-define extract (headline) :for (kvs crypt)
   "Materialize HEADLINE, decrypt it, then run completing read on all properties to kill ring."
-  (save-window-excursion
-    (org-glance-action-call 'materialize :on headline :for '(crypt))
-    (unwind-protect
-         (org-glance-buffer-properties-to-kill-ring)
-      (with-demoted-errors "Unable to kill buffer: %s" (kill-buffer (org-glance-headline:materialized-buffer-name headline))))))
+  (let ((key-value-pairs (save-window-excursion
+                           (org-glance-action-call 'materialize :on headline :for '(crypt))
+                           (unwind-protect
+                                (org-glance:get-buffer-key-value-pairs)
+                             (with-demoted-errors "Unable to kill buffer: %s"
+                               (kill-buffer (org-glance-headline:materialized-buffer-name headline)))))))
+    (while t
+      (kill-new (alist-get (org-completing-read "Extract property: " key-value-pairs) key-value-pairs nil nil #'string=)))))
 
 (org-glance:provide)

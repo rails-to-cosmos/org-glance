@@ -67,11 +67,14 @@ If point is before first heading, eval forms on each headline."
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+") #'(lambda () (interactive)
-                                                       (org-glance-overview:capture
-                                                        (org-glance-overview:category))))
+(define-key org-glance-overview-mode-map (kbd "+")
+  #'(lambda () (interactive)
+      (org-glance-overview:capture (org-glance-overview:category))
+      (org-glance-overview:materialize-headline)
+      (org-end-of-meta-data)
+      (insert "\n")))
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
-(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
+(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:jump)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id
@@ -153,7 +156,6 @@ If point is before first heading, eval forms on each headline."
     (org-glance-overview:register-headline-in-overview captured-headline view-id)
     (org-overview)
     (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-    (org-glance-overview:materialize-headline)
     captured-headline))
 
 (cl-defun org-glance-overview:import-headlines
@@ -184,13 +186,13 @@ If point is before first heading, eval forms on each headline."
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
 
-(cl-defun org-glance-overview:select-headline
+(cl-defun org-glance-overview:jump
     (&optional (view-id (org-glance-overview:category)))
   (interactive)
   (let ((headlines (org-glance-view:headlines view-id)))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id (org-glance-scope--choose-headline
-                              (org-glance-scope--prompt-headlines "Choose: " headlines)
+                              (org-glance-scope--prompt-headlines "Jump to headline: " headlines)
                               headlines)))))
 
 (define-minor-mode org-glance-overview-mode
@@ -310,7 +312,7 @@ If point is before first heading, eval forms on each headline."
                    (org-glance:format org-glance-overview:header)))
          (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
          (contents (s-join "\n" (mapcar #'org-glance-headline:contents headlines))))
-    (--org-glance:make-file-directory filename)
+    (-org-glance:make-file-directory filename)
     (with-temp-file filename
       (org-mode)
       (insert header)
@@ -383,6 +385,7 @@ If point is before first heading, eval forms on each headline."
   ;; - [ ] check for nested views and ask to flatten them
   ;; - [ ] check if original headline is stored in archive
   ;; - [ ] check for PROPERTIES drawer indentation
+  ;; - [ ] fix non-relative DIR properties
 
   (when (org-glance-overview:pull)
     (let* ((view-id (org-glance-overview:category))
@@ -542,8 +545,7 @@ If point is before first heading, eval forms on each headline."
                    (cadr choice))))))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (org-glance-headline:add-biconnected-relation source target)
-  (org-glance-overview:pull))
+  (org-glance-headline:add-biconnected-relation source target))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
