@@ -312,7 +312,7 @@ If point is before first heading, eval forms on each headline."
                    (org-glance:format org-glance-overview:header)))
          (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
          (contents (s-join "\n" (mapcar #'org-glance-headline:contents headlines))))
-    (--org-glance:make-file-directory filename)
+    (-org-glance:make-file-directory filename)
     (with-temp-file filename
       (org-mode)
       (insert header)

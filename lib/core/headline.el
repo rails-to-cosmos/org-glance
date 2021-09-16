@@ -7,6 +7,8 @@
   lib.utils.helpers
   lib.utils.org)
 
+(defconst org-glance-headline:key-value-pair-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property.
 Return HEADLINE or nil if it is not a proper `org-glance-headline'."
@@ -419,5 +421,24 @@ Default enrichment is as follows:
 
 (cl-defun org-glance-headline:materialized-buffer-name (&optional (headline (org-glance-headline:at-point)))
   (concat "org-glance:<" (org-glance-headline:title headline) ">"))
+
+(cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
+  (s-contains? "aes-encrypted" (org-glance-headline:contents headline)))
+
+(cl-defun org-glance-headline:key-value-storage? (&optional (headline (org-glance-headline:at-point)))
+  (save-excursion
+    (org-glance-headline:narrow headline
+      (org-end-of-meta-data)
+      (search-forward-regexp org-glance-headline:key-value-pair-re nil t))))
+
+(cl-defun org-glance-headline:key-value-pairs (&optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (cl-loop
+       while (condition-case nil
+                 (re-search-forward org-glance-headline:key-value-pair-re)
+               (search-failed nil))
+       collect (s-trim (substring-no-properties (match-string 1))) into keys
+       collect (s-trim (substring-no-properties (match-string 2))) into vals
+       finally (return (-zip keys vals)))))
 
 (org-glance:provide)

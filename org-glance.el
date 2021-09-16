@@ -142,10 +142,10 @@
      for view-directory in (directory-files org-glance-directory nil "^[[:word:]]+")
      unless (alist-get view-directory org-glance:views-loaded nil nil #'string=)
      do (let ((view-config-file (f-join org-glance-directory view-directory (concat view-directory ".config.json"))))
-          (unless (file-exists-p view-config-file)
-            (with-temp-file view-config-file
-              (insert (json-encode `((id . ,(s-titleize view-directory)))))
-              (json-pretty-print-buffer)))
+          ;; (unless (file-exists-p view-config-file)
+          ;;   (with-temp-file view-config-file
+          ;;     (insert (json-encode `((id . ,(s-titleize view-directory)))))
+          ;;     (json-pretty-print-buffer)))
           (message "Read directory %s" view-directory)
           (apply 'org-glance-def-view
                  (cl-loop

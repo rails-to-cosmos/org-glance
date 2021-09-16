@@ -32,7 +32,7 @@ enjoy using a lot.
                 for line in (s-split "\n" ,result)
                 collect (funcall stripMargin line)))))
 
-(defun --org-glance:make-file-directory (file)
+(defun -org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
       (make-directory dir t))))
@@ -63,7 +63,7 @@ enjoy using a lot.
 
 (cl-defun org-glance:get-buffer-key-value-pairs ()
   "Extract key-value pairs from buffer that match pattern (key: value), run completing read on keys, copy values to kill ring."
-  (let ((property-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$"))
+  (let ((property-re org-glance-headline:key-value-pair-re))
     (save-excursion
       (goto-char (point-min))
       (cl-loop

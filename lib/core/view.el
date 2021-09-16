@@ -35,12 +35,15 @@
 
 (cl-defun org-glance-view:update (&optional (view-id (org-glance-view:choose)))
   (interactive)
-  (message "Update view %s" view-id)
+  (unless (org-glance-view:get-view-by-id view-id)
+    (when (y-or-n-p (format "Define new role? %s" view-id))
+      (org-glance-def-view :id (intern view-id))))
   (let* ((view (org-glance-view:get-view-by-id view-id))
          (db (org-glance-view:metastore-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) (list org-glance-directory)))
          (headlines (org-glance-scope-headlines scope filter)))
+    (message "Update view %s" view-id)
     (org-glance-metastore:create db headlines)
     (list view)))
 
@@ -113,11 +116,24 @@
                                  scope
                                  &allow-other-keys)
   (let ((view (or (org-glance-view:get-view-by-id id)
-                  (org-glance-view:create
-                   :id id
-                   :type type
-                   :scope scope))))
+                  (org-glance-view:create :id id
+                                          :type type
+                                          :scope scope)))
+        (config-file (f-join org-glance-directory
+                             (downcase (format "%s" id))
+                             (downcase (format "%s.config.json" id)))))
+
     (puthash id view org-glance:views)
+
+    (unless (file-exists-p config-file)
+      (-org-glance:make-file-directory config-file)
+      (with-temp-file config-file
+        (insert (json-encode `((id . ,id)
+                               (type . ,type)
+                               ;; (scope . ,scope)
+                               )))
+        (json-pretty-print-buffer)))
+
     (message "View \"%s\"%s is now ready to glance %s"
              id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
