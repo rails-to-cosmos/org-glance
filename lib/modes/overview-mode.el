@@ -74,7 +74,7 @@ If point is before first heading, eval forms on each headline."
       (org-end-of-meta-data)
       (insert "\n")))
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
-(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:select-headline)
+(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:jump)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id
@@ -186,13 +186,13 @@ If point is before first heading, eval forms on each headline."
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
 
-(cl-defun org-glance-overview:select-headline
+(cl-defun org-glance-overview:jump
     (&optional (view-id (org-glance-overview:category)))
   (interactive)
   (let ((headlines (org-glance-view:headlines view-id)))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id (org-glance-scope--choose-headline
-                              (org-glance-scope--prompt-headlines "Choose: " headlines)
+                              (org-glance-scope--prompt-headlines "Jump to headline: " headlines)
                               headlines)))))
 
 (define-minor-mode org-glance-overview-mode
