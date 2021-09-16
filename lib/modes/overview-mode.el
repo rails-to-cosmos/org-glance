@@ -64,6 +64,7 @@ If point is before first heading, eval forms on each headline."
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "v") #'org-glance-overview:visit-headline)
 (define-key org-glance-overview-mode-map (kbd "k") #'org-glance-overview:kill-headline)
+;; (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
 (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
@@ -100,8 +101,6 @@ If point is before first heading, eval forms on each headline."
                  (org-glance-headline:search-forward)
                  (insert contents "\n")
                  (save-buffer))))))
-
-
   headline)
 
 (cl-defun org-glance:capture-headline-at-point
@@ -147,17 +146,17 @@ If point is before first heading, eval forms on each headline."
 (cl-defun org-glance-overview:capture
     (&optional
        (view-id (org-glance-view:choose))
-       (title (read-string (format "New %s: " view-id))))
+       (title (read-string (format "New %s: " view-id)))
+       (headline (with-temp-buffer
+                   (insert "* " title)
+                   (org-glance:capture-headline-at-point view-id))))
   (interactive)
   (org-glance-overview view-id)
-  (let ((captured-headline (with-temp-buffer
-                             (insert "* " title)
-                             (org-glance:capture-headline-at-point view-id))))
-    (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-    (org-glance-overview:register-headline-in-overview captured-headline view-id)
-    (org-overview)
-    (org-glance-headline:search-buffer-by-id (org-glance-headline:id captured-headline))
-    captured-headline))
+  (org-glance-overview:register-headline-in-metastore headline view-id)
+  (org-glance-overview:register-headline-in-overview headline view-id)
+  (org-overview)
+  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+  headline)
 
 (cl-defun org-glance-overview:import-headlines
     (path
@@ -193,7 +192,7 @@ If point is before first heading, eval forms on each headline."
   (let ((headlines (org-glance-view:headlines view-id)))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id (org-glance-scope--choose-headline
-                              (org-glance-scope--prompt-headlines "Jump to headline: " headlines)
+                              (org-completing-read "Jump to headline: " (mapcar #'org-glance-headline:title headlines))
                               headlines)))))
 
 (define-minor-mode org-glance-overview-mode
@@ -484,6 +483,26 @@ If point is before first heading, eval forms on each headline."
       (let ((inhibit-read-only t))
         (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
 
+;; (cl-defun org-glance-overview:move-headline (&optional (new-role (org-glance-view:choose "New role: ")))
+;;   (interactive)
+;;   (org-glance-headline:goto-beginning-of-current-headline)
+;;   (let ((role (org-glance-overview:category))
+;;         (title (org-glance-headline:title))
+;;         (original-headline (org-glance-overview:original-headline)))
+;;     (org-glance-headline:narrow original-headline
+;;       (org-toggle-tag (format "%s" role) 'off)
+;;       (org-glance-overview:capture new-role nil (org-glance-headline:at-point))
+;;       (kill-region (org-entry-beginning-position) (org-entry-end-position))
+;;       (save-buffer)
+;;       (when (= (buffer-size (current-buffer)) 0)
+;;         (when (y-or-n-p "File buffer is empty. Delete it?")
+;;           (delete-file (buffer-file-name) 'trash)
+;;           (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
+;;             (when (y-or-n-p "Partition is empty. Delete it?")
+;;               (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))))
+;;     (let ((inhibit-read-only t))
+;;         (kill-region (org-entry-beginning-position) (org-entry-end-position)))))
+
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
   (interactive)
@@ -494,8 +513,7 @@ If point is before first heading, eval forms on each headline."
          (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (original-headline-contents (org-glance-headline:contents original-headline))
-         )
+         (original-headline-contents (org-glance-headline:contents original-headline)))
     (cond
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))

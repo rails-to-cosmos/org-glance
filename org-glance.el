@@ -119,7 +119,6 @@
 (declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-scope--prompt-headlines (org-glance-module-filename lib.core.scope))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil
@@ -190,7 +189,8 @@ C-u means not to insert relation at point, but register it in logbook instead."
                                          :scope scope
                                          :filter filter)))
     (unwind-protect
-         (when-let (choice (or default-choice (org-glance-scope--prompt-headlines prompt headlines)))
+         (when-let (choice (or default-choice
+                               (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
                  (org-glance-exception:metastore-outdated

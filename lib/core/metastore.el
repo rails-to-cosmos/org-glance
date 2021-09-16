@@ -8,6 +8,7 @@
 (org-glance:require lib.utils.helpers)
 
 (cl-defun org-glance-metastore:write (file metastore)
+  (declare (indent 1))
   (mkdir (file-name-directory file) 'parents)
   (with-temp-file file
     (insert (prin1-to-string metastore)))
@@ -20,11 +21,12 @@
 
 (cl-defun org-glance-metastore:create (file &optional headlines)
   "Create metastore from HEADLINES and write it to FILE."
-  (org-glance-metastore:write file (cl-loop
-                                      with metastore = (make-hash-table :test 'equal)
-                                      for headline in headlines
-                                      do (org-glance-metastore:add-headline headline metastore)
-                                      finally (return metastore))))
+  (org-glance-metastore:write file
+    (cl-loop
+       with metastore = (make-hash-table :test 'equal)
+       for headline in headlines
+       do (org-glance-metastore:add-headline headline metastore)
+       finally (return metastore))))
 
 (defun org-glance-metastore:read (file)
   "Read metastore from FILE."

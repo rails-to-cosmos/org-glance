@@ -18,49 +18,41 @@
     (agenda . org-agenda-files)
     (agenda-with-archives . -org-glance:agenda-with-archives)))
 
-(cl-defgeneric org-glance-scope (lfob)
-  "Adapt list-file-or-buffer to list of files.")
+(cl-defgeneric org-glance-scope (_)
+  "Convert input to list of files if possible.")
 
-(cl-defmethod org-glance-scope ((lfob string))
-  "Return list of file LFOB if exists."
-  (let* ((file (expand-file-name lfob))
-         (files (cond
-                  ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
-                  ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-                  ((f-directory? file) (-org-glance:list-files-recursively file))
-                  (t (list file)))))
-    (cl-loop for file in files
+(cl-defmethod org-glance-scope ((s string))
+  "Return list of file S if exists."
+  (let ((file (expand-file-name s)))
+    (cl-loop for file in (cond
+                           ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
+                           ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
+                           ((f-directory? file) (-org-glance:list-files-recursively file))
+                           (t (list file)))
        when (member (file-name-extension file) org-glance-scope:extensions)
        collect file)))
 
-(cl-defmethod org-glance-scope ((lfob sequence))
-  "Adapt each element of LFOB."
-  (-some->> lfob
+(cl-defmethod org-glance-scope ((l sequence))
+  "Convert L to flattened list of files."
+  (-some->> l
     (-keep #'org-glance-scope)
     -flatten
     seq-uniq))
 
-(cl-defmethod org-glance-scope ((lfob symbol))
-  "Return extracted LFOB from `org-glance-scope--default-scope-alist'."
-  (funcall (cdr (assoc lfob org-glance-scope--default-scope-alist))))
+(cl-defmethod org-glance-scope ((s symbol))
+  "Return extracted S from `org-glance-scope--default-scope-alist'."
+  (funcall (cdr (assoc s org-glance-scope--default-scope-alist))))
 
-(cl-defmethod org-glance-scope ((lfob buffer))
-  "Return list of files from LFOB buffer."
-  (list
-   (condition-case nil
-       (get-file-buffer lfob)
-     (error lfob))))
+(cl-defmethod org-glance-scope ((b buffer))
+  "Return list of files from buffer B."
+  (list (condition-case nil (get-file-buffer b) (error b))))
 
-(cl-defmethod org-glance-scope ((lfob function))
-  "Adapt result of LFOB."
-  (-some->> lfob
-    funcall
-    org-glance-scope))
-
-(defun org-glance-scope--prompt-headlines (prompt headlines)
-  (org-completing-read prompt (mapcar #'org-glance-headline:title headlines)))
+(cl-defmethod org-glance-scope ((f function))
+  "Adapt result of F."
+  (-some->> f funcall org-glance-scope))
 
 (defun org-glance-scope--choose-headline (choice headlines)
+  "Deprecated helper."
   (--first (string= (org-glance-headline:title it) choice) headlines))
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
