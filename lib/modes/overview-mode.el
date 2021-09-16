@@ -446,17 +446,19 @@ If point is before first heading, eval forms on each headline."
     (while (and (org-glance-headline:search-forward))
       (org-glance-overview:pull))))
 
-(cl-defun org-glance-overview:kill-headline (&optional force)
+(cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:goto-beginning-of-current-headline)
-  (let ((inhibit-read-only t)
-        (view-id (org-glance-overview:category))
-        (current-headline-title (org-glance-headline:title)))
-    (when (and (org-glance-headline-p)
-               (or force
-                   (y-or-n-p (org-glance:format "Remove headline \"${current-headline-title}\" from ${view-id} overview?"))))
-      (kill-region (org-entry-beginning-position) (org-entry-end-position)))))
+  (let ((role (org-glance-overview:category))
+        (title (org-glance-headline:title))
+        (original-headline (org-glance-overview:original-headline)))
+    (when (or force (y-or-n-p (org-glance:format "Revoke the role \"${role}\" from \"${title}\"?")))
+      (org-glance-headline:narrow original-headline
+        (org-toggle-tag (format "%s" role) 'off)
+        (save-buffer))
+      (let ((inhibit-read-only t))
+        (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
 
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
@@ -473,7 +475,7 @@ If point is before first heading, eval forms on each headline."
     (cond
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
-           (org-glance-overview:kill-headline 'force)
+           (org-glance-overview:kill-headline :force t)
          (org-glance-exception:headline-not-found "Original headline not found"))
        nil)
       ((string= current-headline-contents original-headline-contents)

@@ -441,4 +441,8 @@ Default enrichment is as follows:
        collect (s-trim (substring-no-properties (match-string 2))) into vals
        finally (return (-zip keys vals)))))
 
+(cl-defun org-glance-headline:roles (&optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (mapcar #'intern (org-get-tags))))
+
 (org-glance:provide)
