@@ -24,16 +24,17 @@
 
 ;;; medium methods applied for all first-level headlines in current file
 
-(defmacro org-glance-overview:context-aware-lambda (&rest forms)
+(defmacro org-glance-overview:foreach (&rest forms)
   "Eval FORMS on headline at point.
 If point is before first heading, eval forms on each headline."
   (declare (indent 0) (debug t))
   `(lambda ()
      (interactive)
      (if (org-before-first-heading-p)
-         (progn
+         (when (or (not current-prefix-arg)
+                   (y-or-n-p "Doctor will repair headlines automatically. Proceed?"))
            (goto-char (point-min))
-           (while (and (org-glance-headline:search-forward) (sit-for 0.01))
+           (while (and (org-glance-headline:search-forward) (sit-for 0))
              (when (= (org-glance-headline:level) 1)
                ,@forms)))
        ,@forms)))
@@ -55,7 +56,7 @@ If point is before first heading, eval forms on each headline."
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
 (define-key org-glance-overview-mode-map (kbd "g")
-  (org-glance-overview:context-aware-lambda
+  (org-glance-overview:foreach
     (org-glance-overview:doctor)))
 (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
 (define-key org-glance-overview-mode-map (kbd "o") #'org-open-at-point)
@@ -373,7 +374,7 @@ If point is before first heading, eval forms on each headline."
     (goto-char (point-min))
     (intern (org-get-category))))
 
-(defmacro org-glance-doctor:fix-when (predicate prompt &rest forms)
+(defmacro org-glance-doctor:when (predicate prompt &rest forms)
   (declare (indent 2) (debug t))
   `(when (and ,predicate (or current-prefix-arg (y-or-n-p (org-glance:format ,prompt))))
      ,@forms))
@@ -385,12 +386,14 @@ If point is before first heading, eval forms on each headline."
   ;; - [ ] check for nested views and ask to flatten them
   ;; - [ ] check if original headline is stored in archive
   ;; - [ ] check for PROPERTIES drawer indentation
-  ;; - [ ] fix non-relative DIR properties
+  ;; - [x] fix non-relative DIR properties
 
   (when (org-glance-overview:pull)
     (let* ((view-id (org-glance-overview:category))
            (original-headline (org-glance-overview:original-headline))
            (original-headline-location (org-glance-headline:file original-headline))
+           (dir (org-element-property :DIR original-headline))
+           (archive (org-element-property :ARCHIVE original-headline))
            (located-in-view-dir-p (cl-loop
                                      for view-id in (org-glance-headline:tags)
                                      for overview-location = (->> view-id
@@ -404,7 +407,19 @@ If point is before first heading, eval forms on each headline."
            (raw-value (org-glance-headline:raw-value original-headline))
            (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
 
-      (org-glance-doctor:fix-when (s-matches? org-link-any-re raw-value)
+      (org-glance-doctor:when (and dir (not (string= dir (abbreviate-file-name dir))))
+          "Headline \"${title}\" contains full path in DIR property. Abbreviate it?"
+        (org-glance-headline:narrow original-headline
+          (org-set-property "DIR" (abbreviate-file-name dir))
+          (save-buffer)))
+
+      (org-glance-doctor:when (and archive (not (string= archive (abbreviate-file-name archive))))
+          "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
+        (org-glance-headline:narrow original-headline
+          (org-set-property "ARCHIVE" (abbreviate-file-name archive))
+          (save-buffer)))
+
+      (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
           "Headline \"${title}\" contains link in raw value. Move it to the body?"
         (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
         (org-glance-headline:narrow original-headline
@@ -412,7 +427,7 @@ If point is before first heading, eval forms on each headline."
           (insert "\n- " raw-value "\n")
           (save-buffer)))
 
-      (org-glance-doctor:fix-when (not located-in-view-dir-p)
+      (org-glance-doctor:when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
         (let ((captured-headline (org-glance-headline:narrow original-headline
                                    (org-glance:capture-headline-at-point view-id))))
@@ -543,17 +558,22 @@ If point is before first heading, eval forms on each headline."
 ;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance-metastore:get-headline (org-glance-headline:id)))
+  (save-window-excursion
+    (org-glance-headline:visit
+     (org-glance-metastore:get-headline (org-glance-headline:id)))))
+
+(cl-defun org-glance-overview:choose-headline-or-capture ()
+  (condition-case choice
+      (org-glance-metastore:choose-headline)
+    (org-glance-exception:headline-not-found
+     (org-glance-overview:capture
+      (org-glance-view:choose "Unknown thing. Please, specify it's role to capture: ")
+      (cadr choice)))))
 
 (cl-defun org-glance-overview:add-relation
     (&optional
        (source (org-glance-overview:original-headline))
-       (target (condition-case choice
-                   (org-glance-metastore:choose-headline)
-                 (org-glance-exception:headline-not-found
-                  (org-glance-overview:capture
-                   (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                   (cadr choice))))))
+       (target (org-glance-overview:choose-headline-or-capture)))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
   (org-glance-headline:add-biconnected-relation source target))

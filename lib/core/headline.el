@@ -147,13 +147,17 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE by id. Grab source file from metastore."
   (let* ((file (org-glance-headline:file headline))
-         (buffer (org-glance-headline:buffer headline)))
+         (buffer (org-glance-headline:buffer headline))
+         (revert-without-query (list file)))
 
-    (cond (file (if (file-exists-p file) (find-file file)
-                  (org-glance-exception:metastore-outdated "File not found: %s" file)))
-          (buffer (if (bufferp buffer)
-                      (switch-to-buffer buffer)
-                    (org-glance-exception:metastore-outdated "Buffer not found: %s" (buffer-name buffer)))))
+    (cond (file
+           (if (file-exists-p file)
+               (find-file file)
+             (org-glance-exception:metastore-outdated "File not found: %s" file)))
+          (buffer
+           (if (bufferp buffer)
+               (switch-to-buffer buffer)
+             (org-glance-exception:metastore-outdated "Buffer not found: %s" (buffer-name buffer)))))
 
     ;; we are now visiting headline file, let's remove restrictions
     (widen)
