@@ -456,7 +456,16 @@ If point is before first heading, eval forms on each headline."
     (when (or force (y-or-n-p (org-glance:format "Revoke the role \"${role}\" from \"${title}\"?")))
       (org-glance-headline:narrow original-headline
         (org-toggle-tag (format "%s" role) 'off)
-        (save-buffer))
+        (unless (org-glance-headline:roles)
+          (when (y-or-n-p "No roles associated with headline. Remove it completely?")
+            (kill-region (org-entry-beginning-position) (org-entry-end-position))))
+        (save-buffer)
+        (when (= (buffer-size (current-buffer)) 0)
+          (when (y-or-n-p "File buffer is empty. Delete it?")
+            (delete-file (buffer-file-name) 'trash)
+            (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
+              (when (y-or-n-p "Partition is empty. Delete it?")
+                (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))))
       (let ((inhibit-read-only t))
         (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
 
