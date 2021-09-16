@@ -61,20 +61,18 @@ enjoy using a lot.
      append (list filename)
      append (-org-glance:list-file-archives filename)))
 
-(cl-defun org-glance-buffer-properties-to-kill-ring ()
+(cl-defun org-glance:get-buffer-key-value-pairs ()
   "Extract key-value pairs from buffer that match pattern (key: value), run completing read on keys, copy values to kill ring."
-  (let* ((property-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
-         (properties (save-excursion
-                       (goto-char (point-min))
-                       (cl-loop
-                          while (condition-case nil
-                                    (re-search-forward property-re)
-                                  (search-failed nil))
-                          collect (s-trim (substring-no-properties (match-string 1))) into keys
-                          collect (s-trim (substring-no-properties (match-string 2))) into vals
-                          finally (return (-zip keys vals))))))
-    (while t
-      (kill-new (alist-get (org-completing-read "Extract property: " properties) properties nil nil #'string=)))))
+  (let ((property-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$"))
+    (save-excursion
+      (goto-char (point-min))
+      (cl-loop
+         while (condition-case nil
+                   (re-search-forward property-re)
+                 (search-failed nil))
+         collect (s-trim (substring-no-properties (match-string 1))) into keys
+         collect (s-trim (substring-no-properties (match-string 2))) into vals
+         finally (return (-zip keys vals))))))
 
 (cl-defun org-glance:title-from-url (url)
   "Return content in <title> tag."
