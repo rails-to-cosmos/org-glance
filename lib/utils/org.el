@@ -57,14 +57,15 @@
     (org-glance:ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
-      (f-join (org-glance-view:resource-location view-id)
-              (->> (org-element-property :raw-value (org-element-at-point))
-                   (s-replace-regexp "[^a-z0-9A-Z_]" "-")
-                   (s-replace-regexp "\\-+" "-")
-                   (s-replace-regexp "\\-+$" "")
-                   (s-truncate 30)
-                   (list (format-time-string "%Y-%m-%d"))
-                   (s-join "_"))))))
+      (abbreviate-file-name
+       (f-join (org-glance-view:resource-location view-id)
+               (->> (org-element-property :raw-value (org-element-at-point))
+                    (s-replace-regexp "[^a-z0-9A-Z_]" "-")
+                    (s-replace-regexp "\\-+" "-")
+                    (s-replace-regexp "\\-+$" "")
+                    (s-truncate 30)
+                    (list (format-time-string "%Y-%m-%d"))
+                    (s-join "_")))))))
 
 (cl-defun org-glance:first-level-headline ()
   (cl-loop while (org-up-heading-safe)))
