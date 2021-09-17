@@ -34,19 +34,16 @@
 ;;      (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
 ;;      (org-set-property "COOKIE_DATA" "todo recursive"))))
 
-(cl-defun org-glance-view:generate-id (&optional (view-id (org-glance-view:completing-read)))
-  (format "%s-%s-%s"
-          view-id
-          (format-time-string "%Y%m%d")
-          (secure-hash 'md5 (buffer-string))))
-
 (cl-defun org-glance-view:generate-id-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
   (save-excursion
     (org-glance:ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
-      (or (org-element-property :ORG_GLANCE_ID (org-element-at-point))
-          (org-glance-view:generate-id view-id)))))
+      (or (org-glance-headline:id (org-element-at-point))
+          (format "%s-%s-%s"
+                  view-id
+                  (format-time-string "%Y%m%d")
+                  (secure-hash 'md5 (buffer-string)))))))
 
 (cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to directory where VIEW-ID resources and metadata are stored."
