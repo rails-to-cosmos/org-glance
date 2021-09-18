@@ -166,9 +166,12 @@ Default enrichment is as follows:
     (org-glance-headline:search-buffer headline)
 
     ;; for interactive usage only
-    (org-glance:expand-parents)
-    (org-overview)
-    (org-cycle 'contents)
+    (condition-case nil
+        (progn
+          (org-glance:expand-parents)
+          (org-overview)
+          (org-cycle 'contents))
+      (error nil))
 
     (org-glance-headline:at-point)))
 
