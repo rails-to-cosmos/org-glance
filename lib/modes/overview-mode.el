@@ -41,6 +41,7 @@ If point is before first heading, eval forms on each headline."
 
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
+(define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "^") #'(lambda ()

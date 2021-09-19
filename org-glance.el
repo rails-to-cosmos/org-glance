@@ -135,26 +135,61 @@
             (org-glance:insert-relation)
           (insert "@")))))
 
+(cl-defun org-glance:read-view-directories ()
+  (directory-files org-glance-directory nil "^[[:word:]]+"))
+
+(cl-defun org-glance:view-directory-loaded? (view-directory)
+  (alist-get view-directory org-glance:views-loaded nil nil #'string=))
+
+(cl-defun org-glance:view-config-file-location (view-directory)
+  (f-join org-glance-directory view-directory (concat view-directory ".config.json")))
+
+(cl-defun org-glance:view-config-file-read (view-directory)
+  (json-read-file (org-glance:view-config-file-location view-directory)))
+
+(cl-defun org-glance:view-directory-register (view-directory)
+  (push (cons view-directory (current-time)) org-glance:views-loaded))
+
 (cl-defun org-glance:system-init ()
   "Update all changed entities from `org-glance-directory'."
   (cl-loop
-     for view-directory in (directory-files org-glance-directory nil "^[[:word:]]+")
-     unless (alist-get view-directory org-glance:views-loaded nil nil #'string=)
-     do (let ((view-config-file (f-join org-glance-directory view-directory (concat view-directory ".config.json"))))
-          ;; (unless (file-exists-p view-config-file)
-          ;;   (with-temp-file view-config-file
-          ;;     (insert (json-encode `((id . ,(s-titleize view-directory)))))
-          ;;     (json-pretty-print-buffer)))
-          (message "Read directory %s" view-directory)
-          (apply 'org-glance-def-view
-                 (cl-loop
-                    for (k . v) in (json-read-file view-config-file)
-                    for pk = (intern (org-glance:format ":${k}"))
-                    for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                                   (t (intern v)))
-                    when pk
-                    append (list pk pv)))
-          (push (cons view-directory (current-time)) org-glance:views-loaded))))
+     for view-directory in (org-glance:read-view-directories)
+     unless (org-glance:view-directory-loaded? view-directory)
+     do
+       (message "Read directory %s" view-directory)
+       (apply 'org-glance-def-view
+              (cl-loop
+                 for (k . v) in (org-glance:view-config-file-read view-directory)
+                 for pk = (intern (org-glance:format ":${k}"))
+                 for pv = (cond ((member k '(type)) (mapcar 'intern v))
+                                (t (intern v)))
+                 when pk
+                 append (list pk pv)))
+       (org-glance:view-directory-register view-directory)
+
+     unless
+       (org-glance:view-directory-loaded? "posit")
+     do
+       (org-glance-def-view :id 'posit)
+       (org-glance:view-directory-register "posit")
+
+     unless
+       (org-glance:view-directory-loaded? "ascertains")
+     do
+       (org-glance-def-view :id 'ascertains)
+       (org-glance:view-directory-register "ascertains")
+
+     unless
+       (org-glance:view-directory-loaded? "thing")
+     do
+       (org-glance-def-view :id 'thing)
+       (org-glance:view-directory-register "thing")
+
+     unless
+       (org-glance:view-directory-loaded? "class")
+     do
+       (org-glance-def-view :id 'class)
+       (org-glance:view-directory-register "class")))
 
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."
