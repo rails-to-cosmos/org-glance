@@ -29,6 +29,7 @@ Use posits in logbook drawer: [
 
 Cache roles: employee/employer, contact/task
 ** Visualization
+*** [[https://observablehq.com/@mbostock/tree-of-life][Tree of Life / Mike Bostock / Observable]]
 *** [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
 - [[http://bl.ocks.org/NPashaP/96447623ef4d342ee09b][DashBoard - bl.ocks.org]]
 - [[http://bl.ocks.org/joews/9697914][Animated d3 word cloud - bl.ocks.org]]
@@ -60,6 +61,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
 ** Unsorted [1/14]
+*** TODO implement custom schedule (maybe for ledna)
 *** TODO high priority for current clocked-in dependencies in completing read
 *** TODO remove headline feature
 *** TODO capture templates support
