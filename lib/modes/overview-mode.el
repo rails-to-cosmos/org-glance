@@ -551,7 +551,8 @@ If point is before first heading, eval forms on each headline."
       (org-glance-headline:visit))
     (org-toggle-comment)
     (save-buffer))
-  (org-glance-overview:pull))
+  (org-glance-overview:pull)
+  (org-glance-headline:search-forward))
 
 (cl-defun org-glance-overview:archive ()
   "Toggle archive headline at point."
@@ -563,7 +564,8 @@ If point is before first heading, eval forms on each headline."
       (org-glance-headline:visit))
     (org-toggle-archive-tag)
     (save-buffer))
-  (org-glance-overview:pull))
+  (org-glance-overview:pull)
+  (org-glance-headline:search-forward))
 
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)
