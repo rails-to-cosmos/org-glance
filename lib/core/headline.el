@@ -15,19 +15,27 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
   (when (not (null (org-element-property :ORG_GLANCE_ID headline)))
     headline))
 
+(defvar org-glance-headline:serde-alist
+  `((:raw-value . org-glance-headline:title)
+    (:begin . org-glance-headline:begin)
+    (:file . org-glance-headline:file)
+    (:commentedp . org-glance-headline:commented?)
+    (:archivedp . org-glance-headline:archived?)))
+
 (cl-defun org-glance-headline:serialize (headline)
   "Serialize HEADLINE to store it on disk."
-  (list (org-glance-headline:title headline)
-        (org-glance-headline:begin headline)
-        (org-glance-headline:file headline)))
+  (cl-loop
+     for (property . method) in org-glance-headline:serde-alist
+     collect (funcall method headline)))
 
 (cl-defun org-glance-headline:deserialize (dump)
   "Deserialize DUMP to minimal headline."
-  (cl-destructuring-bind (title begin file) dump
-    (org-element-create 'headline
-                        (list :raw-value title
-                              :begin begin
-                              :file file))))
+  (org-element-create
+   'headline
+   (cl-loop
+      for (property . method) in org-glance-headline:serde-alist
+      for index from 0
+      append (list property (nth index dump)))))
 
 (cl-defun org-glance-headline:goto-beginning-of-current-headline ()
   "Jump to headline at point and build `org-glance-headline' object from `org-element' at point.

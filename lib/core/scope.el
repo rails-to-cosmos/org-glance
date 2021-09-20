@@ -41,7 +41,9 @@
 
 (cl-defmethod org-glance-scope ((s symbol))
   "Return extracted S from `org-glance-scope--default-scope-alist'."
-  (funcall (cdr (assoc s org-glance-scope--default-scope-alist))))
+  (if-let (reserved-scope (assoc s org-glance-scope--default-scope-alist))
+      (funcall (cdr reserved-scope))
+    (org-glance-scope (symbol-name s))))
 
 (cl-defmethod org-glance-scope ((b buffer))
   "Return list of files from buffer B."

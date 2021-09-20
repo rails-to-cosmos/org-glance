@@ -67,6 +67,76 @@
 (defvar org-glance:actions nil
   "Alist containing registered actions.")
 
+(defcustom org-glance:log-level 800 "Logging level."
+  :type `(choice (const :tag "OFF is a special level that can be used to turn off logging.
+
+This level is initialized to `most-positive-fixnum'."
+                        ,most-positive-fixnum)
+
+                 (const :tag "SEVERE is a message level indicating a serious failure.
+In general SEVERE messages should describe events that are of
+considerable importance and which will prevent normal program
+execution.
+
+They should be reasonably intelligible to end users and to system
+administrators. This level is initialized to 1000." 1000)
+
+                 (const :tag "WARNING is a message level indicating a potential problem.
+In general WARNING messages should describe events that will be
+of interest to end users or system managers, or which indicate
+potential problems.
+
+This level is initialized to 900." 900)
+
+                 (const :tag "INFO is a message level for informational messages.
+Typically INFO messages will be written to the console or its
+equivalent.
+
+So the INFO level should only be used for reasonably significant
+messages that will make sense to end users and system
+administrators.
+
+This level is initialized to 800." 800)
+
+                 (const :tag "CONFIG is a message level for static configuration messages.
+CONFIG messages are intended to provide a variety of static
+configuration information, to assist in debugging problems that
+may be associated with particular configurations.
+
+For example, CONFIG message might include the CPU type, the
+graphics depth, the GUI look-and-feel, etc. This level is
+initialized to 700." 700)
+
+                 (const :tag "FINE is a message level providing tracing information.
+All of FINE, FINER, and FINEST are intended for relatively
+detailed tracing.
+
+The exact meaning of the three levels will vary between
+subsystems, but in general, FINEST should be used for the most
+voluminous detailed output, FINER for somewhat less detailed
+output, and FINE for the lowest volume (and most important)
+messages.
+
+In general the FINE level should be used for information that
+will be broadly interesting to developers who do not have a
+specialized interest in the specific subsystem.
+
+FINE messages might include things like minor (recoverable)
+failures. Issues indicating potential performance problems are
+also worth logging as FINE. This level is initialized to 500." 500)
+
+                 (const :tag "FINER indicates a fairly detailed tracing message.
+By default logging calls for entering, returning, or throwing an
+exception are traced at this level. This level is initialized to
+400." FINER)
+
+                 (const :tag "FINEST indicates a highly detailed tracing message.
+This level is initialized to 300." FINEST)
+
+                 (const :tag "ALL indicates that all messages should be logged.
+This level is initialized to `most-negative-fixnum'."  ,most-negative-fixnum))
+  :group 'org-glance)
+
 (org-glance:require
   cl-generic
   cl-lib
@@ -228,8 +298,8 @@ C-u means not to insert relation at point, but register it in logbook instead."
                                (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
-                 (org-glance-exception:metastore-outdated
-                  (message "Database %s is outdated, actualizing..." db)
+                 (org-glance-exception:db-outdated
+                  (message "Metastore %s is outdated, actualizing..." db)
                   (redisplay)
                   (org-glance :scope scope
                               :filter filter
