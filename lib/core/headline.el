@@ -20,7 +20,9 @@ Return HEADLINE or nil if it is not a proper `org-glance-headline'."
     (:begin . org-glance-headline:begin)
     (:file . org-glance-headline:file)
     (:commentedp . org-glance-headline:commented?)
-    (:archivedp . org-glance-headline:archived?)))
+    (:archivedp . org-glance-headline:archived?))
+  "It is safe (in terms of backward/forward compability of metastores) to append properties.
+Do not modify existing properties without metastore backfill.")
 
 (cl-defun org-glance-headline:serialize (headline)
   "Serialize HEADLINE to store it on disk."
