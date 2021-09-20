@@ -24,7 +24,7 @@
 
 ;;; medium methods applied for all first-level headlines in current file
 
-(defmacro org-glance-overview:foreach (&rest forms)
+(cl-defmacro org-glance-overview:for-each (&rest forms)
   "Eval FORMS on headline at point.
 If point is before first heading, eval forms on each headline."
   (declare (indent 0) (debug t))
@@ -32,11 +32,28 @@ If point is before first heading, eval forms on each headline."
      (interactive)
      (if (org-before-first-heading-p)
          (when (or (not current-prefix-arg)
-                   (y-or-n-p "Doctor will repair headlines automatically. Proceed?"))
+                   (y-or-n-p "Apply action to all headlines in buffer?"))
            (goto-char (point-min))
            (while (and (org-glance-headline:search-forward) (sit-for 0))
              (when (= (org-glance-headline:level) 1)
                ,@forms)))
+       ,@forms)))
+
+(cl-defmacro org-glance-overview:for-one (&rest forms)
+  "Eval FORMS on headline at point.
+If point is before first heading, prompt for headline and eval forms on it."
+  (declare (indent 0) (debug t))
+  `(lambda ()
+     (interactive)
+     (if (org-before-first-heading-p)
+         (let ((headlines (org-glance-view:headlines (org-glance-overview:category))))
+           (save-excursion
+             (org-glance-headline:search-buffer-by-id
+              (org-glance-headline:id
+               (org-glance-scope--choose-headline
+                (org-completing-read "Specify headline: " (mapcar #'org-glance-headline:title headlines))
+                headlines)))
+             ,@forms))
        ,@forms)))
 
 ;; lightweight methods applied for current headline
@@ -52,19 +69,38 @@ If point is before first heading, eval forms on each headline."
                                                            (org-glance-overview:sort)
                                                            (org-overview)
                                                            (save-buffer)))))
-(define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:add-relation)
-(define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:materialize-headline)
-(define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-(define-key org-glance-overview-mode-map (kbd "f") #'org-attach-reveal-in-emacs)
+
+(define-key org-glance-overview-mode-map (kbd "@")
+  (org-glance-overview:for-one
+    (org-glance-overview:add-relation)))
+
+(define-key org-glance-overview-mode-map (kbd "RET")
+  (org-glance-overview:for-one
+    (org-glance-overview:materialize-headline)))
+
+
+
+(define-key org-glance-overview-mode-map (kbd "f")
+  (org-glance-overview:for-one
+    (org-attach-reveal-in-emacs)))
+
 (define-key org-glance-overview-mode-map (kbd "g")
-  (org-glance-overview:foreach
+  (org-glance-overview:for-each
     (org-glance-overview:doctor)))
+
+(define-key org-glance-overview-mode-map (kbd "v")
+  (org-glance-overview:for-one
+    (org-glance-overview:visit-headline)))
+
+(define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
-(define-key org-glance-overview-mode-map (kbd "o") #'org-open-at-point)
 (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
-(define-key org-glance-overview-mode-map (kbd "v") #'org-glance-overview:visit-headline)
-(define-key org-glance-overview-mode-map (kbd "k") #'org-glance-overview:kill-headline)
+
+(define-key org-glance-overview-mode-map (kbd "k")
+  (org-glance-overview:for-one
+    (org-glance-overview:kill-headline)))
+
 ;; (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
 (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
@@ -76,8 +112,9 @@ If point is before first heading, eval forms on each headline."
       (org-glance-overview:materialize-headline)
       (org-end-of-meta-data)
       (insert "\n")))
+
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
-(define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:jump)
+;; (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:jump)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id
@@ -186,15 +223,6 @@ If point is before first heading, eval forms on each headline."
             (let ((captured-headline (org-glance:capture-headline-at-point view-id :remove-original nil)))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
               (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
-
-(cl-defun org-glance-overview:jump
-    (&optional (view-id (org-glance-overview:category)))
-  (interactive)
-  (let ((headlines (org-glance-view:headlines view-id)))
-    (org-glance-headline:search-buffer-by-id
-     (org-glance-headline:id (org-glance-scope--choose-headline
-                              (org-completing-read "Jump to headline: " (mapcar #'org-glance-headline:title headlines))
-                              headlines)))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
@@ -349,12 +377,10 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
-  (org-glance-overview:for-all
-      nil
-    (org-glance-action-call
-     'materialize
-     :on (org-glance-overview:original-headline)
-     :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category))))))
+  (org-glance-action-call
+   'materialize
+   :on (org-glance-overview:original-headline)
+   :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category)))))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
