@@ -1,5 +1,3 @@
-(require 'highlight)
-(require 'org-attach)
 (require 'org-glance-module)
 
 (org-glance:require
