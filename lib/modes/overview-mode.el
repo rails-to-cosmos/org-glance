@@ -621,7 +621,9 @@ If point is before first heading, prompt for headline and eval forms on it."
        (target (org-glance-overview:choose-headline-or-capture)))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (org-glance-headline:add-biconnected-relation source target))
+  (save-window-excursion
+    (org-glance-headline:add-biconnected-relation source target))
+  (org-glance-overview:pull))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
