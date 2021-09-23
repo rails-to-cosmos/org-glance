@@ -24,7 +24,7 @@
     (cl-loop for file in (cond
                            ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
                            ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-                           ((f-directory? file) (directory-files-recursively dir "\\.*.org\\.*"))
+                           ((f-directory? file) (directory-files-recursively file "\\.*.org\\.*"))
                            (t (list file)))
        when (member (file-name-extension file) org-glance-scope:extensions)
        collect file)))
