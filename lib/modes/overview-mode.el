@@ -443,13 +443,13 @@ If point is before first heading, prompt for headline and eval forms on it."
           (org-set-property "ARCHIVE" (abbreviate-file-name archive))
           (save-buffer)))
 
-      (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
-          "Headline \"${title}\" contains link in raw value. Move it to the body?"
-        (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
-        (org-glance-headline:narrow original-headline
-          (org-end-of-meta-data t)
-          (insert "\n- " raw-value "\n")
-          (save-buffer)))
+      ;; (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
+      ;;     "Headline \"${title}\" contains link in raw value. Move it to the body?"
+      ;;   (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
+      ;;   (org-glance-headline:narrow original-headline
+      ;;     (org-end-of-meta-data t)
+      ;;     (insert "\n- " raw-value "\n")
+      ;;     (save-buffer)))
 
       (org-glance-doctor:when (not located-in-view-dir-p)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
