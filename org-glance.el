@@ -137,6 +137,13 @@ This level is initialized to 300." FINEST)
 This level is initialized to `most-negative-fixnum'."  ,most-negative-fixnum))
   :group 'org-glance)
 
+(cl-defmacro org-glance:interactive-lambda (&rest forms)
+  "Define interactive lambda function with FORMS in its body."
+  (declare (indent 0) (debug t))
+  `(lambda ()
+     (interactive)
+     ,@forms))
+
 (org-glance:require
   cl-generic
   cl-lib
