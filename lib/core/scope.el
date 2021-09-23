@@ -1,14 +1,11 @@
-(require 'load-relative)
 (require 'org-glance-module)
-(require 'dash)
 
-(org-glance:require lib.utils.helpers)
-(org-glance:require lib.core.headline)
+(org-glance:require
+  dash
+  org
 
-(declare-function -org-glance:list-files-recursively "lib/utils/helpers.el")
-(declare-function org-glance-headline:scan-file "lib/utils/helpers.el")
-
-(require 'org)
+  lib.core.headline
+  lib.utils.helpers)
 
 (defvar org-glance-scope:extensions
   '("org" "org_archive"))
@@ -27,7 +24,7 @@
     (cl-loop for file in (cond
                            ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
                            ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-                           ((f-directory? file) (-org-glance:list-files-recursively file))
+                           ((f-directory? file) (directory-files-recursively dir "\\.*.org\\.*"))
                            (t (list file)))
        when (member (file-name-extension file) org-glance-scope:extensions)
        collect file)))

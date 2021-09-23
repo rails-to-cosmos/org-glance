@@ -25,16 +25,15 @@
           (goto-char (point-min))
           (org-content 1)
           (org-cycle-hide-drawers 'all)
-          (setq-local --org-glance-materialized-headline:id id)
-          (setq-local --org-glance-materialized-headline:file file)
-          (setq-local --org-glance-materialized-headline:begin beg)
-          (setq-local --org-glance-materialized-headline:end end)
-          ;; extract hash from promoted subtree
-          (setq-local --org-glance-materialized-headline:hash (org-glance-headline:hash))
+          (set (make-local-variable '--org-glance-materialized-headline:id) id)
+          (set (make-local-variable '--org-glance-materialized-headline:file) file)
+          (set (make-local-variable '--org-glance-materialized-headline:begin) beg)
+          (set (make-local-variable '--org-glance-materialized-headline:end) end)
+          (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
           ;; run hooks on original subtree
           (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-hook))
           ;; then promote it saving original level
-          (setq-local --org-glance-materialized-headline:indent (1- (org-glance-headline:level)))
+          (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
           (org-glance-headline:promote-to-the-first-level)
           (org-cycle 'contents))))
     (switch-to-buffer buffer)))

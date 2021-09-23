@@ -41,9 +41,6 @@ enjoy using a lot.
   (cl-loop for tag in (org--get-local-tags)
      collect (downcase tag)))
 
-(defun -org-glance:list-files-recursively (dir)
-  (directory-files-recursively dir "\\.*.org\\.*"))
-
 (defun -org-glance:list-file-archives (filename)
   "Return list of org-mode files for FILENAME."
   (let* ((dir (file-name-directory filename))
