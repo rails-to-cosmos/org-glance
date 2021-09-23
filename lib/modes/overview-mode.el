@@ -97,6 +97,15 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
 (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
+(define-key org-glance-overview-mode-map (kbd "d")
+  (org-glance:interactive-lambda
+    (let* ((headlines-origins (cl-loop
+                                 for headline in (org-glance-headline:scan-buffer)
+                                 collect (org-glance-headline:narrow
+                                             (org-glance-metastore:get-headline (org-glance-headline:id headline))
+                                           (org-glance-headline:file))))
+           (scope (seq-uniq headlines-origins #'string=)))
+      (org-drill scope))))
 
 (define-key org-glance-overview-mode-map (kbd "k")
   (org-glance-overview:for-one
@@ -108,11 +117,12 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
 (define-key org-glance-overview-mode-map (kbd "+")
-  #'(lambda () (interactive)
-      (org-glance-overview:capture (org-glance-overview:category))
-      (org-glance-overview:materialize-headline)
-      (org-end-of-meta-data)
-      (insert "\n")))
+  (org-glance:interactive-lambda
+    (org-glance-overview:capture (org-glance-overview:category))
+    (org-glance-overview:materialize-headline)
+    ;; (org-end-of-meta-data)
+    ;; (insert "\n")
+    ))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 

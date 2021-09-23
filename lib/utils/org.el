@@ -42,7 +42,7 @@
       (or (org-glance-headline:id (org-element-at-point))
           (format "%s-%s-%s"
                   view-id
-                  (format-time-string "%Y%m%d")
+                  (s-join "-" (mapcar #'number-to-string (current-time)))
                   (secure-hash 'md5 (buffer-string)))))))
 
 (cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
