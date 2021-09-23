@@ -22,12 +22,21 @@
 
 ;;; medium methods applied for all first-level headlines in current file
 
+(cl-defun org-glance-overview:choose-headline-and-jump ()
+  "Choose `org-glance-headline' from current overview buffer and goto it."
+  (let ((headlines (org-glance-headline:scan-buffer)))
+    (org-glance-headline:search-buffer-by-id
+     (org-glance-headline:id
+      (org-glance-scope--choose-headline
+       (org-completing-read "Specify headline: "
+                            (mapcar #'org-glance-headline:title (--filter (org-glance-headline:active? it) headlines)))
+       headlines)))))
+
 (cl-defmacro org-glance-overview:for-each (&rest forms)
   "Eval FORMS on headline at point.
 If point is before first heading, eval forms on each headline."
   (declare (indent 0) (debug t))
-  `(lambda ()
-     (interactive)
+  `(org-glance:interactive-lambda
      (if (org-before-first-heading-p)
          (when (or (not current-prefix-arg)
                    (y-or-n-p "Apply action to all headlines in buffer?"))
@@ -41,32 +50,24 @@ If point is before first heading, eval forms on each headline."
   "Eval FORMS on headline at point.
 If point is before first heading, prompt for headline and eval forms on it."
   (declare (indent 0) (debug t))
-  `(lambda ()
-     (interactive)
-     (if (org-before-first-heading-p)
-         (let ((headlines (org-glance-view:headlines (org-glance-overview:category))))
-           (save-excursion
-             (org-glance-headline:search-buffer-by-id
-              (org-glance-headline:id
-               (org-glance-scope--choose-headline
-                (org-completing-read "Specify headline: " (mapcar #'org-glance-headline:title headlines))
-                headlines)))
-             ,@forms))
-       ,@forms)))
+  `(org-glance:interactive-lambda
+     (when (org-before-first-heading-p)
+       (org-glance-overview:choose-headline-and-jump))
+     ,@forms))
 
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
 (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "^") #'(lambda ()
-                                                       (interactive)
-                                                       (save-excursion
-                                                         (let ((inhibit-read-only t))
-                                                           (goto-char (point-min))
-                                                           (org-glance-overview:sort)
-                                                           (org-overview)
-                                                           (save-buffer)))))
+(define-key org-glance-overview-mode-map (kbd "^")
+  (org-glance:interactive-lambda
+    (save-excursion
+      (let ((inhibit-read-only t))
+        (goto-char (point-min))
+        (org-glance-overview:sort)
+        (org-overview)
+        (save-buffer)))))
 
 (define-key org-glance-overview-mode-map (kbd "@")
   (org-glance-overview:for-one
@@ -76,7 +77,9 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-overview:for-one
     (org-glance-overview:materialize-headline)))
 
-
+(define-key org-glance-overview-mode-map (kbd "/")
+  (org-glance:interactive-lambda
+    (org-glance-overview:choose-headline-and-jump)))
 
 (define-key org-glance-overview-mode-map (kbd "f")
   (org-glance-overview:for-one
@@ -112,7 +115,6 @@ If point is before first heading, prompt for headline and eval forms on it."
       (insert "\n")))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
-;; (define-key org-glance-overview-mode-map (kbd "/") #'org-glance-overview:jump)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
   (let* ((metastore-location (-some->> view-id

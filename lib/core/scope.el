@@ -59,9 +59,14 @@
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
   (cl-loop for file in (org-glance-scope scope)
-     append (-non-nil (mapcar filter (progn
-                                       (message "Scan file %s" file)
-                                       (redisplay)
-                                       (org-glance-headline:scan-file file))))))
+     append (-non-nil (mapcar filter
+                              (with-temp-buffer
+                                (message "Scan file %s" file)
+                                (redisplay)
+                                (insert-file-contents file)
+                                (hack-local-variables)
+                                (unless (alist-get 'org-glance-overview-mode (buffer-local-variables))
+                                  (org-mode)
+                                  (org-glance-headline:scan-buffer (current-buffer) :file (abbreviate-file-name file))))))))
 
 (org-glance:provide)

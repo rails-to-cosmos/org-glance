@@ -271,19 +271,12 @@ Default enrichment is as follows:
               (org-element-property :raw-link link))) ;; full link if alias is none
          (org-element-property :begin link))))))
 
-(cl-defun org-glance-headline:scan-file (&optional (file (buffer-file-name)))
-  (with-temp-buffer
-    (insert-file-contents file)
-    (hack-local-variables)
-    (unless (alist-get 'org-glance-overview-mode (buffer-local-variables))
-      (org-mode)
-      (org-element-map (org-element-parse-buffer 'headline) 'headline
-        (lambda (el)
-          (-some-> el
-            (org-glance-headline-p)
-            (org-glance-headline:enrich
-                :file (abbreviate-file-name file)
-                :buffer (get-file-buffer file))))))))
+(cl-defun org-glance-headline:scan-buffer (&optional (buffer (current-buffer)) &rest props)
+  (with-current-buffer buffer
+    (org-element-map (org-element-parse-buffer 'headline) 'headline
+      (lambda (el)
+        (when (org-glance-headline-p el)
+          (apply #'org-glance-headline:enrich el :buffer buffer props))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
