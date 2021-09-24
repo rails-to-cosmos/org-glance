@@ -61,6 +61,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
 ** Unsorted [1/14]
+*** TODO [#A] make headline types implicit with headline grain
 *** TODO implement custom schedule (maybe for ledna)
 *** TODO high priority for current clocked-in dependencies in completing read
 *** TODO remove headline feature

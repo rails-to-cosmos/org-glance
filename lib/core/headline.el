@@ -130,7 +130,8 @@ Default enrichment is as follows:
   (org-element-property :begin headline))
 
 (cl-defun org-glance-headline:end (&optional (headline (org-glance-headline:at-point)))
-  (org-element-property :end headline))
+  (org-glance-headline:narrow headline
+    (save-excursion (org-end-of-subtree t))))
 
 (cl-defun org-glance-headline:class (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :ORG_GLANCE_CLASS headline))
@@ -197,21 +198,22 @@ Default enrichment is as follows:
 
      (if ,save-excursion ;; fixme
          (save-window-excursion
-           (org-glance-headline:visit ,headline)
+           (save-excursion
+             (org-glance-headline:visit ,headline)
 
-           (save-restriction
-             (org-narrow-to-subtree)
-             (when (= (point-max) (save-excursion
-                                    (org-end-of-meta-data)
-                                    (point)))
-               (goto-char (point-max))
-               (insert "\n"))
-             (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-                            ,@forms)))
+             (save-restriction
+               (org-narrow-to-subtree)
+               (when (= (point-max) (save-excursion
+                                      (org-end-of-meta-data)
+                                      (point)))
+                 (goto-char (point-max))
+                 (insert "\n"))
+               (setq result (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+                              ,@forms)))
 
-           (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-                 ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer) (bury-buffer file-buffer)))
-                 (file (save-buffer) (kill-buffer (get-file-buffer file)))))
+             (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
+                   ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer) (bury-buffer file-buffer)))
+                   (file (save-buffer) (kill-buffer (get-file-buffer file))))))
        (progn
          (org-glance-headline:visit ,headline)
 
@@ -297,14 +299,13 @@ Default enrichment is as follows:
       (insert new-title)
       (org-align-tags))))
 
-(cl-defmacro org-glance-headline:format (headline &key (format "${label}=${classes}= [[org-glance-visit:${id}][${stateful-title}]]"))
+(cl-defmacro org-glance-headline:format (headline &key (format "${label} [[org-glance-visit:${id}][${stateful-title}]]"))
   (declare (indent 1) (debug t))
   `(let* ((id (org-glance-headline:id ,headline))
           (state (org-glance-headline:state ,headline))
           (label (if (string-empty-p state) " " (format " *%s* " state)))
           (original-title (org-glance-headline:title ,headline))
           (stateful-title (s-replace-regexp (format "^%s[[:space:]]*" state) "" original-title))
-          (classes (s-join ", " (org-glance-headline:tags ,headline)))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim (org-glance:format ,format))))
 
@@ -429,16 +430,10 @@ Default enrichment is as follows:
           (unless (eql source target)
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
-(cl-defun org-glance-headline:materialized-buffer-name (&optional (headline (org-glance-headline:at-point)))
-  (concat "org-glance:<" (org-glance-headline:title headline) ">"))
-
-(cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
-  (s-contains? "aes-encrypted" (org-glance-headline:contents headline)))
-
 (cl-defun org-glance-headline:key-value-storage? (&optional (headline (org-glance-headline:at-point)))
   (save-excursion
     (org-glance-headline:narrow headline
-      (org-end-of-meta-data)
+      (org-end-of-meta-data t)
       (search-forward-regexp org-glance-headline:key-value-pair-re nil t))))
 
 (cl-defun org-glance-headline:key-value-pairs (&optional (headline (org-glance-headline:at-point)))
@@ -454,5 +449,10 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:roles (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (mapcar #'intern (org-get-tags))))
+
+(cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
+  (org-glance-headline:narrow headline
+    (org-end-of-meta-data t)
+    (looking-at "aes-encrypted")))
 
 (org-glance:provide)

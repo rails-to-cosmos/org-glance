@@ -6,7 +6,7 @@
 (org-glance-action-define extract (headline) :for kvs
   "Completing read all properties from HEADLINE and its successors to kill ring."
   (let ((key-value-pairs (save-window-excursion
-                           (org-glance-action-call 'materialize :on headline)
+                           (org-glance-headline:materialize headline)
                            (unwind-protect
                                 (org-glance:get-buffer-key-value-pairs)
                              (with-demoted-errors "Unable to kill buffer: %s"

@@ -81,13 +81,17 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (org-glance-overview:choose-headline-and-jump)))
 
-(define-key org-glance-overview-mode-map (kbd "f")
+(define-key org-glance-overview-mode-map (kbd "F")
   (org-glance-overview:for-one
     (org-attach-reveal-in-emacs)))
 
-(define-key org-glance-overview-mode-map (kbd "g")
+(define-key org-glance-overview-mode-map (kbd "!")
   (org-glance-overview:for-each
     (org-glance-overview:doctor)))
+
+(define-key org-glance-overview-mode-map (kbd "g")
+  (org-glance-overview:for-each
+    (org-glance-overview:pull)))
 
 (define-key org-glance-overview-mode-map (kbd "v")
   (org-glance-overview:for-one
@@ -271,6 +275,16 @@ If point is before first heading, prompt for headline and eval forms on it."
   (let ((view-name (s-downcase (format "%s" view-id))))
     (f-join org-glance-directory view-name (concat view-name ".org"))))
 
+(cl-defun org-glance-headline:main-role (&optional (headline (org-glance-overview:original-headline)))
+  "Assume main role of HEADLINE as role directory where it is stored."
+  (cl-loop
+     for view-id in (org-glance-headline:tags headline)
+     for overview-directory = (org-glance-overview:directory view-id)
+     for original-directory = (org-glance-headline:file headline)
+     for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
+     when (f-equal? common-parent overview-directory)
+     do (return view-id)))
+
 (cl-defun org-glance-overview:sorting-by-type (sorting-type)
   "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
   (case (if (listp sorting-type) (car sorting-type) sorting-type)
@@ -387,10 +401,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
-  (org-glance-action-call
-   'materialize
-   :on (org-glance-overview:original-headline)
-   :for (org-glance-view-type (org-glance-view:get-view-by-id (org-glance-overview:category)))))
+  (org-glance-headline:materialize (org-glance-overview:original-headline)))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
@@ -430,15 +441,7 @@ If point is before first heading, prompt for headline and eval forms on it."
            (original-headline-location (org-glance-headline:file original-headline))
            (dir (org-element-property :DIR original-headline))
            (archive (org-element-property :ARCHIVE original-headline))
-           (located-in-view-dir-p (cl-loop
-                                     for view-id in (org-glance-headline:tags)
-                                     for overview-location = (->> view-id
-                                                               org-glance-overview:location
-                                                               file-name-directory
-                                                               abbreviate-file-name)
-                                     for common-parent = (abbreviate-file-name (f-common-parent (list overview-location original-headline-location)))
-                                     when (string= common-parent overview-location)
-                                     do (return t)))
+           (main-role (org-glance-headline:main-role))
            (title (org-glance-headline:title))
            (raw-value (org-glance-headline:raw-value original-headline))
            (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
@@ -463,7 +466,7 @@ If point is before first heading, prompt for headline and eval forms on it."
       ;;     (insert "\n- " raw-value "\n")
       ;;     (save-buffer)))
 
-      (org-glance-doctor:when (not located-in-view-dir-p)
+      (org-glance-doctor:when (null main-role)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
         (let ((captured-headline (org-glance-headline:narrow original-headline
                                    (org-glance:capture-headline-at-point view-id))))
@@ -508,15 +511,13 @@ If point is before first heading, prompt for headline and eval forms on it."
       (org-glance-headline:narrow original-headline
         (org-toggle-tag (format "%s" role) 'off)
         (unless (org-glance-headline:roles)
-          (when (y-or-n-p "No roles associated with headline. Remove it completely?")
+          (when (y-or-n-p "No roles is now associated with headline. Remove it completely?")
             (kill-region (org-entry-beginning-position) (org-entry-end-position))))
         (save-buffer)
-        (when (= (buffer-size (current-buffer)) 0)
-          (when (y-or-n-p "File buffer is empty. Delete it?")
-            (delete-file (buffer-file-name) 'trash)
-            (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
-              (when (y-or-n-p "Partition is empty. Delete it?")
-                (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))))
+        (when (= (buffer-size) 0)
+          (delete-file (buffer-file-name) 'trash)
+          (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
+            (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))
       (let ((inhibit-read-only t))
         (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
 
@@ -615,9 +616,8 @@ If point is before first heading, prompt for headline and eval forms on it."
 ;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (save-window-excursion
-    (org-glance-headline:visit
-     (org-glance-metastore:get-headline (org-glance-headline:id)))))
+  (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
+    (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:choose-headline-or-capture ()
   (condition-case choice

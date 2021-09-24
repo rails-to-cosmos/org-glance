@@ -14,7 +14,7 @@
    [("+" "Capture" org-glance-overview:capture)
     ("e" "Extract" org-glance-action-extract)
     ("j" "Jump" org-glance-action-open)
-    ("m" "Materialize" org-glance-action-materialize)]]
+    ("m" "Materialize" org-glance:materialize)]]
   (interactive)
   (org-glance:system-init)
   (transient-setup 'org-glance-form-action))

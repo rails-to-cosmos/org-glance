@@ -182,11 +182,8 @@ This level is initialized to `most-negative-fixnum'."  ,most-negative-fixnum))
 
   lib.actions.babel.insert
   lib.actions.encrypted-headlines.extract
-  lib.actions.encrypted-headlines.materialize
   lib.actions.key-value-headlines.extract
-  lib.actions.main.materialize
-  lib.actions.main.open
-  lib.actions.main.visit)
+  lib.actions.main.open)
 
 (declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
 (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
@@ -286,6 +283,10 @@ C-u means not to insert relation at point, but register it in logbook instead."
     (insert (org-glance-headline:format target)))
   (when-let (source (org-glance-headline:at-point))
     (org-glance-headline:add-biconnected-relation source target)))
+
+(cl-defun org-glance:materialize (&optional (headline (org-glance:get-or-capture)))
+  (interactive)
+  (org-glance-headline:materialize headline))
 
 (cl-defun org-glance
     (&key db

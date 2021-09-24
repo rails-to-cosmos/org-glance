@@ -21,19 +21,6 @@
     (format "org-glance-action-%s-%s" name)
     (intern)))
 
-(cl-defun org-glance-action-call (name &key (on 'current-headline) (for 'all))
-  "Refactoring needed."
-  (let ((headline (cond ((eq on 'current-headline) (org-element-at-point))
-                        (t on))))
-    (cond ((eq for 'all) (funcall (intern (format "org-glance--%s--%s" name for)) headline))
-          ((listp for) (cl-loop for action-type in for
-                          for fn = (intern (format "org-glance--%s--%s" name action-type))
-                          when (fboundp fn)
-                          collect fn into available-functions
-                          finally (if available-functions
-                                      (funcall (car available-functions) headline)
-                                    (org-glance-action-call name :on on :for 'all)))))))
-
 (cl-defun org-glance-action-headlines (action)
   (cl-loop for view being the hash-values of org-glance:views
      when (org-glance-view-action-resolve view action)
