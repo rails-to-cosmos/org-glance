@@ -14,6 +14,7 @@
 (defvar --org-glance-materialized-headline:id nil)
 (defvar --org-glance-materialized-headline:indent nil)
 (defvar --org-glance-materialized-headline:password nil)
+(defvar --org-glance-materialized-headline:clock-marker-position nil)
 
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -44,6 +45,17 @@
          (redisplay))))
 
 (add-hook 'org-glance-after-materialize-sync-hook '--sync-overviews)
+
+(add-hook 'org-glance-before-materialize-sync-hook #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
+                                                             (setq-local --org-glance-materialized-headline:clock-marker-position (marker-position org-clock-marker))
+                                                             (let ((org-log-note-clock-out nil)
+                                                                   (org-clock-out-switch-to-state nil))
+                                                               (org-clock-out)))))
+
+(add-hook 'org-glance-after-materialize-sync-hook #'(lambda () (when --org-glance-materialized-headline:clock-marker-position
+                                                            (goto-char --org-glance-materialized-headline:clock-marker-position)
+                                                            (org-clock-in)
+                                                            (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
 
 (define-key org-glance-materialized-headline-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-materialized-headline-mode-map (kbd "C-c C-q") #'kill-current-buffer)
