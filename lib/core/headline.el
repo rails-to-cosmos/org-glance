@@ -453,6 +453,6 @@ Default enrichment is as follows:
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (org-end-of-meta-data t)
-    (looking-at "aes-encrypted")))
+    (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))
 
 (org-glance:provide)
