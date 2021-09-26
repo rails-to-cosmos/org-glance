@@ -1,9 +1,23 @@
-(require 'org-archive)
 (require 'org-glance-module)
+
+(org-glance:require
+  org-archive)
 
 (cl-defun org-glance:ensure-at-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))
+
+(cl-defun org-glance:title-from-url (url)
+  "Return content in <title> tag."
+  (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
+    (save-excursion
+      (set-buffer download-buffer)
+      (beginning-of-buffer)
+      (setq x1 (progn (search-forward "<title")
+                      (search-forward ">")))
+      (search-forward "</title>")
+      (setq x2 (search-backward "<"))
+      (decode-coding-string (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)) 'utf-8))))
 
 ;; (defun org-glance:recreate-folder-structure-in-subtree-at-point ()
 ;;   (interactive)
@@ -74,14 +88,14 @@
   (save-excursion
     (org-glance:first-level-headline)))
 
-(cl-defun org-glance:parse-links (raw-value)
+(cl-defun org-glance:get-links-from-string (raw-value)
   (-filter
    (lambda (it) (condition-case nil (eql (car it) 'link) (error nil)))
    (org-element-parse-secondary-string raw-value '(link))))
 
 (cl-defun org-glance:clean-title (raw-value)
   (cl-loop
-     with links = (org-glance:parse-links raw-value)
+     with links = (org-glance:get-links-from-string raw-value)
      for link in links
      for contents-begin = (org-element-property :contents-begin link)
      for contents-end = (org-element-property :contents-end link)
@@ -99,5 +113,31 @@
                         for title in titles
                         do (setq result (s-replace-regexp org-link-any-re title result))
                         finally (return result)))))
+
+(defconst org-glance:key-value-pair-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+
+(cl-defun org-glance:get-buffer-key-value-pairs ()
+  "Extract key-value pairs from buffer.
+Run completing read on keys and copy selected values to kill ring.
+
+Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
+  (cl-loop
+     initially (goto-char (point-min))
+     while (condition-case nil
+               (re-search-forward org-glance:key-value-pair-re)
+             (search-failed nil))
+     collect (s-trim (substring-no-properties (match-string 1))) into keys
+     collect (s-trim (substring-no-properties (match-string 2))) into vals
+     finally (return (-zip keys vals))))
+
+(cl-defun org-glance:buffer-links ()
+  "Retrieve all `org-link' positions from current buffer."
+  (org-element-map (org-element-parse-buffer) 'link
+    (lambda (link)
+      (cons
+       (substring-no-properties
+        (or (nth 2 link)                            ;; link alias
+            (org-element-property :raw-link link))) ;; full link if alias is none
+       (org-element-property :begin link)))))
 
 (org-glance:provide)

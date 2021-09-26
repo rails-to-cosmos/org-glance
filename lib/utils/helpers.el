@@ -58,29 +58,4 @@ enjoy using a lot.
      append (list filename)
      append (-org-glance:list-file-archives filename)))
 
-(cl-defun org-glance:get-buffer-key-value-pairs ()
-  "Extract key-value pairs from buffer that match pattern (key: value), run completing read on keys, copy values to kill ring."
-  (let ((property-re org-glance-headline:key-value-pair-re))
-    (save-excursion
-      (goto-char (point-min))
-      (cl-loop
-         while (condition-case nil
-                   (re-search-forward property-re)
-                 (search-failed nil))
-         collect (s-trim (substring-no-properties (match-string 1))) into keys
-         collect (s-trim (substring-no-properties (match-string 2))) into vals
-         finally (return (-zip keys vals))))))
-
-(cl-defun org-glance:title-from-url (url)
-  "Return content in <title> tag."
-  (let (x1 x2 (download-buffer (url-retrieve-synchronously url)))
-    (save-excursion
-      (set-buffer download-buffer)
-      (beginning-of-buffer)
-      (setq x1 (progn (search-forward "<title")
-                      (search-forward ">")))
-      (search-forward "</title>")
-      (setq x2 (search-backward "<"))
-      (decode-coding-string (mm-url-decode-entities-string (buffer-substring-no-properties x1 x2)) 'utf-8))))
-
 (org-glance:provide)

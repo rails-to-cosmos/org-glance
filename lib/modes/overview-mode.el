@@ -103,12 +103,12 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "d")
   (org-glance:interactive-lambda
-    (let* ((headlines-origins (cl-loop
-                                 for headline in (org-glance-headline:scan-buffer)
-                                 collect (org-glance-headline:narrow
-                                             (org-glance-metastore:get-headline (org-glance-headline:id headline))
-                                           (org-glance-headline:file))))
-           (scope (seq-uniq headlines-origins #'string=)))
+    (let* ((origins (cl-loop
+                       for headline in (org-glance-headline:scan-buffer)
+                       collect (org-glance-headline:narrow
+                                   (org-glance-metastore:get-headline (org-glance-headline:id headline))
+                                 (org-glance-headline:file))))
+           (scope (seq-uniq origins #'string=)))
       (org-drill scope))))
 
 (define-key org-glance-overview-mode-map (kbd "k")
@@ -221,7 +221,7 @@ If point is before first heading, prompt for headline and eval forms on it."
                                    for file in (org-glance-scope path)
                                    append (-non-nil (mapcar (org-glance-view-filter (org-glance-view:get-view-by-id view-id))
                                                             (progn
-                                                              (message "Scan file %s" file)
+                                                              (org-glance:log-info "Scan file %s" file)
                                                               (redisplay)
                                                               (with-temp-buffer
                                                                 (org-mode)
@@ -256,13 +256,13 @@ If point is before first heading, prompt for headline and eval forms on it."
   (interactive)
   (org-glance-edit-mode +1)
   (org-glance-overview-mode -1)
-  (message "Edit mode is now enabled."))
+  (org-glance:log-info "Edit mode is now enabled."))
 
 (cl-defun org-glance-edit-mode:apply ()
   (interactive)
   (org-glance-edit-mode -1)
   (org-glance-overview-mode +1)
-  (message "All changes have been applied."))
+  (org-glance:log-info "All changes have been applied."))
 
 (cl-defun org-glance-overview:directory (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
@@ -412,7 +412,7 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-overview:for-all
       nil
     (let ((offset (- (point) (save-excursion
-                               (org-glance-headline:goto-beginning-of-current-headline)
+                               (org-glance-headline:search-parents)
                                (point)))))
       (-some->> (org-glance-headline:at-point)
         org-glance-headline:id
@@ -452,27 +452,25 @@ If point is before first heading, prompt for headline and eval forms on it."
 
       (org-glance-doctor:when (and dir (not (string= dir (abbreviate-file-name dir))))
           "Headline \"${title}\" contains full path in DIR property. Abbreviate it?"
-        (org-glance-headline:narrow original-headline
-          (org-set-property "DIR" (abbreviate-file-name dir))
-          (save-buffer)))
+        (org-glance-headline:with-materialized-headline original-headline
+          (org-set-property "DIR" (abbreviate-file-name dir))))
 
       (org-glance-doctor:when (and archive (not (string= archive (abbreviate-file-name archive))))
           "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
-        (org-glance-headline:narrow original-headline
-          (org-set-property "ARCHIVE" (abbreviate-file-name archive))
-          (save-buffer)))
+        (org-glance-headline:with-materialized-headline original-headline
+          (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
 
       ;; (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
       ;;     "Headline \"${title}\" contains link in raw value. Move it to the body?"
       ;;   (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
-      ;;   (org-glance-headline:narrow original-headline
+      ;;   (org-glance-headline:with-materialized-headline original-headline
       ;;     (org-end-of-meta-data t)
       ;;     (insert "\n- " raw-value "\n")
       ;;     (save-buffer)))
 
       (org-glance-doctor:when (null main-role)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
-        (let ((captured-headline (org-glance-headline:narrow original-headline
+        (let ((captured-headline (org-glance-headline:with-materialized-headline original-headline
                                    (org-glance:capture-headline-at-point view-id))))
           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
           (org-glance-overview:register-headline-in-overview captured-headline view-id))
@@ -494,7 +492,7 @@ If point is before first heading, prompt for headline and eval forms on it."
       (save-buffer)
       (kill-buffer)
       (org-glance-overview:create view-id)
-      (message (org-glance:format "View ${view-id} is now up to date")))))
+      (org-glance:log-info (org-glance:format "View ${view-id} is now up to date")))))
 
 (cl-defun org-glance-overview:pull* ()
   "Apply `org-glance-overview:pull' to each headline in current overview file."
@@ -507,7 +505,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
-  (org-glance-headline:goto-beginning-of-current-headline)
+  (org-glance-headline:search-parents)
   (let ((role (org-glance-overview:category))
         (title (org-glance-headline:title))
         (original-headline (org-glance-overview:original-headline)))
@@ -527,7 +525,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 ;; (cl-defun org-glance-overview:move-headline (&optional (new-role (org-glance-view:choose "New role: ")))
 ;;   (interactive)
-;;   (org-glance-headline:goto-beginning-of-current-headline)
+;;   (org-glance-headline:search-parents)
 ;;   (let ((role (org-glance-overview:category))
 ;;         (title (org-glance-headline:title))
 ;;         (original-headline (org-glance-overview:original-headline)))
@@ -563,11 +561,11 @@ If point is before first heading, prompt for headline and eval forms on it."
          (org-glance-exception:headline-not-found "Original headline not found"))
        nil)
       ((string= current-headline-contents original-headline-contents)
-       (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
+       (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
        t)
       (t (save-excursion
            (save-restriction
-             (org-glance-headline:goto-beginning-of-current-headline)
+             (org-glance-headline:search-parents)
              (org-narrow-to-subtree)
              (delete-region (point-min) (point-max))
              (insert original-headline-contents)
@@ -578,7 +576,7 @@ If point is before first heading, prompt for headline and eval forms on it."
          (goto-char initial-point)
          (org-align-tags t)
          (save-buffer)
-         (message (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
+         (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
          t))
     ))
 
@@ -623,18 +621,10 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:choose-headline-or-capture ()
-  (condition-case choice
-      (org-glance-metastore:choose-headline)
-    (org-glance-exception:headline-not-found
-     (org-glance-overview:capture
-      (org-glance-view:choose "Unknown thing. Please, specify it's role to capture: ")
-      (cadr choice)))))
-
 (cl-defun org-glance-overview:add-relation
     (&optional
        (source (org-glance-overview:original-headline))
-       (target (org-glance-overview:choose-headline-or-capture)))
+       (target (org-glance:get-or-capture)))
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
   (save-window-excursion

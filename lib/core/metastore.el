@@ -1,11 +1,13 @@
-(require 'org)
-(require 'org-element)
 (require 'org-glance-module)
 
-(org-glance:require lib.core.scope)
-(org-glance:require lib.core.exceptions)
-(org-glance:require lib.core.headline)
-(org-glance:require lib.utils.helpers)
+(org-glance:require
+  org
+  org-element
+
+  lib.core.scope
+  lib.core.exceptions
+  lib.core.headline
+  lib.utils.helpers)
 
 (cl-defun org-glance-metastore:write (file metastore)
   (declare (indent 1))
@@ -58,23 +60,7 @@
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
 (cl-defun org-glance-metastore:get-headline (id)
-  "Get full headline by ID."
-  (cl-loop
-     for view-id in (org-glance-view:ids)
-     for metastore = (->> view-id
-                       org-glance-view:get-view-by-id
-                       org-glance-view:metastore-location
-                       org-glance-metastore:read)
-     for headline = (gethash id metastore)
-     when headline
-     collect (-> headline
-               (org-glance-headline:deserialize)
-               (org-glance-headline:enrich :ORG_GLANCE_ID id))
-     into result
-     finally (return (first result))))
-
-(cl-defun org-glance-metastore:get-headlines (id)
-  "Get full headline by ID."
+  "Get headline by ID."
   (cl-loop
      for view-id in (org-glance-view:ids)
      for metastore = (->> view-id
@@ -85,11 +71,14 @@
      when headline
      collect (-> headline
                  (org-glance-headline:deserialize)
-                 (org-glance-headline:enrich :ORG_GLANCE_ID id)
-                 (org-glance-headline:enrich :ORG_GLANCE_CLASS view-id))))
+                 (org-glance-headline:enrich :ORG_GLANCE_ID id))
+     into result
+     finally (return (first result))))
 
 (cl-defun org-glance-metastore:choose-headline ()
-  (let* ((headlines (cl-loop for view-id in (org-glance-view:ids)
+  "Main retriever, refactor needed."
+  (let* ((headlines (cl-loop
+                       for view-id in (org-glance-view:ids)
                        append (cl-loop for headline in (org-glance-view:headlines view-id)
                                  collect (cons ;; duplication of format*
                                           (format "[%s] %s" view-id (org-glance-headline:title headline))
@@ -99,6 +88,6 @@
     (unless headline
       (org-glance-exception:headline-not-found choice))
     (org-glance-headline:narrow headline
-      (org-glance-headline:at-point))))
+      (org-glance-headline:create-from-element-at-point))))
 
 (org-glance:provide)

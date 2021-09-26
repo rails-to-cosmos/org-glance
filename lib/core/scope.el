@@ -58,7 +58,7 @@
   (cl-loop for file in (org-glance-scope scope)
      append (-non-nil (mapcar filter
                               (with-temp-buffer
-                                (message "Scan file %s" file)
+                                (org-glance:log-info "Scan file %s" file)
                                 (redisplay)
                                 (insert-file-contents file)
                                 (hack-local-variables)

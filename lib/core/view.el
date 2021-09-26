@@ -43,7 +43,7 @@
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) (list org-glance-directory)))
          (headlines (org-glance-scope-headlines scope filter)))
-    (message "Update view %s" view-id)
+    (org-glance:log-info "Update view %s" view-id)
     (org-glance-metastore:create db headlines)
     (list view)))
 
@@ -134,7 +134,7 @@
                                )))
         (json-pretty-print-buffer)))
 
-    (message "View \"%s\"%s is now ready to glance %s"
+    (org-glance:log-info "View \"%s\"%s is now ready to glance %s"
              id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))

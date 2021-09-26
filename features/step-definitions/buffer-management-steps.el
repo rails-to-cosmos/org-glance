@@ -20,18 +20,10 @@
          (goto-char (point-max))
          (Then "I should see" text))))
 
-(And "^I should have a choice of \\([[:digit:]]+\\) headlines? for \"\\([^\"]+\\)\" action$"
-     (lambda (cardinality action)
-       (let ((actual-cardinality (->> (org-glance-action-headlines 'visit)
-                                   (length)))
-             (expected-cardinality (->> cardinality
-                                     (string-to-number))))
-         (should (= expected-cardinality actual-cardinality)))))
-
-(When "^I run action \"\\(.+\\)\" for headlines and type \"\\(.+\\)\"$"
-  (lambda (action user-input)
-    (with-simulated-input user-input
-      (cond ((string-equal action "visit") (org-glance-action-visit))))))
+;; (When "^I run action \"\\(.+\\)\" for headlines and type \"\\(.+\\)\"$"
+;;   (lambda (action user-input)
+;;     (with-simulated-input user-input
+;;       (cond ((string-equal action "visit") (org-glance-action-visit))))))
 
 (But "^I should not have \"\\(.+\\)\"$"
      (lambda (something)

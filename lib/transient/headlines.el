@@ -12,8 +12,8 @@
     ("o" "Overview" org-glance-overview)]]
   ["Headline actions"
    [("+" "Capture" org-glance-overview:capture)
-    ("e" "Extract" org-glance-action-extract)
-    ("j" "Jump" org-glance-action-open)
+    ("e" "Extract" org-glance:extract)
+    ("j" "Jump" org-glance:open)
     ("m" "Materialize" org-glance:materialize)]]
   (interactive)
   (org-glance:system-init)
