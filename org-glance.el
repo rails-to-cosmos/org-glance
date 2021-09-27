@@ -30,12 +30,8 @@
 
 ;;; Code:
 
+(require 'org)
 (require 'org-glance-module)
-
-(eval-and-compile
-  (org-glance:require
-    org
-    lib.core.logging))
 
 (defcustom org-glance-directory org-directory
   "Directory with Org files."
@@ -66,47 +62,50 @@
 (defvar org-glance:views-loaded nil
   "Registered views alist.")
 
-(cl-defmacro org-glance:interactive-lambda (&rest forms)
-  "Define interactive lambda function with FORMS in its body."
-  (declare (indent 0) (debug t))
-  `(lambda ()
-     (interactive)
-     ,@forms))
+(eval-and-compile
+  (cl-defmacro org-glance:interactive-lambda (&rest forms)
+    "Define interactive lambda function with FORMS in its body."
+    (declare (indent 0) (debug t))
+    `(lambda ()
+       (interactive)
+       ,@forms))
 
-(org-glance:require
-  cl-generic
-  cl-lib
-  cl-macs
-  json
-  org-element
-  org-macs
-  seq
-  subr-x
+  (org-glance:require
+    cl-generic
+    cl-lib
+    cl-macs
+    json
+    seq
+    subr-x
 
-  lib.utils.encryption                  ; encryption utils
-  lib.utils.helpers                     ; unsorted, deprecated
-  lib.utils.org                         ; org-mode shortcuts
+    lib.core.logging
+    lib.core.exceptions
+
+    lib.utils.encryption                ; encryption utils
+    lib.utils.helpers                   ; unsorted, deprecated
+    lib.utils.org                       ; org-mode shortcuts
 
 ;;; Core APIs
-  ;; Description of high-level org-glance entities: Headline, View,
-  ;; Scope and Metastore.
+    ;; Description of high-level org-glance entities: Headline, View,
+    ;; Scope and Metastore.
 
 ;;; Headline API
-  ;; Org-glance headline is an org-element headline enriched by some
-  ;; shortcuts and helper methods.
-  lib.core.headline                     ; good
-  lib.core.metastore                    ; ok
-  lib.core.scope                        ; ? deprecated
-  lib.core.view                         ; migrate to overview
+    ;; Org-glance headline is an org-element headline enriched by some
+    ;; shortcuts and helper methods.
 
-  lib.modes.overview-mode               ; good one, improve
-  lib.modes.materialized-headline-mode
+    lib.core.headline                   ; good
+    lib.core.metastore                  ; ok
+    lib.core.scope                      ; ? deprecated
+    lib.core.view                       ; migrate to overview
 
-  lib.links.visit
+    lib.modes.overview-mode             ; good one, improve
+    lib.modes.materialized-headline-mode
 
-  lib.transient.headlines
+    lib.links.visit
 
-  lib.plugins.metadata)
+    lib.transient.headlines
+
+    lib.plugins.metadata))
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 

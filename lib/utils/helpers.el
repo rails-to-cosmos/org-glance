@@ -1,6 +1,7 @@
 (require 'org-glance-module)
 
 (org-glance:require
+  s
   aes
   dash
   org
@@ -28,7 +29,7 @@ enjoy using a lot.
          (result `(s-format ,fmt 'aget (list ,@agetter))))
     `(s-join "\n"
              (cl-loop
-                with stripMargin = (-partial 's-replace-regexp "^\\W*|" "")
+                with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
                 for line in (s-split "\n" ,result)
                 collect (funcall stripMargin line)))))
 

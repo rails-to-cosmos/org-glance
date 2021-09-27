@@ -363,13 +363,16 @@ If point is before first heading, prompt for headline and eval forms on it."
          (filename (org-glance-overview:location view-id))
          (header (let ((category view-id))
                    (org-glance:format org-glance-overview:header)))
-         (headlines (->> view-id org-glance-view:update org-glance-view:headlines))
-         (contents (s-join "\n" (mapcar #'org-glance-headline:contents headlines))))
+         (headlines (->> view-id org-glance-view:update org-glance-view:headlines)))
     (-org-glance:make-file-directory filename)
     (with-temp-file filename
       (org-mode)
       (insert header)
-      (insert contents)
+      (cl-loop
+         for headline in headlines
+         collect (org-glance-headline:contents headline)
+         into contents
+         finally (insert (s-join "\n" contents)))
       (goto-char (point-min))
       (condition-case nil
           (org-glance-overview:sort)

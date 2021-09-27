@@ -176,28 +176,15 @@ metastore.")
 
     (cond ((and file (file-exists-p file)) (find-file file))
           ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
-          (t ;; file/buffer not found, use current buffer
-           ))
+          (t (org-glance:log-warning "File and buffer not found for visiting. Using current buffer...")))
 
-    ;; we are now visiting headline file, let's remove restrictions
+    (org-glance:log-debug "We are now visiting headline buffer %s, let's remove restrictions" (current-buffer))
     (widen)
-
-    ;; search for headline in buffer
-
+    (org-glance:log-debug "Search headline in buffer")
     (cond (id (org-glance-headline:search-buffer-by-id id))
-          (t (goto-char (org-glance-headline:begin headline))))
+          (t (goto-char (org-glance-headline:begin headline))))))
 
-    ;; for interactive usage only
-    ;; (condition-case nil
-    ;;     (progn
-    ;;       (org-glance:expand-parents)
-    ;;       (org-overview)
-    ;;       (org-cycle 'contents))
-    ;;   (error nil))
-
-    ))
-
-(cl-defmacro org-glance-headline:narrow (headline &rest forms &key (save-excursion t) &allow-other-keys)
+(cl-defmacro org-glance-headline:narrow (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
   `(save-window-excursion
@@ -205,18 +192,7 @@ metastore.")
        (save-restriction
          (org-glance-headline:visit ,headline)
          (org-narrow-to-subtree)
-         ;; (when (= (point-max) (save-excursion
-         ;;                        (org-end-of-meta-data)
-         ;;                        (point)))
-         ;;   (goto-char (point-max))
-         ;;   (insert "\n"))
-
-         ,@forms)
-
-       ;; (cond ((and file-buffer (not (eq file-buffer (current-buffer)))) (bury-buffer file-buffer))
-       ;;       ((and file-buffer (eq file-buffer (current-buffer))) (progn (switch-to-buffer visited-buffer) (bury-buffer file-buffer)))
-       ;;       (file (save-buffer) (kill-buffer (get-file-buffer file))))
-       )))
+         ,@forms))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance:ensure-at-heading)
@@ -227,6 +203,7 @@ metastore.")
   (let ((file (org-glance-headline:file headline))
         (buffer (org-glance-headline:buffer headline)))
     (cond (file (with-temp-buffer
+                  (org-glance:log-debug "Extract contents for headline %s from file %s" (org-glance-headline:id headline) file)
                   (org-mode)
                   (insert-file-contents file)
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
@@ -235,6 +212,7 @@ metastore.")
                   (org-glance-headline:promote-to-the-first-level)
                   (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
           (buffer (with-current-buffer buffer
+                    (org-glance:log-debug "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) file)
                     (save-window-excursion
                       (save-excursion
                         (save-restriction
@@ -262,7 +240,7 @@ metastore.")
 (cl-defun org-glance-headline:rename (headline title)
   (org-glance-headline:narrow headline
     (let ((old-title (org-glance-headline:raw-value headline))
-          (new-title (s-replace-regexp "[[:space:]]" " " title)))
+          (new-title (replace-regexp-in-string "[[:space:]]" " " title)))
       (org-glance-headline:add-log-note
        (org-glance:format "- Renamed from \"${old-title}\" to \"${new-title}\" on ${now}"))
       (org-glance-headline:search-parents)
@@ -277,7 +255,7 @@ metastore.")
           (state (org-glance-headline:state ,headline))
           (label (if (string-empty-p state) " " (format " *%s* " state)))
           (original-title (org-glance-headline:title ,headline))
-          (stateful-title (s-replace-regexp (format "^%s[[:space:]]*" state) "" original-title))
+          (stateful-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" original-title))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim (org-glance:format ,format))))
 

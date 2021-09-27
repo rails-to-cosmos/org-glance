@@ -100,4 +100,8 @@ This level is initialized to 300.")
   "Log info if `org-glance:log-level' allows."
   (apply #'org-glance:log org-glance.log-level.INFO format-string args))
 
+(cl-defun org-glance:log-debug (format-string &rest args)
+  "Log debug message if `org-glance:log-level' allows."
+  (apply #'org-glance:log org-glance.log-level.FINEST format-string args))
+
 (org-glance:provide)

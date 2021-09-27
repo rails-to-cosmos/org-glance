@@ -2,8 +2,11 @@
 
 (org-glance:require
   lib.core.headline
+
+  ;; remove this dependencies:
   lib.core.metastore
-  lib.core.view)
+  lib.core.view
+  lib.modes.overview-mode)
 
 (defvar org-glance-materialized-headline-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -126,7 +129,9 @@
             (goto-char beg)
             (insert new-contents)))
 
+        ;; TODO: get rid of metastore knowledge here
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
+        ;; (setq-local --org-glance-materialized-headline:hash source-hash)
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
         (org-glance:log-info "Materialized headline successfully synchronized")))))

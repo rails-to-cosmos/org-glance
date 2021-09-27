@@ -1,6 +1,7 @@
 (require 'org-glance-module)
 
 (org-glance:require
+  s
   org-archive)
 
 (cl-defun org-glance:ensure-at-heading ()
@@ -74,9 +75,9 @@
       (abbreviate-file-name
        (f-join (org-glance-view:resource-location view-id)
                (->> (org-element-property :raw-value (org-element-at-point))
-                    (s-replace-regexp "[^a-z0-9A-Z_]" "-")
-                    (s-replace-regexp "\\-+" "-")
-                    (s-replace-regexp "\\-+$" "")
+                    (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
+                    (replace-regexp-in-string "\\-+" "-")
+                    (replace-regexp-in-string "\\-+$" "")
                     (s-truncate 30)
                     (list (format-time-string "%Y-%m-%d"))
                     (s-join "_")))))))
@@ -111,7 +112,7 @@
      finally (return (cl-loop
                         with result = raw-value
                         for title in titles
-                        do (setq result (s-replace-regexp org-link-any-re title result))
+                        do (setq result (replace-regexp-in-string org-link-any-re title result))
                         finally (return result)))))
 
 (defconst org-glance:key-value-pair-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
