@@ -153,6 +153,7 @@
             (beg (org-glance-headline:begin headline))
             (end (org-glance-headline:end headline))
             (contents (org-glance-headline:contents headline)))
+       (setq-local default-directory (file-name-directory file))
        (org-glance:log-info "Headline ID: \"%s\"" id)
        (org-glance:log-info "Headline FILE: \"%s\"" file)
        (org-glance:log-info "Headline BEG: \"%s\"" beg)
