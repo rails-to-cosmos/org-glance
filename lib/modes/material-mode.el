@@ -3,17 +3,17 @@
 (org-glance:require
   lib.core.headline
 
-  ;; remove this dependencies:
+  ;; remove these dependencies:
   lib.core.metastore
   lib.core.view
   lib.modes.overview-mode)
 
-(defvar org-glance-materialized-headline-mode-map (make-sparse-keymap)
+(defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
-(define-minor-mode org-glance-materialized-headline-mode
+(define-minor-mode org-glance-material-mode
     "A minor mode to be activated only in materialized view editor."
-  nil nil org-glance-materialized-headline-mode-map)
+  nil nil org-glance-material-mode-map)
 
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
@@ -80,9 +80,9 @@
                                                             (org-clock-in)
                                                             (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
 
-(define-key org-glance-materialized-headline-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
-(define-key org-glance-materialized-headline-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-(define-key org-glance-materialized-headline-mode-map (kbd "C-c C-v") #'org-glance-overview)
+(define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
+(define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
 (define-error 'org-glance-exception:headline-not-modified "No changes made in materialized view" 'user-error)
 (cl-defun org-glance-exception:headline-not-modified (format &rest args)
@@ -159,9 +159,9 @@
        (org-glance:log-info "Headline BEG: \"%s\"" beg)
        (org-glance:log-info "Headline END: \"%s\"" end)
 
-       (org-glance:log-info "Enable `org-mode' and `org-glance-materialized-headline-mode'")
+       (org-glance:log-info "Enable `org-mode' and `org-glance-material-mode'")
        (org-mode)
-       (org-glance-materialized-headline-mode +1)
+       (org-glance-material-mode +1)
 
        (org-glance:log-info "Insert headline contents")
        (insert contents)

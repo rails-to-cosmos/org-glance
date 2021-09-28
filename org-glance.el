@@ -99,7 +99,7 @@
     lib.core.view                       ; migrate to overview
 
     lib.modes.overview-mode             ; good one, improve
-    lib.modes.materialized-headline-mode
+    lib.modes.material-mode
 
     lib.links.visit
 
@@ -130,8 +130,8 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance:use-@-for-relations ()
-  "Rebind `@' key in `org-mode' buffers for relation management."
+(cl-defun org-glance:@magic ()
+  "Rebind `@' key in `org-mode' buffers for context-aware relation management."
   (define-key org-mode-map (kbd "@")
     #'(lambda () (interactive)
         (if (or (looking-back "^" 1)

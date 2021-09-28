@@ -5,8 +5,8 @@ Feature: System Init
   I want to define things, classes and domains
 
   Scenario: Let's start from scratch
-    When I visit my forest
-    Then I am in the buffer "*org-mode-forest*"
+    When I enter the forest
+    Then I am in the buffer "*org-glance*"
     And I should see
       """
       #    -*- mode: org; mode: org-glance-overview -*-
