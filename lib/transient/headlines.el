@@ -16,7 +16,7 @@
     ("j" "Jump" org-glance:open)
     ("m" "Materialize" org-glance:materialize)]]
   (interactive)
-  (org-glance:system-init)
+  (org-glance:init)
   (transient-setup 'org-glance-form-action))
 
 (org-glance:provide)

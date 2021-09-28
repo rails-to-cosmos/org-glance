@@ -53,14 +53,13 @@ metastore.")
      do (org-element-put-property element key value)
      finally (return element)))
 
-(cl-defun org-glance-headline:create-from-element-at-point ()
-  (when (eql 'headline (org-element-type (org-element-at-point)))
+(cl-defun org-glance-headline:create (&optional (proto (org-element-at-point)))
+  (when (eql 'headline (org-element-type proto))
     (cl-loop
-       with element = (org-element-at-point)
        for (property . method) in org-glance-headline:serde-alist
        for index from 0
-       do (org-glance-headline:enrich element property (funcall method element))
-       finally (return element))))
+       do (org-glance-headline:enrich proto property (funcall method proto))
+       finally (return proto))))
 
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
@@ -69,7 +68,7 @@ metastore.")
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (org-glance-headline:create-from-element-at-point))
+  (org-glance-headline:create))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -154,13 +153,10 @@ metastore.")
 (cl-defun org-glance-headline:tags (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
-(cl-defun org-glance-headline:parse-buffer-headlines ()
-  (org-element-map (org-element-parse-buffer 'headline) 'headline
-    (lambda (elem) (when (string= (org-glance-headline:id elem) id)
-                (org-element-property :begin elem)))))
-
 (cl-defun org-glance-headline:search-buffer-by-id (id)
-  (let ((points (org-glance-headline:parse-buffer-headlines)))
+  (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
+                  (lambda (elem) (when (string= (org-glance-headline:id elem) id)
+                              (org-element-property :begin elem))))))
     (unless points
       (org-glance-exception:headline-not-found "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
@@ -223,12 +219,29 @@ metastore.")
                           (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
           (t (org-glance-exception:headline-not-found "Unable to determine headline location.")))))
 
-(cl-defun org-glance-headline:scan-buffer (&optional (buffer (current-buffer)) &rest props)
-  (with-current-buffer buffer
+(cl-defgeneric org-glance-headline:extract (scope)
+  "Extract `org-glance-headlines' from scope.")
+
+(cl-defmethod org-glance-headline:extract ((f string))
+  "Extract headlines from file F."
+  (if-let (b (get-buffer f)) ;; buffer name
+      (org-glance-headline:extract b)
+    (with-temp-buffer
+      (org-glance:log-debug "Scan file %s" f)
+      (insert-file-contents f)
+      (org-mode)
+      (cl-loop
+         for headline in (org-glance-headline:extract (current-buffer))
+         collect (org-glance-headline:enrich headline :file (abbreviate-file-name f))))))
+
+(cl-defmethod org-glance-headline:extract ((b buffer))
+  "Extract headlines from buffer B."
+  (with-current-buffer b
     (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (el)
-        (when (org-glance-headline-p el)
-          (apply #'org-glance-headline:enrich el :buffer buffer props))))))
+      (lambda (e)
+        (when (org-glance-headline-p e)
+          (org-glance-headline:enrich (org-glance-headline:create e)
+            :buffer b))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline

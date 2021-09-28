@@ -48,7 +48,7 @@
        (scope '(agenda))
        (filter #'(lambda (_) t))
        (db-init nil))
-  "Deprecated method, refactor is needed."
+  "Deprecated method, refactor it."
   (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
          (load-db? (and (not (null db)) (file-exists-p db)))
          (skip-db? (null db)))
@@ -88,6 +88,6 @@
     (unless headline
       (org-glance-exception:headline-not-found choice))
     (org-glance-headline:narrow headline
-      (org-glance-headline:create-from-element-at-point))))
+      (org-glance-headline:create))))
 
 (org-glance:provide)

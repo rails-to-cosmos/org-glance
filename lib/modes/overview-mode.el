@@ -24,7 +24,7 @@
 
 (cl-defun org-glance-overview:choose-headline-and-jump ()
   "Choose `org-glance-headline' from current overview buffer and goto it."
-  (let ((headlines (org-glance-headline:scan-buffer)))
+  (let ((headlines (org-glance-headline:extract (current-buffer))))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id
       (org-glance-scope--choose-headline
@@ -104,7 +104,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "d")
   (org-glance:interactive-lambda
     (let* ((origins (cl-loop
-                       for headline in (org-glance-headline:scan-buffer)
+                       for headline in (org-glance-headline:extract (current-buffer))
                        collect (org-glance-headline:narrow
                                    (org-glance-metastore:get-headline (org-glance-headline:id headline))
                                  (org-glance-headline:file))))
@@ -637,7 +637,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
   (org-glance-overview:for-all
-      (error "not implemented yet") ;; org-glance-headline:scan-file
+      (error "not implemented yet")
     (let ((relations (org-glance-headline:relations*)))
       (with-temp-file "relations.js"
         (insert "var relations = ["

@@ -154,7 +154,7 @@
 (cl-defun org-glance:view-directory-register (view-directory)
   (push (cons view-directory (current-time)) org-glance:views-loaded))
 
-(cl-defun org-glance:system-init ()
+(cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."
   (cl-loop
      for view-directory in (org-glance:read-view-directories)
@@ -202,10 +202,16 @@ C-u means not to insert relation at point, but register it in logbook instead."
     (org-glance-headline:add-biconnected-relation source target)))
 
 (cl-defun org-glance:materialize (&optional (headline (org-glance:get-or-capture)))
+  "Materialize HEADLINE in new buffer."
   (interactive)
   (org-glance-headline:materialize headline))
 
 (cl-defun org-glance:open (&optional (headline (org-glance:get-or-capture)))
+  "Run `org-open-at-point' on any `org-link' inside HEADLINE.
+
+If there is only one link, open it.
+If there is more than one link, prompt user to choose which one to open.
+If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (org-glance-headline:with-materialized-headline headline
     (org-end-of-meta-data t)
@@ -220,7 +226,8 @@ C-u means not to insert relation at point, but register it in logbook instead."
 
 (cl-defun org-glance:extract (&optional (headline (org-glance:get-or-capture)))
   (interactive)
-  "Materialize HEADLINE and retrieve key-value pairs from its contents."
+  "Materialize HEADLINE and retrieve key-value pairs from its contents.
+If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
   (let ((pairs (org-glance-headline:with-materialized-headline headline
                  (org-glance:get-buffer-key-value-pairs))))
     (while t

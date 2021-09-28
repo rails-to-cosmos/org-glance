@@ -18,14 +18,19 @@
 (cl-defgeneric org-glance-scope (_)
   "Convert input to list of files if possible.")
 
-(cl-defmethod org-glance-scope ((s string))
+(cl-defmethod org-glance-scope ((file string))
   "Return list of file S if exists."
-  (let ((file (expand-file-name s)))
-    (cl-loop for file in (cond
-                           ((not (file-exists-p file)) (warn "File %s does not exist" file) nil)
-                           ((not (file-readable-p file)) (warn "File %s is not readable" file) nil)
-                           ((f-directory? file) (directory-files-recursively file "\\.*.org\\.*"))
-                           (t (list file)))
+  (let ((files-list (cond
+                      ((not (file-exists-p file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
+                      ((not (file-readable-p file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
+                      ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
+                      ((with-temp-buffer
+                         (insert-file-contents file)
+                         (hack-local-variables)
+                         (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
+                      (t (list file)))))
+    (cl-loop
+       for file in files-list
        when (member (file-name-extension file) org-glance-scope:extensions)
        collect file)))
 
@@ -55,15 +60,8 @@
   (--first (string= (org-glance-headline:title it) choice) headlines))
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
-  (cl-loop for file in (org-glance-scope scope)
-     append (-non-nil (mapcar filter
-                              (with-temp-buffer
-                                (org-glance:log-info "Scan file %s" file)
-                                (redisplay)
-                                (insert-file-contents file)
-                                (hack-local-variables)
-                                (unless (alist-get 'org-glance-overview-mode (buffer-local-variables))
-                                  (org-mode)
-                                  (org-glance-headline:scan-buffer (current-buffer) :file (abbreviate-file-name file))))))))
+  (cl-loop
+     for file in (org-glance-scope scope)
+     append (-non-nil (mapcar filter (org-glance-headline:extract file)))))
 
 (org-glance:provide)
