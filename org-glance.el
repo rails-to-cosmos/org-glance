@@ -140,7 +140,7 @@
           (insert "@")))))
 
 (cl-defun org-glance:read-view-directories ()
-  (--filter (f-directory? it) (directory-files org-glance-directory nil "^[[:word:]]+")))
+  (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
 
 (cl-defun org-glance:view-directory-loaded? (view-directory)
   (alist-get view-directory org-glance:views-loaded nil nil #'string=))
