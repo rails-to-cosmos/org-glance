@@ -136,7 +136,9 @@
     (org-glance:interactive-lambda
       (if (or (looking-back "^" 1)
               (looking-back "[[:space:]]" 1))
-          (org-glance:refer)
+          (condition-case nil
+              (org-glance:refer)
+            (quit (insert "@")))
         (insert "@")))))
 
 (cl-defun org-glance:read-view-directories ()
@@ -169,12 +171,18 @@
                  |AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
                  |DOWN A GULLY.
 
-                 |PRESS + TO BREAK A NEW GROUND."))))
+                 |PRESS + TO BREAK A NEW GROUND.
+
+                 |Unscheduled things in TODO state: _
+                 |Things to drill in: _
+                 |"))))
     (find-file forest-location)
     (rename-buffer "*org-glance*")))
 
 (cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."
+  (unless (f-exists? org-glance-directory)
+    (mkdir org-glance-directory))
   (cl-loop
      for view-directory in (org-glance:read-view-directories)
      unless (org-glance:view-directory-loaded? view-directory)
@@ -191,7 +199,7 @@
        (org-glance:view-directory-register view-directory))
 
   (cl-loop
-     for reserved-entity in '(posit ascertains thing class)
+     for reserved-entity in '(posit thing class role ascertains)
      unless (org-glance:view-directory-loaded? (symbol-name reserved-entity))
      do
        (org-glance-def-view :id reserved-entity)

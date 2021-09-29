@@ -128,10 +128,7 @@
     (unless (file-exists-p config-file)
       (-org-glance:make-file-directory config-file)
       (with-temp-file config-file
-        (insert (json-encode `((id . ,id)
-                               (type . ,type)
-                               ;; (scope . ,scope)
-                               )))
+        (insert (json-encode `((id . ,id))))
         (json-pretty-print-buffer)))
 
     (org-glance:log-info "View \"%s\"%s is now ready to glance %s"

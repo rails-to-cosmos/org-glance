@@ -18,7 +18,7 @@ Feature: System Init
       AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
       DOWN A GULLY.
 
-      PRESS + TO BREAK A NEW GROUND.
+      WHAT DO YOU SEE? PRESS + TO BREAK A NEW GROUND.
       """
     And I should have 0 grounds owned
     And I should have 0 trees planted
