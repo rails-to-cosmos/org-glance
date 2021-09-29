@@ -133,11 +133,11 @@
 (cl-defun org-glance:@magic ()
   "Rebind `@' key in `org-mode' buffers for context-aware relation management."
   (define-key org-mode-map (kbd "@")
-    #'(lambda () (interactive)
-        (if (or (looking-back "^" 1)
-                (looking-back "[[:space:]]" 1))
-            (org-glance:refer)
-          (insert "@")))))
+    (org-glance:interactive-lambda
+      (if (or (looking-back "^" 1)
+              (looking-back "[[:space:]]" 1))
+          (org-glance:refer)
+        (insert "@")))))
 
 (cl-defun org-glance:read-view-directories ()
   (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
@@ -192,8 +192,7 @@
 
   (cl-loop
      for reserved-entity in '(posit ascertains thing class)
-     unless
-       (org-glance:view-directory-loaded? (symbol-name reserved-entity))
+     unless (org-glance:view-directory-loaded? (symbol-name reserved-entity))
      do
        (org-glance-def-view :id reserved-entity)
        (org-glance:view-directory-register (symbol-name reserved-entity))))
