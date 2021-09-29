@@ -10,8 +10,15 @@
 
 (And "^I should have \\([[:digit:]]+\\) grounds? owned$"
      (lambda (cardinality)
-       (should (= cardinality 0))))
+       (should (string= cardinality "0"))))
 
 (And "^I should have \\([[:digit:]]+\\) trees? planted$"
      (lambda (cardinality)
-       (should (= cardinality 0))))
+       (should (string= cardinality "0"))))
+
+(Then "^I should see$"
+      (lambda (text)
+        (should (s-contains-p text (buffer-substring-no-properties (point-min) (point-max))))))
+
+(Given "^I am in the buffer \"\\([^\"]+\\)\"$"
+       (lambda (arg) (switch-to-buffer (get-buffer-create arg))))

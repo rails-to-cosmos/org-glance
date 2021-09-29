@@ -140,7 +140,7 @@
           (insert "@")))))
 
 (cl-defun org-glance:read-view-directories ()
-  (directory-files org-glance-directory nil "^[[:word:]]+"))
+  (--filter (f-directory? it) (directory-files org-glance-directory nil "^[[:word:]]+")))
 
 (cl-defun org-glance:view-directory-loaded? (view-directory)
   (alist-get view-directory org-glance:views-loaded nil nil #'string=))
@@ -153,6 +153,25 @@
 
 (cl-defun org-glance:view-directory-register (view-directory)
   (push (cons view-directory (current-time)) org-glance:views-loaded))
+
+(cl-defun org-glance:forest ()
+  (interactive)
+  (let ((forest-location (f-join org-glance-directory "forest.org")))
+    (unless (f-exists? forest-location)
+      (with-temp-file forest-location
+        (insert (org-glance:format
+                 "#    -*- mode: org; mode: org-glance-overview -*-
+
+                 |#+CATEGORY: Forest
+                 |#+STARTUP: overview
+
+                 |YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
+                 |AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
+                 |DOWN A GULLY.
+
+                 |PRESS + TO BREAK A NEW GROUND."))))
+    (find-file forest-location)
+    (rename-buffer "*org-glance*")))
 
 (cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."

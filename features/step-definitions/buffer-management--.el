@@ -8,7 +8,7 @@
 
 (Then "^I should see$"
       (lambda (text)
-        (should (s-contains-p text (s-trim (thing-at-point 'line))))))
+        (should (s-contains-p text (buffer-substring-no-properties (point-min) (point-max))))))
 
 (Then "^I should see \"\\(.+\\)\"$"
       (lambda (text)

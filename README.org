@@ -11,6 +11,8 @@ This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
 * Issues
+** Gamification
+- [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 ** Anchor Modeling
 - =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
 - =Article= [[org-glance-visit:Article-20210826-9b1d041ca0c9581606151a2ae496115d][Modeling Conflicting, Unreliable, and Varying Information]]

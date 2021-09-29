@@ -4,3 +4,4 @@ ogpm-cache.el
 .cask
 /dist/
 /README.org_archive
+/.ecukes-failing-scenarios

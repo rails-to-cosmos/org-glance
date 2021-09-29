@@ -11,7 +11,7 @@ Feature: System Init
       """
       #    -*- mode: org; mode: org-glance-overview -*-
 
-      #+CATEGORY: Ground
+      #+CATEGORY: Forest
       #+STARTUP: overview
 
       YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
