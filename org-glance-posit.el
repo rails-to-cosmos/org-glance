@@ -25,34 +25,32 @@
 ;;   (assert (booleanp value))
 ;;   (vector (current-time) value (list (list thing 'thing) (list class 'class))))
 
-(org-glance-posit:set-role "C1" 'is-class :value "Infant")
+;; (org-glance-posit:set-role "C1" 'is-class :value "Infant")
 
-(org-glance-posit:set-role "C2" 'is-class :value "Teenager")
-(org-glance-posit:set-relation "A" "C1" :referrer 'thing :referee 'class :value t)
+;; (org-glance-posit:set-role "C2" 'is-class :value "Teenager")
+;; (org-glance-posit:set-relation "A" "C1" :referrer 'thing :referee 'class :value t)
 
 
 ;; Fact-based modeling
 ;;; https://en.wikipedia.org/wiki/Object-role_modeling
 
-(cl-defun org-glance-posit (referrer &rest referees &key (value t value-specified-p) &allow-other-keys)
-  "Posit REFERRER and REFEREES are related.
-Set value of this posit to VALUE.
+(cl-defun org-glance-posit (&rest appearances &key (value t value-specified-p) &allow-other-keys)
+  "Posit APPEARANCES are related in context of VALUE.
 
 Referrer could be either list of two elements (id and role) or
 one element (then implicitly assume its role as a `referrer').
 Same logic applies to each referee."
   ;; [{(Archie, husband), (Bella, wife)}, married, 2004-06-19]
   (interactive)
-  (let ((referees (--take-while (not (member it (list :value))) referees))
-        (value (if value-specified-p
-                   value
-                 (nth 1 (--drop-while (not (member it (list :value))) referees)))))
-    (vector
-     (apply #'list
-            (cond ((listp referrer) referrer) (t (list referrer 'referrer)))
-            (--map (cond ((listp it) it) (t (list it 'referee))) referees))
-     value
-     (current-time))))
+  (cl-labels ((appearance (thing &optional role) (cond ((listp thing) thing) (t (list thing role)))))
+    (let ((appearances (--take-while (not (member it (list :value))) appearances))
+          (value (if value-specified-p
+                     value
+                   (nth 1 (--drop-while (not (member it (list :value))) appearances)))))
+      (vector
+       (apply #'list (--map (appearance it 'relative) appearances))
+       value
+       (current-time)))))
 
 ;; 1. thing - unique identifier
 ;; 2. role - string representing a role

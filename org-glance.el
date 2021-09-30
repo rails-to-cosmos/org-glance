@@ -173,8 +173,9 @@
 
                  |PRESS + TO BREAK A NEW GROUND.
 
-                 |Unscheduled things in TODO state: _
-                 |Things to drill in: _
+                 |Unscheduled things in TODO state: _ (schedule)
+                 |Things to drill in: _ (start drill)
+                 |Things drowning in the past: _ (reschedule)
                  |"))))
     (find-file forest-location)
     (rename-buffer "*org-glance*")))
