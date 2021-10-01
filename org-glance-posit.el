@@ -57,33 +57,40 @@ Same logic applies to each referee."
 ;; 2.5 appearance (dereferencing) set - ((thing, role), ...) bindings
 ;; 3. value - anything, default t
 
-(org-glance-posit '(id001 created-at) :value "10 Aug 2020")
-(org-glance-posit '(id001 title) :value "Some Interesting Article")
+;; When to create posit?
+;;; 1. Capture headline (INSERT).
+;;; 2. Refer (UPDATE relations).
+;;; 3. Materialize sync (UPDATE contents & relations)
 
-(org-glance-posit '(A is-class) :value "Article")
-(org-glance-posit '(A is-class) :value "Webpage")
+;;; Actions: materialize/open/extract/... ???
 
-(org-glance-posit '(id001 thing) :value 'active '(Article class))
-(org-glance-posit '(id001 thing) '(Article class) :value 'active)
-(org-glance-posit '(id001 thing) '(Article class) :value nil)
+;; (org-glance-posit '(id001 created-at) :value "10 Aug 2020")
+;; (org-glance-posit '(id001 title) :value "Some Interesting Article")
 
-(org-glance-posit '(id001 thing) '(A class) :value 'active)
-(org-glance-posit '(id002 thing) '(A class) :value 'active)
-(org-glance-posit 'id001 'id002 'id003 '(id004 role) :value 'active)
+;; (org-glance-posit '(A is-class) :value "Article")
+;; (org-glance-posit '(A is-class) :value "Webpage")
 
-(cl-defun org-glance-posit:get-all-posits-of-thing (thing)) ;;; === get thing's logbook
-(cl-defun org-glance-posit:get-all-roles-of-thing (thing)) ;;; === get all roles with non-nil value
+;; (org-glance-posit '(id001 thing) :value 'active '(Article class))
+;; (org-glance-posit '(id001 thing) '(Article class) :value 'active)
+;; (org-glance-posit '(id001 thing) '(Article class) :value nil)
 
-(cl-defun org-glance-posit:get-all-relations-of-thing (thing)) ;;; ???
-;; + dfs, bfs, a*
-;; search datalog
-;; (cl-defun org-glance-posit:get-all-classes-of-thing (thing)) ;;; === get all relations with role 'class
+;; (org-glance-posit '(id001 thing) '(A class) :value 'active)
+;; (org-glance-posit '(id002 thing) '(A class) :value 'active)
+;; (org-glance-posit 'id001 'id002 'id003 '(id004 role) :value 'active)
 
-(cl-defun org-glance-posit:get-all-things-of-class (class)) ;;; search by tag
-(cl-defun org-glance-posit:get-all-things-with-role (role)) ;;; role=thing - get all things. role=class - get all classes
+;; (cl-defun org-glance-posit:get-all-posits-of-thing (thing)) ;;; === get thing's logbook
+;; (cl-defun org-glance-posit:get-all-roles-of-thing (thing)) ;;; === get all roles with non-nil value
 
-(cl-defun org-glance-posit:get-all-things-with-role-eq (role value))
+;; (cl-defun org-glance-posit:get-all-relations-of-thing (thing)) ;;; ???
+;; ;; + dfs, bfs, a*
+;; ;; search datalog
+;; ;; (cl-defun org-glance-posit:get-all-classes-of-thing (thing)) ;;; === get all relations with role 'class
 
-(org-glance-posit:read)
+;; (cl-defun org-glance-posit:get-all-things-of-class (class)) ;;; search by tag
+;; (cl-defun org-glance-posit:get-all-things-with-role (role)) ;;; role=thing - get all things. role=class - get all classes
+
+;; (cl-defun org-glance-posit:get-all-things-with-role-eq (role value))
+
+;; (org-glance-posit:read)
 
 (org-glance:provide)

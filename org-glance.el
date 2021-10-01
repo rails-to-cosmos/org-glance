@@ -78,6 +78,8 @@
     seq
     subr-x
 
+    org-glance-posit
+
     lib.core.logging
     lib.core.exceptions
 
