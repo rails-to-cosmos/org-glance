@@ -2,8 +2,10 @@
 
 (defvar org-glance-posit:location (f-join org-glance-directory "posit.el"))
 
-(cl-defun org-glance-posit:write (posit)
-  (append-to-file (concat (prin1-to-string posit) "\n") nil org-glance-posit:location))
+(cl-defun org-glance-posit:write (&rest posits)
+  (cl-loop
+     for posit in posits
+     do (append-to-file (concat (prin1-to-string posit) "\n") nil org-glance-posit:location)))
 
 (cl-defun org-glance-posit:read ()
   (with-temp-buffer
@@ -47,6 +49,7 @@ Same logic applies to each referee."
 ;;; 1. Capture headline (INSERT).
 ;;; 2. Refer (UPDATE relations).
 ;;; 3. Materialize sync (UPDATE contents & relations)
+;;; 4. Import headlines.
 
 ;;; Actions: materialize/open/extract/... ???
 

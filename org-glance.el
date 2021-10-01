@@ -208,6 +208,7 @@
        (org-glance-def-view :id reserved-entity)
        (org-glance:view-directory-register (symbol-name reserved-entity))))
 
+;; TODO: reschedule-or-capture
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."
   (condition-case choice

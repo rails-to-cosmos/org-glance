@@ -204,8 +204,16 @@ If point is before first heading, prompt for headline and eval forms on it."
                    (org-glance:capture-headline-at-point view-id))))
   (interactive)
   (org-glance-overview view-id)
+
   (org-glance-overview:register-headline-in-metastore headline view-id)
   (org-glance-overview:register-headline-in-overview headline view-id)
+  (let ((id (intern (org-glance-headline:id headline))))
+    (org-glance-posit:write
+     (org-glance-posit (list id 'thing) (list (intern view-id) 'class) :value t)
+     (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
+     (org-glance-posit (list id 'file) :value (org-glance-headline:file headline))
+     (org-glance-posit (list id 'begin) :value (org-glance-headline:begin headline))))
+
   (org-overview)
   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
   headline)
