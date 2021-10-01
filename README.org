@@ -62,13 +62,29 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Agenda and Notifications
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** Unsorted [1/14]
-*** TODO [#A] make headline types implicit with headline grain
-*** TODO implement custom schedule (maybe for ledna)
+** Unsorted [5/18]
+*** DONE [#A] make headline types implicit with headline grain
+CLOSED: [2021-10-01 Fri 16:40]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
+:END:
+*** DONE implement custom schedule (maybe for ledna)
+CLOSED: [2021-10-01 Fri 16:40]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
+:END:
 *** TODO high priority for current clocked-in dependencies in completing read
-*** TODO remove headline feature
+*** DONE remove headline feature
+CLOSED: [2021-10-01 Fri 16:40]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
+:END:
 *** TODO capture templates support
-*** TODO change metastore serialization format (elisp → json)
+*** CANCELLED change metastore serialization format (elisp → json)
+CLOSED: [2021-10-01 Fri 16:40]
+:LOGBOOK:
+- State "CANCELLED"  from "TODO"       [2021-10-01 Fri 16:40]
+:END:
 *** TODO mutable states → publish-subscribe model
 - implement write ahead log
 - store initial state and diffs, then apply compaction

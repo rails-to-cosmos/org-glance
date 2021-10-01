@@ -86,7 +86,7 @@
          (choice (org-completing-read "Headline: " headlines))
          (headline (alist-get choice headlines nil nil #'string=)))
     (unless headline
-      (org-glance-exception:headline-not-found choice))
+      (org-glance-exception:HEADLINE-NOT-FOUND choice))
     (org-glance-headline:narrow headline
       (org-glance-headline:create))))
 

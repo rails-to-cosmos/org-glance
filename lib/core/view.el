@@ -108,7 +108,7 @@
   (cond
     ((symbolp view-id) (gethash view-id org-glance:views))
     ((stringp view-id) (gethash (intern view-id) org-glance:views))
-    (t (org-glance-exception:view-not-found view-id))))
+    (t (org-glance-exception:VIEW-NOT-FOUND view-id))))
 
 (cl-defun org-glance-def-view (&key
                                  id

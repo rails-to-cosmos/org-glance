@@ -84,9 +84,9 @@
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 (define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
-(define-error 'org-glance-exception:headline-not-modified "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-exception:headline-not-modified (format &rest args)
-  (signal 'org-glance-exception:headline-not-modified (list (apply #'format-message format args))))
+(define-error 'org-glance-exception:HEADLINE-NOT-MODIFIED "No changes made in materialized view" 'user-error)
+(cl-defun org-glance-exception:HEADLINE-NOT-MODIFIED (format &rest args)
+  (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
 
 (cl-defun org-glance-materialized-headline:sync ()
   (interactive)
@@ -103,10 +103,10 @@
                           (org-glance-headline:hash))))
 
       (unless (string= glance-hash source-hash)
-        (org-glance-exception:source-file-corrupted source))
+        (org-glance-exception:SOURCE-FILE-CORRUPTED source))
 
       (when (string= glance-hash current-hash)
-        (org-glance-exception:headline-not-modified source))
+        (org-glance-exception:HEADLINE-NOT-MODIFIED source))
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
       (let ((new-contents (save-restriction

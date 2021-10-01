@@ -6,9 +6,9 @@
      (cl-defun ,name (format &rest args)
        (signal (quote ,name) (list (apply #'format-message format args))))))
 
-(org-glance:define-exception org-glance-exception:source-file-corrupted "Source file corrupted, please reread")
-(org-glance:define-exception org-glance-exception:properties-corrupted "Headline metadata corrupted, please reread")
-(org-glance:define-exception org-glance-exception:metastore-outdated "Metastore is outdated, please rebuild")
-(org-glance:define-exception org-glance-exception:headline-not-found "Headline not found")
+(org-glance:define-exception org-glance-exception:SOURCE-FILE-CORRUPTED "Source file corrupted, please reread")
+(org-glance:define-exception org-glance-exception:PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread")
+(org-glance:define-exception org-glance-exception:METASTORE-OUTDATED "Metastore is outdated, please rebuild")
+(org-glance:define-exception org-glance-exception:HEADLINE-NOT-FOUND "Headline not found")
 
 (org-glance:provide)

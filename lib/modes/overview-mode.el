@@ -561,7 +561,7 @@ If point is before first heading, prompt for headline and eval forms on it."
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
            (org-glance-overview:kill-headline :force t)
-         (org-glance-exception:headline-not-found "Original headline not found"))
+         (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
        nil)
       ((string= current-headline-contents original-headline-contents)
        (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))

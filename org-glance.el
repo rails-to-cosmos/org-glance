@@ -212,10 +212,10 @@
   "Choose thing from metastore or capture it if not found."
   (condition-case choice
       (org-glance-metastore:choose-headline)
-    (org-glance-exception:headline-not-found
+    (org-glance-exception:HEADLINE-NOT-FOUND
      (let ((title (cadr choice)))
        (if (string-empty-p title)
-           (org-glance-exception:headline-not-found "Empty headline")
+           (org-glance-exception:HEADLINE-NOT-FOUND "Empty headline")
          (save-window-excursion
            (org-glance-overview:capture
             (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
@@ -280,7 +280,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                                (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
                (condition-case nil (funcall action headline)
-                 (org-glance-exception:db-outdated
+                 (org-glance-exception:DB-OUTDATED
                   (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
                   (redisplay)
                   (org-glance :scope scope
