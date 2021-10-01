@@ -18,19 +18,6 @@
        do
          (forward-line))))
 
-;; (cl-defun org-glance-posit:set-class (thing class &key (value t))
-;;   "Posit THING has CLASS.  Set value of this posit to VALUE."
-;;   ;; [{(Archie, thing), (Person, class)}, active, 1972-08-20]
-;;   (interactive)
-;;   (assert (booleanp value))
-;;   (vector (current-time) value (list (list thing 'thing) (list class 'class))))
-
-;; (org-glance-posit:set-role "C1" 'is-class :value "Infant")
-
-;; (org-glance-posit:set-role "C2" 'is-class :value "Teenager")
-;; (org-glance-posit:set-relation "A" "C1" :referrer 'thing :referee 'class :value t)
-
-
 ;; Fact-based modeling
 ;;; https://en.wikipedia.org/wiki/Object-role_modeling
 
@@ -40,7 +27,6 @@
 Referrer could be either list of two elements (id and role) or
 one element (then implicitly assume its role as a `referrer').
 Same logic applies to each referee."
-  ;; [{(Archie, husband), (Bella, wife)}, married, 2004-06-19]
   (interactive)
   (cl-labels ((appearance (thing &optional role) (cond ((listp thing) thing) (t (list thing role)))))
     (let ((appearances (--take-while (not (member it (list :value))) appearances))
