@@ -1,17 +1,25 @@
 (require 'org-glance-module)
 
-(defvar org-glance-posit:location (f-join org-glance-directory "posit.el"))
+(cl-defun org-glance-posit:location ()
+  (f-join org-glance-directory "posit.el"))
 
 (cl-defun org-glance-posit:write (&rest posits)
   (cl-loop
+     with eol = "\n"
      for posit in posits
-     do (append-to-file (concat (prin1-to-string posit) "\n") nil org-glance-posit:location)))
+     unless (null posit)
+     collect (prin1-to-string posit) into lines
+     finally
+       (unless (file-exists-p (org-glance-posit:location))
+         (-org-glance:make-file-directory (org-glance-posit:location))
+         (make-empty-file (org-glance-posit:location)))
+       (append-to-file (concat (s-join eol lines) eol) nil (org-glance-posit:location))))
 
 (cl-defun org-glance-posit:read ()
   (with-temp-buffer
     (cl-loop
        initially
-         (insert-file-contents org-glance-posit:location)
+         (insert-file-contents (org-glance-posit:location))
          (goto-char (point-min))
        until
          (eobp)
@@ -23,22 +31,33 @@
 ;; Fact-based modeling
 ;;; https://en.wikipedia.org/wiki/Object-role_modeling
 
-(cl-defun org-glance-posit (&rest appearances &key (value t value-specified-p) &allow-other-keys)
-  "Posit APPEARANCES are related in context of VALUE.
+(cl-defun org-glance-appearance (thing &optional role)
+  "Create appearance of THING with ROLE."
+  (cond ((listp thing) thing)
+        (t (list thing role))))
 
-Referrer could be either list of two elements (id and role) or
-one element (then implicitly assume its role as a `referrer').
-Same logic applies to each referee."
+(cl-defun org-glance-posit (&rest args &key (value t) &allow-other-keys)
+  "Posit that appearances ARGS are related in context of VALUE.
+
+Each arg of ARGS should be a proper `org-glance-appearance'.
+
+By default, assume role of the first appearance is 'referrer, and the others are 'referee."
   (interactive)
-  (cl-labels ((appearance (thing &optional role) (cond ((listp thing) thing) (t (list thing role)))))
-    (let ((appearances (--take-while (not (member it (list :value))) appearances))
-          (value (if value-specified-p
-                     value
-                   (nth 1 (--drop-while (not (member it (list :value))) appearances)))))
-      (vector
-       (apply #'list (--map (appearance it 'relative) appearances))
-       value
-       (current-time)))))
+  (let* ((kwargs (list :value))
+         (appearances (--take-while (not (member it kwargs)) args))
+         (value (if (member :value args)
+                    (nth 1 (--drop-while (not (eq it :value)) args))
+                  t)))
+    (vector
+     (apply #'list (--map (org-glance-appearance it 'relative) appearances))
+     value
+     (current-time))))
+
+;; test cases:
+;; (org-glance-posit (list 'Class 'is-class) 'a 'b 'c :value t)
+;; (org-glance-posit (list 'Class 'is-class))
+;; (org-glance-posit (list 'Class 'is-class) :value nil)
+;; (org-glance-posit (list 'Class 'is-class) 'a :value nil)
 
 ;; 1. thing - unique identifier
 ;; 2. role - string representing a role
@@ -81,5 +100,17 @@ Same logic applies to each referee."
 ;; (cl-defun org-glance-posit:get-all-things-with-role-eq (role value))
 
 ;; (org-glance-posit:read)
+
+;; (cl-defun org-glance-def-class (thing)
+;;   "Reserve THING as a 'class."
+;;   (org-glance-posit (list thing 'is-class)))
+
+;; (cl-defun org-glance-thing (thing)
+;;   "Set THING role to be equal 'thing."
+;;   (list thing 'thing))
+
+;; (cl-defun org-glance-class (class)
+;;   "Set CLASS role to be equal 'class."
+;;   (list class 'class))
 
 (org-glance:provide)
