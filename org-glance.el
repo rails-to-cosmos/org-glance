@@ -208,7 +208,6 @@
        (org-glance-def-view :id reserved-entity)
        (org-glance:view-directory-register (symbol-name reserved-entity))))
 
-;; TODO: reschedule-or-capture
 (cl-defun org-glance:get-or-capture ()
   "Choose thing from metastore or capture it if not found."
   (condition-case choice
@@ -221,6 +220,16 @@
            (org-glance-overview:capture
             (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
             title)))))))
+
+(cl-defun org-glance:reschedule-or-capture ()
+  "Choose or capture new thing.
+
+If it has completed state, make it TODO and prompt user to reschedule it."
+  (interactive)
+  (org-glance-headline:with-materialized-headline (org-glance:get-or-capture)
+    (org-remove-timestamp-with-keyword org-scheduled-string)
+    (call-interactively #'org-schedule)
+    (org-todo "TODO")))
 
 (cl-defun org-glance:refer (&optional (target (org-glance:get-or-capture)))
   "Insert relation from `org-glance-headline' at point to TARGET.
