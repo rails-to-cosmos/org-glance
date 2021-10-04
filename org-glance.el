@@ -78,10 +78,9 @@
     seq
     subr-x
 
-    org-glance-posit
-
     lib.core.logging
     lib.core.exceptions
+    lib.core.posit
 
     lib.utils.encryption                ; encryption utils
     lib.utils.helpers                   ; unsorted, deprecated

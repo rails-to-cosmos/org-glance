@@ -1,5 +1,8 @@
 (require 'org-glance-module)
 
+;; Fact-based modeling
+;;; https://en.wikipedia.org/wiki/Object-role_modeling
+
 (cl-defun org-glance-posit:location ()
   (f-join org-glance-directory "posit.el"))
 
@@ -27,9 +30,6 @@
          (read (buffer-substring (point) (line-end-position)))
        do
          (forward-line))))
-
-;; Fact-based modeling
-;;; https://en.wikipedia.org/wiki/Object-role_modeling
 
 (cl-defun org-glance-appearance (thing &optional role)
   "Create appearance of THING with ROLE."
