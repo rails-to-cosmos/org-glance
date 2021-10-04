@@ -103,7 +103,7 @@
     lib.modes.overview-mode             ; good one, improve
     lib.modes.material-mode
 
-    lib.links.visit
+    lib.view.links
 
     lib.transient.headlines
 
