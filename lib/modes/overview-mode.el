@@ -155,6 +155,18 @@ If point is before first heading, prompt for headline and eval forms on it."
                  (save-buffer))))))
   headline)
 
+(cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
+  (let ((id (intern (org-glance-headline:id headline)))
+        (class (if (symbolp class) class (intern class))))
+    (assert (symbolp id))
+    (assert (symbolp class))
+    (org-glance-posit:write
+     (org-glance-posit (list class 'is-class))
+     (org-glance-posit (list id 'thing) (list class 'class))
+     (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
+     (org-glance-posit (list id 'source) :value (list (org-glance-headline:file headline)
+                                                      (org-glance-headline:begin headline))))))
+
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
      &key (remove-original t))
@@ -197,15 +209,16 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:capture
     (&optional
-       (view-id (org-glance-view:choose))
-       (title (read-string (format "New %s: " view-id)))
+       (class (org-glance-view:choose))
+       (title (read-string (format "New %s: " class)))
        (headline (with-temp-buffer
                    (insert "* " title)
-                   (org-glance:capture-headline-at-point view-id))))
+                   (org-glance:capture-headline-at-point class))))
   (interactive)
-  (org-glance-overview view-id)
-  (org-glance-overview:register-headline-in-metastore headline view-id)
-  (org-glance-overview:register-headline-in-overview headline view-id)
+  (org-glance-overview class)
+  (org-glance-overview:register-headline-in-metastore headline class)
+  (org-glance-overview:register-headline-in-overview headline class)
+  (org-glance-overview:register-headline-in-write-ahead-log headline class)
   (org-overview)
   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
   headline)
@@ -236,7 +249,8 @@ If point is before first heading, prompt for headline and eval forms on it."
             (goto-char pos)
             (let ((captured-headline (org-glance:capture-headline-at-point view-id :remove-original nil)))
               (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-              (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
+              (org-glance-overview:register-headline-in-overview captured-headline view-id)
+              (org-glance-overview:register-headline-in-write-ahead-log captured-headline view-id))))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
