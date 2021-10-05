@@ -207,69 +207,76 @@
        (org-glance-def-view :id reserved-entity)
        (org-glance:view-directory-register (symbol-name reserved-entity))))
 
-(cl-defun org-glance:get-or-capture ()
-  "Choose thing from metastore or capture it if not found."
-  (condition-case choice
-      (org-glance-metastore:choose-headline)
-    (org-glance-exception:HEADLINE-NOT-FOUND
-     (let ((title (cadr choice)))
-       (if (string-empty-p title)
-           (org-glance-exception:HEADLINE-NOT-FOUND "Empty headline")
-         (save-window-excursion
-           (org-glance-overview:capture
-            (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-            title)))))))
+(cl-defmacro org-glance:with-captured-headline (headline &rest forms)
+  "Get or capture headline and run FORMS on it."
+  (declare (indent 1) (debug t))
+  `(condition-case choice
+       (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
+             (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
+     (org-glance-exception:HEADLINE-NOT-FOUND
+      (let ((title (cadr choice)))
+        (org-glance-overview:capture
+         :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+         :title title
+         :callback (lambda ()
+                     (let ((,headline (org-glance-overview:original-headline)))
+                       ,@forms)))))))
 
 (cl-defun org-glance:reschedule-or-capture ()
   "Choose or capture new thing.
 
 If it has completed state, make it TODO and prompt user to reschedule it."
   (interactive)
-  (org-glance-headline:with-materialized-headline (org-glance:get-or-capture)
-    (org-remove-timestamp-with-keyword org-scheduled-string)
-    (call-interactively #'org-schedule)
-    (org-todo "TODO")))
+  (org-glance:with-captured-headline headline
+    (org-glance-headline:with-materialized-headline headline
+      (org-remove-timestamp-with-keyword org-scheduled-string)
+      (call-interactively #'org-schedule)
+      (org-todo "TODO"))))
 
-(cl-defun org-glance:refer (&optional (target (org-glance:get-or-capture)))
+(cl-defun org-glance:refer ()
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
-  (unless current-prefix-arg
-    (insert (org-glance-headline:format target)))
-  (when-let (source (org-glance-headline:at-point))
-    (org-glance-headline:add-biconnected-relation source target)))
+  (org-glance:with-captured-headline target
+    (unless current-prefix-arg
+      (insert (org-glance-headline:format target)))
+    (when-let (source (org-glance-headline:at-point))
+      (org-glance-headline:add-biconnected-relation source target))))
 
-(cl-defun org-glance:materialize (&optional (headline (org-glance:get-or-capture)))
+(cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
   (interactive)
-  (org-glance-headline:materialize headline))
+  (org-glance:with-captured-headline headline
+    (org-glance-headline:materialize headline)))
 
-(cl-defun org-glance:open (&optional (headline (org-glance:get-or-capture)))
+(cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
 
 If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
-  (org-glance-headline:with-materialized-headline headline
-    (org-end-of-meta-data t)
-    (narrow-to-region (point) (point-max))
-    (let* ((links (org-glance:buffer-links))
-           (pos (cond
-                  ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                  ((= (length links) 1) (cdar links))
-                  (t (user-error "Unable to find links in headline")))))
-      (goto-char pos)
-      (org-open-at-point))))
+  (org-glance:with-captured-headline headline
+    (org-glance-headline:with-materialized-headline headline
+      (org-end-of-meta-data t)
+      (narrow-to-region (point) (point-max))
+      (let* ((links (org-glance:buffer-links))
+             (pos (cond
+                    ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                    ((= (length links) 1) (cdar links))
+                    (t (user-error "Unable to find links in headline")))))
+        (goto-char pos)
+        (org-open-at-point)))))
 
-(cl-defun org-glance:extract (&optional (headline (org-glance:get-or-capture)))
+(cl-defun org-glance:extract ()
   (interactive)
   "Materialize HEADLINE and retrieve key-value pairs from its contents.
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
-  (let ((pairs (org-glance-headline:with-materialized-headline headline
-                 (org-glance:get-buffer-key-value-pairs))))
-    (while t
-      (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))
+  (org-glance:with-captured-headline headline
+    (let ((pairs (org-glance-headline:with-materialized-headline headline
+                   (org-glance:get-buffer-key-value-pairs))))
+      (while t
+        (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=))))))
 
 (cl-defun org-glance
     (&key db
