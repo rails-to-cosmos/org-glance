@@ -221,6 +221,7 @@ If point is before first heading, prompt for headline and eval forms on it."
        (callback nil))
   (interactive)
   (let ((org-capture-templates `(("t" "Thing" entry (file ,file) ,(concat "* TODO " title "%?")))))
+    (unless (f-exists? file) (make-empty-file file t))
     (find-file file)
     (with-current-buffer (get-file-buffer file)
       (setq-local org-glance-capture:id (format "%s-%s-%s"
