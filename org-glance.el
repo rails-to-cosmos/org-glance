@@ -62,51 +62,50 @@
 (defvar org-glance:views-loaded nil
   "Registered views alist.")
 
-(eval-and-compile
-  (cl-defmacro org-glance:interactive-lambda (&rest forms)
-    "Define interactive lambda function with FORMS in its body."
-    (declare (indent 0) (debug t))
-    `(lambda ()
-       (interactive)
-       ,@forms))
+(cl-defmacro org-glance:interactive-lambda (&rest forms)
+  "Define interactive lambda function with FORMS in its body."
+  (declare (indent 0) (debug t))
+  `(lambda ()
+     (interactive)
+     ,@forms))
 
-  (org-glance:require
-    cl-generic
-    cl-lib
-    cl-macs
-    json
-    seq
-    subr-x
+(org-glance:require
+  cl-generic
+  cl-lib
+  cl-macs
+  json
+  seq
+  subr-x
 
-    lib.core.logging
-    lib.core.exceptions
-    lib.core.posit
+  lib.core.logging
+  lib.core.exceptions
+  lib.core.posit
 
-    lib.utils.encryption                ; encryption utils
-    lib.utils.helpers                   ; unsorted, deprecated
-    lib.utils.org                       ; org-mode shortcuts
+  lib.utils.encryption                ; encryption utils
+  lib.utils.helpers                   ; unsorted, deprecated
+  lib.utils.org                       ; org-mode shortcuts
 
 ;;; Core APIs
-    ;; Description of high-level org-glance entities: Headline, View,
-    ;; Scope and Metastore.
+  ;; Description of high-level org-glance entities: Headline, View,
+  ;; Scope and Metastore.
 
 ;;; Headline API
-    ;; Org-glance headline is an org-element headline enriched by some
-    ;; shortcuts and helper methods.
+  ;; Org-glance headline is an org-element headline enriched by some
+  ;; shortcuts and helper methods.
 
-    lib.core.headline                   ; good
-    lib.core.metastore                  ; ok
-    lib.core.scope                      ; ? deprecated
-    lib.core.view                       ; migrate to overview
+  lib.core.headline                   ; good
+  lib.core.metastore                  ; ok
+  lib.core.scope                      ; ? deprecated
+  lib.core.view                       ; migrate to overview
 
-    lib.modes.overview-mode             ; good one, improve
-    lib.modes.material-mode
+  lib.modes.overview-mode             ; good one, improve
+  lib.modes.material-mode
 
-    lib.view.links
+  lib.view.links
 
-    lib.transient.headlines
+  lib.transient.headlines
 
-    lib.plugins.metadata))
+  lib.plugins.metadata)
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 
@@ -130,17 +129,6 @@
   "Options concerning glancing entries."
   :tag "Org Glance"
   :group 'org)
-
-(cl-defun org-glance:@magic ()
-  "Rebind `@' key in `org-mode' buffers for context-aware relation management."
-  (define-key org-mode-map (kbd "@")
-    (org-glance:interactive-lambda
-      (if (or (looking-back "^" 1)
-              (looking-back "[[:space:]]" 1))
-          (condition-case nil
-              (org-glance:refer)
-            (quit (insert "@")))
-        (insert "@")))))
 
 (cl-defun org-glance:read-view-directories ()
   (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
@@ -185,6 +173,9 @@
   "Update all changed entities from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
+
+  (load-file (org-glance-module-filename lib.modes.overview-mode))
+
   (cl-loop
      for view-directory in (org-glance:read-view-directories)
      unless (org-glance:view-directory-loaded? view-directory)
@@ -206,6 +197,18 @@
      do
        (org-glance-def-view :id reserved-entity)
        (org-glance:view-directory-register (symbol-name reserved-entity))))
+
+(cl-defun org-glance:@magic ()
+  "Rebind `@' key in `org-mode' buffers for context-aware relation management."
+  (define-key org-mode-map (kbd "@")
+    (org-glance:interactive-lambda
+      (org-glance:init)
+      (if (or (looking-back "^" 1)
+              (looking-back "[[:space:]]" 1))
+          (condition-case nil
+              (org-glance:refer)
+            (quit (insert "@")))
+        (insert "@")))))
 
 (cl-defmacro org-glance:with-captured-headline (headline &rest forms)
   "Get or capture headline and run FORMS on it."

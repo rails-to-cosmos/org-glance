@@ -2,7 +2,8 @@
 
 (org-glance:require
   highlight
-  org-attach)
+  org-attach
+  org-capture)
 
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
@@ -220,19 +221,19 @@ If point is before first heading, prompt for headline and eval forms on it."
                       (org-glance:format "${class}.org"))))
        (callback nil))
   (interactive)
+  (unless (f-exists? file) (make-empty-file file t))
+  (find-file file)
+  (with-current-buffer (get-file-buffer file)
+    (setq-local org-glance-capture:id (format "%s-%s-%s"
+                                              class
+                                              system-name
+                                              (s-join "-" (mapcar #'number-to-string (current-time))))
+                org-glance-capture:class (if (symbolp class) class (intern class)))
+    (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
+    (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+    (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t)))
   (let ((org-capture-templates `(("t" "Thing" entry (file ,file) ,(concat "* TODO " title "%?")))))
-    (unless (f-exists? file) (make-empty-file file t))
-    (find-file file)
-    (with-current-buffer (get-file-buffer file)
-      (setq-local org-glance-capture:id (format "%s-%s-%s"
-                                                class
-                                                system-name
-                                                (s-join "-" (mapcar #'number-to-string (current-time))))
-                  org-glance-capture:class (if (symbolp class) class (intern class)))
-      (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
-      (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
-      (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-      (org-capture nil "t"))))
+    (org-capture nil "t")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
   (assert (stringp org-glance-capture:id))
