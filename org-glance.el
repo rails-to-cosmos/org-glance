@@ -216,11 +216,11 @@
              (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
      (org-glance-exception:HEADLINE-NOT-FOUND (org-glance-overview:capture
                                                :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                                               :title (progn
-                                                        ;; TODO: investigate bug in captured title
-                                                        ;; or get rid of it in future
-                                                        ;; (pp choice)
-                                                        (cadr choice))
+                                               ;; :title (progn
+                                               ;;          ;; TODO: investigate bug in captured title
+                                               ;;          ;; or get rid of it in future
+                                               ;;          ;; (pp choice)
+                                               ;;          (cadr choice))
                                                :callback (lambda ()
                                                            (let ((,headline (org-glance-overview:original-headline)))
                                                              ,@forms))))))

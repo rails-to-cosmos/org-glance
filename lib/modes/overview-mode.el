@@ -208,17 +208,13 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:capture
     (&key
        (class (org-glance-view:choose))
-       (title (read-string (format "New %s: " class)))
        (file (abbreviate-file-name
-              (f-join (org-glance-view:resource-location class)
-                      (->> title
-                           (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
-                           (replace-regexp-in-string "\\-+" "-")
-                           (replace-regexp-in-string "\\-+$" "")
-                           (s-truncate 30)
-                           (list (format-time-string "%Y-%m-%d"))
-                           (s-join "_"))
-                      (org-glance:format "${class}.org"))))
+              (concat
+               (make-temp-name (f-join (org-glance-view:resource-location class)
+                                       (format-time-string "%Y-%m-%d")
+                                       class
+                                       "-"))
+               ".org")))
        (callback nil))
   (interactive)
   (unless (f-exists? file) (make-empty-file file t))
@@ -232,7 +228,7 @@ If point is before first heading, prompt for headline and eval forms on it."
     (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
     (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
     (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t)))
-  (let ((org-capture-templates `(("t" "Thing" entry (file ,file) ,(concat "* TODO " title "%?")))))
+  (let ((org-capture-templates `(("t" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
     (org-capture nil "t")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
