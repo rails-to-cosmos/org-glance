@@ -394,26 +394,29 @@ metastore.")
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:kvp? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :kvp)
-      (org-element-property :kvp headline)
-    (org-glance-headline:narrow headline
-      (org-end-of-meta-data t)
-      (when (re-search-forward org-glance:key-value-pair-re nil t)
-        t))))
+  ;; (if (plist-member (nth 1 headline) :kvp)
+  ;;     (org-element-property :kvp headline)
+  ;;   (org-glance-headline:narrow headline
+  ;;     (org-end-of-meta-data t)
+  ;;     (when (re-search-forward org-glance:key-value-pair-re nil t)
+  ;;       t)))
+  )
 
 (cl-defun org-glance-headline:linked? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :linkedp)
-      (org-element-property :linkedp headline)
-    (org-glance-headline:narrow headline
-      (org-end-of-meta-data t)
-      (when (re-search-forward org-any-link-re nil t)
-        t))))
+  ;; (if (plist-member (nth 1 headline) :linkedp)
+  ;;     (org-element-property :linkedp headline)
+  ;;   (org-glance-headline:narrow headline
+  ;;     (org-end-of-meta-data t)
+  ;;     (when (re-search-forward org-any-link-re nil t)
+  ;;       t)))
+  )
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :encryptedp)
-      (org-glance-headline:narrow headline
-        (org-end-of-meta-data t)
-        (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))
+  ;; (if (plist-member (nth 1 headline) :encryptedp)
+  ;;     (org-glance-headline:narrow headline
+  ;;       (org-end-of-meta-data t)
+  ;;       (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))
+  )
 
 (cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
