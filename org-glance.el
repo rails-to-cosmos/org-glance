@@ -174,8 +174,6 @@
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
 
-  (load-file (org-glance-module-filename lib.modes.overview-mode))
-
   (cl-loop
      for view-directory in (org-glance:read-view-directories)
      unless (org-glance:view-directory-loaded? view-directory)
@@ -216,14 +214,12 @@
   `(condition-case choice
        (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
              (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
-     (org-glance-exception:HEADLINE-NOT-FOUND
-      (let ((title (cadr choice)))
-        (org-glance-overview:capture
-         :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-         :title title
-         :callback (lambda ()
-                     (let ((,headline (org-glance-overview:original-headline)))
-                       ,@forms)))))))
+     (org-glance-exception:HEADLINE-NOT-FOUND (org-glance-overview:capture
+                                               :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+                                               :title (cadr choice)
+                                               :callback (lambda ()
+                                                           (let ((,headline (org-glance-overview:original-headline)))
+                                                             ,@forms))))))
 
 (cl-defun org-glance:reschedule-or-capture ()
   "Choose or capture new thing.
@@ -240,11 +236,15 @@ If it has completed state, make it TODO and prompt user to reschedule it."
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
-  (org-glance:with-captured-headline target
-    (unless current-prefix-arg
-      (insert (org-glance-headline:format target)))
-    (when-let (source (org-glance-headline:at-point))
-      (org-glance-headline:add-biconnected-relation source target))))
+  (lexical-let ((buffer (current-buffer))
+                (point (point)))
+    (org-glance:with-captured-headline target
+      (switch-to-buffer buffer)
+      (goto-char point)
+      (unless current-prefix-arg
+        (insert (org-glance-headline:format target)))
+      (when-let (source (org-glance-headline:at-point))
+        (org-glance-headline:add-biconnected-relation source target)))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
