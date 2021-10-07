@@ -562,14 +562,14 @@ If point is before first heading, prompt for headline and eval forms on it."
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:search-parents)
-  (let ((role (org-glance-overview:class))
-        (title (org-glance-headline:title))
+  (let ((title (org-glance-headline:title))
+        (class (org-glance-overview:class))
         (original-headline (org-glance-overview:original-headline)))
-    (when (or force (y-or-n-p (org-glance:format "Revoke the role \"${role}\" from \"${title}\"?")))
+    (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (org-glance-headline:narrow original-headline
-        (org-toggle-tag (format "%s" role) 'off)
-        (unless (org-glance-headline:roles)
-          (when (y-or-n-p "No roles is now associated with headline. Remove it completely?")
+        (org-toggle-tag (format "%s" class) 'off)
+        (unless (org-glance-headline:classes)
+          (when (y-or-n-p "No classs is now associated with headline. Remove it completely?")
             (kill-region (org-entry-beginning-position) (org-entry-end-position))))
         (save-buffer)
         (when (= (buffer-size) 0)
@@ -580,7 +580,7 @@ If point is before first heading, prompt for headline and eval forms on it."
         (kill-region (org-entry-beginning-position) (org-entry-end-position))
         (save-buffer)))))
 
-;; (cl-defun org-glance-overview:move-headline (&optional (new-role (org-glance-view:choose "New role: ")))
+;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance-view:choose "New role: ")))
 ;;   (interactive)
 ;;   (org-glance-headline:search-parents)
 ;;   (let ((role (org-glance-overview:class))
@@ -634,11 +634,10 @@ If point is before first heading, prompt for headline and eval forms on it."
          (org-align-tags t)
          (save-buffer)
          (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
-         t))
-    ))
+         t))))
 
 (cl-defun org-glance-overview:comment ()
-  "Toggle comment headline at point."
+  "Comment headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -651,7 +650,7 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-headline:search-forward))
 
 (cl-defun org-glance-overview:archive ()
-  "Toggle archive headline at point."
+  "Archive headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -678,16 +677,14 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:add-relation
-    (&optional
-       (source (org-glance-overview:original-headline))
-       target)
+(cl-defun org-glance-overview:add-relation ()
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (save-window-excursion
+  (lexical-let ((source (org-glance-overview:original-headline)))
     (org-glance:with-captured-headline target
-      (org-glance-headline:add-biconnected-relation source target)))
-  (org-glance-overview:pull))
+      (org-glance-headline:add-biconnected-relation source target)
+      ;; TODO pull source and target
+      )))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

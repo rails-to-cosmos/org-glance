@@ -415,7 +415,7 @@ metastore.")
         (org-end-of-meta-data t)
         (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))
 
-(cl-defun org-glance-headline:roles (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (mapcar #'intern (org-get-tags))))
 
