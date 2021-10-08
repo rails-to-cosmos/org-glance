@@ -11,7 +11,7 @@ This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
 * Issues
-** Gamification
+** TODO Gamification
 - [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 ** Anchor Modeling
 - =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
@@ -63,6 +63,8 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
 ** Unsorted [5/18]
+*** TODO Handle capture cancelling
+*** TODO Clone repetitive headlines
 *** DONE [#A] make headline types implicit with headline grain
 CLOSED: [2021-10-01 Fri 16:40]
 :LOGBOOK:

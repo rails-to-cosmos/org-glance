@@ -214,19 +214,24 @@
   `(condition-case choice
        (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
              (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
-     (org-glance-exception:HEADLINE-NOT-FOUND (org-glance-overview:capture
-                                               :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
-                                               ;; :title (progn
-                                               ;;          ;; TODO: investigate bug in captured title
-                                               ;;          ;; or get rid of it in future
-                                               ;;          ;; (pp choice)
-                                               ;;          (cadr choice))
-                                               :callback (lambda ()
-                                                           (let ((,headline (org-glance-overview:original-headline)))
-                                                             ,@forms))))))
+     (org-glance-exception:HEADLINE-NOT-FOUND
+      (lexical-let ((buffer (current-buffer))
+                    (point (point)))
+        (org-glance-overview:capture
+         :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+         ;; :title (progn
+         ;;          ;; TODO: investigate bug in captured title
+         ;;          ;; or get rid of it in future
+         ;;          ;; (pp choice)
+         ;;          (cadr choice))
+         :callback (lambda ()
+                     (let ((,headline (org-glance-overview:original-headline)))
+                       (switch-to-buffer buffer)
+                       (goto-char point)
+                       ,@forms)))))))
 
 (cl-defun org-glance:reschedule-or-capture ()
-  "Choose or capture new thing.
+  "Choose or capture a new thing.
 
 If it has completed state, make it TODO and prompt user to reschedule it."
   (interactive)
@@ -240,15 +245,11 @@ If it has completed state, make it TODO and prompt user to reschedule it."
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
-  (lexical-let ((buffer (current-buffer))
-                (point (point)))
-    (org-glance:with-captured-headline target
-      (switch-to-buffer buffer)
-      (goto-char point)
-      (unless current-prefix-arg
-        (insert (org-glance-headline:format target)))
-      (when-let (source (org-glance-headline:at-point))
-        (org-glance-headline:add-biconnected-relation source target)))))
+  (org-glance:with-captured-headline target
+    (unless current-prefix-arg
+      (insert (org-glance-headline:format target)))
+    (when-let (source (org-glance-headline:at-point))
+      (org-glance-headline:add-biconnected-relation source target))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."

@@ -208,54 +208,72 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:capture
     (&key
        (class (org-glance-view:choose))
-       (file (abbreviate-file-name
-              (concat
-               (make-temp-name (f-join (org-glance-view:resource-location class)
-                                       (format-time-string "%Y-%m-%d")
-                                       class
-                                       "-"))
-               ".org")))
+       (file (make-temp-file "org-glance-" nil ".org"))
        (callback nil))
   (interactive)
-  (unless (f-exists? file) (make-empty-file file t))
   (find-file file)
-  (with-current-buffer (get-file-buffer file)
-    (setq-local org-glance-capture:id (format "%s-%s-%s"
-                                              class
-                                              system-name
-                                              (s-join "-" (mapcar #'number-to-string (current-time))))
-                org-glance-capture:class (if (symbolp class) class (intern class)))
-    (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
-    (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
-    (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t)))
-  (let ((org-capture-templates `(("t" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
-    (org-capture nil "t")))
+  (setq-local org-glance-capture:id (format "%s-%s-%s"
+                                            class
+                                            system-name
+                                            (s-join "-" (mapcar #'number-to-string (current-time))))
+              org-glance-capture:class (if (symbolp class) class (intern class)))
+  (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
+  (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+  (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
+  (let ((org-capture-templates `(("_" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
+    (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
+  "Preprocess headline before capturing.
+
+Consider using buffer local variables:
+- `org-glance-capture:id'
+- `org-glance-capture:class'"
   (assert (stringp org-glance-capture:id))
   (assert (symbolp org-glance-capture:class))
 
   (goto-char (point-min))
   (or (org-at-heading-p) (org-next-visible-heading 0))
+
   (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
-  (org-set-property "DIR" (abbreviate-file-name default-directory))
   (org-toggle-tag (format "%s" org-glance-capture:class) t))
 
 (cl-defun org-glance-capture:after-finalize-hook ()
+  "Register captured headline in metastore.
+
+Consider using buffer local variables:
+- `org-glance-capture:id'
+- `org-glance-capture:class'"
   (assert (stringp org-glance-capture:id))
   (assert (symbolp org-glance-capture:class))
 
-  (let ((id org-glance-capture:id)
-        (class org-glance-capture:class)
-        (headline (save-excursion
-                    (org-glance-headline:search-buffer-by-id org-glance-capture:id)
-                    (org-glance-headline:at-point))))
+  (let* ((id org-glance-capture:id)
+         (class org-glance-capture:class)
+         (headline (progn
+                     (org-glance-headline:search-buffer-by-id id)
+                     (org-glance-headline:at-point)))
+         (refile-dir (make-temp-file
+                         (f-join (org-glance-view:resource-location class)
+                                 (concat (format-time-string "%Y-%m-%d_")
+                                         (org-glance-headline:title headline)
+                                         "-"))
+                         'directory))
+         (new-file (f-join refile-dir (format "%s.org" class))))
+
+    (org-glance:log-debug "Generate headline directory: %s" refile-dir)
+    (org-set-property "DIR" (abbreviate-file-name refile-dir))
+    (save-buffer)
+    (f-move (org-glance-headline:file headline) new-file)
+    (org-glance-headline:enrich headline :file new-file)
+
     (org-glance-overview class)
     (org-glance-overview:register-headline-in-metastore headline class)
     (org-glance-overview:register-headline-in-overview headline class)
     (org-glance-overview:register-headline-in-write-ahead-log headline class)
-    (org-overview)
-    (org-glance-headline:search-buffer-by-id id)))
+
+    ;; (org-overview)
+    ;; (org-glance-headline:search-buffer-by-id id)
+    ))
 
 (cl-defun org-glance-overview:import-headlines
     (path
