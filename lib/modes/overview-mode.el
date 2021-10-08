@@ -273,13 +273,13 @@ Consider using buffer local variables:
     (org-glance-headline:enrich headline :file new-file)
 
     (org-glance-overview class)
+
     (org-glance-overview:register-headline-in-metastore headline class)
     (org-glance-overview:register-headline-in-overview headline class)
     (org-glance-overview:register-headline-in-write-ahead-log headline class)
 
-    ;; (org-overview)
-    ;; (org-glance-headline:search-buffer-by-id id)
-    ))
+    (org-overview)
+    (org-glance-headline:search-buffer-by-id id)))
 
 (cl-defun org-glance-overview:import-headlines
     (path

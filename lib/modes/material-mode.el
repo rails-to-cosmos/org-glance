@@ -15,6 +15,9 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-material-mode-map)
 
+;; (defvar org-glance-materialized-headlines-buffers (make-hash-table)
+;;   "Maps headline to last materialized buffer associated with it.")
+
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
 (defvar --org-glance-materialized-headline:file nil)
@@ -140,7 +143,12 @@
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
-  (let ((buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">"))))
+  (let (;; (cached-buffer (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-headlines-buffers))
+        (buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">"))
+          ;; (if (and cached-buffer (buffer-live-p cached-buffer))
+          ;;     cached-buffer
+          ;;   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
+          ))
     (org-glance:log-info "Generate new buffer for materialized headline: %s" buffer)
     buffer))
 
