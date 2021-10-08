@@ -261,13 +261,15 @@ Consider using buffer local variables:
                                            (replace-regexp-in-string "\\-+$" "")
                                            (s-truncate 30))
                                       "-"))
-                         'directory))
+                      'directory))
+         (tmp-file (org-glance-headline:file headline))
          (new-file (f-join refile-dir (format "%s.org" class))))
-
     (org-glance:log-debug "Generate headline directory: %s" refile-dir)
     (org-set-property "DIR" (abbreviate-file-name refile-dir))
     (save-buffer)
-    (f-move (org-glance-headline:file headline) new-file)
+    (kill-buffer)
+
+    (f-move tmp-file new-file)
     (org-glance-headline:enrich headline :file new-file)
 
     (org-glance-overview class)
