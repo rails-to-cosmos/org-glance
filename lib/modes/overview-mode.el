@@ -128,9 +128,9 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
-(cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
-  (let* ((metastore-location (-some->> view-id
-                               org-glance-view:get-view-by-id
+(cl-defun org-glance-overview:register-headline-in-metastore (headline class)
+  (let* ((metastore-location (-some->> class
+                               org-glance:get-class
                                org-glance-view:metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
@@ -154,16 +154,34 @@ If point is before first heading, prompt for headline and eval forms on it."
   headline)
 
 (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
-  (let ((id (intern (org-glance-headline:id headline)))
-        (class (if (symbolp class) class (intern class))))
-    (assert (symbolp id))
-    (assert (symbolp class))
-    (org-glance-posit:write
-     (org-glance-posit (list class 'is-class))
-     (org-glance-posit (list id 'thing) (list class 'class))
-     (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
-     (org-glance-posit (list id 'source) :value (list (org-glance-headline:file headline)
-                                                      (org-glance-headline:begin headline))))))
+  (org-glance-headline:with-materialized-headline headline
+    (let ((id (intern (org-glance-headline:id headline)))
+          (class (if (symbolp class) class (intern class))))
+      (org-glance-posit:write
+       (org-glance-posit (list class 'is-class))
+       (org-glance-posit (list id 'thing) (list class 'class))
+       (org-glance-posit (list id 'origin) :value (list (org-glance-headline:file headline) (org-glance-headline:begin headline)))
+       (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
+       (org-glance-posit (list id 'contents)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (base64-encode-string
+                                   (buffer-substring-no-properties (point) (point-max))
+                                   t)))
+       (org-glance-posit (list id 'extractable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                    t)))
+       (org-glance-posit (list id 'openable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (when (re-search-forward org-any-link-re nil t)
+                                    t)))
+       (org-glance-posit (list id 'decryptable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
 
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
@@ -253,17 +271,18 @@ Consider using buffer local variables:
                      (org-glance-headline:search-buffer-by-id id)
                      (org-glance-headline:at-point)))
          (refile-dir (make-temp-file
-                      (f-join (org-glance-view:resource-location class)
-                              (concat (format-time-string "%Y-%m-%d_")
-                                      (->> (org-glance-headline:title headline)
-                                           (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
-                                           (replace-regexp-in-string "\\-+" "-")
-                                           (replace-regexp-in-string "\\-+$" "")
-                                           (s-truncate 30))
-                                      "-"))
+                      (-org-glance:make-file-directory
+                       (f-join (org-glance-view:resource-location class)
+                               (concat (format-time-string "%Y-%m-%d_")
+                                       (->> (org-glance-headline:title headline)
+                                            (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
+                                            (replace-regexp-in-string "\\-+" "-")
+                                            (replace-regexp-in-string "\\-+$" "")
+                                            (s-truncate 30))
+                                       "-")))
                       'directory))
          (tmp-file (org-glance-headline:file headline))
-         (new-file (f-join refile-dir (format "%s.org" class))))
+         (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
     (org-glance:log-debug "Generate headline directory: %s" refile-dir)
     (org-set-property "DIR" (abbreviate-file-name refile-dir))
     (save-buffer)
@@ -273,6 +292,10 @@ Consider using buffer local variables:
     (org-glance-headline:enrich headline :file new-file)
 
     (org-glance-overview class)
+
+    (org-glance:log-debug "Register headline of class %s in metastore: %s"
+                          (pp-to-string class)
+                          (pp-to-string headline))
 
     (org-glance-overview:register-headline-in-metastore headline class)
     (org-glance-overview:register-headline-in-overview headline class)
@@ -430,14 +453,17 @@ Consider using buffer local variables:
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
-(cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:create (&optional
+                                        (class (org-glance-view:completing-read))
+                                        headlines)
   (interactive)
   (let* ((inhibit-read-only t)
-         (filename (org-glance-overview:location view-id))
-         (header (let ((category view-id))
+         (filename (-org-glance:make-file-directory
+                    (org-glance-overview:location class)))
+         (header (let ((category class))
                    (org-glance:format org-glance-overview:header)))
-         (headlines (->> view-id org-glance-view:update org-glance-view:headlines)))
-    (-org-glance:make-file-directory filename)
+         ;; (headlines (->> class org-glance-view:update org-glance-view:headlines))
+         )
     (with-temp-file filename
       (org-mode)
       (insert header)
@@ -453,13 +479,13 @@ Consider using buffer local variables:
       (org-align-tags t))
     (find-file filename)))
 
-(cl-defun org-glance-overview (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (when view-id
-    (when-let (location (org-glance-overview:location view-id))
+  (when class
+    (when-let (location (org-glance-overview:location class))
       (if (file-exists-p location)
           (find-file location)
-        (org-glance-overview:create view-id)))))
+        (org-glance-overview:create class)))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)

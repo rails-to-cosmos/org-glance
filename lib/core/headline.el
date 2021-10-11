@@ -127,9 +127,10 @@ metastore.")
     (format-time-string "%Y-%m-%d %H:%M:%S")))
 
 (cl-defun org-glance-headline:file (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :file)
-      (org-element-property :file headline)
-    (if-let (file (buffer-file-name)) (abbreviate-file-name file))))
+  (when-let (file (if (plist-member (nth 1 headline) :file)
+                      (org-element-property :file headline)
+                    (buffer-file-name)))
+    (abbreviate-file-name file)))
 
 (cl-defun org-glance-headline:level (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :level headline))

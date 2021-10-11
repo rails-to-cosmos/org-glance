@@ -32,6 +32,8 @@
 
 (require 'org)
 (require 'org-glance-module)
+(eval-when-compile
+  (require 'cl))
 
 (defcustom org-glance-directory org-directory
   "Directory with Org files."
@@ -58,6 +60,11 @@
 
 (defvar org-glance:views (make-hash-table)
   "Hash table (id->view) that lists all registered classes of things.")
+
+(defun org-glance:get-class (class)
+  (assert (symbolp class))
+  (or (gethash class org-glance:views)
+      (org-glance-exception:VIEW-NOT-FOUND class)))
 
 (defvar org-glance:views-loaded nil
   "Registered views alist.")
@@ -140,10 +147,9 @@
   (f-join org-glance-directory view-directory (concat view-directory ".config.json")))
 
 (cl-defun org-glance:view-config-file-read (view-directory)
-  (json-read-file (org-glance:view-config-file-location view-directory)))
-
-(cl-defun org-glance:view-directory-register (view-directory)
-  (push (cons view-directory (current-time)) org-glance:views-loaded))
+  (condition-case nil
+      (json-read-file (org-glance:view-config-file-location view-directory))
+    (error nil)))
 
 (cl-defun org-glance:forest ()
   (interactive)
@@ -169,32 +175,39 @@
     (find-file forest-location)
     (rename-buffer "*org-glance*")))
 
+(cl-defun org-glance:create-class (class)
+  (org-glance:log-info "Create class \"%s\"" class)
+
+  (if-let (config (org-glance:view-config-file-read class))
+      (apply 'org-glance-def-view
+             (cl-loop
+                for (k . v) in config
+                for pk = (intern (org-glance:format ":${k}"))
+                for pv = (cond ((member k '(type)) (mapcar 'intern v))
+                               (t (intern v)))
+                when pk
+                append (list pk pv)))
+    (org-glance-def-view :id class))
+
+  (unless (f-exists? (org-glance-overview:location class))
+    (org-glance-overview:create class))
+
+  (push class org-glance:views-loaded))
+
 (cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
 
   (cl-loop
-     for view-directory in (org-glance:read-view-directories)
-     unless (org-glance:view-directory-loaded? view-directory)
-     do
-       (org-glance:log-info "Read directory %s" view-directory)
-       (apply 'org-glance-def-view
-              (cl-loop
-                 for (k . v) in (org-glance:view-config-file-read view-directory)
-                 for pk = (intern (org-glance:format ":${k}"))
-                 for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                                (t (intern v)))
-                 when pk
-                 append (list pk pv)))
-       (org-glance:view-directory-register view-directory))
+     for class in (org-glance:read-view-directories)
+     unless (org-glance:view-directory-loaded? class)
+     do (org-glance:create-class class))
 
   (cl-loop
-     for reserved-entity in '(posit thing class role ascertains)
-     unless (org-glance:view-directory-loaded? (symbol-name reserved-entity))
-     do
-       (org-glance-def-view :id reserved-entity)
-       (org-glance:view-directory-register (symbol-name reserved-entity))))
+     for class in '(posit thing class role ascertains)
+     unless (org-glance:view-directory-loaded? (symbol-name class))
+     do (org-glance:create-class class)))
 
 (cl-defun org-glance:@magic ()
   "Rebind `@' key in `org-mode' buffers for context-aware relation management."
@@ -215,7 +228,7 @@
        (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
              (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
      (org-glance-exception:HEADLINE-NOT-FOUND
-      (lexical-let ((buffer (current-buffer))
+      (lexical-let ((origin (current-buffer))
                     (point (point)))
         (org-glance-overview:capture
          :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
@@ -226,7 +239,7 @@
          ;;          (cadr choice))
          :callback (lambda ()
                      (let ((,headline (org-glance-overview:original-headline)))
-                       (switch-to-buffer buffer)
+                       (switch-to-buffer origin)
                        (goto-char point)
                        ,@forms)))))))
 
