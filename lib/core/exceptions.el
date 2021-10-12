@@ -1,33 +1,15 @@
 (require 'org-glance-module)
 
-(define-error 'org-glance-exception:source-file-corrupted
-    "Source file corrupted, please reread" 'user-error)
+(cl-defmacro org-glance:define-exception (name message &optional (parent 'user-error))
+  `(progn
+     (define-error (quote ,name) ,message (quote ,parent))
+     (cl-defun ,name (format &rest args)
+       (signal (quote ,name) (list (apply #'format format args))))))
 
-(cl-defun org-glance-exception:source-file-corrupted (format &rest args)
-  (signal 'org-glance-exception:source-file-corrupted (list (apply #'format-message format args))))
-
-(define-error 'org-glance-exception:properties-corrupted
-    "Materialized view properties corrupted, please reread" 'user-error)
-
-(cl-defun org-glance-exception:properties-corrupted (format &rest args)
-  (signal 'org-glance-exception:properties-corrupted (list (apply #'format-message format args))))
-
-(define-error 'org-glance-exception:metastore-outdated
-    "Metastore is outdated" 'user-error)
-
-(defun org-glance-exception:metastore-outdated (format &rest args)
-  "Raise `org-glance-exception:metastore-outdated' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-exception:metastore-outdated (list (apply #'format-message format args))))
-
-(define-error 'org-glance-exception:headline-not-found
-    "Headline not found" 'user-error)
-
-(defun org-glance-exception:headline-not-found (format &rest args)
-  "Raise `org-glance-exception:headline-not-found' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-exception:headline-not-found (list (apply #'format-message format args))))
-
-(defun org-glance-exception:view-not-found (format &rest args)
-  "Raise `org-glance-exception:view-not-found' exception formatted with FORMAT ARGS."
-  (signal 'org-glance-exception:view-not-found (list (apply #'format-message format args))))
+(org-glance:define-exception org-glance-exception:SOURCE-FILE-CORRUPTED "Source file corrupted, please reread")
+(org-glance:define-exception org-glance-exception:PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread")
+(org-glance:define-exception org-glance-exception:METASTORE-OUTDATED "Metastore is outdated, please rebuild")
+(org-glance:define-exception org-glance-exception:HEADLINE-NOT-FOUND "Headline not found")
+(org-glance:define-exception org-glance-exception:CLASS-NOT-FOUND "Class not found")
 
 (org-glance:provide)

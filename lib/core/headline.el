@@ -127,9 +127,10 @@ metastore.")
     (format-time-string "%Y-%m-%d %H:%M:%S")))
 
 (cl-defun org-glance-headline:file (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :file)
-      (org-element-property :file headline)
-    (if-let (file (buffer-file-name)) (abbreviate-file-name file))))
+  (when-let (file (if (plist-member (nth 1 headline) :file)
+                      (org-element-property :file headline)
+                    (buffer-file-name)))
+    (abbreviate-file-name file)))
 
 (cl-defun org-glance-headline:level (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :level headline))
@@ -158,7 +159,7 @@ metastore.")
                   (lambda (elem) (when (string= (org-glance-headline:id elem) id)
                               (org-element-property :begin elem))))))
     (unless points
-      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" (buffer-file-name) id))
+      (org-glance-exception:HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
       (org-glance:log-warning "Headline ID %s is not unique in file %s" id (buffer-file-name)))
     (goto-char (car points))))
@@ -217,7 +218,7 @@ metastore.")
                           (org-narrow-to-subtree)
                           (org-glance-headline:promote-to-the-first-level)
                           (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
-          (t (org-glance-exception:headline-not-found "Unable to determine headline location.")))))
+          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))))
 
 (cl-defgeneric org-glance-headline:extract (scope)
   "Extract `org-glance-headlines' from scope.")
@@ -394,28 +395,31 @@ metastore.")
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:kvp? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :kvp)
-      (org-element-property :kvp headline)
-    (org-glance-headline:narrow headline
-      (org-end-of-meta-data t)
-      (when (re-search-forward org-glance:key-value-pair-re nil t)
-        t))))
+  ;; (if (plist-member (nth 1 headline) :kvp)
+  ;;     (org-element-property :kvp headline)
+  ;;   (org-glance-headline:narrow headline
+  ;;     (org-end-of-meta-data t)
+  ;;     (when (re-search-forward org-glance:key-value-pair-re nil t)
+  ;;       t)))
+  )
 
 (cl-defun org-glance-headline:linked? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :linkedp)
-      (org-element-property :linkedp headline)
-    (org-glance-headline:narrow headline
-      (org-end-of-meta-data t)
-      (when (re-search-forward org-any-link-re nil t)
-        t))))
+  ;; (if (plist-member (nth 1 headline) :linkedp)
+  ;;     (org-element-property :linkedp headline)
+  ;;   (org-glance-headline:narrow headline
+  ;;     (org-end-of-meta-data t)
+  ;;     (when (re-search-forward org-any-link-re nil t)
+  ;;       t)))
+  )
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
-  (if (plist-member (nth 1 headline) :encryptedp)
-      (org-glance-headline:narrow headline
-        (org-end-of-meta-data t)
-        (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))
+  ;; (if (plist-member (nth 1 headline) :encryptedp)
+  ;;     (org-glance-headline:narrow headline
+  ;;       (org-end-of-meta-data t)
+  ;;       (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))
+  )
 
-(cl-defun org-glance-headline:roles (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline
     (mapcar #'intern (org-get-tags))))
 

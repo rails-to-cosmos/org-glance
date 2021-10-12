@@ -36,7 +36,8 @@ enjoy using a lot.
 (defun -org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
-      (make-directory dir t))))
+      (make-directory dir t)))
+  file)
 
 (defun -org-glance:collect-tags ()
   (cl-loop for tag in (org--get-local-tags)

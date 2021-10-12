@@ -16,7 +16,7 @@
 
 (defun org-glance-view:ids ()
   "List registered views."
-  (sort (hash-table-keys org-glance:views) #'s-less?))
+  (sort (hash-table-keys org-glance:classes) #'s-less?))
 
 (cl-defmethod org-glance-view:metastore-location ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
@@ -33,12 +33,12 @@
          headline))
    view))
 
-(cl-defun org-glance-view:update (&optional (view-id (org-glance-view:choose)))
+(cl-defun org-glance-view:update (&optional (view-id (org-glance:choose-class)))
   (interactive)
-  (unless (org-glance-view:get-view-by-id view-id)
+  (unless (org-glance:get-class view-id)
     (when (y-or-n-p (format "Define new role? %s" view-id))
       (org-glance-def-view :id (intern view-id))))
-  (let* ((view (org-glance-view:get-view-by-id view-id))
+  (let* ((view (org-glance:get-class view-id))
          (db (org-glance-view:metastore-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) (list org-glance-directory)))
@@ -51,11 +51,11 @@
 
 (cl-defmethod org-glance-view:headlines ((view symbol))
   "When VIEW is a symbol, extract org-glance-view from `org-glance-view` hashmap by key."
-  (org-glance-view:headlines (org-glance-view:get-view-by-id view)))
+  (org-glance-view:headlines (org-glance:get-class view)))
 
 (cl-defmethod org-glance-view:headlines ((view string))
   "When VIEW is a string, extract org-glance-view from `org-glance-view` hashmap by key intern."
-  (org-glance-view:headlines (org-glance-view:get-view-by-id (intern view))))
+  (org-glance-view:headlines (org-glance:get-class (intern view))))
 
 (cl-defmethod org-glance-view:headlines ((view list))
   "When VIEW is a list, apply org-glance-view:headlines for each element of it."
@@ -80,23 +80,6 @@
   "Generate prompt for VIEW. Assume ACTION context."
   (s-titleize (format "%s %s: " action (org-glance-view-id view))))
 
-(cl-defgeneric org-glance-view-action-resolve (view action))
-
-(cl-defmethod org-glance-view-action-resolve ((view org-glance-view) (action symbol))
-  (let* ((action-types (->> org-glance:actions
-                            (alist-get action)
-                            (-sort (lambda (lhs rhs) (> (length lhs) (length rhs))))))
-         (view-actions (cl-loop
-                          for action-type in action-types
-                          with view-type = (org-glance-view-type view)
-                          when (cl-subsetp action-type view-type)
-                          return action-type)))
-    (or view-actions
-        (car (member org-glance-view-default-type (alist-get action org-glance:actions))))))
-
-(cl-defmethod org-glance-view-action-resolve ((view null) (action symbol))
-  (user-error "Assertion error: unable to resolve action when view is null"))
-
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-view:ids)))
@@ -104,18 +87,12 @@
         (intern (org-completing-read prompt views))
       (car views))))
 
-(defun org-glance-view:get-view-by-id (view-id)
-  (cond
-    ((symbolp view-id) (gethash view-id org-glance:views))
-    ((stringp view-id) (gethash (intern view-id) org-glance:views))
-    (t (org-glance-exception:view-not-found view-id))))
-
 (cl-defun org-glance-def-view (&key
                                  id
                                  type
                                  scope
                                  &allow-other-keys)
-  (let ((view (or (org-glance-view:get-view-by-id id)
+  (let ((view (or (org-glance:get-class id)
                   (org-glance-view:create :id id
                                           :type type
                                           :scope scope)))
@@ -123,15 +100,12 @@
                              (downcase (format "%s" id))
                              (downcase (format "%s.config.json" id)))))
 
-    (puthash id view org-glance:views)
+    (puthash id view org-glance:classes)
 
     (unless (file-exists-p config-file)
       (-org-glance:make-file-directory config-file)
       (with-temp-file config-file
-        (insert (json-encode `((id . ,id)
-                               (type . ,type)
-                               ;; (scope . ,scope)
-                               )))
+        (insert (json-encode `((id . ,id))))
         (json-pretty-print-buffer)))
 
     (org-glance:log-info "View \"%s\"%s is now ready to glance %s"
@@ -140,7 +114,7 @@
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
     view))
 
-(cl-defun org-glance-view:choose (&optional (prompt "Choose view: "))
+(cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))
 
 (org-glance:provide)

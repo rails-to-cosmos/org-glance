@@ -1,8 +1,9 @@
 CASK ?= cask
 EMACS ?= emacs
 
-.PHONY: all test testsrc clean init
-all: init build
+.PHONY: all test clean init
+
+all: init build test
 
 init:
 	${CASK} install
@@ -10,10 +11,6 @@ init:
 build:
 	${CASK} clean-elc
 	${CASK} build
-
-test_src:
-	${CASK} clean-elc
-	${CASK} exec ecukes
 
 test:
 	${CASK} clean-elc

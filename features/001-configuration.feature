@@ -5,20 +5,6 @@ Feature: System Init
   I want to define things, classes and domains
 
   Scenario: Let's start from scratch
-    When I visit my forest
-    Then I am in the buffer "*org-mode-forest*"
-    And I should see
-      """
-      #    -*- mode: org; mode: org-glance-overview -*-
-
-      #+CATEGORY: Ground
-      #+STARTUP: overview
-
-      YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
-      AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
-      DOWN A GULLY.
-
-      PRESS + TO BREAK A NEW GROUND.
-      """
-    And I should have 0 grounds owned
-    And I should have 0 trees planted
+    When I capture thing "New article" of class "article"
+    Then I should have 1 class active
+    And I should have 1 thing of class "article" registered

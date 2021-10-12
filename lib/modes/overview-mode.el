@@ -2,7 +2,8 @@
 
 (org-glance:require
   highlight
-  org-attach)
+  org-attach
+  org-capture)
 
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
@@ -122,17 +123,14 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
-    (org-glance-overview:capture (org-glance-overview:category))
-    (org-glance-overview:materialize-headline)
-    ;; (org-end-of-meta-data)
-    ;; (insert "\n")
-    ))
+    (org-glance-overview:capture
+     :class (org-glance-overview:class))))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
-(cl-defun org-glance-overview:register-headline-in-metastore (headline view-id)
-  (let* ((metastore-location (-some->> view-id
-                               org-glance-view:get-view-by-id
+(cl-defun org-glance-overview:register-headline-in-metastore (headline class)
+  (let* ((metastore-location (-some->> class
+                               org-glance:get-class
                                org-glance-view:metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
@@ -154,6 +152,38 @@ If point is before first heading, prompt for headline and eval forms on it."
                  (insert contents "\n")
                  (save-buffer))))))
   headline)
+
+(cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
+  (org-glance-headline:with-materialized-headline headline
+    (let ((id (intern (org-glance-headline:id headline)))
+          (class (if (symbolp class) class (intern class))))
+      (org-glance-posit:write
+       (org-glance-posit (list class 'is-class))
+       (org-glance-posit (list id 'thing) (list class 'class))
+       (org-glance-posit (list id 'origin) :value (list (org-glance-headline:file headline) (org-glance-headline:begin headline)))
+       (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
+       (org-glance-posit (list id 'contents)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  ""
+                                  ;; (base64-encode-string
+                                  ;;  (buffer-substring-no-properties (point) (point-max))
+                                  ;;  t)
+                                  ))
+       (org-glance-posit (list id 'extractable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                    t)))
+       (org-glance-posit (list id 'openable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (when (re-search-forward org-any-link-re nil t)
+                                    t)))
+       (org-glance-posit (list id 'decryptable)
+                         :value (save-excursion
+                                  (org-end-of-meta-data t)
+                                  (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
 
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
@@ -196,47 +226,112 @@ If point is before first heading, prompt for headline and eval forms on it."
             result))))))
 
 (cl-defun org-glance-overview:capture
-    (&optional
-       (view-id (org-glance-view:choose))
-       (title (read-string (format "New %s: " view-id)))
-       (headline (with-temp-buffer
-                   (insert "* " title)
-                   (org-glance:capture-headline-at-point view-id))))
+    (&key
+       (class (org-glance:choose-class))
+       (file (make-temp-file "org-glance-" nil ".org"))
+       (callback nil))
   (interactive)
-  (org-glance-overview view-id)
-  (org-glance-overview:register-headline-in-metastore headline view-id)
-  (org-glance-overview:register-headline-in-overview headline view-id)
-  (org-overview)
-  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-  headline)
+  (find-file file)
+  (setq-local org-glance-capture:id (format "%s-%s-%s"
+                                            class
+                                            system-name
+                                            (s-join "-" (mapcar #'number-to-string (current-time))))
+              org-glance-capture:class (if (symbolp class) class (intern class)))
+  (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
+  (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+  (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
+  (let ((org-capture-templates `(("_" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
+    (org-capture nil "_")))
+
+(cl-defun org-glance-capture:prepare-finalize-hook ()
+  "Preprocess headline before capturing.
+
+Consider using buffer local variables:
+- `org-glance-capture:id'
+- `org-glance-capture:class'"
+  (goto-char (point-min))
+  (or (org-at-heading-p) (org-next-visible-heading 0))
+  (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
+  (org-toggle-tag (format "%s" org-glance-capture:class) t))
+
+(cl-defun org-glance-capture:after-finalize-hook ()
+  "Register captured headline in metastore.
+
+Consider using buffer local variables:
+- `org-glance-capture:id'
+- `org-glance-capture:class'"
+
+  (org-glance:log-debug
+   "Finalize capture (id: %s, class: %s)"
+   org-glance-capture:id
+   org-glance-capture:class)
+
+  (unless (org-glance:get-class org-glance-capture:class)
+    (save-window-excursion
+      (org-glance:create-class org-glance-capture:class)))
+
+  (let* ((id org-glance-capture:id)
+         (class org-glance-capture:class)
+         (headline (progn
+                     (org-glance-headline:search-buffer-by-id id)
+                     (org-glance-headline:at-point)))
+         (refile-dir (make-temp-file
+                      (-org-glance:make-file-directory
+                       (f-join (org-glance-view:resource-location class)
+                               (concat (format-time-string "%Y-%m-%d_")
+                                       (->> (org-glance-headline:title headline)
+                                            (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
+                                            (replace-regexp-in-string "\\-+" "-")
+                                            (replace-regexp-in-string "\\-+$" "")
+                                            (s-truncate 30))
+                                       "-")))
+                      'directory))
+         (tmp-file (org-glance-headline:file headline))
+         (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
+    (org-glance:log-debug "Generate headline directory: %s" refile-dir)
+    (org-set-property "DIR" (abbreviate-file-name refile-dir))
+    (save-buffer)
+    (kill-buffer)
+
+    (f-move tmp-file new-file)
+    (org-glance-headline:enrich headline :file new-file)
+
+    (org-glance-overview class)
+
+    (org-glance:log-debug "Register headline of class %s in metastore: %s"
+                          (pp-to-string class)
+                          (pp-to-string headline))
+
+    (org-glance-overview:register-headline-in-metastore headline class)
+    (org-glance-overview:register-headline-in-overview headline class)
+    (org-glance-overview:register-headline-in-write-ahead-log headline class)
+
+    (org-overview)
+    (org-glance-headline:search-buffer-by-id id)))
 
 (cl-defun org-glance-overview:import-headlines
     (path
      &optional
-       (view-id (org-glance-overview:category)))
+       (class (org-glance-view:completing-read)))
   (interactive "fImport from location: ")
-  (when (y-or-n-p (org-glance:format "Import headlines of class ${view-id} from ${path}?"))
+  (when (y-or-n-p (org-glance:format "Import headlines of class ${class} from ${path}?"))
     (cl-loop
-       for original-headline in (cl-loop
-                                   for file in (org-glance-scope path)
-                                   append (-non-nil (mapcar (org-glance-view-filter (org-glance-view:get-view-by-id view-id))
-                                                            (progn
-                                                              (org-glance:log-info "Scan file %s" file)
-                                                              (redisplay)
-                                                              (with-temp-buffer
-                                                                (org-mode)
-                                                                (insert-file-contents file)
-                                                                (let ((filename (abbreviate-file-name file)))
-                                                                  (org-element-map (org-element-parse-buffer 'headline) 'headline
-                                                                    (lambda (el)
-                                                                      (org-glance-headline:enrich el :file filename)))))))))
-       do (let ((pos (org-glance-headline:begin original-headline))
-                (file (org-glance-headline:file original-headline)))
-            (find-file file)
-            (goto-char pos)
-            (let ((captured-headline (org-glance:capture-headline-at-point view-id :remove-original nil)))
-              (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-              (org-glance-overview:register-headline-in-overview captured-headline view-id))))))
+       for file in (org-glance-scope path)
+       do (with-temp-buffer
+            (org-glance:log-info "Scan file %s" file)
+            (redisplay)
+            (org-mode)
+            (insert-file-contents file)
+            (org-element-map (org-element-parse-buffer 'headline) 'headline
+              (lambda (el)
+                (when (-contains?
+                       (mapcar #'downcase (org-element-property :tags el))
+                       (downcase (symbol-name class)))
+                  (org-glance-headline:enrich el :file (abbreviate-file-name file))
+                  (org-glance-overview:register-headline-in-metastore el class)
+                  (org-glance-overview:register-headline-in-overview el class)
+                  ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
+                  )))))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
@@ -272,8 +367,9 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
-  (let ((view-name (s-downcase (format "%s" view-id))))
-    (f-join org-glance-directory view-name (concat view-name ".org"))))
+  (when view-id
+    (let ((view-name (s-downcase (format "%s" view-id))))
+      (f-join org-glance-directory view-name (concat view-name ".org")))))
 
 (cl-defun org-glance-headline:main-role (&optional (headline (org-glance-overview:original-headline)))
   "Assume main role of HEADLINE as role directory where it is stored."
@@ -357,14 +453,15 @@ If point is before first heading, prompt for headline and eval forms on it."
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
-(cl-defun org-glance-overview:create (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:create (&optional
+                                        (class (org-glance-view:completing-read))
+                                        headlines)
   (interactive)
   (let* ((inhibit-read-only t)
-         (filename (org-glance-overview:location view-id))
-         (header (let ((category view-id))
-                   (org-glance:format org-glance-overview:header)))
-         (headlines (->> view-id org-glance-view:update org-glance-view:headlines)))
-    (-org-glance:make-file-directory filename)
+         (filename (-org-glance:make-file-directory
+                    (org-glance-overview:location class)))
+         (header (let ((category class))
+                   (org-glance:format org-glance-overview:header))))
     (with-temp-file filename
       (org-mode)
       (insert header)
@@ -380,13 +477,13 @@ If point is before first heading, prompt for headline and eval forms on it."
       (org-align-tags t))
     (find-file filename)))
 
-(cl-defun org-glance-overview (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (when view-id
-    (let ((location (org-glance-overview:location view-id)))
+  (when class
+    (when-let (location (org-glance-overview:location class))
       (if (file-exists-p location)
           (find-file location)
-        (org-glance-overview:create view-id)))))
+        (org-glance-overview:create class)))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
@@ -423,10 +520,10 @@ If point is before first heading, prompt for headline and eval forms on it."
         org-glance-headline:visit)
       (forward-char offset))))
 
-(cl-defun org-glance-overview:category ()
+(cl-defun org-glance-overview:class ()
   (save-excursion
     (goto-char (point-min))
-    (intern (org-get-category))))
+    (intern (downcase (org-get-category)))))
 
 (defmacro org-glance-doctor:when (predicate prompt &rest forms)
   (declare (indent 2) (debug t))
@@ -443,7 +540,7 @@ If point is before first heading, prompt for headline and eval forms on it."
   ;; - [x] fix non-relative DIR properties
 
   (when (org-glance-overview:pull)
-    (let* ((view-id (org-glance-overview:category))
+    (let* ((view-id (org-glance-overview:class))
            (original-headline (org-glance-overview:original-headline))
            (original-headline-location (org-glance-headline:file original-headline))
            (dir (org-element-property :DIR original-headline))
@@ -490,12 +587,13 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:pull! ()
   "Completely rebuild current overview file."
   (interactive)
-  (let ((view-id (org-glance-overview:category)))
-    (when (y-or-n-p (org-glance:format "Rebuild ${view-id}?"))
+  (let ((class (org-glance-overview:class)))
+    (when (y-or-n-p (org-glance:format "Rebuild ${class}?"))
       (save-buffer)
       (kill-buffer)
-      (org-glance-overview:create view-id)
-      (org-glance:log-info (org-glance:format "View ${view-id} is now up to date")))))
+      (org-glance-overview:create class)
+      (org-glance-overview:import-headlines org-glance-directory class)
+      (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
 
 (cl-defun org-glance-overview:pull* ()
   "Apply `org-glance-overview:pull' to each headline in current overview file."
@@ -509,14 +607,14 @@ If point is before first heading, prompt for headline and eval forms on it."
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:search-parents)
-  (let ((role (org-glance-overview:category))
-        (title (org-glance-headline:title))
+  (let ((title (org-glance-headline:title))
+        (class (org-glance-overview:class))
         (original-headline (org-glance-overview:original-headline)))
-    (when (or force (y-or-n-p (org-glance:format "Revoke the role \"${role}\" from \"${title}\"?")))
+    (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (org-glance-headline:narrow original-headline
-        (org-toggle-tag (format "%s" role) 'off)
-        (unless (org-glance-headline:roles)
-          (when (y-or-n-p "No roles is now associated with headline. Remove it completely?")
+        (org-toggle-tag (format "%s" class) 'off)
+        (unless (org-glance-headline:classes)
+          (when (y-or-n-p "No classs is now associated with headline. Remove it completely?")
             (kill-region (org-entry-beginning-position) (org-entry-end-position))))
         (save-buffer)
         (when (= (buffer-size) 0)
@@ -524,12 +622,13 @@ If point is before first heading, prompt for headline and eval forms on it."
           (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
             (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))
       (let ((inhibit-read-only t))
-        (kill-region (org-entry-beginning-position) (org-entry-end-position))))))
+        (kill-region (org-entry-beginning-position) (org-entry-end-position))
+        (save-buffer)))))
 
-;; (cl-defun org-glance-overview:move-headline (&optional (new-role (org-glance-view:choose "New role: ")))
+;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance:choose-class "New role: ")))
 ;;   (interactive)
 ;;   (org-glance-headline:search-parents)
-;;   (let ((role (org-glance-overview:category))
+;;   (let ((role (org-glance-overview:class))
 ;;         (title (org-glance-headline:title))
 ;;         (original-headline (org-glance-overview:original-headline)))
 ;;     (org-glance-headline:narrow original-headline
@@ -561,7 +660,7 @@ If point is before first heading, prompt for headline and eval forms on it."
       ((null original-headline-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
            (org-glance-overview:kill-headline :force t)
-         (org-glance-exception:headline-not-found "Original headline not found"))
+         (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
        nil)
       ((string= current-headline-contents original-headline-contents)
        (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
@@ -580,11 +679,10 @@ If point is before first heading, prompt for headline and eval forms on it."
          (org-align-tags t)
          (save-buffer)
          (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
-         t))
-    ))
+         t))))
 
 (cl-defun org-glance-overview:comment ()
-  "Toggle comment headline at point."
+  "Comment headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -597,7 +695,7 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-headline:search-forward))
 
 (cl-defun org-glance-overview:archive ()
-  "Toggle archive headline at point."
+  "Archive headline at point."
   (interactive)
   (save-window-excursion
     (->> (org-glance-headline:at-point)
@@ -624,15 +722,14 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:add-relation
-    (&optional
-       (source (org-glance-overview:original-headline))
-       (target (org-glance:get-or-capture)))
+(cl-defun org-glance-overview:add-relation ()
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
-  (save-window-excursion
-    (org-glance-headline:add-biconnected-relation source target))
-  (org-glance-overview:pull))
+  (lexical-let ((source (org-glance-overview:original-headline)))
+    (org-glance:with-captured-headline target
+      (org-glance-headline:add-biconnected-relation source target)
+      ;; TODO pull source and target
+      )))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

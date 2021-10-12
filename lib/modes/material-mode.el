@@ -3,17 +3,20 @@
 (org-glance:require
   lib.core.headline
 
-  ;; remove this dependencies:
+  ;; remove these dependencies:
   lib.core.metastore
   lib.core.view
   lib.modes.overview-mode)
 
-(defvar org-glance-materialized-headline-mode-map (make-sparse-keymap)
+(defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
-(define-minor-mode org-glance-materialized-headline-mode
+(define-minor-mode org-glance-material-mode
     "A minor mode to be activated only in materialized view editor."
-  nil nil org-glance-materialized-headline-mode-map)
+  nil nil org-glance-material-mode-map)
+
+;; (defvar org-glance-materialized-headlines-buffers (make-hash-table)
+;;   "Maps headline to last materialized buffer associated with it.")
 
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
@@ -47,7 +50,7 @@
   (cl-loop
      for view-id in (org-glance-view:ids)
      for metastore = (->> view-id
-                          org-glance-view:get-view-by-id
+                          org-glance:get-class
                           org-glance-view:metastore-location
                           org-glance-metastore:read)
      for headline = (gethash id metastore)
@@ -80,13 +83,13 @@
                                                             (org-clock-in)
                                                             (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
 
-(define-key org-glance-materialized-headline-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
-(define-key org-glance-materialized-headline-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-(define-key org-glance-materialized-headline-mode-map (kbd "C-c C-v") #'org-glance-overview)
+(define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
+(define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
-(define-error 'org-glance-exception:headline-not-modified "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-exception:headline-not-modified (format &rest args)
-  (signal 'org-glance-exception:headline-not-modified (list (apply #'format-message format args))))
+(define-error 'org-glance-exception:HEADLINE-NOT-MODIFIED "No changes made in materialized view" 'user-error)
+(cl-defun org-glance-exception:HEADLINE-NOT-MODIFIED (format &rest args)
+  (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
 
 (cl-defun org-glance-materialized-headline:sync ()
   (interactive)
@@ -103,10 +106,10 @@
                           (org-glance-headline:hash))))
 
       (unless (string= glance-hash source-hash)
-        (org-glance-exception:source-file-corrupted source))
+        (org-glance-exception:SOURCE-FILE-CORRUPTED source))
 
       (when (string= glance-hash current-hash)
-        (org-glance-exception:headline-not-modified source))
+        (org-glance-exception:HEADLINE-NOT-MODIFIED source))
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
       (let ((new-contents (save-restriction
@@ -140,7 +143,12 @@
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
-  (let ((buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">"))))
+  (let (;; (cached-buffer (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-headlines-buffers))
+        (buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">"))
+          ;; (if (and cached-buffer (buffer-live-p cached-buffer))
+          ;;     cached-buffer
+          ;;   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
+          ))
     (org-glance:log-info "Generate new buffer for materialized headline: %s" buffer)
     buffer))
 
@@ -159,9 +167,9 @@
        (org-glance:log-info "Headline BEG: \"%s\"" beg)
        (org-glance:log-info "Headline END: \"%s\"" end)
 
-       (org-glance:log-info "Enable `org-mode' and `org-glance-materialized-headline-mode'")
+       (org-glance:log-info "Enable `org-mode' and `org-glance-material-mode'")
        (org-mode)
-       (org-glance-materialized-headline-mode +1)
+       (org-glance-material-mode +1)
 
        (org-glance:log-info "Insert headline contents")
        (insert contents)

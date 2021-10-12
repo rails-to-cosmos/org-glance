@@ -1,22 +1,28 @@
-;;; visit.el - Support for links to org-glance headliens
 (require 'org-glance-module)
 (require 'ol)
 
-(org-link-set-parameters
- "org-glance-visit"
- :follow #'org-glance-link:open
- ;; :export #'org-glance-link:export
- ;; :store #'org-glance-link:store-link
- )
+(org-link-set-parameters "org-glance-visit" :follow #'org-glance-link:materialize
+                         ;; :export #'org-glance-link:export
+                         ;; :store #'org-glance-link:store-link
+                         )
+
+(org-link-set-parameters "org-glance-open" :follow #'org-glance-link:open
+                         ;; :export #'org-glance-link:export
+                         ;; :store #'org-glance-link:store-link
+                         )
 
 ;; (defcustom org-glance-link:command 'man
 ;;   "The Emacs command to be used to display a man page."
 ;;   :group 'org-link
 ;;   :type '(choice (const man) (const woman)))
 
+(defun org-glance-link:materialize (id _)
+  "Materialize org-glance headline identified by ID."
+  (org-glance:materialize (org-glance-metastore:get-headline id)))
+
 (defun org-glance-link:open (id _)
-  "Visit org-glance headline identified by ID."
-  (org-glance-headline:materialize (org-glance-metastore:get-headline id)))
+  "Open org-glance headline identified by ID."
+  (org-glance:open (org-glance-metastore:get-headline id)))
 
 ;; (defun org-glance-link:store-link ()
 ;;   "Store a link to a man page."
@@ -49,4 +55,3 @@
 ;;       (t path))))
 
 (org-glance:provide)
-;;; visit.el ends here
