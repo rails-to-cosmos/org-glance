@@ -49,6 +49,5 @@
 (Teardown
  ;; After when everything has been run
  (message "= Teardown =")
- ;; (delete-directory org-glance-test:root-location t)
- ;; (message "Sandbox root directory \"%s\" has been removed on teardown" org-glance-test:root-location)
- )
+ (delete-directory org-glance-test:root-location t)
+ (message "Sandbox root directory \"%s\" has been removed on teardown" org-glance-test:root-location))

@@ -4,11 +4,12 @@
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
-    (with-simulated-input ((insert thing-title) "RET" (insert class-name) "RET" (insert thing-title))
+    (with-simulated-input ((insert thing-title) "RET" (insert class-name) "RET")
       (org-glance:reschedule-or-capture))
+    (insert thing-title)
     (org-capture-finalize)))
 
-(Then "^I should have \\([[:digit:]]+\\) classe?s? active$"
+(Then "^I should have \\([[:digit:]]+\\) active classe?s?$"
       (lambda (count)
         (= (hash-table-count org-glance:classes) (string-to-number count))))
 
