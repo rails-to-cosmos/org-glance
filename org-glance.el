@@ -228,11 +228,6 @@ Pass `<captured>' variable to determine if headline was captured before running 
       (lexical-let ((buffer (current-buffer)) (point (point)))
         (org-glance-overview:capture
          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
-         ;; :title (progn
-         ;;          ;; TODO: investigate bug in captured title
-         ;;          ;; or get rid of it in future
-         ;;          ;; (pp choice)
-         ;;          (cadr choice))
          :callback (lambda ()
                      (let ((,headline (org-glance-overview:original-headline))
                            (<captured> t))

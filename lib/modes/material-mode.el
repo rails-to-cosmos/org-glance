@@ -1,6 +1,8 @@
 (require 'org-glance-module)
 
 (org-glance:require
+  ol
+
   lib.core.headline
 
   ;; remove these dependencies:
