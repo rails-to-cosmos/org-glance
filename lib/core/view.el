@@ -35,10 +35,10 @@
 
 (cl-defun org-glance-view:update (&optional (view-id (org-glance-view:choose)))
   (interactive)
-  (unless (org-glance-view:get-view-by-id view-id)
+  (unless (org-glance:get-class view-id)
     (when (y-or-n-p (format "Define new role? %s" view-id))
       (org-glance-def-view :id (intern view-id))))
-  (let* ((view (org-glance-view:get-view-by-id view-id))
+  (let* ((view (org-glance:get-class view-id))
          (db (org-glance-view:metastore-location view))
          (filter (org-glance-view-filter view))
          (scope (or (org-glance-view-scope view) (list org-glance-directory)))
@@ -51,11 +51,11 @@
 
 (cl-defmethod org-glance-view:headlines ((view symbol))
   "When VIEW is a symbol, extract org-glance-view from `org-glance-view` hashmap by key."
-  (org-glance-view:headlines (org-glance-view:get-view-by-id view)))
+  (org-glance-view:headlines (org-glance:get-class view)))
 
 (cl-defmethod org-glance-view:headlines ((view string))
   "When VIEW is a string, extract org-glance-view from `org-glance-view` hashmap by key intern."
-  (org-glance-view:headlines (org-glance-view:get-view-by-id (intern view))))
+  (org-glance-view:headlines (org-glance:get-class (intern view))))
 
 (cl-defmethod org-glance-view:headlines ((view list))
   "When VIEW is a list, apply org-glance-view:headlines for each element of it."
@@ -104,18 +104,12 @@
         (intern (org-completing-read prompt views))
       (car views))))
 
-(defun org-glance-view:get-view-by-id (view-id)
-  (cond
-    ((symbolp view-id) (gethash view-id org-glance:views))
-    ((stringp view-id) (gethash (intern view-id) org-glance:views))
-    (t (org-glance-exception:VIEW-NOT-FOUND view-id))))
-
 (cl-defun org-glance-def-view (&key
                                  id
                                  type
                                  scope
                                  &allow-other-keys)
-  (let ((view (or (org-glance-view:get-view-by-id id)
+  (let ((view (or (org-glance:get-class id)
                   (org-glance-view:create :id id
                                           :type type
                                           :scope scope)))

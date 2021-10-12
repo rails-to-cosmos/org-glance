@@ -63,10 +63,9 @@
 
 (defun org-glance:get-class (class)
   (assert (symbolp class))
-  (or (gethash class org-glance:views)
-      (org-glance-exception:VIEW-NOT-FOUND class)))
+  (gethash class org-glance:views))
 
-(defvar org-glance:views-loaded nil
+(defvar org-glance:classes (make-hash-table)
   "Registered views alist.")
 
 (cl-defmacro org-glance:interactive-lambda (&rest forms)
@@ -140,9 +139,6 @@
 (cl-defun org-glance:read-view-directories ()
   (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
 
-(cl-defun org-glance:view-directory-loaded? (view-directory)
-  (alist-get view-directory org-glance:views-loaded nil nil #'string=))
-
 (cl-defun org-glance:view-config-file-location (view-directory)
   (f-join org-glance-directory view-directory (concat view-directory ".config.json")))
 
@@ -189,10 +185,13 @@
                 append (list pk pv)))
     (org-glance-def-view :id class))
 
-  (unless (f-exists? (org-glance-overview:location class))
-    (org-glance-overview:create class))
+  (puthash class t org-glance:classes)
 
-  (push class org-glance:views-loaded))
+  (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
+    (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
+
+  (unless (f-exists? (org-glance-overview:location class))
+    (org-glance-overview:create class)))
 
 (cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."
@@ -200,13 +199,14 @@
     (mkdir org-glance-directory))
 
   (cl-loop
-     for class in (org-glance:read-view-directories)
-     unless (org-glance:view-directory-loaded? class)
+     for directory in (org-glance:read-view-directories)
+     for class = (intern directory)
+     unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class))
 
   (cl-loop
      for class in '(posit thing class role ascertains)
-     unless (org-glance:view-directory-loaded? (symbol-name class))
+     unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class)))
 
 (cl-defun org-glance:@magic ()
