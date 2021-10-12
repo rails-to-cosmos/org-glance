@@ -227,7 +227,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:capture
     (&key
-       (class (org-glance-view:choose))
+       (class (org-glance:choose-class))
        (file (make-temp-file "org-glance-" nil ".org"))
        (callback nil))
   (interactive)
@@ -249,12 +249,8 @@ If point is before first heading, prompt for headline and eval forms on it."
 Consider using buffer local variables:
 - `org-glance-capture:id'
 - `org-glance-capture:class'"
-  (assert (stringp org-glance-capture:id))
-  (assert (symbolp org-glance-capture:class))
-
   (goto-char (point-min))
   (or (org-at-heading-p) (org-next-visible-heading 0))
-
   (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
   (org-toggle-tag (format "%s" org-glance-capture:class) t))
 
@@ -264,8 +260,15 @@ Consider using buffer local variables:
 Consider using buffer local variables:
 - `org-glance-capture:id'
 - `org-glance-capture:class'"
-  (assert (stringp org-glance-capture:id))
-  (assert (symbolp org-glance-capture:class))
+
+  (org-glance:log-debug
+   "Finalize capture (id: %s, class: %s)"
+   org-glance-capture:id
+   org-glance-capture:class)
+
+  (unless (org-glance:get-class org-glance-capture:class)
+    (save-window-excursion
+      (org-glance:create-class org-glance-capture:class)))
 
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)
@@ -622,7 +625,7 @@ Consider using buffer local variables:
         (kill-region (org-entry-beginning-position) (org-entry-end-position))
         (save-buffer)))))
 
-;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance-view:choose "New role: ")))
+;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance:choose-class "New role: ")))
 ;;   (interactive)
 ;;   (org-glance-headline:search-parents)
 ;;   (let ((role (org-glance-overview:class))

@@ -36,9 +36,10 @@
 
  (message "Environment:")
 
- (setq org-glance-directory org-glance-test:view-location)
- (message " org-glance-directory: %s" org-glance-directory)
+ (setq org-glance-directory org-glance-test:view-location
+       org-glance:log-level -2305843009213693952)
 
+ (message " org-glance-directory: %s" org-glance-directory)
  (message "\nStdOut:"))
 
 (After

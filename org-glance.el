@@ -58,15 +58,11 @@
    :documentation "List of files/directories where org-glance should search for headlines for this view."
    :type 'list))
 
-(defvar org-glance:views (make-hash-table)
+(defvar org-glance:classes (make-hash-table)
   "Hash table (id->view) that lists all registered classes of things.")
 
 (defun org-glance:get-class (class)
-  (assert (symbolp class))
-  (gethash class org-glance:views))
-
-(defvar org-glance:classes (make-hash-table)
-  "Registered views alist.")
+  (gethash class org-glance:classes))
 
 (cl-defmacro org-glance:interactive-lambda (&rest forms)
   "Define interactive lambda function with FORMS in its body."
@@ -125,7 +121,7 @@
 (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
-(declare-function org-glance-view:choose (org-glance-module-filename lib.core.view))
+(declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
@@ -172,7 +168,7 @@
     (rename-buffer "*org-glance*")))
 
 (cl-defun org-glance:create-class (class)
-  (org-glance:log-info "Create class \"%s\"" class)
+  (org-glance:log-info "Create class '%s" class)
 
   (if-let (config (org-glance:view-config-file-read class))
       (apply 'org-glance-def-view
@@ -184,8 +180,6 @@
                 when pk
                 append (list pk pv)))
     (org-glance-def-view :id class))
-
-  (puthash class t org-glance:classes)
 
   (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
     (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
@@ -222,24 +216,27 @@
         (insert "@")))))
 
 (cl-defmacro org-glance:with-captured-headline (headline &rest forms)
-  "Get or capture headline and run FORMS on it."
+  "Get or capture headline and run FORMS on it.
+
+Pass `<captured>' variable to determine if headline was captured before running forms."
   (declare (indent 1) (debug t))
   `(condition-case choice
-       (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
-             (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms)))
-     (org-glance-exception:HEADLINE-NOT-FOUND
-      (lexical-let ((origin (current-buffer))
-                    (point (point)))
+       (let ((<captured> nil))
+         (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
+               (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms))))
+     (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
+      (lexical-let ((buffer (current-buffer)) (point (point)))
         (org-glance-overview:capture
-         :class (org-glance-view:choose "Unknown thing. Please, specify it's class to capture: ")
+         :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
          ;; :title (progn
          ;;          ;; TODO: investigate bug in captured title
          ;;          ;; or get rid of it in future
          ;;          ;; (pp choice)
          ;;          (cadr choice))
          :callback (lambda ()
-                     (let ((,headline (org-glance-overview:original-headline)))
-                       (switch-to-buffer origin)
+                     (let ((,headline (org-glance-overview:original-headline))
+                           (<captured> t))
+                       (switch-to-buffer buffer)
                        (goto-char point)
                        ,@forms)))))))
 
@@ -250,9 +247,10 @@ If it has completed state, make it TODO and prompt user to reschedule it."
   (interactive)
   (org-glance:with-captured-headline headline
     (org-glance-headline:with-materialized-headline headline
-      (org-remove-timestamp-with-keyword org-scheduled-string)
-      (call-interactively #'org-schedule)
-      (org-todo "TODO"))))
+      (unless <captured>
+        (org-remove-timestamp-with-keyword org-scheduled-string)
+        (call-interactively #'org-schedule)
+        (org-todo "TODO")))))
 
 (cl-defun org-glance:refer ()
   "Insert relation from `org-glance-headline' at point to TARGET.

@@ -11,7 +11,7 @@
 
 (And "^I should have \\([[:digit:]]+\\) headlines in view \"\\(.+\\)\"$"
      (lambda (cardinality view-id)
-       (let ((actual-cardinality (->> org-glance:views
+       (let ((actual-cardinality (->> org-glance:classes
                                    (gethash (intern view-id))
                                    (org-glance-view:headlines)
                                    (length)))
@@ -21,7 +21,7 @@
 
 (And "^I should have \\([[:digit:]]+\\) views? registered$"
      (lambda (cardinality)
-       (let ((actual-cardinality (->> org-glance:views
+       (let ((actual-cardinality (->> org-glance:classes
                                    (hash-table-keys)
                                    (length)))
              (expected-cardinality (->> cardinality
