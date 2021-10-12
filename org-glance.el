@@ -62,12 +62,13 @@
 (defun org-glance:get-class (class)
   (gethash class org-glance:classes))
 
-(cl-defmacro org-glance:interactive-lambda (&rest forms)
-  "Define interactive lambda function with FORMS in its body."
-  (declare (indent 0) (debug t))
-  `(lambda ()
-     (interactive)
-     ,@forms))
+(eval-and-compile
+  (cl-defmacro org-glance:interactive-lambda (&rest forms)
+    "Define interactive lambda function with FORMS in its body."
+    (declare (indent 0) (debug t))
+    `(lambda ()
+       (interactive)
+       ,@forms)))
 
 (eval-when-compile
   (org-glance:require
@@ -228,13 +229,13 @@ Pass `<captured>' variable to determine if headline was captured before running 
          (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
                (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms))))
      (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
-      (lexical-let ((buffer (current-buffer)) (point (point)))
+      (lexical-let ((<buffer> (current-buffer)) (point (point)))
         (org-glance-overview:capture
          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
          :callback (lambda ()
                      (let ((,headline (org-glance-overview:original-headline))
                            (<captured> t))
-                       (switch-to-buffer buffer)
+                       (switch-to-buffer <buffer>)
                        (goto-char point)
                        ,@forms)))))))
 
@@ -264,7 +265,10 @@ C-u means not to insert relation at point, but register it in logbook instead."
   "Materialize HEADLINE in new buffer."
   (interactive)
   (org-glance:with-captured-headline headline
-    (org-glance-headline:materialize headline)))
+    (let ((buffer (org-glance-headline:materialized-buffer headline)))
+      (if (buffer-live-p buffer)
+          (switch-to-buffer buffer)
+        (org-glance-headline:materialize headline)))))
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.

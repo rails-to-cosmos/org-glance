@@ -17,8 +17,7 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-material-mode-map)
 
-;; (defvar org-glance-materialized-headlines-buffers (make-hash-table)
-;;   "Maps headline to last materialized buffer associated with it.")
+(defvar org-glance-materialized-buffers (make-hash-table))
 
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
@@ -145,14 +144,7 @@
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
-  (let (;; (cached-buffer (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-headlines-buffers))
-        (buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">"))
-          ;; (if (and cached-buffer (buffer-live-p cached-buffer))
-          ;;     cached-buffer
-          ;;   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
-          ))
-    (org-glance:log-info "Generate new buffer for materialized headline: %s" buffer)
-    buffer))
+  (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (&optional (headline (org-glance-headline:at-point)))
   (org-glance:log-info "Materialize headline %s" headline)
@@ -195,6 +187,7 @@
        (org-glance-headline:promote-to-the-first-level)
 
        (org-cycle 'contents)
+       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
        (current-buffer)))))
 
 (advice-add 'org-glance-headline:materialize :around
@@ -240,5 +233,8 @@
              (error nil)))
          (with-demoted-errors "Unable to kill buffer: %s"
            (kill-buffer materialized-buffer))))))
+
+(cl-defun org-glance-headline:materialized-buffer (headline)
+  (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
 
 (org-glance:provide)
