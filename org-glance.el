@@ -32,8 +32,6 @@
 
 (require 'org)
 (require 'org-glance-module)
-(eval-when-compile
-  (require 'cl))
 
 (defcustom org-glance-directory org-directory
   "Directory with Org files."
@@ -71,6 +69,11 @@
      (interactive)
      ,@forms))
 
+(eval-when-compile
+  (org-glance:require
+    cl
+    lib.modes.material-mode))
+
 (org-glance:require
   cl-generic
   cl-lib
@@ -83,9 +86,9 @@
   lib.core.exceptions
   lib.core.posit
 
-  lib.utils.encryption                ; encryption utils
-  lib.utils.helpers                   ; unsorted, deprecated
-  lib.utils.org                       ; org-mode shortcuts
+  lib.utils.encryption                  ; encryption utils
+  lib.utils.helpers                     ; unsorted, deprecated
+  lib.utils.org                         ; org-mode shortcuts
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -95,12 +98,12 @@
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
 
-  lib.core.headline                   ; good
-  lib.core.metastore                  ; ok
-  lib.core.scope                      ; ? deprecated
-  lib.core.view                       ; migrate to overview
+  lib.core.headline                     ; good
+  lib.core.metastore                    ; ok
+  lib.core.scope                        ; ? deprecated
+  lib.core.view                         ; migrate to overview
 
-  lib.modes.overview-mode             ; good one, improve
+  lib.modes.overview-mode               ; good one, improve
   lib.modes.material-mode
 
   lib.view.links

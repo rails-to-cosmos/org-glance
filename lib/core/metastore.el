@@ -73,7 +73,7 @@
                  (org-glance-headline:deserialize)
                  (org-glance-headline:enrich :ORG_GLANCE_ID id))
      into result
-     finally (return (first result))))
+     finally (return (car result))))
 
 (cl-defun org-glance-metastore:choose-headline ()
   "Main retriever, refactor needed."
