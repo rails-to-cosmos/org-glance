@@ -5,4 +5,5 @@ Feature: Capture
 
   Scenario: Materialization
     When I capture thing "Amsterdam" of class "city"
-    Then I materialize "Amsterdam" of class "city"
+    And I materialize "Amsterdam" of class "city"
+    Then I should be in the buffer "org-glance:<Amsterdam>"

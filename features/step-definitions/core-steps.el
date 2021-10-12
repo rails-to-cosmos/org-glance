@@ -17,3 +17,7 @@
       (lambda (count class)
         (= (length (org-glance-view:headlines (intern class)))
            (string-to-number count))))
+
+(Then "^I should be in the buffer \"\\([^\"]+\\)\"$"
+      (lambda (buffer-name)
+        (should (string= buffer-name (buffer-name)))))
