@@ -165,9 +165,11 @@ If point is before first heading, prompt for headline and eval forms on it."
        (org-glance-posit (list id 'contents)
                          :value (save-excursion
                                   (org-end-of-meta-data t)
-                                  (base64-encode-string
-                                   (buffer-substring-no-properties (point) (point-max))
-                                   t)))
+                                  ""
+                                  ;; (base64-encode-string
+                                  ;;  (buffer-substring-no-properties (point) (point-max))
+                                  ;;  t)
+                                  ))
        (org-glance-posit (list id 'extractable)
                          :value (save-excursion
                                   (org-end-of-meta-data t)
@@ -307,31 +309,26 @@ Consider using buffer local variables:
 (cl-defun org-glance-overview:import-headlines
     (path
      &optional
-       (view-id (org-glance-overview:class)))
+       (class (org-glance-view:completing-read)))
   (interactive "fImport from location: ")
-  (when (y-or-n-p (org-glance:format "Import headlines of class ${view-id} from ${path}?"))
+  (when (y-or-n-p (org-glance:format "Import headlines of class ${class} from ${path}?"))
     (cl-loop
-       for original-headline in (cl-loop
-                                   for file in (org-glance-scope path)
-                                   append (-non-nil (mapcar (org-glance-view-filter (org-glance-view:get-view-by-id view-id))
-                                                            (progn
-                                                              (org-glance:log-info "Scan file %s" file)
-                                                              (redisplay)
-                                                              (with-temp-buffer
-                                                                (org-mode)
-                                                                (insert-file-contents file)
-                                                                (let ((filename (abbreviate-file-name file)))
-                                                                  (org-element-map (org-element-parse-buffer 'headline) 'headline
-                                                                    (lambda (el)
-                                                                      (org-glance-headline:enrich el :file filename)))))))))
-       do (let ((pos (org-glance-headline:begin original-headline))
-                (file (org-glance-headline:file original-headline)))
-            (find-file file)
-            (goto-char pos)
-            (let ((captured-headline (org-glance:capture-headline-at-point view-id :remove-original nil)))
-              (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-              (org-glance-overview:register-headline-in-overview captured-headline view-id)
-              (org-glance-overview:register-headline-in-write-ahead-log captured-headline view-id))))))
+       for file in (org-glance-scope path)
+       do (with-temp-buffer
+            (org-glance:log-info "Scan file %s" file)
+            (redisplay)
+            (org-mode)
+            (insert-file-contents file)
+            (org-element-map (org-element-parse-buffer 'headline) 'headline
+              (lambda (el)
+                (when (-contains?
+                       (mapcar #'downcase (org-element-property :tags el))
+                       (downcase (symbol-name class)))
+                  (org-glance-headline:enrich el :file (abbreviate-file-name file))
+                  (org-glance-overview:register-headline-in-metastore el class)
+                  (org-glance-overview:register-headline-in-overview el class)
+                  ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
+                  )))))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
@@ -461,9 +458,7 @@ Consider using buffer local variables:
          (filename (-org-glance:make-file-directory
                     (org-glance-overview:location class)))
          (header (let ((category class))
-                   (org-glance:format org-glance-overview:header)))
-         ;; (headlines (->> class org-glance-view:update org-glance-view:headlines))
-         )
+                   (org-glance:format org-glance-overview:header))))
     (with-temp-file filename
       (org-mode)
       (insert header)
@@ -525,7 +520,7 @@ Consider using buffer local variables:
 (cl-defun org-glance-overview:class ()
   (save-excursion
     (goto-char (point-min))
-    (intern (org-get-category))))
+    (intern (downcase (org-get-category)))))
 
 (defmacro org-glance-doctor:when (predicate prompt &rest forms)
   (declare (indent 2) (debug t))
@@ -589,12 +584,13 @@ Consider using buffer local variables:
 (cl-defun org-glance-overview:pull! ()
   "Completely rebuild current overview file."
   (interactive)
-  (let ((view-id (org-glance-overview:class)))
-    (when (y-or-n-p (org-glance:format "Rebuild ${view-id}?"))
+  (let ((class (org-glance-overview:class)))
+    (when (y-or-n-p (org-glance:format "Rebuild ${class}?"))
       (save-buffer)
       (kill-buffer)
-      (org-glance-overview:create view-id)
-      (org-glance:log-info (org-glance:format "View ${view-id} is now up to date")))))
+      (org-glance-overview:create class)
+      (org-glance-overview:import-headlines org-glance-directory class)
+      (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
 
 (cl-defun org-glance-overview:pull* ()
   "Apply `org-glance-overview:pull' to each headline in current overview file."
