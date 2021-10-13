@@ -56,11 +56,8 @@
    :documentation "List of files/directories where org-glance should search for headlines for this view."
    :type 'list))
 
-(defvar org-glance:classes (make-hash-table)
-  "Hash table (id->view) that lists all registered classes of things.")
-
-(defun org-glance:get-class (class)
-  (gethash class org-glance:classes))
+(defvar org-glance:classes (make-hash-table) "Hash table (id->view) that lists all registered classes of things.")
+(defun org-glance:get-class (class) (gethash class org-glance:classes))
 
 (eval-and-compile
   (cl-defmacro org-glance:interactive-lambda (&rest forms)

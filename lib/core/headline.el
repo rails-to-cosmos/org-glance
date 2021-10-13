@@ -53,13 +53,13 @@ metastore.")
      do (org-element-put-property element key value)
      finally (return element)))
 
-(cl-defun org-glance-headline:create (&optional (proto (org-element-at-point)))
-  (when (eql 'headline (org-element-type proto))
+(cl-defun org-glance-headline:create (&optional (prototype (org-element-at-point)))
+  (when (eql 'headline (org-element-type prototype))
     (cl-loop
        for (property . method) in org-glance-headline:serde-alist
        for index from 0
-       do (org-glance-headline:enrich proto property (funcall method proto))
-       finally (return proto))))
+       do (org-glance-headline:enrich prototype property (funcall method prototype))
+       finally (return prototype))))
 
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
@@ -68,7 +68,10 @@ metastore.")
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (org-glance-headline:create))
+  (org-glance-headline:enrich (org-glance-headline:create)
+    :encryptedp (save-excursion
+                  (org-end-of-meta-data t)
+                  (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -162,7 +165,8 @@ metastore.")
       (org-glance-exception:HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
       (org-glance:log-warning "Headline ID %s is not unique in file %s" id (buffer-file-name)))
-    (goto-char (car points))))
+    (goto-char (car points))
+    (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
   "Visit HEADLINE."
@@ -413,11 +417,7 @@ metastore.")
   )
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
-  ;; (if (plist-member (nth 1 headline) :encryptedp)
-  ;;     (org-glance-headline:narrow headline
-  ;;       (org-end-of-meta-data t)
-  ;;       (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))
-  )
+  (org-element-property :encryptedp headline))
 
 (cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (org-glance-headline:narrow headline

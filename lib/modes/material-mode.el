@@ -61,28 +61,34 @@
                  (org-glance-headline:enrich :ORG_GLANCE_ID id)
                  (org-glance-headline:enrich :ORG_GLANCE_CLASS view-id))))
 
-(cl-defun --sync-overviews ()
-  (when-let (headlines (org-glance-metastore:get-headlines --org-glance-materialized-headline:id))
-    (cl-loop
-       for headline in headlines
-       for class = (org-glance-headline:class headline)
-       do
-         (org-glance:log-info "Update %s overview" class)
-         (org-glance-overview:register-headline-in-overview headline class)
-         (redisplay))))
+(add-hook 'org-glance-before-materialize-sync-hook
+          #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
+                    (setq-local --org-glance-materialized-headline:clock-marker-position (marker-position org-clock-marker))
+                    (let ((org-log-note-clock-out nil)
+                          (org-clock-out-switch-to-state nil))
+                      (org-clock-out)))))
 
-(add-hook 'org-glance-after-materialize-sync-hook '--sync-overviews)
+(add-hook 'org-glance-after-materialize-sync-hook
+          #'(lambda () (when --org-glance-materialized-headline:clock-marker-position
+                    (goto-char --org-glance-materialized-headline:clock-marker-position)
+                    (org-clock-in)
+                    (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
 
-(add-hook 'org-glance-before-materialize-sync-hook #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
-                                                             (setq-local --org-glance-materialized-headline:clock-marker-position (marker-position org-clock-marker))
-                                                             (let ((org-log-note-clock-out nil)
-                                                                   (org-clock-out-switch-to-state nil))
-                                                               (org-clock-out)))))
-
-(add-hook 'org-glance-after-materialize-sync-hook #'(lambda () (when --org-glance-materialized-headline:clock-marker-position
-                                                            (goto-char --org-glance-materialized-headline:clock-marker-position)
-                                                            (org-clock-in)
-                                                            (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
+(add-hook 'org-glance-after-materialize-sync-hook
+          #'(lambda () (let ((headline (org-glance-headline:enrich
+                                      (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
+                                    :begin --org-glance-materialized-headline:begin
+                                    :file --org-glance-materialized-headline:file)))
+                    (org-glance:log-debug "Updated headline: %s" headline)
+                    (cl-loop for tag in (org-element-property :tags headline)
+                       for class = (intern (s-downcase tag))
+                       when (org-glance:get-class class)
+                       do
+                         (org-glance:log-debug "Update overview %s" class)
+                         (org-glance-overview:register-headline-in-overview headline class)
+                         (org-glance:log-debug "Update metastore %s" class)
+                         (org-glance-overview:register-headline-in-metastore headline class)
+                         (redisplay)))))
 
 (define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)

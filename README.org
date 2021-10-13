@@ -11,6 +11,8 @@ This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
 * Issues
+
+** TODO Fix headline-at-point behavior
 ** TODO Gamification
 - [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 ** Anchor Modeling

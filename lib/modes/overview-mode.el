@@ -136,10 +136,10 @@ If point is before first heading, prompt for headline and eval forms on it."
     (org-glance-metastore:add-headline headline metastore)
     (org-glance-metastore:write metastore-location metastore)))
 
-(cl-defun org-glance-overview:register-headline-in-overview (headline view-id)
+(cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
   (save-window-excursion
-    (org-glance-overview view-id)
+    (org-glance-overview class)
     (condition-case nil
         (progn
           (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
