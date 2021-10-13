@@ -136,6 +136,14 @@ If point is before first heading, prompt for headline and eval forms on it."
     (org-glance-metastore:add-headline headline metastore)
     (org-glance-metastore:write metastore-location metastore)))
 
+(cl-defun org-glance-overview:remove-headline-from-metastore (headline class)
+  (let* ((metastore-location (-some->> class
+                               org-glance:get-class
+                               org-glance-view:metastore-location))
+         (metastore (org-glance-metastore:read metastore-location)))
+    (org-glance-metastore:rem-headline headline metastore)
+    (org-glance-metastore:write metastore-location metastore)))
+
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
   (save-window-excursion
@@ -152,6 +160,16 @@ If point is before first heading, prompt for headline and eval forms on it."
                  (insert contents "\n")
                  (save-buffer))))))
   headline)
+
+(cl-defun org-glance-overview:remove-headline-from-overview (headline class)
+  "Add HEADLINE clone in overview VIEW-ID file."
+  (save-window-excursion
+    (org-glance-overview class)
+    (save-excursion
+      (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+      (let ((inhibit-read-only t))
+        (kill-region (org-entry-beginning-position) (org-entry-end-position))
+        (save-buffer)))))
 
 (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
   (org-glance-headline:with-materialized-headline headline
@@ -598,19 +616,8 @@ Consider using buffer local variables:
         (class (org-glance-overview:class))
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
-      (org-glance-headline:narrow original-headline
-        (org-toggle-tag (format "%s" class) 'off)
-        (unless (org-glance-headline:classes)
-          (when (y-or-n-p "No classs is now associated with headline. Remove it completely?")
-            (kill-region (org-entry-beginning-position) (org-entry-end-position))))
-        (save-buffer)
-        (when (= (buffer-size) 0)
-          (delete-file (buffer-file-name) 'trash)
-          (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
-            (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))
-      (let ((inhibit-read-only t))
-        (kill-region (org-entry-beginning-position) (org-entry-end-position))
-        (save-buffer)))))
+      (org-glance-headline:with-materialized-headline original-headline
+        (org-toggle-tag (format "%s" class) 'off)))))
 
 ;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance:choose-class "New role: ")))
 ;;   (interactive)

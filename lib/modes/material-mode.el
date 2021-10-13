@@ -19,6 +19,7 @@
 
 (defvar org-glance-materialized-buffers (make-hash-table))
 
+(defvar --org-glance-materialized-headline:classes nil)
 (defvar --org-glance-materialized-headline:begin nil)
 (defvar --org-glance-materialized-headline:end nil)
 (defvar --org-glance-materialized-headline:file nil)
@@ -49,8 +50,8 @@
 (cl-defun org-glance-metastore:get-headlines (id)
   "Get full headline by ID."
   (cl-loop
-     for view-id in (org-glance-view:ids)
-     for metastore = (->> view-id
+     for class being the hash-keys of org-glance:classes
+     for metastore = (->> class
                           org-glance:get-class
                           org-glance-view:metastore-location
                           org-glance-metastore:read)
@@ -58,8 +59,7 @@
      when headline
      collect (-> headline
                  (org-glance-headline:deserialize)
-                 (org-glance-headline:enrich :ORG_GLANCE_ID id)
-                 (org-glance-headline:enrich :ORG_GLANCE_CLASS view-id))))
+                 (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
 (add-hook 'org-glance-before-materialize-sync-hook
           #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
@@ -80,15 +80,22 @@
                                     :begin --org-glance-materialized-headline:begin
                                     :file --org-glance-materialized-headline:file)))
                     (org-glance:log-debug "Updated headline: %s" headline)
-                    (cl-loop for tag in (org-element-property :tags headline)
-                       for class = (intern (s-downcase tag))
+                    (cl-loop
+                       for class in --org-glance-materialized-headline:classes
                        when (org-glance:get-class class)
                        do
                          (org-glance:log-debug "Update overview %s" class)
                          (org-glance-overview:register-headline-in-overview headline class)
                          (org-glance:log-debug "Update metastore %s" class)
                          (org-glance-overview:register-headline-in-metastore headline class)
-                         (redisplay)))))
+                         (redisplay))
+
+                    (cl-loop
+                       for class in (seq-difference --org-glance-materialized-headline:classes
+                                                    (org-glance-headline:classes))
+                       do
+                         (org-glance-overview:remove-headline-from-overview headline class)
+                         (org-glance-overview:remove-headline-from-metastore headline class)))))
 
 (define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
@@ -141,7 +148,6 @@
 
         ;; TODO: get rid of metastore knowledge here
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
-        ;; (setq-local --org-glance-materialized-headline:hash source-hash)
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
         (org-glance:log-info "Materialized headline successfully synchronized")))))
@@ -179,6 +185,7 @@
 
        (org-glance:log-info "Set local variables")
        (set (make-local-variable '--org-glance-materialized-headline:id) id)
+       (set (make-local-variable '--org-glance-materialized-headline:classes) (org-glance-headline:classes))
        (set (make-local-variable '--org-glance-materialized-headline:file) file)
        (set (make-local-variable '--org-glance-materialized-headline:begin) beg)
        (set (make-local-variable '--org-glance-materialized-headline:end) end)

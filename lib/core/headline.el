@@ -165,9 +165,6 @@ metastore.")
   (org-glance-headline:narrow headline
     (save-excursion (org-end-of-subtree t))))
 
-(cl-defun org-glance-headline:class (&optional (headline (org-glance-headline:at-point)))
-  (org-element-property :ORG_GLANCE_CLASS headline))
-
 (cl-defun org-glance-headline:tags (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
@@ -423,7 +420,8 @@ metastore.")
   (org-element-property :encryptedp headline))
 
 (cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:narrow headline
-    (mapcar #'intern (org-get-tags))))
+  (cl-loop
+     for tag in (org-element-property :tags headline)
+     collect (intern (s-downcase tag))))
 
 (org-glance:provide)

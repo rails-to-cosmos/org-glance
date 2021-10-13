@@ -21,6 +21,10 @@
            (org-glance-headline:serialize headline)
            metastore))
 
+(cl-defun org-glance-metastore:rem-headline (headline metastore)
+  (remhash (org-glance-headline:id headline)
+           metastore))
+
 (cl-defun org-glance-metastore:create (file &optional headlines)
   "Create metastore from HEADLINES and write it to FILE."
   (org-glance-metastore:write file

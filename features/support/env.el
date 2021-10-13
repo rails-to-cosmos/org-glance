@@ -20,34 +20,37 @@
 (Setup  ;; Before anything has run
 
  ;; Implement directory structure for user and system data
- (defvar org-glance-test:root-location (make-temp-file "org-glance-" 'directory))
- (defvar org-glance-test:view-location (f-join org-glance-test:root-location "org-glance"))
- (defvar org-glance-test:user-location (f-join org-glance-test:root-location "user-data"))
+ (defvar org-glance-test:root-location)
+ (defvar org-glance-test:view-location)
+ (defvar org-glance-test:user-location)
+
+ (message "\n= Test suite has been started =")
+ )
+
+(Before
+ ;; Before each scenario is run
+ (message "\n== Run scenario ==")
+
+ (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
+       org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
+       org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
+       org-glance-directory org-glance-test:view-location
+       org-glance:log-level -2305843009213693952
+       org-glance:classes (make-hash-table))
 
  (mkdir org-glance-test:view-location)
  (mkdir org-glance-test:user-location)
 
- (message "\n= Test suite has been started =")
- (message "Sandbox root directory initialized: %s" org-glance-test:root-location))
-
-(Before
- ;; Before each scenario is run
- (message "\n== Run new scenario ==")
-
  (message "Environment:")
-
- (setq org-glance-directory org-glance-test:view-location
-       org-glance:log-level -2305843009213693952)
-
  (message " org-glance-directory: %s" org-glance-directory)
  (message "\nStdOut:"))
 
 (After
  ;; After each scenario is run
+ (delete-directory org-glance-test:root-location t)
+ (message "Remove scenario directory \"%s\"" org-glance-test:root-location)
  )
 
 (Teardown
  ;; After when everything has been run
- (message "= Teardown =")
- (delete-directory org-glance-test:root-location t)
- (message "Sandbox root directory \"%s\" has been removed on teardown" org-glance-test:root-location))
+ (message "= Teardown ="))
