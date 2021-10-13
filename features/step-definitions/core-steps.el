@@ -21,3 +21,7 @@
 (Then "^I should be in the buffer \"\\([^\"]+\\)\"$"
       (lambda (buffer-name)
         (should (string= buffer-name (buffer-name)))))
+
+(And "^I kill buffer \"\\([^\"]+\\)\"$"
+  (lambda (buffer)
+    (kill-buffer buffer)))
