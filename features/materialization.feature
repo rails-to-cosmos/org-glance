@@ -8,7 +8,7 @@ Feature: Capture
     And I materialize "Amsterdam" of class "city"
     Then I should be in the buffer "org-glance:<Amsterdam>"
 
-  Scenario: Cache material buffer
+  Scenario: Reuse material buffers
     When I capture thing "Munich" of class "city"
     And I materialize "Munich" of class "city"
     Then I should be in the buffer "org-glance:<Munich>"
