@@ -317,21 +317,19 @@ Consider using buffer local variables:
   (when (y-or-n-p (org-glance:format "Import headlines of class ${class} from ${path}?"))
     (cl-loop
        for file in (org-glance-scope path)
-       do (with-temp-buffer
-            (org-glance:log-info "Scan file %s" file)
-            (redisplay)
-            (org-mode)
-            (insert-file-contents file)
-            (org-element-map (org-element-parse-buffer 'headline) 'headline
-              (lambda (el)
-                (when (-contains?
-                       (mapcar #'downcase (org-element-property :tags el))
-                       (downcase (symbol-name class)))
-                  (org-glance-headline:enrich el :file (abbreviate-file-name file))
-                  (org-glance-overview:register-headline-in-metastore el class)
-                  (org-glance-overview:register-headline-in-overview el class)
-                  ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
-                  )))))))
+       do
+         (org-glance:log-info "Scan file %s" file)
+         (redisplay)
+         (cl-loop
+            for headline in (org-glance-headline:extract file)
+            when (-contains?
+                  (mapcar #'downcase (org-element-property :tags headline))
+                  (downcase (symbol-name class)))
+            do
+              (org-glance-overview:register-headline-in-metastore headline class)
+              (org-glance-overview:register-headline-in-overview headline class)
+            ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
+              ))))
 
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
@@ -453,9 +451,7 @@ Consider using buffer local variables:
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
-(cl-defun org-glance-overview:create (&optional
-                                        (class (org-glance-view:completing-read))
-                                        headlines)
+(cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
   (let* ((inhibit-read-only t)
          (filename (-org-glance:make-file-directory
@@ -464,17 +460,7 @@ Consider using buffer local variables:
                    (org-glance:format org-glance-overview:header))))
     (with-temp-file filename
       (org-mode)
-      (insert header)
-      (cl-loop
-         for headline in headlines
-         collect (org-glance-headline:contents headline)
-         into contents
-         finally (insert (s-join "\n" contents)))
-      (goto-char (point-min))
-      (condition-case nil
-          (org-glance-overview:sort)
-        (user-error nil))
-      (org-align-tags t))
+      (insert header))
     (find-file filename)))
 
 (cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
@@ -591,6 +577,7 @@ Consider using buffer local variables:
     (when (y-or-n-p (org-glance:format "Rebuild ${class}?"))
       (save-buffer)
       (kill-buffer)
+      (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class)))
       (org-glance-overview:create class)
       (org-glance-overview:import-headlines org-glance-directory class)
       (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))

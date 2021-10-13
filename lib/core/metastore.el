@@ -62,8 +62,8 @@
 (cl-defun org-glance-metastore:get-headline (id)
   "Get headline by ID."
   (cl-loop
-     for view-id in (org-glance-view:ids)
-     for metastore = (->> view-id
+     for class being the hash-keys of org-glance:classes
+     for metastore = (->> class
                           org-glance:get-class
                           org-glance-view:metastore-location
                           org-glance-metastore:read)
@@ -78,10 +78,17 @@
 (cl-defun org-glance-metastore:choose-headline ()
   "Main retriever, refactor needed."
   (let* ((headlines (cl-loop
-                       for view-id in (org-glance-view:ids)
-                       append (cl-loop for headline in (org-glance-view:headlines view-id)
+                       for class being the hash-keys of org-glance:classes
+                       append (cl-loop
+                                 for headline in (org-glance-view:headlines class)
+                                 when (org-glance-headline:active? headline)
                                  collect (cons ;; duplication of format*
-                                          (format "[%s] %s" view-id (org-glance-headline:title headline))
+                                          (format "%s[%s] %s"
+                                                  (if (org-glance-headline:encrypted? headline)
+                                                      "🔒"
+                                                    "")
+                                                  class
+                                                  (org-glance-headline:title headline))
                                           headline))))
          (choice (org-completing-read "Headline: " headlines))
          (headline (alist-get choice headlines nil nil #'string=)))

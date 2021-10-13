@@ -14,14 +14,29 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     headline))
 
 (defvar org-glance-headline:serde-alist
-  `((:raw-value . org-glance-headline:title)
-    (:begin . org-glance-headline:begin)
-    (:file . org-glance-headline:file)
-    (:commentedp . org-glance-headline:commented?)
-    (:archivedp . org-glance-headline:archived?)
-    (:linkedp . org-glance-headline:linked?)
-    (:kvp . org-glance-headline:kvp?)
-    (:encryptedp . org-glance-headline:encrypted?))
+  `((:raw-value  . (:reader org-glance-headline:title      :writer org-glance-headline:title))
+    (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
+    (:file       . (:reader org-glance-headline:file       :writer org-glance-headline:file))
+    (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
+    (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
+    (:linkedp    . (:reader org-glance-headline:linked?    :writer (lambda (hl)
+                                                                     (save-excursion
+                                                                       (save-restriction
+                                                                         (org-narrow-to-subtree)
+                                                                         (org-end-of-meta-data t)
+                                                                         (when (re-search-forward org-any-link-re nil t)
+                                                                           t))))))
+    (:kvp        . (:reader org-glance-headline:kvp?       :writer (lambda (hl)
+                                                                     (save-excursion
+                                                                       (save-restriction
+                                                                         (org-narrow-to-subtree)
+                                                                         (org-end-of-meta-data t)
+                                                                         (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                                                           t))))))
+    (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
+                                                                     (save-excursion
+                                                                       (org-end-of-meta-data t)
+                                                                       (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
   "Map `org-element-property' to `org-glance' extractor method.
 
 It is safe (in terms of backward/forward compability of
@@ -33,14 +48,14 @@ metastore.")
 (cl-defun org-glance-headline:serialize (headline)
   "Serialize HEADLINE to store it on disk."
   (cl-loop
-     for (property . method) in org-glance-headline:serde-alist
-     collect (funcall method headline)))
+     for (property . methods) in org-glance-headline:serde-alist
+     collect (funcall (plist-get methods :reader) headline)))
 
 (cl-defun org-glance-headline:deserialize (dump)
   "Deserialize DUMP to minimal headline."
   (cl-loop
      with element = (org-element-create 'headline)
-     for (property . method) in org-glance-headline:serde-alist
+     for (property . _) in org-glance-headline:serde-alist
      for index from 0
      do (org-glance-headline:enrich element property (nth index dump))
      finally (return element)))
@@ -53,13 +68,15 @@ metastore.")
      do (org-element-put-property element key value)
      finally (return element)))
 
-(cl-defun org-glance-headline:create (&optional (prototype (org-element-at-point)))
-  (when (eql 'headline (org-element-type prototype))
-    (cl-loop
-       for (property . method) in org-glance-headline:serde-alist
-       for index from 0
-       do (org-glance-headline:enrich prototype property (funcall method prototype))
-       finally (return prototype))))
+(cl-defun org-glance-headline:create ()
+  "Create `org-glance-headline' from element at point."
+  (let ((prototype (org-element-at-point)))
+    (when (eql 'headline (org-element-type prototype))
+      (cl-loop
+         for (property . methods) in org-glance-headline:serde-alist
+         for index from 0
+         do (org-glance-headline:enrich prototype property (funcall (plist-get methods :writer) prototype))
+         finally (return prototype)))))
 
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
@@ -68,10 +85,7 @@ metastore.")
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
     (org-up-heading-or-point-min))
-  (org-glance-headline:enrich (org-glance-headline:create)
-    :encryptedp (save-excursion
-                  (org-end-of-meta-data t)
-                  (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))
+  (org-glance-headline:create))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
@@ -245,7 +259,8 @@ metastore.")
     (org-element-map (org-element-parse-buffer 'headline) 'headline
       (lambda (e)
         (when (org-glance-headline-p e)
-          (org-glance-headline:enrich (org-glance-headline:create e)
+          (goto-char (org-glance-headline:begin e))
+          (org-glance-headline:enrich (org-glance-headline:create)
             :buffer b))))))
 
 (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
@@ -399,22 +414,10 @@ metastore.")
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:kvp? (&optional (headline (org-glance-headline:at-point)))
-  ;; (if (plist-member (nth 1 headline) :kvp)
-  ;;     (org-element-property :kvp headline)
-  ;;   (org-glance-headline:narrow headline
-  ;;     (org-end-of-meta-data t)
-  ;;     (when (re-search-forward org-glance:key-value-pair-re nil t)
-  ;;       t)))
-  )
+  (org-element-property :kvp headline))
 
 (cl-defun org-glance-headline:linked? (&optional (headline (org-glance-headline:at-point)))
-  ;; (if (plist-member (nth 1 headline) :linkedp)
-  ;;     (org-element-property :linkedp headline)
-  ;;   (org-glance-headline:narrow headline
-  ;;     (org-end-of-meta-data t)
-  ;;     (when (re-search-forward org-any-link-re nil t)
-  ;;       t)))
-  )
+  (org-element-property :linkedp headline))
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :encryptedp headline))

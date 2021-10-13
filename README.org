@@ -11,8 +11,12 @@ This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
 * Issues
-
-** TODO Fix headline-at-point behavior
+** TODO Overview kill-headline should do materialization. Add tests
+** DONE Fix headline-at-point behavior
+CLOSED: [2021-10-13 Wed 14:28]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-13 Wed 14:28]
+:END:
 ** TODO Gamification
 - [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 ** Anchor Modeling
