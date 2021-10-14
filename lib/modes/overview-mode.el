@@ -509,7 +509,11 @@ Consider using buffer local variables:
 
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
-  (org-glance-headline:materialize (org-glance-overview:original-headline)))
+  (let* ((headline (org-glance-overview:original-headline))
+         (buffer (org-glance-headline:materialized-buffer headline)))
+    (if (buffer-live-p buffer)
+        (switch-to-buffer buffer)
+      (org-glance-headline:materialize headline))))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)

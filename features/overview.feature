@@ -1,4 +1,4 @@
-Feature: Capture
+Feature: Overview
   In order to manage things
   As a user
   I want to manage things in class dimension
@@ -20,3 +20,11 @@ Feature: Capture
     And I should have 2 active classes
     And I should have 0 things of class "video" registered
     And I should have 1 thing of class "article" registered
+
+    When I request "article" overview
+    And I jump to the first headline
+    And I materialize headline at point from overview
+    Then I should be in the buffer "org-glance:<Educative Article>"
+    And I request "article" overview
+    And I materialize headline at point from overview
+    Then I should be in the buffer "org-glance:<Educative Article>"

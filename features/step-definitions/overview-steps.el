@@ -19,3 +19,7 @@
   (lambda ()
     (with-simulated-input "y RET y RET"
       (org-glance-overview:kill-headline))))
+
+(And "^I materialize headline at point from overview$"
+  (lambda ()
+    (org-glance-overview:materialize-headline)))
