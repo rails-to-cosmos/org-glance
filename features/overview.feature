@@ -23,8 +23,8 @@ Feature: Overview
 
     When I request "article" overview
     And I jump to the first headline
-    And I materialize headline at point from overview
+    And I materialize original headline from overview
     Then I should be in the buffer "org-glance:<Educative Article>"
     And I request "article" overview
-    And I materialize headline at point from overview
+    And I materialize original headline from overview
     Then I should be in the buffer "org-glance:<Educative Article>"

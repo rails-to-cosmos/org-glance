@@ -11,6 +11,7 @@ This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
 * Issues
+** TODO Split capture and reschedule?
 ** TODO Overview kill-headline should do materialization. Add tests
 ** DONE Fix headline-at-point behavior
 CLOSED: [2021-10-13 Wed 14:28]

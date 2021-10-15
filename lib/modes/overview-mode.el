@@ -106,9 +106,10 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (let* ((origins (cl-loop
                        for headline in (org-glance-headline:extract (current-buffer))
-                       collect (org-glance-headline:narrow
-                                   (org-glance-metastore:get-headline (org-glance-headline:id headline))
-                                 (org-glance-headline:file))))
+                       collect (->> headline
+                                    org-glance-headline:id
+                                    org-glance-metastore:get-headline
+                                    org-glance-headline:file)))
            (scope (seq-uniq origins #'string=)))
       (org-drill scope))))
 
@@ -568,14 +569,6 @@ Consider using buffer local variables:
         (org-glance-headline:with-materialized-headline original-headline
           (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
 
-      ;; (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
-      ;;     "Headline \"${title}\" contains link in raw value. Move it to the body?"
-      ;;   (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
-      ;;   (org-glance-headline:with-materialized-headline original-headline
-      ;;     (org-end-of-meta-data t)
-      ;;     (insert "\n- " raw-value "\n")
-      ;;     (save-buffer)))
-
       (org-glance-doctor:when (null main-role)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
         (let ((captured-headline (org-glance-headline:with-materialized-headline original-headline
@@ -622,26 +615,6 @@ Consider using buffer local variables:
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (org-glance-headline:with-materialized-headline original-headline
         (org-toggle-tag (format "%s" class) 'off)))))
-
-;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance:choose-class "New role: ")))
-;;   (interactive)
-;;   (org-glance-headline:search-parents)
-;;   (let ((role (org-glance-overview:class))
-;;         (title (org-glance-headline:title))
-;;         (original-headline (org-glance-overview:original-headline)))
-;;     (org-glance-headline:narrow original-headline
-;;       (org-toggle-tag (format "%s" role) 'off)
-;;       (org-glance-overview:capture new-role nil (org-glance-headline:at-point))
-;;       (kill-region (org-entry-beginning-position) (org-entry-end-position))
-;;       (save-buffer)
-;;       (when (= (buffer-size (current-buffer)) 0)
-;;         (when (y-or-n-p "File buffer is empty. Delete it?")
-;;           (delete-file (buffer-file-name) 'trash)
-;;           (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
-;;             (when (y-or-n-p "Partition is empty. Delete it?")
-;;               (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))))
-;;     (let ((inhibit-read-only t))
-;;         (kill-region (org-entry-beginning-position) (org-entry-end-position)))))
 
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
@@ -717,8 +690,13 @@ Consider using buffer local variables:
 ;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
-    (org-glance-headline:at-point)))
+  (save-window-excursion
+    (save-excursion
+      (->> (org-glance-headline:at-point)
+           org-glance-headline:id
+           org-glance-metastore:get-headline
+           org-glance-headline:visit)
+      (org-glance-headline:at-point))))
 
 (cl-defun org-glance-overview:add-relation ()
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
