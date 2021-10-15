@@ -24,8 +24,7 @@
  (defvar org-glance-test:view-location)
  (defvar org-glance-test:user-location)
 
- (message "\n= Test suite has been started =")
- )
+ (message "\n= Test suite has been started ="))
 
 (Before
  ;; Before each scenario is run
@@ -48,7 +47,7 @@
 
 (After
  ;; After each scenario is run
- (delete-directory org-glance-test:root-location t)
+ ;; (delete-directory org-glance-test:root-location t)
  (message "Remove scenario directory \"%s\"" org-glance-test:root-location)
  (message "\n== End scenario ==\n")
  )

@@ -79,13 +79,13 @@
      into result
      finally (return (car result))))
 
-(cl-defun org-glance-metastore:choose-headline ()
+(cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
   (let* ((headlines (cl-loop
                        for class being the hash-keys of org-glance:classes
                        append (cl-loop
                                  for headline in (org-glance-view:headlines class)
-                                 when (org-glance-headline:active? headline)
+                                 when (funcall filter headline)
                                  collect (cons ;; duplication of format*
                                           (format "%s[%s] %s"
                                                   (if (org-glance-headline:encrypted? headline)

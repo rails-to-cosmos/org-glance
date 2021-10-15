@@ -25,18 +25,19 @@ Return headline or nil if it is not a proper `org-glance-headline'."
                                                                          (org-narrow-to-subtree)
                                                                          (org-end-of-meta-data t)
                                                                          (when (re-search-forward org-any-link-re nil t)
-                                                                           t))))))
+                                                                           'contains-link))))))
     (:kvp        . (:reader org-glance-headline:kvp?       :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (save-restriction
                                                                          (org-narrow-to-subtree)
                                                                          (org-end-of-meta-data t)
                                                                          (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                                                           t))))))
+                                                                           'contains-properties))))))
     (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (org-end-of-meta-data t)
-                                                                       (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))
+                                                                       (when (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")
+                                                                         'encrypted)))))
     (:buffer . (:reader org-glance-headline:buffer :writer (lambda (hl)
                                                              (condition-case nil
                                                                  (buffer-name (get-file-buffer (org-glance-headline:file hl)))
@@ -397,13 +398,16 @@ metastore.")
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:kvp? (&optional (headline (org-glance-headline:at-point)))
-  (org-element-property :kvp headline))
+  (when (org-element-property :kvp headline)
+    'contains-properties))
 
 (cl-defun org-glance-headline:linked? (&optional (headline (org-glance-headline:at-point)))
-  (org-element-property :linkedp headline))
+  (when (org-element-property :linkedp headline)
+    'contains-link))
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
-  (org-element-property :encryptedp headline))
+  (when (org-element-property :encryptedp headline)
+    'encrypted))
 
 (cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (cl-loop
