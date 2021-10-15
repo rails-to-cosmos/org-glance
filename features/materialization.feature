@@ -21,5 +21,6 @@ Feature: Capture
   Scenario: Ability to materialize non-file buffers
     When I capture thing "Dmitry" of class "contact"
     And I materialize "Dmitry" of class "contact"
+    Then I should be in the buffer "org-glance:<Dmitry>"
     And I materialize headline at point
     Then I should be in the buffer "org-glance:<Dmitry><2>"
