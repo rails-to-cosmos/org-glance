@@ -702,9 +702,10 @@ Consider using buffer local variables:
   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
   (interactive)
   (lexical-let ((source (org-glance-overview:original-headline)))
-    (org-glance:apply
-      :callback (lambda (target)
-                  (org-glance-headline:add-biconnected-relation source target)))))
+    (flet ((add-relation (headline) (org-glance-headline:add-biconnected-relation source target)))
+      (org-glance:choose-headline-apply
+        :if-exists #'add-relation
+        :if-captured #'add-relation))))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

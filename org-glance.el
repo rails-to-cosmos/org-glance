@@ -216,68 +216,64 @@
             (quit (insert "@")))
         (insert "@")))))
 
-(cl-defmacro org-glance:apply (&key on filter callback)
-  "Create ON if it is unbound or nil.
-Optionally filter scope with FILTER and APPLY forms on headline."
+(cl-defmacro org-glance:choose-headline-apply (&key filter if-exists if-captured)
+  "Choose headline or capture it.
+Apply IF-EXISTS or IF-CAPTURED methods on it.
+Optionally filter scope with FILTER."
   (declare (indent 0) (debug t))
   `(condition-case choice
-       (cond (,on (condition-case nil
-                      (funcall ,callback ,on nil)
-                    (wrong-number-of-arguments (funcall ,callback ,on))))
-             (,filter (let ((<hl> (org-glance-metastore:choose-headline :filter ,filter)))
-                        (condition-case nil
-                            (funcall ,callback <hl> nil)
-                          (wrong-number-of-arguments (funcall ,callback <hl>)))))
-             (t (let ((<hl> (org-glance-metastore:choose-headline)))
-                  (condition-case nil
-                      (funcall ,callback <hl> nil)
-                    (wrong-number-of-arguments (funcall ,callback <hl>))))))
+       (when ,if-exists
+         (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
+               (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
      (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
-      (lexical-let ((<buffer> (current-buffer)) (point (point)))
+      (lexical-let ((<buffer> (current-buffer))
+                    (<point> (point)))
         (org-glance-overview:capture
          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
          :callback (lambda ()
-                     (let ((<hl> (org-glance-overview:original-headline)))
-                       (switch-to-buffer <buffer>)
-                       (goto-char point)
-                       (condition-case nil
-                           (funcall ,callback <hl> t)
-                         (wrong-number-of-arguments (funcall ,callback <hl>))))))))))
+                     (when ,if-captured
+                       (let ((<hl> (org-glance-overview:original-headline)))
+                         (switch-to-buffer <buffer>)
+                         (goto-char <point>)
+                         (funcall ,if-captured <hl>)))))))))
 
 (cl-defun org-glance:reschedule-or-capture ()
   "Choose or capture a new thing.
 
 If it has completed state, make it TODO and prompt user to reschedule it."
   (interactive)
-  (org-glance:apply
-   :callback (lambda (hl captured?)
-               (org-glance-headline:with-materialized-headline hl
-                 (unless captured?
+  (org-glance:choose-headline-apply
+    :if-exists (lambda (headline)
+                 (org-glance-headline:with-materialized-headline headline
                    (org-remove-timestamp-with-keyword org-scheduled-string)
                    (call-interactively #'org-schedule)
-                   (org-todo "TODO"))))))
+                   (org-todo "TODO")))))
 
 (cl-defun org-glance:refer ()
   "Insert relation from `org-glance-headline' at point to TARGET.
 C-u means not to insert relation at point, but register it in logbook instead."
   (interactive)
-  (org-glance:apply
-   :callback (lambda (headline)
-               (unless current-prefix-arg
-                 (insert (org-glance-headline:format headline)))
-               (when-let (source (org-glance-headline:at-point))
-                 (org-glance-headline:add-biconnected-relation source target)))))
+  (flet ((refer (headline) (lambda (headline)
+                             (unless current-prefix-arg
+                               (insert (org-glance-headline:format headline)))
+                             (when-let (source (org-glance-headline:at-point))
+                               (org-glance-headline:add-biconnected-relation source target)))))
+    (org-glance:choose-headline-apply
+      :if-exists #'refer
+      :if-captured #'refer)))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
   (interactive)
-  (org-glance:apply
-   :on headline
-   :callback (lambda (headline)
-               (let ((buffer (org-glance-headline:materialized-buffer headline)))
-                 (if (buffer-live-p buffer)
-                     (switch-to-buffer buffer)
-                   (org-glance-headline:materialize headline))))))
+  (flet ((materialize (headline) (let ((buffer (org-glance-headline:materialized-buffer headline)))
+                                   (if (buffer-live-p buffer)
+                                       (switch-to-buffer buffer)
+                                     (org-glance-headline:materialize headline)))))
+    (if headline
+        (materialize headline)
+      (org-glance:choose-headline-apply
+        :if-exists #'materialize
+        :if-captured #'materialize))))
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
@@ -286,37 +282,44 @@ If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
-  (org-glance:apply
-   :on headline
-   :filter (lambda (headline) (and
-                               (org-glance-headline:active? headline)
-                               (org-glance-headline:linked? headline)))
-   :callback (lambda (headline)
-               (org-glance-headline:with-materialized-headline headline
-                 (org-end-of-meta-data t)
-                 (narrow-to-region (point) (point-max))
-                 (let* ((links (org-glance:buffer-links))
-                        (pos (cond
-                               ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                               ((= (length links) 1) (cdar links))
-                               (t (user-error "Unable to find links in headline")))))
-                   (goto-char pos)
-                   (org-open-at-point))))))
+  (flet ((filter (headline) (and
+                             (org-glance-headline:active? headline)
+                             (org-glance-headline:linked? headline)))
+         (open (headline)
+           (org-glance-headline:with-materialized-headline headline
+             (org-end-of-meta-data t)
+             (narrow-to-region (point) (point-max))
+             (let* ((links (org-glance:buffer-links))
+                    (pos (cond
+                           ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                           ((= (length links) 1) (cdar links))
+                           (t (user-error "Unable to find links in headline")))))
+               (goto-char pos)
+               (org-open-at-point)))))
+    (if headline
+        (open headline)
+      (org-glance:choose-headline-apply
+        :filter #'filter
+        :if-exists #'open
+        :if-captured #'open))))
 
 (cl-defun org-glance:extract ()
   (interactive)
   "Materialize HEADLINE and retrieve key-value pairs from its contents.
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
-  (org-glance:apply
-   :filter (lambda (headline)
-             (and
-              (org-glance-headline:active? headline)
-              (org-glance-headline:kvp? headline)))
-   :callback (lambda (headline)
-               (let ((pairs (org-glance-headline:with-materialized-headline headline
-                              (org-glance:get-buffer-key-value-pairs))))
-                 (while t
-                   (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+  (flet ((filter (headline)
+           (and
+            (org-glance-headline:active? headline)
+            (org-glance-headline:kvp? headline)))
+         (extract (headline)
+           (let ((pairs (org-glance-headline:with-materialized-headline headline
+                          (org-glance:get-buffer-key-value-pairs))))
+             (while t
+               (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=))))))
+    (org-glance:choose-headline-apply
+      :filter #'filter
+      :if-exists #'extract
+      :if-captured #'extract)))
 
 (cl-defun org-glance
     (&key db
