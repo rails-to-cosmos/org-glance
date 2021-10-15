@@ -18,7 +18,7 @@ Feature: Capture
     And I materialize "Munich" of class "city"
     Then I should be in the buffer "org-glance:<Munich>"
 
-  Scenario: Ability to materialize non-file buffers
+  Scenario: Materialize non-file buffers
     When I capture thing "Dmitry" of class "contact"
     And I materialize "Dmitry" of class "contact"
     Then I should be in the buffer "org-glance:<Dmitry>"

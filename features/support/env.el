@@ -31,6 +31,7 @@
  ;; Before each scenario is run
  (message "\n== Begin new scenario ==")
 
+ (desktop-clear)
  (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
        org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
        org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
