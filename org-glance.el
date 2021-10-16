@@ -311,7 +311,8 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
     :filter (lambda (headline)
               (and
                (org-glance-headline:active? headline)
-               (org-glance-headline:kvp? headline)))
+               (or (org-glance-headline:kvp? headline)
+                   (org-glance-headline:encrypted? headline))))
     :action (lambda (headline)
               (let ((pairs (org-glance-headline:with-materialized-headline headline
                              (org-glance:get-buffer-key-value-pairs))))

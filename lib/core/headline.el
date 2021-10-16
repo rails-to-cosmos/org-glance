@@ -158,7 +158,9 @@ metastore.")
   (org-element-property :level headline))
 
 (cl-defun org-glance-headline:buffer (&optional (headline (org-glance-headline:at-point)))
-  (buffer-name (org-element-property :buffer headline)))
+  (let ((buffer (org-element-property :buffer headline)))
+    (cond ((bufferp buffer) (buffer-name buffer))
+          (t buffer))))
 
 (cl-defun org-glance-headline:begin (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :begin headline))
