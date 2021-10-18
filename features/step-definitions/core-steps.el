@@ -5,16 +5,17 @@
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
-    (with-simulated-input ((insert thing-title) "RET" (insert class-name) "RET")
-      (org-glance:reschedule-or-capture))
+    (with-simulated-input (;; (insert thing-title) "RET"
+                           (insert class-name) "RET")
+      (org-glance-overview:capture))
     (insert thing-title)
     (org-capture-finalize)))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\" with contents$"
   (lambda (thing-title class-name contents)
-    (with-simulated-input ((insert thing-title) "RET"
+    (with-simulated-input (;; (insert thing-title) "RET"
                            (insert class-name) "RET")
-      (org-glance:reschedule-or-capture))
+      (org-glance-overview:capture))
     (insert thing-title)
     (goto-char (point-max))
     (insert "\n")

@@ -204,17 +204,17 @@
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class)))
 
-(cl-defun org-glance:@magic ()
-  "Rebind `@' key in `org-mode' buffers for context-aware relation management."
-  (define-key org-mode-map (kbd "@")
-    (org-glance:interactive-lambda
-      (org-glance:init)
-      (if (or (looking-back "^" 1)
-              (looking-back "[[:space:]]" 1))
-          (condition-case nil
-              (org-glance:refer)
-            (quit (insert "@")))
-        (insert "@")))))
+(cl-defun org-glance:@ ()
+  "Context-aware relation management."
+  (interactive)
+  (org-glance:init)
+  (if (and (not (org-in-src-block-p))
+           (or (looking-back "^" 1)
+               (looking-back "[[:space:]]" 1)))
+      (condition-case nil
+          (org-glance:refer)
+        (quit (insert "@")))
+    (insert "@")))
 
 (cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
   "Choose headline or capture it.
@@ -247,17 +247,17 @@ Optionally filter scope with FILTER."
       :if-exists action
       :if-captured action)))
 
-(cl-defun org-glance:reschedule-or-capture ()
-  "Choose or capture a new thing.
+;; (cl-defun org-glance:reschedule-or-capture ()
+;;   "Choose or capture a new thing.
 
-If it has completed state, make it TODO and prompt user to reschedule it."
-  (interactive)
-  (org-glance:get-or-capture
-    :if-exists (lambda (headline)
-                 (org-glance-headline:with-materialized-headline headline
-                   (org-remove-timestamp-with-keyword org-scheduled-string)
-                   (call-interactively #'org-schedule)
-                   (org-todo "TODO")))))
+;; If it has completed state, make it TODO and prompt user to reschedule it."
+;;   (interactive)
+;;   (org-glance:get-or-capture
+;;     :if-exists (lambda (headline)
+;;                  (org-glance-headline:with-materialized-headline headline
+;;                    (org-remove-timestamp-with-keyword org-scheduled-string)
+;;                    (call-interactively #'org-schedule)
+;;                    (org-todo "TODO")))))
 
 (cl-defun org-glance:refer (&optional headline)
   "Insert relation from `org-glance-headline' at point to HEADLINE.
@@ -269,7 +269,7 @@ C-u means not to insert relation at point, but register it in logbook instead."
               (unless current-prefix-arg
                 (insert (org-glance-headline:format headline)))
               (when-let (source (org-glance-headline:at-point))
-                (org-glance-headline:add-biconnected-relation source target)))))
+                (org-glance-headline:add-biconnected-relation source headline)))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
