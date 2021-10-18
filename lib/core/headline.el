@@ -235,8 +235,7 @@ metastore.")
                           (org-narrow-to-subtree)
                           (org-glance-headline:promote-to-the-first-level)
                           (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
-          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))
-    ))
+          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))))
 
 (cl-defgeneric org-glance-headline:extract (scope)
   "Extract `org-glance-headlines' from scope.")
@@ -278,7 +277,7 @@ metastore.")
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim
-      (org-glance:format "${label} ${state-label} [[org-glance-visit:${id}][${stateless-title}]]"))))
+      (org-glance:format "${state-label} [[org-glance-visit:${id}][${stateless-title}]]"))))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."

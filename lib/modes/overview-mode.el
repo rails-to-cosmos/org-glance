@@ -248,26 +248,30 @@ If point is before first heading, prompt for headline and eval forms on it."
     (&key
        (class (org-glance:choose-class))
        (file (make-temp-file "org-glance-" nil ".org"))
+       (default "")
        (callback nil))
   (interactive)
+  (org-glance:log-debug "User input: %s" default)
   (find-file file)
-  (setq-local org-glance-capture:id (format "%s-%s-%s"
-                                            class
-                                            system-name
-                                            (s-join "-" (mapcar #'number-to-string (current-time))))
-              org-glance-capture:class (if (symbolp class) class (intern class)))
+  (setq-local
+   org-glance-capture:id (format "%s-%s-%s"
+                                 class
+                                 system-name
+                                 (s-join "-" (mapcar #'number-to-string (current-time))))
+   org-glance-capture:class (if (symbolp class) class (intern class))
+   org-glance-capture:default default)
+
   (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
   (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
   (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-  (let ((org-capture-templates `(("_" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
+
+  (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) "* TODO %?"))))
     (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
   "Preprocess headline before capturing.
 
-Consider using buffer local variables:
-- `org-glance-capture:id'
-- `org-glance-capture:class'"
+Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `org-glance-capture:default'."
   (goto-char (point-min))
   (or (org-at-heading-p) (org-next-visible-heading 0))
   (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
@@ -276,9 +280,7 @@ Consider using buffer local variables:
 (cl-defun org-glance-capture:after-finalize-hook ()
   "Register captured headline in metastore.
 
-Consider using buffer local variables:
-- `org-glance-capture:id'
-- `org-glance-capture:class'"
+Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `org-glance-capture:default'."
 
   (org-glance:log-debug
    "Finalize capture (id: %s, class: %s)"
@@ -291,9 +293,7 @@ Consider using buffer local variables:
 
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)
-         (headline (progn
-                     (org-glance-headline:search-buffer-by-id id)
-                     (org-glance-headline:at-point)))
+         (headline (org-glance-headline:search-buffer-by-id id))
          (refile-dir (make-temp-file
                       (-org-glance:make-file-directory
                        (f-join (org-glance-view:resource-location class)

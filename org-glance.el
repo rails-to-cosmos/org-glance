@@ -216,12 +216,12 @@
             (quit (insert "@")))
         (insert "@")))))
 
-(cl-defmacro org-glance:choose-headline-apply (&key filter if-exists if-captured)
+(cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
   "Choose headline or capture it.
 Then apply IF-EXISTS or IF-CAPTURED method on it.
 Optionally filter scope with FILTER."
   (declare (indent 0) (debug t))
-  `(condition-case choice
+  `(condition-case default
        (when ,if-exists
          (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
                (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
@@ -229,6 +229,7 @@ Optionally filter scope with FILTER."
       (lexical-let ((<buffer> (current-buffer))
                     (<point> (point)))
         (org-glance-overview:capture
+         :default (cadr default)
          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
          :callback (lambda ()
                      (when ,if-captured
@@ -240,8 +241,8 @@ Optionally filter scope with FILTER."
 (cl-defun org-glance:ensure-headline-apply (&optional headline &key filter action)
   (declare (indent 1))
   (if headline
-      (apply action headline)
-    (org-glance:choose-headline-apply
+      (funcall action headline)
+    (org-glance:get-or-capture
       :filter filter
       :if-exists action
       :if-captured action)))
@@ -251,7 +252,7 @@ Optionally filter scope with FILTER."
 
 If it has completed state, make it TODO and prompt user to reschedule it."
   (interactive)
-  (org-glance:choose-headline-apply
+  (org-glance:get-or-capture
     :if-exists (lambda (headline)
                  (org-glance-headline:with-materialized-headline headline
                    (org-remove-timestamp-with-keyword org-scheduled-string)

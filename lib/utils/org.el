@@ -115,7 +115,7 @@
                         do (setq result (replace-regexp-in-string org-link-any-re title result))
                         finally (return result)))))
 
-(defconst org-glance:key-value-pair-re "^\\([[:word:],[:blank:]]+\\)\\:[[:blank:]]*\\(.*\\)$")
+(defconst org-glance:key-value-pair-re "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
 (cl-defun org-glance:get-buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
