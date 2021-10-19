@@ -88,17 +88,19 @@
                                  when (funcall filter headline)
                                  collect (cons ;; duplication of format*
                                           (format "%s[%s] %s"
-                                                  ""
-                                                  ;; (cl-loop
-                                                  ;;    for icon in (list
-                                                  ;;                 (when (org-glance-headline:encrypted? headline) "encrypted")
-                                                  ;;                 (when (org-glance-headline:linked? headline) "link")
-                                                  ;;                 (when (org-glance-headline:kvp? headline) "property"))
-                                                  ;;    when icon
-                                                  ;;    collect icon into modifiers
-                                                  ;;    finally (return (if modifiers
-                                                  ;;                        (concat "[" (s-join ", " modifiers) "] ")
-                                                  ;;                      "")))
+                                                  (cl-loop
+                                                     for icon in (list
+                                                                  (when (org-glance-headline:encrypted? headline) (propertize "🔒" 'face 'bold))
+                                                                  ;; (when (org-glance-headline:linked? headline) (let ((s "A"))
+                                                                  ;;                                                (add-face-text-property 0 1 '(:underline t :weight bold) nil s)
+                                                                  ;;                                                s))
+                                                                  ;; (when (org-glance-headline:kvp? headline) "property")
+                                                                  )
+                                                     when icon
+                                                     collect icon into modifiers
+                                                     finally (return (if modifiers
+                                                                         (concat "" (s-join ", " modifiers) " ")
+                                                                       "")))
                                                   class
                                                   (org-glance-headline:title headline))
                                           headline))))
