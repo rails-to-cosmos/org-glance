@@ -21,7 +21,12 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
-** TODO Split capture and reschedule?
+** TODO Clone feature (clone on repeat, clone-archive+reschedule)
+** DONE Split capture and reschedule?
+CLOSED: [2021-10-23 Sat 13:24]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-23 Sat 13:24]
+:END:
 ** TODO Overview kill-headline should do materialization. Add tests
 ** DONE Fix headline-at-point behavior
 CLOSED: [2021-10-13 Wed 14:28]
