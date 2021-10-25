@@ -19,14 +19,14 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (:file       . (:reader org-glance-headline:file       :writer org-glance-headline:file))
     (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
     (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
-    (:linkedp    . (:reader org-glance-headline:linked?    :writer (lambda (hl)
+    (:contains-link-p    . (:reader org-glance-headline:contains-link?    :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (save-restriction
                                                                          (org-narrow-to-subtree)
                                                                          (org-end-of-meta-data t)
                                                                          (when (re-search-forward org-any-link-re nil t)
                                                                            'contains-link))))))
-    (:kvp        . (:reader org-glance-headline:kvp?       :writer (lambda (hl)
+    (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (save-restriction
                                                                          (org-narrow-to-subtree)
@@ -398,12 +398,12 @@ metastore.")
           (unless (eql source target)
             (org-glance-headline:add-relation target source :rel target->source)))))))
 
-(cl-defun org-glance-headline:kvp? (&optional (headline (org-glance-headline:at-point)))
-  (when (org-element-property :kvp headline)
-    'contains-properties))
+(cl-defun org-glance-headline:contains-property? (&optional (headline (org-glance-headline:at-point)))
+  (when (org-element-property :contains-property-p headline)
+    'contains-property))
 
-(cl-defun org-glance-headline:linked? (&optional (headline (org-glance-headline:at-point)))
-  (when (org-element-property :linkedp headline)
+(cl-defun org-glance-headline:contains-link? (&optional (headline (org-glance-headline:at-point)))
+  (when (org-element-property :contains-link-p headline)
     'contains-link))
 
 (cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))

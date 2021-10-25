@@ -291,7 +291,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     :filter (lambda (headline)
               (and
                (org-glance-headline:active? headline)
-               (org-glance-headline:linked? headline)))
+               (org-glance-headline:contains-link? headline)))
     :action (lambda (headline)
               (org-glance-headline:with-materialized-headline headline
                 (org-end-of-meta-data t)
@@ -312,7 +312,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
     :filter (lambda (headline)
               (and
                (org-glance-headline:active? headline)
-               (or (org-glance-headline:kvp? headline)
+               (or (org-glance-headline:contains-property? headline)
                    (org-glance-headline:encrypted? headline))))
     :action (lambda (headline)
               (let ((pairs (org-glance-headline:with-materialized-headline headline

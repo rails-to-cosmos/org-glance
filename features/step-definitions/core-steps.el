@@ -51,14 +51,14 @@
       (lambda () (should (->> (org-glance-headline:at-point)
                          org-glance-headline:id
                          org-glance-metastore:get-headline
-                         org-glance-headline:linked?))))
+                         org-glance-headline:contains-link?))))
 
 (Then "^headline at point should not be encrypted$"
       (lambda () (should (not (org-glance-headline:encrypted?)))))
 
 (Then "^headline at point should not contain properties$"
       (lambda ()
-        (should (not (org-glance-headline:kvp?)))))
+        (should (not (org-glance-headline:contains-property?)))))
 
 (Then "^headline at point should not be archived$"
       (lambda ()
