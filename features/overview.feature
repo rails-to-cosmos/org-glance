@@ -16,7 +16,7 @@ Feature: Overview
     When I capture thing "Educative Article" of class "article"
 
     And I should have 2 active classes
-    And I should have 1 things of class "video" registered
+    And I should have 1 thing of class "video" registered
     And I should have 1 thing of class "article" registered
 
     When I request "video" overview
@@ -27,6 +27,24 @@ Feature: Overview
     And I should have 2 active classes
     And I should have 0 things of class "video" registered
     And I should have 1 thing of class "article" registered
+
+  Scenario: Kill should be case-independent
+    When I capture thing "javascript video" of class "video"
+
+    And I should have 1 active class
+    And I should have 1 thing of class "video" registered
+
+    When I request "video" overview
+    And I jump to the first headline
+    And I materialize original headline from overview
+    And I change tag "video" to "VIDEO"
+    And I kill current buffer
+    And I should have 1 active classes
+    And I should have 1 thing of class "video" registered
+    And I kill headline at point
+    And there are no headlines here
+    And I should have 1 active classes
+    And I should have 0 things of class "video" registered
 
   Scenario: Basic overview materialization
     When I capture thing "Picnic" of class "event"

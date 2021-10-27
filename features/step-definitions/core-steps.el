@@ -5,16 +5,14 @@
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
-    (with-simulated-input (;; (insert thing-title) "RET"
-                           (insert class-name) "RET")
+    (with-simulated-input ((insert class-name) "RET")
       (org-glance-overview:capture))
     (insert thing-title)
     (org-capture-finalize)))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\" with contents$"
   (lambda (thing-title class-name contents)
-    (with-simulated-input (;; (insert thing-title) "RET"
-                           (insert class-name) "RET")
+    (with-simulated-input ((insert class-name) "RET")
       (org-glance-overview:capture))
     (insert thing-title)
     (goto-char (point-max))
@@ -27,8 +25,8 @@
         (should (= (hash-table-count org-glance:classes) (string-to-number count)))))
 
 (Then "^I should have \\([[:digit:]]+\\) things? of class \"\\([^\"]+\\)\" registered$"
-      (lambda (count class)
-        (should (= (length (org-glance-view:headlines (intern class)))
+      (lambda (count class-name)
+        (should (= (length (org-glance-view:headlines (org-glance-headline:string-to-class class-name)))
                    (string-to-number count)))))
 
 (Then "^I should be in the buffer \"\\([^\"]+\\)\"$"
@@ -67,3 +65,12 @@
 (Then "^headline at point should not be commented$"
       (lambda ()
         (should (not (org-glance-headline:commented?)))))
+
+(And "^I change tag \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
+  (lambda (from-tag to-tag)
+    (org-toggle-tag from-tag 'off)
+    (org-toggle-tag to-tag 'on)))
+
+(And "^I kill current buffer$"
+  (lambda ()
+    (kill-buffer)))

@@ -410,9 +410,12 @@ metastore.")
   (when (org-element-property :encryptedp headline)
     'encrypted))
 
+(cl-defun org-glance-headline:string-to-class (tag)
+  (intern (s-downcase tag)))
+
 (cl-defun org-glance-headline:classes (&optional (headline (org-glance-headline:at-point)))
   (cl-loop
      for tag in (org-element-property :tags headline)
-     collect (intern (s-downcase tag))))
+     collect (org-glance-headline:string-to-class tag)))
 
 (org-glance:provide)

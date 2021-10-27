@@ -49,6 +49,10 @@
 
 (cl-defgeneric org-glance-view:headlines (view))
 
+(cl-defmethod org-glance-view:headlines ((view null))
+  "When VIEW is a symbol, extract org-glance-view from `org-glance-view` hashmap by key."
+  nil)
+
 (cl-defmethod org-glance-view:headlines ((view symbol))
   "When VIEW is a symbol, extract org-glance-view from `org-glance-view` hashmap by key."
   (org-glance-view:headlines (org-glance:get-class view)))

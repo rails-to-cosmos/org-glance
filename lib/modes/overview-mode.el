@@ -532,7 +532,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:class ()
   (save-excursion
     (goto-char (point-min))
-    (intern (downcase (org-get-category)))))
+    (org-glance-headline:string-to-class (org-get-category))))
 
 (defmacro org-glance-doctor:when (predicate prompt &rest forms)
   (declare (indent 2) (debug t))
@@ -614,7 +614,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (org-glance-headline:with-materialized-headline original-headline
-        (org-toggle-tag (format "%s" class) 'off)))))
+        (cl-loop
+           with tags = (org-get-tags)
+           with indices = (--find-indices (string= class (org-glance-headline:string-to-class it)) tags)
+           for index in indices
+           do (org-toggle-tag (nth index tags) 'off))))))
 
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
