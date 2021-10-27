@@ -23,3 +23,12 @@ Feature: Interaction
     And headline at point should not be commented
     And I can open 1 headline
     And I can decrypt 0 headlines
+
+  Scenario: Link in title should be replaced with link's description
+    When I capture thing "Episode" of class "task"
+    And I materialize "Episode" of class "task"
+    And I rename headline to "[[https://www.youtube.com/watch?v=bYy90EUAh98][Episode]]"
+    And I sync materialized headline
+    And I kill current buffer
+    And I materialize "Episode" of class "task"
+    Then I should be in the buffer "org-glance:<Episode>"

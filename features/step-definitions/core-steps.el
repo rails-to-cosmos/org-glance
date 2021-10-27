@@ -66,11 +66,20 @@
       (lambda ()
         (should (not (org-glance-headline:commented?)))))
 
+(And "^I rename headline to \"\\([^\"]+\\)\"$"
+     (lambda (new-title)
+       (should (org-glance:ensure-at-heading))
+       (replace-string (org-glance-headline:title) new-title nil (point-min) (save-excursion (end-of-line) (point)))))
+
+(And "^I sync materialized headline$"
+     (lambda ()
+       (org-glance-materialized-headline:sync)))
+
 (And "^I change tag \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
-  (lambda (from-tag to-tag)
-    (org-toggle-tag from-tag 'off)
-    (org-toggle-tag to-tag 'on)))
+     (lambda (from-tag to-tag)
+       (org-toggle-tag from-tag 'off)
+       (org-toggle-tag to-tag 'on)))
 
 (And "^I kill current buffer$"
-  (lambda ()
-    (kill-buffer)))
+     (lambda ()
+       (kill-buffer)))

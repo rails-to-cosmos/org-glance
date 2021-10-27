@@ -8,4 +8,5 @@
 (Then "^I materialize \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
       (lambda (thing class)
         (with-simulated-input ((insert "[" class "]") "SPC" (insert thing) "RET")
-          (org-glance:materialize))))
+          (org-glance:materialize)
+          (org-glance-headline:search-forward))))

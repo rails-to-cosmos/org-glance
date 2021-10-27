@@ -107,6 +107,7 @@
   (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
 
 (cl-defun org-glance-materialized-headline:sync ()
+  "Apply material buffer changes to metadata and all headline views."
   (interactive)
   (save-excursion
     (org-glance-headline:search-parents)
