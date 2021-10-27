@@ -269,7 +269,8 @@
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
 
 (cl-defun org-glance-headline:material-blocker-hook (change-plist)
-  (if (and (eql 'todo-state-change (plist-get change-plist :type))
+  (if (and org-glance-clone-on-repeat-p
+           (eql 'todo-state-change (plist-get change-plist :type))
            (member (plist-get change-plist :to) org-done-keywords))
       (lexical-let ((headline (org-glance-headline:at-point)))
         (run-with-idle-timer 1 nil #'(lambda () (org-glance-headline:clone headline)))

@@ -38,6 +38,11 @@
   :group 'org-glance
   :type 'directory)
 
+(defcustom org-glance-clone-on-repeat-p nil
+  "Clone repeated headlines instead of repeating it."
+  :group 'org-glance
+  :type 'boolean)
+
 (cl-defstruct (org-glance-view (:constructor org-glance-view:create))
   "This structure contains metadata about categorized `org-mode' headlines."
   (id
