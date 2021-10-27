@@ -237,22 +237,22 @@ metastore.")
                           (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
           (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))))
 
-(cl-defgeneric org-glance-headline:extract (scope)
+(cl-defgeneric org-glance-headline:extract-from (scope)
   "Extract `org-glance-headlines' from scope.")
 
-(cl-defmethod org-glance-headline:extract ((f string))
+(cl-defmethod org-glance-headline:extract-from ((f string))
   "Extract headlines from file F."
   (if-let (b (get-buffer f)) ;; buffer name
-      (org-glance-headline:extract b)
+      (org-glance-headline:extract-from b)
     (with-temp-buffer
       (org-glance:log-debug "Scan file %s" f)
       (insert-file-contents f)
       (org-mode)
       (cl-loop
-         for headline in (org-glance-headline:extract (current-buffer))
+         for headline in (org-glance-headline:extract-from (current-buffer))
          collect (org-glance-headline:enrich headline :file (abbreviate-file-name f))))))
 
-(cl-defmethod org-glance-headline:extract ((b buffer))
+(cl-defmethod org-glance-headline:extract-from ((b buffer))
   "Extract headlines from buffer B."
   (with-current-buffer b
     (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -417,5 +417,23 @@ metastore.")
   (cl-loop
      for tag in (org-element-property :tags headline)
      collect (org-glance-headline:string-to-class tag)))
+
+(cl-defun org-glance-headline:scheduled (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :scheduled headline))
+
+(cl-defun org-glance-headline:deadline (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :deadline headline))
+
+(cl-defun org-glance-headline:repeated-p (&optional (headline (org-glance-headline:at-point)))
+  (when-let (repeater (or (when-let (scheduled (org-glance-headline:scheduled headline))
+                            (plist-get (cadr scheduled) :repeater-value))
+                          (when-let (deadline (org-glance-headline:deadline headline))
+                            (plist-get (cadr deadline) :repeater-value))))
+    (> repeater 0)))
+
+(cl-defun org-glance-headline:clone (&optional (headline (org-glance-headline:at-point)))
+  (with-current-buffer (org-glance-headline:buffer headline)
+    (message "CLONE!")
+    (pp headline)))
 
 (org-glance:provide)

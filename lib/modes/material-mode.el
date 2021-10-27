@@ -207,6 +207,8 @@
        (set (make-local-variable '--org-glance-materialized-headline:begin) begin)
        (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
 
+       (add-hook 'org-blocker-hook #'org-glance-headline:material-blocker-hook 0 'local)
+
        ;; run hooks on original subtree
        (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
        (run-hooks 'org-glance-after-materialize-hook)
@@ -265,5 +267,13 @@
 
 (cl-defun org-glance-headline:materialized-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
+
+(cl-defun org-glance-headline:material-blocker-hook (change-plist)
+  (if (and (eql 'todo-state-change (plist-get change-plist :type))
+           (member (plist-get change-plist :to) org-done-keywords))
+      (lexical-let ((headline (org-glance-headline:at-point)))
+        (run-with-idle-timer 1 nil #'(lambda () (org-glance-headline:clone headline)))
+        (bury-buffer))
+    t))
 
 (org-glance:provide)

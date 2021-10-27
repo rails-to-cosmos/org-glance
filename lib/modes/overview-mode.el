@@ -25,7 +25,7 @@
 
 (cl-defun org-glance-overview:choose-headline-and-jump ()
   "Choose `org-glance-headline' from current overview buffer and goto it."
-  (let ((headlines (org-glance-headline:extract (current-buffer))))
+  (let ((headlines (org-glance-headline:extract-from (current-buffer))))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id
       (org-glance-scope--choose-headline
@@ -104,14 +104,16 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "d")
   (org-glance:interactive-lambda
-    (let* ((origins (cl-loop
-                       for headline in (org-glance-headline:extract (current-buffer))
-                       collect (->> headline
-                                    org-glance-headline:id
-                                    org-glance-metastore:get-headline
-                                    org-glance-headline:file)))
-           (scope (seq-uniq origins #'string=)))
-      (org-drill scope))))
+    (cl-loop
+       for headline in (org-glance-headline:extract-from (current-buffer))
+       collect (save-window-excursion
+                 (org-glance-headline:visit (->> headline
+                                                 org-glance-headline:id
+                                                 org-glance-metastore:get-headline))
+                 (buffer-file-name))
+       into files
+       finally
+         (org-drill files))))
 
 (define-key org-glance-overview-mode-map (kbd "k")
   (org-glance-overview:for-one
@@ -340,7 +342,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (org-glance:log-info "Scan file %s" file)
          (redisplay)
          (cl-loop
-            for headline in (org-glance-headline:extract file)
+            for headline in (org-glance-headline:extract-from file)
             when (-contains?
                   (mapcar #'downcase (org-element-property :tags headline))
                   (downcase (symbol-name class)))
