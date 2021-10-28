@@ -218,6 +218,7 @@ If point is before first heading, prompt for headline and eval forms on it."
              (id (org-glance-view:generate-id-for-subtree-at-point view-id))
              (dir (org-glance:generate-dir-for-subtree-at-point view-id))
              (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+
         (mkdir dir 'parents)
 
         (save-restriction
@@ -296,17 +297,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)
          (headline (org-glance-headline:search-buffer-by-id id))
-         (refile-dir (make-temp-file
-                      (-org-glance:make-file-directory
-                       (f-join (org-glance-view:resource-location class)
-                               (concat (format-time-string "%Y-%m-%d_")
-                                       (->> (org-glance-headline:title headline)
-                                            (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
-                                            (replace-regexp-in-string "\\-+" "-")
-                                            (replace-regexp-in-string "\\-+$" "")
-                                            (s-truncate 30))
-                                       "-")))
-                      'directory))
+         (refile-dir (org-glance-headline:generate-directory
+                      (org-glance-view:resource-location class)
+                      (org-glance-headline:title headline)))
          (tmp-file (org-glance-headline:file headline))
          (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
     (org-glance:log-debug "Generate headline directory: %s" refile-dir)

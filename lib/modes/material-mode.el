@@ -171,7 +171,9 @@
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
-(cl-defun org-glance-headline:materialize (headline)
+(cl-defun org-glance-headline:materialize (headline &optional (pure nil))
+  "Materialize HEADLINE.
+PURE materialization means side-effect-free behaviour: `org-blocker-hook' will be deactivated."
   (org-glance:log-info "Materialize headline %s" headline)
   (switch-to-buffer
    (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
@@ -184,7 +186,7 @@
        (org-glance:log-debug "Headline ID: \"%s\"" id)
        (org-glance:log-debug "Headline FILE: \"%s\"" file)
        (org-glance:log-debug "Headline BUFFER: \"%s\"" buffer)
-       (org-glance:log-debug "Headline BEGIN: \"%s\"" begin)
+       (org-glance:log-debug "Headline BEGIN: %d" begin)
 
        (when file
          (setq-local default-directory (file-name-directory file)))
@@ -207,7 +209,8 @@
        (set (make-local-variable '--org-glance-materialized-headline:begin) begin)
        (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
 
-       (add-hook 'org-blocker-hook #'org-glance-headline:material-blocker-hook 0 'local)
+       (unless pure
+         (add-hook 'org-blocker-hook #'org-glance-headline:material-blocker-hook 0 'local))
 
        ;; run hooks on original subtree
        (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
@@ -222,7 +225,7 @@
        (current-buffer)))))
 
 (advice-add 'org-glance-headline:materialize :around
-            (lambda (fn headline)
+            (lambda (fn headline &rest args)
               (cond ((org-glance-headline:encrypted? headline)
                      (cl-flet ((decrypt ()
                                  (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
@@ -233,7 +236,7 @@
                        (add-hook 'org-glance-after-materialize-hook #'decrypt)
 
                        (unwind-protect
-                            (funcall fn headline)
+                            (apply fn headline args)
                          (remove-hook 'org-glance-after-materialize-hook #'decrypt)
                          (add-hook 'org-glance-before-materialize-sync-hook
                                    (lambda ()
@@ -247,15 +250,16 @@
                                      (org-glance-headline:decrypt --org-glance-materialized-headline:password)
                                      (org-glance-headline:promote-to-the-first-level))
                                    0 'local))))
-                    (t (funcall fn headline)))))
+                    (t (apply fn headline args)))))
 
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."
   (declare (indent 1) (debug t))
-  `(let ((materialized-buffer (org-glance-headline:materialize ,headline))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline 'pure))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
      (unwind-protect
           (with-current-buffer materialized-buffer
+            (org-glance-headline:search-forward)
             ,@forms)
        (when (buffer-live-p materialized-buffer)
          (with-current-buffer materialized-buffer
@@ -270,11 +274,36 @@
 
 (cl-defun org-glance-headline:material-blocker-hook (change-plist)
   (if (and org-glance-clone-on-repeat-p
+           (org-glance-headline:repeated-p)
            (eql 'todo-state-change (plist-get change-plist :type))
            (member (plist-get change-plist :to) org-done-keywords))
-      (lexical-let ((headline (org-glance-headline:at-point)))
-        (run-with-idle-timer 1 nil #'(lambda () (org-glance-headline:clone headline)))
-        (bury-buffer))
+      (let* ((headline (org-glance-headline:at-point))
+             (from-state (plist-get change-plist :from))
+             (to-state (plist-get change-plist :to))
+             (class (car --org-glance-materialized-headline:classes))
+             (captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
+        (org-glance-overview:register-headline-in-metastore captured-headline class)
+        (org-glance-overview:register-headline-in-overview captured-headline class)
+        (if (null from-state)
+            (progn
+              (goto-char (org-glance-headline:begin))
+              (while (looking-at "[* ]") (forward-char))
+              (insert (substring-no-properties to-state) " "))
+          (replace-string (substring-no-properties from-state) (substring-no-properties to-state) nil (org-glance-headline:begin) (save-excursion (end-of-line) (point))))
+        (org-glance-materialized-headline:sync)
+        (bury-buffer)
+        (lexical-let ((buffer (current-buffer))) ;; blocker should not modify buffer, but idle timer could
+          (run-with-idle-timer 1 nil #'(lambda () (kill-buffer buffer))))
+
+        ;; post-process headline here
+        ;; remove unnecessary data
+        (org-glance-headline:with-materialized-headline captured-headline
+          (org-todo to-state)
+          (org-end-of-meta-data t)
+          (kill-region (point) (point-max)))
+
+        (org-glance-headline:materialize captured-headline)
+        nil)
     t))
 
 (org-glance:provide)

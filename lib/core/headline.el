@@ -431,9 +431,18 @@ metastore.")
                             (plist-get (cadr deadline) :repeater-value))))
     (> repeater 0)))
 
-(cl-defun org-glance-headline:clone (&optional (headline (org-glance-headline:at-point)))
-  (with-current-buffer (org-glance-headline:buffer headline)
-    (message "CLONE!")
-    (pp headline)))
+(cl-defun org-glance-headline:generate-directory (location title)
+  (abbreviate-file-name
+   (make-temp-file
+    (-org-glance:make-file-directory
+     (f-join location
+             (concat (format-time-string "%Y-%m-%d_")
+                     (->> title
+                          (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
+                          (replace-regexp-in-string "\\-+" "-")
+                          (replace-regexp-in-string "\\-+$" "")
+                          (s-truncate 30))
+                     "-")))
+    'directory)))
 
 (org-glance:provide)
