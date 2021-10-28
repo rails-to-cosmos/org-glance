@@ -10,6 +10,8 @@
 #+CATEGORY: ${category}
 #+STARTUP: overview
 
+${calendar}
+
 ")
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
@@ -348,7 +350,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (read-only-mode 'toggle))
+  (read-only-mode 'toggle)
+  (org-glance-overview:refresh-widgets))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
@@ -459,15 +462,50 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                        finally (return (point)))))
                  (set-mark beginning-of-group)
                  (goto-char end-of-group)
-                 (apply #'org-sort-entries
-                        (append '(nil)
-                                (if (listp (car order)) (car order) (list (car order)))))
+                 (apply #'org-sort-entries nil (if (listp (car order)) (car order) (list (car order))))
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
+
+(cl-defun org-glance-overview:calendar-widget (date)
+  (with-temp-buffer
+
+    (insert
+     (with-temp-buffer
+       (calendar-generate-month (car date) (caddr date) 0)
+       (buffer-substring-no-properties (point-min) (point-max))))
+
+    (goto-char (point-min))
+
+    (while (re-search-forward "\\([[:digit:]]\\{4\\}\\)" nil t)
+      (replace-match "[[elisp:(-og-calw-y \\1)][\\1]]"))
+
+    (while (re-search-forward "\\([[:digit:]]\\{1,2\\}\\)" nil t)
+      (if (= (string-to-number (match-string 1)) (cadr date))
+          (replace-match "*\\1*")
+        (replace-match "[[elisp:(-og-calw-d \\1)][\\1]]")))
+
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(cl-defun org-glance-overview:refresh-widgets ()
+  (interactive)
+  (let* ((class (org-glance-overview:class))
+         (point (point))
+         (inhibit-read-only t)
+         (today (calendar-current-date))
+         (calendar (org-glance-overview:calendar-widget today))
+         (header (let ((category class))
+                   (org-glance:format org-glance-overview:header))))
+    (goto-char (point-min))
+    (org-next-visible-heading 1)
+    (kill-region (point-min) (point))
+    (insert header)
+    (goto-char point)))
 
 (cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
   (let* ((inhibit-read-only t)
+         (today (calendar-current-date))
+         (calendar (org-glance-overview:calendar-widget today))
          (filename (-org-glance:make-file-directory
                     (org-glance-overview:location class)))
          (header (let ((category class))
