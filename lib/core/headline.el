@@ -131,24 +131,25 @@ metastore.")
   (org-element-property :raw-value headline))
 
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
+  "Get title of HEADLINE, cleanup links."
   (with-temp-buffer
     (insert (or (org-element-property :TITLE headline)
                 (org-element-property :raw-value headline)
                 ""))
     (cl-loop
-       for (title link-begin link-end) in (org-element-map (org-element-parse-buffer) 'link
-                                            (lambda (link) (list
-                                                       (substring-no-properties
-                                                        (or (nth 2 link)
-                                                            (org-element-property :raw-link link)))
-                                                       (org-element-property :begin link)
-                                                       (org-element-property :end link))))
+       for (title beg end) in (org-element-map (org-element-parse-buffer) 'link
+                                (lambda (link) (list
+                                           (substring-no-properties
+                                            (or (nth 2 link)
+                                                (org-element-property :raw-link link)))
+                                           (org-element-property :begin link)
+                                           (org-element-property :end link))))
        collect title into titles
-       collect (s-trim (buffer-substring-no-properties link-begin link-end)) into raw-links
+       collect (s-trim (buffer-substring-no-properties beg end)) into links
        finally (return (cl-loop
                           initially (goto-char (point-min))
                           for i upto (1- (length titles))
-                          do (replace-string (nth i raw-links) (nth i titles))
+                          do (replace-string (nth i links) (nth i titles))
                           finally (return (buffer-substring-no-properties (point-min) (point-max))))))))
 
 (cl-defun org-glance-headline:priority (&optional (headline (org-glance-headline:at-point)))
