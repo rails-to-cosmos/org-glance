@@ -99,23 +99,15 @@
   (let ((view (or (org-glance:get-class id)
                   (org-glance-view:create :id id
                                           :type type
-                                          :scope scope)))
-        (config-file (f-join org-glance-directory
-                             (downcase (format "%s" id))
-                             (downcase (format "%s.config.json" id)))))
+                                          :scope scope))))
 
     (puthash id view org-glance:classes)
-
-    (unless (file-exists-p config-file)
-      (-org-glance:make-file-directory config-file)
-      (with-temp-file config-file
-        (insert (json-encode `((id . ,id))))
-        (json-pretty-print-buffer)))
 
     (org-glance:log-info "View \"%s\"%s is now ready to glance %s"
              id
              (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
              (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))
+
     view))
 
 (cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))

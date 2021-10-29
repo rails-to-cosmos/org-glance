@@ -138,59 +138,24 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance:read-view-directories ()
-  (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
-
-(cl-defun org-glance:view-config-file-location (view-directory)
-  (f-join org-glance-directory view-directory (concat view-directory ".config.json")))
-
-(cl-defun org-glance:view-config-file-read (view-directory)
-  (condition-case nil
-      (json-read-file (org-glance:view-config-file-location view-directory))
-    (error nil)))
-
-(cl-defun org-glance:forest ()
-  (interactive)
-  (let ((forest-location (f-join org-glance-directory "forest.org")))
-    (unless (f-exists? forest-location)
-      (with-temp-file forest-location
-        (insert (org-glance:format
-                 "#    -*- mode: org; mode: org-glance-overview -*-
-
-                 |#+CATEGORY: Forest
-                 |#+STARTUP: overview
-
-                 |YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
-                 |AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
-                 |DOWN A GULLY.
-
-                 |PRESS + TO BREAK A NEW GROUND.
-
-                 |Unscheduled things in TODO state: _ (schedule)
-                 |Things to drill in: _ (start drill)
-                 |Things drowning in the past: _ (reschedule)
-                 |"))))
-    (find-file forest-location)
-    (rename-buffer "*org-glance*")))
+(cl-defun org-glance:read-class-directories ()
+  (--filter
+   (f-directory? (f-join org-glance-directory it))
+   (directory-files org-glance-directory nil "^[[:word:]]+")))
 
 (cl-defun org-glance:create-class (class)
-  (org-glance:log-info "Create class '%s" class)
+  (org-glance:log-debug "Create class \"%s\"" class)
 
-  (if-let (config (org-glance:view-config-file-read class))
-      (apply 'org-glance-def-view
-             (cl-loop
-                for (k . v) in config
-                for pk = (intern (org-glance:format ":${k}"))
-                for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                               (t (intern v)))
-                when pk
-                append (list pk pv)))
-    (org-glance-def-view :id class))
+  (org-glance-def-view :id class)
 
+  (org-glance:log-debug "Metastore exists?")
   (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
+    (org-glance:log-debug "Create metastore")
     (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
 
+  (org-glance:log-debug "Overview exists?")
   (unless (f-exists? (org-glance-overview:location class))
+    (org-glance:log-debug "Create overview")
     (org-glance-overview:create class)))
 
 (cl-defun org-glance:init ()
@@ -199,7 +164,7 @@
     (mkdir org-glance-directory))
 
   (cl-loop
-     for directory in (org-glance:read-view-directories)
+     for directory in (org-glance:read-class-directories)
      for class = (intern directory)
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class))
@@ -252,30 +217,13 @@ Optionally filter scope with FILTER."
       :if-exists action
       :if-captured action)))
 
-;; (cl-defun org-glance:reschedule-or-capture ()
-;;   "Choose or capture a new thing.
-
-;; If it has completed state, make it TODO and prompt user to reschedule it."
-;;   (interactive)
-;;   (org-glance:get-or-capture
-;;     :if-exists (lambda (headline)
-;;                  (org-glance-headline:with-materialized-headline headline
-;;                    (org-remove-timestamp-with-keyword org-scheduled-string)
-;;                    (call-interactively #'org-schedule)
-;;                    (org-todo "TODO")))))
-
 (cl-defun org-glance:refer (&optional headline)
-  "Insert relation from `org-glance-headline' at point to HEADLINE.
-
-C-u means not to insert relation at point, but register it in logbook instead."
+  "Insert link to HEADLINE."
   (interactive)
   (org-glance:ensure-headline-apply headline
     :action (lambda (headline)
               (unless current-prefix-arg
-                (insert (org-glance-headline:format headline)))
-              ;; (when-let (source (org-glance-headline:at-point))
-              ;;   (org-glance-headline:add-biconnected-relation source headline))
-              )))
+                (insert (org-glance-headline:format headline))))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
