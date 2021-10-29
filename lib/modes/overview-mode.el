@@ -93,8 +93,18 @@ If point is before first heading, prompt for headline and eval forms on it."
     (org-glance-overview:doctor)))
 
 (define-key org-glance-overview-mode-map (kbd "g")
-  (org-glance-overview:for-each
-    (org-glance-overview:pull)))
+  (org-glance:interactive-lambda
+    (if (org-before-first-heading-p)
+        (progn
+          (org-glance-overview:refresh-widgets)
+          (pulse-momentary-highlight-region
+           (point-min)
+           (save-excursion
+             (org-next-visible-heading 1)
+             (point))
+           'region))
+      (org-glance-overview:pull))
+    (save-buffer)))
 
 (define-key org-glance-overview-mode-map (kbd "v")
   (org-glance-overview:for-one
@@ -350,8 +360,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (read-only-mode 'toggle)
-  (org-glance-overview:refresh-widgets))
+  (read-only-mode 'toggle))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
@@ -466,7 +475,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
-(cl-defun org-glance-overview:calendar-widget (date)
+(cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
   (with-temp-buffer
 
     (insert
@@ -486,33 +495,24 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
     (buffer-substring-no-properties (point-min) (point-max))))
 
-(cl-defun org-glance-overview:refresh-widgets ()
+(cl-defun org-glance-overview:refresh-widgets (&optional (class (org-glance-overview:class)))
   (interactive)
-  (let* ((class (org-glance-overview:class))
-         (point (point))
-         (inhibit-read-only t)
-         (today (calendar-current-date))
-         (calendar (org-glance-overview:calendar-widget today))
-         (header (let ((category class))
-                   (org-glance:format org-glance-overview:header))))
+  (let ((inhibit-read-only t)
+        (point (point))
+        (calendar (org-glance-overview:calendar-widget)))
     (goto-char (point-min))
     (org-next-visible-heading 1)
     (kill-region (point-min) (point))
-    (insert header)
+    (insert (let ((category class))
+              (org-glance:format org-glance-overview:header)))
     (goto-char point)))
 
 (cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (let* ((inhibit-read-only t)
-         (today (calendar-current-date))
-         (calendar (org-glance-overview:calendar-widget today))
-         (filename (-org-glance:make-file-directory
-                    (org-glance-overview:location class)))
-         (header (let ((category class))
-                   (org-glance:format org-glance-overview:header))))
+  (let ((filename (-org-glance:make-file-directory
+                   (org-glance-overview:location class))))
     (with-temp-file filename
-      (org-mode)
-      (insert header))
+      (org-glance-overview:refresh-widgets class))
     (find-file filename)))
 
 (cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))

@@ -298,6 +298,7 @@ PURE materialization means side-effect-free behaviour: `org-blocker-hook' will b
         ;; post-process headline here
         ;; remove unnecessary data
         (org-glance-headline:with-materialized-headline captured-headline
+          (org-clock-out-if-current)
           (org-todo to-state)
           (org-end-of-meta-data t)
           (kill-region (point) (point-max)))
