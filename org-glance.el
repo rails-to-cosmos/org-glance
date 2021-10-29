@@ -130,7 +130,7 @@
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
+;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil
@@ -273,8 +273,9 @@ C-u means not to insert relation at point, but register it in logbook instead."
     :action (lambda (headline)
               (unless current-prefix-arg
                 (insert (org-glance-headline:format headline)))
-              (when-let (source (org-glance-headline:at-point))
-                (org-glance-headline:add-biconnected-relation source headline)))))
+              ;; (when-let (source (org-glance-headline:at-point))
+              ;;   (org-glance-headline:add-biconnected-relation source headline))
+              )))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."

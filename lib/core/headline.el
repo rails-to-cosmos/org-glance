@@ -402,18 +402,18 @@ metastore.")
          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
     (org-glance-headline:add-log-note (org-glance:format "- ${rel} ${target-title} on ${now}") source)))
 
-(cl-defun org-glance-headline:add-biconnected-relation
-    (source target
-     &key
-       (source->target org-glance-relation:forward)
-       (target->source org-glance-relation:backward))
-  (when source
-    (save-excursion
-      (save-restriction
-        (org-save-outline-visibility t
-          (org-glance-headline:add-relation source target :rel source->target)
-          (unless (eql source target)
-            (org-glance-headline:add-relation target source :rel target->source)))))))
+;; (cl-defun org-glance-headline:add-biconnected-relation
+;;     (source target
+;;      &key
+;;        (source->target org-glance-relation:forward)
+;;        (target->source org-glance-relation:backward))
+;;   (when source
+;;     (save-excursion
+;;       (save-restriction
+;;         (org-save-outline-visibility t
+;;           (org-glance-headline:add-relation source target :rel source->target)
+;;           (unless (eql source target)
+;;             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:contains-property? (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :contains-property-p headline)

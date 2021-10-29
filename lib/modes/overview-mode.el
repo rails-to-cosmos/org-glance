@@ -72,9 +72,9 @@ If point is before first heading, prompt for headline and eval forms on it."
         (org-overview)
         (save-buffer)))))
 
-(define-key org-glance-overview-mode-map (kbd "@")
-  (org-glance-overview:for-one
-    (org-glance-overview:add-relation)))
+;; (define-key org-glance-overview-mode-map (kbd "@")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:add-relation)))
 
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
@@ -735,13 +735,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            org-glance-headline:visit)
       (org-glance-headline:at-point))))
 
-(cl-defun org-glance-overview:add-relation ()
-  "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
-  (interactive)
-  (lexical-let ((source (org-glance-overview:original-headline)))
-    (org-glance:ensure-headline-apply
-        :action (lambda (headline)
-                  (org-glance-headline:add-biconnected-relation source headline)))))
+;; (cl-defun org-glance-overview:add-relation ()
+;;   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
+;;   (interactive)
+;;   (lexical-let ((source (org-glance-overview:original-headline)))
+;;     (org-glance:ensure-headline-apply
+;;         :action (lambda (headline)
+;;                   (org-glance-headline:add-biconnected-relation source headline)))))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
