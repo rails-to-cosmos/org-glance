@@ -47,7 +47,7 @@
 
 (After
  ;; After each scenario is run
- ;; (delete-directory org-glance-test:root-location t)
+ (delete-directory org-glance-test:root-location t)
  (message "Remove scenario directory \"%s\"" org-glance-test:root-location)
  (message "\n== End scenario ==\n")
  )
