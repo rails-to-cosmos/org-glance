@@ -428,7 +428,11 @@ metastore.")
   (when-let (repeater (or (when-let (scheduled (org-glance-headline:scheduled headline))
                             (plist-get (cadr scheduled) :repeater-value))
                           (when-let (deadline (org-glance-headline:deadline headline))
-                            (plist-get (cadr deadline) :repeater-value))))
+                            (plist-get (cadr deadline) :repeater-value))
+                          (when (and (boundp 'org-advanced-schedule-mode)
+                                     org-advanced-schedule-mode
+                                     (org-element-property :ADVANCED_SCHEDULE headline))
+                            1)))
     (> repeater 0)))
 
 (cl-defun org-glance-headline:generate-directory (location title)
