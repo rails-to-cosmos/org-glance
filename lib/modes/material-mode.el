@@ -81,9 +81,9 @@
                                     :file --org-glance-materialized-headline:file
                                     :buffer --org-glance-materialized-headline:buffer)))
                     (org-glance:log-debug "Updated headline: %s" headline)
+
                     (cl-loop
-                       for class in --org-glance-materialized-headline:classes
-                       when (org-glance:get-class class)
+                       for class in (org-glance-headline:classes)
                        do
                          (org-glance:log-debug "Update overview %s" class)
                          (org-glance-overview:register-headline-in-overview headline class)
@@ -92,10 +92,11 @@
                          (redisplay))
 
                     (cl-loop
-                       for class in (seq-difference --org-glance-materialized-headline:classes
-                                                    (org-glance-headline:classes))
+                       for class in (seq-difference --org-glance-materialized-headline:classes (org-glance-headline:classes))
                        do
+                         (org-glance:log-debug "Remove from overview %s" class)
                          (org-glance-overview:remove-headline-from-overview headline class)
+                         (org-glance:log-debug "Remove from metastore %s" class)
                          (org-glance-overview:remove-headline-from-metastore headline class)))))
 
 (define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
@@ -171,9 +172,9 @@
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
-(cl-defun org-glance-headline:materialize (headline &optional (pure nil))
+(cl-defun org-glance-headline:materialize (headline &optional (read-only nil))
   "Materialize HEADLINE.
-PURE materialization means side-effect-free behaviour: `org-blocker-hook' will be deactivated."
+READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' will be deactivated."
   (org-glance:log-info "Materialize headline %s" headline)
   (switch-to-buffer
    (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
@@ -209,7 +210,7 @@ PURE materialization means side-effect-free behaviour: `org-blocker-hook' will b
        (set (make-local-variable '--org-glance-materialized-headline:begin) begin)
        (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
 
-       (unless pure
+       (unless read-only
          (add-hook 'org-blocker-hook #'org-glance-headline:material-blocker-hook 0 'local))
 
        ;; run hooks on original subtree
@@ -255,11 +256,11 @@ PURE materialization means side-effect-free behaviour: `org-blocker-hook' will b
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."
   (declare (indent 1) (debug t))
-  `(let ((materialized-buffer (org-glance-headline:materialize ,headline 'pure))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline 'read-only))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
      (unwind-protect
           (with-current-buffer materialized-buffer
-            (org-glance-headline:search-forward)
+            (org-glance-headline:search-parents)
             ,@forms)
        (when (buffer-live-p materialized-buffer)
          (with-current-buffer materialized-buffer

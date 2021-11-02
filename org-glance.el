@@ -229,6 +229,8 @@ Optionally filter scope with FILTER."
   "Materialize HEADLINE in new buffer."
   (interactive)
   (org-glance:ensure-headline-apply headline
+    :filter (lambda (headline)
+              (org-glance-headline:active? headline))
     :action (lambda (headline)
               (let ((buffer (org-glance-headline:materialized-buffer headline)))
                 (if (buffer-live-p buffer)

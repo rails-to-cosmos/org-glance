@@ -20,19 +20,19 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
     (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
     (:contains-link-p    . (:reader org-glance-headline:contains-link?    :writer (lambda (hl)
-                                                                     (save-excursion
-                                                                       (save-restriction
-                                                                         (org-narrow-to-subtree)
-                                                                         (org-end-of-meta-data t)
-                                                                         (when (re-search-forward org-any-link-re nil t)
-                                                                           'contains-link))))))
+                                                                                    (save-excursion
+                                                                                      (save-restriction
+                                                                                        (org-narrow-to-subtree)
+                                                                                        (org-end-of-meta-data t)
+                                                                                        (when (re-search-forward org-any-link-re nil t)
+                                                                                          'contains-link))))))
     (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
-                                                                     (save-excursion
-                                                                       (save-restriction
-                                                                         (org-narrow-to-subtree)
-                                                                         (org-end-of-meta-data t)
-                                                                         (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                                                           'contains-properties))))))
+                                                                                                   (save-excursion
+                                                                                                     (save-restriction
+                                                                                                       (org-narrow-to-subtree)
+                                                                                                       (org-end-of-meta-data t)
+                                                                                                       (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                                                                                         'contains-properties))))))
     (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (org-end-of-meta-data t)
@@ -139,11 +139,11 @@ metastore.")
     (cl-loop
        for (title beg end) in (org-element-map (org-element-parse-buffer) 'link
                                 (lambda (link) (list
-                                           (substring-no-properties
-                                            (or (nth 2 link)
-                                                (org-element-property :raw-link link)))
-                                           (org-element-property :begin link)
-                                           (org-element-property :end link))))
+                                                (substring-no-properties
+                                                 (or (nth 2 link)
+                                                     (org-element-property :raw-link link)))
+                                                (org-element-property :begin link)
+                                                (org-element-property :end link))))
        collect title into titles
        collect (s-trim (buffer-substring-no-properties beg end)) into links
        finally (return (cl-loop
