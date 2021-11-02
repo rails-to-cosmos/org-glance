@@ -274,23 +274,34 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
 
 (cl-defun org-glance-headline:material-blocker-hook (change-plist)
-  (if (and org-glance-clone-on-repeat-p
-           (org-glance-headline:repeated-p)
-           (eql 'todo-state-change (plist-get change-plist :type))
-           (member (plist-get change-plist :to) org-done-keywords))
+  (if (and
+       org-glance-clone-on-repeat-p
+       (eql 'todo-state-change (plist-get change-plist :type))
+       (member (plist-get change-plist :to) org-done-keywords)
+       (org-glance-headline:repeated-p))
       (let* ((headline (org-glance-headline:at-point))
+             (classes (org-glance-headline:classes))
+             (captured-headline (org-glance:capture-headline-at-point class :remove-original nil))
              (from-state (plist-get change-plist :from))
-             (to-state (plist-get change-plist :to))
-             (class (car --org-glance-materialized-headline:classes))
-             (captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
-        (org-glance-overview:register-headline-in-metastore captured-headline class)
-        (org-glance-overview:register-headline-in-overview captured-headline class)
+             (to-state (plist-get change-plist :to)))
+
+        (cl-loop
+           for class in classes
+           do
+             (org-glance-overview:register-headline-in-metastore captured-headline class)
+             (org-glance-overview:register-headline-in-overview captured-headline class))
+
         (if (null from-state)
             (progn
               (goto-char (org-glance-headline:begin))
               (while (looking-at "[* ]") (forward-char))
               (insert (substring-no-properties to-state) " "))
-          (replace-string (substring-no-properties from-state) (substring-no-properties to-state) nil (org-glance-headline:begin) (save-excursion (end-of-line) (point))))
+          (replace-string (substring-no-properties from-state)
+                          (substring-no-properties to-state)
+                          nil
+                          (org-glance-headline:begin)
+                          (save-excursion (end-of-line) (point))))
+
         (org-glance-materialized-headline:sync)
         (bury-buffer)
         (lexical-let ((buffer (current-buffer))) ;; blocker should not modify buffer, but idle timer could
