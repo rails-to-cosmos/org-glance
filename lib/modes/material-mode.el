@@ -285,6 +285,8 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
              (from-state (plist-get change-plist :from))
              (to-state (plist-get change-plist :to)))
 
+        (org-clock-out-if-current)
+
         (cl-loop
            for class in classes
            do
@@ -310,7 +312,6 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
         ;; post-process headline here
         ;; remove unnecessary data
         (org-glance-headline:with-materialized-headline captured-headline
-          (org-clock-out-if-current)
           (org-todo to-state)
           (org-end-of-meta-data t)
           (kill-region (point) (point-max)))
