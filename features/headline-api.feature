@@ -44,3 +44,21 @@ Managing Incidents
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
       - Uses fewer resources than other clients
       """
+
+  @headline
+  Scenario: Create from the inside
+    When I create a file called "headline-from-inside.org" with content:
+      """
+      * Vocal lesson :task:
+      - Mozart
+      - Bach
+      """
+    And I find file "headline-from-inside.org"
+    And I goto the end of the buffer
+    Then headline title should be "Vocal lesson"
+    And headline contents should be:
+      """
+      * Vocal lesson :task:
+      - Mozart
+      - Bach
+      """

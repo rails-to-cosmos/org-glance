@@ -9,8 +9,12 @@
       (insert content))))
 
 (And "^I find file \"\\([^\"]+\\)\"$"
-  (lambda (filename)
-    (find-file (f-join org-glance-test:user-location filename))))
+     (lambda (filename)
+       (find-file (f-join org-glance-test:user-location filename))))
+
+(And "^I goto the end of the buffer$"
+     (lambda ()
+       (goto-char (point-max))))
 
 (When "^I define class \"\\([^\"]+\\)\"$"
   (lambda (class)
