@@ -8,6 +8,10 @@
     (with-temp-file (f-join org-glance-test:user-location filename)
       (insert content))))
 
+(When "^I create an org file with content:$"
+  (lambda (content)
+    (find-file (make-temp-file "org-glance-" nil ".org" content))))
+
 (And "^I find file \"\\([^\"]+\\)\"$"
      (lambda (filename)
        (find-file (f-join org-glance-test:user-location filename))))

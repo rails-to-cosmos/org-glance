@@ -2,28 +2,28 @@ Feature: Headline API
 
   @headline
   Scenario: Create from element at point
-    When I create a file called "basic-headline.org" with content:
+    When I create an org file with content:
 """
-* Google SRE Book :book:
+* Google SRE Book :book:mgmt:
 Managing Incidents
 """
-    And I find file "basic-headline.org"
     Then headline title should be "Google SRE Book"
+    And headline classes should be "book, mgmt"
     And headline contents should be:
 """
-* Google SRE Book :book:
+* Google SRE Book :book:mgmt:
 Managing Incidents
 """
 
   @headline
   Scenario: Create from indented element at point
-    When I create a file called "indented-headline.org" with content:
+    When I create an org file with content:
       """
-      ** Tags :doc:
+      *** Tags :doc:
       Features and scenarios can be tagged using syntax @tag
       """
-    And I find file "indented-headline.org"
     Then headline title should be "Tags"
+    And headline classes should be "doc"
     And headline contents should be:
       """
       * Tags :doc:
@@ -32,13 +32,13 @@ Managing Incidents
 
   @headline
   Scenario: Create from element with links in title
-    When I create a file called "headline-with-links.org" with content:
+    When I create an org file with content:
       """
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
       - Uses fewer resources than other clients
       """
-    And I find file "headline-with-links.org"
     Then headline title should be "Transmission bookmark: Transmission Web UI"
+    And headline classes should be "bookmark"
     And headline contents should be:
       """
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
@@ -47,18 +47,18 @@ Managing Incidents
 
   @headline
   Scenario: Create from the inside
-    When I create a file called "headline-from-inside.org" with content:
+    When I create an org file with content:
       """
-      * Vocal lesson :task:
+      * Vocal lesson :Task:
       - Mozart
       - Bach
       """
-    And I find file "headline-from-inside.org"
     And I goto the end of the buffer
     Then headline title should be "Vocal lesson"
+    And headline classes should be "task"
     And headline contents should be:
       """
-      * Vocal lesson :task:
+      * Vocal lesson :Task:
       - Mozart
       - Bach
       """

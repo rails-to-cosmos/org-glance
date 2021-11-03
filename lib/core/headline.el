@@ -24,7 +24,6 @@ Return headline or nil if it is not a proper `org-glance-headline'."
   ((position :initarg :position
              :initform (point)
              :type number
-             :custom number
              :documentation "Headline position in buffer."))
   "Base class for headline location."
   :abstract t)

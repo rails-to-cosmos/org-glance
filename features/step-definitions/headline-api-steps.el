@@ -15,3 +15,9 @@
                              (insert (oref headline :contents))
                              (org-align-tags 'all)
                              (buffer-substring-no-properties (point-min) (point-max))))))))
+
+(And "^headline classes should be \"\\([^\"]+\\)\"$"
+  (lambda (expected-classes)
+    (let ((headline (org-glance-headline-at-point)))
+      (should (string= (s-join ", " (mapcar #'symbol-name (oref headline :classes)))
+                       expected-classes)))))
