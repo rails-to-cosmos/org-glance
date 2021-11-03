@@ -281,7 +281,7 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
        (org-glance-headline:repeated-p))
       (let* ((headline (org-glance-headline:at-point))
              (classes (org-glance-headline:classes))
-             (captured-headline (org-glance:capture-headline-at-point class :remove-original nil))
+             (captured-headline (org-glance:capture-headline-at-point (car classes) :remove-original nil))
              (from-state (plist-get change-plist :from))
              (to-state (plist-get change-plist :to)))
 
