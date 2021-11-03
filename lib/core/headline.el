@@ -2,6 +2,7 @@
 
 (org-glance:require
   eieio
+  dash
   org
   org-element
   lib.core.exceptions
@@ -42,21 +43,68 @@ Return headline or nil if it is not a proper `org-glance-headline'."
            :documentation "Name of the existing buffer."))
   "Buffer location.")
 
-(cl-deftype org-element-headline ()
-    '(satisfies (lambda (el) (eql 'headline (org-element-type el)))))
-
 (defclass org-glance-headline ()
   ((title :initarg :title
           :type string
           :documentation "The title of headline.")
-   (location :initarg :location
-             :type org-glance-headline-location
-             :documentation "The location of headline.")
    (contents :initarg :contents
              :type string)
-   (element :initarg :element
-            :type org-element-headline))
+   (classes :initarg :classes
+            :type (satisfies (lambda (val) (--all-p (symbolp it) val)))))
   "A base class for tracking headlines.")
+
+(cl-defun org-glance:buffer-links ()
+  "Extract links from current buffer."
+  (org-element-map (org-element-parse-buffer) 'link
+    (lambda (link) (list
+               (substring-no-properties
+                (or (nth 2 link)
+                    (org-element-property :raw-link link)))
+               (org-element-property :begin link)
+               (org-element-property :end link)))))
+
+(cl-defun org-glance:remove-links-from-string (s)
+  "Replace org-links in S with it's titles where possible."
+  (with-temp-buffer
+    (insert s)
+    (cl-loop
+       for (title beg end) in (org-glance:buffer-links)
+       collect title into titles
+       collect (s-trim (buffer-substring-no-properties beg end)) into links
+       finally (return
+                 (cl-loop
+                    initially (goto-char (point-min))
+                    for i upto (1- (length titles))
+                    do (replace-string (nth i links) (nth i titles))
+                    finally (return (buffer-substring-no-properties (point-min) (point-max))))))))
+
+(cl-defun org-glance-headline-at-point ()
+  "Create `org-glance-headline' from `org-element' at point."
+  (save-excursion
+    (org-glance:ensure-at-heading)
+    (let ((element (org-element-at-point)))
+      (assert (eql 'headline (org-element-type element)))
+      (let ((title (->> (or (org-element-property :TITLE element)
+                            (org-element-property :raw-value element)
+                            "")
+                        (org-glance:remove-links-from-string)))
+            (contents (save-restriction
+                        (widen)
+                        (org-narrow-to-subtree)
+                        (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                          (with-temp-buffer
+                            (org-mode)
+                            (insert contents)
+                            (goto-char (point-min))
+                            (while (looking-at "^\\*\\*")
+                              (org-promote-subtree))
+                            (buffer-string)))))
+            (classes (cl-loop for tag in (org-element-property :tags element)
+                        collect (intern (s-downcase tag)))))
+        (org-glance-headline
+         :title title
+         :contents contents
+         :classes classes)))))
 
 ;; (cl-defmethod org-glance-thing-serialize ((thing org-glance-thing))
 ;;   (message "Hello thing: %s"  (oref thing name)))

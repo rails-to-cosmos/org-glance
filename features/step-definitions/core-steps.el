@@ -3,6 +3,15 @@
 (require 's)
 (require 'with-simulated-input)
 
+(When "^I create a file called \"\\([^\"]+\\)\" with content:$"
+  (lambda (filename content)
+    (with-temp-file (f-join org-glance-test:user-location filename)
+      (insert content))))
+
+(And "^I find file \"\\([^\"]+\\)\"$"
+  (lambda (filename)
+    (find-file (f-join org-glance-test:user-location filename))))
+
 (When "^I define class \"\\([^\"]+\\)\"$"
   (lambda (class)
     (org-glance:create-class (intern class))))
