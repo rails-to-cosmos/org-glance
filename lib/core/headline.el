@@ -1,6 +1,7 @@
 (require 'org-glance-module)
 
 (org-glance:require
+  eieio
   org
   org-element
   lib.core.exceptions
@@ -13,26 +14,76 @@ Return headline or nil if it is not a proper `org-glance-headline'."
   (when (org-element-property :ORG_GLANCE_ID headline)
     headline))
 
+;; Headline could appear in 3 states:
+;; - Dummy
+;; - Raw
+;; - Full
+
+(defclass org-glance-headline-location () ; Where things can be stored? File/Buffer/?
+  ((position :initarg :position
+             :initform (point)
+             :type number
+             :custom number
+             :documentation "Headline position in buffer."))
+  "Base class for headline location."
+  :abstract t)
+
+(defclass org-glance-headline-file (org-glance-headline-location)
+  ((filename :initarg :filename
+             :initform (buffer-file-name)
+             :type (satisfies f-exists-p)
+             :documentation "Name of the existing file."))
+  "File location.")
+
+(defclass org-glance-headline-buffer (org-glance-headline-location)
+  ((buffer :initarg :buffer-name
+           :initform (current-buffer)
+           :type (satisfies buffer-live-p)
+           :documentation "Name of the existing buffer."))
+  "Buffer location.")
+
+(cl-deftype org-element-headline ()
+    '(satisfies (lambda (el) (eql 'headline (org-element-type el)))))
+
+(defclass org-glance-headline ()
+  ((title :initarg :title
+          :type string
+          :documentation "The title of headline.")
+   (location :initarg :location
+             :type org-glance-headline-location
+             :documentation "The location of headline.")
+   (contents :initarg :contents
+             :type string)
+   (element :initarg :element
+            :type org-element-headline))
+  "A base class for tracking headlines.")
+
+;; (cl-defmethod org-glance-thing-serialize ((thing org-glance-thing))
+;;   (message "Hello thing: %s"  (oref thing name)))
+
+;; (let ((thing (org-glance-headline :title "Test thing")))
+;;   (oref thing :properties))
+
 (defvar org-glance-headline:serde-alist
-  `((:raw-value  . (:reader org-glance-headline:title      :writer org-glance-headline:title))
-    (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
-    (:file       . (:reader org-glance-headline:file       :writer org-glance-headline:file))
-    (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
-    (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
-    (:contains-link-p    . (:reader org-glance-headline:contains-link?    :writer (lambda (hl)
-                                                                                    (save-excursion
-                                                                                      (save-restriction
-                                                                                        (org-narrow-to-subtree)
-                                                                                        (org-end-of-meta-data t)
-                                                                                        (when (re-search-forward org-any-link-re nil t)
-                                                                                          'contains-link))))))
-    (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
-                                                                                                   (save-excursion
-                                                                                                     (save-restriction
-                                                                                                       (org-narrow-to-subtree)
-                                                                                                       (org-end-of-meta-data t)
-                                                                                                       (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                                                                                         'contains-properties))))))
+  `((:raw-value  . (:reader org-glance-headline:title :writer org-glance-headline:title))
+    (:begin      . (:reader org-glance-headline:begin :writer org-glance-headline:begin))
+    (:file       . (:reader org-glance-headline:file :writer org-glance-headline:file))
+    (:commentedp . (:reader org-glance-headline:commented-p :writer org-glance-headline:commented-p))
+    (:archivedp  . (:reader org-glance-headline:archived-p :writer org-glance-headline:archived-p))
+    (:contains-link-p . (:reader org-glance-headline:contains-link-p :writer (lambda (hl)
+                                                                               (save-excursion
+                                                                                 (save-restriction
+                                                                                   (org-narrow-to-subtree)
+                                                                                   (org-end-of-meta-data t)
+                                                                                   (when (re-search-forward org-any-link-re nil t)
+                                                                                     'contains-link))))))
+    (:contains-property-p . (:reader org-glance-headline:contains-property-p :writer (lambda (hl)
+                                                                                       (save-excursion
+                                                                                         (save-restriction
+                                                                                           (org-narrow-to-subtree)
+                                                                                           (org-end-of-meta-data t)
+                                                                                           (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                                                                             'contains-properties))))))
     (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
                                                                      (save-excursion
                                                                        (org-end-of-meta-data t)
@@ -54,6 +105,7 @@ metastore.")
   "Serialize HEADLINE to store it on disk."
   (cl-loop
      for (property . methods) in org-glance-headline:serde-alist
+     when (plist-get methods :reader)
      collect (funcall (plist-get methods :reader) headline)))
 
 (cl-defun org-glance-headline:deserialize (dump)
@@ -99,8 +151,8 @@ metastore.")
 
 (cl-defun org-glance-headline:active? (&optional (headline (org-element-at-point)))
   (and (org-glance-headline-p headline)
-       (not (org-glance-headline:commented? headline))
-       (not (org-glance-headline:archived? headline))))
+       (not (org-glance-headline:commented-p headline))
+       (not (org-glance-headline:archived-p headline))))
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
@@ -119,11 +171,11 @@ metastore.")
 (cl-defun org-glance-headline:state (&optional (headline (org-glance-headline:at-point)))
   (substring-no-properties (or (org-element-property :todo-keyword headline) "")))
 
-(cl-defun org-glance-headline:commented? (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:commented-p (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :commentedp headline)
     t))
 
-(cl-defun org-glance-headline:archived? (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:archived-p (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :archivedp headline)
     t))
 
@@ -186,7 +238,7 @@ metastore.")
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
 (cl-defun org-glance-headline:search-buffer-by-id (id)
-  (org-glance:log-debug "I'm in buffer \"%s\"" (current-buffer))
+  (org-glance:log-debug "Searching buffer %s by id %s" (current-buffer) id)
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
                   (lambda (elem) (when (string= (org-glance-headline:id elem) id)
                               (org-element-property :begin elem))))))
@@ -232,8 +284,12 @@ metastore.")
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
   (let ((file (org-glance-headline:file headline))
         (buffer (org-glance-headline:buffer headline)))
+    (org-glance:log-debug "File DEBUG: %s" file)
+    (org-glance:log-debug "Buffer DEBUG: %s" buffer)
     (cond (file (with-temp-buffer
-                  (org-glance:log-debug "Extract contents for headline %s from file %s" (org-glance-headline:id headline) file)
+                  (org-glance:log-debug "Extract contents for headline %s from file %s"
+                                        (org-glance-headline:id headline)
+                                        file)
                   (org-mode)
                   (insert-file-contents file)
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
@@ -415,11 +471,11 @@ metastore.")
 ;;           (unless (eql source target)
 ;;             (org-glance-headline:add-relation target source :rel target->source)))))))
 
-(cl-defun org-glance-headline:contains-property? (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:contains-property-p (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :contains-property-p headline)
     'contains-property))
 
-(cl-defun org-glance-headline:contains-link? (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:contains-link-p (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :contains-link-p headline)
     'contains-link))
 
@@ -434,6 +490,12 @@ metastore.")
   (cl-loop
      for tag in (org-element-property :tags headline)
      collect (org-glance-headline:string-to-class tag)))
+
+(cl-defun org-glance-headline:generate-id (class)
+  (format "%s-%s-%s"
+          class
+          (s-join "-" (mapcar #'number-to-string (current-time)))
+          (secure-hash 'md5 (buffer-string))))
 
 (cl-defun org-glance-headline:scheduled (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :scheduled headline))

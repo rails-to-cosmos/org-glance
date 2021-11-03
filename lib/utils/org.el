@@ -49,16 +49,6 @@
 ;;      (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
 ;;      (org-set-property "COOKIE_DATA" "todo recursive"))))
 
-(cl-defun org-glance-view:generate-id-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
-  (save-excursion
-    (org-glance:ensure-at-heading)
-    (save-restriction
-      (org-narrow-to-subtree)
-      (format "%s-%s-%s"
-              view-id
-              (s-join "-" (mapcar #'number-to-string (current-time)))
-              (secure-hash 'md5 (buffer-string))))))
-
 (cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
   "Path to directory where VIEW-ID resources and metadata are stored."
   (abbreviate-file-name
@@ -66,14 +56,10 @@
            (s-downcase (format "%s" view-id))
            "resources")))
 
-(cl-defun org-glance:generate-dir-for-subtree-at-point (&optional (view-id (org-glance-view:completing-read)))
-  (save-excursion
-    (org-glance:ensure-at-heading)
-    (save-restriction
-      (org-narrow-to-subtree)
-      (org-glance-headline:generate-directory
-       (org-glance-view:resource-location view-id)
-       (org-element-property :raw-value (org-element-at-point))))))
+(cl-defun org-glance:generate-dir-for-subtree-at-point (class)
+  (org-glance-headline:generate-directory
+   (org-glance-view:resource-location class)
+   (org-element-property :raw-value (org-element-at-point))))
 
 (cl-defun org-glance:first-level-headline ()
   (cl-loop while (org-up-heading-safe)))

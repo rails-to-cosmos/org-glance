@@ -92,10 +92,10 @@
                                                   ;;    for icon in (list
                                                   ;;                 ""
                                                   ;;                 ;; (when (org-glance-headline:encrypted? headline) (propertize "🔒" 'face 'bold))
-                                                  ;;                 ;; (when (org-glance-headline:contains-link? headline) (let ((s "A"))
+                                                  ;;                 ;; (when (org-glance-headline:contains-link-p headline) (let ((s "A"))
                                                   ;;                 ;;                                                (add-face-text-property 0 1 '(:underline t :weight bold) nil s)
                                                   ;;                 ;;                                                s))
-                                                  ;;                 ;; (when (org-glance-headline:contains-property? headline) "property")
+                                                  ;;                 ;; (when (org-glance-headline:contains-property-p headline) "property")
                                                   ;;                 )
                                                   ;;    when icon
                                                   ;;    collect icon into modifiers

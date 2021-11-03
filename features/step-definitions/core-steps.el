@@ -53,22 +53,22 @@
       (lambda () (should (->> (org-glance-headline:at-point)
                          org-glance-headline:id
                          org-glance-metastore:get-headline
-                         org-glance-headline:contains-link?))))
+                         org-glance-headline:contains-link-p))))
 
 (Then "^headline at point should not be encrypted$"
       (lambda () (should (not (org-glance-headline:encrypted?)))))
 
 (Then "^headline at point should not contain properties$"
       (lambda ()
-        (should (not (org-glance-headline:contains-property?)))))
+        (should (not (org-glance-headline:contains-property-p)))))
 
 (Then "^headline at point should not be archived$"
       (lambda ()
-        (should (not (org-glance-headline:archived?)))))
+        (should (not (org-glance-headline:archived-p)))))
 
 (Then "^headline at point should not be commented$"
       (lambda ()
-        (should (not (org-glance-headline:commented?)))))
+        (should (not (org-glance-headline:commented-p)))))
 
 (And "^I rename headline to \"\\([^\"]+\\)\"$"
      (lambda (new-title)

@@ -88,10 +88,6 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-overview:for-one
     (org-attach-reveal-in-emacs)))
 
-(define-key org-glance-overview-mode-map (kbd "!")
-  (org-glance-overview:for-each
-    (org-glance-overview:doctor)))
-
 (define-key org-glance-overview-mode-map (kbd "g")
   (org-glance:interactive-lambda
     (if (org-before-first-heading-p)
@@ -163,17 +159,19 @@ If point is before first heading, prompt for headline and eval forms on it."
   "Add HEADLINE clone in overview VIEW-ID file."
   (save-window-excursion
     (org-glance-overview class)
-    (condition-case nil
-        (progn
-          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-          (org-glance-overview:pull))
-      (error (let ((inhibit-read-only t)
-                   (contents (org-glance-headline:contents headline)))
-               (unless (string-empty-p contents)
+    (save-excursion
+      (condition-case nil
+          (progn
+            (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+            (org-glance-overview:pull))
+        (error (let ((inhibit-read-only t))
                  (beginning-of-buffer)
                  (org-glance-headline:search-forward)
-                 (insert contents "\n")
-                 (save-buffer))))))
+                 (insert (org-glance-headline:with-materialized-headline headline
+                           (org-glance-headline:contents))
+                         "\n")
+                 (save-buffer)
+                 )))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -218,46 +216,46 @@ If point is before first heading, prompt for headline and eval forms on it."
                                   (org-end-of-meta-data t)
                                   (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
 
-(cl-defun org-glance:capture-headline-at-point
-    (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
-     &key (remove-original t))
-  (interactive)
-  (save-window-excursion
-    (save-excursion
-      (org-glance:ensure-at-heading)
-      (let* ((view-id (cond ((symbolp view-id) (symbol-name view-id))
-                            ((stringp view-id) view-id)))
-             (id (org-glance-view:generate-id-for-subtree-at-point view-id))
-             (dir (org-glance:generate-dir-for-subtree-at-point view-id))
-             (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+(cl-defun org-glance:capture-headline-at-point (class &optional (remove-original t) &rest args)
+  (declare (indent 2))
+  (save-excursion
+    (org-glance:ensure-at-heading)
+    (let ((tag (downcase (symbol-name class)))
+          (dir (org-glance:generate-dir-for-subtree-at-point class)))
+      (mkdir dir 'parents)
 
-        (mkdir dir 'parents)
+      (save-restriction
+        (org-narrow-to-subtree)
+        (let* ((contents (buffer-substring-no-properties (point-min) (point-max)))
+               (new-headline (save-window-excursion
+                               (let ((overview-location (f-join dir (format "%s.org" class))))
+                                 (org-glance:log-debug "Visit thing's location: %s" overview-location)
+                                 (find-file overview-location))
+                               (save-restriction
+                                 (widen)
+                                 (end-of-buffer)
+                                 (save-excursion
+                                   (insert contents))
+                                 (org-glance-headline:promote-to-the-first-level)
+                                 (org-set-property "ORG_GLANCE_ID" (org-glance-headline:generate-id class))
+                                 (org-set-property "DIR" dir)
+                                 (org-set-property "CATEGORY" tag)
+                                 (org-set-property "ORG_GLANCE_CREATION_TIME"
+                                                   (with-temp-buffer
+                                                     (let ((current-prefix-arg '(16)))
+                                                       (call-interactively #'org-time-stamp-inactive)
+                                                       (buffer-substring-no-properties (point-min) (point-max)))))
+                                 (org-toggle-tag tag t)
+                                 (save-buffer)
+                                 (apply #'org-glance-headline:enrich (org-glance-headline:at-point) args)))))
 
-        (save-restriction
-          (org-narrow-to-subtree)
-          (let* ((contents (buffer-substring-no-properties (point-min) (point-max)))
-                 (result (save-window-excursion
-                           (find-file output-file)
-                           (save-restriction
-                             (widen)
-                             (end-of-buffer)
-                             (save-excursion
-                               (insert contents))
-                             (org-glance-headline:promote-to-the-first-level)
-                             (org-set-property "ORG_GLANCE_ID" id)
-                             (org-set-property "DIR" dir)
-                             (org-set-property "CATEGORY" view-id)
-                             (org-set-property "ORG_GLANCE_CREATION_TIME" (with-temp-buffer
-                                                                            (let ((current-prefix-arg '(16)))
-                                                                              (call-interactively #'org-time-stamp-inactive)
-                                                                              (buffer-substring-no-properties (point-min) (point-max)))))
-                             (unless (member (downcase view-id) (-org-glance:collect-tags))
-                               (org-toggle-tag view-id))
-                             (save-buffer)
-                             (org-glance-headline:at-point)))))
-            (when remove-original
-              (delete-region (point-min) (point-max)))
-            result))))))
+          (when remove-original
+            (delete-region (point-min) (point-max)))
+
+          (org-glance-overview:register-headline-in-metastore new-headline class)
+          (org-glance-overview:register-headline-in-overview new-headline class)
+
+          new-headline)))))
 
 (cl-defun org-glance-overview:capture
     (&key
@@ -571,46 +569,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (declare (indent 2) (debug t))
   `(when (and ,predicate (or current-prefix-arg (y-or-n-p (org-glance:format ,prompt))))
      ,@forms))
-
-(cl-defun org-glance-overview:doctor ()
-  ;; - [ ] check if visited file is not headline archive file
-  ;; - [ ] check for view data structure: no empty directories etc
-  ;; - [x] check for view data structure: proper partitioning
-  ;; - [ ] check for nested views and ask to flatten them
-  ;; - [ ] check if original headline is stored in archive
-  ;; - [ ] check for PROPERTIES drawer indentation
-  ;; - [x] fix non-relative DIR properties
-
-  (when (org-glance-overview:pull)
-    (let* ((view-id (org-glance-overview:class))
-           (original-headline (org-glance-overview:original-headline))
-           (original-headline-location (org-glance-headline:file original-headline))
-           (dir (org-element-property :DIR original-headline))
-           (archive (org-element-property :ARCHIVE original-headline))
-           (main-role (org-glance-headline:main-role))
-           (title (org-glance-headline:title))
-           (raw-value (org-glance-headline:raw-value original-headline))
-           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-
-      (org-glance-doctor:when (and dir (not (string= dir (abbreviate-file-name dir))))
-          "Headline \"${title}\" contains full path in DIR property. Abbreviate it?"
-        (org-glance-headline:with-materialized-headline original-headline
-          (org-set-property "DIR" (abbreviate-file-name dir))))
-
-      (org-glance-doctor:when (and archive (not (string= archive (abbreviate-file-name archive))))
-          "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
-        (org-glance-headline:with-materialized-headline original-headline
-          (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
-
-      (org-glance-doctor:when (null main-role)
-          "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
-        (let ((captured-headline (org-glance-headline:with-materialized-headline original-headline
-                                   (org-glance:capture-headline-at-point view-id))))
-          (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-          (org-glance-overview:register-headline-in-overview captured-headline view-id))
-        (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))
-
-      (org-glance-overview:pull))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))

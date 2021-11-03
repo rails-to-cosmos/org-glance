@@ -75,21 +75,13 @@
                     (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
 
 (add-hook 'org-glance-after-materialize-sync-hook
-          #'(lambda () (let ((headline (org-glance-headline:enrich
-                                      (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
-                                    :begin --org-glance-materialized-headline:begin
-                                    :file --org-glance-materialized-headline:file
-                                    :buffer --org-glance-materialized-headline:buffer)))
-                    (org-glance:log-debug "Updated headline: %s" headline)
-
+          #'(lambda () (progn
                     (cl-loop
                        for class in (org-glance-headline:classes)
-                       do
-                         (org-glance:log-debug "Update overview %s" class)
-                         (org-glance-overview:register-headline-in-overview headline class)
-                         (org-glance:log-debug "Update metastore %s" class)
-                         (org-glance-overview:register-headline-in-metastore headline class)
-                         (redisplay))
+                       do (org-glance:capture-headline-at-point class nil
+                            :begin --org-glance-materialized-headline:begin
+                            :file --org-glance-materialized-headline:file
+                            :buffer --org-glance-materialized-headline:buffer))
 
                     (cl-loop
                        for class in (seq-difference --org-glance-materialized-headline:classes (org-glance-headline:classes))
@@ -274,48 +266,43 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
 
 (cl-defun org-glance-headline:material-blocker-hook (change-plist)
-  (if (and
-       org-glance-clone-on-repeat-p
-       (eql 'todo-state-change (plist-get change-plist :type))
-       (member (plist-get change-plist :to) org-done-keywords)
-       (org-glance-headline:repeated-p))
-      (let* ((headline (org-glance-headline:at-point))
-             (classes (org-glance-headline:classes))
-             (captured-headline (org-glance:capture-headline-at-point class :remove-original nil))
-             (from-state (plist-get change-plist :from))
-             (to-state (plist-get change-plist :to)))
+  (if (and org-glance-clone-on-repeat-p
+           (eql 'todo-state-change (plist-get change-plist :type))
+           (member (plist-get change-plist :to) org-done-keywords)
+           (org-glance-headline:repeated-p))
+      (cl-loop
+         with headline = (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
+         with from-state = (substring-no-properties (plist-get change-plist :from))
+         with to-state = (substring-no-properties (plist-get change-plist :to))
+         with classes = (org-glance-headline:classes headline)
+         with begin = (org-glance-headline:begin headline)
+         with end = (save-excursion
+                      (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
+                      (end-of-line)
+                      (point))
+         for class in classes
+         do (let ((captured-headline (org-glance:capture-headline-at-point class nil)))
+              (if (null from-state)
+                  (progn
+                    (goto-char begin)
+                    (while (looking-at "[* ]")
+                      (forward-char))
+                    (insert to-state " "))
+                (replace-string from-state to-state nil begin end))
 
-        (cl-loop
-           for class in classes
-           do
-             (org-glance-overview:register-headline-in-metastore captured-headline class)
-             (org-glance-overview:register-headline-in-overview captured-headline class))
-
-        (if (null from-state)
-            (progn
-              (goto-char (org-glance-headline:begin))
-              (while (looking-at "[* ]") (forward-char))
-              (insert (substring-no-properties to-state) " "))
-          (replace-string (substring-no-properties from-state)
-                          (substring-no-properties to-state)
-                          nil
-                          (org-glance-headline:begin)
-                          (save-excursion (end-of-line) (point))))
-
-        (org-glance-materialized-headline:sync)
-        (bury-buffer)
-        (lexical-let ((buffer (current-buffer))) ;; blocker should not modify buffer, but idle timer could
-          (run-with-idle-timer 1 nil #'(lambda () (kill-buffer buffer))))
-
-        ;; post-process headline here
-        ;; remove unnecessary data
-        (org-glance-headline:with-materialized-headline captured-headline
-          (org-todo to-state)
-          (org-end-of-meta-data)
-          (kill-region (point) (point-max)))
-
-        (org-glance-headline:materialize captured-headline)
-        nil)
+              ;; post-process headline here
+              ;; remove unnecessary data
+              (org-glance-headline:with-materialized-headline captured-headline
+                (org-todo to-state)
+                (org-end-of-meta-data)
+                (kill-region (point) (point-max))))
+         finally
+           (org-glance-materialized-headline:sync)
+           (bury-buffer)
+           (lexical-let ((buffer (current-buffer))) ;; blocker should not modify buffer, but idle timer could
+             (run-with-idle-timer 1 nil #'(lambda () (kill-buffer buffer))))
+         ;; (org-glance-headline:materialize captured-headline)
+           (return nil))
     t))
 
 (org-glance:provide)
