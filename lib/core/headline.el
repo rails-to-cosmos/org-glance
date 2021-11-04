@@ -83,27 +83,24 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (org-glance:ensure-at-heading)
     (let ((element (org-element-at-point)))
       (assert (eql 'headline (org-element-type element)))
-      (let ((title (->> (or (org-element-property :TITLE element)
-                            (org-element-property :raw-value element)
-                            "")
-                        (org-glance:remove-links-from-string)))
-            (contents (save-restriction
-                        (widen)
-                        (org-narrow-to-subtree)
-                        (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                          (with-temp-buffer
-                            (org-mode)
-                            (insert contents)
-                            (goto-char (point-min))
-                            (while (looking-at "^\\*\\*")
-                              (org-promote-subtree))
-                            (buffer-string)))))
-            (classes (cl-loop for tag in (org-element-property :tags element)
-                        collect (intern (s-downcase tag)))))
-        (org-glance-headline
-         :title title
-         :contents contents
-         :classes classes)))))
+      (org-glance-headline
+       :title (->> (or (org-element-property :TITLE element)
+                       (org-element-property :raw-value element)
+                       "")
+                   (org-glance:remove-links-from-string))
+       :contents (save-restriction
+                   (widen)
+                   (org-narrow-to-subtree)
+                   (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                     (with-temp-buffer
+                       (org-mode)
+                       (insert contents)
+                       (goto-char (point-min))
+                       (while (looking-at "^\\*\\*")
+                         (org-promote-subtree))
+                       (buffer-string))))
+       :classes (cl-loop for tag in (org-element-property :tags element)
+                   collect (intern (s-downcase tag)))))))
 
 ;; (cl-defmethod org-glance-thing-serialize ((thing org-glance-thing))
 ;;   (message "Hello thing: %s"  (oref thing name)))
