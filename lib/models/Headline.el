@@ -5,17 +5,22 @@
   dash
   org
   org-element
-  lib.core.exceptions
   lib.utils.helpers)
 
 (defclass org-glance-headline ()
-  ((title :initarg :title
+  ((id :initarg :id
+       :initform (intern (concat
+                          (s-join "-" (mapcar #'number-to-string (current-time)))
+                          (secure-hash 'md5 (buffer-string))))
+       :type symbol
+       :documentation "Unique id.")
+   (classes :initarg :classes
+            :type (satisfies (lambda (val) (--all-p (symbolp it) val))))
+   (title :initarg :title
           :type string
           :documentation "The title of headline.")
    (contents :initarg :contents
-             :type string)
-   (classes :initarg :classes
-            :type (satisfies (lambda (val) (--all-p (symbolp it) val)))))
+             :type string))
   "A base class for tracking headlines.")
 
 (cl-defun org-glance-headline-from-element (element)

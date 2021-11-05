@@ -4,7 +4,7 @@
   dash
   org
 
-  lib.core.headline
+  lib.models.Headline
   lib.utils.helpers)
 
 (defvar org-glance-scope:extensions

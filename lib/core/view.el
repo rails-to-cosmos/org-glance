@@ -6,9 +6,9 @@
   subr-x
 
   lib.core.scope
-  lib.core.metastore
+  lib.models.Metastore
   lib.core.exceptions
-  lib.core.headline
+  lib.models.Headline
   lib.utils.helpers)
 
 (defvar org-glance-view-default-type '(all)

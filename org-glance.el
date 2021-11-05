@@ -101,8 +101,8 @@
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
 
-  lib.core.headline                     ; good
-  lib.core.metastore                    ; ok
+  lib.models.Headline                     ; good
+  lib.models.Metastore                    ; ok
   lib.core.scope                        ; ? deprecated
   lib.core.view                         ; migrate to overview
 
@@ -120,17 +120,17 @@
 (declare-function org-completing-read "org-macs.el")
 
 (declare-function org-glance-def-view (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headline:materialize (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-headline:title (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:materialize (org-glance-module-filename lib.models.Headline))
+(declare-function org-glance-headline:title (org-glance-module-filename lib.models.Headline))
 
 (declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
-(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
+(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.models.Metastore))
+(declare-function org-glance-headlines (org-glance-module-filename lib.models.Metastore))
 (declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
-;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-headline:format (org-glance-module-filename lib.models.Headline))
+(declare-function org-glance-headline:at-point (org-glance-module-filename lib.models.Headline))
+;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.models.Headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil

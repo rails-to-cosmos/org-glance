@@ -3,10 +3,10 @@
 (org-glance:require
   ol
 
-  lib.core.headline
+  lib.models.Headline
 
   ;; remove these dependencies:
-  lib.core.metastore
+  lib.models.Metastore
   lib.core.view
   lib.modes.overview-mode)
 
