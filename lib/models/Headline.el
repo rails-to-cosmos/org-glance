@@ -5,7 +5,8 @@
   dash
   org
   org-element
-  lib.utils.helpers)
+  lib.utils.helpers
+  lib.models.Class)
 
 (defclass org-glance-headline ()
   ((id :initarg :id
@@ -14,8 +15,8 @@
                           (secure-hash 'md5 (buffer-string))))
        :type symbol
        :documentation "Unique id.")
-   (classes :initarg :classes
-            :type (satisfies (lambda (val) (--all-p (org-glance-class-p it) val))))
+   (class :initarg :class
+          :type org-glance-class)
    (title :initarg :title
           :type string
           :documentation "The title of headline.")
@@ -24,46 +25,41 @@
              :type string))
   "A base class for tracking headlines.")
 
-(org-glance-headline
- :classes (list (org-glance-class :id 'task))
- :title "Hello")
-
 (cl-defmethod initialize-instance :after ((m org-glance-headline) &rest _)
   "Constructor for `org-glance-headline'."
-  (unless (slot-boundp m 'classes)
-    (error "Unable to initialize `org-glance-headline': CLASSES should be bound"))
-  (unless (slot-boundp m 'title)
-    (error "Unable to initialize `org-glance-headline': TITLE should be bound")))
+  (cond ((not (slot-boundp m 'class)) (error "Unable to initialize `org-glance-headline': CLASS should be specified"))
+        ((not (slot-boundp m 'title)) (error "Unable to initialize `org-glance-headline': TITLE should be specified"))))
 
-(cl-defun org-glance-headline-from-element (element)
+(cl-defun org-glance-headline:create-headlines-from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
   (unless (eql 'headline (org-element-type element))
     (user-error "Unable to create `org-glance-headline' from `%s': `headline' expected" (org-element-type element)))
 
-  (org-glance-headline
-   :title (->> (or (org-element-property :TITLE element)
-                   (org-element-property :raw-value element)
-                   "")
-               (-org-glance:remove-links))
-   :contents (save-restriction
-               (widen)
-               (org-narrow-to-subtree)
-               (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                 (with-temp-buffer
-                   (org-mode)
-                   (insert contents)
-                   (goto-char (point-min))
-                   (while (looking-at "^\\*\\*")
-                     (org-promote-subtree))
-                   (buffer-substring-no-properties (point-min) (point-max)))))
-   :classes (cl-loop for tag in (org-element-property :tags element)
-               collect (intern (s-downcase tag)))))
+  (cl-loop for tag in (org-element-property :tags element)
+     collect (org-glance-headline
+              :title (->> (or (org-element-property :TITLE element)
+                              (org-element-property :raw-value element)
+                              "")
+                          (-org-glance:remove-links))
+              :contents (save-restriction
+                          (widen)
+                          (org-narrow-to-subtree)
+                          (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                            (with-temp-buffer
+                              (org-mode)
+                              (save-excursion
+                                (insert contents))
+                              (org-set-tags (format "%s" (s-downcase tag)))
+                              (while (looking-at "^\\*\\*")
+                                (org-promote-subtree))
+                              (buffer-substring-no-properties (point-min) (point-max)))))
+              :class (org-glance-class :id (intern (s-downcase tag))))))
 
-(cl-defun org-glance-headline-at-point ()
+(cl-defun org-glance-headline:create-headlines-from-element-at-point ()
   "Create `org-glance-headline' from `org-element' at point."
   (save-excursion
     (org-glance:ensure-at-heading)
-    (org-glance-headline-from-element (org-element-at-point))))
+    (org-glance-headline:create-headlines-from-element (org-element-at-point))))
 
 ;; (cl-defmethod org-glance-thing-serialize ((thing org-glance-thing))
 ;;   (message "Hello thing: %s"  (oref thing name)))

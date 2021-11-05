@@ -56,17 +56,11 @@
   :group 'org-glance
   :type 'boolean)
 
-(defvar org-glance-class-registry (make-hash-table)
-  "Hash table (id->class) that lists all registered classes.")
-
-(defun org-glance:get-class (class)
-  "Get CLASS from registry."
-  (gethash class org-glance-class-registry))
-
-(eval-when-compile
-  (org-glance:require
-    cl
-    lib.modes.material-mode))
+;; (eval-when-compile
+;;   (org-glance:require
+;;     cl
+;;     ;; lib.modes.material-mode
+;;     ))
 
 (org-glance:require
   cl-generic
@@ -79,8 +73,8 @@
   lib.core.logging
   lib.core.exceptions
   lib.core.posit
-  lib.utils.encryption                  ; encryption utils
-  lib.utils.helpers                     ; unsorted, deprecated
+  ;; lib.utils.encryption                  ; encryption utils
+  ;; lib.utils.helpers                     ; unsorted, deprecated
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -90,212 +84,225 @@
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
 
-  lib.models.Headline                     ; good
-  lib.models.Metastore                    ; ok
-  lib.core.scope                        ; ? deprecated
-  lib.core.view                         ; migrate to overview
+  lib.models.Headline
+  lib.models.Class
+  lib.models.Metastore
 
-  lib.modes.overview-mode               ; good one, improve
-  lib.modes.material-mode
+  ;; lib.core.scope                        ; ? deprecated
+  ;; lib.core.view                         ; migrate to overview
 
-  lib.view.links
+  ;; lib.modes.overview-mode               ; good one, improve
+  ;; lib.modes.material-mode
 
-  lib.transient.headlines
+  ;; lib.view.links
 
-  lib.plugins.metadata)
+  ;; lib.transient.headlines
+
+  ;; lib.plugins.metadata
+  )
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 
-(declare-function org-completing-read "org-macs.el")
+;; (declare-function org-completing-read "org-macs.el")
 
-(declare-function org-glance-def-view (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headline:materialize (org-glance-module-filename lib.models.Headline))
-(declare-function org-glance-headline:title (org-glance-module-filename lib.models.Headline))
+;; (declare-function org-glance-def-view (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-headline:materialize (org-glance-module-filename lib.models.Headline))
+;; (declare-function org-glance-headline:title (org-glance-module-filename lib.models.Headline))
 
-(declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
-(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.models.Metastore))
-(declare-function org-glance-headlines (org-glance-module-filename lib.models.Metastore))
-(declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
-(declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headline:format (org-glance-module-filename lib.models.Headline))
-(declare-function org-glance-headline:at-point (org-glance-module-filename lib.models.Headline))
-(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
+;; (declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
+;; (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.models.Metastore))
+;; (declare-function org-glance-headlines (org-glance-module-filename lib.models.Metastore))
+;; (declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
+;; (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
+;; (declare-function org-glance-headline:format (org-glance-module-filename lib.models.Headline))
+;; (declare-function org-glance-headline:at-point (org-glance-module-filename lib.models.Headline))
+;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
-(cl-defun org-glance:read-class-directories ()
-  (--filter
-   (f-directory? (f-join org-glance-directory it))
-   (directory-files org-glance-directory nil "^[[:word:]]+")))
 
-(cl-defun org-glance:create-class (class)
+;; Classes
+
+(defvar org-glance-class-registry (make-hash-table)
+  "Hash table (id->class) that lists all registered classes.")
+
+(defun org-glance:get-class (class)
+  "Get CLASS from registry."
+  (gethash class org-glance-class-registry))
+
+(cl-defun org-glance:create-class (id)
+  "Create CLASS as instance of `org-glance-class'.
+Register it in `org-glance-class-registry'."
   (org-glance:log-debug "Create class \"%s\"" class)
 
-  (org-glance-def-view :id class)
+  (let ((class (org-glance-class :id id)))
+    (puthash id class org-glance-class-registry))
 
-  (org-glance:log-debug "Metastore exists?")
-  (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
-    (org-glance:log-debug "Create metastore")
-    (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
+  ;; (org-glance:log-debug "Metastore exists?")
+  ;; (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
+  ;;   (org-glance:log-debug "Create metastore")
+  ;;   (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
 
-  (org-glance:log-debug "Overview exists?")
-  (unless (f-exists? (org-glance-overview:location class))
-    (org-glance:log-debug "Create overview")
-    (org-glance-overview:create class)))
+  ;; (org-glance:log-debug "Overview exists?")
+  ;; (unless (f-exists? (org-glance-overview:location class))
+  ;;   (org-glance:log-debug "Create overview")
+  ;;   (org-glance-overview:create class))
 
-(cl-defun org-glance:init ()
-  "Update all changed entities from `org-glance-directory'."
-  (unless (f-exists? org-glance-directory)
-    (mkdir org-glance-directory))
+  )
 
-  (cl-loop
-     for directory in (org-glance:read-class-directories)
-     for class = (intern directory)
-     unless (gethash class org-glance-class-registry nil)
-     do (org-glance:create-class class))
+;; (cl-defun org-glance:init ()
+;;   "Update all changed entities from `org-glance-directory'."
+;;   (unless (f-exists? org-glance-directory)
+;;     (mkdir org-glance-directory))
 
-  (cl-loop
-     for class in '(posit thing class role ascertains)
-     unless (gethash class org-glance-class-registry nil)
-     do (org-glance:create-class class)))
+;;   (cl-loop
+;;      for directory in (-org-glance:read-directories)
+;;      for class = (intern directory)
+;;      unless (gethash class org-glance-class-registry nil)
+;;      do (org-glance:create-class class))
 
-(cl-defun org-glance:@ ()
-  "Context-aware relation management."
-  (interactive)
-  (org-glance:init)
-  (if (and (not (org-in-src-block-p))
-           (or (looking-back "^" 1)
-               (looking-back "[[:space:]]" 1)))
-      (condition-case nil
-          (org-glance:refer)
-        (quit (insert "@")))
-    (insert "@")))
+;;   (cl-loop
+;;      for class in '(posit thing class role ascertains)
+;;      unless (gethash class org-glance-class-registry nil)
+;;      do (org-glance:create-class class)))
 
-(cl-defun org-glance:capture-headline (headline class)
-  (let ((dir (org-glance-headline:generate-directory
-              (org-glance-view:resource-location class)
-              (org-glance-headline:raw-value headline))))
-    (mkdir dir 'parents)
-    ))
+;; (cl-defun org-glance:@ ()
+;;   "Context-aware relation management."
+;;   (interactive)
+;;   (org-glance:init)
+;;   (if (and (not (org-in-src-block-p))
+;;            (or (looking-back "^" 1)
+;;                (looking-back "[[:space:]]" 1)))
+;;       (condition-case nil
+;;           (org-glance:refer)
+;;         (quit (insert "@")))
+;;     (insert "@")))
 
-(cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
-  "Choose headline or capture it.
-Then apply IF-EXISTS or IF-CAPTURED method on it.
-Optionally filter scope with FILTER."
-  (declare (indent 0) (debug t))
-  `(condition-case default
-       (when ,if-exists
-         (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
-               (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
-     (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
-      (lexical-let ((<buffer> (current-buffer))
-                    (<point> (point)))
-        (org-glance-overview:capture
-         :default (cadr default)
-         :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
-         :callback (lambda ()
-                     (when ,if-captured
-                       (let ((<hl> (org-glance-overview:original-headline)))
-                         (switch-to-buffer <buffer>)
-                         (goto-char <point>)
-                         (funcall ,if-captured <hl>)))))))))
+;; (cl-defun org-glance:capture-headline (headline class)
+;;   (let ((dir (org-glance-headline:generate-directory
+;;               (org-glance-view:resource-location class)
+;;               (org-glance-headline:raw-value headline))))
+;;     (mkdir dir 'parents)
+;;     ))
 
-(cl-defun org-glance:ensure-headline-apply (&optional headline &key filter action)
-  (declare (indent 1))
-  (if headline
-      (funcall action headline)
-    (org-glance:get-or-capture
-      :filter filter
-      :if-exists action
-      :if-captured action)))
+;; (cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
+;;   "Choose headline or capture it.
+;; Then apply IF-EXISTS or IF-CAPTURED method on it.
+;; Optionally filter scope with FILTER."
+;;   (declare (indent 0) (debug t))
+;;   `(condition-case default
+;;        (when ,if-exists
+;;          (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
+;;                (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
+;;      (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
+;;       (lexical-let ((<buffer> (current-buffer))
+;;                     (<point> (point)))
+;;         (org-glance-overview:capture
+;;          :default (cadr default)
+;;          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
+;;          :callback (lambda ()
+;;                      (when ,if-captured
+;;                        (let ((<hl> (org-glance-overview:original-headline)))
+;;                          (switch-to-buffer <buffer>)
+;;                          (goto-char <point>)
+;;                          (funcall ,if-captured <hl>)))))))))
 
-(cl-defun org-glance:refer (&optional headline)
-  "Insert link to HEADLINE."
-  (interactive)
-  (org-glance:ensure-headline-apply headline
-    :action (lambda (headline)
-              (unless current-prefix-arg
-                (insert (org-glance-headline:format headline))))))
+;; (cl-defun org-glance:ensure-headline-apply (&optional headline &key filter action)
+;;   (declare (indent 1))
+;;   (if headline
+;;       (funcall action headline)
+;;     (org-glance:get-or-capture
+;;       :filter filter
+;;       :if-exists action
+;;       :if-captured action)))
 
-(cl-defun org-glance:materialize (&optional headline)
-  "Materialize HEADLINE in new buffer."
-  (interactive)
-  (org-glance:ensure-headline-apply headline
-    :filter (lambda (headline)
-              (org-glance-headline:active? headline))
-    :action (lambda (headline)
-              (let ((buffer (org-glance-headline:materialized-buffer headline)))
-                (if (buffer-live-p buffer)
-                    (switch-to-buffer buffer)
-                  (org-glance-headline:materialize headline))))))
+;; (cl-defun org-glance:refer (&optional headline)
+;;   "Insert link to HEADLINE."
+;;   (interactive)
+;;   (org-glance:ensure-headline-apply headline
+;;     :action (lambda (headline)
+;;               (unless current-prefix-arg
+;;                 (insert (org-glance-headline:format headline))))))
 
-(cl-defun org-glance:open (&optional headline)
-  "Run `org-open-at-point' on any `org-link' inside HEADLINE.
-If there is only one link, open it.
-If there is more than one link, prompt user to choose which one to open.
-If headline doesn't contain links, role `can-be-opened' should be revoked."
-  (interactive)
-  (org-glance:ensure-headline-apply headline
-    :filter (lambda (headline)
-              (and
-               (org-glance-headline:active? headline)
-               (org-glance-headline:contains-link-p headline)))
-    :action (lambda (headline)
-              (org-glance-headline:with-materialized-headline headline
-                (org-end-of-meta-data t)
-                (narrow-to-region (point) (point-max))
-                (let ((pos (let ((links (-org-glance:buffer-links)))
-                             (cond
-                               ((> (length links) 1) (nth 1 (assoc (org-completing-read "Open link: " links)
-                                                                   links)))
-                               ((= (length links) 1) (nth 1 (car links)))
-                               (t (user-error "Unable to find links in headline"))))))
-                  (goto-char pos)
-                  (org-open-at-point))))))
+;; (cl-defun org-glance:materialize (&optional headline)
+;;   "Materialize HEADLINE in new buffer."
+;;   (interactive)
+;;   (org-glance:ensure-headline-apply headline
+;;     :filter (lambda (headline)
+;;               (org-glance-headline:active? headline))
+;;     :action (lambda (headline)
+;;               (let ((buffer (org-glance-headline:materialized-buffer headline)))
+;;                 (if (buffer-live-p buffer)
+;;                     (switch-to-buffer buffer)
+;;                   (org-glance-headline:materialize headline))))))
 
-(cl-defun org-glance:extract (&optional headline)
-  (interactive)
-  "Materialize HEADLINE and retrieve key-value pairs from its contents.
-If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
-  (org-glance:ensure-headline-apply headline
-    :filter (lambda (headline)
-              (and
-               (org-glance-headline:active? headline)
-               (or (org-glance-headline:contains-property-p headline)
-                   (org-glance-headline:encrypted? headline))))
-    :action (lambda (headline)
-              (let ((pairs (org-glance-headline:with-materialized-headline headline
-                             (org-glance:get-buffer-key-value-pairs))))
-                (while t
-                  (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+;; (cl-defun org-glance:open (&optional headline)
+;;   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
+;; If there is only one link, open it.
+;; If there is more than one link, prompt user to choose which one to open.
+;; If headline doesn't contain links, role `can-be-opened' should be revoked."
+;;   (interactive)
+;;   (org-glance:ensure-headline-apply headline
+;;     :filter (lambda (headline)
+;;               (and
+;;                (org-glance-headline:active? headline)
+;;                (org-glance-headline:contains-link-p headline)))
+;;     :action (lambda (headline)
+;;               (org-glance-headline:with-materialized-headline headline
+;;                 (org-end-of-meta-data t)
+;;                 (narrow-to-region (point) (point-max))
+;;                 (let ((pos (let ((links (-org-glance:buffer-links)))
+;;                              (cond
+;;                                ((> (length links) 1) (nth 1 (assoc (org-completing-read "Open link: " links)
+;;                                                                    links)))
+;;                                ((= (length links) 1) (nth 1 (car links)))
+;;                                (t (user-error "Unable to find links in headline"))))))
+;;                   (goto-char pos)
+;;                   (org-open-at-point))))))
 
-(cl-defun org-glance
-    (&key db
-       default-choice
-       (db-init nil)
-       (filter #'(lambda (_) t))
-       (scope '(agenda))
-       (action #'org-glance-headline:visit)
-       (prompt "Glance: "))
-  "Deprecated main method, refactoring needed."
-  (let ((headlines (org-glance-headlines :db db
-                                         :db-init db-init
-                                         :scope scope
-                                         :filter filter)))
-    (unwind-protect
-         (when-let (choice (or default-choice
-                               (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
-           (if-let (headline (org-glance-scope--choose-headline choice headlines))
-               (condition-case nil (funcall action headline)
-                 (org-glance-exception:DB-OUTDATED
-                  (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
-                  (redisplay)
-                  (org-glance :scope scope
-                              :filter filter
-                              :action action
-                              :db db
-                              :db-init t
-                              :default-choice choice
-                              :prompt prompt)))
-             (user-error "Headline not found"))))))
+;; (cl-defun org-glance:extract (&optional headline)
+;;   (interactive)
+;;   "Materialize HEADLINE and retrieve key-value pairs from its contents.
+;; If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
+;;   (org-glance:ensure-headline-apply headline
+;;     :filter (lambda (headline)
+;;               (and
+;;                (org-glance-headline:active? headline)
+;;                (or (org-glance-headline:contains-property-p headline)
+;;                    (org-glance-headline:encrypted? headline))))
+;;     :action (lambda (headline)
+;;               (let ((pairs (org-glance-headline:with-materialized-headline headline
+;;                              (org-glance:get-buffer-key-value-pairs))))
+;;                 (while t
+;;                   (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+
+;; (cl-defun org-glance
+;;     (&key db
+;;        default-choice
+;;        (db-init nil)
+;;        (filter #'(lambda (_) t))
+;;        (scope '(agenda))
+;;        (action #'org-glance-headline:visit)
+;;        (prompt "Glance: "))
+;;   "Deprecated main method, refactoring needed."
+;;   (let ((headlines (org-glance-headlines :db db
+;;                                          :db-init db-init
+;;                                          :scope scope
+;;                                          :filter filter)))
+;;     (unwind-protect
+;;          (when-let (choice (or default-choice
+;;                                (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
+;;            (if-let (headline (org-glance-scope--choose-headline choice headlines))
+;;                (condition-case nil (funcall action headline)
+;;                  (org-glance-exception:DB-OUTDATED
+;;                   (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
+;;                   (redisplay)
+;;                   (org-glance :scope scope
+;;                               :filter filter
+;;                               :action action
+;;                               :db db
+;;                               :db-init t
+;;                               :default-choice choice
+;;                               :prompt prompt)))
+;;              (user-error "Headline not found"))))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

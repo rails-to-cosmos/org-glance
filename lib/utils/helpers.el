@@ -8,6 +8,11 @@
   org-archive
   org-element)
 
+(cl-defun -org-glance:read-directories (directory)
+  (--filter
+   (f-directory? (f-join directory it))
+   (directory-files directory nil "^[[:word:]]+")))
+
 (cl-defun -org-glance:buffer-links ()
   "Extract links from current buffer."
   (org-element-map (org-element-parse-buffer) 'link
@@ -127,17 +132,17 @@ enjoy using a lot.
 ;;      (org-set-property "ARCHIVE" (f-join event-dir-rel "story.org::"))
 ;;      (org-set-property "COOKIE_DATA" "todo recursive"))))
 
-(cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
-  "Path to directory where VIEW-ID resources and metadata are stored."
-  (abbreviate-file-name
-   (f-join org-glance-directory
-           (s-downcase (format "%s" view-id))
-           "resources")))
+;; (cl-defun org-glance-view:resource-location (&optional (view-id (org-glance-view:completing-read)))
+;;   "Path to directory where VIEW-ID resources and metadata are stored."
+;;   (abbreviate-file-name
+;;    (f-join org-glance-directory
+;;            (s-downcase (format "%s" view-id))
+;;            "resources")))
 
-(cl-defun org-glance:generate-dir-for-subtree-at-point (class)
-  (org-glance-headline:generate-directory
-   (org-glance-view:resource-location class)
-   (org-element-property :raw-value (org-element-at-point))))
+;; (cl-defun org-glance:generate-dir-for-subtree-at-point (class)
+;;   (org-glance-headline:generate-directory
+;;    (org-glance-view:resource-location class)
+;;    (org-element-property :raw-value (org-element-at-point))))
 
 (cl-defun org-glance:first-level-headline ()
   (cl-loop while (org-up-heading-safe)))
