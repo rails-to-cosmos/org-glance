@@ -16,7 +16,7 @@
 
 (defun org-glance-view:ids ()
   "List registered views."
-  (sort (hash-table-keys org-glance:classes) #'s-less?))
+  (sort (hash-table-keys org-glance-class-registry) #'s-less?))
 
 (cl-defmethod org-glance-view:metastore-location ((view org-glance-view))
   (let ((view-id (downcase (symbol-name (org-glance-view-id view)))))
@@ -101,7 +101,7 @@
                                           :type type
                                           :scope scope))))
 
-    (puthash id view org-glance:classes)
+    (puthash id view org-glance-class-registry)
 
     (org-glance:log-info "View \"%s\"%s is now ready to glance %s"
              id

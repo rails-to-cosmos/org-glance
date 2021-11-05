@@ -15,13 +15,25 @@
        :type symbol
        :documentation "Unique id.")
    (classes :initarg :classes
-            :type (satisfies (lambda (val) (--all-p (symbolp it) val))))
+            :type (satisfies (lambda (val) (--all-p (org-glance-class-p it) val))))
    (title :initarg :title
           :type string
           :documentation "The title of headline.")
    (contents :initarg :contents
+             :initform ""
              :type string))
   "A base class for tracking headlines.")
+
+(org-glance-headline
+ :classes (list (org-glance-class :id 'task))
+ :title "Hello")
+
+(cl-defmethod initialize-instance :after ((m org-glance-headline) &rest _)
+  "Constructor for `org-glance-headline'."
+  (unless (slot-boundp m 'classes)
+    (error "Unable to initialize `org-glance-headline': CLASSES should be bound"))
+  (unless (slot-boundp m 'title)
+    (error "Unable to initialize `org-glance-headline': TITLE should be bound")))
 
 (cl-defun org-glance-headline-from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."

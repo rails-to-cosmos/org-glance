@@ -64,7 +64,7 @@
 ;; (cl-defun org-glance-metastore:get-headline (id)
 ;;   "Get headline by ID."
 ;;   (cl-loop
-;;      for class being the hash-keys of org-glance:classes
+;;      for class being the hash-keys of org-glance-class-registry
 ;;      for metastore = (->> class
 ;;                           org-glance:get-class
 ;;                           org-glance-view:metastore-location
@@ -80,7 +80,7 @@
 ;; (cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
 ;;   "Main retriever, refactor needed."
 ;;   (let* ((headlines (cl-loop
-;;                        for class being the hash-keys of org-glance:classes
+;;                        for class being the hash-keys of org-glance-class-registry
 ;;                        append (cl-loop
 ;;                                  for headline in (org-glance-view:headlines class)
 ;;                                  when (funcall filter headline)

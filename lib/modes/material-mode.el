@@ -50,7 +50,7 @@
 (cl-defun org-glance-metastore:get-headlines (id)
   "Get full headline by ID."
   (cl-loop
-     for class being the hash-keys of org-glance:classes
+     for class being the hash-keys of org-glance-class-registry
      for metastore = (->> class
                           org-glance:get-class
                           org-glance-view:metastore-location

@@ -36,7 +36,7 @@
        org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
        org-glance-directory org-glance-test:view-location
        org-glance:log-level -2305843009213693952
-       org-glance:classes (make-hash-table))
+       org-glance-class-registry (make-hash-table))
 
  (mkdir org-glance-test:view-location)
  (mkdir org-glance-test:user-location)

@@ -41,38 +41,27 @@
        (interactive)
        ,@forms)))
 
+(defgroup org-glance nil
+  "Options concerning glancing entries."
+  :tag "Org Glance"
+  :group 'org)
+
 (defcustom org-glance-directory org-directory
   "Directory with Org files."
   :group 'org-glance
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "Clone repeated headlines instead of repeating it."
+  "Clone repeated headlines instead of updating."
   :group 'org-glance
   :type 'boolean)
 
-(cl-defstruct (org-glance-view (:constructor org-glance-view:create))
-  "This structure contains metadata about categorized `org-mode' headlines."
-  (id
-   nil
-   :read-only t
-   :documentation "ID slot is a primary key that uniqly identifies `org-glance-view'."
-   :type 'symbol)
-  (type
-   nil
-   :read-only nil
-   :documentation "List of actions allowed to use on headlines of this view."
-   :type 'list)
-  (scope
-   nil
-   :read-only nil
-   :documentation "List of files/directories where org-glance should search for headlines for this view."
-   :type 'list))
+(defvar org-glance-class-registry (make-hash-table)
+  "Hash table (id->class) that lists all registered classes.")
 
-(defvar org-glance:classes (make-hash-table)
-  "Hash table (id->view) that lists all registered classes of things.")
-
-(defun org-glance:get-class (class) (gethash class org-glance:classes))
+(defun org-glance:get-class (class)
+  "Get CLASS from registry."
+  (gethash class org-glance-class-registry))
 
 (eval-when-compile
   (org-glance:require
@@ -130,13 +119,7 @@
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:format (org-glance-module-filename lib.models.Headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.models.Headline))
-;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.models.Headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
-
-(defgroup org-glance nil
-  "Options concerning glancing entries."
-  :tag "Org Glance"
-  :group 'org)
 
 (cl-defun org-glance:read-class-directories ()
   (--filter
@@ -166,12 +149,12 @@
   (cl-loop
      for directory in (org-glance:read-class-directories)
      for class = (intern directory)
-     unless (gethash class org-glance:classes nil)
+     unless (gethash class org-glance-class-registry nil)
      do (org-glance:create-class class))
 
   (cl-loop
      for class in '(posit thing class role ascertains)
-     unless (gethash class org-glance:classes nil)
+     unless (gethash class org-glance-class-registry nil)
      do (org-glance:create-class class)))
 
 (cl-defun org-glance:@ ()
