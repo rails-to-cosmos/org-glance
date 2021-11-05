@@ -62,6 +62,6 @@
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
   (cl-loop
      for file in (org-glance-scope scope)
-     append (-non-nil (mapcar filter (org-glance-headline:extract file)))))
+     append (-non-nil (mapcar filter (org-glance-headline:extract-from file)))))
 
 (org-glance:provide)

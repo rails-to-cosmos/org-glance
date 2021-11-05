@@ -10,7 +10,23 @@
 This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
+#+begin_src emacs-lisp
+(use-package org-glance
+    :load-path "~/sync/stuff/org-glance"
+    :bind (("C-x j" . org-glance-form-action)
+           :map org-mode-map
+           ("@" . org-glance:@))
+    :config (setq org-glance-directory "~/sync/views")
+    :ensure aes)
+#+end_src
+
 * Issues
+** TODO Clone feature (clone on repeat, clone-archive+reschedule)
+** DONE Split capture and reschedule?
+CLOSED: [2021-10-23 Sat 13:24]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-10-23 Sat 13:24]
+:END:
 ** TODO Overview kill-headline should do materialization. Add tests
 ** DONE Fix headline-at-point behavior
 CLOSED: [2021-10-13 Wed 14:28]

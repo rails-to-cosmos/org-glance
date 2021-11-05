@@ -10,6 +10,8 @@
 #+CATEGORY: ${category}
 #+STARTUP: overview
 
+${calendar}
+
 ")
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
@@ -25,7 +27,7 @@
 
 (cl-defun org-glance-overview:choose-headline-and-jump ()
   "Choose `org-glance-headline' from current overview buffer and goto it."
-  (let ((headlines (org-glance-headline:extract (current-buffer))))
+  (let ((headlines (org-glance-headline:extract-from (current-buffer))))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id
       (org-glance-scope--choose-headline
@@ -70,9 +72,9 @@ If point is before first heading, prompt for headline and eval forms on it."
         (org-overview)
         (save-buffer)))))
 
-(define-key org-glance-overview-mode-map (kbd "@")
-  (org-glance-overview:for-one
-    (org-glance-overview:add-relation)))
+;; (define-key org-glance-overview-mode-map (kbd "@")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:add-relation)))
 
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
@@ -91,8 +93,18 @@ If point is before first heading, prompt for headline and eval forms on it."
     (org-glance-overview:doctor)))
 
 (define-key org-glance-overview-mode-map (kbd "g")
-  (org-glance-overview:for-each
-    (org-glance-overview:pull)))
+  (org-glance:interactive-lambda
+    (if (org-before-first-heading-p)
+        (progn
+          (org-glance-overview:refresh-widgets)
+          (pulse-momentary-highlight-region
+           (point-min)
+           (save-excursion
+             (org-next-visible-heading 1)
+             (point))
+           'region))
+      (org-glance-overview:pull))
+    (save-buffer)))
 
 (define-key org-glance-overview-mode-map (kbd "v")
   (org-glance-overview:for-one
@@ -104,13 +116,16 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "d")
   (org-glance:interactive-lambda
-    (let* ((origins (cl-loop
-                       for headline in (org-glance-headline:extract (current-buffer))
-                       collect (org-glance-headline:narrow
-                                   (org-glance-metastore:get-headline (org-glance-headline:id headline))
-                                 (org-glance-headline:file))))
-           (scope (seq-uniq origins #'string=)))
-      (org-drill scope))))
+    (cl-loop
+       for headline in (org-glance-headline:extract-from (current-buffer))
+       collect (save-window-excursion
+                 (org-glance-headline:visit (->> headline
+                                                 org-glance-headline:id
+                                                 org-glance-metastore:get-headline))
+                 (buffer-file-name))
+       into files
+       finally
+         (org-drill files))))
 
 (define-key org-glance-overview-mode-map (kbd "k")
   (org-glance-overview:for-one
@@ -215,6 +230,7 @@ If point is before first heading, prompt for headline and eval forms on it."
              (id (org-glance-view:generate-id-for-subtree-at-point view-id))
              (dir (org-glance:generate-dir-for-subtree-at-point view-id))
              (output-file (f-join dir (org-glance:format "${view-id}.org"))))
+
         (mkdir dir 'parents)
 
         (save-restriction
@@ -247,26 +263,30 @@ If point is before first heading, prompt for headline and eval forms on it."
     (&key
        (class (org-glance:choose-class))
        (file (make-temp-file "org-glance-" nil ".org"))
+       (default "")
        (callback nil))
   (interactive)
+  (org-glance:log-debug "User input: %s" default)
   (find-file file)
-  (setq-local org-glance-capture:id (format "%s-%s-%s"
-                                            class
-                                            system-name
-                                            (s-join "-" (mapcar #'number-to-string (current-time))))
-              org-glance-capture:class (if (symbolp class) class (intern class)))
+  (setq-local
+   org-glance-capture:id (format "%s-%s-%s"
+                                 class
+                                 system-name
+                                 (s-join "-" (mapcar #'number-to-string (current-time))))
+   org-glance-capture:class (if (symbolp class) class (intern class))
+   org-glance-capture:default default)
+
   (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
   (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
   (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-  (let ((org-capture-templates `(("_" "Thing" entry (file ,file) ,(concat "* TODO %?")))))
+
+  (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) "* TODO %?"))))
     (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
   "Preprocess headline before capturing.
 
-Consider using buffer local variables:
-- `org-glance-capture:id'
-- `org-glance-capture:class'"
+Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `org-glance-capture:default'."
   (goto-char (point-min))
   (or (org-at-heading-p) (org-next-visible-heading 0))
   (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
@@ -275,9 +295,7 @@ Consider using buffer local variables:
 (cl-defun org-glance-capture:after-finalize-hook ()
   "Register captured headline in metastore.
 
-Consider using buffer local variables:
-- `org-glance-capture:id'
-- `org-glance-capture:class'"
+Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `org-glance-capture:default'."
 
   (org-glance:log-debug
    "Finalize capture (id: %s, class: %s)"
@@ -290,20 +308,10 @@ Consider using buffer local variables:
 
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)
-         (headline (progn
-                     (org-glance-headline:search-buffer-by-id id)
-                     (org-glance-headline:at-point)))
-         (refile-dir (make-temp-file
-                      (-org-glance:make-file-directory
-                       (f-join (org-glance-view:resource-location class)
-                               (concat (format-time-string "%Y-%m-%d_")
-                                       (->> (org-glance-headline:title headline)
-                                            (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
-                                            (replace-regexp-in-string "\\-+" "-")
-                                            (replace-regexp-in-string "\\-+$" "")
-                                            (s-truncate 30))
-                                       "-")))
-                      'directory))
+         (headline (org-glance-headline:search-buffer-by-id id))
+         (refile-dir (org-glance-headline:generate-directory
+                      (org-glance-view:resource-location class)
+                      (org-glance-headline:title headline)))
          (tmp-file (org-glance-headline:file headline))
          (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
     (org-glance:log-debug "Generate headline directory: %s" refile-dir)
@@ -339,7 +347,7 @@ Consider using buffer local variables:
          (org-glance:log-info "Scan file %s" file)
          (redisplay)
          (cl-loop
-            for headline in (org-glance-headline:extract file)
+            for headline in (org-glance-headline:extract-from file)
             when (-contains?
                   (mapcar #'downcase (org-element-property :tags headline))
                   (downcase (symbol-name class)))
@@ -463,22 +471,48 @@ Consider using buffer local variables:
                                        finally (return (point)))))
                  (set-mark beginning-of-group)
                  (goto-char end-of-group)
-                 (apply #'org-sort-entries
-                        (append '(nil)
-                                (if (listp (car order)) (car order) (list (car order)))))
+                 (apply #'org-sort-entries nil (if (listp (car order)) (car order) (list (car order))))
                  (goto-char end-of-group)))
              (org-glance-overview:sort (cdr order) (car order))))))
 
+(cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
+  (with-temp-buffer
+
+    (insert
+     (with-temp-buffer
+       (calendar-generate-month (car date) (caddr date) 0)
+       (buffer-substring-no-properties (point-min) (point-max))))
+
+    (goto-char (point-min))
+
+    (while (re-search-forward "\\([[:digit:]]\\{4\\}\\)" nil t)
+      (replace-match "[[elisp:(-og-calw-y \\1)][\\1]]"))
+
+    (while (re-search-forward "\\([[:digit:]]\\{1,2\\}\\)" nil t)
+      (if (= (string-to-number (match-string 1)) (cadr date))
+          (replace-match "*\\1*")
+        (replace-match "[[elisp:(-og-calw-d \\1)][\\1]]")))
+
+    (buffer-substring-no-properties (point-min) (point-max))))
+
+(cl-defun org-glance-overview:refresh-widgets (&optional (class (org-glance-overview:class)))
+  (interactive)
+  (let ((inhibit-read-only t)
+        (point (point))
+        (calendar (org-glance-overview:calendar-widget)))
+    (goto-char (point-min))
+    (org-next-visible-heading 1)
+    (kill-region (point-min) (point))
+    (insert (let ((category class))
+              (org-glance:format org-glance-overview:header)))
+    (goto-char point)))
+
 (cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (let* ((inhibit-read-only t)
-         (filename (-org-glance:make-file-directory
-                    (org-glance-overview:location class)))
-         (header (let ((category class))
-                   (org-glance:format org-glance-overview:header))))
+  (let ((filename (-org-glance:make-file-directory
+                   (org-glance-overview:location class))))
     (with-temp-file filename
-      (org-mode)
-      (insert header))
+      (org-glance-overview:refresh-widgets class))
     (find-file filename)))
 
 (cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
@@ -509,7 +543,11 @@ Consider using buffer local variables:
 
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
-  (org-glance-headline:materialize (org-glance-overview:original-headline)))
+  (let* ((headline (org-glance-overview:original-headline))
+         (buffer (org-glance-headline:materialized-buffer headline)))
+    (if (buffer-live-p buffer)
+        (switch-to-buffer buffer)
+      (org-glance-headline:materialize headline))))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
@@ -527,7 +565,7 @@ Consider using buffer local variables:
 (cl-defun org-glance-overview:class ()
   (save-excursion
     (goto-char (point-min))
-    (intern (downcase (org-get-category)))))
+    (org-glance-headline:string-to-class (org-get-category))))
 
 (defmacro org-glance-doctor:when (predicate prompt &rest forms)
   (declare (indent 2) (debug t))
@@ -563,14 +601,6 @@ Consider using buffer local variables:
           "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
         (org-glance-headline:with-materialized-headline original-headline
           (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
-
-      ;; (org-glance-doctor:when (s-matches? org-link-any-re raw-value)
-      ;;     "Headline \"${title}\" contains link in raw value. Move it to the body?"
-      ;;   (org-glance-headline:rename original-headline (org-glance:clean-title raw-value))
-      ;;   (org-glance-headline:with-materialized-headline original-headline
-      ;;     (org-end-of-meta-data t)
-      ;;     (insert "\n- " raw-value "\n")
-      ;;     (save-buffer)))
 
       (org-glance-doctor:when (null main-role)
           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
@@ -617,27 +647,11 @@ Consider using buffer local variables:
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (org-glance-headline:with-materialized-headline original-headline
-        (org-toggle-tag (format "%s" class) 'off)))))
-
-;; (cl-defun org-glance-overview:move-headline (&optional (new-class (org-glance:choose-class "New role: ")))
-;;   (interactive)
-;;   (org-glance-headline:search-parents)
-;;   (let ((role (org-glance-overview:class))
-;;         (title (org-glance-headline:title))
-;;         (original-headline (org-glance-overview:original-headline)))
-;;     (org-glance-headline:narrow original-headline
-;;       (org-toggle-tag (format "%s" role) 'off)
-;;       (org-glance-overview:capture new-role nil (org-glance-headline:at-point))
-;;       (kill-region (org-entry-beginning-position) (org-entry-end-position))
-;;       (save-buffer)
-;;       (when (= (buffer-size (current-buffer)) 0)
-;;         (when (y-or-n-p "File buffer is empty. Delete it?")
-;;           (delete-file (buffer-file-name) 'trash)
-;;           (when (= 0 (length (directory-files (file-name-directory (buffer-file-name)) nil "^[^.]")))
-;;             (when (y-or-n-p "Partition is empty. Delete it?")
-;;               (delete-directory (file-name-directory (buffer-file-name)) nil 'trash))))))
-;;     (let ((inhibit-read-only t))
-;;         (kill-region (org-entry-beginning-position) (org-entry-end-position)))))
+        (cl-loop
+           with tags = (org-get-tags)
+           with indices = (--find-indices (string= class (org-glance-headline:string-to-class it)) tags)
+           for index in indices
+           do (org-toggle-tag (nth index tags) 'off))))))
 
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
@@ -691,15 +705,8 @@ Consider using buffer local variables:
 (cl-defun org-glance-overview:archive ()
   "Archive headline at point."
   (interactive)
-  (save-window-excursion
-    (->> (org-glance-headline:at-point)
-      (org-glance-headline:id)
-      (org-glance-metastore:get-headline)
-      (org-glance-headline:visit))
-    (org-toggle-archive-tag)
-    (save-buffer))
-  (org-glance-overview:pull)
-  (org-glance-headline:search-forward))
+  (org-glance-headline:with-materialized-headline (org-glance-overview:original-headline)
+    (org-toggle-archive-tag)))
 
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)
@@ -713,17 +720,21 @@ Consider using buffer local variables:
 ;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance-headline:narrow (org-glance-metastore:get-headline (org-glance-headline:id))
-    (org-glance-headline:at-point)))
+  (save-window-excursion
+    (save-excursion
+      (->> (org-glance-headline:at-point)
+           org-glance-headline:id
+           org-glance-metastore:get-headline
+           org-glance-headline:visit)
+      (org-glance-headline:at-point))))
 
-(cl-defun org-glance-overview:add-relation ()
-  "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
-  (interactive)
-  (lexical-let ((source (org-glance-overview:original-headline)))
-    (org-glance:with-captured-headline target
-      (org-glance-headline:add-biconnected-relation source target)
-      ;; TODO pull source and target
-      )))
+;; (cl-defun org-glance-overview:add-relation ()
+;;   "In `org-glance-overview-mode' add relation from original headline at point SOURCE to TARGET."
+;;   (interactive)
+;;   (lexical-let ((source (org-glance-overview:original-headline)))
+;;     (org-glance:ensure-headline-apply
+;;         :action (lambda (headline)
+;;                   (org-glance-headline:add-biconnected-relation source headline)))))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)

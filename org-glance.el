@@ -38,6 +38,11 @@
   :group 'org-glance
   :type 'directory)
 
+(defcustom org-glance-clone-on-repeat-p nil
+  "Clone repeated headlines instead of repeating it."
+  :group 'org-glance
+  :type 'boolean)
+
 (cl-defstruct (org-glance-view (:constructor org-glance-view:create))
   "This structure contains metadata about categorized `org-mode' headlines."
   (id
@@ -125,7 +130,7 @@
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
+;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil
@@ -133,59 +138,24 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance:read-view-directories ()
-  (--filter (f-directory? (f-join org-glance-directory it)) (directory-files org-glance-directory nil "^[[:word:]]+")))
-
-(cl-defun org-glance:view-config-file-location (view-directory)
-  (f-join org-glance-directory view-directory (concat view-directory ".config.json")))
-
-(cl-defun org-glance:view-config-file-read (view-directory)
-  (condition-case nil
-      (json-read-file (org-glance:view-config-file-location view-directory))
-    (error nil)))
-
-(cl-defun org-glance:forest ()
-  (interactive)
-  (let ((forest-location (f-join org-glance-directory "forest.org")))
-    (unless (f-exists? forest-location)
-      (with-temp-file forest-location
-        (insert (org-glance:format
-                 "#    -*- mode: org; mode: org-glance-overview -*-
-
-                 |#+CATEGORY: Forest
-                 |#+STARTUP: overview
-
-                 |YOU ARE STANDING AT THE END OF A ROAD BEFORE A SMALL BRICK BUILDING.
-                 |AROUND YOU IS A FOREST. A SMALL STREAM FLOWS OUT OF THE BUILDING AND
-                 |DOWN A GULLY.
-
-                 |PRESS + TO BREAK A NEW GROUND.
-
-                 |Unscheduled things in TODO state: _ (schedule)
-                 |Things to drill in: _ (start drill)
-                 |Things drowning in the past: _ (reschedule)
-                 |"))))
-    (find-file forest-location)
-    (rename-buffer "*org-glance*")))
+(cl-defun org-glance:read-class-directories ()
+  (--filter
+   (f-directory? (f-join org-glance-directory it))
+   (directory-files org-glance-directory nil "^[[:word:]]+")))
 
 (cl-defun org-glance:create-class (class)
-  (org-glance:log-info "Create class '%s" class)
+  (org-glance:log-debug "Create class \"%s\"" class)
 
-  (if-let (config (org-glance:view-config-file-read class))
-      (apply 'org-glance-def-view
-             (cl-loop
-                for (k . v) in config
-                for pk = (intern (org-glance:format ":${k}"))
-                for pv = (cond ((member k '(type)) (mapcar 'intern v))
-                               (t (intern v)))
-                when pk
-                append (list pk pv)))
-    (org-glance-def-view :id class))
+  (org-glance-def-view :id class)
 
+  (org-glance:log-debug "Metastore exists?")
   (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
+    (org-glance:log-debug "Create metastore")
     (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
 
+  (org-glance:log-debug "Overview exists?")
   (unless (f-exists? (org-glance-overview:location class))
+    (org-glance:log-debug "Create overview")
     (org-glance-overview:create class)))
 
 (cl-defun org-glance:init ()
@@ -194,7 +164,7 @@
     (mkdir org-glance-directory))
 
   (cl-loop
-     for directory in (org-glance:read-view-directories)
+     for directory in (org-glance:read-class-directories)
      for class = (intern directory)
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class))
@@ -204,97 +174,107 @@
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class)))
 
-(cl-defun org-glance:@magic ()
-  "Rebind `@' key in `org-mode' buffers for context-aware relation management."
-  (define-key org-mode-map (kbd "@")
-    (org-glance:interactive-lambda
-      (org-glance:init)
-      (if (or (looking-back "^" 1)
-              (looking-back "[[:space:]]" 1))
-          (condition-case nil
-              (org-glance:refer)
-            (quit (insert "@")))
-        (insert "@")))))
+(cl-defun org-glance:@ ()
+  "Context-aware relation management."
+  (interactive)
+  (org-glance:init)
+  (if (and (not (org-in-src-block-p))
+           (or (looking-back "^" 1)
+               (looking-back "[[:space:]]" 1)))
+      (condition-case nil
+          (org-glance:refer)
+        (quit (insert "@")))
+    (insert "@")))
 
-(cl-defmacro org-glance:with-captured-headline (headline &rest forms)
-  "Get or capture headline and run FORMS on it.
-
-Pass `<captured>' variable to determine if headline was captured before running forms."
-  (declare (indent 1) (debug t))
-  `(condition-case choice
-       (let ((<captured> nil))
-         (cond ((and (boundp (quote ,headline)) ,headline) ,@forms)
-               (t (let ((,headline (org-glance-metastore:choose-headline))) ,@forms))))
+(cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
+  "Choose headline or capture it.
+Then apply IF-EXISTS or IF-CAPTURED method on it.
+Optionally filter scope with FILTER."
+  (declare (indent 0) (debug t))
+  `(condition-case default
+       (when ,if-exists
+         (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
+               (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
      (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
-      (lexical-let ((<buffer> (current-buffer)) (point (point)))
+      (lexical-let ((<buffer> (current-buffer))
+                    (<point> (point)))
         (org-glance-overview:capture
+         :default (cadr default)
          :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
          :callback (lambda ()
-                     (let ((,headline (org-glance-overview:original-headline))
-                           (<captured> t))
-                       (switch-to-buffer <buffer>)
-                       (goto-char point)
-                       ,@forms)))))))
+                     (when ,if-captured
+                       (let ((<hl> (org-glance-overview:original-headline)))
+                         (switch-to-buffer <buffer>)
+                         (goto-char <point>)
+                         (funcall ,if-captured <hl>)))))))))
 
-(cl-defun org-glance:reschedule-or-capture ()
-  "Choose or capture a new thing.
+(cl-defun org-glance:ensure-headline-apply (&optional headline &key filter action)
+  (declare (indent 1))
+  (if headline
+      (funcall action headline)
+    (org-glance:get-or-capture
+      :filter filter
+      :if-exists action
+      :if-captured action)))
 
-If it has completed state, make it TODO and prompt user to reschedule it."
+(cl-defun org-glance:refer (&optional headline)
+  "Insert link to HEADLINE."
   (interactive)
-  (org-glance:with-captured-headline headline
-    (org-glance-headline:with-materialized-headline headline
-      (unless <captured>
-        (org-remove-timestamp-with-keyword org-scheduled-string)
-        (call-interactively #'org-schedule)
-        (org-todo "TODO")))))
-
-(cl-defun org-glance:refer ()
-  "Insert relation from `org-glance-headline' at point to TARGET.
-C-u means not to insert relation at point, but register it in logbook instead."
-  (interactive)
-  (org-glance:with-captured-headline target
-    (unless current-prefix-arg
-      (insert (org-glance-headline:format target)))
-    (when-let (source (org-glance-headline:at-point))
-      (org-glance-headline:add-biconnected-relation source target))))
+  (org-glance:ensure-headline-apply headline
+    :action (lambda (headline)
+              (unless current-prefix-arg
+                (insert (org-glance-headline:format headline))))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
   (interactive)
-  (org-glance:with-captured-headline headline
-    (let ((buffer (org-glance-headline:materialized-buffer headline)))
-      (if (buffer-live-p buffer)
-          (switch-to-buffer buffer)
-        (org-glance-headline:materialize headline)))))
+  (org-glance:ensure-headline-apply headline
+    :filter (lambda (headline)
+              (org-glance-headline:active? headline))
+    :action (lambda (headline)
+              (let ((buffer (org-glance-headline:materialized-buffer headline)))
+                (if (buffer-live-p buffer)
+                    (switch-to-buffer buffer)
+                  (org-glance-headline:materialize headline))))))
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
-
 If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
-  (org-glance:with-captured-headline headline
-    (org-glance-headline:with-materialized-headline headline
-      (org-end-of-meta-data t)
-      (narrow-to-region (point) (point-max))
-      (let* ((links (org-glance:buffer-links))
-             (pos (cond
-                    ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                    ((= (length links) 1) (cdar links))
-                    (t (user-error "Unable to find links in headline")))))
-        (goto-char pos)
-        (org-open-at-point)))))
+  (org-glance:ensure-headline-apply headline
+    :filter (lambda (headline)
+              (and
+               (org-glance-headline:active? headline)
+               (org-glance-headline:contains-link? headline)))
+    :action (lambda (headline)
+              (org-glance-headline:with-materialized-headline headline
+                (org-end-of-meta-data t)
+                (narrow-to-region (point) (point-max))
+                (let ((pos (let ((links (org-glance:buffer-links)))
+                             (cond
+                               ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                               ((= (length links) 1) (cdar links))
+                               (t (user-error "Unable to find links in headline"))))))
+                  (goto-char pos)
+                  (org-open-at-point))))))
 
-(cl-defun org-glance:extract ()
+(cl-defun org-glance:extract (&optional headline)
   (interactive)
   "Materialize HEADLINE and retrieve key-value pairs from its contents.
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
-  (org-glance:with-captured-headline headline
-    (let ((pairs (org-glance-headline:with-materialized-headline headline
-                   (org-glance:get-buffer-key-value-pairs))))
-      (while t
-        (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=))))))
+  (org-glance:ensure-headline-apply headline
+    :filter (lambda (headline)
+              (and
+               (org-glance-headline:active? headline)
+               (or (org-glance-headline:contains-property? headline)
+                   (org-glance-headline:encrypted? headline))))
+    :action (lambda (headline)
+              (let ((pairs (org-glance-headline:with-materialized-headline headline
+                             (org-glance:get-buffer-key-value-pairs))))
+                (while t
+                  (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
 
 (cl-defun org-glance
     (&key db

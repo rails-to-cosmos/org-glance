@@ -24,13 +24,13 @@
  (defvar org-glance-test:view-location)
  (defvar org-glance-test:user-location)
 
- (message "\n= Test suite has been started =")
- )
+ (message "\n= Test suite has been started ="))
 
 (Before
  ;; Before each scenario is run
- (message "\n== Run scenario ==")
+ (message "\n== Begin new scenario ==")
 
+ (desktop-clear)
  (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
        org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
        org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
@@ -49,6 +49,7 @@
  ;; After each scenario is run
  (delete-directory org-glance-test:root-location t)
  (message "Remove scenario directory \"%s\"" org-glance-test:root-location)
+ (message "\n== End scenario ==\n")
  )
 
 (Teardown

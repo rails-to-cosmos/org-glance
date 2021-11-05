@@ -79,18 +79,29 @@
      into result
      finally (return (car result))))
 
-(cl-defun org-glance-metastore:choose-headline ()
+(cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
   (let* ((headlines (cl-loop
                        for class being the hash-keys of org-glance:classes
                        append (cl-loop
                                  for headline in (org-glance-view:headlines class)
-                                 when (org-glance-headline:active? headline)
+                                 when (funcall filter headline)
                                  collect (cons ;; duplication of format*
-                                          (format "%s[%s] %s"
-                                                  (if (org-glance-headline:encrypted? headline)
-                                                      "🔒"
-                                                    "")
+                                          (format "[%s] %s"
+                                                  ;; (cl-loop
+                                                  ;;    for icon in (list
+                                                  ;;                 ""
+                                                  ;;                 ;; (when (org-glance-headline:encrypted? headline) (propertize "🔒" 'face 'bold))
+                                                  ;;                 ;; (when (org-glance-headline:contains-link? headline) (let ((s "A"))
+                                                  ;;                 ;;                                                (add-face-text-property 0 1 '(:underline t :weight bold) nil s)
+                                                  ;;                 ;;                                                s))
+                                                  ;;                 ;; (when (org-glance-headline:contains-property? headline) "property")
+                                                  ;;                 )
+                                                  ;;    when icon
+                                                  ;;    collect icon into modifiers
+                                                  ;;    finally (return (if modifiers
+                                                  ;;                        (concat "" (s-join ", " modifiers) " ")
+                                                  ;;                      "")))
                                                   class
                                                   (org-glance-headline:title headline))
                                           headline))))
@@ -98,7 +109,8 @@
          (headline (alist-get choice headlines nil nil #'string=)))
     (unless headline
       (org-glance-exception:HEADLINE-NOT-FOUND choice))
+
     (org-glance-headline:narrow headline
-      (org-glance-headline:create))))
+      (org-glance-headline:create-from-element-at-point))))
 
 (org-glance:provide)

@@ -16,11 +16,11 @@
 ;;   :group 'org-link
 ;;   :type '(choice (const man) (const woman)))
 
-(defun org-glance-link:materialize (id _)
+(defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
   (org-glance:materialize (org-glance-metastore:get-headline id)))
 
-(defun org-glance-link:open (id _)
+(defun org-glance-link:open (id &optional _)
   "Open org-glance headline identified by ID."
   (org-glance:open (org-glance-metastore:get-headline id)))
 
