@@ -23,7 +23,6 @@ Managing Incidents
       Managing Incidents
       """
 
-
   @headline
   Scenario: Create from indented element at point
     When I create an org file with content:
@@ -41,7 +40,7 @@ Managing Incidents
       """
 
   @headline
-  Scenario: Create from element with links in title
+  Scenario: Create from element with links in title, links should be cleared
     When I create an org file with content:
       """
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
@@ -56,7 +55,7 @@ Managing Incidents
       """
 
   @headline
-  Scenario: Create from the inside
+  Scenario: Create from the inside, tags should be downcased
     When I create an org file with content:
       """
       * Vocal lesson :Task:
