@@ -161,7 +161,7 @@
     (mkdir org-glance-directory))
 
   (cl-loop
-     for directory in (org-glance:list-directories)
+     for directory in (org-glance:list-directories org-glance-directory)
      for class = (intern directory)
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class))
