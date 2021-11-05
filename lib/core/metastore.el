@@ -1,6 +1,7 @@
 (require 'org-glance-module)
 
 (org-glance:require
+  eieio
   org
   org-element
 
@@ -9,9 +10,41 @@
   lib.core.headline
   lib.utils.helpers)
 
+(defclass org-glance-metastore ()
+  ((store :initarg :store
+          :initform (make-hash-table)
+          :type hash-table
+          :protection private)))
+
+(cl-defmethod org-glance-metastore-get ((m org-glance-metastore) key)
+  (gethash key (oref m store)))
+
+(cl-defmethod org-glance-metastore-set ((m org-glance-metastore) key value)
+  (puthash key value (oref m store)))
+
+(cl-defmethod org-glance-metastore-remove ((m org-glance-metastore) key)
+  (remhash key (oref m store)))
+
+(cl-defmethod org-glance-metastore-save ((m org-glance-metastore) file)
+  (with-temp-file (-org-glance:make-file-directory file)
+    (insert (prin1-to-string (oref m store)))))
+
+(cl-defmethod org-glance-metastore-load ((m org-glance-metastore) file)
+  (with-temp-buffer
+    (insert-file-contents file)
+    (oset m store (read (buffer-substring-no-properties (point-min) (point-max))))))
+
+;; (let ((m (org-glance-metastore)))
+;;   (org-glance-metastore-set m 'a 1)
+;;   (org-glance-metastore-save m "/tmp/1.el")
+;;   (org-glance-metastore-remove m 'a)
+;;   (org-glance-metastore-load m "/tmp/1.el")
+;;   m
+;;   )
+
 (cl-defun org-glance-metastore:write (file metastore)
   (declare (indent 1))
-  (mkdir (file-name-directory file) 'parents)
+  (-org-glance:make-file-directory file)
   (with-temp-file file
     (insert (prin1-to-string metastore)))
   metastore)
@@ -21,7 +54,7 @@
            (org-glance-headline:serialize headline)
            metastore))
 
-(cl-defun org-glance-metastore:rem-headline (headline metastore)
+(cl-defun org-glance-metastore:remove-headline (headline metastore)
   (remhash (org-glance-headline:id headline)
            metastore))
 

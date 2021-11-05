@@ -1,4 +1,4 @@
-Feature: Headline API
+Feature: Headline
 
   @headline
   Scenario: Create from element at point

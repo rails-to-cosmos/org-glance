@@ -152,7 +152,7 @@ If point is before first heading, prompt for headline and eval forms on it."
                                org-glance:get-class
                                org-glance-view:metastore-location))
          (metastore (org-glance-metastore:read metastore-location)))
-    (org-glance-metastore:rem-headline headline metastore)
+    (org-glance-metastore:remove-headline headline metastore)
     (org-glance-metastore:write metastore-location metastore)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)

@@ -33,6 +33,14 @@
 (require 'org)
 (require 'org-glance-module)
 
+(eval-and-compile
+  (cl-defmacro org-glance:interactive-lambda (&rest forms)
+    "Define interactive lambda function with FORMS in its body."
+    (declare (indent 0) (debug t))
+    `(lambda ()
+       (interactive)
+       ,@forms)))
+
 (defcustom org-glance-directory org-directory
   "Directory with Org files."
   :group 'org-glance
@@ -61,16 +69,10 @@
    :documentation "List of files/directories where org-glance should search for headlines for this view."
    :type 'list))
 
-(defvar org-glance:classes (make-hash-table) "Hash table (id->view) that lists all registered classes of things.")
-(defun org-glance:get-class (class) (gethash class org-glance:classes))
+(defvar org-glance:classes (make-hash-table)
+  "Hash table (id->view) that lists all registered classes of things.")
 
-(eval-and-compile
-  (cl-defmacro org-glance:interactive-lambda (&rest forms)
-    "Define interactive lambda function with FORMS in its body."
-    (declare (indent 0) (debug t))
-    `(lambda ()
-       (interactive)
-       ,@forms)))
+(defun org-glance:get-class (class) (gethash class org-glance:classes))
 
 (eval-when-compile
   (org-glance:require
@@ -88,10 +90,8 @@
   lib.core.logging
   lib.core.exceptions
   lib.core.posit
-
   lib.utils.encryption                  ; encryption utils
   lib.utils.helpers                     ; unsorted, deprecated
-  lib.utils.org                         ; org-mode shortcuts
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -259,10 +259,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
               (org-glance-headline:with-materialized-headline headline
                 (org-end-of-meta-data t)
                 (narrow-to-region (point) (point-max))
-                (let ((pos (let ((links (org-glance:buffer-links)))
+                (let ((pos (let ((links (-org-glance:buffer-links)))
                              (cond
-                               ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                               ((= (length links) 1) (cdar links))
+                               ((> (length links) 1) (nth 1 (assoc (org-completing-read "Open link: " links)
+                                                                   links)))
+                               ((= (length links) 1) (nth 1 (car links)))
                                (t (user-error "Unable to find links in headline"))))))
                   (goto-char pos)
                   (org-open-at-point))))))
