@@ -7,6 +7,11 @@
   org
   org-element)
 
+(cl-defun org-glance:list-directories (base-dir)
+  (--filter
+   (f-directory? (f-join base-dir it))
+   (directory-files base-dir nil "^[[:word:]]+")))
+
 (cl-defmacro org-glance:format (fmt)
   "Like `s-format' but with format fields in it.
 FMT is a string to be expanded against the current lexical

@@ -61,7 +61,9 @@
    :documentation "List of files/directories where org-glance should search for headlines for this view."
    :type 'list))
 
-(defvar org-glance:classes (make-hash-table) "Hash table (id->view) that lists all registered classes of things.")
+(defvar org-glance:classes (make-hash-table)
+  "Hash table (id->view) that lists all registered classes of things.")
+
 (defun org-glance:get-class (class) (gethash class org-glance:classes))
 
 (eval-and-compile
@@ -138,11 +140,6 @@
   :tag "Org Glance"
   :group 'org)
 
-(cl-defun org-glance:read-class-directories ()
-  (--filter
-   (f-directory? (f-join org-glance-directory it))
-   (directory-files org-glance-directory nil "^[[:word:]]+")))
-
 (cl-defun org-glance:create-class (class)
   (org-glance:log-debug "Create class \"%s\"" class)
 
@@ -164,7 +161,7 @@
     (mkdir org-glance-directory))
 
   (cl-loop
-     for directory in (org-glance:read-class-directories)
+     for directory in (org-glance:list-directories)
      for class = (intern directory)
      unless (gethash class org-glance:classes nil)
      do (org-glance:create-class class))
