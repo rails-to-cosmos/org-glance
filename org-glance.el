@@ -72,7 +72,15 @@
 
   lib.core.logging
   lib.core.exceptions
-  lib.core.posit
+
+  lib.models.Headline
+  lib.models.Class
+  lib.models.Scope
+
+  lib.controllers.HeadlineRegistry
+  lib.controllers.ClassRegistry
+
+  ;; lib.core.posit
   ;; lib.utils.encryption                  ; encryption utils
   ;; lib.utils.helpers                     ; unsorted, deprecated
 
@@ -83,10 +91,6 @@
 ;;; Headline API
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
-
-  lib.models.Headline
-  lib.models.Class
-  lib.models.Metastore
 
   ;; lib.core.scope                        ; ? deprecated
   ;; lib.core.view                         ; migrate to overview
@@ -121,48 +125,10 @@
 
 ;; Classes
 
-(defvar org-glance-class-registry (make-hash-table)
-  "Hash table (id->class) that lists all registered classes.")
-
-(defun org-glance:get-class (class)
-  "Get CLASS from registry."
-  (gethash class org-glance-class-registry))
-
-(cl-defun org-glance:create-class (id)
-  "Create CLASS as instance of `org-glance-class'.
-Register it in `org-glance-class-registry'."
-  (org-glance:log-debug "Create class \"%s\"" class)
-
-  (let ((class (org-glance-class :id id)))
-    (puthash id class org-glance-class-registry))
-
-  ;; (org-glance:log-debug "Metastore exists?")
-  ;; (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
-  ;;   (org-glance:log-debug "Create metastore")
-  ;;   (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
-
-  ;; (org-glance:log-debug "Overview exists?")
-  ;; (unless (f-exists? (org-glance-overview:location class))
-  ;;   (org-glance:log-debug "Create overview")
-  ;;   (org-glance-overview:create class))
-
-  )
-
-;; (cl-defun org-glance:init ()
-;;   "Update all changed entities from `org-glance-directory'."
-;;   (unless (f-exists? org-glance-directory)
-;;     (mkdir org-glance-directory))
-
-;;   (cl-loop
-;;      for directory in (-org-glance:read-directories)
-;;      for class = (intern directory)
-;;      unless (gethash class org-glance-class-registry nil)
-;;      do (org-glance:create-class class))
-
-;;   (cl-loop
-;;      for class in '(posit thing class role ascertains)
-;;      unless (gethash class org-glance-class-registry nil)
-;;      do (org-glance:create-class class)))
+(cl-defun org-glance-init ()
+  "Update all changed entities from `org-glance-directory'."
+  (-org-glance:ensure-directory org-glance-directory)
+  (org-glance-class-registry:update org-glance-class-registry org-glance-directory))
 
 ;; (cl-defun org-glance:@ ()
 ;;   "Context-aware relation management."

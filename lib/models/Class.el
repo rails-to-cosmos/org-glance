@@ -9,7 +9,7 @@
     :type symbol)
    (capture-template
     :initarg :capture-template
-    :initform "* TODO %?"
+    :initform "* %?"
     :type string))
   "Class symbol for `org-glance-headline'.")
 

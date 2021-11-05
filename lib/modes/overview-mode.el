@@ -302,7 +302,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
   (unless (org-glance:get-class org-glance-capture:class)
     (save-window-excursion
-      (org-glance:create-class org-glance-capture:class)))
+      (org-glance-register-class org-glance-capture:class)))
 
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)

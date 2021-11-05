@@ -20,10 +20,6 @@
      (lambda ()
        (goto-char (point-max))))
 
-(When "^I define class \"\\([^\"]+\\)\"$"
-  (lambda (class)
-    (org-glance:create-class (intern class))))
-
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
     (with-simulated-input ((insert class-name) "RET")

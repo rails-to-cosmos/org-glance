@@ -14,7 +14,7 @@
                           (s-join "-" (mapcar #'number-to-string (current-time)))
                           (secure-hash 'md5 (buffer-string))))
        :type symbol
-       :documentation "Unique id.")
+       :documentation "Unique symbol.")
    (class :initarg :class
           :type org-glance-class)
    (title :initarg :title

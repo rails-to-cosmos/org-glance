@@ -8,7 +8,11 @@
   org-archive
   org-element)
 
-(cl-defun -org-glance:read-directories (directory)
+(cl-defun -org-glance:ensure-directory (directory)
+  (unless (f-exists? directory)
+    (mkdir directory)))
+
+(cl-defun -org-glance:list-directories (directory)
   (--filter
    (f-directory? (f-join directory it))
    (directory-files directory nil "^[[:word:]]+")))
