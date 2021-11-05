@@ -52,7 +52,7 @@
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "Clone repeated headlines instead of updating."
+  "Clone repeated headlines on complete."
   :group 'org-glance
   :type 'boolean)
 
