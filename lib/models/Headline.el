@@ -16,13 +16,15 @@
        :type symbol
        :documentation "Unique symbol.")
    (class :initarg :class
-          :type org-glance-class)
+          :type org-glance-class
+          :documentation "Headline class.")
    (title :initarg :title
           :type string
           :documentation "The title of headline.")
    (contents :initarg :contents
              :initform ""
-             :type string))
+             :type string
+             :documentation "Headline contents."))
   "A base class for tracking headlines.")
 
 (cl-defmethod initialize-instance :after ((m org-glance-headline) &rest _)
@@ -30,36 +32,33 @@
   (cond ((not (slot-boundp m 'class)) (error "Unable to initialize `org-glance-headline': CLASS should be specified"))
         ((not (slot-boundp m 'title)) (error "Unable to initialize `org-glance-headline': TITLE should be specified"))))
 
-(cl-defun org-glance-headline:create-headlines-from-element (element)
-  "Create `org-glance-headline' from `org-element' ELEMENT."
-  (unless (eql 'headline (org-element-type element))
-    (user-error "Unable to create `org-glance-headline' from `%s': `headline' expected" (org-element-type element)))
-
-  (cl-loop for tag in (org-element-property :tags element)
-     collect (org-glance-headline
-              :title (->> (or (org-element-property :TITLE element)
-                              (org-element-property :raw-value element)
-                              "")
-                          (-org-glance:remove-links))
-              :contents (save-restriction
-                          (widen)
-                          (org-narrow-to-subtree)
-                          (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                            (with-temp-buffer
-                              (org-mode)
-                              (save-excursion
-                                (insert contents))
-                              (org-set-tags (format "%s" (s-downcase tag)))
-                              (while (looking-at "^\\*\\*")
-                                (org-promote-subtree))
-                              (buffer-substring-no-properties (point-min) (point-max)))))
-              :class (org-glance-class :id (intern (s-downcase tag))))))
-
 (cl-defun org-glance-headline:create-headlines-from-element-at-point ()
   "Create `org-glance-headline' from `org-element' at point."
   (save-excursion
     (org-glance:ensure-at-heading)
-    (org-glance-headline:create-headlines-from-element (org-element-at-point))))
+
+    (let ((element (org-element-at-point)))
+      (unless (eql 'headline (org-element-type element))
+        (user-error "Unable to create `org-glance-headline' from `%s': `headline' expected" (org-element-type element)))
+
+      (cl-loop for tag in (org-element-property :tags element)
+         collect (org-glance-headline
+                  :title (->> (or (org-element-property :TITLE element)
+                                  (org-element-property :raw-value element)
+                                  "")
+                              (-org-glance:remove-links))
+                  :contents (let ((contents (s-trim (buffer-substring-no-properties
+                                                     (org-element-property :begin element)
+                                                     (org-element-property :end element)))))
+                              (with-temp-buffer
+                                (org-mode)
+                                (save-excursion
+                                  (insert contents))
+                                (org-set-tags (format "%s" (s-downcase tag)))
+                                (while (looking-at "^\\*\\*")
+                                  (org-promote-subtree))
+                                (buffer-substring-no-properties (point-min) (point-max))))
+                  :class (org-glance-class :id (intern (s-downcase tag))))))))
 
 ;; (cl-defmethod org-glance-thing-serialize ((thing org-glance-thing))
 ;;   (message "Hello thing: %s"  (oref thing name)))
@@ -315,29 +314,6 @@
 
 ;; (cl-defgeneric org-glance-headline:extract-from (scope)
 ;;   "Extract `org-glance-headlines' from scope.")
-
-;; (cl-defmethod org-glance-headline:extract-from ((f string))
-;;   "Extract headlines from file F."
-;;   (if-let (b (get-buffer f)) ;; buffer name
-;;       (org-glance-headline:extract-from b)
-;;     (with-temp-buffer
-;;       (org-glance:log-debug "Scan file %s" f)
-;;       (insert-file-contents f)
-;;       (org-mode)
-;;       (cl-loop
-;;          for headline in (org-glance-headline:extract-from (current-buffer))
-;;          collect (org-glance-headline:enrich headline :file (abbreviate-file-name f))))))
-
-;; (cl-defmethod org-glance-headline:extract-from ((b buffer))
-;;   "Extract headlines from buffer B."
-;;   (with-current-buffer b
-;;     (org-element-map (org-element-parse-buffer 'headline) 'headline
-;;       (lambda (e)
-;;         (when (org-glance-headline-p e)
-;;           (save-excursion
-;;             (goto-char (org-glance-headline:begin e))
-;;             (org-glance-headline:enrich (org-glance-headline:create-from-element-at-point)
-;;               :buffer b)))))))
 
 ;; (cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
 ;;   (org-glance-headline:with-materialized-headline headline

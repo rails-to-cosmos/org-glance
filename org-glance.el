@@ -66,6 +66,8 @@
   cl-generic
   cl-lib
   cl-macs
+  dash
+  eieio
   json
   seq
   subr-x
@@ -122,12 +124,14 @@
 ;; (declare-function org-glance-headline:at-point (org-glance-module-filename lib.models.Headline))
 ;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
+(defvar org-glance-class-registry (org-glance-class-registry:create))
+(defvar org-glance-headline-registry (org-glance-headline-registry:create))
 
 ;; Classes
 
 (cl-defun org-glance-init ()
   "Update all changed entities from `org-glance-directory'."
-  (-org-glance:ensure-directory org-glance-directory)
+  (org-glance--ensure-directory org-glance-directory)
   (org-glance-class-registry:update org-glance-class-registry org-glance-directory))
 
 ;; (cl-defun org-glance:@ ()

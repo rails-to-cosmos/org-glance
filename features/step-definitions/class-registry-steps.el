@@ -10,7 +10,7 @@
 
 (When "^I create directory \"\\([^\"]+\\)\" in org glance directory$"
   (lambda (directory)
-    (-org-glance:ensure-directory (f-join org-glance-directory directory))))
+    (org-glance--ensure-directory (f-join org-glance-directory directory))))
 
 (And "^I update class registry$"
   (lambda ()

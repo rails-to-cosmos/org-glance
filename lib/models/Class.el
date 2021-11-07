@@ -4,13 +4,11 @@
   eieio)
 
 (defclass org-glance-class ()
-  ((id
-    :initarg :id
-    :type symbol)
-   (capture-template
-    :initarg :capture-template
-    :initform "* %?"
-    :type string))
+  ((id :initarg :id
+       :type symbol)
+   (capture-template :initarg :capture-template
+                     :initform "* %?"
+                     :type string))
   "Class symbol for `org-glance-headline'.")
 
 (cl-defmethod initialize-instance :after ((m org-glance-class) &rest _)

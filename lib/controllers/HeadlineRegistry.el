@@ -4,8 +4,9 @@
   lib.utils.helpers
   lib.models.Class)
 
-(defvar org-glance-headline-registry (make-hash-table)
-  "Hash table (id->headelin) that lists all registered headlines.")
+(cl-defun org-glance-headline-registry:create ()
+  "Hash table (id->headelin) that lists all registered headlines."
+  (make-hash-table))
 
 (cl-defun org-glance-headline-registry:load (file)
   "Load headline registry from FILE."

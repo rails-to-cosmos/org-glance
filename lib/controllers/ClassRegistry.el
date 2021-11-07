@@ -4,8 +4,9 @@
   lib.utils.helpers
   lib.models.Class)
 
-(defvar org-glance-class-registry (make-hash-table)
-  "Hash table (id->class) that lists all registered classes.")
+(cl-defun org-glance-class-registry:create ()
+  "Hash table (id->class) that lists all registered classes."
+  (make-hash-table))
 
 (cl-defun org-glance-register-class (class-id)
   "Create CLASS as instance of `org-glance-class'.
