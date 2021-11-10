@@ -311,8 +311,9 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
         ;; remove unnecessary data
         (org-glance-headline:with-materialized-headline captured-headline
           (org-todo to-state)
-          (org-end-of-meta-data)
-          (kill-region (point) (point-max)))
+          ;; (org-end-of-meta-data)
+          ;; (kill-region (point) (point-max))
+          )
 
         (org-glance-headline:materialize captured-headline)
         nil)
