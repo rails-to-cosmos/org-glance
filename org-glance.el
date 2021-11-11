@@ -183,36 +183,25 @@
         (quit (insert "@")))
     (insert "@")))
 
-(cl-defmacro org-glance:get-or-capture (&key filter if-exists if-captured)
-  "Choose headline or capture it.
-Then apply IF-EXISTS or IF-CAPTURED method on it.
-Optionally filter scope with FILTER."
-  (declare (indent 0) (debug t))
-  `(condition-case default
-       (when ,if-exists
-         (cond (,filter (funcall ,if-exists (org-glance-metastore:choose-headline :filter ,filter)))
-               (t (funcall ,if-exists (org-glance-metastore:choose-headline)))))
-     (org-glance-exception:HEADLINE-NOT-FOUND ;; capture new headline
-      (lexical-let ((<buffer> (current-buffer))
-                    (<point> (point)))
-        (org-glance-overview:capture
-         :default (cadr default)
-         :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
-         :callback (lambda ()
-                     (when ,if-captured
-                       (let ((<hl> (org-glance-overview:original-headline)))
-                         (switch-to-buffer <buffer>)
-                         (goto-char <point>)
-                         (funcall ,if-captured <hl>)))))))))
-
-(cl-defun org-glance:ensure-headline-apply (&optional headline &key filter action)
+(cl-defmacro org-glance:ensure-headline-apply (headline &key filter action)
   (declare (indent 1))
-  (if headline
-      (funcall action headline)
-    (org-glance:get-or-capture
-      :filter filter
-      :if-exists action
-      :if-captured action)))
+  `(if ,headline
+       (funcall ,action ,headline)
+     (condition-case default
+         (when ,action
+           (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
+                 (t (funcall ,action (org-glance-metastore:choose-headline)))))
+       (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
+                                                              (<point> (point)))
+                                                  (org-glance-overview:capture
+                                                   :default (cadr default)
+                                                   :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
+                                                   :callback (lambda ()
+                                                               (when ,action
+                                                                 (let ((<hl> (org-glance-overview:original-headline)))
+                                                                   (switch-to-buffer <buffer>)
+                                                                   (goto-char <point>)
+                                                                   (funcall ,action <hl>))))))))))
 
 (cl-defun org-glance:refer (&optional headline)
   "Insert link to HEADLINE."
