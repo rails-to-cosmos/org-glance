@@ -252,6 +252,7 @@
 
 (advice-add 'org-auto-repeat-maybe :before
             (lambda (&rest args) (when (and
+                                   org-glance-material-mode
                                    org-glance-clone-on-repeat-p
                                    (member (org-get-todo-state) org-done-keywords)
                                    (org-glance-headline:repeated-p))
