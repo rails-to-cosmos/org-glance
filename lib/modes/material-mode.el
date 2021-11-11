@@ -65,7 +65,8 @@
           #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
                     (setq-local --org-glance-materialized-headline:clock-marker-position (marker-position org-clock-marker))
                     (let ((org-log-note-clock-out nil)
-                          (org-clock-out-switch-to-state nil))
+                          ;; (org-clock-out-switch-to-state nil)
+                          )
                       (org-clock-out)))))
 
 (add-hook 'org-glance-after-materialize-sync-hook
@@ -173,8 +174,7 @@
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (read-only nil))
-  "Materialize HEADLINE.
-READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' will be deactivated."
+  "Materialize HEADLINE."
   (org-glance:log-info "Materialize headline %s" headline)
   (switch-to-buffer
    (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
@@ -209,9 +209,6 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
        (set (make-local-variable '--org-glance-materialized-headline:buffer) buffer)
        (set (make-local-variable '--org-glance-materialized-headline:begin) begin)
        (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
-
-       (unless read-only
-         (add-hook 'org-blocker-hook #'org-glance-headline:material-blocker-hook 0 'local))
 
        ;; run hooks on original subtree
        (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
@@ -253,6 +250,25 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
                                    0 'local))))
                     (t (apply fn headline args)))))
 
+(advice-add 'org-auto-repeat-maybe :before
+            (lambda (&rest args) (when (and
+                                   org-glance-clone-on-repeat-p
+                                   (member (org-get-todo-state) org-done-keywords)
+                                   (org-glance-headline:repeated-p))
+                              (lexical-let ((contents (save-excursion
+                                                        (org-back-to-heading t)
+                                                        (save-restriction
+                                                          (org-narrow-to-subtree)
+                                                          (buffer-substring-no-properties (point-min) (point-max))))))
+                                (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
+                                                                     (insert contents)
+                                                                     (goto-char (point-min))
+                                                                     (cl-loop
+                                                                        for class in (org-glance-headline:classes)
+                                                                        do (let ((captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
+                                                                             (org-glance-overview:register-headline-in-metastore captured-headline class)
+                                                                             (org-glance-overview:register-headline-in-overview captured-headline class))))))))))
+
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."
   (declare (indent 1) (debug t))
@@ -272,51 +288,5 @@ READ-ONLY materialization means side-effect-free behaviour: `org-blocker-hook' w
 
 (cl-defun org-glance-headline:materialized-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
-
-(cl-defun org-glance-headline:material-blocker-hook (change-plist)
-  (if (and
-       org-glance-clone-on-repeat-p
-       (eql 'todo-state-change (plist-get change-plist :type))
-       (member (plist-get change-plist :to) org-done-keywords)
-       (org-glance-headline:repeated-p))
-      (let* ((headline (org-glance-headline:at-point))
-             (classes (org-glance-headline:classes))
-             (captured-headline (org-glance:capture-headline-at-point (car classes) :remove-original nil))
-             (from-state (plist-get change-plist :from))
-             (to-state (plist-get change-plist :to)))
-
-        (cl-loop
-           for class in classes
-           do
-             (org-glance-overview:register-headline-in-metastore captured-headline class)
-             (org-glance-overview:register-headline-in-overview captured-headline class))
-
-        (if (null from-state)
-            (progn
-              (goto-char (org-glance-headline:begin))
-              (while (looking-at "[* ]") (forward-char))
-              (insert (substring-no-properties to-state) " "))
-          (replace-string (substring-no-properties from-state)
-                          (substring-no-properties to-state)
-                          nil
-                          (org-glance-headline:begin)
-                          (save-excursion (end-of-line) (point))))
-
-        (org-glance-materialized-headline:sync)
-        (bury-buffer)
-        (lexical-let ((buffer (current-buffer))) ;; blocker should not modify buffer, but idle timer could
-          (run-with-idle-timer 1 nil #'(lambda () (kill-buffer buffer))))
-
-        ;; post-process headline here
-        ;; remove unnecessary data
-        (org-glance-headline:with-materialized-headline captured-headline
-          (org-todo to-state)
-          ;; (org-end-of-meta-data)
-          ;; (kill-region (point) (point-max))
-          )
-
-        (org-glance-headline:materialize captured-headline)
-        nil)
-    t))
 
 (org-glance:provide)
