@@ -268,13 +268,12 @@ If point is before first heading, prompt for headline and eval forms on it."
   (interactive)
   (org-glance:log-debug "User input: %s" default)
   (find-file file)
-  (setq-local
-   org-glance-capture:id (format "%s-%s-%s"
-                                 class
-                                 system-name
-                                 (s-join "-" (mapcar #'number-to-string (current-time))))
-   org-glance-capture:class (if (symbolp class) class (intern class))
-   org-glance-capture:default default)
+  (setq-local org-glance-capture:id (format "%s-%s-%s"
+                                            class
+                                            system-name
+                                            (s-join "-" (mapcar #'number-to-string (current-time))))
+              org-glance-capture:class (if (symbolp class) class (intern class))
+              org-glance-capture:default default)
 
   (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
   (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
