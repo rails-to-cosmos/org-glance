@@ -188,20 +188,18 @@
   `(if ,headline
        (funcall ,action ,headline)
      (condition-case default
-         (when ,action
-           (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
-                 (t (funcall ,action (org-glance-metastore:choose-headline)))))
+         (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
+               (t (funcall ,action (org-glance-metastore:choose-headline))))
        (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
                                                               (<point> (point)))
                                                   (org-glance-overview:capture
                                                    :default (cadr default)
                                                    :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
                                                    :callback (lambda ()
-                                                               (when ,action
-                                                                 (let ((<hl> (org-glance-overview:original-headline)))
-                                                                   (switch-to-buffer <buffer>)
-                                                                   (goto-char <point>)
-                                                                   (funcall ,action <hl>))))))))))
+                                                               (let ((<hl> (org-glance-overview:original-headline)))
+                                                                 (switch-to-buffer <buffer>)
+                                                                 (goto-char <point>)
+                                                                 (funcall ,action <hl>)))))))))
 
 (cl-defun org-glance:refer (&optional headline)
   "Insert link to HEADLINE."
