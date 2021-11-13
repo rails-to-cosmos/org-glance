@@ -21,6 +21,8 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+
+** TODO Proper partition sort implementation
 ** TODO Implement capacity concept
 ** DONE Clone feature (clone on repeat, clone-archive+reschedule)
 CLOSED: [2021-11-13 Sat 14:17]

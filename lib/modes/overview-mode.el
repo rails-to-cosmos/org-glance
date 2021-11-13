@@ -93,6 +93,10 @@ If point is before first heading, prompt for headline and eval forms on it."
         (org-overview)
         (save-buffer)))))
 
+;; (partition-sort #'org-glance-headline:state
+;;                 #'org-glance-headline:priority
+;;                 (org-sort-entries nil ?a))
+
 ;; (define-key org-glance-overview-mode-map (kbd "@")
 ;;   (org-glance-overview:for-one
 ;;     (org-glance-overview:add-relation)))
