@@ -113,4 +113,13 @@
 (cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))
 
+(cl-defun org-glance:capture-template (class &key (default ""))
+  (let ((class (if (symbolp class) class (intern class)))
+        (capture-template-config-file (f-join (org-glance-overview:directory class) "capture-template.org")))
+    (s-replace "%?" (concat default "%?")
+               (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
+                                                                  (insert-file-contents capture-template-config-file)
+                                                                  (buffer-substring-no-properties (point-min) (point-max))))
+                     (t "* TODO %?")))))
+
 (org-glance:provide)

@@ -66,9 +66,30 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "^")
   (org-glance:interactive-lambda
     (save-excursion
-      (let ((inhibit-read-only t))
-        (goto-char (point-min))
-        (org-glance-overview:sort)
+      (let ((inhibit-read-only t)
+            (beginning-of-headlines (save-excursion
+                                      (goto-char (point-min))
+                                      (org-glance-headline:search-forward)
+                                      (point)))
+            (end-of-headlines (point-max)))
+        (org-glance-overview:order-by '(started
+                                        pending
+                                        todo
+                                        done
+                                        cancelled
+                                        org-in-archived-heading-p
+                                        org-in-commented-heading-p))
+        (cl-loop
+           for state being the hash-keys of (org-glance-overview:partition-by #'org-glance-headline:state :test #'equal)
+           using (hash-value buffer)
+           do
+             (goto-char (point-max))
+             (insert (with-current-buffer buffer
+                       (goto-char (point-min))
+                       (org-sort-entries nil ?a)
+                       (buffer-substring-no-properties (1+ (point-min)) (point-max))))
+             (kill-buffer buffer))
+        (delete-region beginning-of-headlines end-of-headlines)
         (org-overview)
         (save-buffer)))))
 
@@ -278,8 +299,8 @@ If point is before first heading, prompt for headline and eval forms on it."
   (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
   (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
   (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-
-  (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) "* TODO %?"))))
+  (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) (org-glance:capture-template class
+                                                                                                             :default default)))))
     (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
@@ -404,39 +425,30 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      when (f-equal? common-parent overview-directory)
      do (return view-id)))
 
-(cl-defun org-glance-overview:sorting-by-type (sorting-type)
-  "Determine how to group entries by `org-sort-entries' SORTING-TYPE."
-  (case (if (listp sorting-type) (car sorting-type) sorting-type)
-    (?a #'org-glance-headline:title)
-    (?p #'org-glance-headline:priority)
-    (?c #'org-glance-headline:creation-time)
-    (?o #'org-glance-headline:state)
-    (?t #'org-glance-headline:creation-time)
-    (?f (cadr sorting-type))
-    (t nil)))
+(cl-defun org-glance-overview:partition-by (partition-method &key (test #'eql))
+  (let ((buffers (make-hash-table :test test)))
+    (save-excursion
+      (goto-char (point-min))
+      (org-glance-headline:search-forward)
+      (while (< (point) (point-max))
+        (let* ((group-state (funcall partition-method))
+               (group-buffer (get-buffer-create (concat "org-glance-overview-group:" group-state)))
+               (contents (buffer-substring-no-properties (point) (org-end-of-subtree))))
+          (with-current-buffer group-buffer
+            (org-mode)
+            (unless (gethash group-state buffers)
+              (delete-region (point-min) (point-max))
+              (insert "\n"))
+            (insert contents "\n"))
+          (puthash group-state group-buffer buffers)
+          (org-glance-headline:search-forward))))
+    buffers))
 
-(cl-defun org-glance-overview:comparator-by-type (sorting-type)
-  "Determine how to compare entries by `org-sort-entries' SORTING-TYPE."
-  (case (if (listp sorting-type) (car sorting-type) sorting-type)
-    (?a #'string=)
-    (?p #'eql)
-    (?c #'string=)
-    (?o #'string=)
-    (?t #'string=)
-    (?f #'eql)
-    (t nil)))
+(cl-defun org-glance-overview:order-by (order-by
+                                        &key
+                                          (desc t))
 
-(cl-defun org-glance-overview:sort (&optional
-                                      (order '(
-                                               (?f ;; move commented headings down
-                                                (lambda () (if (org-in-commented-heading-p t) 1 -1))
-                                                <)
-                                               (?f ;; move archived headings down
-                                                (lambda () (if (org-in-archived-heading-p) 1 -1))
-                                                <)
-                                               ?o
-                                               ?p))
-                                      group)
+  ;; Memo:
   ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
   ;; c   By creation time, which is assumed to be the first inactive time stamp
   ;;     at the beginning of a line.
@@ -450,29 +462,35 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   ;; t   By date/time, either the first active time stamp in the entry, or, if
   ;;     none exist, by the first inactive one.
 
-  (cond ((null order) nil)
-        ((null group) (progn
-                        (apply #'org-sort-entries
-                               (append '(nil)
-                                       (if (listp (car order)) (car order) (list (car order)))))
-                        (org-glance-overview:sort (cdr order) (car order))))
-        (t (let ((grouper (org-glance-overview:sorting-by-type group))
-                 (comparator (org-glance-overview:comparator-by-type group)))
-             (beginning-of-buffer)
-             (org-glance-headline:search-forward)
-             (while (< (point) (point-max))
-               (let* ((group-state (funcall grouper))
-                      (beginning-of-group (point))
-                      (end-of-group (cl-loop
-                                       while (and (< (point) (point-max))
-                                                  (funcall comparator group-state (funcall grouper)))
-                                       do (org-glance-headline:search-forward)
-                                       finally (return (point)))))
-                 (set-mark beginning-of-group)
-                 (goto-char end-of-group)
-                 (apply #'org-sort-entries nil (if (listp (car order)) (car order) (list (car order))))
-                 (goto-char end-of-group)))
-             (org-glance-overview:sort (cdr order) (car order))))))
+  (if-let (order-by (if desc (reverse order-by) order-by))
+
+      (save-excursion
+        (goto-char (point-min))
+        (let ((order (car order-by)))
+          (cond
+            ((numberp order)
+             (org-sort-entries nil order))
+
+            ((member (downcase (symbol-name order)) (mapcar #'downcase org-todo-keywords-1))
+             (let ((order-state (downcase (symbol-name order))))
+               (org-sort-entries nil ?f (lambda () (if (and (string= (downcase (org-get-todo-state)) order-state)
+                                                       (not (org-in-archived-heading-p))
+                                                       (not (org-in-commented-heading-p)))
+                                                  1
+                                                -1))
+                                 #'>)))
+
+            ((fboundp order)
+             (let ((result (funcall order)))
+               (cond
+                 ((booleanp result) (org-sort-entries nil ?f (lambda () (if result 1 -1)) #'>))
+                 ((numberp result) (org-sort-entries nil ?f (lambda () result) #'>))
+                 ((stringp result) (org-sort-entries nil ?f (lambda () result) #'string>))
+                 (t (error "Comparator for %s not implemented" (type-of result))))))))
+        (org-glance-overview:order-by (cdr order-by)
+         :desc nil))
+
+    (org-overview)))
 
 (cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
   (with-temp-buffer
