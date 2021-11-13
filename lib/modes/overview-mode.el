@@ -473,7 +473,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
             ((member (downcase (symbol-name order)) (mapcar #'downcase org-todo-keywords-1))
              (let ((order-state (downcase (symbol-name order))))
-               (org-sort-entries nil ?f (lambda () (if (and (string= (downcase (org-get-todo-state)) order-state)
+               (org-sort-entries nil ?f (lambda () (if (and (string= (downcase (or (org-get-todo-state) "")) order-state)
                                                        (not (org-in-archived-heading-p))
                                                        (not (org-in-commented-heading-p)))
                                                   1
