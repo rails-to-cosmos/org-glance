@@ -69,9 +69,11 @@ If point is before first heading, prompt for headline and eval forms on it."
       (let ((inhibit-read-only t)
             (beginning-of-headlines (save-excursion
                                       (goto-char (point-min))
-                                      (org-glance-headline:search-forward)
+                                      (outline-next-heading)
                                       (point)))
             (end-of-headlines (point-max)))
+
+        ;; refactor me, uneffective ordering
         (org-glance-overview:order-by '(started
                                         pending
                                         todo
@@ -79,15 +81,22 @@ If point is before first heading, prompt for headline and eval forms on it."
                                         cancelled
                                         org-in-archived-heading-p
                                         org-in-commented-heading-p))
+
         (cl-loop
-           for state being the hash-keys of (org-glance-overview:partition-by #'org-glance-headline:state :test #'equal)
+           for state being the hash-keys of (org-glance-overview:partition-by
+                                             #'(lambda ()
+                                                 (list (intern (downcase (org-glance-headline:state)))
+                                                       (org-in-archived-heading-p)
+                                                       (org-in-commented-heading-p)
+                                                       (org-glance-headline:priority))) :test #'equal)
            using (hash-value buffer)
            do
              (goto-char (point-max))
              (insert (with-current-buffer buffer
-                       (goto-char (point-min))
+                       (set-mark (point-min))
+                       (goto-char (point-max))
                        (org-sort-entries nil ?a)
-                       (buffer-substring-no-properties (1+ (point-min)) (point-max))))
+                       (buffer-substring-no-properties (point-min) (point-max))))
              (kill-buffer buffer))
         (delete-region beginning-of-headlines end-of-headlines)
         (org-overview)
@@ -433,19 +442,18 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
-      (org-glance-headline:search-forward)
+      (outline-next-heading)
       (while (< (point) (point-max))
         (let* ((group-state (funcall partition-method))
-               (group-buffer (get-buffer-create (concat "org-glance-overview-group:" group-state)))
+               (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
                (contents (buffer-substring-no-properties (point) (org-end-of-subtree))))
           (with-current-buffer group-buffer
             (org-mode)
             (unless (gethash group-state buffers)
-              (delete-region (point-min) (point-max))
-              (insert "\n"))
+              (delete-region (point-min) (point-max)))
             (insert contents "\n"))
           (puthash group-state group-buffer buffers)
-          (org-glance-headline:search-forward))))
+          (outline-next-heading))))
     buffers))
 
 (cl-defun org-glance-overview:order-by (order-by
