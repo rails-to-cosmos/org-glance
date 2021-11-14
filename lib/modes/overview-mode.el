@@ -73,7 +73,7 @@ If point is before first heading, prompt for headline and eval forms on it."
                                       (point)))
             (end-of-headlines (point-max)))
 
-        ;; refactor me, uneffective ordering
+        ;; refactor me, ineffective ordering
         (org-glance-overview:order-by '(started
                                         pending
                                         todo
