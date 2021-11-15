@@ -17,6 +17,13 @@ ${calendar}
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
+(defvar org-glance-overview:order-priority-table '(started
+                                                   pending
+                                                   todo
+                                                   done
+                                                   cancelled)
+  "Order priority table.")
+
 ;;; heavy methods applied to all headlines from current view's scope
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
@@ -73,23 +80,33 @@ If point is before first heading, prompt for headline and eval forms on it."
                                       (point)))
             (end-of-headlines (point-max)))
 
-        ;; refactor me, ineffective ordering
-        (org-glance-overview:order-by '(started
-                                        pending
-                                        todo
-                                        done
-                                        cancelled
-                                        org-in-archived-heading-p
-                                        org-in-commented-heading-p))
-
         (cl-loop
-           for state being the hash-keys of (org-glance-overview:partition-by
-                                             #'(lambda ()
-                                                 (list (intern (downcase (org-glance-headline:state)))
-                                                       (org-in-archived-heading-p)
-                                                       (org-in-commented-heading-p)
-                                                       (org-glance-headline:priority))) :test #'equal)
-           using (hash-value buffer)
+           for buffer in (org-glance-overview:partition-by
+                          #'(lambda ()
+                              (list (intern (downcase (org-glance-headline:state)))
+                                    (org-glance-headline:priority)
+                                    (org-in-archived-heading-p)
+                                    (org-in-commented-heading-p)))
+                          :test #'equal
+                          :comparator #'(lambda (item1 item2) (let ((state1 (nth 0 item1))
+                                                               (state2 (nth 0 item2))
+                                                               (priority1 (or (nth 1 item1) ?B))
+                                                               (priority2 (or (nth 1 item2) ?B))
+                                                               (archived1 (nth 2 item1))
+                                                               (archived2 (nth 2 item2))
+                                                               (commented1 (nth 2 item1))
+                                                               (commented2 (nth 2 item2)))
+                                                           (cond
+                                                             ((and (not archived1) archived2)
+                                                              t)
+                                                             ((and (not commented1) commented2)
+                                                              t)
+                                                             ((< (or (-elem-index state1 org-glance-overview:order-priority-table) 0)
+                                                                 (or (-elem-index state2 org-glance-overview:order-priority-table) 0))
+                                                              t)
+                                                             ((< priority1 priority2)
+                                                              t)
+                                                             (t nil)))))
            do
              (goto-char (point-max))
              (insert (with-current-buffer buffer
@@ -101,14 +118,6 @@ If point is before first heading, prompt for headline and eval forms on it."
         (delete-region beginning-of-headlines end-of-headlines)
         (org-overview)
         (save-buffer)))))
-
-;; (partition-sort #'org-glance-headline:state
-;;                 #'org-glance-headline:priority
-;;                 (org-sort-entries nil ?a))
-
-;; (define-key org-glance-overview-mode-map (kbd "@")
-;;   (org-glance-overview:for-one
-;;     (org-glance-overview:add-relation)))
 
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
@@ -438,7 +447,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      when (f-equal? common-parent overview-directory)
      do (return view-id)))
 
-(cl-defun org-glance-overview:partition-by (partition-method &key (test #'eql))
+(cl-defun org-glance-overview:partition-by (partition-method &key (test #'eql) (comparator #'<))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
@@ -454,55 +463,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
             (insert contents "\n"))
           (puthash group-state group-buffer buffers)
           (outline-next-heading))))
-    buffers))
-
-(cl-defun org-glance-overview:order-by (order-by
-                                        &key
-                                          (desc t))
-
-  ;; Memo:
-  ;; a   Alphabetically, ignoring the TODO keyword and the priority, if any.
-  ;; c   By creation time, which is assumed to be the first inactive time stamp
-  ;;     at the beginning of a line.
-  ;; d   By deadline date/time.
-  ;; k   By clocking time.
-  ;; n   Numerically, by converting the beginning of the entry/item to a number.
-  ;; o   By order of TODO keywords.
-  ;; p   By priority according to the cookie.
-  ;; r   By the value of a property.
-  ;; s   By scheduled date/time.
-  ;; t   By date/time, either the first active time stamp in the entry, or, if
-  ;;     none exist, by the first inactive one.
-
-  (if-let (order-by (if desc (reverse order-by) order-by))
-
-      (save-excursion
-        (goto-char (point-min))
-        (let ((order (car order-by)))
-          (cond
-            ((numberp order)
-             (org-sort-entries nil order))
-
-            ((member (downcase (symbol-name order)) (mapcar #'downcase org-todo-keywords-1))
-             (let ((order-state (downcase (symbol-name order))))
-               (org-sort-entries nil ?f (lambda () (if (and (string= (downcase (or (org-get-todo-state) "")) order-state)
-                                                       (not (org-in-archived-heading-p))
-                                                       (not (org-in-commented-heading-p)))
-                                                  1
-                                                -1))
-                                 #'>)))
-
-            ((fboundp order)
-             (let ((result (funcall order)))
-               (cond
-                 ((booleanp result) (org-sort-entries nil ?f (lambda () (if result 1 -1)) #'>))
-                 ((numberp result) (org-sort-entries nil ?f (lambda () result) #'>))
-                 ((stringp result) (org-sort-entries nil ?f (lambda () result) #'string>))
-                 (t (error "Comparator for %s not implemented" (type-of result))))))))
-        (org-glance-overview:order-by (cdr order-by)
-         :desc nil))
-
-    (org-overview)))
+    (cl-loop
+       for key in (sort (hash-table-keys buffers) comparator)
+       collect (gethash key buffers))))
 
 (cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
   (with-temp-buffer
