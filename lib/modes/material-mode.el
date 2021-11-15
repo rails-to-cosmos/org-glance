@@ -259,7 +259,7 @@
 
                               (lexical-let ((buffer (current-buffer)))
                                 (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
-                                                                     (save-buffer)))))
+                                                                     (org-glance-materialized-headline:sync)))))
 
                               (lexical-let ((contents (save-excursion
                                                         (org-back-to-heading t)
