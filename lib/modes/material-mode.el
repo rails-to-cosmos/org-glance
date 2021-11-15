@@ -256,6 +256,11 @@
                                    org-glance-clone-on-repeat-p
                                    (member (org-get-todo-state) org-done-keywords)
                                    (org-glance-headline:repeated-p))
+
+                              (lexical-let ((buffer (current-buffer)))
+                                (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
+                                                                     (save-buffer)))))
+
                               (lexical-let ((contents (save-excursion
                                                         (org-back-to-heading t)
                                                         (save-restriction

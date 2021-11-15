@@ -21,7 +21,9 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
-
+** TODO able to capture any text without headlines (default headline will be generated then)
+** TODO Repeat and clone diary-cyclic monthly entries
+** TODO Save after clone
 ** TODO Proper partition sort implementation
 ** TODO Implement capacity concept
 ** DONE Clone feature (clone on repeat, clone-archive+reschedule)
