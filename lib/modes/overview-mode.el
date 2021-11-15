@@ -771,4 +771,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                collect (org-glance:format "{\"name\":\"${name}\",\"relations\":[${relations}]}")))
                 "];")))))
 
+(cl-defun -og-calw-d (day)
+  (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids))))
+    (org-agenda-list)
+    (org-agenda-day-view day)
+    (switch-to-buffer org-agenda-buffer)
+    (delete-other-windows)))
+
 (org-glance:provide)

@@ -169,7 +169,9 @@
   (cl-loop
      for class in '(posit thing class role ascertains)
      unless (gethash class org-glance:classes nil)
-     do (org-glance:create-class class)))
+     do (org-glance:create-class class))
+
+  (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids))))
 
 (cl-defun org-glance:@ ()
   "Context-aware relation management."
