@@ -558,7 +558,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                     (buffer-file-name)
                                   (org-glance-headline:file (org-glance-overview:original-headline))))))
     (org-agenda-list)
-    (org-agenda-fortnight-view)
+    (org-agenda-day-view)
     (switch-to-buffer org-agenda-buffer)
     (delete-other-windows)))
 
@@ -566,7 +566,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids))))
     (org-agenda-list)
-    (org-agenda-fortnight-view)
+    (org-agenda-day-view)
     (switch-to-buffer org-agenda-buffer)
     (delete-other-windows)))
 

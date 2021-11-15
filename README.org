@@ -21,6 +21,8 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** TODO Implement day-grained CAPACITY
+show it with schedule (as an overlay)
 ** TODO able to capture any text without headlines (default headline will be generated then)
 ** TODO Repeat and clone diary-cyclic monthly entries
 ** TODO Save after clone
