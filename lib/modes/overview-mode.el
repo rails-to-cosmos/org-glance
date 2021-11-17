@@ -81,32 +81,26 @@ If point is before first heading, prompt for headline and eval forms on it."
             (end-of-headlines (point-max)))
 
         (cl-loop
-           for buffer in (org-glance-overview:partition-by
-                          #'(lambda ()
-                              (list (intern (downcase (org-glance-headline:state)))
-                                    (org-glance-headline:priority)
-                                    (org-in-archived-heading-p)
-                                    (org-in-commented-heading-p)))
-                          :test #'equal
-                          :comparator #'(lambda (item1 item2) (let ((state1 (nth 0 item1))
-                                                               (state2 (nth 0 item2))
-                                                               (priority1 (or (nth 1 item1) ?B))
-                                                               (priority2 (or (nth 1 item2) ?B))
-                                                               (archived1 (nth 2 item1))
-                                                               (archived2 (nth 2 item2))
-                                                               (commented1 (nth 2 item1))
-                                                               (commented2 (nth 2 item2)))
-                                                           (cond
-                                                             ((and (not archived1) archived2)
-                                                              t)
-                                                             ((and (not commented1) commented2)
-                                                              t)
-                                                             ((< (or (-elem-index state1 org-glance-overview:order-priority-table) 0)
-                                                                 (or (-elem-index state2 org-glance-overview:order-priority-table) 0))
-                                                              t)
-                                                             ((< priority1 priority2)
-                                                              t)
-                                                             (t nil)))))
+           for buffer in (org-glance-overview:partition-by #'(lambda () (list (intern (downcase (org-glance-headline:state)))
+                                                                         (org-glance-headline:priority)
+                                                                         (org-in-archived-heading-p)
+                                                                         (org-in-commented-heading-p)))
+                             :test #'equal
+                             :comparator #'(lambda (item1 item2)
+                                             (pcase (-zip-lists item1 item2)
+                                               (`((,state1 ,state2)
+                                                  (,priority1 ,priority2)
+                                                  (,archived1 ,archived2)
+                                                  (,commented1 ,commented2))
+
+                                                 (let ((state-1-index (or (-elem-index state1 org-glance-overview:order-priority-table) 0))
+                                                       (state-2-index (or (-elem-index state2 org-glance-overview:order-priority-table) 0)))
+                                                   (cond
+                                                     ((not (eq archived1 archived2)) (if archived1 nil t))
+                                                     ((not (eq commented1 commented2)) (if commented1 nil t))
+                                                     ((/= state-1-index state-2-index) (< state-1-index state-2-index))
+                                                     ((/= (or priority1 ?B) (or priority2 ?B)) (< (/= (or priority1 ?B) (or priority2 ?B))))
+                                                     (t nil)))))))
            do
              (goto-char (point-max))
              (insert (with-current-buffer buffer
@@ -448,6 +442,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      do (return view-id)))
 
 (cl-defun org-glance-overview:partition-by (partition-method &key (test #'eql) (comparator #'<))
+  (declare (indent 2) (debug t))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
