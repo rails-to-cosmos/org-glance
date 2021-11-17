@@ -23,7 +23,7 @@ Return headline or nil if it is not a proper `org-glance-headline'."
                                                                                     (save-excursion
                                                                                       (save-restriction
                                                                                         (org-narrow-to-subtree)
-                                                                                        (org-end-of-meta-data t)
+                                                                                        ;; (org-end-of-meta-data t)
                                                                                         (when (re-search-forward org-any-link-re nil t)
                                                                                           'contains-link))))))
     (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)

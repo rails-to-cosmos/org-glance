@@ -236,7 +236,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                (org-glance-headline:contains-link? headline)))
     :action (lambda (headline)
               (org-glance-headline:with-materialized-headline headline
-                (org-end-of-meta-data t)
+                ;; (org-end-of-meta-data t)
                 (narrow-to-region (point) (point-max))
                 (let ((pos (let ((links (org-glance:buffer-links)))
                              (cond
