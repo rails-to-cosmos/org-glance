@@ -117,6 +117,7 @@
            (source-file --org-glance-materialized-headline:file)
            (source-buffer --org-glance-materialized-headline:buffer)
            (source-hash (cond (source-file (with-temp-buffer
+                                             (org-mode)
                                              (insert-file-contents source-file)
                                              (org-glance-headline:search-buffer-by-id id)
                                              (org-glance-headline:hash)))

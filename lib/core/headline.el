@@ -242,8 +242,7 @@ metastore.")
                   (org-glance-headline:promote-to-the-first-level)
                   (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
           (buffer (with-current-buffer buffer
-                    (org-glance:log-debug "I'm in buffer %s" buffer)
-                    (org-glance:log-debug "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) file)
+                    (org-glance:log-debug "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) buffer)
                     (save-window-excursion
                       (save-excursion
                         (save-restriction
@@ -393,6 +392,7 @@ metastore.")
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
     (with-temp-buffer
+      (org-mode)
       (insert contents)
       (buffer-hash))))
 
