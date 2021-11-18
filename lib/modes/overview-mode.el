@@ -99,7 +99,7 @@ If point is before first heading, prompt for headline and eval forms on it."
                                                      ((not (eq archived1 archived2)) (if archived1 nil t))
                                                      ((not (eq commented1 commented2)) (if commented1 nil t))
                                                      ((/= state-1-index state-2-index) (< state-1-index state-2-index))
-                                                     ((/= (or priority1 ?B) (or priority2 ?B)) (< (/= (or priority1 ?B) (or priority2 ?B))))
+                                                     ((/= (or priority1 ?B) (or priority2 ?B)) (< (or priority1 ?B) (or priority2 ?B)))
                                                      (t nil)))))))
            do
              (goto-char (point-max))
