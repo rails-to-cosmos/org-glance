@@ -259,7 +259,9 @@
 
                               (lexical-let ((buffer (current-buffer)))
                                 (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
-                                                                     (org-glance-materialized-headline:sync)))))
+                                                                     (condition-case nil
+                                                                         (org-glance-materialized-headline:sync)
+                                                                       (org-glance-exception:HEADLINE-NOT-MODIFIED nil))))))
 
                               (lexical-let ((contents (save-excursion
                                                         (org-back-to-heading t)
