@@ -692,8 +692,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:archive ()
   "Archive headline at point."
   (interactive)
-  (org-glance-headline:with-materialized-headline (org-glance-overview:original-headline)
-    (org-toggle-archive-tag)))
+  (save-window-excursion
+    (org-glance-headline:with-materialized-headline (org-glance-overview:original-headline)
+      (org-toggle-archive-tag))))
 
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)

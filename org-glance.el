@@ -238,12 +238,12 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
               (org-glance-headline:with-materialized-headline headline
                 ;; (org-end-of-meta-data t)
                 (narrow-to-region (point) (point-max))
-                (let ((pos (let ((links (org-glance:buffer-links)))
-                             (cond
-                               ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                               ((= (length links) 1) (cdar links))
-                               (t (user-error "Unable to find links in headline"))))))
-                  (goto-char pos)
+                (let* ((links (org-glance:buffer-links))
+                       (position (cond
+                                   ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                                   ((= (length links) 1) (cdar links))
+                                   (t (user-error "Unable to find links in headline")))))
+                  (goto-char position)
                   (org-open-at-point))))))
 
 (cl-defun org-glance:extract (&optional headline)
