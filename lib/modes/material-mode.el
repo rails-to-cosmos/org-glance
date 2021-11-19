@@ -281,21 +281,19 @@
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."
   (declare (indent 1) (debug t))
-  `(save-window-excursion
-     (save-excursion
-       (let ((materialized-buffer (org-glance-headline:materialize ,headline 'read-only))
-             (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-         (unwind-protect
-              (with-current-buffer materialized-buffer
-                (org-glance-headline:search-parents)
-                ,@forms)
-           (when (buffer-live-p materialized-buffer)
-             (with-current-buffer materialized-buffer
-               (condition-case nil
-                   (org-glance-materialized-headline:sync)
-                 (error nil)))
-             (with-demoted-errors "Unable to kill buffer: %s"
-               (kill-buffer materialized-buffer))))))))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline 'read-only))
+         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+     (unwind-protect
+          (with-current-buffer materialized-buffer
+            (org-glance-headline:search-parents)
+            ,@forms)
+       (when (buffer-live-p materialized-buffer)
+         (with-current-buffer materialized-buffer
+           (condition-case nil
+               (org-glance-materialized-headline:sync)
+             (error nil)))
+         (with-demoted-errors "Unable to kill buffer: %s"
+           (kill-buffer materialized-buffer))))))
 
 (cl-defun org-glance-headline:materialized-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
