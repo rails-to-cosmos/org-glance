@@ -4,6 +4,9 @@
   s
   org-archive)
 
+(cl-defun org-glance-now ()
+  (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
+
 (cl-defun org-glance:ensure-at-heading ()
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))

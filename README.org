@@ -21,6 +21,14 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** DONE bidirected relations
+CLOSED: [2021-11-20 Sat 13:59]
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2021-11-20 Sat 13:59]
+CLOCK: [2021-11-20 Sat 11:08]--[2021-11-20 Sat 12:45] =>  1:37
+- Clocked out on [2021-11-20 Sat 12:45]
+- State "STARTED"    from "TODO"       [2021-11-20 Sat 11:08]
+:END:
 ** TODO delete class feature
 ** TODO Implement day-grained CAPACITY
 show it with schedule (as an overlay)

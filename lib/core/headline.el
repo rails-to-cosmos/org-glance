@@ -279,21 +279,25 @@ metastore.")
             (org-glance-headline:enrich (org-glance-headline:create-from-element-at-point)
               :buffer b)))))))
 
-(cl-defun org-glance-headline:add-log-note (note &optional (headline (org-glance-headline:at-point)))
-  (org-glance-headline:with-materialized-headline headline
+(cl-defun org-glance-headline:add-log-note (string &rest objects)
+  (save-excursion
+    (org-glance:ensure-at-heading)
     (goto-char (org-log-beginning t))
-    (insert note "\n")))
+    (insert (apply #'format string objects) "\n")))
 
 (cl-defmacro org-glance-headline:format (headline)
   (declare (indent 1) (debug t))
   `(let* ((id (org-glance-headline:id ,headline))
           (state (org-glance-headline:state ,headline))
-          (state-label (if (string-empty-p state) "" (format "*%s*" state)))
+          ;; (state-label (if (string-empty-p state) "" (format "*%s*" state)))
           (title (org-glance-headline:title ,headline))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
+          (category (if-let (category (org-element-property :CATEGORY headline))
+                        (downcase (format "=%s= " category))
+                      ""))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim
-      (org-glance:format "${state-label} [[org-glance-visit:${id}][${stateless-title}]]"))))
+      (org-glance:format "${category}[[org-glance-visit:${id}][${stateless-title}]]"))))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
@@ -396,11 +400,11 @@ metastore.")
       (insert contents)
       (buffer-hash))))
 
-(cl-defun org-glance-headline:add-relation (source target &key (rel org-glance-relation:forward))
-  (interactive)
-  (let* ((target-title (org-glance-headline:format target))
-         (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-    (org-glance-headline:add-log-note (org-glance:format "- ${rel} ${target-title} on ${now}") source)))
+;; (cl-defun org-glance-headline:add-relation (source target &key (rel org-glance-relation:forward))
+;;   (interactive)
+;;   (let* ((target-title (org-glance-headline:format target))
+;;          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
+;;     (org-glance-headline:add-log-note (org-glance:format "- ${rel} ${target-title} on ${now}") source)))
 
 ;; (cl-defun org-glance-headline:add-biconnected-relation
 ;;     (source target
