@@ -140,6 +140,10 @@
   :tag "Org Glance"
   :group 'org)
 
+(cl-defun org-glance:remove-class (class)
+  (org-glance:log-debug "Remove class \"%s\"" class)
+  (remhash class org-glance:classes))
+
 (cl-defun org-glance:create-class (class)
   (org-glance:log-debug "Create class \"%s\"" class)
 
@@ -162,14 +166,20 @@
 
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)
-     for class = (intern directory)
-     unless (gethash class org-glance:classes nil)
-     do (org-glance:create-class class))
+     do (let ((class (intern directory)))
+          (unless (gethash class org-glance:classes nil)
+            (org-glance:create-class class))))
 
   (cl-loop
-     for class in '(posit thing class role ascertains)
-     unless (gethash class org-glance:classes nil)
-     do (org-glance:create-class class))
+     for class being the hash-keys of org-glance:classes
+     do (let ((class-name (s-downcase (format "%s" class))))
+          (unless (f-exists? (f-join org-glance-directory class-name))
+            (org-glance:remove-class class))))
+
+  ;; (cl-loop
+  ;;    for class in '(posit thing class role ascertains)
+  ;;    unless (gethash class org-glance:classes nil)
+  ;;    do (org-glance:create-class class))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids))))
 
