@@ -21,6 +21,10 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** TODO mentions in capture
+** TODO material mode: proper tags removal (update local buffer variables)
+** TODO class overview
+** TODO clone + reschedule
 ** DONE bidirected relations
 CLOSED: [2021-11-20 Sat 13:59]
 :LOGBOOK:
