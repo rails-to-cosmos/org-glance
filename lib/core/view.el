@@ -120,6 +120,6 @@
                (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
                                                                   (insert-file-contents capture-template-config-file)
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
-                     (t "* TODO %?")))))
+                     (t "* %?")))))
 
 (org-glance:provide)
