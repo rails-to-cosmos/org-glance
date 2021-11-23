@@ -171,6 +171,10 @@ If point is before first heading, prompt for headline and eval forms on it."
   (org-glance-overview:for-one
     (org-glance-overview:kill-headline)))
 
+(define-key org-glance-overview-mode-map (kbd "R")
+  (org-glance-overview:for-one
+    (org-glance-overview:move)))
+
 ;; (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
 (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
@@ -642,12 +646,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         (class (org-glance-overview:class))
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
-      (org-glance-headline:with-materialized-headline original-headline
-        (cl-loop
-           with tags = (org-get-tags)
-           with indices = (--find-indices (string= class (org-glance-headline:string-to-class it)) tags)
-           for index in indices
-           do (org-toggle-tag (nth index tags) 'off))))))
+      (save-window-excursion
+        (org-glance-headline:with-materialized-headline original-headline
+          (cl-loop
+             with tags = (org-get-tags)
+             with indices = (--find-indices (string= class (org-glance-headline:string-to-class it)) tags)
+             for index in indices
+             do (org-toggle-tag (nth index tags) 'off)))))))
 
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview clone at point."
@@ -704,6 +709,22 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (save-window-excursion
     (org-glance-headline:with-materialized-headline (org-glance-overview:original-headline)
       (org-toggle-archive-tag))))
+
+(cl-defun org-glance-overview:move ()
+  "Move headline to another class."
+  (interactive)
+  (let* ((old-class (org-glance-overview:class))
+         (new-class (let ((views (--filter (not (eql old-class it)) (org-glance-view:ids))))
+                      (intern (org-completing-read "Move headline to: " views))))
+         (original-headline (org-glance-overview:original-headline)))
+    (save-window-excursion
+      (org-glance-headline:with-materialized-headline original-headline
+        (cl-loop
+           with tags = (org-get-tags)
+           with indices = (--find-indices (string= old-class (org-glance-headline:string-to-class it)) tags)
+           for index in indices
+           do (org-toggle-tag (nth index tags) 'off)
+           finally (org-toggle-tag (symbol-name new-class) 'on))))))
 
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)
