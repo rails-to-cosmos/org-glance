@@ -84,12 +84,13 @@ If point is before first heading, prompt for headline and eval forms on it."
             (end-of-headlines (point-max)))
 
         (cl-loop
-           for buffer in (org-glance-overview:partition-by #'(lambda () (list
-                                                                    (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
-                                                                    (or (org-glance-headline:priority) ?B)
-                                                                    (org-in-archived-heading-p)
-                                                                    (org-in-commented-heading-p)
-                                                                    (downcase (org-get-tags-string))))
+           for buffer in (org-glance-overview:partition-by
+                             #'(lambda () (list
+                                      (org-in-archived-heading-p)
+                                      (org-in-commented-heading-p)
+                                      (downcase (org-get-tags-string))
+                                      (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
+                                      (or (org-glance-headline:priority) ?B)))
                              :comparator #'(lambda (item1 item2)
                                              (cl-loop
                                                 for (i j) in (-zip-lists item1 item2)
