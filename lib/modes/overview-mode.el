@@ -90,7 +90,6 @@ If point is before first heading, prompt for headline and eval forms on it."
                                                                     (org-in-archived-heading-p)
                                                                     (org-in-commented-heading-p)
                                                                     (downcase (org-get-tags-string))))
-                             :test #'equal
                              :comparator #'(lambda (item1 item2)
                                              (cl-loop
                                                 for (i j) in (-zip-lists item1 item2)
@@ -445,7 +444,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      when (f-equal? common-parent overview-directory)
      do (return view-id)))
 
-(cl-defun org-glance-overview:partition-by (partition-method &key (test #'eql) (comparator #'<))
+(cl-defun org-glance-overview:partition-by (partition-method &key (test #'equal) (comparator #'<))
   (declare (indent 2) (debug t))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
