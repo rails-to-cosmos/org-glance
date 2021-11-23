@@ -84,26 +84,23 @@ If point is before first heading, prompt for headline and eval forms on it."
             (end-of-headlines (point-max)))
 
         (cl-loop
-           for buffer in (org-glance-overview:partition-by #'(lambda () (list (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
-                                                                         (org-glance-headline:priority)
-                                                                         (org-in-archived-heading-p)
-                                                                         (org-in-commented-heading-p)
-                                                                         (downcase (org-get-tags-string))))
+           for buffer in (org-glance-overview:partition-by #'(lambda () (list
+                                                                    (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
+                                                                    (or (org-glance-headline:priority) ?B)
+                                                                    (org-in-archived-heading-p)
+                                                                    (org-in-commented-heading-p)
+                                                                    (downcase (org-get-tags-string))))
                              :test #'equal
                              :comparator #'(lambda (item1 item2)
-                                             (pcase (-zip-lists item1 item2)
-                                               (`((,state-1 ,state-2)
-                                                  (,priority-1 ,priority-2)
-                                                  (,archived-1 ,archived-2)
-                                                  (,commented-1 ,commented-2)
-                                                  (,tags-1 ,tags-2))
-                                                 (cond
-                                                   ((not (eq archived-1 archived-2)) (if archived-1 nil t))
-                                                   ((not (eq commented-1 commented-2)) (if commented-1 nil t))
-                                                   ((not (string= tags-1 tags-2)) (string< tags-1 tags-2))
-                                                   ((/= state-1 state-2) (< state-1 state-2))
-                                                   ((/= (or priority-1 ?B) (or priority-2 ?B)) (< (or priority-1 ?B) (or priority-2 ?B)))
-                                                   (t nil))))))
+                                             (cl-loop
+                                                for (i j) in (-zip-lists item1 item2)
+                                                when (cond ((not (eql (type-of i) (type-of j))) nil)
+                                                           ((stringp i) (not (string= i j)))
+                                                           (t (not (eql i j))))
+                                                return (cond ((stringp i) (string< i j))
+                                                             ((numberp i) (< i j))
+                                                             ((booleanp i) i)
+                                                             (t nil)))))
            do
              (goto-char (point-max))
              (insert (with-current-buffer buffer
