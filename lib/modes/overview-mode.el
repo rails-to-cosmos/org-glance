@@ -17,11 +17,14 @@ ${calendar}
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
-(defvar org-glance-overview:order-priority-table '(started
-                                                   pending
-                                                   todo
-                                                   done
-                                                   cancelled)
+(defvar org-glance-overview:order-priority-table
+  (list
+   ""
+   "started"
+   "pending"
+   "todo"
+   "done"
+   "cancelled")
   "Order priority table.")
 
 ;;; heavy methods applied to all headlines from current view's scope
