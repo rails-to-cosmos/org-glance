@@ -196,7 +196,7 @@
                         (let ((source (org-glance-headline:at-point))
                               (target-title (org-glance-headline:format headline))
                               (ts (org-glance-now)))
-                          (org-glance-headline:add-log-note "- Mentioned the %s on %s" target-title ts)
+                          (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts)
                           (insert target-title)
                           (when source
                             (let ((source-title (org-glance-headline:format source)))
@@ -204,7 +204,7 @@
                                 (save-excursion
                                   (org-glance-headline:with-materialized-headline headline
                                     (org-glance-headline:add-log-note
-                                     (format "- Mentioned by the %s on %s" source-title ts))))))))))
+                                     (format "- Mentioned by %s on %s" source-title ts))))))))))
         (quit (insert "@")))
     (insert "@")))
 
