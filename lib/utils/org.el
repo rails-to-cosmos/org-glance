@@ -133,6 +133,6 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
     (lambda (link)
       (let ((caption (substring-no-properties (or (nth 2 link) (org-element-property :raw-link link))))
             (position (org-element-property :begin link)))
-        (list caption position)))))
+        (cons caption position)))))
 
 (org-glance:provide)
