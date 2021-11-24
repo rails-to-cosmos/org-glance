@@ -131,10 +131,8 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
   "Retrieve all `org-link' positions from current buffer."
   (org-element-map (org-element-parse-buffer) 'link
     (lambda (link)
-      (cons
-       (substring-no-properties
-        (or (nth 2 link)                            ;; link alias
-            (org-element-property :raw-link link))) ;; full link if alias is none
-       (org-element-property :begin link)))))
+      (let ((caption (substring-no-properties (or (nth 2 link) (org-element-property :raw-link link))))
+            (position (org-element-property :begin link)))
+        (list caption position)))))
 
 (org-glance:provide)

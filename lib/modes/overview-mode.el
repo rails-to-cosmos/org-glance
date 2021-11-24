@@ -318,7 +318,7 @@ If point is before first heading, prompt for headline and eval forms on it."
   (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
   (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
   (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file)
-                                           (org-glance:capture-template class :default default)))))
+                                           (org-glance-overview:template class :default default)))))
     (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
@@ -487,9 +487,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
     (buffer-substring-no-properties (point-min) (point-max))))
 
-(cl-defun org-glance:capture-template (class &key (default ""))
+(cl-defun org-glance-overview:template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
-        (capture-template-config-file (f-join (org-glance-overview:directory class) "capture-template.org")))
+        (capture-template-config-file (f-join (org-glance-overview:directory class) "template.org")))
     (s-replace "%?" (concat default "%?")
                (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
                                                                   (insert-file-contents capture-template-config-file)

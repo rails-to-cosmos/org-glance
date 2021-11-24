@@ -113,7 +113,7 @@
 (cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))
   (org-completing-read prompt (org-glance-view:ids)))
 
-(cl-defun org-glance:capture-template (class &key (default ""))
+(cl-defun org-glance-overview:template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
         (capture-template-config-file (f-join (org-glance-overview:directory class) "capture-template.org")))
     (s-replace "%?" (concat default "%?")

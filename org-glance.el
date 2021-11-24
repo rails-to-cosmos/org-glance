@@ -252,22 +252,20 @@ If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (org-glance:ensure-headline-apply
-      :headline headline
-      :filter (lambda (headline)
-                (and
-                 (org-glance-headline:active? headline)
-                 (org-glance-headline:contains-link? headline)))
-      :action (lambda (headline)
-                (org-glance-headline:with-materialized-headline headline
-                  ;; (org-end-of-meta-data t)
-                  (narrow-to-region (point) (point-max))
-                  (let* ((links (org-glance:buffer-links))
-                         (position (cond
-                                     ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                                     ((= (length links) 1) (cdar links))
-                                     (t (user-error "Unable to find links in headline")))))
-                    (goto-char position)
-                    (org-open-at-point))))))
+   :headline headline
+   :filter (lambda (headline) (and
+                          (org-glance-headline:active? headline)
+                          (org-glance-headline:contains-link? headline)))
+   :action (lambda (headline) (org-glance-headline:with-materialized-headline headline
+                           ;; (org-end-of-meta-data t)
+                           (narrow-to-region (point) (point-max))
+                           (let* ((links (org-glance:buffer-links))
+                                  (position (cond
+                                              ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                                              ((= (length links) 1) (cdar links))
+                                              (t (user-error "Unable to find links in headline")))))
+                             (goto-char position)
+                             (org-open-at-point))))))
 
 (cl-defun org-glance:extract (&optional headline)
   (interactive)
