@@ -71,45 +71,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "^")
-  (org-glance:interactive-lambda
-    (save-excursion
-      (let ((inhibit-read-only t)
-            (beginning-of-headlines (save-excursion
-                                      (goto-char (point-min))
-                                      (outline-next-heading)
-                                      (point)))
-            (end-of-headlines (point-max)))
-
-        (cl-loop
-           for buffer in (org-glance-overview:partition-by
-                             #'(lambda () (list
-                                      (org-in-archived-heading-p)
-                                      (org-in-commented-heading-p)
-                                      (downcase (org-get-tags-string))
-                                      (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
-                                      (or (org-glance-headline:priority) ?B)))
-                             :comparator #'(lambda (item1 item2)
-                                             (cl-loop
-                                                for (i j) in (-zip-lists item1 item2)
-                                                when (cond ((not (eql (type-of i) (type-of j))) nil)
-                                                           ((stringp i) (not (string= i j)))
-                                                           (t (not (eql i j))))
-                                                return (cond ((stringp i) (string< i j))
-                                                             ((numberp i) (< i j))
-                                                             ((booleanp i) i)
-                                                             (t nil)))))
-           do
-             (goto-char (point-max))
-             (insert (with-current-buffer buffer
-                       (set-mark (point-min))
-                       (goto-char (point-max))
-                       (org-sort-entries nil ?a)
-                       (buffer-substring-no-properties (point-min) (point-max))))
-             (kill-buffer buffer))
-        (delete-region beginning-of-headlines end-of-headlines)
-        (org-overview)
-        (save-buffer)))))
+(define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
 
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
@@ -132,6 +94,7 @@ If point is before first heading, prompt for headline and eval forms on it."
     (if (org-before-first-heading-p)
         (progn
           (org-glance-overview:refresh-widgets)
+          (org-glance-overview:order-by)
           (pulse-momentary-highlight-region
            (point-min)
            (save-excursion
@@ -222,7 +185,8 @@ If point is before first heading, prompt for headline and eval forms on it."
     (save-excursion
       (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
       (let ((inhibit-read-only t))
-        (kill-region (org-entry-beginning-position) (org-entry-end-position))
+        (kill-region (org-entry-beginning-position) (save-excursion
+                                                      (org-end-of-subtree t t)))
         (save-buffer)))))
 
 (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
@@ -757,6 +721,45 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            org-glance-metastore:get-headline
            org-glance-headline:visit)
       (org-glance-headline:at-point))))
+
+(cl-defun org-glance-overview:order-by (&optional (order #'(lambda () (list
+                                                                  (not (org-in-archived-heading-p))
+                                                                  (not (org-in-commented-heading-p))
+                                                                  (downcase (org-get-tags-string))
+                                                                  (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
+                                                                  (or (org-glance-headline:priority) ?B)))))
+  (interactive)
+  (save-excursion
+    (let ((inhibit-read-only t)
+          (beginning-of-headlines (save-excursion
+                                    (goto-char (point-min))
+                                    (outline-next-heading)
+                                    (point)))
+          (end-of-headlines (point-max)))
+
+      (cl-loop
+         for buffer in (org-glance-overview:partition-by order
+                           :comparator #'(lambda (item1 item2)
+                                           (cl-loop
+                                              for (i j) in (-zip-lists item1 item2)
+                                              when (cond ((not (eql (type-of i) (type-of j))) nil)
+                                                         ((stringp i) (not (string= i j)))
+                                                         (t (not (eql i j))))
+                                              return (cond ((stringp i) (string< i j))
+                                                           ((numberp i) (< i j))
+                                                           ((booleanp i) i)
+                                                           (t nil)))))
+         do
+           (goto-char (point-max))
+           (insert (with-current-buffer buffer
+                     (set-mark (point-min))
+                     (goto-char (point-max))
+                     (org-sort-entries nil ?a)
+                     (buffer-substring-no-properties (point-min) (point-max))))
+           (kill-buffer buffer))
+      (delete-region beginning-of-headlines end-of-headlines)
+      (org-overview)
+      (save-buffer))))
 
 (cl-defun org-glance-overview:vizualize ()
   (interactive)
