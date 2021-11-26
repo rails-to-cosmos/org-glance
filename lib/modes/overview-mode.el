@@ -706,10 +706,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:add-class ()
   "Add class to headline."
   (interactive)
-  (let* ((old-class (org-glance-overview:class))
-         (new-class (let ((views (--filter (not (eql old-class it)) (org-glance-view:ids))))
-                      (intern (org-completing-read "Add class: " views))))
-         (original-headline (org-glance-overview:original-headline)))
+  (let* ((original-headline (org-glance-overview:original-headline))
+         (old-classes (org-glance-headline:classes original-headline))
+         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-view:ids))))
+                      (intern (org-completing-read "Add class: " views)))))
     (save-window-excursion
       (org-glance-headline:with-materialized-headline original-headline
         (org-toggle-tag (symbol-name new-class) 'on)))))
