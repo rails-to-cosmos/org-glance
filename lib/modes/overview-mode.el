@@ -45,7 +45,7 @@ ${custom-header}
 
 (cl-defmacro org-glance-overview:for-each (&rest forms)
   "Eval FORMS on headline at point.
-If point is before first heading, eval forms on each headline."
+If point is before the first heading, eval forms on each headline in buffer."
   (declare (indent 0) (debug t))
   `(org-glance:interactive-lambda
      (if (org-before-first-heading-p)
@@ -59,7 +59,7 @@ If point is before first heading, eval forms on each headline."
 
 (cl-defmacro org-glance-overview:for-one (&rest forms)
   "Eval FORMS on headline at point.
-If point is before first heading, prompt for headline and eval forms on it."
+If point is before the first heading, prompt for headline and eval forms on it."
   (declare (indent 0) (debug t))
   `(org-glance:interactive-lambda
      (when (org-before-first-heading-p)
@@ -140,8 +140,9 @@ If point is before first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
-    (org-glance-overview:capture
-     :class (org-glance-overview:class))))
+    (org-glance-overview:for-all
+        (org-glance-overview:capture :class (org-glance-overview:class))
+      (org-glance-overview:add-class))))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
@@ -500,7 +501,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                   (org-glance-headline:file (org-glance-overview:original-headline)))))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
-        (org-agenda-span 14)
+        (org-agenda-span 21)
         (org-agenda-start-day "-7d"))
     (org-agenda-list)
     (switch-to-buffer org-agenda-buffer)
@@ -511,7 +512,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-view:ids)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
-        (org-agenda-span 14)
+        (org-agenda-span 21)
         (org-agenda-start-day "-7d"))
     (org-agenda-list)
     (switch-to-buffer org-agenda-buffer)
@@ -701,6 +702,17 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            for index in indices
            do (org-toggle-tag (nth index tags) 'off)
            finally (org-toggle-tag (symbol-name new-class) 'on))))))
+
+(cl-defun org-glance-overview:add-class ()
+  "Add class to headline."
+  (interactive)
+  (let* ((old-class (org-glance-overview:class))
+         (new-class (let ((views (--filter (not (eql old-class it)) (org-glance-view:ids))))
+                      (intern (org-completing-read "Add class: " views))))
+         (original-headline (org-glance-overview:original-headline)))
+    (save-window-excursion
+      (org-glance-headline:with-materialized-headline original-headline
+        (org-toggle-tag (symbol-name new-class) 'on)))))
 
 ;; (cl-defun org-glance-overview:edit-mode ()
 ;;   (interactive)
