@@ -734,12 +734,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            org-glance-headline:visit)
       (org-glance-headline:at-point))))
 
-(cl-defun org-glance-overview:order-by (&optional (order #'(lambda () (list
-                                                                  (not (org-in-archived-heading-p))
-                                                                  (not (org-in-commented-heading-p))
-                                                                  (downcase (org-get-tags-string))
-                                                                  (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)
-                                                                  (or (org-glance-headline:priority) ?B)))))
+(cl-defun org-glance-overview:order-by
+    (&optional (order #'(lambda () (list
+                               (not (org-in-archived-heading-p))  ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
+                               (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
+                               (downcase (org-get-tags-string))  ;; partition by tag string.
+                               (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)  ;; partition by state
+                               (or (org-glance-headline:priority) ?B))))) ;; partition by priority
   (interactive)
   (save-excursion
     (let ((inhibit-read-only t)
