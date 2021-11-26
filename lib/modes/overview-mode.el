@@ -738,8 +738,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (&optional (order #'(lambda () (list
                                (not (org-in-archived-heading-p))  ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
                                (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
-                               (downcase (org-get-tags-string))  ;; partition by tag string.
                                (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)  ;; partition by state
+                               (downcase (s-join ":" (sort (org-get-tags) #'string<)))  ;; partition by tag string.
                                (or (org-glance-headline:priority) ?B))))) ;; partition by priority
   (interactive)
   (save-excursion
