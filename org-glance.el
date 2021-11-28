@@ -113,9 +113,7 @@
 
   lib.view.links
 
-  lib.transient.headlines
-
-  lib.plugins.metadata)
+  lib.transient.headlines)
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 
@@ -163,6 +161,14 @@
   "Update all changed entities from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
+
+  (advice-add 'org-auto-repeat-maybe :before
+              (lambda (&rest args) (when (and
+                                     (or org-glance-material-mode org-glance-overview-mode)
+                                     org-glance-clone-on-repeat-p
+                                     (member (org-get-todo-state) org-done-keywords)
+                                     (org-glance-headline:repeated-p))
+                                (org-glance:clone-headline))))
 
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)
@@ -283,6 +289,27 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                                (org-glance:get-buffer-key-value-pairs))))
                   (while t
                     (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+
+(cl-defun org-glance:clone-headline ()
+
+  (when org-glance-material-mode
+    (lexical-let ((buffer (current-buffer)))
+      (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
+                                           (condition-case nil
+                                               (org-glance-materialized-headline:sync)
+                                             (org-glance-exception:HEADLINE-NOT-MODIFIED nil)))))))
+
+  (lexical-let ((contents (save-excursion
+                            (org-back-to-heading t)
+                            (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t))))))
+    (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
+                                         (insert contents)
+                                         (goto-char (point-min))
+                                         (cl-loop
+                                            for class in (org-glance-headline:classes)
+                                            do (let ((captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
+                                                 (org-glance-overview:register-headline-in-metastore captured-headline class)
+                                                 (org-glance-overview:register-headline-in-overview captured-headline class))))))))
 
 (cl-defun org-glance
     (&key db

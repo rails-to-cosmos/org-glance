@@ -251,33 +251,6 @@
                                    0 'local))))
                     (t (apply fn headline args)))))
 
-(advice-add 'org-auto-repeat-maybe :before
-            (lambda (&rest args) (when (and
-                                   org-glance-material-mode
-                                   org-glance-clone-on-repeat-p
-                                   (member (org-get-todo-state) org-done-keywords)
-                                   (org-glance-headline:repeated-p))
-
-                              (lexical-let ((buffer (current-buffer)))
-                                (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
-                                                                     (condition-case nil
-                                                                         (org-glance-materialized-headline:sync)
-                                                                       (org-glance-exception:HEADLINE-NOT-MODIFIED nil))))))
-
-                              (lexical-let ((contents (save-excursion
-                                                        (org-back-to-heading t)
-                                                        (save-restriction
-                                                          (org-narrow-to-subtree)
-                                                          (buffer-substring-no-properties (point-min) (point-max))))))
-                                (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
-                                                                     (insert contents)
-                                                                     (goto-char (point-min))
-                                                                     (cl-loop
-                                                                        for class in (org-glance-headline:classes)
-                                                                        do (let ((captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
-                                                                             (org-glance-overview:register-headline-in-metastore captured-headline class)
-                                                                             (org-glance-overview:register-headline-in-overview captured-headline class))))))))))
-
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."
   (declare (indent 1) (debug t))

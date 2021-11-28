@@ -5,6 +5,14 @@
   org-attach
   org-capture)
 
+(defface org-glance-headline-changed-face
+    '((((background dark)) (:background "#013220"))
+      (((background light)) (:background "honeydew")))
+  "*Face used to highlight evaluated paragraph."
+  :group 'org-glance :group 'faces)
+
+(set-face-extend 'org-glance-headline-changed-face t)
+
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
 #+CATEGORY: ${category}
@@ -29,7 +37,7 @@ ${custom-header}
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
 ;; rebuild view and reread all files from view's scope
-(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
+;; (define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -67,84 +75,84 @@ If point is before the first heading, prompt for headline and eval forms on it."
      ,@forms))
 
 ;; lightweight methods applied for current headline
-(define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
-(define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
-(define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
-(define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
+;; (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
+;; (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
+;; (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
+;; (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
+;; (define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
 
-(define-key org-glance-overview-mode-map (kbd "RET")
-  (org-glance-overview:for-one
-    (org-glance-overview:materialize-headline)))
+;; (define-key org-glance-overview-mode-map (kbd "RET")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:materialize-headline)))
 
-(define-key org-glance-overview-mode-map (kbd "/")
-  (org-glance:interactive-lambda
-    (org-glance-overview:choose-headline-and-jump)))
+;; (define-key org-glance-overview-mode-map (kbd "/")
+;;   (org-glance:interactive-lambda
+;;     (org-glance-overview:choose-headline-and-jump)))
 
-(define-key org-glance-overview-mode-map (kbd "F")
-  (org-glance-overview:for-one
-    (org-attach-reveal-in-emacs)))
+;; (define-key org-glance-overview-mode-map (kbd "F")
+;;   (org-glance-overview:for-one
+;;     (org-attach-reveal-in-emacs)))
 
 ;; (define-key org-glance-overview-mode-map (kbd "!")
 ;;   (org-glance-overview:for-each
 ;;     (org-glance-overview:doctor)))
 
-(define-key org-glance-overview-mode-map (kbd "g")
-  (org-glance:interactive-lambda
-    (if (org-before-first-heading-p)
-        (progn
-          (org-glance-overview:refresh-widgets)
-          (org-glance-overview:order-by)
-          (pulse-momentary-highlight-region
-           (point-min)
-           (save-excursion
-             (org-next-visible-heading 1)
-             (point))
-           'region))
-      (org-glance-overview:pull))
-    (save-buffer)))
+;; (define-key org-glance-overview-mode-map (kbd "g")
+;;   (org-glance:interactive-lambda
+;;     (if (org-before-first-heading-p)
+;;         (progn
+;;           (org-glance-overview:refresh-widgets)
+;;           (org-glance-overview:order-by)
+;;           (pulse-momentary-highlight-region
+;;            (point-min)
+;;            (save-excursion
+;;              (org-next-visible-heading 1)
+;;              (point))
+;;            'region))
+;;       (org-glance-overview:pull))
+;;     (save-buffer)))
 
-(define-key org-glance-overview-mode-map (kbd "v")
-  (org-glance-overview:for-one
-    (org-glance-overview:visit-headline)))
+;; (define-key org-glance-overview-mode-map (kbd "v")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:visit-headline)))
 
-(define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-(define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
-(define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
-(define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
-(define-key org-glance-overview-mode-map (kbd "d")
-  (org-glance:interactive-lambda
-    (cl-loop
-       for headline in (org-glance-headline:extract-from (current-buffer))
-       collect (save-window-excursion
-                 (org-glance-headline:visit (->> headline
-                                                 org-glance-headline:id
-                                                 org-glance-metastore:get-headline))
-                 (buffer-file-name))
-       into files
-       finally
-         (org-drill files))))
+;; (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
+;; (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
+;; (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
+;; (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
+;; (define-key org-glance-overview-mode-map (kbd "d")
+;;   (org-glance:interactive-lambda
+;;     (cl-loop
+;;        for headline in (org-glance-headline:extract-from (current-buffer))
+;;        collect (save-window-excursion
+;;                  (org-glance-headline:visit (->> headline
+;;                                                  org-glance-headline:id
+;;                                                  org-glance-metastore:get-headline))
+;;                  (buffer-file-name))
+;;        into files
+;;        finally
+;;          (org-drill files))))
 
-(define-key org-glance-overview-mode-map (kbd "k")
-  (org-glance-overview:for-one
-    (org-glance-overview:kill-headline)))
+;; (define-key org-glance-overview-mode-map (kbd "k")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:kill-headline)))
 
-(define-key org-glance-overview-mode-map (kbd "R")
-  (org-glance-overview:for-one
-    (org-glance-overview:move)))
+;; (define-key org-glance-overview-mode-map (kbd "R")
+;;   (org-glance-overview:for-one
+;;     (org-glance-overview:move)))
 
 ;; (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
-(define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
+;; (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
-(define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
+;; (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 
-(define-key org-glance-overview-mode-map (kbd "+")
-  (org-glance:interactive-lambda
-    (org-glance-overview:for-all
-        (org-glance-overview:capture :class (org-glance-overview:class))
-      (org-glance-overview:add-class))))
+;; (define-key org-glance-overview-mode-map (kbd "+")
+;;   (org-glance:interactive-lambda
+;;     (org-glance-overview:for-all
+;;         (org-glance-overview:capture :class (org-glance-overview:class))
+;;       (org-glance-overview:add-class))))
 
-(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
+;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
   (let* ((metastore-location (-some->> class
@@ -173,10 +181,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (error (let ((inhibit-read-only t)
                    (contents (org-glance-headline:contents headline)))
                (unless (string-empty-p contents)
-                 (beginning-of-buffer)
-                 (org-glance-headline:search-forward)
-                 (insert contents "\n")
-                 (save-buffer))))))
+                 (end-of-buffer)
+                 ;; (org-glance-headline:search-forward)
+                 (insert "\n" contents)
+                 ;; (save-buffer)
+                 )))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -190,37 +199,37 @@ If point is before the first heading, prompt for headline and eval forms on it."
                                                       (org-end-of-subtree t t)))
         (save-buffer)))))
 
-(cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
-  (org-glance-headline:with-materialized-headline headline
-    (let ((id (intern (org-glance-headline:id headline)))
-          (class (if (symbolp class) class (intern class))))
-      (org-glance-posit:write
-       (org-glance-posit (list class 'is-class))
-       (org-glance-posit (list id 'thing) (list class 'class))
-       (org-glance-posit (list id 'origin) :value (list (org-glance-headline:file headline) (org-glance-headline:begin headline)))
-       (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
-       (org-glance-posit (list id 'contents)
-                         :value (save-excursion
-                                  (org-end-of-meta-data t)
-                                  ""
-                                  ;; (base64-encode-string
-                                  ;;  (buffer-substring-no-properties (point) (point-max))
-                                  ;;  t)
-                                  ))
-       (org-glance-posit (list id 'extractable)
-                         :value (save-excursion
-                                  (org-end-of-meta-data t)
-                                  (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                    t)))
-       (org-glance-posit (list id 'openable)
-                         :value (save-excursion
-                                  (org-end-of-meta-data t)
-                                  (when (re-search-forward org-any-link-re nil t)
-                                    t)))
-       (org-glance-posit (list id 'decryptable)
-                         :value (save-excursion
-                                  (org-end-of-meta-data t)
-                                  (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
+;; (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
+;;   (org-glance-headline:with-materialized-headline headline
+;;     (let ((id (intern (org-glance-headline:id headline)))
+;;           (class (if (symbolp class) class (intern class))))
+;;       (org-glance-posit:write
+;;        (org-glance-posit (list class 'is-class))
+;;        (org-glance-posit (list id 'thing) (list class 'class))
+;;        (org-glance-posit (list id 'origin) :value (list (org-glance-headline:file headline) (org-glance-headline:begin headline)))
+;;        (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
+;;        (org-glance-posit (list id 'contents)
+;;                          :value (save-excursion
+;;                                   (org-end-of-meta-data t)
+;;                                   ""
+;;                                   ;; (base64-encode-string
+;;                                   ;;  (buffer-substring-no-properties (point) (point-max))
+;;                                   ;;  t)
+;;                                   ))
+;;        (org-glance-posit (list id 'extractable)
+;;                          :value (save-excursion
+;;                                   (org-end-of-meta-data t)
+;;                                   (when (re-search-forward org-glance:key-value-pair-re nil t)
+;;                                     t)))
+;;        (org-glance-posit (list id 'openable)
+;;                          :value (save-excursion
+;;                                   (org-end-of-meta-data t)
+;;                                   (when (re-search-forward org-any-link-re nil t)
+;;                                     t)))
+;;        (org-glance-posit (list id 'decryptable)
+;;                          :value (save-excursion
+;;                                   (org-end-of-meta-data t)
+;;                                   (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
 
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
@@ -333,7 +342,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
     (org-glance-overview:register-headline-in-metastore headline class)
     (org-glance-overview:register-headline-in-overview headline class)
-    (org-glance-overview:register-headline-in-write-ahead-log headline class)
+    ;; (org-glance-overview:register-headline-in-write-ahead-log headline class)
 
     (org-overview)
     (org-glance-headline:search-buffer-by-id id)))
@@ -360,18 +369,56 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
             ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
               ))))
 
+(cl-defun org-glance-overview:sync-headlines ()
+  (when (and org-glance-overview:changed-headlines
+             (y-or-n-p (format "%d headline%s has been changed. Syncronize with origins?"
+                               (length org-glance-overview:changed-headlines)
+                               (if (> (length org-glance-overview:changed-headlines) 1) "s" ""))))
+
+    (cl-loop
+       for id in org-glance-overview:changed-headlines
+       do (save-excursion
+            (org-glance-headline:search-buffer-by-id id)
+            (let ((contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t)))))
+              (save-window-excursion
+                (save-excursion
+                  (->> (org-glance-headline:at-point)
+                       org-glance-headline:id
+                       org-glance-metastore:get-headline
+                       org-glance-headline:visit)
+                  (save-restriction
+                    (org-narrow-to-subtree)
+                    (unless (string= (buffer-substring-no-properties (point-min) (point-max)) contents)
+                      (delete-region (point-min) (point-max))
+                      (insert contents)
+                      (save-buffer)
+                      (kill-buffer))))
+                (hlt-unhighlight-region (point) (save-excursion (org-end-of-subtree t t))))))))
+
+  (setq-local org-glance-overview:changed-headlines '()))
+
+(cl-defun org-glance-overview:track-changes (start end old-len)
+  (save-match-data
+    (let ((diff (buffer-substring-no-properties start end)))
+      (when (and (not (org-before-first-heading-p))
+                 (not (and (eobp) (string= diff "\n"))))
+        (when-let (id (org-glance-headline:id))
+          (cl-pushnew id org-glance-overview:changed-headlines :test #'string=)
+          (hlt-highlight-region (org-glance-headline:begin)
+                                (save-excursion (org-end-of-subtree t t))
+                                'org-glance-headline-changed-face))))))
+
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (read-only-mode 'toggle)
-  ;; (when (org-collect-keywords '("COLUMNS"))
-  ;;   (org-columns))
-  )
+  (defvar-local org-glance-overview:changed-headlines '())
+  (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
+  (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
 
-(define-key org-glance-edit-mode-map (kbd "C-c C-c") 'org-glance-edit-mode:apply)
+;; (define-key org-glance-edit-mode-map (kbd "C-c C-c") 'org-glance-edit-mode:apply)
 
 (define-minor-mode org-glance-edit-mode
     "A minor mode to edit and sync overview files."
@@ -412,7 +459,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      do (return view-id)))
 
 (cl-defun org-glance-overview:partition-by (partition-method &key (test #'equal) (comparator #'<))
-  (declare (indent 2) (debug t))
+  (declare (indent 2))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
@@ -420,7 +467,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (while (< (point) (point-max))
         (let* ((group-state (funcall partition-method))
                (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
-               (contents (buffer-substring-no-properties (point) (org-end-of-subtree))))
+               (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
           (with-current-buffer group-buffer
             (org-mode)
             (unless (gethash group-state buffers)
