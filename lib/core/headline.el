@@ -470,4 +470,17 @@ metastore.")
                      "-")))
     'directory)))
 
+(cl-defun org-glance-headline:trim (headline)
+  "Trim HEADLINE contents."
+  (let ((contents (org-glance-headline:contents headline))
+        (indent (org-glance-headline:level headline)))
+    (with-temp-buffer
+      (org-mode)
+      (insert contents)
+      (goto-char (point-min))
+      (cl-loop for i from 1 to (1- indent)
+         do (org-demote-subtree))
+      (org-end-of-meta-data)
+      (s-trim (buffer-substring-no-properties (point-min) (point))))))
+
 (org-glance:provide)

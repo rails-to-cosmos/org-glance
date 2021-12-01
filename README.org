@@ -21,6 +21,7 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** TODO completing read
 ** TODO proper table view
 ** TODO mentions in capture
 ** TODO material mode: proper tags removal (update local buffer variables)

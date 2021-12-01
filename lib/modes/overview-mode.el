@@ -17,8 +17,7 @@
 
 #+CATEGORY: ${category}
 #+STARTUP: overview
-${custom-header}
-")
+${custom-header}")
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
@@ -37,7 +36,7 @@ ${custom-header}
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
 ;; rebuild view and reread all files from view's scope
-;; (define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
+(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -75,84 +74,80 @@ If point is before the first heading, prompt for headline and eval forms on it."
      ,@forms))
 
 ;; lightweight methods applied for current headline
-;; (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
-;; (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
-;; (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
-;; (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
-;; (define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
+(define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
+(define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
+(define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
+(define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
+(define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
 
-;; (define-key org-glance-overview-mode-map (kbd "RET")
-;;   (org-glance-overview:for-one
-;;     (org-glance-overview:materialize-headline)))
+(define-key org-glance-overview-mode-map (kbd "RET")
+  (org-glance-overview:for-one
+    (org-glance-overview:materialize-headline)))
 
-;; (define-key org-glance-overview-mode-map (kbd "/")
-;;   (org-glance:interactive-lambda
-;;     (org-glance-overview:choose-headline-and-jump)))
+(define-key org-glance-overview-mode-map (kbd "/")
+  (org-glance:interactive-lambda
+    (org-glance-overview:choose-headline-and-jump)))
 
-;; (define-key org-glance-overview-mode-map (kbd "F")
-;;   (org-glance-overview:for-one
-;;     (org-attach-reveal-in-emacs)))
+(define-key org-glance-overview-mode-map (kbd "F")
+  (org-glance-overview:for-one
+    (org-attach-reveal-in-emacs)))
 
-;; (define-key org-glance-overview-mode-map (kbd "!")
-;;   (org-glance-overview:for-each
-;;     (org-glance-overview:doctor)))
+(define-key org-glance-overview-mode-map (kbd "!")
+  (org-glance-overview:for-each
+    (org-glance-overview:doctor)))
 
-;; (define-key org-glance-overview-mode-map (kbd "g")
-;;   (org-glance:interactive-lambda
-;;     (if (org-before-first-heading-p)
-;;         (progn
-;;           (org-glance-overview:refresh-widgets)
-;;           (org-glance-overview:order-by)
-;;           (pulse-momentary-highlight-region
-;;            (point-min)
-;;            (save-excursion
-;;              (org-next-visible-heading 1)
-;;              (point))
-;;            'region))
-;;       (org-glance-overview:pull))
-;;     (save-buffer)))
+(define-key org-glance-overview-mode-map (kbd "g")
+  (org-glance:interactive-lambda
+    (if (org-before-first-heading-p)
+        (progn
+          (org-glance-overview:refresh-widgets)
+          (org-glance-overview:order-by)
+          (pulse-momentary-highlight-region
+           (point-min)
+           (save-excursion
+             (org-next-visible-heading 1)
+             (point))
+           'region))
+      (org-glance-overview:pull))
+    (save-buffer)))
 
-;; (define-key org-glance-overview-mode-map (kbd "v")
-;;   (org-glance-overview:for-one
-;;     (org-glance-overview:visit-headline)))
+(define-key org-glance-overview-mode-map (kbd "v")
+  (org-glance-overview:for-one
+    (org-glance-overview:visit-headline)))
 
-;; (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-;; (define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
-;; (define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
-;; (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
-;; (define-key org-glance-overview-mode-map (kbd "d")
-;;   (org-glance:interactive-lambda
-;;     (cl-loop
-;;        for headline in (org-glance-headline:extract-from (current-buffer))
-;;        collect (save-window-excursion
-;;                  (org-glance-headline:visit (->> headline
-;;                                                  org-glance-headline:id
-;;                                                  org-glance-metastore:get-headline))
-;;                  (buffer-file-name))
-;;        into files
-;;        finally
-;;          (org-drill files))))
+(define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
+(define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
+(define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
+(define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
+(define-key org-glance-overview-mode-map (kbd "d")
+  (org-glance:interactive-lambda
+    (cl-loop
+       for headline in (org-glance-headline:extract-from (current-buffer))
+       collect (save-window-excursion
+                 (org-glance-headline:visit (->> headline
+                                                 org-glance-headline:id
+                                                 org-glance-metastore:get-headline))
+                 (buffer-file-name))
+       into files
+       finally
+         (org-drill files))))
 
-;; (define-key org-glance-overview-mode-map (kbd "k")
-;;   (org-glance-overview:for-one
-;;     (org-glance-overview:kill-headline)))
+(define-key org-glance-overview-mode-map (kbd "k")
+  (org-glance-overview:for-one
+    (org-glance-overview:kill-headline)))
 
-;; (define-key org-glance-overview-mode-map (kbd "R")
-;;   (org-glance-overview:for-one
-;;     (org-glance-overview:move)))
+(define-key org-glance-overview-mode-map (kbd "R")
+  (org-glance-overview:for-one
+    (org-glance-overview:move)))
 
-;; (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
-;; (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
+(define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
+(define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
-;; (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
+(define-key org-glance-overview-mode-map (kbd "+")
+  (org-glance:interactive-lambda
+    (org-glance-overview:capture :class (org-glance-overview:class))))
 
-;; (define-key org-glance-overview-mode-map (kbd "+")
-;;   (org-glance:interactive-lambda
-;;     (org-glance-overview:for-all
-;;         (org-glance-overview:capture :class (org-glance-overview:class))
-;;       (org-glance-overview:add-class))))
-
-;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
+(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
   (let* ((metastore-location (-some->> class
@@ -179,13 +174,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
           (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
           (org-glance-overview:pull))
       (error (let ((inhibit-read-only t)
-                   (contents (org-glance-headline:contents headline)))
+                   (contents (org-glance-headline:trim headline)))
                (unless (string-empty-p contents)
                  (end-of-buffer)
-                 ;; (org-glance-headline:search-forward)
                  (insert "\n" contents)
-                 ;; (save-buffer)
-                 )))))
+                 (save-buffer))))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -411,13 +404,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (defvar-local org-glance-overview:changed-headlines '())
-  (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
-  (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t))
+  (read-only-mode 'toggle))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
 
+;; (define-key org-glance-overview-mode-map (kbd "C-c C-p") #'org-glance-edit-mode:start)
 ;; (define-key org-glance-edit-mode-map (kbd "C-c C-c") 'org-glance-edit-mode:apply)
 
 (define-minor-mode org-glance-edit-mode
@@ -428,10 +420,16 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (org-glance-edit-mode +1)
   (org-glance-overview-mode -1)
+  (defvar-local org-glance-overview:changed-headlines '())
+  (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
+  ;; (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t)
+
   (org-glance:log-info "Edit mode is now enabled."))
 
 (cl-defun org-glance-edit-mode:apply ()
   (interactive)
+  (org-glance-overview:sync-headlines)
+  (setq-local after-change-functions (cl-remove 'org-glance-overview:track-changes after-change-functions))
   (org-glance-edit-mode -1)
   (org-glance-overview-mode +1)
   (org-glance:log-info "All changes have been applied."))
@@ -685,17 +683,16 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
          (current-headline-title (org-glance-headline:title current-headline))
-         (current-headline-indent (org-glance-headline:level current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (original-headline-contents (org-glance-headline:contents original-headline)))
+         (trimmed-contents (org-glance-headline:trim original-headline)))
     (cond
-      ((null original-headline-contents)
+      ((null trimmed-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
            (org-glance-overview:kill-headline :force t)
          (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
        nil)
-      ((string= current-headline-contents original-headline-contents)
+      ((string= current-headline-contents trimmed-contents)
        (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
        t)
       (t (save-excursion
@@ -703,10 +700,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (org-glance-headline:search-parents)
              (org-narrow-to-subtree)
              (delete-region (point-min) (point-max))
-             (insert original-headline-contents)
-             (goto-char (point-min))
-             (cl-loop for i from 1 to (1- current-headline-indent)
-                do (org-demote-subtree))))
+             (insert trimmed-contents)))
          (org-overview)
          (goto-char initial-point)
          (org-align-tags t)
