@@ -292,12 +292,12 @@ metastore.")
           ;; (state-label (if (string-empty-p state) "" (format "*%s*" state)))
           (title (org-glance-headline:title ,headline))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
-          (category (if-let (category (org-element-property :CATEGORY headline))
-                        (downcase (format "=%s= " category))
-                      ""))
+          ;; (category (if-let (category (org-element-property :CATEGORY headline))
+          ;;               (downcase (format "=%s= " category))
+          ;;             ""))
           (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
      (s-trim
-      (org-glance:format "${category}[[org-glance-visit:${id}][${stateless-title}]]"))))
+      (org-glance:format "[[org-glance-visit:${id}][${stateless-title}]]"))))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
