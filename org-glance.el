@@ -110,6 +110,7 @@
 
   lib.modes.overview-mode               ; good one, improve
   lib.modes.material-mode
+  lib.modes.agenda-mode
 
   lib.view.links
 
@@ -197,24 +198,24 @@
            (or (looking-back "^" 1)
                (looking-back "[[:space:]]" 1)))
       (condition-case nil
-          (org-glance:ensure-headline-apply
-              :action (lambda (headline)
-                        (let ((source (org-glance-headline:at-point))
-                              (target-title (org-glance-headline:format headline))
-                              (ts (org-glance-now)))
-                          (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts)
-                          (insert target-title)
-                          (when source
-                            (let ((source-title (org-glance-headline:format source)))
-                              (save-window-excursion
-                                (save-excursion
-                                  (org-glance-headline:with-materialized-headline headline
-                                    (org-glance-headline:add-log-note
-                                     (format "- Mentioned by %s on %s" source-title ts))))))))))
+          (org-glance:choose-headline-apply
+           :action (lambda (headline)
+                     (let ((source (org-glance-headline:at-point))
+                           (target-title (org-glance-headline:format headline))
+                           (ts (org-glance-now)))
+                       (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts)
+                       (insert target-title)
+                       (when source
+                         (let ((source-title (org-glance-headline:format source)))
+                           (save-window-excursion
+                             (save-excursion
+                               (org-glance-headline:with-materialized-headline headline
+                                 (org-glance-headline:add-log-note
+                                  (format "- Mentioned by %s on %s" source-title ts))))))))))
         (quit (insert "@")))
     (insert "@")))
 
-(cl-defmacro org-glance:ensure-headline-apply (&key headline filter action)
+(cl-defmacro org-glance:apply-on (headline &key action)
   "If HEADLINE specified, apply ACTION on it.
 
 If HEADLINE is not specified, ask user to choose HEADLINE from
@@ -222,34 +223,45 @@ existing headlines filtered by FILTER.
 
 If user chooses unexisting headline, capture it and apply ACTION
 after capture process has been finished."
-  `(if ,headline
-       (funcall ,action ,headline)
-     (condition-case default
-         (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
-               (t (funcall ,action (org-glance-metastore:choose-headline))))
-       (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
-                                                              (<point> (point)))
-                                                  (org-glance-overview:capture
-                                                   :default (cadr default)
-                                                   :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
-                                                   :callback (lambda ()
-                                                               (let ((<hl> (org-glance-overview:original-headline)))
-                                                                 (switch-to-buffer <buffer>)
-                                                                 (goto-char <point>)
-                                                                 (funcall ,action <hl>)))))))))
+  (declare (indent 1))
+  `(funcall ,action ,headline))
+
+(cl-defmacro org-glance:choose-headline-apply (&key filter action)
+  "If HEADLINE specified, apply ACTION on it.
+
+If HEADLINE is not specified, ask user to choose HEADLINE from
+existing headlines filtered by FILTER.
+
+If user chooses unexisting headline, capture it and apply ACTION
+after capture process has been finished."
+  `(condition-case default
+       (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
+             (t (funcall ,action (org-glance-metastore:choose-headline))))
+     (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
+                                                            (<point> (point)))
+                                                (org-glance-overview:capture
+                                                 :default (cadr default)
+                                                 :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
+                                                 :callback (lambda ()
+                                                             (let ((<hl> (org-glance-overview:original-headline)))
+                                                               (switch-to-buffer <buffer>)
+                                                               (goto-char <point>)
+                                                               (funcall ,action <hl>))))))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
   (interactive)
-  (org-glance:ensure-headline-apply
-      :headline headline
-      :filter (lambda (headline)
-                (org-glance-headline:active? headline))
-      :action (lambda (headline)
-                (let ((buffer (org-glance-headline:materialized-buffer headline)))
-                  (if (buffer-live-p buffer)
-                      (switch-to-buffer buffer)
-                    (org-glance-headline:materialize headline))))))
+  (let ((action (lambda (headline)
+                  (let ((buffer (org-glance-headline:materialized-buffer headline)))
+                    (if (buffer-live-p buffer)
+                        (switch-to-buffer buffer)
+                      (org-glance-headline:materialize headline))))))
+    (if headline
+        (org-glance:apply-on headline
+          :action action)
+      (org-glance:choose-headline-apply
+       :filter #'org-glance-headline:active?
+       :action action))))
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
@@ -257,41 +269,48 @@ If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
-  (org-glance:ensure-headline-apply
-   :headline headline
-   :filter (lambda (headline) (and
-                          (org-glance-headline:active? headline)
-                          (org-glance-headline:contains-link? headline)))
-   :action (lambda (headline) (org-glance-headline:with-materialized-headline headline
-                           ;; (org-end-of-meta-data t)
-                           (narrow-to-region (point) (point-max))
-                           (let* ((links (org-glance:buffer-links))
-                                  (position (cond
-                                              ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                                              ((= (length links) 1) (cdar links))
-                                              (t (user-error "Unable to find links in headline")))))
-                             (goto-char position)
-                             (org-open-at-point))))))
+  (let ((action (lambda (headline)
+                  (org-glance-headline:with-materialized-headline headline
+                    ;; (org-end-of-meta-data t)
+                    ;; (narrow-to-region (point) (point-max))
+                    (let* ((links (--filter (not (s-contains? "org-glance" (car it))) (org-glance:buffer-links)))
+                           (position (cond
+                                       ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
+                                       ((= (length links) 1) (cdar links))
+                                       (t (user-error "Unable to find links in headline")))))
+                      (goto-char position)
+                      (org-open-at-point))))))
+    (if headline
+        (org-glance:apply-on headline
+          :action action)
+      (org-glance:choose-headline-apply
+       :filter (lambda (headline)
+                 (and
+                  (org-glance-headline:active? headline)
+                  (org-glance-headline:contains-link? headline)))
+       :action action))))
 
 (cl-defun org-glance:extract (&optional headline)
   (interactive)
   "Materialize HEADLINE and retrieve key-value pairs from its contents.
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
-  (org-glance:ensure-headline-apply
-      :headline headline
-      :filter (lambda (headline)
-                (and
-                 (org-glance-headline:active? headline)
-                 (or (org-glance-headline:contains-property? headline)
-                     (org-glance-headline:encrypted? headline))))
-      :action (lambda (headline)
-                (let ((pairs (org-glance-headline:with-materialized-headline headline
-                               (org-glance:get-buffer-key-value-pairs))))
-                  (while t
-                    (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+  (let ((action (lambda (headline)
+                  (let ((pairs (org-glance-headline:with-materialized-headline headline
+                                 (org-glance:get-buffer-key-value-pairs))))
+                    (while t
+                      (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+    (if headline
+        (org-glance:apply-on headline
+          :action action)
+      (org-glance:choose-headline-apply
+       :filter (lambda (headline)
+                 (and
+                  (org-glance-headline:active? headline)
+                  (or (org-glance-headline:contains-property? headline)
+                      (org-glance-headline:encrypted? headline))))
+       :action action))))
 
 (cl-defun org-glance:clone-headline ()
-
   (when org-glance-material-mode
     (lexical-let ((buffer (current-buffer)))
       (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
@@ -301,7 +320,16 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
 
   (lexical-let ((contents (save-excursion
                             (org-back-to-heading t)
-                            (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t))))))
+                            (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
+                                  (pinned (save-excursion
+                                            (cl-loop
+                                               while (search-forward "#+begin_pin" nil t)
+                                               collect (save-excursion
+                                                         (beginning-of-line)
+                                                         (buffer-substring-no-properties (point) (save-excursion
+                                                                                                   (search-forward "#+end_pin" nil t)
+                                                                                                   (point))))))))
+                              (s-join "\n\n" (append (list header) pinned))))))
     (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
                                          (insert contents)
                                          (goto-char (point-min))

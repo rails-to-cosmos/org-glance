@@ -477,26 +477,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
        for key in (sort (hash-table-keys buffers) comparator)
        collect (gethash key buffers))))
 
-(cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
-  (with-temp-buffer
-
-    (insert
-     (with-temp-buffer
-       (calendar-generate-month (car date) (caddr date) 0)
-       (buffer-substring-no-properties (point-min) (point-max))))
-
-    (goto-char (point-min))
-
-    (while (re-search-forward "\\([[:digit:]]\\{4\\}\\)" nil t)
-      (replace-match "[[elisp:(-og-calw-y \\1)][\\1]]"))
-
-    (while (re-search-forward "\\([[:digit:]]\\{1,2\\}\\)" nil t)
-      (if (= (string-to-number (match-string 1)) (cadr date))
-          (replace-match "*\\1*")
-        (replace-match "[[elisp:(-og-calw-d \\1)][\\1]]")))
-
-    (buffer-substring-no-properties (point-min) (point-max))))
-
 (cl-defun org-glance-overview:template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
         (capture-template-config-file (f-join (org-glance-overview:directory class) "template.org")))

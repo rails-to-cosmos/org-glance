@@ -19,15 +19,15 @@
 
 (defvar org-glance-materialized-buffers (make-hash-table))
 
-(defvar --org-glance-materialized-headline:classes nil)
-(defvar --org-glance-materialized-headline:begin nil)
-(defvar --org-glance-materialized-headline:file nil)
-(defvar --org-glance-materialized-headline:buffer nil)
-(defvar --org-glance-materialized-headline:hash nil)
-(defvar --org-glance-materialized-headline:id nil)
-(defvar --org-glance-materialized-headline:indent nil)
-(defvar --org-glance-materialized-headline:password nil)
-(defvar --org-glance-materialized-headline:clock-marker-position nil)
+(defvar-local --org-glance-materialized-headline:classes nil)
+(defvar-local --org-glance-materialized-headline:begin nil)
+(defvar-local --org-glance-materialized-headline:file nil)
+(defvar-local --org-glance-materialized-headline:buffer nil)
+(defvar-local --org-glance-materialized-headline:hash nil)
+(defvar-local --org-glance-materialized-headline:id nil)
+(defvar-local --org-glance-materialized-headline:indent nil)
+(defvar-local --org-glance-materialized-headline:password nil)
+(defvar-local --org-glance-materialized-headline:clock-marker-position nil)
 
 (defcustom org-glance-after-materialize-hook nil
   "Normal hook that is run after a buffer is materialized in separate buffer."
@@ -201,7 +201,11 @@
        (insert contents)
        (goto-char (point-min))
        (org-content 1)
+
        (org-cycle-hide-drawers 'all)
+       (org-display-inline-images)
+       (org-hide-block-all)
+       (org-cycle 'contents)
 
        (org-glance:log-info "Set local variables")
        (set (make-local-variable '--org-glance-materialized-headline:id) id)
@@ -219,7 +223,6 @@
        (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
        (org-glance-headline:promote-to-the-first-level)
 
-       (org-cycle 'contents)
        (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
        (current-buffer)))))
 
