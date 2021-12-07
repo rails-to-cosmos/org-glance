@@ -84,33 +84,19 @@
   (let* ((headlines (cl-loop
                        for class being the hash-keys of org-glance:classes
                        append (cl-loop
-                                 for headline in (org-glance-view:headlines class)
-                                 when (funcall filter headline)
+                                 for headline in (-filter filter (org-glance-view:headlines class))
                                  collect (cons ;; duplication of format*
-                                          (format "[%s] %s"
-                                                  ;; (cl-loop
-                                                  ;;    for icon in (list
-                                                  ;;                 ""
-                                                  ;;                 ;; (when (org-glance-headline:encrypted? headline) (propertize "🔒" 'face 'bold))
-                                                  ;;                 ;; (when (org-glance-headline:contains-link? headline) (let ((s "A"))
-                                                  ;;                 ;;                                                (add-face-text-property 0 1 '(:underline t :weight bold) nil s)
-                                                  ;;                 ;;                                                s))
-                                                  ;;                 ;; (when (org-glance-headline:contains-property? headline) "property")
-                                                  ;;                 )
-                                                  ;;    when icon
-                                                  ;;    collect icon into modifiers
-                                                  ;;    finally (return (if modifiers
-                                                  ;;                        (concat "" (s-join ", " modifiers) " ")
-                                                  ;;                      "")))
-                                                  class
-                                                  (org-glance-headline:title headline))
-                                          headline))))
+                                          (format "[%s] %s" class (org-glance-headline:title headline))
+                                          (list headline class)))))
          (choice (org-completing-read "Headline: " headlines))
-         (headline (alist-get choice headlines nil nil #'string=)))
-    (unless headline
+         (headline.class (alist-get choice headlines nil nil #'string=)))
+    (unless headline.class
       (org-glance-exception:HEADLINE-NOT-FOUND choice))
 
-    (org-glance-headline:narrow headline
-      (org-glance-headline:create-from-element-at-point))))
+    (let ((headline (car headline.class))
+          (class (cadr headline.class)))
+      (org-glance-headline:narrow headline
+        (org-glance-headline:enrich (org-glance-headline:create-from-element-at-point)
+          :class class)))))
 
 (org-glance:provide)

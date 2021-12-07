@@ -127,7 +127,6 @@
 (declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
 (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
-(declare-function org-glance-overview:capture (org-glance-module-filename lib.modes.overview-mode))
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
@@ -215,17 +214,6 @@
         (quit (insert "@")))
     (insert "@")))
 
-(cl-defmacro org-glance:apply-on (headline &key action)
-  "If HEADLINE specified, apply ACTION on it.
-
-If HEADLINE is not specified, ask user to choose HEADLINE from
-existing headlines filtered by FILTER.
-
-If user chooses unexisting headline, capture it and apply ACTION
-after capture process has been finished."
-  (declare (indent 1))
-  `(funcall ,action ,headline))
-
 (cl-defmacro org-glance:choose-headline-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.
 
@@ -239,7 +227,7 @@ after capture process has been finished."
              (t (funcall ,action (org-glance-metastore:choose-headline))))
      (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
                                                             (<point> (point)))
-                                                (org-glance-overview:capture
+                                                (org-glance:capture
                                                  :default (cadr default)
                                                  :class (org-glance:choose-class "Unknown thing. Please, specify it's class to capture: ")
                                                  :callback (lambda ()
@@ -257,8 +245,7 @@ after capture process has been finished."
                         (switch-to-buffer buffer)
                       (org-glance-headline:materialize headline))))))
     (if headline
-        (org-glance:apply-on headline
-          :action action)
+        (funcall action headline)
       (org-glance:choose-headline-apply
        :filter #'org-glance-headline:active?
        :action action))))
@@ -281,8 +268,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                       (goto-char position)
                       (org-open-at-point))))))
     (if headline
-        (org-glance:apply-on headline
-          :action action)
+        (funcall action headline)
       (org-glance:choose-headline-apply
        :filter (lambda (headline)
                  (and
@@ -300,8 +286,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                     (while t
                       (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
     (if headline
-        (org-glance:apply-on headline
-          :action action)
+        (funcall action headline)
       (org-glance:choose-headline-apply
        :filter (lambda (headline)
                  (and
@@ -309,6 +294,15 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                   (or (org-glance-headline:contains-property? headline)
                       (org-glance-headline:encrypted? headline))))
        :action action))))
+
+(cl-defun org-glance:prototype ()
+  (interactive)
+  "Capture headline based on chosen prototype."
+  (org-glance:choose-headline-apply
+   :action (lambda (headline)
+             (org-glance:capture
+              :class (org-element-property :class headline)
+              :template (org-glance-headline:contents headline)))))
 
 (cl-defun org-glance:clone-headline ()
   (when org-glance-material-mode
@@ -338,6 +332,29 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                                             do (let ((captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
                                                  (org-glance-overview:register-headline-in-metastore captured-headline class)
                                                  (org-glance-overview:register-headline-in-overview captured-headline class))))))))
+
+(cl-defun org-glance:capture
+    (&key
+       (class (org-glance:choose-class))
+       (file (make-temp-file "org-glance-" nil ".org"))
+       (default "")
+       (callback nil)
+       (template (org-glance-overview:template class :default default)))
+  (interactive)
+  (let ((class (if (symbolp class) class (intern class))))
+    (org-glance:log-debug "User input: %s" default)
+    (find-file file)
+    (setq-local org-glance-capture:id (format "%s-%s-%s"
+                                              class
+                                              system-name
+                                              (s-join "-" (mapcar #'number-to-string (current-time))))
+                org-glance-capture:class class
+                org-glance-capture:default default)
+    (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
+    (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+    (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
+    (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
+      (org-capture nil "_"))))
 
 (cl-defun org-glance
     (&key db

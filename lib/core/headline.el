@@ -230,6 +230,8 @@ metastore.")
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
+  "Extracts HEADLINE contents.
+FIXME. Unstable one. Refactor is needed."
   (let ((file (org-glance-headline:file headline))
         (buffer (org-glance-headline:buffer headline)))
     (cond (file (with-temp-buffer

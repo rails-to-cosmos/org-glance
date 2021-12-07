@@ -145,7 +145,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
-    (org-glance-overview:capture :class (org-glance-overview:class))))
+    (org-glance:capture :class (org-glance-overview:class))))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
@@ -264,29 +264,6 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (when remove-original
               (delete-region (point-min) (point-max)))
             result))))))
-
-(cl-defun org-glance-overview:capture
-    (&key
-       (class (org-glance:choose-class))
-       (file (make-temp-file "org-glance-" nil ".org"))
-       (default "")
-       (callback nil))
-  (interactive)
-  (org-glance:log-debug "User input: %s" default)
-  (find-file file)
-  (setq-local org-glance-capture:id (format "%s-%s-%s"
-                                            class
-                                            system-name
-                                            (s-join "-" (mapcar #'number-to-string (current-time))))
-              org-glance-capture:class (if (symbolp class) class (intern class))
-              org-glance-capture:default default)
-
-  (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
-  (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
-  (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-  (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file)
-                                           (org-glance-overview:template class :default default)))))
-    (org-capture nil "_")))
 
 (cl-defun org-glance-capture:prepare-finalize-hook ()
   "Preprocess headline before capturing.
@@ -434,11 +411,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (org-glance-overview-mode +1)
   (org-glance:log-info "All changes have been applied."))
 
-(cl-defun org-glance-overview:directory (&optional (view-id (org-glance-view:completing-read)))
-  "Path to file where VIEW-ID headlines are stored."
-  (let ((view-name (s-downcase (format "%s" view-id))))
+(cl-defun org-glance-overview:directory (&optional (class (org-glance-view:completing-read)))
+  "Path to file where CLASS headlines are stored."
+  (let ((class-name (s-downcase (format "%s" class))))
     (abbreviate-file-name
-     (f-join org-glance-directory view-name))))
+     (f-join org-glance-directory class-name))))
 
 (cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
