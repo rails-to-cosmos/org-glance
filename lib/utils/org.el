@@ -129,10 +129,13 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
 
 (cl-defun org-glance:buffer-links ()
   "Retrieve all `org-link' positions from current buffer."
-  (org-element-map (org-element-parse-buffer) 'link
-    (lambda (link)
-      (let ((caption (substring-no-properties (or (nth 2 link) (org-element-property :raw-link link))))
-            (position (org-element-property :begin link)))
-        (cons caption position)))))
+  (remove-if #'null
+             (org-element-map (org-element-parse-buffer) 'link
+               (lambda (link)
+                 (let ((raw-link (org-element-property :raw-link link)))
+                   (unless (s-starts-with? "org-glance" raw-link)
+                     (let ((caption (substring-no-properties (or (nth 2 link) raw-link)))
+                           (position (org-element-property :begin link)))
+                       (cons caption position))))))))
 
 (org-glance:provide)
