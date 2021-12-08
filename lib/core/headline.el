@@ -251,8 +251,14 @@ FIXME. Unstable one. Refactor is needed."
                           (widen)
                           (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
                           (org-narrow-to-subtree)
-                          (org-glance-headline:promote-to-the-first-level)
-                          (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
+                          (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                            (with-temp-buffer
+                              (org-mode)
+                              (insert contents)
+                              (goto-char (point-min))
+                              (outline-next-heading)
+                              (org-glance-headline:promote-to-the-first-level)
+                              (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
           (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))))
 
 (cl-defgeneric org-glance-headline:extract-from (scope)
@@ -474,8 +480,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:trim (&optional (headline (org-glance-headline:at-point)))
   "Trim HEADLINE contents."
-  (let ((contents (org-glance-headline:contents headline))
-        (indent (org-glance-headline:level headline)))
+  (let ((contents (org-glance-headline:contents headline)))
     (with-temp-buffer
       (org-mode)
       (insert contents)
@@ -487,13 +492,10 @@ FIXME. Unstable one. Refactor is needed."
                                            collect (org-element-property :raw-value timestamp))))))
             (header (save-excursion
                       (goto-char (point-min))
-                      (cl-loop
-                         for i from 1 to (1- indent)
-                         do (org-demote-subtree))
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point))))))
         (concat header (if timestamps
-                           (concat "\n\nActive timestamps: " (s-join ", " timestamps))
+                           (concat "\n:TIMESTAMPS:\n- " (s-join "\n- " timestamps) "\n:END:")
                          ""))))))
 
 (org-glance:provide)
