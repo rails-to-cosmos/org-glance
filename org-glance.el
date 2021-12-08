@@ -172,6 +172,26 @@
                                      (org-glance-headline:repeated-p))
                                 (org-glance:clone-headline))))
 
+  (advice-add 'org-auto-repeat-maybe :after
+              (lambda (&rest args) (when (and
+                                     (or org-glance-material-mode org-glance-overview-mode)
+                                     org-glance-clone-on-repeat-p
+                                     (org-glance-headline:repeated-p))
+                                (let ((contents (save-excursion
+                                                  (org-back-to-heading t)
+                                                  (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
+                                                        (pinned (save-excursion
+                                                                  (cl-loop
+                                                                     while (search-forward "#+begin_pin" nil t)
+                                                                     collect (save-excursion
+                                                                               (beginning-of-line)
+                                                                               (buffer-substring-no-properties (point) (save-excursion
+                                                                                                                         (search-forward "#+end_pin" nil t)
+                                                                                                                         (point))))))))
+                                                    (s-join "\n" (append (list header) pinned))))))
+                                  (delete-region (point-min) (point-max))
+                                  (insert contents)))))
+
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)
      do (let ((class (intern directory)))
@@ -315,32 +335,19 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
   ;;                                              (org-glance-materialized-headline:sync)
   ;;                                            (org-glance-exception:HEADLINE-NOT-MODIFIED nil)))))))
 
-  (lexical-let ((contents (org-glance-headline:contents)
-                          ;; (save-excursion
-                          ;;   (org-back-to-heading t)
-                          ;;   (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
-                          ;;         (pinned (save-excursion
-                          ;;                   (cl-loop
-                          ;;                      while (search-forward "#+begin_pin" nil t)
-                          ;;                      collect (save-excursion
-                          ;;                                (beginning-of-line)
-                          ;;                                (buffer-substring-no-properties (point) (save-excursion
-                          ;;                                                                          (search-forward "#+end_pin" nil t)
-                          ;;                                                                          (point))))))))
-                          ;;     (s-join "\n\n" (append (list header) pinned)))
-                          ;;   )
-                          ))
-    (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
-                                         (insert contents)
-                                         (goto-char (point-min))
+  (lexical-let ((contents (org-glance-headline:contents)))
+    (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
+                                         (with-temp-buffer
+                                           (insert contents)
+                                           (goto-char (point-min))
 
-                                         (org-tss:reset-buffer-timestamps-except-earliest)
+                                           (org-tss:reset-buffer-timestamps-except-earliest)
 
-                                         (cl-loop
-                                            for class in (org-glance-headline:classes)
-                                            do (let ((captured-headline (org-glance:capture-headline-at-point class)))
-                                                 (org-glance-overview:register-headline-in-metastore captured-headline class)
-                                                 (org-glance-overview:register-headline-in-overview captured-headline class))))))))
+                                           (cl-loop
+                                              for class in (org-glance-headline:classes)
+                                              do (let ((captured-headline (org-glance:capture-headline-at-point class)))
+                                                   (org-glance-overview:register-headline-in-metastore captured-headline class)
+                                                   (org-glance-overview:register-headline-in-overview captured-headline class)))))))))
 
 (cl-defun org-glance:capture
     (&key

@@ -205,6 +205,14 @@
        (org-cycle-hide-drawers 'all)
        (org-display-inline-images)
        (org-hide-block-all)
+
+       ;; show pins by default
+       (org-element-map (org-element-parse-buffer) 'special-block
+         (lambda (special-block) (when (string= "pin" (org-element-property :type special-block))
+                              (save-excursion
+                                (goto-char (org-element-property :begin special-block))
+                                (org-hide-block-toggle 'off)))))
+
        (org-cycle 'contents)
 
        (org-glance:log-info "Set local variables")
