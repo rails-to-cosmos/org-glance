@@ -202,7 +202,8 @@
                      (let ((source (org-glance-headline:at-point))
                            (target-title (org-glance-headline:format headline))
                            (ts (org-glance-now)))
-                       (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts)
+                       (when source
+                         (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts))
                        (insert target-title)
                        (when source
                          (let ((source-title (org-glance-headline:format source)))
