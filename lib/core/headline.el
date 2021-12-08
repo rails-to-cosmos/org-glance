@@ -472,17 +472,28 @@ FIXME. Unstable one. Refactor is needed."
                      "-")))
     'directory)))
 
-(cl-defun org-glance-headline:trim (headline)
+(cl-defun org-glance-headline:trim (&optional (headline (org-glance-headline:at-point)))
   "Trim HEADLINE contents."
   (let ((contents (org-glance-headline:contents headline))
         (indent (org-glance-headline:level headline)))
     (with-temp-buffer
       (org-mode)
       (insert contents)
-      (goto-char (point-min))
-      (cl-loop for i from 1 to (1- indent)
-         do (org-demote-subtree))
-      (org-end-of-meta-data)
-      (s-trim (buffer-substring-no-properties (point-min) (point))))))
+      (let ((timestamps (-flatten (org-element-map (org-element-parse-buffer) '(headline)
+                                    #'(lambda (headline)
+                                        (cl-loop
+                                           for timestamp in (org-element-map headline '(timestamp) #'identity)
+                                           when (eql 'active (org-element-property :type timestamp))
+                                           collect (org-element-property :raw-value timestamp))))))
+            (header (save-excursion
+                      (goto-char (point-min))
+                      (cl-loop
+                         for i from 1 to (1- indent)
+                         do (org-demote-subtree))
+                      (org-end-of-meta-data)
+                      (s-trim (buffer-substring-no-properties (point-min) (point))))))
+        (concat header (if timestamps
+                           (concat "\n\nActive timestamps: " (s-join ", " timestamps))
+                         ""))))))
 
 (org-glance:provide)
