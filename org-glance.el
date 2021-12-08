@@ -179,7 +179,7 @@
                                      (org-glance-headline:repeated-p))
                                 (let ((contents (save-excursion
                                                   (org-back-to-heading t)
-                                                  (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
+                                                  (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
                                                         (pinned (save-excursion
                                                                   (cl-loop
                                                                      while (search-forward "#+begin_pin" nil t)
@@ -188,7 +188,7 @@
                                                                                (buffer-substring-no-properties (point) (save-excursion
                                                                                                                          (search-forward "#+end_pin" nil t)
                                                                                                                          (point))))))))
-                                                    (s-join "\n" (append (list header) pinned))))))
+                                                    (s-join "\n\n" (append (list header) pinned))))))
                                   (delete-region (point-min) (point-max))
                                   (insert contents)))))
 
@@ -378,6 +378,11 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
    :action (lambda (headline)
              (org-glance-headline:with-materialized-headline headline
                (org-set-tags '())))))
+
+(cl-defun org-glance:insert-pin-block ()
+  (interactive)
+  (insert "#+begin_pin" "\n\n" "#+end_pin")
+  (forward-line -1))
 
 (cl-defun org-glance
     (&key db

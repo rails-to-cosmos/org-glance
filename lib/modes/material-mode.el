@@ -171,6 +171,23 @@
 (defun org-glance-materialized-headline:source-hash ()
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
 
+(cl-defun org-glance:material-buffer-default-view ()
+  "Default restriction of material buffer."
+  ;; (org-content 1)
+  ;; (org-cycle 'contents)
+
+  (org-display-inline-images)
+
+  ;; hide all blocks but pins
+  (org-hide-block-all)
+  (org-element-map (org-element-parse-buffer) 'special-block
+    (lambda (special-block) (when (string= "pin" (org-element-property :type special-block))
+                         (save-excursion
+                           (goto-char (org-element-property :begin special-block))
+                           (org-hide-block-toggle 'off)))))
+
+  (org-cycle-hide-drawers 'all))
+
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
@@ -200,20 +217,8 @@
        (org-glance:log-debug "Insert headline contents")
        (insert contents)
        (goto-char (point-min))
-       (org-content 1)
 
-       (org-cycle-hide-drawers 'all)
-       (org-display-inline-images)
-       (org-hide-block-all)
-
-       ;; show pins by default
-       (org-element-map (org-element-parse-buffer) 'special-block
-         (lambda (special-block) (when (string= "pin" (org-element-property :type special-block))
-                              (save-excursion
-                                (goto-char (org-element-property :begin special-block))
-                                (org-hide-block-toggle 'off)))))
-
-       (org-cycle 'contents)
+       (org-glance:material-buffer-default-view)
 
        (org-glance:log-info "Set local variables")
        (set (make-local-variable '--org-glance-materialized-headline:id) id)
