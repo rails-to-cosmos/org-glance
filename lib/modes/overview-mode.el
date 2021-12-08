@@ -174,7 +174,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
           (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
           (org-glance-overview:pull))
       (error (let ((inhibit-read-only t)
-                   (contents (org-glance-headline:trim headline)))
+                   (contents (org-glance-headline:overview headline)))
                (unless (string-empty-p contents)
                  (end-of-buffer)
                  (insert "\n" contents)
@@ -227,6 +227,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance:capture-headline-at-point
     (&optional (view-id (org-completing-read "Capture headline for view: " (org-glance-view:ids)))
      &key (remove-original t))
+  (declare (indent 1))
   (interactive)
   (save-window-excursion
     (save-excursion
@@ -642,7 +643,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (trimmed-contents (org-glance-headline:trim original-headline)))
+         (trimmed-contents (org-glance-headline:overview original-headline)))
     (cond
       ((null trimmed-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))

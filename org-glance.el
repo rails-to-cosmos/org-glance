@@ -94,6 +94,7 @@
   lib.utils.encryption                  ; encryption utils
   lib.utils.helpers                     ; unsorted, deprecated
   lib.utils.org                         ; org-mode shortcuts
+  lib.utils.org-tss-mode
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -162,6 +163,7 @@
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
 
+  (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before
               (lambda (&rest args) (when (and
                                      (or org-glance-material-mode org-glance-overview-mode)
@@ -306,31 +308,37 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
               :template (org-glance-headline:contents headline)))))
 
 (cl-defun org-glance:clone-headline ()
-  (when org-glance-material-mode
-    (lexical-let ((buffer (current-buffer)))
-      (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
-                                           (condition-case nil
-                                               (org-glance-materialized-headline:sync)
-                                             (org-glance-exception:HEADLINE-NOT-MODIFIED nil)))))))
+  ;; (when org-glance-material-mode
+  ;;   (lexical-let ((buffer (current-buffer)))
+  ;;     (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
+  ;;                                          (condition-case nil
+  ;;                                              (org-glance-materialized-headline:sync)
+  ;;                                            (org-glance-exception:HEADLINE-NOT-MODIFIED nil)))))))
 
-  (lexical-let ((contents (save-excursion
-                            (org-back-to-heading t)
-                            (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
-                                  (pinned (save-excursion
-                                            (cl-loop
-                                               while (search-forward "#+begin_pin" nil t)
-                                               collect (save-excursion
-                                                         (beginning-of-line)
-                                                         (buffer-substring-no-properties (point) (save-excursion
-                                                                                                   (search-forward "#+end_pin" nil t)
-                                                                                                   (point))))))))
-                              (s-join "\n\n" (append (list header) pinned))))))
+  (lexical-let ((contents (org-glance-headline:contents)
+                          ;; (save-excursion
+                          ;;   (org-back-to-heading t)
+                          ;;   (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
+                          ;;         (pinned (save-excursion
+                          ;;                   (cl-loop
+                          ;;                      while (search-forward "#+begin_pin" nil t)
+                          ;;                      collect (save-excursion
+                          ;;                                (beginning-of-line)
+                          ;;                                (buffer-substring-no-properties (point) (save-excursion
+                          ;;                                                                          (search-forward "#+end_pin" nil t)
+                          ;;                                                                          (point))))))))
+                          ;;     (s-join "\n\n" (append (list header) pinned)))
+                          ;;   )
+                          ))
     (run-with-idle-timer 1 nil #'(lambda () (with-temp-buffer
                                          (insert contents)
                                          (goto-char (point-min))
+
+                                         (org-tss:reset-buffer-timestamps-except-earliest)
+
                                          (cl-loop
                                             for class in (org-glance-headline:classes)
-                                            do (let ((captured-headline (org-glance:capture-headline-at-point class :remove-original nil)))
+                                            do (let ((captured-headline (org-glance:capture-headline-at-point class)))
                                                  (org-glance-overview:register-headline-in-metastore captured-headline class)
                                                  (org-glance-overview:register-headline-in-overview captured-headline class))))))))
 

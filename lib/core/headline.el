@@ -481,7 +481,7 @@ FIXME. Unstable one. Refactor is needed."
                      "-")))
     'directory)))
 
-(cl-defun org-glance-headline:trim (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:overview (&optional (headline (org-glance-headline:at-point)))
   "Trim HEADLINE contents."
   (let ((contents (org-glance-headline:contents headline)))
     (with-temp-buffer
