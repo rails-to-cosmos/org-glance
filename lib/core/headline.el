@@ -454,15 +454,18 @@ FIXME. Unstable one. Refactor is needed."
   (org-element-property :deadline headline))
 
 (cl-defun org-glance-headline:repeated-p (&optional (headline (org-glance-headline:at-point)))
-  (when-let (repeater (or (when-let (scheduled (org-glance-headline:scheduled headline))
-                            (plist-get (cadr scheduled) :repeater-value))
-                          (when-let (deadline (org-glance-headline:deadline headline))
-                            (plist-get (cadr deadline) :repeater-value))
-                          (when (and (boundp 'org-advanced-schedule-mode)
-                                     org-advanced-schedule-mode
-                                     (org-element-property :ADVANCED_SCHEDULE headline))
-                            1)))
-    (> repeater 0)))
+  (let* ((contents (org-glance-headline:contents headline))
+         (tss (with-temp-buffer
+                (org-mode)
+                (insert contents)
+                (-flatten
+                 (org-element-map (org-element-parse-buffer) '(headline)
+                   #'(lambda (headline)
+                       (cl-loop
+                          for timestamp in (org-element-map headline '(timestamp) #'identity)
+                          when (eql 'active (org-element-property :type timestamp))
+                          collect (org-element-property :repeater-value timestamp))))))))
+    (--any? (> it 0) tss)))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name
