@@ -357,6 +357,13 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
     (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
       (org-capture nil "_"))))
 
+(cl-defun org-glance:revoke ()
+  (interactive)
+  (org-glance:choose-headline-apply
+   :action (lambda (headline)
+             (org-glance-headline:with-materialized-headline headline
+               (org-set-tags '())))))
+
 (cl-defun org-glance
     (&key db
        default-choice

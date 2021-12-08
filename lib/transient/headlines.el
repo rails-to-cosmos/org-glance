@@ -13,6 +13,7 @@
   ["Headline actions"
    [("+" "Capture" org-glance:capture)
     ("e" "Extract" org-glance:extract)
+    ("k" "Kill" org-glance:revoke)
     ("j" "Jump" org-glance:open)
     ("m" "Materialize" org-glance:materialize)]]
   (interactive)
