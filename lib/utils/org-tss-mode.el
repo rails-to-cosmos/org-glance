@@ -17,8 +17,8 @@
           (org-narrow-to-subtree)
           (cl-loop
              for timestamp in (org-element-map (org-element-parse-buffer) '(timestamp) #'identity)
-             when (and (eql 'active (org-element-property :type timestamp))
-                       (< 0 (org-element-property :repeater-value timestamp)))
+             when (and (member (org-element-property :type timestamp) '(active active-range))
+                       (> (or (org-element-property :repeater-value timestamp) 0) 0))
              collect timestamp))
         #'(lambda (lhs rhs) (time-less-p
                         (org-time-string-to-time (org-element-property :raw-value lhs))

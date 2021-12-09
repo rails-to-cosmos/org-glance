@@ -454,18 +454,12 @@ FIXME. Unstable one. Refactor is needed."
   (org-element-property :deadline headline))
 
 (cl-defun org-glance-headline:repeated-p (&optional (headline (org-glance-headline:at-point)))
-  (let* ((contents (org-glance-headline:contents headline))
-         (tss (with-temp-buffer
-                (org-mode)
-                (insert contents)
-                (-flatten
-                 (org-element-map (org-element-parse-buffer) '(headline)
-                   #'(lambda (headline)
-                       (cl-loop
-                          for timestamp in (org-element-map headline '(timestamp) #'identity)
-                          when (eql 'active (org-element-property :type timestamp))
-                          collect (org-element-property :repeater-value timestamp))))))))
-    (--any? (> it 0) tss)))
+  (let ((contents (org-glance-headline:contents headline)))
+    (with-temp-buffer
+      (org-mode)
+      (insert contents)
+      (when (org-tss:get-buffer-timestamps)
+        t))))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name
@@ -487,18 +481,14 @@ FIXME. Unstable one. Refactor is needed."
     (with-temp-buffer
       (org-mode)
       (insert contents)
-      (let ((timestamps (-flatten (org-element-map (org-element-parse-buffer) '(headline)
-                                    #'(lambda (headline)
-                                        (cl-loop
-                                           for timestamp in (org-element-map headline '(timestamp) #'identity)
-                                           when (eql 'active (org-element-property :type timestamp))
-                                           collect (org-element-property :raw-value timestamp))))))
+      (let ((tss (cl-loop for timestamp in (org-tss:get-buffer-timestamps)
+                    collect (org-element-property :raw-value timestamp)))
             (header (save-excursion
                       (goto-char (point-min))
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point))))))
-        (concat header (if timestamps
-                           (concat "\n:TIMESTAMPS:\n- " (s-join "\n- " timestamps) "\n:END:")
+        (concat header (if tss
+                           (concat "\n:TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")
                          ""))))))
 
 (org-glance:provide)
