@@ -458,7 +458,7 @@ FIXME. Unstable one. Refactor is needed."
     (with-temp-buffer
       (org-mode)
       (insert contents)
-      (when (org-tss:get-buffer-timestamps)
+      (when (org-tss:get-buffer-active-repeated-timestamps)
         t))))
 
 (cl-defun org-glance-headline:generate-directory (location title)
@@ -481,7 +481,7 @@ FIXME. Unstable one. Refactor is needed."
     (with-temp-buffer
       (org-mode)
       (insert contents)
-      (let ((tss (cl-loop for timestamp in (org-tss:get-buffer-timestamps)
+      (let ((tss (cl-loop for timestamp in (org-tss:get-buffer-active-repeated-timestamps)
                     collect (org-element-property :raw-value timestamp)))
             (header (save-excursion
                       (goto-char (point-min))

@@ -12,7 +12,7 @@
     (t (advice-remove 'org-auto-repeat-maybe #'org-tss:capture)
        (advice-remove 'org-auto-repeat-maybe #'org-tss:restore))))
 
-(cl-defun org-tss:get-buffer-timestamps ()
+(cl-defun org-tss:get-buffer-active-repeated-timestamps ()
   (sort (save-restriction
           (org-narrow-to-subtree)
           (cl-loop
@@ -25,10 +25,10 @@
                         (org-time-string-to-time (org-element-property :raw-value rhs))))))
 
 (cl-defun org-tss:capture (&rest args)
-  (setq-local -org-tss:local-timestamps (org-tss:get-buffer-timestamps)))
+  (setq-local -org-tss:local-timestamps (org-tss:get-buffer-active-repeated-timestamps)))
 
 (cl-defun org-tss:restore (&rest args)
-  (let ((-org-tss:local-timestamps* (org-tss:get-buffer-timestamps)))
+  (let ((-org-tss:local-timestamps* (org-tss:get-buffer-active-repeated-timestamps)))
     (cl-loop
        for tsi from 1 below (length -org-tss:local-timestamps*)
        for ts = (nth tsi -org-tss:local-timestamps)
@@ -41,7 +41,7 @@
 
 (cl-defun org-tss:reset-buffer-timestamps-except-earliest ()
   "Reset active timestamps in buffer except earliest."
-  (let ((tss (org-tss:get-buffer-timestamps)))
+  (let ((tss (org-tss:get-buffer-active-repeated-timestamps)))
     (progn
       (cl-loop
          for ts in tss
