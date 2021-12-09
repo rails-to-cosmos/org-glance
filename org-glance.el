@@ -233,7 +233,7 @@
                              (save-excursion
                                (org-glance-headline:with-materialized-headline headline
                                  (org-glance-headline:add-log-note
-                                  (format "- Mentioned by %s on %s" source-title ts))))))))))
+                                  (format "- Mentioned in %s on %s" source-title ts))))))))))
         (quit (insert "@")))
     (insert "@")))
 
