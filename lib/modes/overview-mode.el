@@ -499,9 +499,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
-  (let ((org-agenda-files (list (org-glance-overview:for-all
-                                    (buffer-file-name)
-                                  (org-glance-headline:file (org-glance-overview:original-headline)))))
+  (let ((org-agenda-files (list (buffer-file-name)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
         (org-agenda-span 21)
