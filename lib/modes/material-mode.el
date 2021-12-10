@@ -61,20 +61,6 @@
                  (org-glance-headline:deserialize)
                  (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
-(add-hook 'org-glance-before-materialize-sync-hook
-          #'(lambda () (when (eql (marker-buffer org-clock-marker) (current-buffer))
-                    (setq-local --org-glance-materialized-headline:clock-marker-position (marker-position org-clock-marker))
-                    (let ((org-log-note-clock-out nil)
-                          ;; (org-clock-out-switch-to-state nil)
-                          )
-                      (org-clock-out)))))
-
-(add-hook 'org-glance-after-materialize-sync-hook
-          #'(lambda () (when --org-glance-materialized-headline:clock-marker-position
-                    (goto-char --org-glance-materialized-headline:clock-marker-position)
-                    (org-clock-in)
-                    (setq-local --org-glance-materialized-headline:clock-marker-position nil))))
-
 (add-hook 'org-glance-after-materialize-sync-hook
           #'(lambda () (let ((headline (org-glance-headline:enrich
                                       (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
