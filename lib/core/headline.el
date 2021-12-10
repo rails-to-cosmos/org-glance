@@ -493,9 +493,36 @@ FIXME. Unstable one. Refactor is needed."
             (header (save-excursion
                       (goto-char (point-min))
                       (org-end-of-meta-data)
-                      (s-trim (buffer-substring-no-properties (point-min) (point))))))
-        (concat header (if tss
-                           (concat "\n:TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")
-                         ""))))))
+                      (s-trim (buffer-substring-no-properties (point-min) (point)))))
+            (state (org-glance-headline:state))
+            (schedule (org-glance-headline:scheduled))
+            (deadline (org-glance-headline:deadline)))
+
+        (concat
+         "* "
+         state
+         (if (string-empty-p state) "" " ")
+         (org-glance-headline:title)
+         " "
+         (org-get-tags-string)
+         "\n"
+         (if schedule
+             (concat "SCHEDULED: " (org-element-property :raw-value schedule))
+           (if deadline
+               " "
+             ""))
+         (if deadline
+             (concat "DEADLINE: " (org-element-property :raw-value deadline))
+           "")
+         (if (or schedule deadline)
+             "\n"
+           "")
+         (concat
+          ":PROPERTIES:\n"
+          (concat ":ORG_GLANCE_ID: " (org-glance-headline:id) "\n")
+          ":END:")
+         (if tss
+             (concat "\n" ":TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")
+           ""))))))
 
 (org-glance:provide)

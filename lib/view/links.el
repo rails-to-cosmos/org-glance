@@ -1,15 +1,33 @@
 (require 'org-glance-module)
 (require 'ol)
 
-(org-link-set-parameters "org-glance-visit" :follow #'org-glance-link:materialize
-                         ;; :export #'org-glance-link:export
-                         ;; :store #'org-glance-link:store-link
-                         )
+(cl-defun org-glance-link:choose-thing-for-materialization ()
+  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metastore:choose-headline))))
 
-(org-link-set-parameters "org-glance-open" :follow #'org-glance-link:open
-                         ;; :export #'org-glance-link:export
-                         ;; :store #'org-glance-link:store-link
-                         )
+(cl-defun org-glance-link:choose-thing-for-opening ()
+  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metastore:choose-headline :filter #'(lambda (headline)
+                                                                                                        (and
+                                                                                                         (org-glance-headline:active? headline)
+                                                                                                         (org-glance-headline:contains-link? headline)))))))
+
+
+(org-link-set-parameters
+ "org-glance-visit"
+ :follow #'org-glance-link:materialize
+ :face '(:background "LightCyan1"; :underline nil
+         )
+ :complete 'org-glance-link:choose-thing-for-materialization
+ ;; :export #'org-glance-link:export
+ ;; :store #'org-glance-link:store-link
+ )
+
+(org-link-set-parameters
+ "org-glance-open"
+ :follow #'org-glance-link:open
+ :complete 'org-glance-link:choose-thing-for-opening
+ ;; :export #'org-glance-link:export
+ ;; :store #'org-glance-link:store-link
+ )
 
 ;; (defcustom org-glance-link:command 'man
 ;;   "The Emacs command to be used to display a man page."

@@ -606,6 +606,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class)))
       (org-glance-overview:create class)
       (org-glance-overview:import-headlines org-glance-directory class)
+      (org-glance-overview:order-by)
+      (let ((inhibit-read-only t))
+        (org-align-all-tags))
       (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
 
 (cl-defun org-glance-overview:pull* ()
