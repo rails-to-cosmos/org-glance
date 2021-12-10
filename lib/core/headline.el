@@ -495,13 +495,19 @@ FIXME. Unstable one. Refactor is needed."
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point)))))
             (state (org-glance-headline:state))
+            (priority (org-glance-headline:priority))
             (schedule (org-glance-headline:scheduled))
             (deadline (org-glance-headline:deadline)))
 
         (concat
          "* "
          state
-         (if (string-empty-p state) "" " ")
+         (if (string-empty-p state)
+             ""
+           " ")
+         (if priority
+             (concat "[#" (char-to-string priority) "]" " ")
+           "")
          (org-glance-headline:title)
          " "
          (org-get-tags-string)
