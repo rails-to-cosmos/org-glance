@@ -517,11 +517,13 @@ FIXME. Unstable one. Refactor is needed."
                       (goto-char (point-min))
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point)))))
-            (state (org-glance-headline:state))
-            (priority (org-glance-headline:priority))
-            (schedule (org-glance-headline:scheduled))
-            (deadline (org-glance-headline:deadline))
-            (relations (org-glance-headline:relations)))
+            (state (org-glance-headline:state headline))
+            (id (org-glance-headline:id headline))
+            (title (org-glance-headline:title headline))
+            (priority (org-glance-headline:priority headline))
+            (schedule (org-glance-headline:scheduled headline))
+            (deadline (org-glance-headline:deadline headline))
+            (relations (org-glance-headline:relations headline)))
 
         (concat
          "* "
@@ -532,7 +534,7 @@ FIXME. Unstable one. Refactor is needed."
          (if priority
              (concat "[#" (char-to-string priority) "]" " ")
            "")
-         (org-glance-headline:title)
+         title
          " "
          (org-get-tags-string)
          "\n"
@@ -549,7 +551,7 @@ FIXME. Unstable one. Refactor is needed."
            "")
          (concat
           ":PROPERTIES:\n"
-          (concat ":ORG_GLANCE_ID: " (org-glance-headline:id) "\n")
+          (concat ":ORG_GLANCE_ID: " id "\n")
           ":END:")
          (if tss
              (concat "\n" ":TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")

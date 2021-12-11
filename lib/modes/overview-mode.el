@@ -173,19 +173,20 @@ If point is before the first heading, prompt for headline and eval forms on it."
         (progn
           (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
           (org-glance-overview:pull))
-      (error
-       (cond
-         ;; register archived entries only in archive overview
-         ((and (memq 'archive (org-glance-headline:classes headline))
-               (not (eql 'archive class)))
-          nil)
-         (t (let ((inhibit-read-only t)
-                  (contents (org-glance-headline:overview headline)))
-
-              (unless (string-empty-p contents)
-                (end-of-buffer)
-                (insert "\n" contents)
-                (save-buffer))))))))
+      (error nil
+             (cond
+               ;; register archived entries only in archive overview
+               ((and (memq 'archive (org-glance-headline:classes headline))
+                     (not (eql 'archive class)))
+                nil)
+               (t (let ((inhibit-read-only t)
+                        (contents (org-glance-headline:overview headline)))
+                    (unless (string-empty-p contents)
+                      (end-of-buffer)
+                      (when (eolp)
+                        (insert "\n"))
+                      (insert (s-trim contents))
+                      (save-buffer))))))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
