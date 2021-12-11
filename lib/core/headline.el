@@ -359,7 +359,12 @@ FIXME. Unstable one. Refactor is needed."
       (with-temp-buffer
         (save-excursion
           (insert link))
-        (org-element-link-parser)))))
+        (let ((element (org-element-link-parser)))
+          (org-element-put-property
+           element
+           :contents (buffer-substring-no-properties
+                      (org-element-property :contents-begin element)
+                      (org-element-property :contents-end element))))))))
 
 (cl-defun org-glance-relation:id ()
   (org-element-property :path (org-glance-relation:link)))
@@ -379,16 +384,18 @@ FIXME. Unstable one. Refactor is needed."
         (insert line))
       (when (org-glance-headline:next-relation)
         (list 'org-glance-relation
-              (list
-               :type (org-glance-relation:type)
-               :link (org-glance-relation:link)
-               :timestamp (org-glance-relation:timestamp)))))))
+              (list :type (org-glance-relation:type)
+                    :link (org-glance-relation:link)
+                    :timestamp (org-glance-relation:timestamp)))))))
 
 (cl-defun org-glance-relation-interpreter (relation)
   (concat "- "
           (org-element-property :type relation)
           " "
-          (org-element-link-interpreter (org-element-property :link relation) nil)
+          (let ((link (org-element-property :link relation)))
+            (org-element-link-interpreter link
+                                          (org-element-property :contents link)))
+
           " on "
           (org-element-timestamp-interpreter (org-element-property :timestamp relation) nil)))
 
