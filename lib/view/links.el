@@ -1,21 +1,28 @@
 (require 'org-glance-module)
 (require 'ol)
 
+(defface org-glance-link-materialize-face
+    '((((background dark)) (:background "DarkCyan"))
+      (t (:background "LightCyan1")))
+  "*Face used to highlight evaluated paragraph."
+  :group 'org-glance
+  :group 'faces)
+
 (cl-defun org-glance-link:choose-thing-for-materialization ()
   (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metastore:choose-headline))))
 
 (cl-defun org-glance-link:choose-thing-for-opening ()
-  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metastore:choose-headline :filter #'(lambda (headline)
-                                                                                                        (and
-                                                                                                         (org-glance-headline:active? headline)
-                                                                                                         (org-glance-headline:contains-link? headline)))))))
+  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metastore:choose-headline
+                                                      :filter #'(lambda (headline)
+                                                                  (and
+                                                                   (org-glance-headline:active? headline)
+                                                                   (org-glance-headline:contains-link? headline)))))))
 
 
 (org-link-set-parameters
  "org-glance-visit"
  :follow #'org-glance-link:materialize
- ;; :face '(:background "LightCyan1"; :underline nil
- ;;         )
+ :face 'org-glance-link-materialize-face
  :complete 'org-glance-link:choose-thing-for-materialization
  ;; :export #'org-glance-link:export
  ;; :store #'org-glance-link:store-link
