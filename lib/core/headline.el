@@ -332,26 +332,16 @@ FIXME. Unstable one. Refactor is needed."
 (defconst org-glance-relation:backward "Referred from")
 (defconst org-glance-relation-re
   (rx (seq bol
-           (0+ (any "\t -"))
-           (or (literal org-glance-relation:forward)
-               (literal org-glance-relation:backward))
-           (0+ (any "\t *"))
-           (group-n 1 (0+ word)) ;; state
-           (0+ (any "\t *"))
-           "="
-           (group-n 2 (1+ (any word))) ;; category
-           "="
-           (0+ (any "\t "))
-           "[[org-glance-visit:"
-           (group-n 3 (1+ (not "]"))) ;; id
-           "]["
-           (group-n 4 (1+ (not "]"))) ;; title
-           "]]"
-           (0+ (any "\t "))
+           "-"
+           (1+ space)
+           (group-n 1 (* (in word space)))
+           (1+ space)
+           (group-n 2 (regexp org-link-any-re))
+           (1+ space)
            "on"
-           (0+ (any "\t "))
-           (regexp org-ts-regexp-inactive)
-           (0+ (any "\t "))
+           (1+ space)
+           (group-n 3 (regexp org-element--timestamp-regexp))
+           (0+ space)
            eol))
   "Matches relation.")
 
@@ -360,21 +350,54 @@ FIXME. Unstable one. Refactor is needed."
       (re-search-forward org-glance-relation-re)
     (error nil)))
 
-(cl-defun org-glance-headline:relation-category ()
-  (substring-no-properties (match-string 2)))
+(cl-defun org-glance-relation:type ()
+  (substring-no-properties (match-string 1)))
 
-(cl-defun org-glance-headline:relation-id ()
-  (substring-no-properties (match-string 3)))
+(cl-defun org-glance-relation:link ()
+  (save-match-data
+    (let ((link (match-string 2)))
+      (with-temp-buffer
+        (save-excursion
+          (insert link))
+        (org-element-link-parser)))))
+
+(cl-defun org-glance-relation:id ()
+  (org-element-property :path (org-glance-relation:link)))
+
+(cl-defun org-glance-relation:timestamp ()
+  (save-match-data
+    (let ((ts (match-string 3)))
+      (with-temp-buffer
+        (save-excursion
+          (insert ts))
+        (org-element-timestamp-parser)))))
+
+(cl-defun org-glance-relation-parser ()
+  (let ((line (thing-at-point 'line)))
+    (with-temp-buffer
+      (save-excursion
+        (insert line))
+      (when (org-glance-headline:next-relation)
+        (list 'org-glance-relation
+              (list
+               :type (org-glance-relation:type)
+               :link (org-glance-relation:link)
+               :timestamp (org-glance-relation:timestamp)))))))
+
+(cl-defun org-glance-relation-interpreter (relation)
+  (concat "- "
+          (org-element-property :type relation)
+          " "
+          (org-element-link-interpreter (org-element-property :link relation) nil)
+          " on "
+          (org-element-timestamp-interpreter (org-element-property :timestamp relation) nil)))
 
 (cl-defun org-glance-headline:relations (&optional (headline (org-glance-headline:at-point)))
   "Get all first-level relations of HEADLINE."
   (org-glance-headline:with-materialized-headline headline
     (cl-loop
        while (org-glance-headline:next-relation)
-       for id = (org-glance-headline:relation-id)
-       for relation = (org-glance-metastore:get-headline id)
-       when relation
-       collect relation)))
+       collect (org-glance-relation-parser))))
 
 (cl-defun org-glance-headline:relations* (&optional (headline (org-glance-headline:at-point)))
   "Get all relations of HEADLINE recursively."
@@ -497,7 +520,8 @@ FIXME. Unstable one. Refactor is needed."
             (state (org-glance-headline:state))
             (priority (org-glance-headline:priority))
             (schedule (org-glance-headline:scheduled))
-            (deadline (org-glance-headline:deadline)))
+            (deadline (org-glance-headline:deadline))
+            (relations (org-glance-headline:relations)))
 
         (concat
          "* "
@@ -529,6 +553,12 @@ FIXME. Unstable one. Refactor is needed."
           ":END:")
          (if tss
              (concat "\n" ":TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")
+           "")
+         (if relations
+             (concat "\n"
+                     ":RELATIONS:\n"
+                     (s-join "\n" (mapcar #'org-glance-relation-interpreter relations))
+                     "\n:END:")
            ""))))))
 
 (org-glance:provide)
