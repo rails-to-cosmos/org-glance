@@ -14,8 +14,8 @@
 (org-link-set-parameters
  "org-glance-visit"
  :follow #'org-glance-link:materialize
- :face '(:background "LightCyan1"; :underline nil
-         )
+ ;; :face '(:background "LightCyan1"; :underline nil
+ ;;         )
  :complete 'org-glance-link:choose-thing-for-materialization
  ;; :export #'org-glance-link:export
  ;; :store #'org-glance-link:store-link
