@@ -229,6 +229,14 @@ metastore.")
   (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
+(cl-defun org-glance-headline:replace-headline-at-point (new-contents)
+  (let ((beg (org-glance-headline:begin))
+        (end (save-excursion (org-end-of-subtree t)))
+        (inhibit-read-only t))
+    (delete-region beg end)
+    (goto-char beg)
+    (insert new-contents)))
+
 (cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
   "Extracts HEADLINE contents.
 FIXME. Unstable one. Refactor is needed."
@@ -328,108 +336,69 @@ FIXME. Unstable one. Refactor is needed."
 
 ;; Relations
 
-(defconst org-glance-relation:forward "Related to")
-(defconst org-glance-relation:backward "Referred from")
-(defconst org-glance-relation-re
-  (rx (seq bol
-           "-"
-           (1+ space)
-           (group-n 1 (* (in word space)))
-           (1+ space)
-           (group-n 2 (regexp org-link-any-re))
-           (1+ space)
-           "on"
-           (1+ space)
-           (group-n 3 (regexp org-element--timestamp-regexp))
-           (0+ space)
-           eol))
-  "Matches relation.")
-
-(cl-defun org-glance-headline:next-relation ()
-  (condition-case nil
-      (re-search-forward org-glance-relation-re)
-    (error nil)))
-
-(cl-defun org-glance-relation:type ()
-  (substring-no-properties (match-string 1)))
-
-(cl-defun org-glance-relation:link ()
-  (save-match-data
-    (let ((link (match-string 2)))
-      (with-temp-buffer
-        (save-excursion
-          (insert link))
-        (let ((element (org-element-link-parser)))
-          (org-element-put-property
-           element
-           :contents (buffer-substring-no-properties
-                      (org-element-property :contents-begin element)
-                      (org-element-property :contents-end element))))))))
-
-(cl-defun org-glance-relation:id ()
-  (org-element-property :path (org-glance-relation:link)))
-
-(cl-defun org-glance-relation:timestamp ()
-  (save-match-data
-    (let ((ts (match-string 3)))
-      (with-temp-buffer
-        (save-excursion
-          (insert ts))
-        (org-element-timestamp-parser)))))
-
-(cl-defun org-glance-relation-parser ()
-  (let ((line (thing-at-point 'line)))
-    (with-temp-buffer
-      (save-excursion
-        (insert line))
-      (when (org-glance-headline:next-relation)
-        (list 'org-glance-relation
-              (list :type (org-glance-relation:type)
-                    :link (org-glance-relation:link)
-                    :timestamp (org-glance-relation:timestamp)))))))
-
 (cl-defun org-glance-relation-interpreter (relation)
-  (concat "- "
-          (org-element-property :type relation)
-          " "
-          (let ((link (org-element-property :link relation)))
-            (org-element-link-interpreter link
-                                          (org-element-property :contents link)))
+  (concat
+   (org-glance-relation-type-interpreter relation)
+   (org-element-link-interpreter (org-element-property :link relation)
+                                 (org-element-property :contents relation))))
 
-          " on "
-          (org-element-timestamp-interpreter (org-element-property :timestamp relation) nil)))
+(cl-defun org-glance-relation-type-parser ()
+  (cond ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6)) 'subtask)
+        (t 'mention)))
 
-(cl-defun org-glance-headline:relations (&optional (headline (org-glance-headline:at-point)))
-  "Get all first-level relations of HEADLINE."
-  (org-glance-headline:with-materialized-headline headline
-    (cl-loop
-       while (org-glance-headline:next-relation)
-       collect (org-glance-relation-parser))))
+(cl-defun org-glance-relation-type-interpreter (relation)
+  (case (org-element-property :type relation)
+    ('subtask "- [ ] ")
+    ('mention "- ")
+    (t (org-element-property :type relation))))
 
-(cl-defun org-glance-headline:relations* (&optional (headline (org-glance-headline:at-point)))
-  "Get all relations of HEADLINE recursively."
-  (let* ((visited (make-hash-table :test 'equal))
-         (headlines (list headline)))
-    (cl-loop
-       while headlines
-       for headline = (pop headlines)
-       for relations = (org-glance-headline:relations headline)
-       for id = (org-glance-headline:id headline)
-       for title = (org-glance-headline:title headline)
-       for relation-titles = (mapcar #'org-glance-headline:title relations)
-       unless (gethash id visited nil)
-       collect (cons title relation-titles)
-       into result
-       do
-         (puthash id t visited)
-         (cl-loop
-            for relation in relations
-            for relation-id = (org-glance-headline:id relation)
-            unless (gethash relation-id visited nil)
-            do
-              (push relation headlines)
-              (pp (mapcar #'org-glance-headline:title headlines)))
-       finally (return result))))
+(cl-defun org-glance-headline:relations ()
+  "Get all first-level relations of headline at point."
+  (cl-loop
+     with relations = (make-hash-table)
+     for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
+     for id = (intern (org-element-property :path link))
+     when (and (s-contains? "org-glance" (org-element-property :type link))
+               (not (gethash id relations)))
+     collect (let* ((type (save-excursion
+                            (goto-char (org-element-property :begin link))
+                            (org-glance-relation-type-parser)))
+                    (relation (list 'org-glance-relation
+                                    (list :id id
+                                          :type type
+                                          :contents (condition-case nil
+                                                        (buffer-substring-no-properties
+                                                         (org-element-property :contents-begin link)
+                                                         (org-element-property :contents-end link))
+                                                      (error nil))
+                                          :link link))))
+               (puthash id t relations)
+               relation)))
+
+;; (cl-defun org-glance-headline:relations* (&optional (headline (org-glance-headline:at-point)))
+;;   "Get all relations of HEADLINE recursively."
+;;   (let* ((visited (make-hash-table :test 'equal))
+;;          (headlines (list headline)))
+;;     (cl-loop
+;;        while headlines
+;;        for headline = (pop headlines)
+;;        for relations = (org-glance-headline:relations headline)
+;;        for id = (org-glance-headline:id headline)
+;;        for title = (org-glance-headline:title headline)
+;;        for relation-titles = (mapcar #'org-glance-headline:title relations)
+;;        unless (gethash id visited nil)
+;;        collect (cons title relation-titles)
+;;        into result
+;;        do
+;;          (puthash id t visited)
+;;          (cl-loop
+;;             for relation in relations
+;;             for relation-id = (org-glance-headline:id relation)
+;;             unless (gethash relation-id visited nil)
+;;             do
+;;               (push relation headlines)
+;;               (pp (mapcar #'org-glance-headline:title headlines)))
+;;        finally (return result))))
 
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
@@ -524,13 +493,14 @@ FIXME. Unstable one. Refactor is needed."
                       (goto-char (point-min))
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point)))))
+            (relations (org-glance-headline:relations))
+            (tags (org-get-tags-string))
             (state (org-glance-headline:state headline))
             (id (org-glance-headline:id headline))
             (title (org-glance-headline:title headline))
             (priority (org-glance-headline:priority headline))
             (schedule (org-glance-headline:scheduled headline))
-            (deadline (org-glance-headline:deadline headline))
-            (relations (org-glance-headline:relations headline)))
+            (deadline (org-glance-headline:deadline headline)))
 
         (concat
          "* "
@@ -543,7 +513,7 @@ FIXME. Unstable one. Refactor is needed."
            "")
          title
          " "
-         (org-get-tags-string)
+         tags
          "\n"
          (if schedule
              (concat "SCHEDULED: " (org-element-property :raw-value schedule))

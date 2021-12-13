@@ -76,7 +76,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
 (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
+(define-key org-glance-overview-mode-map (kbd ",") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
+(define-key org-glance-overview-mode-map (kbd ".") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
 
@@ -175,12 +177,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
           (org-glance-overview:pull))
       (error nil
              (cond
-               ;; register archived entries only in archive overview
+               ;; register archived entries only in archive class
                ((and (memq 'archive (org-glance-headline:classes headline))
                      (not (eql 'archive class)))
                 nil)
-               (t (let ((inhibit-read-only t)
-                        (contents (org-glance-headline:overview headline)))
+               (t (let ((contents (org-glance-headline:overview headline)))
                     (unless (string-empty-p contents)
                       (end-of-buffer)
                       (when (eolp)
@@ -644,7 +645,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              do (org-toggle-tag (nth index tags) 'off)))))))
 
 (cl-defun org-glance-overview:pull ()
-  "Pull any modifications from original headline to it's overview clone at point."
+  "Pull any modifications from original headline to it's overview at point."
   (interactive)
   (let* ((inhibit-read-only t)
          (initial-point (point))
@@ -652,14 +653,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (trimmed-contents (org-glance-headline:overview original-headline)))
+         (overview-contents (org-glance-headline:overview original-headline)))
     (cond
-      ((null trimmed-contents)
+      ((null overview-contents)
        (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
            (org-glance-overview:kill-headline :force t)
          (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
        nil)
-      ((string= current-headline-contents trimmed-contents)
+      ((string= current-headline-contents overview-contents)
        (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
        t)
       (t (save-excursion
@@ -667,7 +668,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (org-glance-headline:search-parents)
              (org-narrow-to-subtree)
              (delete-region (point-min) (point-max))
-             (insert trimmed-contents)))
+             (insert overview-contents)))
          (org-overview)
          (goto-char initial-point)
          (org-align-tags t)

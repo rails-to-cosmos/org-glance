@@ -61,30 +61,7 @@
                  (org-glance-headline:deserialize)
                  (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
-(add-hook 'org-glance-after-materialize-sync-hook
-          #'(lambda () (let ((headline (org-glance-headline:enrich
-                                      (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
-                                    :begin --org-glance-materialized-headline:begin
-                                    :file --org-glance-materialized-headline:file
-                                    :buffer --org-glance-materialized-headline:buffer)))
-                    (org-glance:log-debug "Updated headline: %s" headline)
-
-                    (cl-loop
-                       for class in (org-glance-headline:classes)
-                       do
-                         (org-glance:log-debug "Update overview %s" class)
-                         (org-glance-overview:register-headline-in-overview headline class)
-                         (org-glance:log-debug "Update metastore %s" class)
-                         (org-glance-overview:register-headline-in-metastore headline class)
-                         (redisplay))
-
-                    (cl-loop
-                       for class in (seq-difference --org-glance-materialized-headline:classes (org-glance-headline:classes))
-                       do
-                         (org-glance:log-debug "Remove from overview %s" class)
-                         (org-glance-overview:remove-headline-from-overview headline class)
-                         (org-glance:log-debug "Remove from metastore %s" class)
-                         (org-glance-overview:remove-headline-from-metastore headline class)))))
+(add-hook 'org-glance-after-materialize-sync-hook #'org-glance-materialized-headline:push)
 
 (define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
@@ -95,7 +72,7 @@
   (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
 
 (cl-defun org-glance-materialized-headline:sync ()
-  "Apply material buffer changes to metadata and all headline views."
+  "Push material buffer changes to all headline origins and views."
   (interactive)
   (save-excursion
     (org-glance-headline:search-parents)
@@ -121,6 +98,7 @@
         (org-glance-exception:HEADLINE-NOT-MODIFIED (or source-file source-buffer)))
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
+
       (let ((new-contents (save-restriction
                             (org-narrow-to-subtree)
                             (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -135,24 +113,43 @@
                              (org-mode)
                              (insert-file-contents source-file)
                              (org-glance-headline:search-buffer-by-id id)
-                             (let ((beg (org-glance-headline:begin))
-                                   (end (save-excursion (org-end-of-subtree t))))
-                               (delete-region beg end)
-                               (goto-char beg)
-                               (insert new-contents))))
+                             (org-glance-headline:replace-headline-at-point new-contents)))
               (source-buffer (with-current-buffer source-buffer
                                (org-glance-headline:search-buffer-by-id id)
-                               (let ((beg (org-glance-headline:begin))
-                                     (end (save-excursion (org-end-of-subtree t))))
-                                 (delete-region beg end)
-                                 (goto-char beg)
-                                 (insert new-contents)))))
+                               (org-glance-headline:replace-headline-at-point new-contents))))
 
         ;; TODO: get rid of metastore knowledge here
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
-        (org-glance:log-info "Materialized headline successfully synchronized")))))
+        (org-glance:log-info "Materialized headline successfully synchronized"))
+      )))
+
+(cl-defun org-glance-materialized-headline:push ()
+  (let* ((headline (org-glance-headline:enrich
+                       (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
+                     :begin --org-glance-materialized-headline:begin
+                     :file --org-glance-materialized-headline:file
+                     :buffer --org-glance-materialized-headline:buffer))
+         (classes (org-glance-headline:classes headline)))
+    (org-glance:log-debug "Updated headline: %s" headline)
+
+    (cl-loop
+       for class in classes
+       do
+         (org-glance:log-debug "Update overview %s" class)
+         (org-glance-overview:register-headline-in-overview headline class)
+         (org-glance:log-debug "Update metastore %s" class)
+         (org-glance-overview:register-headline-in-metastore headline class)
+         (redisplay))
+
+    (cl-loop
+       for class in (seq-difference --org-glance-materialized-headline:classes classes)
+       do
+         (org-glance:log-debug "Remove from overview %s" class)
+         (org-glance-overview:remove-headline-from-overview headline class)
+         (org-glance:log-debug "Remove from metastore %s" class)
+         (org-glance-overview:remove-headline-from-metastore headline class))))
 
 (defun org-glance-materialized-headline:source-hash ()
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
@@ -207,12 +204,12 @@
        (org-glance:material-buffer-default-view)
 
        (org-glance:log-info "Set local variables")
-       (set (make-local-variable '--org-glance-materialized-headline:id) id)
-       (set (make-local-variable '--org-glance-materialized-headline:classes) (org-glance-headline:classes))
-       (set (make-local-variable '--org-glance-materialized-headline:file) file)
-       (set (make-local-variable '--org-glance-materialized-headline:buffer) buffer)
-       (set (make-local-variable '--org-glance-materialized-headline:begin) begin)
-       (set (make-local-variable '--org-glance-materialized-headline:hash) (org-glance-headline:hash))
+       (setq-local --org-glance-materialized-headline:id id)
+       (setq-local --org-glance-materialized-headline:classes (org-glance-headline:classes))
+       (setq-local --org-glance-materialized-headline:file file)
+       (setq-local --org-glance-materialized-headline:buffer buffer)
+       (setq-local --org-glance-materialized-headline:begin begin)
+       (setq-local --org-glance-materialized-headline:hash (org-glance-headline:hash))
 
        ;; run hooks on original subtree
        (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
@@ -225,20 +222,21 @@
        (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
        (current-buffer)))))
 
+(cl-defun org-glance-headline:decrypt-headline-at-point-with-local-password ()
+  (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
+  (org-glance-headline:decrypt --org-glance-materialized-headline:password))
+
 (advice-add 'org-glance-headline:materialize :around
             (lambda (fn headline &rest args)
               (cond ((org-glance-headline:encrypted? headline)
-                     (cl-flet ((decrypt ()
-                                 (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
-                                 (org-glance-headline:decrypt --org-glance-materialized-headline:password)))
-
+                     (progn
                        (org-glance:log-info "The headline is encrypted")
                        (org-glance:log-info "Add `org-glance-after-materialize-hook' to decrypt it")
-                       (add-hook 'org-glance-after-materialize-hook #'decrypt)
+                       (add-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
 
                        (unwind-protect
                             (apply fn headline args)
-                         (remove-hook 'org-glance-after-materialize-hook #'decrypt)
+                         (remove-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
                          (add-hook 'org-glance-before-materialize-sync-hook
                                    (lambda ()
                                      (org-glance-headline:demote --org-glance-materialized-headline:indent)

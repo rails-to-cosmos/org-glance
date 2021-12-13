@@ -215,27 +215,49 @@
   "Choose headline to refer. Insert link at point."
   (interactive)
   (org-glance:init)
-  (if (and (not (org-in-src-block-p))
-           (or (looking-back "^" 1)
-               (looking-back "[[:space:]]" 1)))
-      (condition-case nil
-          (org-glance:choose-headline-apply
-           :action (lambda (headline)
-                     (let ((source (org-glance-headline:at-point))
-                           (target-title (org-glance-headline:format headline))
-                           (ts (org-glance-now)))
-                       (when source
-                         (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts))
-                       (insert target-title)
-                       (when source
-                         (let ((source-title (org-glance-headline:format source)))
-                           (save-window-excursion
-                             (save-excursion
-                               (org-glance-headline:with-materialized-headline headline
-                                 (org-glance-headline:add-log-note
-                                  (format "- Mentioned in %s on %s" source-title ts))))))))))
-        (quit (insert "@")))
-    (insert "@")))
+  (condition-case nil
+      (cond
+        ;; subtask
+        ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6))
+         (org-glance:choose-headline-apply
+          :action (lambda (headline)
+                    (let ((source (org-glance-headline:at-point))
+                          (target-title (org-glance-headline:format headline))
+                          (ts (org-glance-now)))
+                      ;; (when source
+                      ;;   (org-glance-headline:add-log-note "- Is became a subtask to %s on %s" target-title ts))
+                      (insert target-title)
+                      ;; (when source
+                      ;;   (let ((source-title (org-glance-headline:format source)))
+                      ;;     (save-window-excursion
+                      ;;       (save-excursion
+                      ;;         (org-glance-headline:with-materialized-headline headline
+                      ;;           (org-glance-headline:add-log-note
+                      ;;            (format "- Created subtask %s on %s" source-title ts)))))))
+                      ))))
+        ;; mention
+        ((and (not (org-in-src-block-p))
+              (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
+         (org-glance:choose-headline-apply
+          :action (lambda (headline)
+                    (let ((source (org-glance-headline:at-point))
+                          (target-title (org-glance-headline:format headline))
+                          (ts (org-glance-now)))
+                      ;; (when source
+                      ;;   (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts))
+                      (insert target-title)
+                      ;; (when source
+                      ;;   (let ((source-title (org-glance-headline:format source)))
+                      ;;     (save-window-excursion
+                      ;;       (save-excursion
+                      ;;         (org-glance-headline:with-materialized-headline headline
+                      ;;           (org-glance-headline:add-log-note
+                      ;;            (format "- Mentioned in %s on %s" source-title ts)))))))
+                      ))))
+
+        ;; simple @
+        (t (keyboard-quit)))
+    (quit (insert "@"))))
 
 (cl-defmacro org-glance:choose-headline-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.
