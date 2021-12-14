@@ -531,13 +531,14 @@ FIXME. Unstable one. Refactor is needed."
           (concat ":ORG_GLANCE_ID: " id "\n")
           ":END:")
          (if tss
-             (concat "\n" ":TIMESTAMPS:\n- " (s-join "\n- " tss) "\n:END:")
+             (concat "\n\n"
+                     "- Timestamps\n  - "
+                     (s-join "\n  - " tss))
            "")
          (if relations
-             (concat "\n"
-                     ":RELATIONS:\n"
-                     (s-join "\n" (mapcar #'org-glance-relation-interpreter relations))
-                     "\n:END:")
+             (concat "\n\n"
+                     "- Relations\n  "
+                     (s-join "\n  " (mapcar #'org-glance-relation-interpreter relations)))
            ""))))))
 
 (org-glance:provide)

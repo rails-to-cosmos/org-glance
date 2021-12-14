@@ -79,19 +79,19 @@
          for index from 0
          do
            (goto-char (org-element-property :begin ts))
-           (save-excursion
-             (let ((bound1 (org-element-property :begin ts))
-	           (bound0 (org-element-property :end ts)))
-               (when (and (re-search-forward
-		           (concat "\\(" org-scheduled-time-regexp "\\)\\|\\("
-			           org-deadline-time-regexp "\\)\\|\\("
-			           org-ts-regexp "\\)")
-		           bound0 t)
-		          (re-search-backward "[ \t]+\\(?:[.+]\\)?\\+\\([0-9]+\\)[hdwmy]"
-				              bound1 t))
-	         (replace-match "0" t nil nil 1))))
-
-           (when (> index 0)
-             (org-toggle-timestamp-type))))))
+           (if (> index 0)
+               (org-toggle-timestamp-type)
+             ;; reset repeater
+             (save-excursion
+               (let ((bound1 (org-element-property :begin ts))
+	             (bound0 (org-element-property :end ts)))
+                 (when (and (re-search-forward
+		             (concat "\\(" org-scheduled-time-regexp "\\)\\|\\("
+			             org-deadline-time-regexp "\\)\\|\\("
+			             org-ts-regexp "\\)")
+		             bound0 t)
+		            (re-search-backward "[ \t]+\\(?:[.+]\\)?\\+\\([0-9]+\\)[hdwmy]"
+				                bound1 t))
+	           (replace-match "0" t nil nil 1)))))))))
 
 (org-glance:provide)

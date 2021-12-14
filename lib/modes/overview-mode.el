@@ -181,7 +181,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
                ((and (memq 'archive (org-glance-headline:classes headline))
                      (not (eql 'archive class)))
                 nil)
-               (t (let ((contents (org-glance-headline:overview headline)))
+               (t (let ((inhibit-read-only t)
+                        (contents (org-glance-headline:overview headline)))
                     (unless (string-empty-p contents)
                       (end-of-buffer)
                       (when (eolp)
@@ -335,6 +336,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (when (y-or-n-p (org-glance:format "Import headlines of class ${class} from ${path}?"))
     (cl-loop
        for file in (org-glance-scope path)
+       unless (s-contains? "sync-conflict" file)
        do
          (org-glance:log-info "Scan file %s" file)
          (redisplay)
