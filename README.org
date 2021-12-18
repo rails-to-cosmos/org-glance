@@ -21,6 +21,11 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** TODO quick-insert on material sync
+assume overview is sorted
+perform quick insert instead of tail insert
+** TODO high-level agenda
+** TODO fix reverse relation
 ** TODO save checkboxes history when :RESET_CHECK_BOXES: t
 ** relations: subtasks (blockers), downstreams, mentions
 ** text props magic
@@ -47,7 +52,7 @@ CLOSED: [2021-11-20 Sat 16:36]
 ** TODO Implement day-grained CAPACITY
 show it with schedule (as an overlay)
 ** TODO able to capture any text without headlines (default headline will be generated then)
-** TODO Repeat and clone diary-cyclic monthly entries
+** TODO Repeat and clone diary-cyclic monthly entries?
 ** DONE Save after clone
 CLOSED: [2021-11-17 Wed 16:54]
 :LOGBOOK:

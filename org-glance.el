@@ -350,13 +350,6 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
               :template (org-glance-headline:contents headline)))))
 
 (cl-defun org-glance:clone-headline ()
-  ;; (when org-glance-material-mode
-  ;;   (lexical-let ((buffer (current-buffer)))
-  ;;     (run-with-idle-timer 1 nil #'(lambda () (with-current-buffer buffer
-  ;;                                          (condition-case nil
-  ;;                                              (org-glance-materialized-headline:sync)
-  ;;                                            (org-glance-exception:HEADLINE-NOT-MODIFIED nil)))))))
-
   (lexical-let ((contents (org-glance-headline:contents)))
     (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
                                          (with-temp-buffer

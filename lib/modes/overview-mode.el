@@ -102,7 +102,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (if (org-before-first-heading-p)
         (progn
-          (org-glance-overview:refresh-widgets)
+          ;; (org-glance-overview:refresh-widgets)
           (org-glance-overview:order-by)
           (pulse-momentary-highlight-region
            (point-min)
@@ -152,6 +152,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
+  (org-glance:log-debug "Update metastore %s" class)
   (let* ((metastore-location (-some->> class
                                org-glance:get-class
                                org-glance-view:metastore-location))
@@ -160,6 +161,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-metastore:write metastore-location metastore)))
 
 (cl-defun org-glance-overview:remove-headline-from-metastore (headline class)
+  (org-glance:log-debug "Remove from metastore %s" class)
   (let* ((metastore-location (-some->> class
                                org-glance:get-class
                                org-glance-view:metastore-location))
@@ -169,6 +171,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
+  (org-glance:log-debug "Update overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
     (condition-case nil
@@ -193,6 +196,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
+  (org-glance:log-debug "Remove from overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
     (save-excursion
@@ -656,27 +660,24 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
          (overview-contents (org-glance-headline:overview original-headline)))
-    (cond
-      ((null overview-contents)
-       (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
-           (org-glance-overview:kill-headline :force t)
-         (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
-       nil)
-      ((string= current-headline-contents overview-contents)
-       (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
-       t)
-      (t (save-excursion
-           (save-restriction
-             (org-glance-headline:search-parents)
-             (org-narrow-to-subtree)
-             (delete-region (point-min) (point-max))
-             (insert overview-contents)))
-         (org-overview)
-         (goto-char initial-point)
-         (org-align-tags t)
-         (save-buffer)
-         (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
-         t))))
+    (cond ((null overview-contents)
+           (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
+               (org-glance-overview:kill-headline :force t)
+             (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
+           nil)
+          ((string= current-headline-contents overview-contents)
+           (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
+           t)
+          (t (org-glance-headline:with-headline-at-point
+              (delete-region (point-min) (point-max))
+              (insert overview-contents))
+             (org-overview)
+             (goto-char initial-point)
+             (org-align-tags t)
+             (org-update-checkbox-count-maybe)
+             (save-buffer)
+             (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
+             t))))
 
 (cl-defun org-glance-overview:comment ()
   "Comment headline at point."

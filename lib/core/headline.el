@@ -344,13 +344,15 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-relation-type-parser ()
   (cond ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6)) 'subtask)
+        ((and (org-at-item-checkbox-p) (looking-back "- \\[X\\] " 6)) 'subtask-done)
         (t 'mention)))
 
 (cl-defun org-glance-relation-type-interpreter (relation)
   (case (org-element-property :type relation)
     ('subtask "- [ ] ")
+    ('subtask-done "- [X] ")
     ('mention "- ")
-    (t (org-element-property :type relation))))
+    (t (prin1-to-string (org-element-property :type relation)))))
 
 (cl-defun org-glance-headline:relations ()
   "Get all first-level relations of headline at point."
@@ -375,56 +377,12 @@ FIXME. Unstable one. Refactor is needed."
                (puthash id t relations)
                relation)))
 
-;; (cl-defun org-glance-headline:relations* (&optional (headline (org-glance-headline:at-point)))
-;;   "Get all relations of HEADLINE recursively."
-;;   (let* ((visited (make-hash-table :test 'equal))
-;;          (headlines (list headline)))
-;;     (cl-loop
-;;        while headlines
-;;        for headline = (pop headlines)
-;;        for relations = (org-glance-headline:relations headline)
-;;        for id = (org-glance-headline:id headline)
-;;        for title = (org-glance-headline:title headline)
-;;        for relation-titles = (mapcar #'org-glance-headline:title relations)
-;;        unless (gethash id visited nil)
-;;        collect (cons title relation-titles)
-;;        into result
-;;        do
-;;          (puthash id t visited)
-;;          (cl-loop
-;;             for relation in relations
-;;             for relation-id = (org-glance-headline:id relation)
-;;             unless (gethash relation-id visited nil)
-;;             do
-;;               (push relation headlines)
-;;               (pp (mapcar #'org-glance-headline:title headlines)))
-;;        finally (return result))))
-
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
     (with-temp-buffer
       (org-mode)
       (insert contents)
       (buffer-hash))))
-
-;; (cl-defun org-glance-headline:add-relation (source target &key (rel org-glance-relation:forward))
-;;   (interactive)
-;;   (let* ((target-title (org-glance-headline:format target))
-;;          (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-;;     (org-glance-headline:add-log-note (org-glance:format "- ${rel} ${target-title} on ${now}") source)))
-
-;; (cl-defun org-glance-headline:add-biconnected-relation
-;;     (source target
-;;      &key
-;;        (source->target org-glance-relation:forward)
-;;        (target->source org-glance-relation:backward))
-;;   (when source
-;;     (save-excursion
-;;       (save-restriction
-;;         (org-save-outline-visibility t
-;;           (org-glance-headline:add-relation source target :rel source->target)
-;;           (unless (eql source target)
-;;             (org-glance-headline:add-relation target source :rel target->source)))))))
 
 (cl-defun org-glance-headline:contains-property? (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :contains-property-p headline)
@@ -493,7 +451,14 @@ FIXME. Unstable one. Refactor is needed."
                       (goto-char (point-min))
                       (org-end-of-meta-data)
                       (s-trim (buffer-substring-no-properties (point-min) (point)))))
-            (relations (org-glance-headline:relations))
+            (relations (cl-loop
+                          for relation in (org-glance-headline:relations)
+                          when (eq (org-element-property :type relation) 'mention)
+                          collect relation into mentions
+                          when (memq (org-element-property :type relation) '(subtask subtask-done))
+                          collect relation into subtasks
+                          finally (return (list :mentions mentions
+                                                :subtasks subtasks))))
             (tags (org-get-tags-string))
             (state (org-glance-headline:state headline))
             (id (org-glance-headline:id headline))
@@ -501,44 +466,59 @@ FIXME. Unstable one. Refactor is needed."
             (priority (org-glance-headline:priority headline))
             (schedule (org-glance-headline:scheduled headline))
             (deadline (org-glance-headline:deadline headline)))
+        (with-temp-buffer
+          (insert
+           (concat
+            "* "
+            state
+            (if (string-empty-p state)
+                ""
+              " ")
+            (if priority
+                (concat "[#" (char-to-string priority) "]" " ")
+              "")
+            title
+            ;; " "
+            ;; tags
+            "\n"
+            (if schedule
+                (concat "SCHEDULED: " (org-element-property :raw-value schedule))
+              (if deadline
+                  " "
+                ""))
+            (if deadline
+                (concat "DEADLINE: " (org-element-property :raw-value deadline))
+              "")
+            (if (or schedule deadline)
+                "\n"
+              "")
+            (concat
+             ":PROPERTIES:\n"
+             (concat ":ORG_GLANCE_ID: " id "\n")
+             ":END:")
+            (if tss
+                (concat "\n\n"
+                        "- Timestamps:\n  - "
+                        (s-join "\n  - " tss))
+              "")
+            (if-let (subtasks (plist-get relations :subtasks))
+                (concat "\n\n"
+                        "- *Subtasks* [/]\n  "
+                        (s-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
+              "")
+            (if-let (mentions (plist-get relations :mentions))
+                (concat "\n\n"
+                        "- *Mentions*\n  "
+                        (s-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
+              "")))
+          (org-update-checkbox-count-maybe)
+          (buffer-string))))))
 
-        (concat
-         "* "
-         state
-         (if (string-empty-p state)
-             ""
-           " ")
-         (if priority
-             (concat "[#" (char-to-string priority) "]" " ")
-           "")
-         title
-         " "
-         tags
-         "\n"
-         (if schedule
-             (concat "SCHEDULED: " (org-element-property :raw-value schedule))
-           (if deadline
-               " "
-             ""))
-         (if deadline
-             (concat "DEADLINE: " (org-element-property :raw-value deadline))
-           "")
-         (if (or schedule deadline)
-             "\n"
-           "")
-         (concat
-          ":PROPERTIES:\n"
-          (concat ":ORG_GLANCE_ID: " id "\n")
-          ":END:")
-         (if tss
-             (concat "\n\n"
-                     "- Timestamps\n  - "
-                     (s-join "\n  - " tss))
-           "")
-         (if relations
-             (concat "\n\n"
-                     "- Relations\n  "
-                     (s-join "\n  " (mapcar #'org-glance-relation-interpreter relations)))
-           ""))))))
+(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
+  `(save-excursion
+     (save-restriction
+       (org-glance-headline:search-parents)
+       (org-narrow-to-subtree)
+       ,@forms)))
 
 (org-glance:provide)

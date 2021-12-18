@@ -2,8 +2,8 @@
 (require 'ol)
 
 (defface org-glance-link-materialize-face
-    '((((background dark)) (:background "DarkCyan"))
-      (t (:background "LightCyan1")))
+    '((((background dark)) (:inherit default :underline "MediumPurple3"))
+      (t (:inherit default :underline "Magenta")))
   "*Face used to highlight evaluated paragraph."
   :group 'org-glance
   :group 'faces)

@@ -71,11 +71,11 @@
 (cl-defun org-glance-exception:HEADLINE-NOT-MODIFIED (format &rest args)
   (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
 
-(cl-defun org-glance-materialized-headline:sync ()
+(cl-defun org-glance-materialized-headline:sync (&optional without-relations)
   "Push material buffer changes to all headline origins and views."
   (interactive)
   (save-excursion
-    (org-glance-headline:search-parents)
+    (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
     (let* ((id --org-glance-materialized-headline:id)
            (source-file --org-glance-materialized-headline:file)
            (source-buffer --org-glance-materialized-headline:buffer)
@@ -99,15 +99,27 @@
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
-      (let ((new-contents (save-restriction
-                            (org-narrow-to-subtree)
-                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-                              (with-temp-buffer
-                                (org-mode)
-                                (insert buffer-contents)
-                                (goto-char (point-min))
-                                (org-glance-headline:demote indent-level)
-                                (buffer-substring-no-properties (point-min) (point-max)))))))
+      (unless without-relations
+        (cl-loop
+           for relation in (org-glance-headline:relations)
+           for relation-id = (org-element-property :id relation)
+           for headline-link = (org-glance-headline:format (org-glance-headline:at-point))
+           do (save-window-excursion
+                (org-glance-headline:with-materialized-headline (org-glance-metastore:get-headline (symbol-name relation-id))
+                  (unless (cl-loop
+                             for rr in (org-glance-headline:relations)
+                             if (eq (org-element-property :id rr) (intern id))
+                             return t)
+                    (org-glance-headline:add-log-note "- Mentioned by %s on %s" headline-link (org-glance-now)))))))
+
+      (let ((new-contents (org-glance-headline:with-headline-at-point
+                           (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
+                             (with-temp-buffer
+                               (org-mode)
+                               (insert buffer-contents)
+                               (goto-char (point-min))
+                               (org-glance-headline:demote indent-level)
+                               (buffer-substring-no-properties (point-min) (point-max)))))))
 
         (cond (source-file (with-temp-file source-file
                              (org-mode)
@@ -122,8 +134,7 @@
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
-        (org-glance:log-info "Materialized headline successfully synchronized"))
-      )))
+        (org-glance:log-info "Materialized headline successfully synchronized")))))
 
 (cl-defun org-glance-materialized-headline:push ()
   (let* ((headline (org-glance-headline:enrich
@@ -137,18 +148,13 @@
     (cl-loop
        for class in classes
        do
-         (org-glance:log-debug "Update overview %s" class)
          (org-glance-overview:register-headline-in-overview headline class)
-         (org-glance:log-debug "Update metastore %s" class)
-         (org-glance-overview:register-headline-in-metastore headline class)
-         (redisplay))
+         (org-glance-overview:register-headline-in-metastore headline class))
 
     (cl-loop
        for class in (seq-difference --org-glance-materialized-headline:classes classes)
        do
-         (org-glance:log-debug "Remove from overview %s" class)
          (org-glance-overview:remove-headline-from-overview headline class)
-         (org-glance:log-debug "Remove from metastore %s" class)
          (org-glance-overview:remove-headline-from-metastore headline class))))
 
 (defun org-glance-materialized-headline:source-hash ()
@@ -263,7 +269,7 @@
        (when (buffer-live-p materialized-buffer)
          (with-current-buffer materialized-buffer
            (condition-case nil
-               (org-glance-materialized-headline:sync)
+               (org-glance-materialized-headline:sync 'without-relations)
              (error nil)))
          (with-demoted-errors "Unable to kill buffer: %s"
            (kill-buffer materialized-buffer))))))
