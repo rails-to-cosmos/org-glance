@@ -110,7 +110,9 @@
                              for rr in (org-glance-headline:relations)
                              if (eq (org-element-property :id rr) (intern id))
                              return t)
-                    (org-glance-headline:add-log-note "- Mentioned by %s on %s" headline-link (org-glance-now)))))))
+                    (cond ((memq (org-element-property :type relation) '(subtask subtask-done))
+                           (org-glance-headline:add-log-note "- Part of %s from %s" headline-link (org-glance-now)))
+                          (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now)))))))))
 
       (let ((new-contents (org-glance-headline:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))

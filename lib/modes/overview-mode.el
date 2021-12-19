@@ -110,7 +110,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
              (org-next-visible-heading 1)
              (point))
            'region))
-      (org-glance-overview:pull))
+      (org-glance-overview:pull)
+      (outline-show-subtree)
+      (org-cycle-hide-drawers 'org-cycle-hide-drawers))
     (save-buffer)))
 
 (define-key org-glance-overview-mode-map (kbd "v")
@@ -118,8 +120,38 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-overview:visit-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-(define-key org-glance-overview-mode-map (kbd "n") #'org-glance-headline:search-forward)
-(define-key org-glance-overview-mode-map (kbd "p") #'org-glance-headline:search-backward)
+
+(define-key org-glance-overview-mode-map (kbd "n")
+  (org-glance:interactive-lambda
+    (when (org-glance-headline:at-point)
+      (outline-hide-subtree))
+    (org-glance-headline:search-forward)
+    (when (org-glance-headline:at-point)
+      (outline-show-subtree)
+      (org-cycle-hide-drawers 'org-cycle-hide-drawers)
+      ;; (pulse-momentary-highlight-region
+      ;;  (point)
+      ;;  (save-excursion
+      ;;    (org-next-visible-heading 1)
+      ;;    (point))
+      ;;  'region)
+      )))
+
+(define-key org-glance-overview-mode-map (kbd "p")
+  (org-glance:interactive-lambda
+    (when (org-glance-headline:at-point)
+      (outline-hide-subtree))
+    (org-glance-headline:search-backward)
+    (when (org-glance-headline:at-point)
+      (outline-show-subtree)
+      (org-cycle-hide-drawers 'org-cycle-hide-drawers)
+      ;; (pulse-momentary-highlight-region
+      ;;  (point)
+      ;;  (save-excursion
+      ;;    (org-next-visible-heading 1)
+      ;;    (point))
+      ;;  'region)
+      )))
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 (define-key org-glance-overview-mode-map (kbd "d")
   (org-glance:interactive-lambda
@@ -626,14 +658,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (let ((inhibit-read-only t))
         (org-align-all-tags))
       (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
-
-(cl-defun org-glance-overview:pull* ()
-  "Apply `org-glance-overview:pull' to each headline in current overview file."
-  (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (while (and (org-glance-headline:search-forward))
-      (org-glance-overview:pull))))
 
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
