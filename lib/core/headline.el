@@ -356,16 +356,29 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:relations ()
   "Get all first-level relations of headline at point."
-  (cl-loop
-     with relations = (make-hash-table)
-     for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
-     for id = (intern (org-element-property :path link))
-     when (and (s-contains? "org-glance" (org-element-property :type link))
-               (not (gethash id relations)))
-     collect (let* ((type (save-excursion
-                            (goto-char (org-element-property :begin link))
-                            (org-glance-relation-type-parser)))
-                    (relation (list 'org-glance-relation
+  (org-glance-headline:with-headline-at-point
+   (cl-loop
+      with relations = (make-hash-table)
+      for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
+      for id = (intern (org-element-property :path link))
+      for type = (cond
+                   ((s-contains? "org-glance" (org-element-property :type link)) (let ((link-type (save-excursion
+                                                                                                    (goto-char (org-element-property :begin link))
+                                                                                                    (org-glance-relation-type-parser))))
+                                                                                   (if (memq link-type '(subtask subtask-done))
+                                                                                       ;; actualize link state
+                                                                                       (condition-case nil
+                                                                                           (save-window-excursion
+                                                                                             (org-glance-headline:with-materialized-headline (org-glance-metastore:get-headline (symbol-name id))
+                                                                                               (cond ((memq (intern (or (org-get-todo-state) "")) (mapcar #'intern org-done-keywords)) 'subtask-done)
+                                                                                                     (t 'subtask))))
+                                                                                         (org-glance-exception:HEADLINE-NOT-FOUND link-type))
+                                                                                     link-type)))
+                   (t nil))
+      when (and type
+                (or (not (gethash id relations))
+                    (memq type '(subtask subtask-done))))
+      collect (let ((relation (list 'org-glance-relation
                                     (list :id id
                                           :type type
                                           :contents (condition-case nil
@@ -374,8 +387,8 @@ FIXME. Unstable one. Refactor is needed."
                                                          (org-element-property :contents-end link))
                                                       (error nil))
                                           :link link))))
-               (puthash id t relations)
-               relation)))
+                (puthash id t relations)
+                relation))))
 
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
@@ -439,14 +452,12 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:overview (&optional (headline (org-glance-headline:at-point)))
   "Trim HEADLINE contents."
-  (let ((contents (org-glance-headline:contents headline)))
-    (with-temp-buffer
-      (org-mode)
-      (insert contents)
-      (let ((tss (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
-                                             (org-tss:filter-active)
-                                             (org-tss:sort))
-                    collect (org-element-property :raw-value timestamp)))
+  (save-window-excursion
+    (org-glance-headline:with-materialized-headline headline
+      (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
+                                                    (org-tss:filter-active)
+                                                    (org-tss:sort))
+                           collect (org-element-property :raw-value timestamp)))
             (header (save-excursion
                       (goto-char (point-min))
                       (org-end-of-meta-data)
@@ -483,9 +494,7 @@ FIXME. Unstable one. Refactor is needed."
             "\n"
             (if schedule
                 (concat "SCHEDULED: " (org-element-property :raw-value schedule))
-              (if deadline
-                  " "
-                ""))
+              "")
             (if deadline
                 (concat "DEADLINE: " (org-element-property :raw-value deadline))
               "")
@@ -494,22 +503,23 @@ FIXME. Unstable one. Refactor is needed."
               "")
             (concat
              ":PROPERTIES:\n"
-             (concat ":ORG_GLANCE_ID: " id "\n")
+             ":ORG_GLANCE_ID: " id "\n"
+             ":DIR: " (abbreviate-file-name default-directory) "\n"
              ":END:")
-            (if tss
+            (if timestamps
                 (concat "\n\n"
-                        "- Timestamps:\n  - "
-                        (s-join "\n  - " tss))
+                        "- Timestamps"
+                        (org-glance-join "\n  - " timestamps))
               "")
             (if-let (subtasks (plist-get relations :subtasks))
                 (concat "\n\n"
-                        "- *Subtasks* [/]\n  "
-                        (s-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
+                        "- *Subtasks* [/]"
+                        (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
               "")
             (if-let (mentions (plist-get relations :mentions))
                 (concat "\n\n"
-                        "- *Mentions*\n  "
-                        (s-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
+                        "- *Mentions*"
+                        (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
               "")))
           (org-update-checkbox-count-maybe)
           (buffer-string))))))

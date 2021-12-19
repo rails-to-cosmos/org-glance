@@ -65,4 +65,7 @@ enjoy using a lot.
      append (list filename)
      append (-org-glance:list-file-archives filename)))
 
+(cl-defun org-glance-join (separator strings)
+  (concat separator (s-join separator strings)))
+
 (org-glance:provide)

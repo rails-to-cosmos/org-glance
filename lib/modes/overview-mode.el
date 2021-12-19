@@ -520,8 +520,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         (org-agenda-span 21)
         (org-agenda-start-day "-7d"))
     (org-agenda-list)
-    (switch-to-buffer org-agenda-buffer)
-    (delete-other-windows)))
+    ;; (switch-to-buffer org-agenda-buffer)
+    ;; (delete-other-windows)
+    ))
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)

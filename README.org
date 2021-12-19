@@ -20,7 +20,33 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
+Terms
+
+- headline -- org-element of type 'headline with ORG_GLANCE_ID property specified.
+  Contains all nested elements.
+
+- overview(HEADLINE) -- read-only org-element that contains all HEADLINE retrievable data used in
+  org-agenda, org-glance transient filters and in any kind of views:
+  1. Todo state.
+  2. Active timestamps, SCHEDULED and DEADLINE properties.
+  3. ORG_GLANCE_ID property.
+  4. Default directory of headline, DIR.
+  5. Relations: mentions, subtasks, etc
+  6. Content-related features:
+     1. Headline contains org-link?
+     2. Content is encrypted?
+     3. Headline contains key-value data that can be extracted?
+- class(HEADLINE) -- symbol from org-tags of HEADLINE.
+- overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
+
 * Issues
+** TODO on materialize pull subtasks states
+** DONE on materialize push clarify subtasks states in overview
+CLOSED: [2021-12-18 Sat 12:58]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-12-18 Sat 12:58]
+:END:
+** TODO when i need to create a new class?
 ** TODO quick-insert on material sync
 assume overview is sorted
 perform quick insert instead of tail insert
