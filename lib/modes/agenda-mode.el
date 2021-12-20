@@ -76,4 +76,27 @@
         (org-glance-agenda-display-entry entry))))
   (find-file (org-glance-agenda-location)))
 
+(cl-defun org-glance-agenda:daily (class date)
+  (let ((entries (org-agenda-get-day-entries
+                  (org-glance-overview:location class)
+                  date)))
+    (cl-loop
+       for entry in entries
+       for marker = (get-text-property 0 'org-marker entry)
+       collect (save-window-excursion
+                 (org-goto-marker-or-bmk marker)
+                 (->> (org-glance-headline:at-point)
+                      org-glance-headline:id
+                      org-glance-metastore:get-headline
+                      org-glance-headline:visit)
+                 (org-glance-headline:at-point)))))
+
+;; (cl-loop
+;;    for headline in (org-glance-agenda:daily 'task (list 12 20 2021))
+;;    collect (org-glance-headline:with-materialized-headline headline
+;;              (cons (org-glance-headline:title headline) (length (org-glance-headline:subtasks)))))
+
+;; 0. Filter tasks!
+;; 1. Unfinished tasks count.
+
 (org-glance:provide)

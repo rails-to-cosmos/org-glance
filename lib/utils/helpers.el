@@ -66,6 +66,12 @@ enjoy using a lot.
      append (-org-glance:list-file-archives filename)))
 
 (cl-defun org-glance-join (separator strings)
-  (concat separator (s-join separator strings)))
+  (let ((joined-strings (s-join separator strings)))
+    (if (string-empty-p joined-strings)
+        ""
+      (concat separator joined-strings))))
+
+(cl-defun org-glance-join-but-null (separator strings)
+  (org-glance-join separator (cl-remove-if #'null strings)))
 
 (org-glance:provide)

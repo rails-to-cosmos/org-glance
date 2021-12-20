@@ -505,7 +505,8 @@ FIXME. Unstable one. Refactor is needed."
            (priority (org-glance-headline:priority headline))
            (schedule (org-glance-headline:scheduled headline))
            (deadline (org-glance-headline:deadline headline))
-           (encrypted (org-glance-headline:encrypted?)))
+           (encrypted (org-glance-headline:encrypted?))
+           (linked (org-glance-headline:contains-link?)))
        (with-temp-buffer
          (insert
           (concat
@@ -530,34 +531,36 @@ FIXME. Unstable one. Refactor is needed."
            (if (or schedule deadline)
                "\n"
              "")
-           (concat
-            ":PROPERTIES:\n"
-            ":ORG_GLANCE_ID: " id "\n"
-            ":DIR: " (abbreviate-file-name default-directory) "\n"
-            ":END:")
-           (if encrypted
-               "\n\n*Headline is encrypted*.\n"
-             "")
-           (if timestamps
-               (concat "\n\n"
-                       "- Timestamps"
-                       (org-glance-join "\n  - " timestamps))
-             "")
-           (if-let (projects (plist-get relations :projects))
-               (concat "\n\n"
-                       "- *Projects* [/]"
-                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter projects)))
-             "")
-           (if-let (subtasks (plist-get relations :subtasks))
-               (concat "\n\n"
-                       "- *Subtasks* [/]"
-                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
-             "")
-           (if-let (mentions (plist-get relations :mentions))
-               (concat "\n\n"
-                       "- *Mentions*"
-                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
-             "")))
+
+           ":PROPERTIES:\n"
+           ":ORG_GLANCE_ID: " id "\n"
+           ":DIR: " (abbreviate-file-name default-directory) "\n"
+           ":END:"
+
+           (org-glance-join-but-null "\n\n"
+                                     (list
+                                      (when (or encrypted linked)
+                                        (concat "- Features"
+                                                (org-glance-join-but-null "\n  - "
+                                                                          (list
+                                                                           (when encrypted "Encrypted")
+                                                                           (when linked "Contains links to external resources")))))
+
+                                      (when timestamps
+                                        (concat "- Timestamps"
+                                                (org-glance-join-but-null "\n  - " timestamps)))
+
+                                      (if-let (projects (plist-get relations :projects))
+                                          (concat "- Projects [/]"
+                                                  (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
+
+                                      (if-let (subtasks (plist-get relations :subtasks))
+                                          (concat "- Subtasks [/]"
+                                                  (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
+
+                                      (if-let (mentions (plist-get relations :mentions))
+                                          (concat "- Mentions"
+                                                  (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter mentions))))))))
          (org-update-checkbox-count-maybe)
          (buffer-string))))))
 
