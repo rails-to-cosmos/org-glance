@@ -345,7 +345,8 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-relation-type-parser ()
   (cond ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6)) 'subtask)
         ((and (org-at-item-checkbox-p) (looking-back "- \\[X\\] " 6)) 'subtask-done)
-        ((looking-back "- Part of " 6) 'project)
+        ((and (org-at-item-p) (looking-back "- \\[ \\] Part of a project " 30)) 'project)
+        ((and (org-at-item-p) (looking-back "- \\[X\\] Part of a project " 30)) 'project-done)
         (t 'mention)))
 
 (cl-defun org-glance-relation-type-interpreter (relation)
@@ -353,7 +354,8 @@ FIXME. Unstable one. Refactor is needed."
    (case (org-element-property :type relation)
      ('subtask "- [ ]")
      ('subtask-done "- [X]")
-     ('project "- [ ]")
+     ('project "- [ ] Part of a project")
+     ('project-done "- [X] Part of a project")
      ('mention "-")
      (t (prin1-to-string (org-element-property :type relation))))
    " "))
@@ -370,13 +372,19 @@ FIXME. Unstable one. Refactor is needed."
                     (let ((link-type (save-excursion
                                        (goto-char (org-element-property :begin link))
                                        (org-glance-relation-type-parser))))
-                      (if (memq link-type '(subtask subtask-done))
-                          ;; actualize link state
+                      (if (memq link-type '(subtask subtask-done project project-done))
+                          ;; actualize link state for subtasks and projects
                           (condition-case nil
                               (save-window-excursion
                                 (org-glance-headline:with-materialized-headline (org-glance-metastore:get-headline (symbol-name id))
-                                  (cond ((memq (intern (or (org-get-todo-state) "")) (mapcar #'intern org-done-keywords)) 'subtask-done)
-                                        (t 'subtask))))
+                                  (let ((state (intern (or (org-get-todo-state) "")))
+                                        (done-kws (mapcar #'intern org-done-keywords)))
+                                    (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
+                                                                       ((memq link-type '(project project-done)) 'project-done)
+                                                                       (t 'subtask-done)))
+                                          (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
+                                                   ((memq link-type '(project project-done)) 'project)
+                                                   (t 'subtask)))))))
                             (org-glance-exception:HEADLINE-NOT-FOUND link-type))
                         link-type)))
                    (t nil))
@@ -532,7 +540,7 @@ FIXME. Unstable one. Refactor is needed."
               "")
             (if-let (projects (plist-get relations :projects))
                 (concat "\n\n"
-                        "- *Part of projects* [/]"
+                        "- *Projects* [/]"
                         (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter projects)))
               "")
             (if-let (subtasks (plist-get relations :subtasks))

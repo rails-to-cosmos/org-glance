@@ -104,6 +104,8 @@
            for relation in (org-glance-headline:relations)
            for relation-id = (org-element-property :id relation)
            for headline-link = (org-glance-headline:format (org-glance-headline:at-point))
+           for state = (intern (or (org-get-todo-state) ""))
+           for done-kws = (mapcar #'intern org-done-keywords)
            do (save-window-excursion
                 (org-glance-headline:with-materialized-headline (org-glance-metastore:get-headline (symbol-name relation-id))
                   (unless (cl-loop
@@ -111,7 +113,9 @@
                              if (eq (org-element-property :id rr) (intern id))
                              return t)
                     (cond ((memq (org-element-property :type relation) '(subtask subtask-done))
-                           (org-glance-headline:add-log-note "- Part of %s from %s" headline-link (org-glance-now)))
+                           (if (memq state done-kws)
+                               (org-glance-headline:add-log-note "- [X] Part of a project %s from %s" headline-link (org-glance-now))
+                             (org-glance-headline:add-log-note "- [ ] Part of a project %s from %s" headline-link (org-glance-now))))
                           (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now)))))))))
 
       (let ((new-contents (org-glance-headline:with-headline-at-point
