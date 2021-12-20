@@ -345,8 +345,8 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-relation-type-parser ()
   (cond ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6)) 'subtask)
         ((and (org-at-item-checkbox-p) (looking-back "- \\[X\\] " 6)) 'subtask-done)
-        ((and (org-at-item-p) (looking-back "- \\[ \\] Part of a project " 30)) 'project)
-        ((and (org-at-item-p) (looking-back "- \\[X\\] Part of a project " 30)) 'project-done)
+        ((and (org-at-item-p) (looking-back "- \\[ \\] Part of a project " 25)) 'project)
+        ((and (org-at-item-p) (looking-back "- \\[X\\] Part of a project " 25)) 'project-done)
         (t 'mention)))
 
 (cl-defun org-glance-relation-type-interpreter (relation)
@@ -492,7 +492,7 @@ FIXME. Unstable one. Refactor is needed."
                           collect relation into mentions
                           when (memq (org-element-property :type relation) '(subtask subtask-done))
                           collect relation into subtasks
-                          when (memq (org-element-property :type relation) '(project))
+                          when (memq (org-element-property :type relation) '(project project-done))
                           collect relation into projects
                           finally (return (list :mentions mentions
                                                 :subtasks subtasks
