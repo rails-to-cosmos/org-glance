@@ -477,84 +477,89 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:overview (&optional (headline (org-glance-headline:at-point)))
   "Trim HEADLINE contents."
   (save-window-excursion
-    (org-glance-headline:with-materialized-headline headline
-      (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
-                                                    (org-tss:filter-active)
-                                                    (org-tss:sort))
-                           collect (org-element-property :raw-value timestamp)))
-            (header (save-excursion
-                      (goto-char (point-min))
-                      (org-end-of-meta-data)
-                      (s-trim (buffer-substring-no-properties (point-min) (point)))))
-            (relations (cl-loop
-                          for relation in (org-glance-headline:relations)
-                          when (eq (org-element-property :type relation) 'mention)
-                          collect relation into mentions
-                          when (memq (org-element-property :type relation) '(subtask subtask-done))
-                          collect relation into subtasks
-                          when (memq (org-element-property :type relation) '(project project-done))
-                          collect relation into projects
-                          finally (return (list :mentions mentions
-                                                :subtasks subtasks
-                                                :projects projects))))
-            (tags (org-get-tags-string))
-            (state (org-glance-headline:state headline))
-            (id (org-glance-headline:id headline))
-            (title (org-glance-headline:title headline))
-            (priority (org-glance-headline:priority headline))
-            (schedule (org-glance-headline:scheduled headline))
-            (deadline (org-glance-headline:deadline headline)))
-        (with-temp-buffer
-          (insert
+    (org-glance-headline:visit headline)
+    (org-glance-headline:with-headline-at-point
+     (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
+                                                   (org-tss:filter-active)
+                                                   (org-tss:sort))
+                          collect (org-element-property :raw-value timestamp)))
+           (header (save-excursion
+                     (goto-char (point-min))
+                     (org-end-of-meta-data)
+                     (s-trim (buffer-substring-no-properties (point-min) (point)))))
+           (relations (cl-loop
+                         for relation in (org-glance-headline:relations)
+                         when (eq (org-element-property :type relation) 'mention)
+                         collect relation into mentions
+                         when (memq (org-element-property :type relation) '(subtask subtask-done))
+                         collect relation into subtasks
+                         when (memq (org-element-property :type relation) '(project project-done))
+                         collect relation into projects
+                         finally (return (list :mentions mentions
+                                               :subtasks subtasks
+                                               :projects projects))))
+           (tags (org-get-tags-string))
+           (state (org-glance-headline:state headline))
+           (id (org-glance-headline:id headline))
+           (title (org-glance-headline:title headline))
+           (priority (org-glance-headline:priority headline))
+           (schedule (org-glance-headline:scheduled headline))
+           (deadline (org-glance-headline:deadline headline))
+           (encrypted (org-glance-headline:encrypted?)))
+       (with-temp-buffer
+         (insert
+          (concat
+           "* "
+           state
+           (if (string-empty-p state)
+               ""
+             " ")
+           (if priority
+               (concat "[#" (char-to-string priority) "]" " ")
+             "")
+           title
+           ;; " "
+           ;; tags
+           "\n"
+           (if schedule
+               (concat "SCHEDULED: " (org-element-property :raw-value schedule))
+             "")
+           (if deadline
+               (concat "DEADLINE: " (org-element-property :raw-value deadline))
+             "")
+           (if (or schedule deadline)
+               "\n"
+             "")
            (concat
-            "* "
-            state
-            (if (string-empty-p state)
-                ""
-              " ")
-            (if priority
-                (concat "[#" (char-to-string priority) "]" " ")
-              "")
-            title
-            ;; " "
-            ;; tags
-            "\n"
-            (if schedule
-                (concat "SCHEDULED: " (org-element-property :raw-value schedule))
-              "")
-            (if deadline
-                (concat "DEADLINE: " (org-element-property :raw-value deadline))
-              "")
-            (if (or schedule deadline)
-                "\n"
-              "")
-            (concat
-             ":PROPERTIES:\n"
-             ":ORG_GLANCE_ID: " id "\n"
-             ":DIR: " (abbreviate-file-name default-directory) "\n"
-             ":END:")
-            (if timestamps
-                (concat "\n\n"
-                        "- Timestamps"
-                        (org-glance-join "\n  - " timestamps))
-              "")
-            (if-let (projects (plist-get relations :projects))
-                (concat "\n\n"
-                        "- *Projects* [/]"
-                        (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter projects)))
-              "")
-            (if-let (subtasks (plist-get relations :subtasks))
-                (concat "\n\n"
-                        "- *Subtasks* [/]"
-                        (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
-              "")
-            (if-let (mentions (plist-get relations :mentions))
-                (concat "\n\n"
-                        "- *Mentions*"
-                        (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
-              "")))
-          (org-update-checkbox-count-maybe)
-          (buffer-string))))))
+            ":PROPERTIES:\n"
+            ":ORG_GLANCE_ID: " id "\n"
+            ":DIR: " (abbreviate-file-name default-directory) "\n"
+            ":END:")
+           (if encrypted
+               "\n\n*Headline is encrypted*.\n"
+             "")
+           (if timestamps
+               (concat "\n\n"
+                       "- Timestamps"
+                       (org-glance-join "\n  - " timestamps))
+             "")
+           (if-let (projects (plist-get relations :projects))
+               (concat "\n\n"
+                       "- *Projects* [/]"
+                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter projects)))
+             "")
+           (if-let (subtasks (plist-get relations :subtasks))
+               (concat "\n\n"
+                       "- *Subtasks* [/]"
+                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter subtasks)))
+             "")
+           (if-let (mentions (plist-get relations :mentions))
+               (concat "\n\n"
+                       "- *Mentions*"
+                       (org-glance-join "\n  " (mapcar #'org-glance-relation-interpreter mentions)))
+             "")))
+         (org-update-checkbox-count-maybe)
+         (buffer-string))))))
 
 (cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
   `(save-excursion
