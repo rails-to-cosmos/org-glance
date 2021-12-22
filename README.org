@@ -40,6 +40,7 @@ Terms
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO repetitive tasks: clone subtasks
 ** TODO on materialize pull subtasks states
 ** DONE on materialize push clarify subtasks states in overview
 CLOSED: [2021-12-18 Sat 12:58]
