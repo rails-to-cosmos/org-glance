@@ -13,35 +13,7 @@ Return headline or nil if it is not a proper `org-glance-headline'."
   (when (org-element-property :ORG_GLANCE_ID headline)
     headline))
 
-(defvar org-glance-headline:serde-alist
-  `((:raw-value  . (:reader org-glance-headline:title      :writer org-glance-headline:title))
-    (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
-    (:file       . (:reader org-glance-headline:file       :writer org-glance-headline:file))
-    (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
-    (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
-    (:contains-link-p    . (:reader org-glance-headline:contains-link?    :writer (lambda (hl)
-                                                                                    (save-excursion
-                                                                                      (save-restriction
-                                                                                        (org-narrow-to-subtree)
-                                                                                        ;; (org-end-of-meta-data t)
-                                                                                        (when (re-search-forward org-any-link-re nil t)
-                                                                                          'contains-link))))))
-    (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
-                                                                                                   (save-excursion
-                                                                                                     (save-restriction
-                                                                                                       (org-narrow-to-subtree)
-                                                                                                       (org-end-of-meta-data t)
-                                                                                                       (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                                                                                         'contains-properties))))))
-    (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
-                                                                     (save-excursion
-                                                                       (org-end-of-meta-data t)
-                                                                       (when (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")
-                                                                         'encrypted)))))
-    (:buffer . (:reader org-glance-headline:buffer :writer (lambda (hl)
-                                                             (condition-case nil
-                                                                 (buffer-name (get-file-buffer (org-glance-headline:file hl)))
-                                                               (wrong-type-argument (buffer-name)))))))
+(defvar org-glance-headline:serde-alist nil
   "Map `org-element-property' to `org-glance' extractor method.
 
 It is safe (in terms of backward/forward compability of
@@ -49,6 +21,36 @@ metastores) to append properties to this map.
 
 Do not modify existing properties without backfilling of
 metastore.")
+
+(setq org-glance-headline:serde-alist
+      `((:raw-value  . (:reader org-glance-headline:title      :writer org-glance-headline:title))
+        (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
+        (:file       . (:reader org-glance-headline:file       :writer org-glance-headline:file))
+        (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
+        (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
+        (:contains-link-p    . (:reader org-glance-headline:contains-link?    :writer (lambda (hl)
+                                                                                        (save-excursion
+                                                                                          (save-restriction
+                                                                                            (org-narrow-to-subtree)
+                                                                                            ;; (org-end-of-meta-data t)
+                                                                                            (when (org-glance:buffer-links)
+                                                                                              'contains-link))))))
+        (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
+                                                                                                       (save-excursion
+                                                                                                         (save-restriction
+                                                                                                           (org-narrow-to-subtree)
+                                                                                                           (org-end-of-meta-data t)
+                                                                                                           (when (re-search-forward org-glance:key-value-pair-re nil t)
+                                                                                                             'contains-properties))))))
+        (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
+                                                                         (save-excursion
+                                                                           (org-end-of-meta-data t)
+                                                                           (when (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")
+                                                                             'encrypted)))))
+        (:buffer . (:reader org-glance-headline:buffer :writer (lambda (hl)
+                                                                 (condition-case nil
+                                                                     (buffer-name (get-file-buffer (org-glance-headline:file hl)))
+                                                                   (wrong-type-argument (buffer-name))))))))
 
 (cl-defun org-glance-headline:serialize (headline)
   "Serialize HEADLINE to store it on disk."
@@ -561,7 +563,9 @@ FIXME. Unstable one. Refactor is needed."
                                       (if-let (mentions (plist-get relations :mentions))
                                           (concat "- Mentions"
                                                   (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter mentions))))))))
-         (org-update-checkbox-count-maybe)
+         (condition-case nil
+             (org-update-checkbox-count-maybe)
+           (error nil))
          (buffer-string))))))
 
 (cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)

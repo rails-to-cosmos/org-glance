@@ -699,7 +699,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (org-overview)
              (goto-char initial-point)
              (org-align-tags t)
-             (org-update-checkbox-count-maybe)
+             (condition-case nil
+                 (org-update-checkbox-count-maybe)
+               (error nil))
              (save-buffer)
              (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
              t))))
