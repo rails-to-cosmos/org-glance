@@ -238,30 +238,31 @@
   (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
   (org-glance-headline:decrypt --org-glance-materialized-headline:password))
 
-(advice-add 'org-glance-headline:materialize :around
-            (lambda (fn headline &rest args)
-              (cond ((org-glance-headline:encrypted? headline)
-                     (progn
-                       (org-glance:log-info "The headline is encrypted")
-                       (org-glance:log-info "Add `org-glance-after-materialize-hook' to decrypt it")
-                       (add-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
+(cl-defun org-glance-materialized-headline:support-encrypted-headlines (fn headline &rest args)
+  (cond ((org-glance-headline:encrypted? headline)
+         (progn
+           (org-glance:log-info "The headline is encrypted")
+           (org-glance:log-info "Add `org-glance-after-materialize-hook' to decrypt it")
+           (add-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
 
-                       (unwind-protect
-                            (apply fn headline args)
-                         (remove-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
-                         (add-hook 'org-glance-before-materialize-sync-hook
-                                   (lambda ()
-                                     (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                                     (org-glance-headline:encrypt --org-glance-materialized-headline:password)
-                                     (org-glance-headline:promote-to-the-first-level))
-                                   0 'local)
-                         (add-hook 'org-glance-after-materialize-sync-hook
-                                   (lambda ()
-                                     (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                                     (org-glance-headline:decrypt --org-glance-materialized-headline:password)
-                                     (org-glance-headline:promote-to-the-first-level))
-                                   0 'local))))
-                    (t (apply fn headline args)))))
+           (unwind-protect
+                (apply fn headline args)
+             (remove-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
+             (add-hook 'org-glance-before-materialize-sync-hook
+                       (lambda ()
+                         (org-glance-headline:demote --org-glance-materialized-headline:indent)
+                         (org-glance-headline:encrypt --org-glance-materialized-headline:password)
+                         (org-glance-headline:promote-to-the-first-level))
+                       0 'local)
+             (add-hook 'org-glance-after-materialize-sync-hook
+                       (lambda ()
+                         (org-glance-headline:demote --org-glance-materialized-headline:indent)
+                         (org-glance-headline:decrypt --org-glance-materialized-headline:password)
+                         (org-glance-headline:promote-to-the-first-level))
+                       0 'local))))
+        (t (apply fn headline args))))
+
+(advice-add 'org-glance-headline:materialize :around #'org-glance-materialized-headline:support-encrypted-headlines)
 
 (cl-defmacro org-glance-headline:with-materialized-headline (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it."

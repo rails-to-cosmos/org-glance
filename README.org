@@ -20,7 +20,7 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
-Terms
+* Terms
 
 - headline -- org-element of type 'headline with ORG_GLANCE_ID property specified.
   Contains all nested elements.

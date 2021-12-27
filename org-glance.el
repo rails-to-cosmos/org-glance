@@ -158,39 +158,46 @@
     (org-glance:log-debug "Create overview")
     (org-glance-overview:create class)))
 
+(cl-defun org-glance-materialized-headline:clone-before-auto-repeat (&rest args)
+  (when (and
+         (or org-glance-material-mode org-glance-overview-mode)
+         org-glance-clone-on-repeat-p
+         (member (org-get-todo-state) org-done-keywords)
+         (org-glance-headline:repeated-p))
+    (org-glance:clone-headline)))
+
+(cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
+  "Do only if headline has been cloned before auto repeat.
+Cleanup new headline considering auto-repeat ARGS.
+
+- Remove all data but PINNED of cloned headline."
+  (when (and
+         (or org-glance-material-mode org-glance-overview-mode)
+         org-glance-clone-on-repeat-p
+         (org-glance-headline:repeated-p))
+    (let ((contents (save-excursion
+                      (org-back-to-heading t)
+                      (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
+                            (pinned (save-excursion
+                                      (cl-loop
+                                         while (search-forward "#+begin_pin" nil t)
+                                         collect (save-excursion
+                                                   (beginning-of-line)
+                                                   (buffer-substring-no-properties (point) (save-excursion
+                                                                                             (search-forward "#+end_pin" nil t)
+                                                                                             (point))))))))
+                        (s-join "\n\n" (append (list header) pinned))))))
+      (delete-region (point-min) (point-max))
+      (insert contents))))
+
 (cl-defun org-glance:init ()
   "Update all changed entities from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
 
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
-  (advice-add 'org-auto-repeat-maybe :before
-              (lambda (&rest args) (when (and
-                                     (or org-glance-material-mode org-glance-overview-mode)
-                                     org-glance-clone-on-repeat-p
-                                     (member (org-get-todo-state) org-done-keywords)
-                                     (org-glance-headline:repeated-p))
-                                (org-glance:clone-headline))))
-
-  (advice-add 'org-auto-repeat-maybe :after
-              (lambda (&rest args) (when (and
-                                     (or org-glance-material-mode org-glance-overview-mode)
-                                     org-glance-clone-on-repeat-p
-                                     (org-glance-headline:repeated-p))
-                                (let ((contents (save-excursion
-                                                  (org-back-to-heading t)
-                                                  (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
-                                                        (pinned (save-excursion
-                                                                  (cl-loop
-                                                                     while (search-forward "#+begin_pin" nil t)
-                                                                     collect (save-excursion
-                                                                               (beginning-of-line)
-                                                                               (buffer-substring-no-properties (point) (save-excursion
-                                                                                                                         (search-forward "#+end_pin" nil t)
-                                                                                                                         (point))))))))
-                                                    (s-join "\n\n" (append (list header) pinned))))))
-                                  (delete-region (point-min) (point-max))
-                                  (insert contents)))))
+  (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
+  (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
 
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)
