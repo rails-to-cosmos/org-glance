@@ -326,8 +326,9 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   "Materialize HEADLINE and retrieve key-value pairs from its contents.
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
   (let ((action (lambda (headline)
-                  (let ((pairs (org-glance-headline:with-materialized-headline headline
-                                 (org-glance-buffer-key-value-pairs))))
+                  (let ((pairs (save-window-excursion
+                                 (org-glance-headline:with-materialized-headline headline
+                                   (org-glance-buffer-key-value-pairs)))))
                     (while t
                       (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
     (if headline

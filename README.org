@@ -40,6 +40,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO implement headline aliases
 ** PENDING capture through materialization
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2021-12-26 Sun 13:30]

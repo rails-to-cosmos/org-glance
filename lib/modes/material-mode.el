@@ -201,9 +201,12 @@
        (org-glance:log-debug "Headline FILE: \"%s\"" file)
        (org-glance:log-debug "Headline BUFFER: \"%s\"" buffer)
        (org-glance:log-debug "Headline BEGIN: %d" begin)
+       (org-glance:log-debug "Headline CONTENTS: \"%s\"" contents)
 
        (when file
-         (setq-local default-directory (file-name-directory file)))
+         (setq-local default-directory (file-name-directory file))
+         (org-glance:log-debug "Set default directory in materialized buffer to %s"
+                               default-directory))
 
        (org-glance:log-debug "Enable `org-mode' and `org-glance-material-mode'")
        (org-mode)
