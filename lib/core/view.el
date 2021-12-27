@@ -14,7 +14,7 @@
 (defvar org-glance-view-default-type '(all)
   "Default type for all views.")
 
-(defun org-glance-view:ids ()
+(defun org-glance-classes ()
   "List registered views."
   (sort (hash-table-keys org-glance:classes) #'s-less?))
 
@@ -86,7 +86,7 @@
 
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: "))
   "Run completing read PROMPT on registered views filtered by TYPE."
-  (let ((views (org-glance-view:ids)))
+  (let ((views (org-glance-classes)))
     (if (> (length views) 1)
         (intern (org-completing-read prompt views))
       (car views))))
@@ -111,9 +111,9 @@
     view))
 
 (cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))
-  (org-completing-read prompt (org-glance-view:ids)))
+  (org-completing-read prompt (org-glance-classes)))
 
-(cl-defun org-glance-overview:template (class &key (default ""))
+(cl-defun org-glance-capture-template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
         (capture-template-config-file (f-join (org-glance-overview:directory class) "capture-template.org")))
     (s-replace "%?" (concat default "%?")

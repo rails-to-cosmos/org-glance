@@ -4,8 +4,7 @@
   org
   org-element
   lib.core.exceptions
-  lib.utils.helpers
-  lib.utils.org)
+  lib.utils.helpers)
 
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property specified.
@@ -33,7 +32,7 @@ metastore.")
                                                                                           (save-restriction
                                                                                             (org-narrow-to-subtree)
                                                                                             ;; (org-end-of-meta-data t)
-                                                                                            (when (org-glance:buffer-links)
+                                                                                            (when (org-glance-buffer-links)
                                                                                               'contains-link))))))
         (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
                                                                                                        (save-excursion
@@ -87,7 +86,7 @@ metastore.")
 
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
-  (org-glance:ensure-at-heading)
+  (org-glance-ensure-at-heading)
   (beginning-of-line)
   (while (and (not (org-glance-headline-p))
               (> (point) (point-min)))
@@ -227,7 +226,7 @@ metastore.")
          ,@forms))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
-  (org-glance:ensure-at-heading)
+  (org-glance-ensure-at-heading)
   (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
@@ -299,7 +298,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:add-log-note (string &rest objects)
   (save-excursion
-    (org-glance:ensure-at-heading)
+    (org-glance-ensure-at-heading)
     (goto-char (org-log-beginning t))
     (insert (apply #'format string objects) "\n")))
 

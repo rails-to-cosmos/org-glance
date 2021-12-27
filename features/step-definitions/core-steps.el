@@ -5,19 +5,19 @@
 
 (When "^I define class \"\\([^\"]+\\)\"$"
   (lambda (class)
-    (org-glance:create-class (intern class))))
+    (org-glance-class-create (intern class))))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
     (with-simulated-input ((insert class-name) "RET")
-      (org-glance:capture))
+      (org-glance-capture))
     (insert thing-title)
     (org-capture-finalize)))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\" with contents$"
   (lambda (thing-title class-name contents)
     (with-simulated-input ((insert class-name) "RET")
-      (org-glance:capture))
+      (org-glance-capture))
     (insert thing-title)
     (goto-char (point-max))
     (insert "\n")
@@ -72,7 +72,7 @@
 
 (And "^I rename headline to \"\\([^\"]+\\)\"$"
      (lambda (new-title)
-       (should (org-glance:ensure-at-heading))
+       (should (org-glance-ensure-at-heading))
        (replace-string (org-glance-headline:title) new-title nil (point-min) (save-excursion (end-of-line) (point)))))
 
 (And "^I sync materialized headline$"
