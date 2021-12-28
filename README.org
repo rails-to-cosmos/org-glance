@@ -40,6 +40,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO domains. domain borders. cross-domain classes.
 ** TODO implement headline aliases
 ** PENDING capture through materialization
 :LOGBOOK:
@@ -100,7 +101,6 @@ CLOSED: [2021-11-17 Wed 16:54]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-11-17 Wed 16:54]
 :END:
-** TODO Implement capacity concept
 ** DONE Clone feature (clone on repeat, clone-archive+reschedule)
 CLOSED: [2021-11-13 Sat 14:17]
 :LOGBOOK:
