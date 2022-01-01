@@ -41,7 +41,7 @@ metastore.")
                                                                                                            (org-end-of-meta-data t)
                                                                                                            (when (re-search-forward org-glance:key-value-pair-re nil t)
                                                                                                              'contains-properties))))))
-        (:encryptedp . (:reader org-glance-headline:encrypted? :writer (lambda (hl)
+        (:encryptedp . (:reader org-glance-headline:encrypted-p :writer (lambda (hl)
                                                                          (save-excursion
                                                                            (org-end-of-meta-data t)
                                                                            (when (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")
@@ -189,8 +189,8 @@ metastore.")
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (org-glance:log-debug "I'm in buffer \"%s\"" (current-buffer))
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                  (lambda (elem) (when (string= (org-glance-headline:id elem) id)
-                              (org-element-property :begin elem))))))
+                  (lambda (el) (when (string= (org-glance-headline:id el) id)
+                              (org-element-property :begin el))))))
     (unless points
       (org-glance-exception:HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
@@ -268,7 +268,7 @@ FIXME. Unstable one. Refactor is needed."
                               (outline-next-heading)
                               (org-glance-headline:promote-to-the-first-level)
                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
-          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location.")))))
+          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location")))))
 
 (cl-defgeneric org-glance-headline:extract-from (scope)
   "Extract `org-glance-headlines' from scope.")
@@ -361,7 +361,7 @@ FIXME. Unstable one. Refactor is needed."
      (t (prin1-to-string (org-element-property :type relation))))
    " "))
 
-(cl-defun org-glance-headline:relations ()
+(cl-defun org-glance-headline-relations ()
   "Get all first-level relations of headline at point."
   (org-glance-headline:with-headline-at-point
    (cl-loop
@@ -411,7 +411,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:subtasks ()
   (cl-loop
-     for relation in (org-glance-headline:relations)
+     for relation in (org-glance-headline-relations)
      when (org-glance-headline-relation:subtask-p relation)
      collect relation))
 
@@ -430,7 +430,7 @@ FIXME. Unstable one. Refactor is needed."
   (when (org-element-property :contains-link-p headline)
     'contains-link))
 
-(cl-defun org-glance-headline:encrypted? (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:encrypted-p (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :encryptedp headline)
     'encrypted))
 
@@ -448,7 +448,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:deadline (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :deadline headline))
 
-(cl-defun org-glance-headline:repeated-p (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:repetitive-p (&optional (headline (org-glance-headline:at-point)))
   (let ((contents (org-glance-headline:contents headline)))
     (with-temp-buffer
       (org-mode)
@@ -457,7 +457,7 @@ FIXME. Unstable one. Refactor is needed."
       (when (append
              (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
                (org-tss:filter-active)
-               (org-tss:filter-repeated)
+               (org-tss:filter-repetitive)
                (org-tss:sort)))
         t))))
 
@@ -476,7 +476,7 @@ FIXME. Unstable one. Refactor is needed."
     'directory)))
 
 (cl-defun org-glance-headline:overview (&optional (headline (org-glance-headline:at-point)))
-  "Trim HEADLINE contents."
+  "Return HEADLINE high-level usability characteristics."
   (save-window-excursion
     (org-glance-headline:visit headline)
     (org-glance-headline:with-headline-at-point
@@ -489,7 +489,7 @@ FIXME. Unstable one. Refactor is needed."
                      (org-end-of-meta-data)
                      (s-trim (buffer-substring-no-properties (point-min) (point)))))
            (relations (cl-loop
-                         for relation in (org-glance-headline:relations)
+                         for relation in (org-glance-headline-relations)
                          when (eq (org-element-property :type relation) 'mention)
                          collect relation into mentions
                          when (memq (org-element-property :type relation) '(subtask subtask-done))
@@ -506,7 +506,8 @@ FIXME. Unstable one. Refactor is needed."
            (priority (org-glance-headline:priority headline))
            (schedule (org-glance-headline:scheduled headline))
            (deadline (org-glance-headline:deadline headline))
-           (encrypted (org-glance-headline:encrypted?))
+           (encrypted (org-glance-headline:encrypted-p))
+           (repetitive (org-glance-headline:repetitive-p))
            (linked (org-glance-headline:contains-link?)))
        (with-temp-buffer
          (insert
@@ -540,15 +541,19 @@ FIXME. Unstable one. Refactor is needed."
 
            (org-glance-join-but-null "\n\n"
                                      (list
-                                      (when (or encrypted linked)
-                                        (concat "- Features"
+                                      (when (or encrypted linked repetitive)
+                                        (concat "- Usability characteristics"
                                                 (org-glance-join-but-null "\n  - "
                                                                           (list
                                                                            (when encrypted "Encrypted")
-                                                                           (when linked "Contains links to external resources")))))
+                                                                           (when linked "Contains links to third-party resources")
+                                                                           (when repetitive (format "Repetitive%s"
+                                                                                                    (if timestamps
+                                                                                                        (format ", next active timestamp is " (car timestamps))
+                                                                                                      "")))))))
 
-                                      (when timestamps
-                                        (concat "- Timestamps"
+                                      (when (and timestamps (not repetitive))
+                                        (concat "- Schedule"
                                                 (org-glance-join-but-null "\n  - " timestamps)))
 
                                       (if-let (projects (plist-get relations :projects))

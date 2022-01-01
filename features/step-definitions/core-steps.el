@@ -56,7 +56,7 @@
                          org-glance-headline:contains-link?))))
 
 (Then "^headline at point should not be encrypted$"
-      (lambda () (should (not (org-glance-headline:encrypted?)))))
+      (lambda () (should (not (org-glance-headline:encrypted-p)))))
 
 (Then "^headline at point should not contain properties$"
       (lambda ()

@@ -61,8 +61,6 @@
                  (org-glance-headline:deserialize)
                  (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
-(add-hook 'org-glance-after-materialize-sync-hook #'org-glance-materialized-headline:push)
-
 (define-key org-glance-material-mode-map (kbd "C-x C-s") #'org-glance-materialized-headline:sync)
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 (define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
@@ -89,7 +87,12 @@
                                                (org-glance-headline:hash)))))
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
-           (current-hash (org-glance-headline:hash)))
+           (current-hash (org-glance-headline:hash))
+           (source-headline (org-glance-headline:enrich (org-glance-headline:at-point)
+                              :begin --org-glance-materialized-headline:begin
+                              :file --org-glance-materialized-headline:file
+                              :buffer --org-glance-materialized-headline:buffer))
+           (source-classes (org-glance-headline:classes)))
 
       (unless (string= glance-hash source-hash)
         (org-glance-exception:SOURCE-CORRUPTED (or source-file source-buffer)))
@@ -97,26 +100,32 @@
       (when (string= glance-hash current-hash)
         (org-glance-exception:HEADLINE-NOT-MODIFIED (or source-file source-buffer)))
 
-      (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
+      (save-excursion
+        (with-demoted-errors "Hook error: %s"
+          (run-hooks 'org-glance-before-materialize-sync-hook)))
 
       (unless without-relations
         (cl-loop
-           for relation in (org-glance-headline:relations)
+           for relation in (org-glance-headline-relations)
            for relation-id = (org-element-property :id relation)
            for headline-link = (org-glance-headline:format (org-glance-headline:at-point))
            for state = (intern (or (org-get-todo-state) ""))
            for done-kws = (mapcar #'intern org-done-keywords)
+           for relation-headline = (org-glance-metastore:get-headline (symbol-name relation-id))
            do (save-window-excursion
-                (org-glance-headline:with-materialized-headline (org-glance-metastore:get-headline (symbol-name relation-id))
-                  (unless (cl-loop
-                             for rr in (org-glance-headline:relations)
-                             if (eq (org-element-property :id rr) (intern id))
-                             return t)
-                    (cond ((memq (org-element-property :type relation) '(subtask subtask-done))
-                           (if (memq state done-kws)
-                               (org-glance-headline:add-log-note "- [X] Part of a project %s from %s" headline-link (org-glance-now))
-                             (org-glance-headline:add-log-note "- [ ] Part of a project %s from %s" headline-link (org-glance-now))))
-                          (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now)))))))))
+                (save-excursion
+                  (condition-case nil
+                      (org-glance-headline:with-materialized-headline relation-headline
+                        (unless (cl-loop
+                                   for rr in (org-glance-headline-relations)
+                                   if (eq (org-element-property :id rr) (intern id))
+                                   return t)
+                          (cond ((memq (org-element-property :type relation) '(subtask subtask-done))
+                                 (if (memq state done-kws)
+                                     (org-glance-headline:add-log-note "- [X] Part of a project %s from %s" headline-link (org-glance-now))
+                                   (org-glance-headline:add-log-note "- [ ] Part of a project %s from %s" headline-link (org-glance-now))))
+                                (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now))))))
+                    (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))))))
 
       (let ((new-contents (org-glance-headline:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -136,32 +145,24 @@
                                (org-glance-headline:search-buffer-by-id id)
                                (org-glance-headline:replace-headline-at-point new-contents))))
 
-        ;; TODO: get rid of metastore knowledge here
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
-        (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
+        (cl-loop
+           for class in source-classes
+           do
+             (org-glance-overview:register-headline-in-overview source-headline class)
+             (org-glance-overview:register-headline-in-metastore source-headline class))
+
+        (cl-loop
+           for class in (seq-difference --org-glance-materialized-headline:classes source-classes)
+           do
+             (org-glance-overview:remove-headline-from-overview source-headline class)
+             (org-glance-overview:remove-headline-from-metastore source-headline class))
+
+        (with-demoted-errors "Hook error: %s"
+          (run-hooks 'org-glance-after-materialize-sync-hook))
+
         (org-glance:log-info "Materialized headline successfully synchronized")))))
-
-(cl-defun org-glance-materialized-headline:push ()
-  (let* ((headline (org-glance-headline:enrich
-                       (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
-                     :begin --org-glance-materialized-headline:begin
-                     :file --org-glance-materialized-headline:file
-                     :buffer --org-glance-materialized-headline:buffer))
-         (classes (org-glance-headline:classes headline)))
-    (org-glance:log-debug "Updated headline: %s" headline)
-
-    (cl-loop
-       for class in classes
-       do
-         (org-glance-overview:register-headline-in-overview headline class)
-         (org-glance-overview:register-headline-in-metastore headline class))
-
-    (cl-loop
-       for class in (seq-difference --org-glance-materialized-headline:classes classes)
-       do
-         (org-glance-overview:remove-headline-from-overview headline class)
-         (org-glance-overview:remove-headline-from-metastore headline class))))
 
 (defun org-glance-materialized-headline:source-hash ()
   (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
@@ -242,7 +243,7 @@
   (org-glance-headline:decrypt --org-glance-materialized-headline:password))
 
 (cl-defun org-glance-materialized-headline:support-encrypted-headlines (fn headline &rest args)
-  (cond ((org-glance-headline:encrypted? headline)
+  (cond ((org-glance-headline:encrypted-p headline)
          (progn
            (org-glance:log-info "The headline is encrypted")
            (org-glance:log-info "Add `org-glance-after-materialize-hook' to decrypt it")

@@ -11,7 +11,9 @@
   "*Face used to highlight evaluated paragraph."
   :group 'org-glance :group 'faces)
 
-(set-face-extend 'org-glance-headline-changed-face t)
+(cl-defun org-glance-overview-init ()
+  "Init overview mode."
+  (set-face-extend 'org-glance-headline-changed-face t))
 
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
@@ -206,24 +208,27 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:log-debug "Update overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
-    (condition-case nil
-        (progn
-          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-          (org-glance-overview:pull))
-      (error nil
-             (cond
-               ;; register archived entries only in archive class
-               ((and (memq 'archive (org-glance-headline:classes headline))
-                     (not (eql 'archive class)))
-                nil)
-               (t (let ((inhibit-read-only t)
-                        (contents (org-glance-headline:overview headline)))
-                    (unless (string-empty-p contents)
-                      (end-of-buffer)
-                      (when (eolp)
-                        (insert "\n"))
-                      (insert (s-trim contents))
-                      (save-buffer))))))))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (condition-case nil
+            (progn
+              (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+              (org-glance-overview:pull))
+          (org-glance-exception:HEADLINE-NOT-FOUND
+           (cond
+             ;; register archived entries only in archive class
+             ((and (memq 'archive (org-glance-headline:classes headline))
+                   (not (eql 'archive class)))
+              nil)
+             (t (let ((inhibit-read-only t)
+                      (contents (org-glance-headline:overview headline)))
+                  (unless (string-empty-p contents)
+                    (end-of-buffer)
+                    (when (eolp)
+                      (insert "\n"))
+                    (insert (s-trim contents))
+                    (save-buffer))))))))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -231,12 +236,16 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:log-debug "Remove from overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
-    (save-excursion
-      (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-      (let ((inhibit-read-only t))
-        (kill-region (org-entry-beginning-position) (save-excursion
-                                                      (org-end-of-subtree t t)))
-        (save-buffer)))))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (when (condition-case nil
+                  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+                (org-glance-exception:HEADLINE-NOT-FOUND nil))
+          (let ((inhibit-read-only t))
+            (kill-region (org-entry-beginning-position) (save-excursion
+                                                          (org-end-of-subtree t t)))
+            (save-buffer)))))))
 
 ;; (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
 ;;   (org-glance-headline:with-materialized-headline headline
@@ -816,7 +825,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (org-glance-overview:for-all
       (error "not implemented yet")
-    (let ((relations (org-glance-headline:relations*)))
+    (let ((relations (org-glance-headline-relations*)))
       (with-temp-file "relations.js"
         (insert "var relations = ["
                 (s-join "," (cl-loop

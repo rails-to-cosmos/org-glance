@@ -41,7 +41,7 @@
 (cl-defun org-tss:filter-active (tss)
   (--filter (member (org-element-property :type it) '(active active-range)) tss))
 
-(cl-defun org-tss:filter-repeated (tss)
+(cl-defun org-tss:filter-repetitive (tss)
   (--filter (and (member (org-element-property :type it) '(active active-range))
                  (> (or (org-element-property :repeater-value it) 0) 0))
             tss))
@@ -49,13 +49,13 @@
 (cl-defun org-tss:capture (&rest args)
   (setq-local -org-tss:local-timestamps (-some->> (org-tss:subtree-timestamps)
                                           (org-tss:filter-active)
-                                          (org-tss:filter-repeated)
+                                          (org-tss:filter-repetitive)
                                           (org-tss:sort))))
 
 (cl-defun org-tss:restore (&rest args)
   (let ((tss* (-some->> (org-tss:subtree-timestamps)
                 (org-tss:filter-active)
-                (org-tss:filter-repeated)
+                (org-tss:filter-repetitive)
                 (org-tss:sort))))
     (cl-loop
        for tsi from 1 below (length tss*)
@@ -71,7 +71,7 @@
   "Reset active timestamps in buffer except earliest."
   (let ((tss (-some->> (org-tss:subtree-timestamps)
                (org-tss:filter-active)
-               (org-tss:filter-repeated)
+               (org-tss:filter-repetitive)
                (org-tss:sort))))
     (progn
       (cl-loop

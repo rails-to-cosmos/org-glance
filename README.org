@@ -40,6 +40,8 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO [#A] data corruption in overview after sync relations
+** TODO update relation title and status on visit
 ** TODO domains. domain borders. cross-domain classes.
 ** TODO implement headline aliases
 ** PENDING capture through materialization

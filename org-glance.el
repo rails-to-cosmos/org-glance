@@ -1,6 +1,6 @@
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
-;; Copyright (C) 2018-2021 Dmitry Akatov
+;; Copyright (C) 2018-2022 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -154,8 +154,8 @@
          (or org-glance-material-mode org-glance-overview-mode)
          org-glance-clone-on-repeat-p
          (member (org-get-todo-state) org-done-keywords)
-         (org-glance-headline:repeated-p))
-    (org-glance:clone-headline)))
+         (org-glance-headline:repetitive-p))
+    (org-glance-clone)))
 
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
   "Do only if headline has been cloned before auto repeat.
@@ -165,7 +165,7 @@ Cleanup new headline considering auto-repeat ARGS.
   (when (and
          (or org-glance-material-mode org-glance-overview-mode)
          org-glance-clone-on-repeat-p
-         (org-glance-headline:repeated-p))
+         (org-glance-headline:repetitive-p))
     (let ((contents (save-excursion
                       (org-back-to-heading t)
                       (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
@@ -183,8 +183,11 @@ Cleanup new headline considering auto-repeat ARGS.
 
 (cl-defun org-glance-init ()
   "Update all changed entities from `org-glance-directory'."
+
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory))
+
+  (org-glance-overview-init)
 
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
@@ -215,44 +218,28 @@ Cleanup new headline considering auto-repeat ARGS.
   (org-glance-init)
   (condition-case nil
       (cond
-        ;; subtask
-        ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6))
-         (org-glance-choose-and-apply
-          :action (lambda (headline)
-                    (let ((source (org-glance-headline:at-point))
-                          (target-title (org-glance-headline:format headline))
-                          (ts (org-glance-now)))
-                      ;; (when source
-                      ;;   (org-glance-headline:add-log-note "- Is became a subtask to %s on %s" target-title ts))
-                      (insert target-title)
-                      ;; (when source
-                      ;;   (let ((source-title (org-glance-headline:format source)))
-                      ;;     (save-window-excursion
-                      ;;       (save-excursion
-                      ;;         (org-glance-headline:with-materialized-headline headline
-                      ;;           (org-glance-headline:add-log-note
-                      ;;            (format "- Created subtask %s on %s" source-title ts)))))))
-                      ))))
         ;; mention
         ((and (not (org-in-src-block-p))
               (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
          (org-glance-choose-and-apply
           :action (lambda (headline)
-                    (let ((source (org-glance-headline:at-point))
-                          (target-title (org-glance-headline:format headline))
-                          (ts (org-glance-now)))
-                      ;; (when source
-                      ;;   (org-glance-headline:add-log-note "- Mentioned %s on %s" target-title ts))
-                      (insert target-title)
-                      ;; (when source
-                      ;;   (let ((source-title (org-glance-headline:format source)))
-                      ;;     (save-window-excursion
-                      ;;       (save-excursion
-                      ;;         (org-glance-headline:with-materialized-headline headline
-                      ;;           (org-glance-headline:add-log-note
-                      ;;            (format "- Mentioned in %s on %s" source-title ts)))))))
-                      ))))
-
+                    (insert (org-glance-headline:format headline)))))
+        ;; active region
+        ((use-region-p)
+         (lexical-let ((<buffer> (current-buffer))
+                       (<region-beginning> (region-beginning))
+                       (<region-end> (region-end))
+                       (<point> (point)))
+           (org-glance-capture
+            :default (buffer-substring-no-properties <region-beginning> <region-end>)
+            :class (org-glance:choose-class "Specify class to capture headline from active region: ")
+            :finalize t
+            :callback (lambda ()
+                        (let ((<hl> (org-glance-overview:original-headline)))
+                          (switch-to-buffer <buffer>)
+                          (goto-char <region-beginning>)
+                          (delete-region <region-beginning> <region-end>)
+                          (insert (org-glance-headline:format <hl>)))))))
         ;; simple @
         (t (keyboard-quit)))
     (quit (insert "@"))))
@@ -338,7 +325,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                  (and
                   (org-glance-headline:active? headline)
                   (or (org-glance-headline:contains-property? headline)
-                      (org-glance-headline:encrypted? headline))))
+                      (org-glance-headline:encrypted-p headline))))
        :action action))))
 
 ;; (cl-defun org-glance:prototype ()
@@ -350,7 +337,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
 ;;               :class (org-element-property :class headline)
 ;;               :template (org-glance-headline:contents headline)))))
 
-(cl-defun org-glance:clone-headline ()
+(cl-defun org-glance-clone ()
   (lexical-let ((contents (org-glance-headline:contents)))
     (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
                                          (with-temp-buffer
@@ -369,10 +356,15 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
     (&key
        (class (org-glance:choose-class))
        (file (make-temp-file "org-glance-" nil ".org"))
-       (default "")
+       (default
+           (cond
+             ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
+             (t "")))
        (callback nil)
+       (finalize nil)
        (template (org-glance-capture-template class :default default)))
   (interactive)
+
   (let ((class (if (symbolp class) class (intern class))))
     (org-glance:log-debug "User input: %s" default)
     (find-file file)
@@ -383,7 +375,9 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
     (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
     (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
     (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
-      (org-capture nil "_"))))
+      (org-capture nil "_")
+      (when finalize
+        (org-capture-finalize)))))
 
 (cl-defun org-glance:revoke ()
   (interactive)
