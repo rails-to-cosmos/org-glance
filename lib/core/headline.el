@@ -89,7 +89,7 @@ metastore.")
   (org-glance-ensure-at-heading)
   (beginning-of-line)
   (while (and (not (org-glance-headline-p))
-              (> (point) (point-min)))
+              (not (org-before-first-heading-p)))
     (org-up-heading-or-point-min))
   (org-glance-headline:create-from-element-at-point))
 
@@ -238,7 +238,7 @@ metastore.")
     (goto-char beg)
     (insert new-contents)))
 
-(cl-defun org-glance-headline:contents (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline-contents (&optional (headline (org-glance-headline:at-point)))
   "Extracts HEADLINE contents.
 FIXME. Unstable one. Refactor is needed."
   (let ((file (org-glance-headline:file headline))
@@ -416,7 +416,7 @@ FIXME. Unstable one. Refactor is needed."
      collect relation))
 
 (cl-defun org-glance-headline:hash (&optional (headline (org-glance-headline:at-point)))
-  (let ((contents (org-glance-headline:contents headline)))
+  (let ((contents (org-glance-headline-contents headline)))
     (with-temp-buffer
       (org-mode)
       (insert contents)
@@ -448,18 +448,14 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:deadline (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :deadline headline))
 
-(cl-defun org-glance-headline:repetitive-p (&optional (headline (org-glance-headline:at-point)))
-  (let ((contents (org-glance-headline:contents headline)))
-    (with-temp-buffer
-      (org-mode)
-      (insert contents)
-      (goto-char (point-min))
-      (when (append
-             (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
-               (org-tss:filter-active)
-               (org-tss:filter-repetitive)
-               (org-tss:sort)))
-        t))))
+(cl-defun org-glance-headline:repetitive-p ()
+  (org-glance-headline:with-headline-at-point
+   (when (append
+          (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
+            (org-tss:filter-active)
+            (org-tss:filter-repetitive)
+            (org-tss:sort)))
+     t)))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name

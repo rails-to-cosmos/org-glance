@@ -196,7 +196,7 @@
             (file (org-glance-headline:file headline))
             (buffer (org-glance-headline:buffer headline))
             (begin (org-glance-headline:begin headline))
-            (contents (org-glance-headline:contents headline)))
+            (contents (org-glance-headline-contents headline)))
 
        (org-glance:log-debug "Headline ID: \"%s\"" id)
        (org-glance:log-debug "Headline FILE: \"%s\"" file)

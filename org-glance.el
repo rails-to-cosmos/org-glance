@@ -151,11 +151,23 @@
 
 (cl-defun org-glance-materialized-headline:clone-before-auto-repeat (&rest args)
   (when (and
-         (or org-glance-material-mode org-glance-overview-mode)
          org-glance-clone-on-repeat-p
+         (or org-glance-material-mode org-glance-overview-mode)
          (member (org-get-todo-state) org-done-keywords)
          (org-glance-headline:repetitive-p))
-    (org-glance-clone)))
+    (lexical-let ((contents (org-glance-headline-contents)))
+      (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
+                                           (with-temp-buffer
+                                             (insert contents)
+                                             (goto-char (point-min))
+
+                                             (org-tss:reset-buffer-timestamps-except-earliest)
+
+                                             (cl-loop
+                                                for class in (org-glance-headline:classes)
+                                                do (let ((headline (org-glance-capture-headline-at-point class)))
+                                                     (org-glance-overview:register-headline-in-metastore headline class)
+                                                     (org-glance-overview:register-headline-in-overview headline class))))))))))
 
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
   "Do only if headline has been cloned before auto repeat.
@@ -335,22 +347,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
 ;;    :action (lambda (headline)
 ;;              (org-glance-capture
 ;;               :class (org-element-property :class headline)
-;;               :template (org-glance-headline:contents headline)))))
-
-(cl-defun org-glance-clone ()
-  (lexical-let ((contents (org-glance-headline:contents)))
-    (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
-                                         (with-temp-buffer
-                                           (insert contents)
-                                           (goto-char (point-min))
-
-                                           (org-tss:reset-buffer-timestamps-except-earliest)
-
-                                           (cl-loop
-                                              for class in (org-glance-headline:classes)
-                                              do (let ((captured-headline (org-glance-capture-headline-at-point class)))
-                                                   (org-glance-overview:register-headline-in-metastore captured-headline class)
-                                                   (org-glance-overview:register-headline-in-overview captured-headline class)))))))))
+;;               :template (org-glance-headline-contents headline)))))
 
 (cl-defun org-glance-capture
     (&key

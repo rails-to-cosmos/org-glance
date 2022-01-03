@@ -40,7 +40,11 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
-** TODO [#A] data corruption in overview after sync relations
+** DONE [#A] data corruption in overview after sync relations
+CLOSED: [2022-01-02 Sun 19:06]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-01-02 Sun 19:06]
+:END:
 ** TODO update relation title and status on visit
 ** TODO domains. domain borders. cross-domain classes.
 ** TODO implement headline aliases

@@ -228,7 +228,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
                     (when (eolp)
                       (insert "\n"))
                     (insert (s-trim contents))
-                    (save-buffer))))))))))
+                    (save-buffer)))))))))
+    (bury-buffer))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -690,7 +691,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
          (current-headline-title (org-glance-headline:title current-headline))
-         (current-headline-contents (org-glance-headline:contents current-headline))
+         (current-headline-contents (org-glance-headline-contents current-headline))
          (original-headline (org-glance-overview:original-headline))
          (overview-contents (org-glance-headline:overview original-headline)))
     (cond ((null overview-contents)
