@@ -545,7 +545,7 @@ FIXME. Unstable one. Refactor is needed."
                                                                            (when linked "Contains links to third-party resources")
                                                                            (when repetitive (format "Repetitive%s"
                                                                                                     (if timestamps
-                                                                                                        (format ", next active timestamp is " (car timestamps))
+                                                                                                        (format ", next active timestamp is %s" (car timestamps))
                                                                                                       "")))))))
 
                                       (when (and timestamps (not repetitive))
