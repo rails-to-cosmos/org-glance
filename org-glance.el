@@ -154,7 +154,7 @@
          org-glance-clone-on-repeat-p
          (or org-glance-material-mode org-glance-overview-mode)
          (member (org-get-todo-state) org-done-keywords)
-         (org-glance-headline:repetitive-p))
+         (org-glance-headline:repeated-p))
     (lexical-let ((contents (org-glance-headline-contents)))
       (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
                                            (with-temp-buffer
@@ -177,7 +177,7 @@ Cleanup new headline considering auto-repeat ARGS.
   (when (and
          (or org-glance-material-mode org-glance-overview-mode)
          org-glance-clone-on-repeat-p
-         (org-glance-headline:repetitive-p))
+         (org-glance-headline:repeated-p))
     (let ((contents (save-excursion
                       (org-back-to-heading t)
                       (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
@@ -237,14 +237,15 @@ Cleanup new headline considering auto-repeat ARGS.
           :action (lambda (headline)
                     (insert (org-glance-headline:format headline)))))
         ;; active region
-        ((use-region-p)
+        ((and (not (org-in-src-block-p))
+              (use-region-p))
          (lexical-let ((<buffer> (current-buffer))
                        (<region-beginning> (region-beginning))
                        (<region-end> (region-end))
                        (<point> (point)))
            (org-glance-capture
             :default (buffer-substring-no-properties <region-beginning> <region-end>)
-            :class (org-glance:choose-class "Specify class to capture headline from active region: ")
+            :class (org-glance:choose-class (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
             :finalize t
             :callback (lambda ()
                         (let ((<hl> (org-glance-overview:original-headline)))
@@ -254,7 +255,7 @@ Cleanup new headline considering auto-repeat ARGS.
                           (insert (org-glance-headline:format <hl>)))))))
         ;; simple @
         (t (keyboard-quit)))
-    (quit (insert "@"))))
+    (quit (self-insert-command 1 64))))
 
 (cl-defmacro org-glance-choose-and-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.

@@ -448,12 +448,12 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:deadline (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :deadline headline))
 
-(cl-defun org-glance-headline:repetitive-p ()
+(cl-defun org-glance-headline:repeated-p ()
   (org-glance-headline:with-headline-at-point
    (when (append
           (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
             (org-tss:filter-active)
-            (org-tss:filter-repetitive)
+            (org-tss:filter-repeated)
             (org-tss:sort)))
      t)))
 
@@ -503,7 +503,7 @@ FIXME. Unstable one. Refactor is needed."
            (schedule (org-glance-headline:scheduled headline))
            (deadline (org-glance-headline:deadline headline))
            (encrypted (org-glance-headline:encrypted-p))
-           (repetitive (org-glance-headline:repetitive-p))
+           (repeated (org-glance-headline:repeated-p))
            (linked (org-glance-headline:contains-link?)))
        (with-temp-buffer
          (insert
@@ -537,18 +537,18 @@ FIXME. Unstable one. Refactor is needed."
 
            (org-glance-join-but-null "\n\n"
                                      (list
-                                      (when (or encrypted linked repetitive)
+                                      (when (or encrypted linked repeated)
                                         (concat "- Usability characteristics"
                                                 (org-glance-join-but-null "\n  - "
                                                                           (list
                                                                            (when encrypted "Encrypted")
                                                                            (when linked "Contains links to third-party resources")
-                                                                           (when repetitive (format "Repetitive%s"
+                                                                           (when repeated (format "Repeated task%s"
                                                                                                     (if timestamps
                                                                                                         (format ", next active timestamp is %s" (car timestamps))
                                                                                                       "")))))))
 
-                                      (when (and timestamps (not repetitive))
+                                      (when (and timestamps (not repeated))
                                         (concat "- Schedule"
                                                 (org-glance-join-but-null "\n  - " timestamps)))
 

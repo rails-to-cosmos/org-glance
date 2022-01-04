@@ -79,15 +79,20 @@
      into result
      finally (return (car result))))
 
+(cl-defun org-glance-all-headlines (&optional filter)
+  (cl-loop
+     for class being the hash-keys of org-glance:classes
+     append (cl-loop
+               for headline in (if filter
+                                   (-filter filter (org-glance-view:headlines class))
+                                 (org-glance-view:headlines class))
+               collect (cons
+                        (format "[%s] %s" class (org-glance-headline:title headline))
+                        (list headline class)))))
+
 (cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
-  (let* ((headlines (cl-loop
-                       for class being the hash-keys of org-glance:classes
-                       append (cl-loop
-                                 for headline in (-filter filter (org-glance-view:headlines class))
-                                 collect (cons ;; duplication of format*
-                                          (format "[%s] %s" class (org-glance-headline:title headline))
-                                          (list headline class)))))
+  (let* ((headlines (org-glance-all-headlines filter))
          (choice (org-completing-read "Headline: " headlines))
          (headline.class (alist-get choice headlines nil nil #'string=)))
     (unless headline.class

@@ -8,7 +8,7 @@
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "Clone repetitive headlines instead of repeating it."
+  "Clone repeated headlines instead of repeating it."
   :group 'org-glance
   :type 'boolean)
 
