@@ -120,7 +120,6 @@
 (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
-(declare-function org-glance-headline:format (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
 ;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
@@ -204,6 +203,7 @@ Cleanup new headline considering auto-repeat ARGS.
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
+  (advice-add 'org-glance-headline:materialize :around #'org-glance-materialized-headline:support-encrypted-headlines)
 
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)
@@ -230,15 +230,10 @@ Cleanup new headline considering auto-repeat ARGS.
   (org-glance-init)
   (condition-case nil
       (cond
-        ;; mention
+
+        ;; active region?
         ((and (not (org-in-src-block-p))
-              (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
-         (org-glance-choose-and-apply
-          :action (lambda (headline)
-                    (insert (org-glance-headline:format headline)))))
-        ;; active region
-        ((and (not (org-in-src-block-p))
-              (use-region-p))
+              (region-active-p))
          (lexical-let ((<buffer> (current-buffer))
                        (<region-beginning> (region-beginning))
                        (<region-end> (region-end))
@@ -252,7 +247,18 @@ Cleanup new headline considering auto-repeat ARGS.
                           (switch-to-buffer <buffer>)
                           (goto-char <region-beginning>)
                           (delete-region <region-beginning> <region-end>)
-                          (insert (org-glance-headline:format <hl>)))))))
+                          (insert (org-glance:with-headline-narrowed <hl>
+                                    (org-glance-headline-ref))))))))
+
+        ;; mention
+        ((and (not (org-in-src-block-p))
+              (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
+         (org-glance-choose-and-apply
+          :action (lambda (headline)
+                    (insert
+                     (org-glance:with-headline-narrowed headline
+                       (org-glance-headline-ref))))))
+
         ;; simple @
         (t (keyboard-quit)))
     (quit (self-insert-command 1 64))))
@@ -283,7 +289,7 @@ after capture process has been finished."
   "Materialize HEADLINE in new buffer."
   (interactive)
   (let ((action (lambda (headline)
-                  (let ((buffer (org-glance-headline:materialized-buffer headline)))
+                  (let ((buffer (org-glance-materialized-headline-buffer headline)))
                     (if (buffer-live-p buffer)
                         (switch-to-buffer buffer)
                       (org-glance-headline:materialize headline))))))
@@ -300,12 +306,8 @@ If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (let ((action (lambda (headline)
-                  (org-glance-headline:with-materialized-headline headline
-                    ;; (org-end-of-meta-data t)
-                    ;; (narrow-to-region (point) (point-max))
-                    (let* ((links (--filter (not (s-contains? "org-glance" (car it))) (org-glance-buffer-links))
-                             ;; copy-paste from metadata writer in headline.el
-                             )
+                  (org-glance:with-headline-materialized headline
+                    (let* ((links (--filter (not (s-contains? "org-glance" (car it))) (org-glance-buffer-links)))
                            (position (cond
                                        ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
                                        ((= (length links) 1) (cdar links))
@@ -327,7 +329,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
   (let ((action (lambda (headline)
                   (let ((pairs (save-window-excursion
-                                 (org-glance-headline:with-materialized-headline headline
+                                 (org-glance:with-headline-materialized headline
                                    (org-glance-buffer-key-value-pairs)))))
                     (while t
                       (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
@@ -381,7 +383,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
   (interactive)
   (org-glance-choose-and-apply
    :action (lambda (headline)
-             (org-glance-headline:with-materialized-headline headline
+             (org-glance:with-headline-materialized headline
                (org-set-tags '())))))
 
 (cl-defun org-glance:insert-pin-block ()

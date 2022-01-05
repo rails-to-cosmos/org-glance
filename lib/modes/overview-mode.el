@@ -130,14 +130,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-headline:search-forward)
     (when (org-glance-headline:at-point)
       (outline-show-subtree)
-      (org-cycle-hide-drawers 'org-cycle-hide-drawers)
-      ;; (pulse-momentary-highlight-region
-      ;;  (point)
-      ;;  (save-excursion
-      ;;    (org-next-visible-heading 1)
-      ;;    (point))
-      ;;  'region)
-      )))
+      (org-cycle-hide-drawers 'org-cycle-hide-drawers))))
 
 (define-key org-glance-overview-mode-map (kbd "p")
   (org-glance:interactive-lambda
@@ -146,27 +139,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-headline:search-backward)
     (when (org-glance-headline:at-point)
       (outline-show-subtree)
-      (org-cycle-hide-drawers 'org-cycle-hide-drawers)
-      ;; (pulse-momentary-highlight-region
-      ;;  (point)
-      ;;  (save-excursion
-      ;;    (org-next-visible-heading 1)
-      ;;    (point))
-      ;;  'region)
-      )))
+      (org-cycle-hide-drawers 'org-cycle-hide-drawers))))
+
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
-(define-key org-glance-overview-mode-map (kbd "d")
-  (org-glance:interactive-lambda
-    (cl-loop
-       for headline in (org-glance-headline:extract-from (current-buffer))
-       collect (save-window-excursion
-                 (org-glance-headline:visit (->> headline
-                                                 org-glance-headline:id
-                                                 org-glance-metastore:get-headline))
-                 (buffer-file-name))
-       into files
-       finally
-         (org-drill files))))
 
 (define-key org-glance-overview-mode-map (kbd "k")
   (org-glance-overview:for-one
@@ -249,7 +224,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (save-buffer)))))))
 
 ;; (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
-;;   (org-glance-headline:with-materialized-headline headline
+;;   (org-glance:with-headline-materialized headline
 ;;     (let ((id (intern (org-glance-headline:id headline)))
 ;;           (class (if (symbolp class) class (intern class))))
 ;;       (org-glance-posit:write
@@ -579,7 +554,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
   (let* ((headline (org-glance-overview:original-headline))
-         (buffer (org-glance-headline:materialized-buffer headline)))
+         (buffer (org-glance-materialized-headline-buffer headline)))
     (if (buffer-live-p buffer)
         (switch-to-buffer buffer)
       (org-glance-headline:materialize headline))))
@@ -629,17 +604,17 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 ;;       (org-glance-doctor:when (and dir (not (string= dir (abbreviate-file-name dir))))
 ;;           "Headline \"${title}\" contains full path in DIR property. Abbreviate it?"
-;;         (org-glance-headline:with-materialized-headline original-headline
+;;         (org-glance:with-headline-materialized original-headline
 ;;           (org-set-property "DIR" (abbreviate-file-name dir))))
 
 ;;       (org-glance-doctor:when (and archive (not (string= archive (abbreviate-file-name archive))))
 ;;           "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
-;;         (org-glance-headline:with-materialized-headline original-headline
+;;         (org-glance:with-headline-materialized original-headline
 ;;           (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
 
 ;;       (org-glance-doctor:when (null main-role)
 ;;           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
-;;         (let ((captured-headline (org-glance-headline:with-materialized-headline original-headline
+;;         (let ((captured-headline (org-glance:with-headline-materialized original-headline
 ;;                                    (org-glance-capture-headline-at-point view-id))))
 ;;           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
 ;;           (org-glance-overview:register-headline-in-overview captured-headline view-id))
@@ -677,7 +652,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the class \"${class}\" from \"${title}\"?")))
       (save-window-excursion
-        (org-glance-headline:with-materialized-headline original-headline
+        (org-glance:with-headline-materialized original-headline
           (cl-loop
              with tags = (org-get-tags)
              with indices = (--find-indices (string= class (org-glance-headline:string-to-class it)) tags)
@@ -718,21 +693,17 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:comment ()
   "Comment headline at point."
   (interactive)
-  (save-window-excursion
-    (->> (org-glance-headline:at-point)
-      (org-glance-headline:id)
-      (org-glance-metastore:get-headline)
-      (org-glance-headline:visit))
-    (org-toggle-comment)
-    (save-buffer))
-  (org-glance-overview:pull)
-  (org-glance-headline:search-forward))
+  (org-glance:with-headline-materialized
+      (->> (org-glance-headline:at-point)
+           (org-glance-headline:id)
+           (org-glance-metastore:get-headline))
+    (org-toggle-comment)))
 
 (cl-defun org-glance-overview:archive ()
   "Archive headline at point."
   (interactive)
   (save-window-excursion
-    (org-glance-headline:with-materialized-headline (org-glance-overview:original-headline)
+    (org-glance:with-headline-materialized (org-glance-overview:original-headline)
       (org-toggle-archive-tag))))
 
 (cl-defun org-glance-overview:move ()
@@ -743,7 +714,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                       (intern (org-completing-read "Move headline to: " views))))
          (original-headline (org-glance-overview:original-headline)))
     (save-window-excursion
-      (org-glance-headline:with-materialized-headline original-headline
+      (org-glance:with-headline-materialized original-headline
         (cl-loop
            with tags = (org-get-tags)
            with indices = (--find-indices (string= old-class (org-glance-headline:string-to-class it)) tags)
@@ -759,19 +730,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-classes))))
                       (intern (org-completing-read "Add class: " views)))))
     (save-window-excursion
-      (org-glance-headline:with-materialized-headline original-headline
+      (org-glance:with-headline-materialized original-headline
         (org-toggle-tag (symbol-name new-class) 'on)))))
-
-;; (cl-defun org-glance-overview:edit-mode ()
-;;   (interactive)
-;;   (org-glance-overview:for-all
-;;       (error "not implemented yet")
-;;     (let* ((headline (org-glance-headline:at-point))
-;;            (beg (org-element-property :begin (org-glance-headline:at-point)))
-;;            (end (org-element-property :end (org-glance-headline:at-point))))
-;;       (hlt-unhighlight-region beg end)
-;;       ;; (hlt-highlight-region beg end 'expal-block-hover-face)
-;;       (remove-text-properties beg end '(read-only t)))))
 
 (cl-defun org-glance-overview:original-headline ()
   (save-window-excursion

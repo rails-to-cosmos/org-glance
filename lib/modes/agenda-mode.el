@@ -83,17 +83,15 @@
     (cl-loop
        for entry in entries
        for marker = (get-text-property 0 'org-marker entry)
-       collect (save-window-excursion
-                 (org-goto-marker-or-bmk marker)
-                 (->> (org-glance-headline:at-point)
-                      org-glance-headline:id
-                      org-glance-metastore:get-headline
-                      org-glance-headline:visit)
+       collect (org-glance:with-headline-narrowed
+                   (->> (org-glance-headline:at-point)
+                        org-glance-headline:id
+                        org-glance-metastore:get-headline)
                  (org-glance-headline:at-point)))))
 
 ;; (cl-loop
 ;;    for headline in (org-glance-agenda:daily 'task (list 12 20 2021))
-;;    collect (org-glance-headline:with-materialized-headline headline
+;;    collect (org-glance:with-headline-materialized headline
 ;;              (cons (org-glance-headline:title headline) (length (org-glance-headline:subtasks)))))
 
 ;; 0. Filter tasks!

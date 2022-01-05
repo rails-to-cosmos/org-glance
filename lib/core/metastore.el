@@ -65,6 +65,9 @@
 
 (cl-defun org-glance-metastore:get-headline (id)
   "Get headline by ID."
+  (when (symbolp id)
+    (setq id (symbol-name id)))
+
   (cl-loop
      for class being the hash-keys of org-glance:classes
      for metastore = (->> class
@@ -100,7 +103,7 @@
 
     (let ((headline (car headline.class))
           (class (cadr headline.class)))
-      (org-glance-headline:narrow headline
+      (org-glance:with-headline-narrowed headline
         (org-glance-headline:enrich (org-glance-headline:create-from-element-at-point)
           :class class)))))
 

@@ -77,7 +77,7 @@
 
 (And "^I sync materialized headline$"
      (lambda ()
-       (org-glance-materialized-headline:sync)))
+       (org-glance-materialized-headline-apply)))
 
 (And "^I change tag \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
      (lambda (from-tag to-tag)

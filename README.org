@@ -40,12 +40,21 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO completing read instead of org-completing-read
 ** DONE [#A] data corruption in overview after sync relations
 CLOSED: [2022-01-02 Sun 19:06]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-01-02 Sun 19:06]
 :END:
-** TODO update relation title and status on visit
+** PENDING update relation title and status on visit
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-01-05 Wed 11:54]
+CLOCK: [2022-01-04 Tue 20:31]--[2022-01-05 Wed 10:54] => 14:23
+- State "STARTED"    from "PENDING"    [2022-01-04 Tue 20:31]
+- State "PENDING"    from "STARTED"    [2022-01-04 Tue 20:31]
+CLOCK: [2022-01-04 Tue 16:06]--[2022-01-04 Tue 20:31] =>  4:25
+- State "STARTED"    from "TODO"       [2022-01-04 Tue 16:06]
+:END:
 ** TODO domains. domain borders. cross-domain classes.
 ** TODO implement headline aliases
 ** PENDING capture through materialization
@@ -74,7 +83,6 @@ perform quick insert instead of tail insert
 ** relations: subtasks (blockers), downstreams, mentions
 ** text props magic
 https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-** TODO completing read instead of org-completing-read
 ** TODO proper table view
 ** TODO mentions in capture
 ** TODO material mode: proper tags removal (update local buffer variables)
