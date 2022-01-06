@@ -8,7 +8,7 @@
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"
   ["Overview"
-   [("a" "Agenda" org-glance-agenda)
+   [("a" "Agenda" org-glance-overview:agenda*)
     ("o" "Overview" org-glance-overview)]]
   ["Headline actions"
    [("+" "Capture" org-glance-capture)

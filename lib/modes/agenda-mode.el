@@ -62,14 +62,14 @@
            with headlines = (make-hash-table)
            for entry in entries
            for marker = (get-text-property 0 'org-marker entry)
-           for headline =
-             (save-window-excursion
-               (org-goto-marker-or-bmk marker)
-               (org-glance:with-headline-narrowed (org-glance-overview:original-headline)
-                 (list
-                  :ref (org-glance-headline-ref)
-                  :id (org-glance-headline:id))))
-           unless (gethash (intern (plist-get headline :id)) headlines)
+           for headline = (save-window-excursion
+                            (org-goto-marker-or-bmk marker)
+                            (org-glance:with-headline-narrowed (org-glance-overview:original-headline)
+                              (list
+                               :ref (org-glance-headline-ref)
+                               :id (org-glance-headline:id))))
+           for id = (plist-get headline :id)
+           when (and (not (null id)) (not (gethash (intern id) headlines)))
            do (let* ((text        (get-text-property 0 'txt entry))
                      (time        (get-text-property 0 'time entry))
                      (time-of-day (get-text-property 0 'time-of-day entry))
@@ -79,7 +79,7 @@
                      (minutes     (if time-of-day
                                       (% time-of-day 100) -1))
                      (duration    (get-text-property 0 'duration entry)))
-                (puthash (intern (plist-get headline :id)) t headlines)
+                (puthash (intern id) t headlines)
                 (insert (format "%s \t %s\n" time
                                 (plist-get headline :ref)))))))
 
@@ -108,5 +108,13 @@
 
 ;; 0. Filter tasks!
 ;; 1. Unfinished tasks count.
+
+(cl-loop
+   for headline in (cl-loop
+                      for file in (org-agenda-files)
+                      when (file-exists-p file)
+                      append (org-glance-headline:extract-from file))
+   collect (org-glance:with-headline-narrowed headline
+              (org-glance-headline:archived?)))
 
 (org-glance:provide)

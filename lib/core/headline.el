@@ -223,6 +223,31 @@ metastore.")
      (org-glance:with-headline-at-point
       ,@forms)))
 
+(cl-defmacro org-glance:with-headline-narrowed (headline &rest forms)
+  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
+  (declare (indent 1) (debug t))
+  `(save-window-excursion
+     (let (result
+           (buffer
+            (cond ((buffer-live-p (get-file-buffer (org-glance-headline:file headline)))
+                   (get-file-buffer (org-glance-headline:file headline)))
+                  ((buffer-live-p (org-glance-headline:buffer headline))
+                   (org-glance-headline:buffer headline))
+                  (t nil))))
+       (unwind-protect
+            (setq result
+                  (progn
+                    (org-glance-headline:visit ,headline)
+                    (org-glance:with-headline-at-point ,@forms)))
+         (unless buffer
+           (kill-buffer
+            (cond ((buffer-live-p (get-file-buffer (org-glance-headline:file headline)))
+                   (get-file-buffer (org-glance-headline:file headline)))
+                  ((buffer-live-p (org-glance-headline:buffer headline))
+                   (org-glance-headline:buffer headline))))))
+
+       result)))
+
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance-ensure-at-heading)
   (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
@@ -292,13 +317,12 @@ FIXME. Unstable one. Refactor is needed."
           (save-excursion
             (goto-char (org-glance-headline:begin e))
             (org-glance-headline:enrich (org-glance-headline:create-from-element-at-point)
-                                        :buffer b)))))))
+              :buffer b)))))))
 
 (cl-defun org-glance-headline:add-log-note (string &rest objects)
-  (save-excursion
-    (org-glance-ensure-at-heading)
-    (goto-char (org-log-beginning t))
-    (insert (apply #'format string objects) "\n")))
+  (org-glance:with-headline-at-point
+   (goto-char (org-log-beginning t))
+   (insert (apply #'format string objects) "\n")))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
@@ -361,17 +385,19 @@ FIXME. Unstable one. Refactor is needed."
                                           (org-glance-relation-type-parser))))
                          (if (memq link-type '(subtask subtask-done project project-done))
                              ;; actualize link state for subtasks and projects
-                             (condition-case nil
-                                 (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
-                                   (let ((state (intern (or (org-get-todo-state) "")))
-                                         (done-kws (mapcar #'intern org-done-keywords)))
-                                     (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
-                                                                        ((memq link-type '(project project-done)) 'project-done)
-                                                                        (t 'subtask-done)))
-                                           (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
-                                                    ((memq link-type '(project project-done)) 'project)
-                                                    (t 'subtask))))))
-                               (org-glance-exception:HEADLINE-NOT-FOUND link-type))
+                             (if-let (headline (org-glance-metastore:get-headline id))
+                                 (condition-case nil
+                                     (org-glance:with-headline-narrowed headline
+                                         (let ((state (intern (or (org-get-todo-state) "")))
+                                               (done-kws (mapcar #'intern org-done-keywords)))
+                                           (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
+                                                                              ((memq link-type '(project project-done)) 'project-done)
+                                                                              (t 'subtask-done)))
+                                                 (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
+                                                          ((memq link-type '(project project-done)) 'project)
+                                                          (t 'subtask))))))
+                                     (org-glance-exception:HEADLINE-NOT-FOUND link-type))
+                               link-type)
                            link-type)))
                       (t nil))
          when (and type
@@ -483,6 +509,7 @@ FIXME. Unstable one. Refactor is needed."
           (id (org-glance-headline:id headline))
           (title (org-glance-headline:title headline))
           (priority (org-glance-headline:priority headline))
+          (closed (org-element-property :closed headline))
           (schedule (org-glance-headline:scheduled headline))
           (deadline (org-glance-headline:deadline headline))
           (encrypted (org-glance-headline:encrypted-p))
@@ -503,13 +530,22 @@ FIXME. Unstable one. Refactor is needed."
           ;; " "
           ;; tags
           "\n"
+          (if closed
+              (concat "CLOSED: " (org-element-property :raw-value closed))
+            "")
+          (if (or schedule deadline)
+              " "
+            "")
           (if schedule
               (concat "SCHEDULED: " (org-element-property :raw-value schedule))
             "")
           (if deadline
+              " "
+            "")
+          (if deadline
               (concat "DEADLINE: " (org-element-property :raw-value deadline))
             "")
-          (if (or schedule deadline)
+          (if (or schedule deadline closed)
               "\n"
             "")
 
@@ -519,36 +555,37 @@ FIXME. Unstable one. Refactor is needed."
           ":END:"
 
           (org-glance-join-but-null "\n\n"
-                                    (list
-                                     (when (or encrypted linked repeated)
-                                       (concat "- Usability characteristics"
-                                               (org-glance-join-but-null "\n  - "
-                                                                         (list
-                                                                          (when encrypted "Encrypted")
-                                                                          (when linked "Contains links to third-party resources")
-                                                                          (when repeated (format "Repeated task%s"
-                                                                                                 (if timestamps
-                                                                                                     (format ", next active timestamp is %s" (car timestamps))
-                                                                                                   "")))))))
+            (list
+             (when (or encrypted linked repeated)
+               (concat "- Usability characteristics"
+                       (org-glance-join-but-null "\n  - "
+                         (list
+                          (when encrypted "Encrypted")
+                          (when linked "Contains links to third-party resources")
+                          (when repeated (format "Repeated task%s"
+                                                 (if timestamps
+                                                     (format ", next active timestamp is %s" (car timestamps))
+                                                   "")))))))
 
-                                     (when (and timestamps (not repeated))
-                                       (concat "- Schedule"
-                                               (org-glance-join-but-null "\n  - " timestamps)))
+             (when (and timestamps (not repeated))
+               (concat "- Schedule"
+                       (org-glance-join-but-null "\n  - " timestamps)))
 
-                                     (when-let (projects (plist-get relations :projects))
-                                       (concat "- Projects [/]"
-                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
+             (when-let (projects (plist-get relations :projects))
+               (concat "- Projects [/]"
+                       (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
 
-                                     (when-let (subtasks (plist-get relations :subtasks))
-                                       (concat "- Subtasks [/]"
-                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
+             (when-let (subtasks (plist-get relations :subtasks))
+               (concat "- Subtasks [/]"
+                       (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
 
-                                     (when-let (mentions (plist-get relations :mentions))
-                                       (concat "- Mentions"
-                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter mentions))))))))
-        (condition-case nil
-            (org-update-checkbox-count-maybe)
-          (error nil))
+             (when-let (mentions (plist-get relations :mentions))
+               (concat "- Mentions"
+                       (org-glance-join-but-null "\n  "
+                         (mapcar #'org-glance-relation-interpreter mentions))))))))
+        ;; (condition-case nil
+        ;;     (org-update-checkbox-count-maybe)
+        ;;   (error nil))
         (buffer-string)))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
