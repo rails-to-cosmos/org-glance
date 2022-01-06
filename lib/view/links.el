@@ -8,6 +8,13 @@
   :group 'org-glance
   :group 'faces)
 
+(defface org-glance-link-overview-face
+    '((((background dark)) (:inherit default :slant italic))
+      (t (:inherit default :slant italic)))
+  "*Face used to highlight evaluated paragraph."
+  :group 'org-glance
+  :group 'faces)
+
 (cl-defun org-glance-link:choose-thing-for-materialization ()
   (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metastore:choose-headline))))
 
@@ -36,6 +43,11 @@
  ;; :store #'org-glance-link:store-link
  )
 
+(org-link-set-parameters
+ "org-glance-overview"
+ :follow #'org-glance-link:overview
+ :face 'org-glance-link-overview-face)
+
 ;; (defcustom org-glance-link:command 'man
 ;;   "The Emacs command to be used to display a man page."
 ;;   :group 'org-link
@@ -48,6 +60,10 @@
 (defun org-glance-link:open (id &optional _)
   "Open org-glance headline identified by ID."
   (org-glance:open (org-glance-metastore:get-headline id)))
+
+(defun org-glance-link:overview (class &optional _)
+  "Open org-glance headline identified by ID."
+  (org-glance-overview (intern (downcase class))))
 
 ;; (defun org-glance-link:store-link ()
 ;;   "Store a link to a man page."

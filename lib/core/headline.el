@@ -220,7 +220,7 @@ metastore.")
   (declare (indent 1) (debug t))
   `(save-window-excursion
      (org-glance-headline:visit ,headline)
-     (org-glance-headline:with-headline-at-point
+     (org-glance:with-headline-at-point
       ,@forms)))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
@@ -303,7 +303,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
   (interactive)
-  (org-glance-headline:with-headline-at-point
+  (org-glance:with-headline-at-point
    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
          (end (save-excursion (org-end-of-subtree t) (point))))
      (org-glance:encrypt-region beg end password))))
@@ -311,7 +311,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:decrypt (&optional password)
   "Decrypt subtree at point with PASSWORD."
   (interactive)
-  (org-glance-headline:with-headline-at-point
+  (org-glance:with-headline-at-point
    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
          (end (save-excursion (org-end-of-subtree t) (point))))
      (org-glance:decrypt-region beg end password))))
@@ -349,7 +349,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline-relations ()
   "Get all first-level relations of headline at point."
-  (org-glance-headline:with-headline-at-point
+  (org-glance:with-headline-at-point
       (cl-loop
          with relations = (make-hash-table)
          for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
@@ -434,7 +434,7 @@ FIXME. Unstable one. Refactor is needed."
   (org-element-property :deadline headline))
 
 (cl-defun org-glance-headline:repeated-p ()
-  (org-glance-headline:with-headline-at-point
+  (org-glance:with-headline-at-point
       (when (append
              (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
                (org-tss:filter-active)
@@ -535,23 +535,23 @@ FIXME. Unstable one. Refactor is needed."
                                        (concat "- Schedule"
                                                (org-glance-join-but-null "\n  - " timestamps)))
 
-                                     (if-let (projects (plist-get relations :projects))
-                                         (concat "- Projects [/]"
-                                                 (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
+                                     (when-let (projects (plist-get relations :projects))
+                                       (concat "- Projects [/]"
+                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
 
-                                     (if-let (subtasks (plist-get relations :subtasks))
-                                         (concat "- Subtasks [/]"
-                                                 (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
+                                     (when-let (subtasks (plist-get relations :subtasks))
+                                       (concat "- Subtasks [/]"
+                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
 
-                                     (if-let (mentions (plist-get relations :mentions))
-                                         (concat "- Mentions"
-                                                 (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter mentions))))))))
+                                     (when-let (mentions (plist-get relations :mentions))
+                                       (concat "- Mentions"
+                                               (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter mentions))))))))
         (condition-case nil
             (org-update-checkbox-count-maybe)
           (error nil))
         (buffer-string)))))
 
-(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
+(cl-defmacro org-glance:with-headline-at-point (&rest forms)
   `(save-excursion
      (save-restriction
        (org-glance-headline:search-parents)
@@ -559,20 +559,28 @@ FIXME. Unstable one. Refactor is needed."
        ,@forms)))
 
 (cl-defun org-glance-headline-ref ()
-  (org-glance-headline:with-headline-at-point
-      (let* ((id (org-glance-headline:id))
-             (state (org-glance-headline:state))
-             (state-label (if (string-empty-p state) "" (format "*%s* " state)))
-             (title (org-glance-headline:title))
-             (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
-             (category (org-glance-headline:tags)))
-        (concat
-         state-label
-         "[[org-glance-visit:"
-         id
-         "]["
-         stateless-title
-         "]]"
-         ))))
+  (org-glance:with-headline-at-point
+   (let* ((id (org-glance-headline:id))
+          (state (org-glance-headline:state))
+          (state-label (if (string-empty-p state)
+                           ""
+                         (progn
+                           (put-text-property 0 (length state) 'face (org-get-todo-face state) state)
+                           (concat state " "))))
+          (title (org-glance-headline:title))
+          (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
+          (tags (org-glance-headline:tags)))
+     (concat
+      state-label
+      (s-join ", " (cl-loop
+                      for tag in tags
+                      collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))
+
+      " [[org-glance-visit:"
+      id
+      "]["
+      stateless-title
+      "]]"
+      ))))
 
 (org-glance:provide)

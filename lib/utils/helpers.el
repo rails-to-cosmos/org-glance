@@ -129,6 +129,7 @@ enjoy using a lot.
       (concat separator joined-strings))))
 
 (cl-defun org-glance-join-but-null (separator strings)
+  (declare (indent 1))
   (org-glance-join separator (cl-remove-if #'null strings)))
 
 (org-glance:provide)

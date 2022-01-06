@@ -128,18 +128,20 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (when (org-glance-headline:at-point)
       (outline-hide-subtree))
     (org-glance-headline:search-forward)
-    (when (org-glance-headline:at-point)
-      (outline-show-subtree)
-      (org-cycle-hide-drawers 'org-cycle-hide-drawers))))
+    ;; (when (org-glance-headline:at-point)
+    ;;   (outline-show-subtree)
+    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
+    ))
 
 (define-key org-glance-overview-mode-map (kbd "p")
   (org-glance:interactive-lambda
     (when (org-glance-headline:at-point)
       (outline-hide-subtree))
     (org-glance-headline:search-backward)
-    (when (org-glance-headline:at-point)
-      (outline-show-subtree)
-      (org-cycle-hide-drawers 'org-cycle-hide-drawers))))
+    ;; (when (org-glance-headline:at-point)
+    ;;   (outline-show-subtree)
+    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
+    ))
 
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 
@@ -677,7 +679,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           ((string= current-headline-contents overview-contents)
            (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
            t)
-          (t (org-glance-headline:with-headline-at-point
+          (t (org-glance:with-headline-at-point
               (delete-region (point-min) (point-max))
               (insert overview-contents))
              (org-overview)

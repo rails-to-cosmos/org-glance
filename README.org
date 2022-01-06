@@ -77,7 +77,12 @@ CLOSED: [2021-12-18 Sat 12:58]
 ** TODO quick-insert on material sync
 assume overview is sorted
 perform quick insert instead of tail insert
-** TODO high-level agenda
+** PENDING high-level agenda
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-01-05 Wed 21:32]
+CLOCK: [2022-01-05 Wed 18:40]--[2022-01-05 Wed 21:32] =>  2:52
+- State "STARTED"    from "TODO"       [2022-01-05 Wed 18:40]
+:END:
 ** TODO fix reverse relation
 ** TODO save checkboxes history when :RESET_CHECK_BOXES: t
 ** relations: subtasks (blockers), downstreams, mentions

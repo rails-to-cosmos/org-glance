@@ -5,8 +5,21 @@
 (defvar org-glance-agenda-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-agenda-mode'.")
 
-(cl-defun org-glance-agenda-location ()
-  (f-join org-glance-directory "glance.org"))
+(define-key org-glance-agenda-mode-map (kbd "n") #'next-line)
+(define-key org-glance-agenda-mode-map (kbd "p") #'previous-line)
+(define-key org-glance-agenda-mode-map (kbd "q") #'bury-buffer)
+(define-key org-glance-agenda-mode-map (kbd "g") #'org-glance-agenda)
+(define-key org-glance-agenda-mode-map (kbd "RET") #'org-open-at-point)
+
+(cl-defun org-glance-date-format (date)
+  (seq-let (month day year) date
+    (format "%d-%02d-%02d" year month day)))
+
+(cl-defun org-glance-agenda-location (&optional (date (calendar-current-date)))
+  (-org-glance:make-file-directory
+   (f-join org-glance-directory
+           "agenda"
+           (format "%s.org" (org-glance-date-format date)))))
 
 (define-minor-mode org-glance-agenda-mode
     "A minor read-only mode to use in glance agenda files."
@@ -15,66 +28,65 @@
 
 (cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
   (with-temp-buffer
+    (save-excursion
+      (calendar-generate-month (car date) (caddr date) 0))
+    (replace-regexp (format "[[:space:]]\\(%d\\)[[:space:]]" (cadr date)) " _\\1_ ")
+    (buffer-string)))
 
-    (insert
-     (with-temp-buffer
-       (calendar-generate-month (car date) (caddr date) 0)
-       (buffer-substring-no-properties (point-min) (point-max))))
-
-    (goto-char (point-min))
-
-    ;; (while (re-search-forward "\\([[:digit:]]\\{4\\}\\)" nil t)
-    ;;   (replace-match "[[elisp:(-og-calw-y \\1)][\\1]]"))
-
-    ;; (while (re-search-forward "\\([[:digit:]]\\{1,2\\}\\)" nil t)
-    ;;   (if (= (string-to-number (match-string 1)) (cadr date))
-    ;;       (replace-match "*\\1*")
-    ;;     (replace-match "[[elisp:(-og-calw-d \\1)][\\1]]")))
-
-    (buffer-substring-no-properties (point-min) (point-max))))
-
-(defun org-glance-agenda-display-entry (entry)
-  "Function to display a specific (org) entry"
-
-  (let* ((text        (get-text-property 0 'txt entry))
-         (time        (get-text-property 0 'time entry))
-         (time-of-day (get-text-property 0 'time-of-day entry))
-         (hours       (if time-of-day
-                          (format "/%02dh —/" (floor (/ time-of-day 100)))
-                        "     "))
-         (minutes     (if time-of-day
-                          (% time-of-day 100) -1))
-         (duration    (get-text-property 0 'duration entry)))
-    ;; (insert (format "%s %s\n" hours text))
-    (insert (format "%s \t %s\n" time text))))
-
-(cl-defun org-glance-agenda ()
+(cl-defun org-glance-agenda (&optional (date (calendar-current-date)))
   (interactive)
-  (with-temp-file (org-glance-agenda-location)
-    (let ((inhibit-read-only t)
-          (calendar (org-glance-overview:calendar-widget))
-          (date (list 12 3 2021))
-          (entries '()))
-      (insert org-glance-agenda:header
-              "\n\n"
-              calendar
-              "\n\n")
 
-      (dolist (file (org-agenda-files))
-        (dolist (entry (org-agenda-get-day-entries file date))
-          (if (get-text-property 0 'time-of-day entry)
-              (add-to-list 'entries entry))))
+  (let ((agenda-location (org-glance-agenda-location date)))
 
-      (setq entries (sort entries #'(lambda (entry-1 entry-2)
-                                      (<
-                                       (get-text-property 0 'time-of-day entry-1)
-                                       (get-text-property 0 'time-of-day entry-2)))))
+    (with-temp-file agenda-location
+      (let ((entries (cl-loop
+                        for file in (org-agenda-files)
+                        when (file-exists-p file)
+                        append (cl-loop for entry in (org-agenda-get-day-entries file date)
+                                  ;; when (get-text-property 0 'time-of-day entry)
+                                  collect entry)
+                        into entries
+                        finally (return (sort entries #'(lambda (entry-1 entry-2)
+                                                          (<
+                                                           (or (get-text-property 0 'time-of-day entry-1) 0)
+                                                           (or (get-text-property 0 'time-of-day entry-2) 0))))))))
 
-      (dolist (entry entries)
-        (pp (get-text-property 0 'org-marker entry) ;; (text-properties-at 0 entry)
-            )
-        (org-glance-agenda-display-entry entry))))
-  (find-file (org-glance-agenda-location)))
+        (insert
+         (s-join "\n\n"
+                 (list
+                  org-glance-agenda:header
+                  (org-glance-overview:calendar-widget date)))
+         "\n\n")
+
+        (cl-loop
+           with headlines = (make-hash-table)
+           for entry in entries
+           for marker = (get-text-property 0 'org-marker entry)
+           for headline =
+             (save-window-excursion
+               (org-goto-marker-or-bmk marker)
+               (org-glance:with-headline-narrowed (org-glance-overview:original-headline)
+                 (list
+                  :ref (org-glance-headline-ref)
+                  :id (org-glance-headline:id))))
+           unless (gethash (intern (plist-get headline :id)) headlines)
+           do (let* ((text        (get-text-property 0 'txt entry))
+                     (time        (get-text-property 0 'time entry))
+                     (time-of-day (get-text-property 0 'time-of-day entry))
+                     (hours       (if time-of-day
+                                      (format "/%02dh —/" (floor (/ time-of-day 100)))
+                                    "     "))
+                     (minutes     (if time-of-day
+                                      (% time-of-day 100) -1))
+                     (duration    (get-text-property 0 'duration entry)))
+                (puthash (intern (plist-get headline :id)) t headlines)
+                (insert (format "%s \t %s\n" time
+                                (plist-get headline :ref)))))))
+
+    (when (buffer-live-p (get-file-buffer agenda-location))
+      (kill-buffer (get-file-buffer agenda-location)))
+
+    (find-file agenda-location)))
 
 (cl-defun org-glance-agenda:daily (class date)
   (let ((entries (org-agenda-get-day-entries

@@ -114,7 +114,7 @@
                                   (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now))))))
                       (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))))))
 
-        (let ((new-contents (org-glance-headline:with-headline-at-point
+        (let ((new-contents (org-glance:with-headline-at-point
                              (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
                                (with-temp-buffer
                                  (org-mode)
