@@ -109,12 +109,12 @@
 ;; 0. Filter tasks!
 ;; 1. Unfinished tasks count.
 
-(cl-loop
-   for headline in (cl-loop
-                      for file in (org-agenda-files)
-                      when (file-exists-p file)
-                      append (org-glance-headline:extract-from file))
-   collect (org-glance:with-headline-narrowed headline
-              (org-glance-headline:archived?)))
+;; (cl-loop
+;;    for headline in (cl-loop
+;;                       for file in (org-agenda-files)
+;;                       when (file-exists-p file)
+;;                       append (org-glance-headline:extract-from file))
+;;    collect (org-glance:with-headline-narrowed headline
+;;               (org-glance-headline:archived?)))
 
 (org-glance:provide)

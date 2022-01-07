@@ -219,21 +219,18 @@ metastore.")
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
   `(save-window-excursion
-     (org-glance-headline:visit ,headline)
-     (org-glance:with-headline-at-point
-      ,@forms)))
-
-(cl-defmacro org-glance:with-headline-narrowed (headline &rest forms)
-  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
-  (declare (indent 1) (debug t))
-  `(save-window-excursion
      (let (result
            (buffer
-            (cond ((buffer-live-p (get-file-buffer (org-glance-headline:file headline)))
-                   (get-file-buffer (org-glance-headline:file headline)))
-                  ((buffer-live-p (org-glance-headline:buffer headline))
-                   (org-glance-headline:buffer headline))
-                  (t nil))))
+            (cond ((and (org-glance-headline:file ,headline)
+                        (or (buffer-live-p (get-file-buffer (org-glance-headline:file ,headline)))
+                            (save-window-excursion
+                              (find-file (org-glance-headline:file ,headline))
+                              t)))
+                   (get-file-buffer (org-glance-headline:file ,headline)))
+                  ((and (org-glance-headline:buffer ,headline)
+                        (buffer-live-p (org-glance-headline:buffer ,headline)))
+                   (org-glance-headline:buffer ,headline))
+                  (t (org-glance-exception:HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
        (unwind-protect
             (setq result
                   (progn
@@ -241,11 +238,12 @@ metastore.")
                     (org-glance:with-headline-at-point ,@forms)))
          (unless buffer
            (kill-buffer
-            (cond ((buffer-live-p (get-file-buffer (org-glance-headline:file headline)))
-                   (get-file-buffer (org-glance-headline:file headline)))
-                  ((buffer-live-p (org-glance-headline:buffer headline))
-                   (org-glance-headline:buffer headline))))))
-
+            (cond ((and (org-glance-headline:file ,headline)
+                        (buffer-live-p (get-file-buffer (org-glance-headline:file ,headline))))
+                   (get-file-buffer (org-glance-headline:file ,headline)))
+                  ((and (org-glance-headline:buffer ,headline)
+                        (buffer-live-p (org-glance-headline:buffer ,headline)))
+                   (org-glance-headline:buffer ,headline))))))
        result)))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
@@ -350,6 +348,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-relation-interpreter (relation)
   (concat
    (org-glance-relation-type-interpreter relation)
+   " "
    (org-element-link-interpreter (org-element-property :link relation)
                                  (org-element-property :contents relation))))
 
@@ -361,61 +360,59 @@ FIXME. Unstable one. Refactor is needed."
         (t 'mention)))
 
 (cl-defun org-glance-relation-type-interpreter (relation)
-  (concat
-   (case (org-element-property :type relation)
-     ('subtask "- [ ]")
-     ('subtask-done "- [X]")
-     ('project "- [ ] Part of a project")
-     ('project-done "- [X] Part of a project")
-     ('mention "-")
-     (t (prin1-to-string (org-element-property :type relation))))
-   " "))
+  (case (org-element-property :type relation)
+    ('subtask "- [ ]")
+    ('subtask-done "- [X]")
+    ('project "- [ ] Part of a project")
+    ('project-done "- [X] Part of a project")
+    ('mention "-")
+    (t (prin1-to-string (org-element-property :type relation)))))
 
 (cl-defun org-glance-headline-relations ()
   "Get all first-level relations of headline at point."
   (org-glance:with-headline-at-point
-      (cl-loop
-         with relations = (make-hash-table)
-         for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
-         for id = (intern (org-element-property :path link))
-         for type = (cond
-                      ((s-contains? "org-glance" (org-element-property :type link))
-                       (let ((link-type (save-excursion
-                                          (goto-char (org-element-property :begin link))
-                                          (org-glance-relation-type-parser))))
-                         (if (memq link-type '(subtask subtask-done project project-done))
-                             ;; actualize link state for subtasks and projects
-                             (if-let (headline (org-glance-metastore:get-headline id))
-                                 (condition-case nil
-                                     (org-glance:with-headline-narrowed headline
-                                         (let ((state (intern (or (org-get-todo-state) "")))
-                                               (done-kws (mapcar #'intern org-done-keywords)))
-                                           (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
-                                                                              ((memq link-type '(project project-done)) 'project-done)
-                                                                              (t 'subtask-done)))
-                                                 (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
-                                                          ((memq link-type '(project project-done)) 'project)
-                                                          (t 'subtask))))))
-                                     (org-glance-exception:HEADLINE-NOT-FOUND link-type))
-                               link-type)
-                           link-type)))
-                      (t nil))
-         when (and type
-                   (or (not (gethash id relations))
-                       (and (memq type '(subtask subtask-done))
-                            (not (memq (org-element-property :type (gethash id relations))
-                                       '(subtask subtask-done))))))
-         do (let ((relation (list 'org-glance-relation
-                                  (list :id id
-                                        :type type
-                                        :contents (condition-case nil
-                                                      (buffer-substring-no-properties
-                                                       (org-element-property :contents-begin link)
-                                                       (org-element-property :contents-end link))
-                                                    (error nil))
-                                        :link link))))
-              (puthash id relation relations))
-         finally (return (hash-table-values relations)))))
+   (cl-loop
+      with relations = (make-hash-table)
+      for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
+      for id = (intern (org-element-property :path link))
+      for type = (cond
+                   ((s-contains? "org-glance" (org-element-property :type link))
+                    (let ((link-type (save-excursion
+                                       (goto-char (org-element-property :begin link))
+                                       (org-glance-relation-type-parser))))
+                      (if (memq link-type '(subtask subtask-done project project-done))
+                          ;; actualize link state for subtasks and projects
+                          (if-let (headline (org-glance-metastore:get-headline id))
+                              (condition-case nil
+                                  (org-glance:with-headline-narrowed headline
+                                    (let ((state (intern (or (org-get-todo-state) "")))
+                                          (done-kws (mapcar #'intern org-done-keywords)))
+                                      (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
+                                                                         ((memq link-type '(project project-done)) 'project-done)
+                                                                         (t 'subtask-done)))
+                                            (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
+                                                     ((memq link-type '(project project-done)) 'project)
+                                                     (t 'subtask))))))
+                                (org-glance-exception:HEADLINE-NOT-FOUND link-type))
+                            link-type)
+                        link-type)))
+                   (t nil))
+      when (and type
+                (or (not (gethash id relations))
+                    (and (memq type '(subtask subtask-done))
+                         (not (memq (org-element-property :type (gethash id relations))
+                                    '(subtask subtask-done))))))
+      do (let ((relation (list 'org-glance-relation
+                               (list :id id
+                                     :type type
+                                     :contents (condition-case nil
+                                                   (buffer-substring-no-properties
+                                                    (org-element-property :contents-begin link)
+                                                    (org-element-property :contents-end link))
+                                                 (error nil))
+                                     :link link))))
+           (puthash id relation relations))
+      finally (return (hash-table-values relations)))))
 
 (cl-defun org-glance-headline-relation:subtask-p (relation)
   (memq (org-element-property :type relation) '(subtask subtask-done)))
@@ -461,12 +458,12 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:repeated-p ()
   (org-glance:with-headline-at-point
-      (when (append
-             (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
-               (org-tss:filter-active)
-               (org-tss:filter-repeated)
-               (org-tss:sort)))
-        t)))
+   (when (append
+          (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
+            (org-tss:filter-active)
+            (org-tss:filter-repeated)
+            (org-tss:sort)))
+     t)))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name
@@ -531,16 +528,18 @@ FIXME. Unstable one. Refactor is needed."
           ;; tags
           "\n"
           (if closed
-              (concat "CLOSED: " (org-element-property :raw-value closed))
-            "")
-          (if (or schedule deadline)
-              " "
+              (concat "CLOSED: "
+                      (org-element-property :raw-value closed)
+                      (if (or schedule deadline)
+                          " "
+                        ""))
             "")
           (if schedule
-              (concat "SCHEDULED: " (org-element-property :raw-value schedule))
-            "")
-          (if deadline
-              " "
+              (concat "SCHEDULED: "
+                      (org-element-property :raw-value schedule)
+                      (if deadline
+                          " "
+                        ""))
             "")
           (if deadline
               (concat "DEADLINE: " (org-element-property :raw-value deadline))
@@ -583,9 +582,9 @@ FIXME. Unstable one. Refactor is needed."
                (concat "- Mentions"
                        (org-glance-join-but-null "\n  "
                          (mapcar #'org-glance-relation-interpreter mentions))))))))
-        ;; (condition-case nil
-        ;;     (org-update-checkbox-count-maybe)
-        ;;   (error nil))
+        (condition-case nil
+            (org-update-checkbox-count-maybe)
+          (error nil))
         (buffer-string)))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
@@ -617,7 +616,6 @@ FIXME. Unstable one. Refactor is needed."
       id
       "]["
       stateless-title
-      "]]"
-      ))))
+      "]]"))))
 
 (org-glance:provide)

@@ -202,7 +202,7 @@
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
   ;; (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
-  (advice-add 'org-glance-headline:materialize :around #'org-glance-materialized-headline:support-encrypted-headlines)
+  (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
   (cl-loop
      for directory in (org-glance:list-directories org-glance-directory)

@@ -222,7 +222,7 @@
   (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
   (org-glance-headline:decrypt --org-glance-materialized-headline:password))
 
-(cl-defun org-glance-materialized-headline:support-encrypted-headlines (fn headline &rest args)
+(cl-defun org-glance-enable-encrypted-headlines (fn headline &rest args)
   (cond ((org-glance-headline:encrypted-p headline)
          (progn
            (org-glance:log-info "The headline is encrypted")
@@ -247,7 +247,7 @@
         (t (apply fn headline args))))
 
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE and run FORMS on it."
+  "Materialize HEADLINE and run FORMS on it. Then push changes to all related overviews."
   (declare (indent 1) (debug t))
   `(let ((materialized-buffer (org-glance-headline:materialize ,headline))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
