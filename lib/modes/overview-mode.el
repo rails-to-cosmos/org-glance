@@ -354,18 +354,28 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      &optional
        (class (org-glance-view:completing-read)))
   (interactive "fImport from location: ")
-  (when (y-or-n-p (org-glance:format "Import headlines of class ${class} from ${path}?"))
-    (cl-loop
-       for file in (org-glance-scope path)
-       unless (s-contains? "sync-conflict" file)
-       do (org-glance:with-file-visited file
-            (org-glance:for-each-headline-in-current-buffer
-              (let ((headline (org-glance-headline:at-point)))
-                (when (-contains?
-                       (mapcar #'downcase (org-element-property :tags headline))
-                       (downcase (symbol-name class)))
-                  (org-glance-overview:register-headline-in-metastore headline class)
-                  (org-glance-overview:register-headline-in-overview headline class))))))))
+  (when (y-or-n-p (org-glance:format "Import ${class} from ${path}?"))
+    (let* ((files (org-glance-scope path))
+           (progress-reporter (make-progress-reporter (format "Collecting %s..." class) 0 (length files))))
+      (cl-loop
+         for file in files
+         for index from 0
+         unless (s-contains? "sync-conflict" file)
+         do
+           (progress-reporter-update progress-reporter index)
+           (let ((standard-output 'ignore)
+                 (garbage-collection-messages nil))
+             (org-glance:with-file-visited file
+               (org-glance:for-each-headline-in-current-buffer
+                 (let ((headline (org-glance-headline:at-point)))
+                   (when (-contains?
+                          (mapcar #'downcase (org-element-property :tags headline))
+                          (downcase (symbol-name class)))
+                     (org-glance-overview:register-headline-in-metastore headline class)
+                     (org-glance-overview:register-headline-in-overview headline class))))))
+           (redisplay)
+         finally
+           (progress-reporter-done progress-reporter)))))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines

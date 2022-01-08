@@ -187,7 +187,6 @@ metastore.")
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
 (cl-defun org-glance-headline:search-buffer-by-id (id)
-  (org-glance:log-debug "I'm in buffer \"%s\"" (current-buffer))
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
                   (lambda (el) (when (string= (org-glance-headline:id el) id)
                                  (org-element-property :begin el))))))
@@ -556,18 +555,27 @@ FIXME. Unstable one. Refactor is needed."
           (title (org-glance-headline:title))
           (alias (org-element-property :ORG_GLANCE_ALIAS (org-element-at-point)))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
-          (tags (org-glance-headline:tags)))
+          (tags (org-glance-headline:tags))
+          (class (s-join ", " (cl-loop
+                                 for tag in tags
+                                 collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
      (if alias
-         (format "[[org-glance-visit:%s][%s]]" id alias)
+
+         (format "[[org-glance-visit:%s][%s]]" id alias
+                 ;; (s-replace-all
+                 ;;  (list (cons "%state" state)
+                 ;;        (cons "%title" stateless-title)
+                 ;;        (cons "%class" class))
+                 ;;  alias)
+                 )
+
        (concat
 
         (if (string-empty-p state)
             ""
           (format "[[org-glance-state:%s][%s]] " state state))
 
-        (s-join ", " (cl-loop
-                        for tag in tags
-                        collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))
+        class
 
         " [[org-glance-visit:"
         id
