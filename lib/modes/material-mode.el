@@ -214,8 +214,10 @@
                          (if (or (bolp) (looking-back "[[:blank:]]" 1))
                              ""
                            " ")
-                         (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
-                           (org-glance-headline-ref)))))))
+                         (condition-case nil
+                             (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
+                               (org-glance-headline-ref))
+                           (org-glance-exception:HEADLINE-NOT-FOUND (format "*Headline not found: %s*" id))))))))
 
        (org-glance:material-buffer-default-view)
 
