@@ -198,7 +198,7 @@
        (when actualize-links-on-startup
          (cl-loop
             while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-            collect (let* ((link (s-split-up-to ":" (substring-no-properties (match-string 2)) 1))
+            collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
                            (type (intern (car link)))
                            (id (cadr link)))
 
