@@ -248,7 +248,7 @@
                           (goto-char <region-beginning>)
                           (delete-region <region-beginning> <region-end>)
                           (insert (org-glance:with-headline-narrowed <hl>
-                                    (org-glance-headline-ref))))))))
+                                    (org-glance-headline-reference))))))))
 
         ;; mention
         ((and (not (org-in-src-block-p))
@@ -257,7 +257,7 @@
           :action (lambda (headline)
                     (insert
                      (org-glance:with-headline-narrowed headline
-                       (org-glance-headline-ref))))))
+                       (org-glance-headline-reference))))))
 
         ;; simple @
         (t (keyboard-quit)))

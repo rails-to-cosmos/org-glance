@@ -66,7 +66,7 @@
                             (org-goto-marker-or-bmk marker)
                             (org-glance:with-headline-narrowed (org-glance-overview:original-headline)
                               (list
-                               :ref (org-glance-headline-ref)
+                               :ref (org-glance-headline-reference)
                                :id (org-glance-headline:id))))
            for id = (plist-get headline :id)
            when (and (not (null id)) (not (gethash (intern id) headlines)))

@@ -526,27 +526,30 @@ FIXME. Unstable one. Refactor is needed."
        (org-narrow-to-subtree)
        ,@forms)))
 
-(cl-defun org-glance-headline-ref ()
+(cl-defun org-glance-headline-reference ()
   (org-glance:with-headline-at-point
    (let* ((id (org-glance-headline:id))
           (state (org-glance-headline:state))
           (title (org-glance-headline:title))
+          (alias (org-element-property :ORG_GLANCE_ALIAS (org-element-at-point)))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
           (tags (org-glance-headline:tags)))
-     (concat
+     (if alias
+         (format "[[org-glance-visit:%s][%s]]" id alias)
+       (concat
 
-      (if (string-empty-p state)
-          ""
-        (format "[[org-glance-state:%s][%s]] " state state))
+        (if (string-empty-p state)
+            ""
+          (format "[[org-glance-state:%s][%s]] " state state))
 
-      (s-join ", " (cl-loop
-                      for tag in tags
-                      collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))
+        (s-join ", " (cl-loop
+                        for tag in tags
+                        collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))
 
-      " [[org-glance-visit:"
-      id
-      "]["
-      stateless-title
-      "]]"))))
+        " [[org-glance-visit:"
+        id
+        "]["
+        stateless-title
+        "]]")))))
 
 (org-glance:provide)

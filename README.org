@@ -63,7 +63,14 @@ CLOCK: [2022-01-04 Tue 16:06]--[2022-01-04 Tue 20:31] =>  4:25
 - State "STARTED"    from "TODO"       [2022-01-04 Tue 16:06]
 :END:
 ** TODO domains. domain borders. cross-domain classes.
-** TODO implement headline aliases
+** DONE headline aliases
+CLOSED: [2022-01-08 Sat 14:13]
+:LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-01-08 Sat 14:13]
+- State "PENDING"    from "STARTED"    [2022-01-08 Sat 14:05]
+- State "STARTED"    from "TODO"       [2022-01-08 Sat 14:04]
+CLOCK: [2022-01-08 Sat 14:04]--[2022-01-08 Sat 14:05] =>  0:01
+:END:
 ** PENDING capture through materialization
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2021-12-26 Sun 13:30]

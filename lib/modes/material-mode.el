@@ -93,7 +93,7 @@
         (cl-loop
            for relation in (org-glance-headline-relations)
            for relation-id = (org-element-property :id relation)
-           for headline-ref = (org-glance-headline-ref)
+           for headline-ref = (org-glance-headline-reference)
            for state = (intern (or (org-get-todo-state) ""))
            for done-kws = (mapcar #'intern org-done-keywords)
            for relation-headline = (org-glance-metastore:get-headline (symbol-name relation-id))
@@ -216,7 +216,7 @@
                            " ")
                          (condition-case nil
                              (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
-                               (org-glance-headline-ref))
+                               (org-glance-headline-reference))
                            (org-glance-exception:HEADLINE-NOT-FOUND (format "*Headline not found: %s*" id))))))))
 
        (org-glance:material-buffer-default-view)
