@@ -87,9 +87,9 @@ metastore.")
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
   (org-glance-ensure-at-heading)
-  (beginning-of-line)
   (while (and (not (org-glance-headline-p))
-              (not (org-before-first-heading-p)))
+              (not (org-before-first-heading-p))
+              (not (bobp)))
     (org-up-heading-or-point-min))
   (org-glance-headline:create-from-element-at-point))
 
@@ -209,11 +209,21 @@ metastore.")
           ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
           (t (org-glance:log-warning "File and buffer not found for visiting. Using current buffer...")))
 
-    (org-glance:log-debug "We are now visiting headline buffer %s, let's remove restrictions" (current-buffer))
     (widen)
-    (org-glance:log-debug "Search headline in buffer")
     (cond (id (org-glance-headline:search-buffer-by-id id))
           (t (goto-char (org-glance-headline:begin headline))))))
+
+(cl-defmacro org-glance:with-file-visited (file &rest forms)
+  "Visit FILE, execute FORMS and close it if it was closed before visit."
+  (declare (indent 1) (debug t))
+  `(save-window-excursion
+     (let ((buffer-lived-p (buffer-live-p (get-file-buffer ,file)))
+           (buffer (find-file-noselect ,file)))
+       (unwind-protect
+            (with-current-buffer buffer
+              ,@forms)
+         (unless buffer-lived-p
+           (kill-buffer buffer))))))
 
 (cl-defmacro org-glance:with-headline-narrowed (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
@@ -246,6 +256,18 @@ metastore.")
                         (buffer-live-p (org-glance-headline:buffer ,headline)))
                    (org-glance-headline:buffer ,headline))))))
        result)))
+
+(cl-defmacro org-glance:for-each-headline-in-current-buffer (&rest forms)
+  "Eval FORMS on headline at point.
+If point is before the first heading, eval forms on each headline in buffer."
+  (declare (indent 0) (debug t))
+  `(save-excursion
+     (cl-loop
+        initially (goto-char (point-min))
+        while (and (org-glance-headline:at-point)
+                   (not (eobp)))
+        collect (progn ,@forms)
+        do (org-glance-headline:search-forward))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance-ensure-at-heading)
@@ -411,113 +433,114 @@ FIXME. Unstable one. Refactor is needed."
                      "-")))
     'directory)))
 
-(cl-defun org-glance-headline:overview (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
-  (org-glance:with-headline-narrowed headline
-    (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
-                                                  (org-tss:filter-active)
-                                                  (org-tss:sort))
-                         collect (org-element-property :raw-value timestamp)))
-          (header (save-excursion
-                    (goto-char (point-min))
-                    (org-end-of-meta-data)
-                    (s-trim (buffer-substring-no-properties (point-min) (point)))))
-          (relations (cl-loop
-                        for relation in (org-glance-headline-relations)
-                        when (eq (org-element-property :type relation) 'mention)
-                        collect relation into mentions
-                        when (memq (org-element-property :type relation) '(subtask subtask-done))
-                        collect relation into subtasks
-                        when (memq (org-element-property :type relation) '(project project-done))
-                        collect relation into projects
-                        finally (return (list :mentions mentions
-                                              :subtasks subtasks
-                                              :projects projects))))
-          (tags (org-get-tags-string))
-          (state (org-glance-headline:state headline))
-          (id (org-glance-headline:id headline))
-          (title (org-glance-headline:title headline))
-          (priority (org-glance-headline:priority headline))
-          (closed (org-element-property :closed headline))
-          (schedule (org-glance-headline:scheduled headline))
-          (deadline (org-glance-headline:deadline headline))
-          (encrypted (org-glance-headline:encrypted-p))
-          (repeated (org-glance-headline:repeated-p))
-          (linked (org-glance-headline:contains-link?)))
-      (with-temp-buffer
-        (insert
-         (concat
-          "* "
-          state
-          (if (string-empty-p state)
-              ""
-            " ")
-          (if priority
-              (concat "[#" (char-to-string priority) "]" " ")
-            "")
-          title
-          ;; " "
-          ;; tags
-          "\n"
-          (if closed
-              (concat "CLOSED: "
-                      (org-element-property :raw-value closed)
-                      (if (or schedule deadline)
-                          " "
-                        ""))
-            "")
-          (if schedule
-              (concat "SCHEDULED: "
-                      (org-element-property :raw-value schedule)
-                      (if deadline
-                          " "
-                        ""))
-            "")
-          (if deadline
-              (concat "DEADLINE: " (org-element-property :raw-value deadline))
-            "")
-          (if (or schedule deadline closed)
-              "\n"
-            "")
+  (org-glance:with-headline-at-point
+   (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
+                                                 (org-tss:filter-active)
+                                                 (org-tss:sort))
+                        collect (org-element-property :raw-value timestamp)))
+         (header (save-excursion
+                   (goto-char (point-min))
+                   (org-end-of-meta-data)
+                   (s-trim (buffer-substring-no-properties (point-min) (point)))))
+         (relations (cl-loop
+                       for relation in (org-glance-headline-relations)
+                       when (eq (org-element-property :type relation) 'mention)
+                       collect relation into mentions
+                       when (memq (org-element-property :type relation) '(subtask subtask-done))
+                       collect relation into subtasks
+                       when (memq (org-element-property :type relation) '(project project-done))
+                       collect relation into projects
+                       finally (return (list :mentions mentions
+                                             :subtasks subtasks
+                                             :projects projects))))
+         (tags (org-get-tags-string))
+         (state (org-glance-headline:state))
+         (id (org-glance-headline:id))
+         (title (org-glance-headline:title))
+         (priority (org-glance-headline:priority))
+         (closed (org-element-property :closed (org-element-at-point)))
+         (schedule (org-glance-headline:scheduled))
+         (deadline (org-glance-headline:deadline))
+         (encrypted (org-glance-headline:encrypted-p))
+         (repeated (org-glance-headline:repeated-p))
+         (linked (org-glance-headline:contains-link?)))
+     (with-temp-buffer
+       (save-excursion
+         (insert
+          (concat
+           "* "
+           state
+           (if (string-empty-p state)
+               ""
+             " ")
+           (if priority
+               (concat "[#" (char-to-string priority) "]" " ")
+             "")
+           title
+           ;; " "
+           ;; tags
+           "\n"
+           (if closed
+               (concat "CLOSED: "
+                       (org-element-property :raw-value closed)
+                       (if (or schedule deadline)
+                           " "
+                         ""))
+             "")
+           (if schedule
+               (concat "SCHEDULED: "
+                       (org-element-property :raw-value schedule)
+                       (if deadline
+                           " "
+                         ""))
+             "")
+           (if deadline
+               (concat "DEADLINE: " (org-element-property :raw-value deadline))
+             "")
+           (if (or schedule deadline closed)
+               "\n"
+             "")
 
-          ":PROPERTIES:\n"
-          ":ORG_GLANCE_ID: " id "\n"
-          ":DIR: " (abbreviate-file-name default-directory) "\n"
-          ":END:"
+           ":PROPERTIES:\n"
+           ":ORG_GLANCE_ID: " id "\n"
+           ":DIR: " (abbreviate-file-name default-directory) "\n"
+           ":END:"
 
-          (org-glance-join-but-null "\n\n"
-            (list
-             (when (or encrypted linked repeated)
-               (concat "- Usability characteristics"
-                       (org-glance-join-but-null "\n  - "
-                         (list
-                          (when encrypted "Encrypted")
-                          (when linked "Contains links to third-party resources")
-                          (when repeated (format "Repeated task%s"
-                                                 (if timestamps
-                                                     (format ", next active timestamp is %s" (car timestamps))
-                                                   "")))))))
+           (org-glance-join-but-null "\n\n"
+             (list
+              (when (or encrypted linked repeated)
+                (concat "- Usability characteristics"
+                        (org-glance-join-but-null "\n  - "
+                          (list
+                           (when encrypted "Encrypted")
+                           (when linked "Contains links to third-party resources")
+                           (when repeated (format "Repeated task%s"
+                                                  (if timestamps
+                                                      (format ", next active timestamp is %s" (car timestamps))
+                                                    "")))))))
 
-             (when (and timestamps (not repeated))
-               (concat "- Schedule"
-                       (org-glance-join-but-null "\n  - " timestamps)))
+              (when (and timestamps (not repeated))
+                (concat "- Schedule"
+                        (org-glance-join-but-null "\n  - " timestamps)))
 
-             (when-let (projects (plist-get relations :projects))
-               (concat "- Projects [/]"
-                       (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
+              (when-let (projects (plist-get relations :projects))
+                (concat "- Projects [/]"
+                        (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
 
-             (when-let (subtasks (plist-get relations :subtasks))
-               (concat "- Subtasks [/]"
-                       (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
+              (when-let (subtasks (plist-get relations :subtasks))
+                (concat "- Subtasks [/]"
+                        (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
 
-             (when-let (mentions (plist-get relations :mentions))
-               (concat "- Mentions"
-                       (org-glance-join-but-null "\n  - "
-                         (mapcar #'org-glance-relation-interpreter mentions))))))))
-        (condition-case nil
-            (org-update-checkbox-count-maybe)
-          (error nil))
-        (buffer-string)))))
+              (when-let (mentions (plist-get relations :mentions))
+                (concat "- Mentions"
+                        (org-glance-join-but-null "\n  - "
+                          (mapcar #'org-glance-relation-interpreter mentions)))))))))
+       (condition-case nil
+           (org-update-checkbox-count-maybe)
+         (error nil))
+       (buffer-string)))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
   `(save-excursion

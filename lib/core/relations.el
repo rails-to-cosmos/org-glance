@@ -1,16 +1,21 @@
 (require 'org-glance-module)
 
 (cl-defun org-glance-relation-interpreter (relation)
-  (org-glance:with-headline-narrowed
-      (org-glance-metastore:get-headline (org-element-property :id relation))
-    (let ((ref (org-glance-headline-reference))
-          (ts (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps 'include-schedules)
-                                          (org-tss:filter-active)
-                                          (org-tss:sort))
-                 collect (org-element-property :raw-value timestamp))))
-      (if ts
-          (concat ref " on " (car ts))
-        ref))))
+  ;; please, avoid metastore here
+  (org-element-link-interpreter (org-element-property :link relation)
+                                (org-element-property :contents relation))
+
+  ;; (org-glance-headline-reference)
+  ;; (org-glance:with-headline-narrowed (org-glance-metastore:get-headline (org-element-property :id relation))
+  ;;   (let ((ref )
+  ;;         (ts (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps 'include-schedules)
+  ;;                                         (org-tss:filter-active)
+  ;;                                         (org-tss:sort))
+  ;;                collect (org-element-property :raw-value timestamp))))
+  ;;     (if ts
+  ;;         (concat ref " on " (car ts))
+  ;;       ref)))
+  )
 
 (cl-defun org-glance-relation-type-parser ()
   'mention)

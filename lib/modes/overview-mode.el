@@ -181,32 +181,31 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-metastore:write metastore-location metastore)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
-  "Add HEADLINE clone in overview VIEW-ID file."
-  (org-glance:log-debug "Update overview %s" class)
-  (save-window-excursion
-    (org-glance-overview class)
-    (save-restriction
-      (widen)
-      (save-excursion
-        (condition-case nil
-            (progn
-              (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-              (org-glance-overview:pull))
-          (org-glance-exception:HEADLINE-NOT-FOUND
-           (cond
-             ;; register archived entries only in archive class
-             ((and (memq 'archive (org-glance-headline:classes headline))
-                   (not (eql 'archive class)))
-              nil)
-             (t (let ((inhibit-read-only t)
-                      (contents (org-glance-headline:overview headline)))
-                  (unless (string-empty-p contents)
-                    (end-of-buffer)
-                    (when (eolp)
-                      (insert "\n"))
-                    (insert (s-trim contents))
-                    (save-buffer)))))))))
-    (bury-buffer))
+  "Add HEADLINE overview to CLASS file."
+  (org-glance:with-file-visited (org-glance-overview:location class)
+    (seq-let (id contents) (org-glance:with-headline-narrowed headline
+                             (list (org-glance-headline:id)
+                                   (org-glance-headline:overview)))
+      (save-restriction
+        (widen)
+        (save-excursion
+          (condition-case nil
+              (progn
+                (org-glance-headline:search-buffer-by-id id)
+                (org-glance-overview:pull))
+            (org-glance-exception:HEADLINE-NOT-FOUND
+             (cond
+               ;; register archived entries only in archive class
+               ((and (memq 'archive (org-glance-headline:classes headline))
+                     (not (eql 'archive class)))
+                nil)
+               (t (let ((inhibit-read-only t))
+                    (unless (string-empty-p contents)
+                      (end-of-buffer)
+                      (when (eolp)
+                        (insert "\n"))
+                      (insert (s-trim contents))
+                      (save-buffer)))))))))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -359,19 +358,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (cl-loop
        for file in (org-glance-scope path)
        unless (s-contains? "sync-conflict" file)
-       do
-         (org-glance:log-info "Scan file %s" file)
-         (redisplay)
-         (cl-loop
-            for headline in (org-glance-headline:extract-from file)
-            when (-contains?
-                  (mapcar #'downcase (org-element-property :tags headline))
-                  (downcase (symbol-name class)))
-            do
-              (org-glance-overview:register-headline-in-metastore headline class)
-              (org-glance-overview:register-headline-in-overview headline class)
-            ;; (org-glance-overview:register-headline-in-write-ahead-log el class)
-              ))))
+       do (org-glance:with-file-visited file
+            (org-glance:for-each-headline-in-current-buffer
+              (let ((headline (org-glance-headline:at-point)))
+                (when (-contains?
+                       (mapcar #'downcase (org-element-property :tags headline))
+                       (downcase (symbol-name class)))
+                  (org-glance-overview:register-headline-in-metastore headline class)
+                  (org-glance-overview:register-headline-in-overview headline class))))))))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines
@@ -664,13 +658,15 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview at point."
   (interactive)
+  (org-glance:log-debug "Pull modifications for headline overview.")
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
          (current-headline-title (org-glance-headline:title current-headline))
          (current-headline-contents (org-glance-headline-contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (overview-contents (org-glance-headline:overview original-headline)))
+         (overview-contents (org-glance:with-headline-narrowed original-headline
+                              (org-glance-headline:overview))))
     (cond ((null overview-contents)
            (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
                (org-glance-overview:kill-headline :force t)

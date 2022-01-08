@@ -96,7 +96,7 @@
            for headline-ref = (org-glance-headline-reference)
            for state = (intern (or (org-get-todo-state) ""))
            for done-kws = (mapcar #'intern org-done-keywords)
-           for relation-headline = (org-glance-metastore:get-headline (symbol-name relation-id))
+           for relation-headline = (org-glance-metastore:get-headline relation-id)
            do (save-window-excursion
                 (save-excursion
                   (condition-case nil
