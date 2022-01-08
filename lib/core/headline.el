@@ -220,6 +220,7 @@ metastore.")
   (declare (indent 1) (debug t))
   `(save-window-excursion
      (let (result
+           (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
            (buffer
             (cond ((and (org-glance-headline:file ,headline)
                         (or (buffer-live-p (get-file-buffer (org-glance-headline:file ,headline)))
@@ -529,7 +530,6 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance:with-headline-at-point
    (let* ((id (org-glance-headline:id))
           (state (org-glance-headline:state))
-          (state-label )
           (title (org-glance-headline:title))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
           (tags (org-glance-headline:tags)))

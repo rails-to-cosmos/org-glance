@@ -47,10 +47,12 @@ CLOSED: [2022-01-02 Sun 19:06]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-01-02 Sun 19:06]
 :END:
-** STARTED update relation title and status on visit
+** DONE update relation title and status on visit
+CLOSED: [2022-01-08 Sat 13:48]
 :LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-01-08 Sat 13:48]
 - State "STARTED"    from "PENDING"    [2022-01-08 Sat 11:50]
-CLOCK: [2022-01-08 Sat 11:50]
+CLOCK: [2022-01-08 Sat 11:50]--[2022-01-08 Sat 13:48] =>  1:58
 - State "STARTED"    from "PENDING"    [2022-01-07 Fri 11:25]
 CLOCK: [2022-01-07 Fri 11:25]--[2022-01-07 Fri 12:02] =>  0:37
 - State "PENDING"    from "STARTED"    [2022-01-05 Wed 11:54]
