@@ -96,6 +96,7 @@
   ;; shortcuts and helper methods.
 
   lib.core.headline                     ; good
+  lib.core.relations
   lib.core.metastore                    ; ok
   lib.core.scope                        ; ? deprecated
   lib.core.view                         ; migrate to overview

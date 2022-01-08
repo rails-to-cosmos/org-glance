@@ -345,75 +345,6 @@ FIXME. Unstable one. Refactor is needed."
 
 ;; Relations
 
-(cl-defun org-glance-relation-interpreter (relation)
-  (concat
-   (org-glance-relation-type-interpreter relation)
-   " "
-   (org-element-link-interpreter (org-element-property :link relation)
-                                 (org-element-property :contents relation))))
-
-(cl-defun org-glance-relation-type-parser ()
-  (cond ((and (org-at-item-checkbox-p) (looking-back "- \\[ \\] " 6)) 'subtask)
-        ((and (org-at-item-checkbox-p) (looking-back "- \\[X\\] " 6)) 'subtask-done)
-        ((and (org-at-item-p) (looking-back "- \\[ \\] Part of a project " 25)) 'project)
-        ((and (org-at-item-p) (looking-back "- \\[X\\] Part of a project " 25)) 'project-done)
-        (t 'mention)))
-
-(cl-defun org-glance-relation-type-interpreter (relation)
-  (case (org-element-property :type relation)
-    ('subtask "- [ ]")
-    ('subtask-done "- [X]")
-    ('project "- [ ] Part of a project")
-    ('project-done "- [X] Part of a project")
-    ('mention "-")
-    (t (prin1-to-string (org-element-property :type relation)))))
-
-(cl-defun org-glance-headline-relations ()
-  "Get all first-level relations of headline at point."
-  (org-glance:with-headline-at-point
-   (cl-loop
-      with relations = (make-hash-table)
-      for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
-      for id = (intern (org-element-property :path link))
-      for type = (cond
-                   ((s-contains? "org-glance" (org-element-property :type link))
-                    (let ((link-type (save-excursion
-                                       (goto-char (org-element-property :begin link))
-                                       (org-glance-relation-type-parser))))
-                      (if (memq link-type '(subtask subtask-done project project-done))
-                          ;; actualize link state for subtasks and projects
-                          (if-let (headline (org-glance-metastore:get-headline id))
-                              (condition-case nil
-                                  (org-glance:with-headline-narrowed headline
-                                    (let ((state (intern (or (org-get-todo-state) "")))
-                                          (done-kws (mapcar #'intern org-done-keywords)))
-                                      (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
-                                                                         ((memq link-type '(project project-done)) 'project-done)
-                                                                         (t 'subtask-done)))
-                                            (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
-                                                     ((memq link-type '(project project-done)) 'project)
-                                                     (t 'subtask))))))
-                                (org-glance-exception:HEADLINE-NOT-FOUND link-type))
-                            link-type)
-                        link-type)))
-                   (t nil))
-      when (and type
-                (or (not (gethash id relations))
-                    (and (memq type '(subtask subtask-done))
-                         (not (memq (org-element-property :type (gethash id relations))
-                                    '(subtask subtask-done))))))
-      do (let ((relation (list 'org-glance-relation
-                               (list :id id
-                                     :type type
-                                     :contents (condition-case nil
-                                                   (buffer-substring-no-properties
-                                                    (org-element-property :contents-begin link)
-                                                    (org-element-property :contents-end link))
-                                                 (error nil))
-                                     :link link))))
-           (puthash id relation relations))
-      finally (return (hash-table-values relations)))))
-
 (cl-defun org-glance-headline-relation:subtask-p (relation)
   (memq (org-element-property :type relation) '(subtask subtask-done)))
 
@@ -580,7 +511,7 @@ FIXME. Unstable one. Refactor is needed."
 
              (when-let (mentions (plist-get relations :mentions))
                (concat "- Mentions"
-                       (org-glance-join-but-null "\n  "
+                       (org-glance-join-but-null "\n  - "
                          (mapcar #'org-glance-relation-interpreter mentions))))))))
         (condition-case nil
             (org-update-checkbox-count-maybe)
@@ -598,16 +529,16 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance:with-headline-at-point
    (let* ((id (org-glance-headline:id))
           (state (org-glance-headline:state))
-          (state-label (if (string-empty-p state)
-                           ""
-                         (progn
-                           (put-text-property 0 (length state) 'face (org-get-todo-face state) state)
-                           (concat state " "))))
+          (state-label )
           (title (org-glance-headline:title))
           (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
           (tags (org-glance-headline:tags)))
      (concat
-      state-label
+
+      (if (string-empty-p state)
+          ""
+        (format "[[org-glance-state:%s][%s]] " state state))
+
       (s-join ", " (cl-loop
                       for tag in tags
                       collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))

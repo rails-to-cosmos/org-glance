@@ -15,6 +15,13 @@
   :group 'org-glance
   :group 'faces)
 
+(defface org-glance-link-state-face
+    '((((background dark)) (:inherit default :weight bold))
+      (t (:inherit default :weight bold)))
+  "*Face used to highlight evaluated paragraph."
+  :group 'org-glance
+  :group 'faces)
+
 (cl-defun org-glance-link:choose-thing-for-materialization ()
   (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metastore:choose-headline))))
 
@@ -48,6 +55,11 @@
  :follow #'org-glance-link:overview
  :face 'org-glance-link-overview-face)
 
+(org-link-set-parameters
+ "org-glance-state"
+ :follow #'org-glance-link:state
+ :face 'org-glance-link-state-face)
+
 ;; (defcustom org-glance-link:command 'man
 ;;   "The Emacs command to be used to display a man page."
 ;;   :group 'org-link
@@ -64,6 +76,10 @@
 (defun org-glance-link:overview (class &optional _)
   "Open org-glance headline identified by ID."
   (org-glance-overview (intern (downcase class))))
+
+(defun org-glance-link:state (state &optional _)
+  "Get all headlines with todo state equal STATE."
+  (user-error "Not implemented."))
 
 ;; (defun org-glance-link:store-link ()
 ;;   "Store a link to a man page."

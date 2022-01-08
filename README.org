@@ -40,14 +40,19 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO timedelta for downstream tasks
 ** TODO completing read instead of org-completing-read
 ** DONE [#A] data corruption in overview after sync relations
 CLOSED: [2022-01-02 Sun 19:06]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-01-02 Sun 19:06]
 :END:
-** PENDING update relation title and status on visit
+** STARTED update relation title and status on visit
 :LOGBOOK:
+- State "STARTED"    from "PENDING"    [2022-01-08 Sat 11:50]
+CLOCK: [2022-01-08 Sat 11:50]
+- State "STARTED"    from "PENDING"    [2022-01-07 Fri 11:25]
+CLOCK: [2022-01-07 Fri 11:25]--[2022-01-07 Fri 12:02] =>  0:37
 - State "PENDING"    from "STARTED"    [2022-01-05 Wed 11:54]
 CLOCK: [2022-01-04 Tue 20:31]--[2022-01-05 Wed 10:54] => 14:23
 - State "STARTED"    from "PENDING"    [2022-01-04 Tue 20:31]
@@ -72,7 +77,7 @@ CLOSED: [2021-12-18 Sat 12:58]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-12-18 Sat 12:58]
 :END:
-** TODO when i need to create a new class?
+** TODO when do i need to create a new class?
 - when you want to start answering specific requests:
 ** TODO quick-insert on material sync
 assume overview is sorted

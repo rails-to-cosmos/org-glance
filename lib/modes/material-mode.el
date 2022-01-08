@@ -95,7 +95,7 @@
           (cl-loop
              for relation in (org-glance-headline-relations)
              for relation-id = (org-element-property :id relation)
-             for headline-link = (org-glance-headline-ref)
+             for headline-ref = (org-glance-headline-ref)
              for state = (intern (or (org-get-todo-state) ""))
              for done-kws = (mapcar #'intern org-done-keywords)
              for relation-headline = (org-glance-metastore:get-headline (symbol-name relation-id))
@@ -107,11 +107,7 @@
                                      for rr in (org-glance-headline-relations)
                                      if (eq (org-element-property :id rr) (intern id))
                                      return t)
-                            (cond ((memq (org-element-property :type relation) '(subtask subtask-done))
-                                   (if (memq state done-kws)
-                                       (org-glance-headline:add-log-note "- [X] Part of a project %s from %s" headline-link (org-glance-now))
-                                     (org-glance-headline:add-log-note "- [ ] Part of a project %s from %s" headline-link (org-glance-now))))
-                                  (t (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-link (org-glance-now))))))
+                            (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
                       (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))))))
 
         (let ((new-contents (org-glance:with-headline-at-point
@@ -152,7 +148,8 @@
           (org-glance:log-info "Materialized headline successfully synchronized"))))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (org-glance-headline:hash (org-glance-metastore:get-headline --org-glance-materialized-headline:id)))
+  (org-glance:with-headline-narrowed (org-glance-metastore:get-headline --org-glance-materialized-headline:id)
+    (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
   "Default restriction of material buffer."
