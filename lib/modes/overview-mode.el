@@ -685,9 +685,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           ((string= current-headline-contents overview-contents)
            (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
            t)
-          (t (org-glance:with-headline-at-point
-              (delete-region (point-min) (point-max))
-              (insert overview-contents))
+          (t (org-glance-headline:replace-headline-at-point overview-contents)
              (org-overview)
              (goto-char initial-point)
              (org-align-tags t)
