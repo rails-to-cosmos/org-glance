@@ -335,7 +335,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                           (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))
                       (quit
                        (setq kill-ring nil)
-                       (org-glance:log-info "Kill ring has been cleared.")))))))
+                       (org-glance:log-info "Kill ring has been cleared")))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply
