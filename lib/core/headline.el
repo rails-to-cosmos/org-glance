@@ -133,41 +133,41 @@ metastore.")
 
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
   "Get title of HEADLINE, cleanup links."
-  (with-temp-buffer
-    (insert (or (org-element-property :TITLE headline)
-                (org-element-property :raw-value headline)
-                ""))
+  (s-trim (with-temp-buffer
+     (insert (or (org-element-property :TITLE headline)
+                 (org-element-property :raw-value headline)
+                 ""))
 
-    ;; org-glance-headline-remove-relations
-    ;; '(org-glance-overview
-    ;;   org-glance-state)
+     ;; org-glance-headline-remove-relations
+     ;; '(org-glance-overview
+     ;;   org-glance-state)
 
-    (cl-loop
-       initially (goto-char (point-min))
-       while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-       collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-                      (type (intern (car link)))
-                      (id (cadr link)))
+     (cl-loop
+        initially (goto-char (point-min))
+        while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
+        collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+                       (type (intern (car link)))
+                       (id (cadr link)))
 
-                 (when (memq type '(org-glance-overview
-                                    org-glance-state))
-                   (delete-region (match-beginning 0) (match-end 0)))))
+                  (when (memq type '(org-glance-overview
+                                     org-glance-state))
+                    (delete-region (match-beginning 0) (match-end 0)))))
 
-    (cl-loop
-       for (title beg end) in (org-element-map (org-element-parse-buffer) 'link
-                                (lambda (link) (list
-                                           (substring-no-properties
-                                            (or (nth 2 link)
-                                                (org-element-property :raw-link link)))
-                                           (org-element-property :begin link)
-                                           (org-element-property :end link))))
-       collect title into titles
-       collect (s-trim (buffer-substring-no-properties beg end)) into links
-       finally (return (cl-loop
-                          initially (goto-char (point-min))
-                          for i upto (1- (length titles))
-                          do (replace-string (nth i links) (nth i titles))
-                          finally (return (buffer-substring-no-properties (point-min) (point-max))))))))
+     (cl-loop
+        for (title beg end) in (org-element-map (org-element-parse-buffer) 'link
+                                 (lambda (link) (list
+                                            (substring-no-properties
+                                             (or (nth 2 link)
+                                                 (org-element-property :raw-link link)))
+                                            (org-element-property :begin link)
+                                            (org-element-property :end link))))
+        collect title into titles
+        collect (s-trim (buffer-substring-no-properties beg end)) into links
+        finally (return (cl-loop
+                           initially (goto-char (point-min))
+                           for i upto (1- (length titles))
+                           do (replace-string (nth i links) (nth i titles))
+                           finally (return (buffer-substring-no-properties (point-min) (point-max)))))))))
 
 (cl-defun org-glance-headline:priority (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :priority headline))
