@@ -330,8 +330,12 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
   (let ((action (lambda (headline)
                   (let ((pairs (org-glance:with-headline-materialized headline
                                  (org-glance-buffer-key-value-pairs))))
-                    (while t
-                      (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))))))
+                    (condition-case nil
+                        (while t
+                          (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))
+                      (quit
+                       (setq kill-ring nil)
+                       (org-glance:log-info "Kill ring has been cleared.")))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply
