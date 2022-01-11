@@ -161,7 +161,7 @@
                                              (insert contents)
                                              (goto-char (point-min))
 
-                                             (org-tss:reset-buffer-timestamps-except-earliest)
+                                             (org-tss-reset-buffer-timestamps-except-earliest)
 
                                              (cl-loop
                                                 for class in (org-glance-headline:classes)

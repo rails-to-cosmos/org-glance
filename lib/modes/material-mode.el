@@ -208,7 +208,7 @@
                                          org-glance-state))
                         (delete-region (match-beginning 0) (match-end 0)))
 
-                      (when (eql type 'org-glance-visit)
+                      (when (memq type '(org-glance-visit org-glance-open))
                         (goto-char (match-beginning 0))
                         (insert
                          (if (or (bolp) (looking-back "[[:blank:]]" 1))
@@ -216,7 +216,7 @@
                            " ")
                          (condition-case nil
                              (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
-                               (org-glance-headline-reference))
+                               (org-glance-headline-reference type))
                            (org-glance-exception:HEADLINE-NOT-FOUND (format "*Headline not found: %s*" id))))))))
 
        (org-glance:material-buffer-default-view)

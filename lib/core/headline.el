@@ -426,13 +426,7 @@ FIXME. Unstable one. Refactor is needed."
   (org-element-property :deadline headline))
 
 (cl-defun org-glance-headline:repeated-p ()
-  (org-glance:with-headline-at-point
-   (when (append
-          (-some->> (org-tss:subtree-timestamps 'include-schedules 'include-deadlines)
-            (org-tss:filter-active)
-            (org-tss:filter-repeated)
-            (org-tss:sort)))
-     t)))
+  (org-tss-headline-repeated-p))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name
@@ -451,9 +445,9 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
   (org-glance:with-headline-at-point
-   (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss:subtree-timestamps)
-                                                 (org-tss:filter-active)
-                                                 (org-tss:sort))
+   (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
+                                                 (org-tss-filter-active)
+                                                 (org-tss-sort-timestamps))
                         collect (org-element-property :raw-value timestamp)))
          (header (save-excursion
                    (goto-char (point-min))
@@ -564,7 +558,7 @@ FIXME. Unstable one. Refactor is needed."
        (org-narrow-to-subtree)
        ,@forms)))
 
-(cl-defun org-glance-headline-reference ()
+(cl-defun org-glance-headline-reference (&optional (type 'org-glance-visit))
   (org-glance:with-headline-at-point
    (let* ((id (org-glance-headline:id))
           (state (org-glance-headline:state))
@@ -575,28 +569,11 @@ FIXME. Unstable one. Refactor is needed."
           (class (s-join ", " (cl-loop
                                  for tag in tags
                                  collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
-     (if alias
-
-         (format "[[org-glance-visit:%s][%s]]" id alias
-                 ;; (s-replace-all
-                 ;;  (list (cons "%state" state)
-                 ;;        (cons "%title" stateless-title)
-                 ;;        (cons "%class" class))
-                 ;;  alias)
-                 )
-
-       (concat
-
-        (if (string-empty-p state)
-            ""
-          (format "[[org-glance-state:%s][%s]] " state state))
-
-        class
-
-        " [[org-glance-visit:"
-        id
-        "]["
-        stateless-title
-        "]]")))))
+     (format "%s%s [[%s:%s][%s]]"
+             (if (string-empty-p state) "" (format "[[org-glance-state:%s][%s]] " state state))
+             class
+             type
+             id
+             (or alias stateless-title)))))
 
 (org-glance:provide)
