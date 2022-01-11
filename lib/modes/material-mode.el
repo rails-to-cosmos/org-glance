@@ -209,15 +209,14 @@
                         (delete-region (match-beginning 0) (match-end 0)))
 
                       (when (memq type '(org-glance-visit org-glance-open))
-                        (goto-char (match-beginning 0))
-                        (insert
-                         (if (or (bolp) (looking-back "[[:blank:]]" 1))
-                             ""
-                           " ")
-                         (condition-case nil
-                             (org-glance:with-headline-narrowed (org-glance-metastore:get-headline id)
-                               (org-glance-headline-reference type))
-                           (org-glance-exception:HEADLINE-NOT-FOUND (format "*Headline not found: %s*" id))))))))
+                        (let ((headline (org-glance-metastore:get-headline id)))
+                          (goto-char (match-beginning 0))
+                          (insert
+                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
+                               ""
+                             " ")
+                           (org-glance:with-headline-narrowed headline
+                             (org-glance-headline-reference type))))))))
 
        (org-glance:material-buffer-default-view)
 
@@ -261,7 +260,7 @@
         (t (apply fn headline args))))
 
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE and run FORMS on it. Then push changes to all related overviews."
+  "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
   (declare (indent 1) (debug t))
   `(let ((materialized-buffer (org-glance-headline:materialize ,headline nil))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
