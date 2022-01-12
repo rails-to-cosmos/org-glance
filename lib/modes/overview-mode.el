@@ -19,7 +19,8 @@
 
 #+CATEGORY: ${category}
 #+STARTUP: overview
-${custom-header}")
+${custom-header}
+")
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
@@ -104,7 +105,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (if (org-before-first-heading-p)
         (progn
-          ;; (org-glance-overview:refresh-widgets)
+          (org-glance-overview:refresh-widgets)
           (org-glance-overview:order-by)
           (pulse-momentary-highlight-region
            (point-min)

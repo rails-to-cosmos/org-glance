@@ -209,7 +209,7 @@
                         (delete-region (match-beginning 0) (match-end 0)))
 
                       (when (memq type '(org-glance-visit org-glance-open))
-                        (let ((headline (org-glance-metastore:get-headline id)))
+                        (when-let (headline (org-glance-metastore:get-headline id))
                           (goto-char (match-beginning 0))
                           (insert
                            (if (or (bolp) (looking-back "[[:blank:]]" 1))
