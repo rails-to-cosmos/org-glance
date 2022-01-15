@@ -40,6 +40,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO optimize "register" methods
 ** TODO timedelta for downstream tasks
 ** TODO completing read instead of org-completing-read
 ** DONE [#A] data corruption in overview after sync relations
