@@ -243,34 +243,18 @@ metastore.")
 (cl-defmacro org-glance:with-headline-narrowed (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(save-window-excursion
-     (let (result
-           (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
-           (buffer
-            (cond ((and (org-glance-headline:file ,headline)
-                        (or (buffer-live-p (get-file-buffer (org-glance-headline:file ,headline)))
-                            (save-window-excursion
-                              (find-file (org-glance-headline:file ,headline))
-                              t)))
-                   (get-file-buffer (org-glance-headline:file ,headline)))
-                  ((and (org-glance-headline:buffer ,headline)
-                        (buffer-live-p (org-glance-headline:buffer ,headline)))
-                   (org-glance-headline:buffer ,headline))
-                  (t (org-glance-exception:HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
-       (unwind-protect
-            (setq result
-                  (progn
-                    (org-glance-headline:visit ,headline)
-                    (org-glance:with-headline-at-point ,@forms)))
-         (unless buffer
-           (kill-buffer
-            (cond ((and (org-glance-headline:file ,headline)
-                        (buffer-live-p (get-file-buffer (org-glance-headline:file ,headline))))
-                   (get-file-buffer (org-glance-headline:file ,headline)))
-                  ((and (org-glance-headline:buffer ,headline)
-                        (buffer-live-p (org-glance-headline:buffer ,headline)))
-                   (org-glance-headline:buffer ,headline))))))
-       result)))
+  `(let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
+         (id (org-glance-headline:id ,headline))
+         (file (org-glance-headline:file ,headline))
+         (buffer (org-glance-headline:buffer ,headline)))
+     (cond (file (org-glance:with-file-visited file
+                   (org-glance-headline:search-buffer-by-id id)
+                   (org-glance:with-headline-at-point ,@forms)))
+           ((and buffer (buffer-live-p buffer))
+            (with-current-buffer buffer
+              (org-glance-headline:search-buffer-by-id id)
+              (org-glance:with-headline-at-point ,@forms)))
+           (t (org-glance-exception:HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
 
 (cl-defmacro org-glance:for-each-headline-in-current-buffer (&rest forms)
   "Eval FORMS on headline at point.

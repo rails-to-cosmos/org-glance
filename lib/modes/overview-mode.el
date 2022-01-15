@@ -562,9 +562,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (let* ((headline (org-glance-overview:original-headline))
          (buffer (org-glance-materialized-headline-buffer headline)))
-    (if (buffer-live-p buffer)
-        (switch-to-buffer buffer)
-      (org-glance-headline:materialize headline))))
+    (switch-to-buffer
+     (if (buffer-live-p buffer)
+         buffer
+       (org-glance-headline:materialize headline)))))
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
@@ -741,13 +742,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         (org-toggle-tag (symbol-name new-class) 'on)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (save-window-excursion
-    (save-excursion
+  (org-glance:with-headline-narrowed
       (->> (org-glance-headline:at-point)
            org-glance-headline:id
-           org-glance-metastore:get-headline
-           org-glance-headline:visit)
-      (org-glance-headline:at-point))))
+           org-glance-metastore:get-headline)
+    (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:order-by
     (&optional (order #'(lambda () (list

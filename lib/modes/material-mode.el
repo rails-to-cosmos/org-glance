@@ -167,69 +167,67 @@
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (actualize-links-on-startup t))
-  "Materialize HEADLINE."
-  (switch-to-buffer
-   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
-     (let ((id (org-glance-headline:id headline))
-           (file (org-glance-headline:file headline))
-           (buffer (org-glance-headline:buffer headline))
-           (begin (org-glance-headline:begin headline))
-           (contents (org-glance-headline-contents headline)))
+  "Materialize HEADLINE and return materialized buffer.
 
-       (when file
-         (setq-local default-directory (file-name-directory file))
-         (org-glance:log-debug "Set default directory in materialized buffer to %s"
-                               default-directory))
+Synchronize links with metastore if ACTUALIZE-LINKS-ON-STARTUP is t."
+  (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
+    (let ((id (org-glance-headline:id headline))
+          (file (org-glance-headline:file headline))
+          (buffer (org-glance-headline:buffer headline))
+          (begin (org-glance-headline:begin headline))
+          (contents (org-glance-headline-contents headline)))
 
-       (org-glance:log-debug "Enable `org-mode' and `org-glance-material-mode'")
-       (org-mode)
-       (org-glance-material-mode +1)
+      (when file
+        (setq-local default-directory (file-name-directory file)))
 
-       (insert contents)
-       (setq --org-glance-materialized-headline:id id
-             --org-glance-materialized-headline:classes (org-glance-headline:classes)
-             --org-glance-materialized-headline:file file
-             --org-glance-materialized-headline:buffer buffer
-             --org-glance-materialized-headline:begin begin
-             --org-glance-materialized-headline:hash (org-glance-headline:hash))
+      (org-mode)
+      (org-glance-material-mode +1)
 
-       (goto-char (point-min))
+      (insert contents)
+      (setq --org-glance-materialized-headline:id id
+            --org-glance-materialized-headline:classes (org-glance-headline:classes)
+            --org-glance-materialized-headline:file file
+            --org-glance-materialized-headline:buffer buffer
+            --org-glance-materialized-headline:begin begin
+            --org-glance-materialized-headline:hash (org-glance-headline:hash))
 
-       (when actualize-links-on-startup
-         (cl-loop
-            while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-            collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-                           (type (intern (car link)))
-                           (id (cadr link)))
+      (goto-char (point-min))
 
-                      (when (memq type '(org-glance-visit
-                                         org-glance-open
-                                         org-glance-overview
-                                         org-glance-state))
-                        (delete-region (match-beginning 0) (match-end 0)))
+      (when actualize-links-on-startup
+        (cl-loop
+           while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
+           collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+                          (type (intern (car link)))
+                          (id (cadr link)))
 
-                      (when (memq type '(org-glance-visit org-glance-open))
-                        (when-let (headline (org-glance-metastore:get-headline id))
-                          (goto-char (match-beginning 0))
-                          (insert
-                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
-                               ""
-                             " ")
-                           (org-glance:with-headline-narrowed headline
-                             (org-glance-headline-reference type))))))))
+                     (when (memq type '(org-glance-visit
+                                        org-glance-open
+                                        org-glance-overview
+                                        org-glance-state))
+                       (delete-region (match-beginning 0) (match-end 0)))
 
-       (org-glance:material-buffer-default-view)
+                     (when (memq type '(org-glance-visit org-glance-open))
+                       (when-let (headline (org-glance-metastore:get-headline id))
+                         (goto-char (match-beginning 0))
+                         (insert
+                          (if (or (bolp) (looking-back "[[:blank:]]" 1))
+                              ""
+                            " ")
+                          (org-glance:with-headline-narrowed headline
+                            (org-glance-headline-reference type))))))))
 
-       ;; run hooks on original subtree
-       (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
-       (run-hooks 'org-glance-after-materialize-hook)
+      (org-glance:material-buffer-default-view)
 
-       (org-glance:log-info "Promote subtree to the first level")
-       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
-       (org-glance-headline:promote-to-the-first-level)
+      ;; run hooks on original subtree
+      (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
+      (run-hooks 'org-glance-after-materialize-hook)
 
-       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
-       (current-buffer)))))
+      (org-glance:log-info "Promote subtree to the first level")
+      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
+      (org-glance-headline:promote-to-the-first-level)
+
+      (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
+      (current-buffer))))
 
 (cl-defun org-glance-headline:decrypt-headline-at-point-with-local-password ()
   (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
