@@ -122,7 +122,6 @@
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
-;; (declare-function org-glance-headline:add-biconnected-relation (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
 (defgroup org-glance nil
@@ -203,6 +202,7 @@
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
   ;; (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
+
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
   (cl-loop
@@ -274,25 +274,27 @@ after capture process has been finished."
   `(condition-case default
        (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
              (t (funcall ,action (org-glance-metastore:choose-headline))))
-     (org-glance-exception:HEADLINE-NOT-FOUND (lexical-let ((<buffer> (current-buffer))
-                                                            (<point> (point)))
-                                                (org-glance-capture
-                                                 :default (cadr default)
-                                                 :class (org-glance:choose-class "Unknown headline. Please, specify it's class to capture: ")
-                                                 :callback (lambda ()
-                                                             (let ((<hl> (org-glance-overview:original-headline)))
-                                                               (switch-to-buffer <buffer>)
-                                                               (goto-char <point>)
-                                                               (funcall ,action <hl>))))))))
+     (org-glance-exception:HEADLINE-NOT-FOUND
+      (lexical-let ((<buffer> (current-buffer))
+                    (<point> (point)))
+        (org-glance-capture
+         :default (cadr default)
+         :class (org-glance:choose-class "Unknown headline. Please, specify it's class to capture: ")
+         :callback (lambda ()
+                     (let ((<hl> (org-glance-overview:original-headline)))
+                       (switch-to-buffer <buffer>)
+                       (goto-char <point>)
+                       (funcall ,action <hl>))))))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
   (interactive)
   (let ((action (lambda (headline)
                   (let ((buffer (org-glance-materialized-headline-buffer headline)))
-                    (if (buffer-live-p buffer)
-                        (switch-to-buffer buffer)
-                      (org-glance-headline:materialize headline))))))
+                    (switch-to-buffer
+                     (if (buffer-live-p buffer)
+                         buffer
+                       (org-glance-headline:materialize headline)))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply

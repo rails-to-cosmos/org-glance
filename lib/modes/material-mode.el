@@ -28,11 +28,11 @@
 (defvar-local --org-glance-materialized-headline:indent nil)
 (defvar-local --org-glance-materialized-headline:password nil)
 
-(defcustom org-glance-after-materialize-hook nil
-  "Normal hook that is run after a buffer is materialized in separate buffer."
-  :options '(copyright-update time-stamp)
-  :type 'hook
-  :group 'org-glance)
+;; (defcustom org-glance-after-materialize-hook nil
+;;   "Normal hook that is run after a buffer is materialized in separate buffer."
+;;   :options '(copyright-update time-stamp)
+;;   :type 'hook
+;;   :group 'org-glance)
 
 (defcustom org-glance-after-materialize-sync-hook nil
   "Hook that is run after a materialized buffer is synchronized to its source file."
@@ -85,9 +85,7 @@
       (when (string= glance-hash current-hash)
         (org-glance-exception:HEADLINE-NOT-MODIFIED (or source-file source-buffer)))
 
-      (save-excursion
-        (with-demoted-errors "Hook error: %s"
-          (run-hooks 'org-glance-before-materialize-sync-hook)))
+      (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
       (unless without-relations
         (cl-loop
@@ -140,8 +138,7 @@
              (org-glance-overview:remove-headline-from-overview source-headline class)
              (org-glance-overview:remove-headline-from-metastore source-headline class))
 
-        (with-demoted-errors "Hook error: %s"
-          (run-hooks 'org-glance-after-materialize-sync-hook))
+        (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
 
         (org-glance:log-info "Materialized headline successfully synchronized")))))
 
@@ -166,10 +163,10 @@
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
 
-(cl-defun org-glance-headline:materialize (headline &optional (actualize-links-on-startup t))
+(cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
   "Materialize HEADLINE and return materialized buffer.
 
-Synchronize links with metastore if ACTUALIZE-LINKS-ON-STARTUP is t."
+Synchronize links with metastore if UPDATE-RELATIONS is t."
   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
     (let ((id (org-glance-headline:id headline))
           (file (org-glance-headline:file headline))
@@ -184,6 +181,7 @@ Synchronize links with metastore if ACTUALIZE-LINKS-ON-STARTUP is t."
       (org-glance-material-mode +1)
 
       (insert contents)
+
       (setq --org-glance-materialized-headline:id id
             --org-glance-materialized-headline:classes (org-glance-headline:classes)
             --org-glance-materialized-headline:file file
@@ -193,7 +191,7 @@ Synchronize links with metastore if ACTUALIZE-LINKS-ON-STARTUP is t."
 
       (goto-char (point-min))
 
-      (when actualize-links-on-startup
+      (when update-relations
         (cl-loop
            while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
            collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
@@ -219,43 +217,39 @@ Synchronize links with metastore if ACTUALIZE-LINKS-ON-STARTUP is t."
       (org-glance:material-buffer-default-view)
 
       ;; run hooks on original subtree
-      (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
-      (run-hooks 'org-glance-after-materialize-hook)
+      ;; (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
+      ;; (with-demoted-errors "After materialize hook errors: %s"
+      ;;   (run-hooks 'org-glance-after-materialize-hook))
 
-      (org-glance:log-info "Promote subtree to the first level")
+      (org-glance:log-debug "Promote subtree to the first level")
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
       (org-glance-headline:promote-to-the-first-level)
 
+      (org-glance:log-debug "Save current buffer to cache")
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
       (current-buffer))))
 
-(cl-defun org-glance-headline:decrypt-headline-at-point-with-local-password ()
-  (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
-  (org-glance-headline:decrypt --org-glance-materialized-headline:password))
-
 (cl-defun org-glance-enable-encrypted-headlines (fn headline &rest args)
-  (cond ((org-glance-headline:encrypted-p headline)
-         (progn
-           (org-glance:log-info "The headline is encrypted")
-           (org-glance:log-info "Add `org-glance-after-materialize-hook' to decrypt it")
-           (add-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
+  (let ((result (apply fn headline args)))
+    (with-current-buffer result
+      (when (org-glance-headline:encrypted-p headline)
+        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
+        (org-glance-headline:decrypt --org-glance-materialized-headline:password)
 
-           (unwind-protect
-                (apply fn headline args)
-             (remove-hook 'org-glance-after-materialize-hook #'org-glance-headline:decrypt-headline-at-point-with-local-password)
-             (add-hook 'org-glance-before-materialize-sync-hook
-                       (lambda ()
-                         (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                         (org-glance-headline:encrypt --org-glance-materialized-headline:password)
-                         (org-glance-headline:promote-to-the-first-level))
-                       0 'local)
-             (add-hook 'org-glance-after-materialize-sync-hook
-                       (lambda ()
-                         (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                         (org-glance-headline:decrypt --org-glance-materialized-headline:password)
-                         (org-glance-headline:promote-to-the-first-level))
-                       0 'local))))
-        (t (apply fn headline args))))
+        (add-hook 'org-glance-before-materialize-sync-hook
+                  (lambda ()
+                    (org-glance-headline:demote --org-glance-materialized-headline:indent)
+                    (org-glance-headline:encrypt --org-glance-materialized-headline:password)
+                    (org-glance-headline:promote-to-the-first-level))
+                  0 'local)
+
+        (add-hook 'org-glance-after-materialize-sync-hook
+                  (lambda ()
+                    (org-glance-headline:demote --org-glance-materialized-headline:indent)
+                    (org-glance-headline:decrypt --org-glance-materialized-headline:password)
+                    (org-glance-headline:promote-to-the-first-level))
+                  0 'local)))
+    result))
 
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
