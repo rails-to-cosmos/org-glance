@@ -28,12 +28,6 @@
 (defvar-local --org-glance-materialized-headline:indent nil)
 (defvar-local --org-glance-materialized-headline:password nil)
 
-;; (defcustom org-glance-after-materialize-hook nil
-;;   "Normal hook that is run after a buffer is materialized in separate buffer."
-;;   :options '(copyright-update time-stamp)
-;;   :type 'hook
-;;   :group 'org-glance)
-
 (defcustom org-glance-after-materialize-sync-hook nil
   "Hook that is run after a materialized buffer is synchronized to its source file."
   :options '(copyright-update time-stamp)
@@ -215,11 +209,6 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
                             (org-glance-headline-reference type))))))))
 
       (org-glance:material-buffer-default-view)
-
-      ;; run hooks on original subtree
-      ;; (org-glance:log-info "Run `org-glance-after-materialize-hook' on original subtree")
-      ;; (with-demoted-errors "After materialize hook errors: %s"
-      ;;   (run-hooks 'org-glance-after-materialize-hook))
 
       (org-glance:log-debug "Promote subtree to the first level")
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
