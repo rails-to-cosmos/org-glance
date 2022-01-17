@@ -78,7 +78,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
-(define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
+;; (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd ",") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ".") #'end-of-buffer)
@@ -88,6 +88,18 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
     (org-glance-overview:materialize-headline)))
+
+(define-key org-glance-overview-mode-map (kbd "#")
+  (org-glance-overview:for-one
+    (let ((headline (org-glance-overview:original-headline)))
+      (if (org-glance-headline:encrypted-p headline)
+          (progn
+            (org-glance:with-headline-narrowed headline
+              (org-glance-headline:decrypt)
+              (save-buffer))
+            (org-glance-overview:pull))
+        (org-glance:with-headline-materialized headline
+          (org-glance-headline:encrypt))))))
 
 (define-key org-glance-overview-mode-map (kbd "/")
   (org-glance:interactive-lambda
