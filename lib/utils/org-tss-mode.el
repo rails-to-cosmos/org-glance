@@ -53,7 +53,8 @@
                                           (org-tss-sort-timestamps))))
 
 (cl-defun org-tss-restore (&rest args)
-  (let ((tss* (-some->> (org-tss-headline-timestamps)
+  (let ((standard-output 'ignore)
+        (tss* (-some->> (org-tss-headline-timestamps)
                 (org-tss-filter-active)
                 (org-tss-filter-repeated)
                 (org-tss-sort-timestamps))))
@@ -69,7 +70,8 @@
 
 (cl-defun org-tss-reset-buffer-timestamps-except-earliest ()
   "Reset active timestamps in buffer except earliest."
-  (let ((tss (-some->> (org-tss-headline-timestamps 'include-schedules 'include-deadlines)
+  (let ((standard-output 'ignore)
+        (tss (-some->> (org-tss-headline-timestamps 'include-schedules 'include-deadlines)
                (org-tss-filter-active)
                (org-tss-filter-repeated)
                (org-tss-sort-timestamps))))

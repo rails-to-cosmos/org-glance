@@ -191,6 +191,29 @@
 ;;       (delete-region (point-min) (point-max))
 ;;       (insert contents))))
 
+(cl-defmacro org-glance-choose-and-apply (&key filter action)
+  "If HEADLINE specified, apply ACTION on it.
+
+If HEADLINE is not specified, ask user to choose HEADLINE from
+existing headlines filtered by FILTER.
+
+If user chooses unexisting headline, capture it and apply ACTION
+after capture process has been finished."
+  `(condition-case default
+       (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
+             (t (funcall ,action (org-glance-metastore:choose-headline))))
+     (org-glance-exception:HEADLINE-NOT-FOUND
+      (lexical-let ((<buffer> (current-buffer))
+                    (<point> (point)))
+        (org-glance-capture
+         :default (cadr default)
+         :class (org-glance:choose-class "Unknown headline. Please, specify it's class to capture: ")
+         :callback (lambda ()
+                     (let ((<hl> (org-glance-overview:original-headline)))
+                       (switch-to-buffer <buffer>)
+                       (goto-char <point>)
+                       (funcall ,action <hl>))))))))
+
 (cl-defun org-glance-init ()
   "Update all changed entities from `org-glance-directory'."
 
@@ -230,7 +253,6 @@
   (org-glance-init)
   (condition-case nil
       (cond
-
         ;; active region?
         ((and (not (org-in-src-block-p))
               (region-active-p))
@@ -262,29 +284,6 @@
         ;; simple @
         (t (keyboard-quit)))
     (quit (self-insert-command 1 64))))
-
-(cl-defmacro org-glance-choose-and-apply (&key filter action)
-  "If HEADLINE specified, apply ACTION on it.
-
-If HEADLINE is not specified, ask user to choose HEADLINE from
-existing headlines filtered by FILTER.
-
-If user chooses unexisting headline, capture it and apply ACTION
-after capture process has been finished."
-  `(condition-case default
-       (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
-             (t (funcall ,action (org-glance-metastore:choose-headline))))
-     (org-glance-exception:HEADLINE-NOT-FOUND
-      (lexical-let ((<buffer> (current-buffer))
-                    (<point> (point)))
-        (org-glance-capture
-         :default (cadr default)
-         :class (org-glance:choose-class "Unknown headline. Please, specify it's class to capture: ")
-         :callback (lambda ()
-                     (let ((<hl> (org-glance-overview:original-headline)))
-                       (switch-to-buffer <buffer>)
-                       (goto-char <point>)
-                       (funcall ,action <hl>))))))))
 
 (cl-defun org-glance:materialize (&optional headline)
   "Materialize HEADLINE in new buffer."
