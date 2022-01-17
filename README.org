@@ -40,6 +40,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO fix tests
 ** TODO kill buffer after material apply
 ** TODO optimize "register" methods
 ** TODO timedelta for downstream tasks
