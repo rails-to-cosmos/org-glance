@@ -155,7 +155,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-overview:move)))
 
 (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
-(define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
+;; (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
@@ -778,35 +778,36 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                                            (t nil)))))
          do
            (goto-char (point-max))
-           (insert (with-current-buffer buffer
-                     (set-mark (point-min))
-                     (goto-char (point-max))
-                     (org-sort-entries nil ?a)
-                     (buffer-substring-no-properties (point-min) (point-max))))
+           (insert (let ((standard-output 'ignore))
+                     (with-current-buffer buffer
+                       (set-mark (point-min))
+                       (goto-char (point-max))
+                       (org-sort-entries nil ?a)
+                       (buffer-substring-no-properties (point-min) (point-max)))))
            (kill-buffer buffer))
       (delete-region beginning-of-headlines end-of-headlines)
       (org-overview)
       (save-buffer))))
 
-(cl-defun org-glance-overview:vizualize ()
-  (interactive)
-  (org-glance-overview:for-all
-      (error "not implemented yet")
-    (let ((relations (org-glance-headline-relations*)))
-      (with-temp-file "relations.js"
-        (insert "var relations = ["
-                (s-join "," (cl-loop
-                               for rel in relations
-                               for name = (car rel)
-                               for relations = (s-join "," (mapcar (-rpartial #'s-wrap "\"") (cdr rel)))
-                               collect (org-glance:format "{\"name\":\"${name}\",\"relations\":[${relations}]}")))
-                "];")))))
+;; (cl-defun org-glance-overview:vizualize ()
+;;   (interactive)
+;;   (org-glance-overview:for-all
+;;       (error "not implemented yet")
+;;     (let ((relations (org-glance-headline-relations)))
+;;       (with-temp-file "relations.js"
+;;         (insert "var relations = ["
+;;                 (s-join "," (cl-loop
+;;                                for rel in relations
+;;                                for name = (car rel)
+;;                                for relations = (s-join "," (mapcar (-rpartial #'s-wrap "\"") (cdr rel)))
+;;                                collect (org-glance:format "{\"name\":\"${name}\",\"relations\":[${relations}]}")))
+;;                 "];")))))
 
-(cl-defun -og-calw-d (day)
-  (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes))))
-    (org-agenda-list)
-    (org-agenda-day-view day)
-    (switch-to-buffer org-agenda-buffer)
-    (delete-other-windows)))
+;; (cl-defun -og-calw-d (day)
+;;   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes))))
+;;     (org-agenda-list)
+;;     (org-agenda-day-view day)
+;;     (switch-to-buffer org-agenda-buffer)
+;;     (delete-other-windows)))
 
 (org-glance:provide)

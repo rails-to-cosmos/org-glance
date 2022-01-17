@@ -143,15 +143,6 @@
 (cl-defun org-glance:material-buffer-default-view ()
   "Default restriction of material buffer."
   (org-display-inline-images)
-
-  ;; hide all blocks but pins
-  (org-hide-block-all)
-  (org-element-map (org-element-parse-buffer) 'special-block
-    (lambda (special-block) (when (string= "pin" (org-element-property :type special-block))
-                         (save-excursion
-                           (goto-char (org-element-property :begin special-block))
-                           (org-hide-block-toggle 'off)))))
-
   (org-cycle-hide-drawers 'all))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
@@ -188,7 +179,8 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
       (when update-relations
         (cl-loop
            while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-           collect (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+           collect (let* ((standard-output 'ignore)
+                          (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
                           (type (intern (car link)))
                           (id (cadr link)))
 
