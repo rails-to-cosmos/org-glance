@@ -30,6 +30,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
+** TODO generic classes for API interactions
 ** TODO fix tests
 ** TODO kill buffer after material apply
 ** TODO optimize "register" methods
