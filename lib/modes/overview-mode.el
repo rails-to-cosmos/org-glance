@@ -25,16 +25,6 @@ ${custom-header}
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
-(defvar org-glance-overview:order-priority-table
-  (list
-   "started"
-   "pending"
-   "todo"
-   ""
-   "done"
-   "cancelled")
-  "Order priority table.")
-
 ;;; heavy methods applied to all headlines from current view's scope
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
@@ -83,7 +73,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ".") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
-(define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order-by)
+(define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order)
 
 (define-key org-glance-overview-mode-map (kbd "RET")
   (org-glance-overview:for-one
@@ -118,7 +108,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (if (org-before-first-heading-p)
         (progn
           (org-glance-overview:refresh-widgets)
-          (org-glance-overview:order-by)
+          (org-glance-overview:order)
           (pulse-momentary-highlight-region
            (point-min)
            (save-excursion
@@ -174,6 +164,65 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-capture :class (org-glance-overview:class))))
 
 (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
+
+(defcustom org-glance-overview:state-ordering
+  (list
+   "started"
+   "pending"
+   "todo"
+   ""
+   "done"
+   "cancelled")
+  "State-related ordering.")
+
+(cl-defun org-glance-overview:partition-builder ()
+  "Main method for partitioning headlines."
+  (let* ((class (org-glance-overview:class))
+         (state-ordering-config (f-join (org-glance-overview:directory class) "task-states.el"))
+         (state-ordering (if (and (file-exists-p state-ordering-config)
+                                  (file-readable-p state-ordering-config))
+                             (with-temp-buffer
+                               (insert-file-contents state-ordering-config)
+                               (read (buffer-substring-no-properties (point-min) (point-max))))
+                           org-glance-overview:state-ordering)))
+    (list
+     (not (org-in-archived-heading-p)) ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
+     (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
+     (or (-elem-index (downcase (org-glance-headline:state)) state-ordering) 0) ;; partition by state
+     (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
+     (or (org-glance-headline:priority) ?B))))
+
+(cl-defun org-glance-overview:partition-comparator (headline1 headline2)
+  "Main method to compare HEADLINE1 with HEADLINE2."
+  (cl-loop
+     for (i j) in (-zip-lists headline1 headline2)
+     when (cond ((not (eql (type-of i) (type-of j))) nil)
+                ((stringp i) (not (string= i j)))
+                (t (not (eql i j))))
+     return (cond ((stringp i) (string< i j))
+                  ((numberp i) (< i j))
+                  ((booleanp i) i)
+                  (t nil))))
+
+(cl-defun org-glance-overview:partition-by (partition-builder &key (test #'equal) (comparator #'<))
+  (declare (indent 2))
+  (let ((buffers (make-hash-table :test test)))
+    (save-excursion
+      (goto-char (point-min))
+      (outline-next-heading)
+      (while (< (point) (point-max))
+        (let* ((group-state (funcall partition-builder))
+               (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
+               (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
+          (with-current-buffer group-buffer
+            (org-mode)
+            (unless (gethash group-state buffers)
+              (delete-region (point-min) (point-max)))
+            (insert contents "\n"))
+          (puthash group-state group-buffer buffers)
+          (outline-next-heading))))
+    (cl-loop for key in (sort (hash-table-keys buffers) comparator)
+       collect (gethash key buffers))))
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
   (org-glance:log-debug "Update metastore %s" class)
@@ -369,7 +418,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive "fImport from location: ")
   (when (y-or-n-p (org-glance:format "Import ${class} from ${path}?"))
     (let* ((files (org-glance-scope path))
-           (progress-reporter (make-progress-reporter (format "Collecting %s..." class) 0 (length files))))
+           (progress-reporter (make-progress-reporter (format "Collecting %s... " class) 0 (length files))))
       (cl-loop
          for file in files
          for index from 0
@@ -483,27 +532,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
      when (f-equal? common-parent overview-directory)
      do (return view-id)))
-
-(cl-defun org-glance-overview:partition-by (partition-method &key (test #'equal) (comparator #'<))
-  (declare (indent 2))
-  (let ((buffers (make-hash-table :test test)))
-    (save-excursion
-      (goto-char (point-min))
-      (outline-next-heading)
-      (while (< (point) (point-max))
-        (let* ((group-state (funcall partition-method))
-               (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
-               (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
-          (with-current-buffer group-buffer
-            (org-mode)
-            (unless (gethash group-state buffers)
-              (delete-region (point-min) (point-max)))
-            (insert contents "\n"))
-          (puthash group-state group-buffer buffers)
-          (outline-next-heading))))
-    (cl-loop
-       for key in (sort (hash-table-keys buffers) comparator)
-       collect (gethash key buffers))))
 
 (cl-defun org-glance-capture-template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
@@ -658,7 +686,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class)))
       (org-glance-overview:create class)
       (org-glance-overview:import-headlines org-glance-directory class)
-      (org-glance-overview:order-by)
+      (org-glance-overview:order)
       (let ((inhibit-read-only t))
         (org-align-all-tags))
       (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
@@ -760,13 +788,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            org-glance-metastore:get-headline)
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:order-by
-    (&optional (order #'(lambda () (list
-                               (not (org-in-archived-heading-p))  ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
-                               (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
-                               (or (-elem-index (downcase (org-glance-headline:state)) org-glance-overview:order-priority-table) 0)  ;; partition by state
-                               (downcase (s-join ":" (sort (org-get-tags) #'string<)))  ;; partition by tag string.
-                               (or (org-glance-headline:priority) ?B))))) ;; partition by priority
+(cl-defun org-glance-overview:order ()
   (interactive)
   (save-excursion
     (let ((inhibit-read-only t)
@@ -777,17 +799,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           (end-of-headlines (point-max)))
 
       (cl-loop
-         for buffer in (org-glance-overview:partition-by order
-                           :comparator #'(lambda (item1 item2)
-                                           (cl-loop
-                                              for (i j) in (-zip-lists item1 item2)
-                                              when (cond ((not (eql (type-of i) (type-of j))) nil)
-                                                         ((stringp i) (not (string= i j)))
-                                                         (t (not (eql i j))))
-                                              return (cond ((stringp i) (string< i j))
-                                                           ((numberp i) (< i j))
-                                                           ((booleanp i) i)
-                                                           (t nil)))))
+         for buffer in (org-glance-overview:partition-by #'org-glance-overview:partition-builder
+                           :comparator #'org-glance-overview:partition-comparator)
          do
            (goto-char (point-max))
            (insert (let ((standard-output 'ignore))

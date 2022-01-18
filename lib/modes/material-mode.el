@@ -83,7 +83,10 @@
 
       (unless without-relations
         (cl-loop
-           for relation in (org-glance-headline-relations)
+           with relations = (org-glance-headline-relations)
+           with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
+           for relation in relations
+           for progress from 0
            for relation-id = (org-element-property :id relation)
            for headline-ref = (org-glance-headline-reference)
            for state = (intern (or (org-get-todo-state) ""))
@@ -91,6 +94,7 @@
            for relation-headline = (org-glance-metastore:get-headline relation-id)
            do (save-window-excursion
                 (save-excursion
+                  (progress-reporter-update progress-reporter progress)
                   (condition-case nil
                       (org-glance:with-headline-materialized relation-headline
                         (unless (cl-loop
@@ -98,7 +102,9 @@
                                    if (eq (org-element-property :id rr) (intern id))
                                    return t)
                           (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
-                    (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))))))
+                    (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))
+                  (redisplay)))
+           finally (progress-reporter-done progress-reporter)))
 
       (let ((new-contents (org-glance:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
