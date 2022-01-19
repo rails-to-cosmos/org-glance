@@ -10,7 +10,7 @@
   ["Overview"
    [("a" "Agenda" org-glance-overview:agenda*)
     ("o" "Overview" org-glance-overview)]]
-  ["Headline actions"
+  ["Actions"
    [("+" "Capture" org-glance-capture)
     ("e" "Extract" org-glance:extract)
     ("k" "Kill" org-glance:revoke)
@@ -25,7 +25,7 @@
   ["Overview"
    [("ф" "Agenda" org-glance-overview:agenda*)
     ("щ" "Overview" org-glance-overview)]]
-  ["Headline actions"
+  ["Actions"
    [("+" "Capture" org-glance-capture)
     ("у" "Extract" org-glance:extract)
     ("л" "Kill" org-glance:revoke)
