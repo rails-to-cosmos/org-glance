@@ -25,11 +25,13 @@ ${custom-header}
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
+(defvar org-glance-overview-deferred-import-hash-table (make-hash-table))
+
 ;;; heavy methods applied to all headlines from current view's scope
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
 ;; rebuild view and reread all files from view's scope
-(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:pull!)
+(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:recreate)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -163,7 +165,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (org-glance-capture :class (org-glance-overview:class))))
 
-(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
+;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 
 (defcustom org-glance-overview:state-ordering
   (list
@@ -411,21 +413,52 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-overview)
       (org-glance-headline:search-buffer-by-id id))))
 
-(cl-defun org-glance-overview:import-headlines-from-directory (path)
+(cl-defun org-glance-overview:import-headlines-from-files (class files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of currents' overview class and add it to overview."
   (interactive "fImport from directory: ")
-  (when-let (class (org-glance-overview:class))
-    (when (y-or-n-p (format "Import %s from %s?" class path))
-      (let ((files (--filter (not (s-contains? "sync-conflict" it)) (org-glance-scope path))))
-        (dolist-with-progress-reporter (file files nil)
-            (format "Collecting %s... " class)
-          (org-glance:for-each-headline-in-file file
-            (let ((headline (org-glance-headline:at-point)))
-              (when (-contains?
-                     (mapcar #'downcase (org-element-property :tags headline))
-                     (downcase (symbol-name class)))
-                (org-glance-overview:register-headline-in-metastore headline class)
-                (org-glance-overview:register-headline-in-overview headline class)))))))))
+  (cl-loop
+     with progress-label = (format "Collecting %s... " class)
+     with progress-reporter = (make-progress-reporter progress-label 0 (length files))
+     for file in (-take-last (- (length files) initial-progress) files)
+     for current-progress from initial-progress
+     if (sit-for 0)
+     do
+       (progress-reporter-update progress-reporter current-progress)
+       (org-glance:with-file-visited file
+         (cl-loop
+            for pos in (org-element-map (org-element-parse-buffer 'headline) 'headline
+                         (lambda (el) (org-element-property :begin el)))
+            do
+              (goto-char pos)
+              (let ((headline (org-glance-headline:at-point)))
+                (when (-contains?
+                       (mapcar #'downcase (org-element-property :tags headline))
+                       (downcase (symbol-name class)))
+                  (org-glance-overview:register-headline-in-metastore headline class)
+                  (org-glance-overview:register-headline-in-overview headline class)))))
+     else
+     do
+       (puthash class (list :progress current-progress
+                            :files files)
+                org-glance-overview-deferred-import-hash-table)
+       (org-glance:log-info (format "Import of %s is deferred. %d files processed of %d" class current-progress (length files)))
+       (progress-reporter-done progress-reporter)
+       (return nil)
+     finally
+     do
+       (progress-reporter-done progress-reporter)
+       (remhash class org-glance-overview-deferred-import-hash-table)
+       (org-glance:log-info (format "Import of %s has been finished successfully" class))))
+
+(cl-defun org-glance-overview:deferred-import-daemon ()
+  (unless (hash-table-empty-p org-glance-overview-deferred-import-hash-table)
+    (let* ((class (first (hash-table-keys org-glance-overview-deferred-import-hash-table)))
+           (config (gethash class org-glance-overview-deferred-import-hash-table))
+           (files (plist-get config :files))
+           (progress (plist-get config :progress)))
+      (org-glance-overview:import-headlines-from-files class files progress))))
+
+(defvar org-glance-overview-deferred-import-timer (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines
@@ -667,21 +700,22 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
        ,then
      ,@else))
 
-(cl-defun org-glance-overview:pull! ()
+(cl-defun org-glance-overview:recreate ()
   "Completely rebuild current overview file."
   (interactive)
   (let ((class-name (org-glance-overview:class)))
-    (when (y-or-n-p (format "Rebuild %s?" class-name))
-      (let ((class (org-glance:get-class class-name)))
+    (when (y-or-n-p (format "Recreate %s?" class-name))
+      (let ((class (org-glance:get-class class-name))
+            (files (--filter (not (s-contains? "sync-conflict" it))
+                             (org-glance-scope org-glance-directory))))
         (save-buffer)
         (kill-buffer)
         (org-glance-metastore:create (org-glance-view:metastore-location class))
         (org-glance-overview:create class-name)
-        (org-glance-overview:import-headlines-from-directory org-glance-directory)
+        (org-glance-overview:import-headlines-from-files class-name files)
         (org-glance-overview:order)
         (let ((inhibit-read-only t))
-          (org-align-all-tags)))
-      (org-glance:log-info (format "View %s is now up to date" class-name)))))
+          (org-align-all-tags))))))
 
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
@@ -750,14 +784,16 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   "Move headline to another class."
   (interactive)
   (let* ((old-class (org-glance-overview:class))
-         (new-class (let ((views (--filter (not (eql old-class it)) (org-glance-classes))))
-                      (intern (org-completing-read "Move headline to: " views))))
+         (new-class (let ((classes (--filter (not (eql old-class it)) (org-glance-classes))))
+                      (intern (org-completing-read "Move headline to: " classes))))
          (original-headline (org-glance-overview:original-headline)))
+    (unless (member new-class (org-glance-classes))
+      (org-glance-class-create new-class))
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
         (cl-loop
            with tags = (org-get-tags)
-           with indices = (--find-indices (string= old-class (org-glance-headline:string-to-class it)) tags)
+           with indices = (--find-indices (eql old-class (org-glance-headline:string-to-class it)) tags)
            for index in indices
            do (org-toggle-tag (nth index tags) 'off)
            finally (org-toggle-tag (symbol-name new-class) 'on))))))

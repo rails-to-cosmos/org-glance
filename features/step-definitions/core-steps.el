@@ -43,11 +43,11 @@
 
 (And "^there is 1 headline here$"
      (lambda ()
-       (should (= 1 (length (org-element-map (org-element-parse-buffer 'headline) 'headline (lambda (el) el)))))))
+       (should (= 1 (length (org-element-map (org-element-parse-buffer 'headline) 'headline #'identity))))))
 
 (And "^there are no headlines here$"
      (lambda ()
-       (should (= 0 (length (org-element-map (org-element-parse-buffer 'headline) 'headline (lambda (el) el)))))))
+       (should (= 0 (length (org-element-map (org-element-parse-buffer 'headline) 'headline #'identity))))))
 
 (Then "^headline at point should contain links$"
       (lambda () (should (->> (org-glance-headline:at-point)

@@ -268,13 +268,6 @@ If point is before the first heading, eval forms on each headline in buffer."
         collect (progn ,@forms)
         do (org-glance-headline:search-forward))))
 
-(cl-defmacro org-glance:for-each-headline-in-file (file &rest forms)
-  "Read FILE, visit each headline and perform FORMS on each headline narrowed."
-  (declare (indent 1) (debug t))
-  `(org-glance:with-file-visited file
-     (org-glance:for-each-headline-in-current-buffer
-       ,@forms)))
-
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance-ensure-at-heading)
   (while (and (org-glance-headline-p) (looking-at "^\\*\\*"))
