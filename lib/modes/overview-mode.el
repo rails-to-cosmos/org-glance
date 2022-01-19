@@ -163,7 +163,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (org-glance-capture :class (org-glance-overview:class))))
 
-(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines)
+(define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 
 (defcustom org-glance-overview:state-ordering
   (list
@@ -411,33 +411,21 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-overview)
       (org-glance-headline:search-buffer-by-id id))))
 
-(cl-defun org-glance-overview:import-headlines
-    (path
-     &optional
-       (class (org-glance-view:completing-read)))
-  (interactive "fImport from location: ")
-  (when (y-or-n-p (org-glance:format "Import ${class} from ${path}?"))
-    (let* ((files (org-glance-scope path))
-           (progress-reporter (make-progress-reporter (format "Collecting %s... " class) 0 (length files))))
-      (cl-loop
-         for file in files
-         for index from 0
-         unless (s-contains? "sync-conflict" file)
-         do
-           (progress-reporter-update progress-reporter index)
-           (let ((standard-output 'ignore)
-                 (garbage-collection-messages nil))
-             (org-glance:with-file-visited file
-               (org-glance:for-each-headline-in-current-buffer
-                 (let ((headline (org-glance-headline:at-point)))
-                   (when (-contains?
-                          (mapcar #'downcase (org-element-property :tags headline))
-                          (downcase (symbol-name class)))
-                     (org-glance-overview:register-headline-in-metastore headline class)
-                     (org-glance-overview:register-headline-in-overview headline class))))))
-           (redisplay)
-         finally
-           (progress-reporter-done progress-reporter)))))
+(cl-defun org-glance-overview:import-headlines-from-directory (path)
+  "Read each org-file from PATH, visit each headline of currents' overview class and add it to overview."
+  (interactive "fImport from directory: ")
+  (when-let (class (org-glance-overview:class))
+    (when (y-or-n-p (format "Import %s from %s?" class path))
+      (let ((files (--filter (not (s-contains? "sync-conflict" it)) (org-glance-scope path))))
+        (dolist-with-progress-reporter (file files nil)
+            (format "Collecting %s... " class)
+          (org-glance:for-each-headline-in-file file
+            (let ((headline (org-glance-headline:at-point)))
+              (when (-contains?
+                     (mapcar #'downcase (org-element-property :tags headline))
+                     (downcase (symbol-name class)))
+                (org-glance-overview:register-headline-in-metastore headline class)
+                (org-glance-overview:register-headline-in-overview headline class)))))))))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines
@@ -621,9 +609,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (forward-char offset))))
 
 (cl-defun org-glance-overview:class ()
+  "Return class name of current overview."
   (save-excursion
     (goto-char (point-min))
-    (org-glance-headline:string-to-class (org-get-category))))
+    (let ((class (org-glance-headline:string-to-class (org-get-category))))
+      (when (gethash class org-glance:classes)
+        class))))
 
 ;; (defmacro org-glance-doctor:when (predicate prompt &rest forms)
 ;;   (declare (indent 2) (debug t))
@@ -679,17 +670,18 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:pull! ()
   "Completely rebuild current overview file."
   (interactive)
-  (let ((class (org-glance-overview:class)))
-    (when (y-or-n-p (org-glance:format "Rebuild ${class}?"))
-      (save-buffer)
-      (kill-buffer)
-      (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class)))
-      (org-glance-overview:create class)
-      (org-glance-overview:import-headlines org-glance-directory class)
-      (org-glance-overview:order)
-      (let ((inhibit-read-only t))
-        (org-align-all-tags))
-      (org-glance:log-info (org-glance:format "View ${class} is now up to date")))))
+  (let ((class-name (org-glance-overview:class)))
+    (when (y-or-n-p (format "Rebuild %s?" class-name))
+      (let ((class (org-glance:get-class class-name)))
+        (save-buffer)
+        (kill-buffer)
+        (org-glance-metastore:create (org-glance-view:metastore-location class))
+        (org-glance-overview:create class-name)
+        (org-glance-overview:import-headlines-from-directory org-glance-directory)
+        (org-glance-overview:order)
+        (let ((inhibit-read-only t))
+          (org-align-all-tags)))
+      (org-glance:log-info (format "View %s is now up to date" class-name)))))
 
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
