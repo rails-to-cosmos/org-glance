@@ -35,7 +35,7 @@ ${custom-header}
 
 ;;; medium methods applied for all first-level headlines in current file
 
-(cl-defun org-glance-overview:choose-headline-and-jump ()
+(cl-defun org-glance-overview:choose-headline ()
   "Choose `org-glance-headline' from current overview buffer and goto it."
   (let ((headlines (org-glance-headline:extract-from (current-buffer))))
     (org-glance-headline:search-buffer-by-id
@@ -45,27 +45,13 @@ ${custom-header}
                             (mapcar #'org-glance-headline:title (--filter (org-glance-headline:active? it) headlines)))
        headlines)))))
 
-(cl-defmacro org-glance-overview:for-each (&rest forms)
-  "Eval FORMS on headline at point.
-If point is before the first heading, eval forms on each headline in buffer."
-  (declare (indent 0) (debug t))
-  `(org-glance:interactive-lambda
-     (if (org-before-first-heading-p)
-         (when (or (not current-prefix-arg)
-                   (y-or-n-p "Apply action to all headlines in buffer?"))
-           (goto-char (point-min))
-           (while (and (org-glance-headline:search-forward) (sit-for 0))
-             (when (= (org-glance-headline:level) 1)
-               ,@forms)))
-       ,@forms)))
-
-(cl-defmacro org-glance-overview:for-one (&rest forms)
+(cl-defmacro org-glance-overview:apply-on-headline (&rest forms)
   "Eval FORMS on headline at point.
 If point is before the first heading, prompt for headline and eval forms on it."
   (declare (indent 0) (debug t))
   `(org-glance:interactive-lambda
      (when (org-before-first-heading-p)
-       (org-glance-overview:choose-headline-and-jump))
+       (org-glance-overview:choose-headline))
      ,@forms))
 
 ;; lightweight methods applied for current headline
@@ -78,11 +64,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "^") #'org-glance-overview:order)
 
 (define-key org-glance-overview-mode-map (kbd "RET")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (org-glance-overview:materialize-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "#")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (let ((headline (org-glance-overview:original-headline)))
       (if (org-glance-headline:encrypted-p headline)
           (progn
@@ -95,15 +81,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "/")
   (org-glance:interactive-lambda
-    (org-glance-overview:choose-headline-and-jump)))
+    (org-glance-overview:choose-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "F")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (org-attach-reveal-in-emacs)))
-
-(define-key org-glance-overview-mode-map (kbd "!")
-  (org-glance-overview:for-each
-    (org-glance-overview:doctor)))
 
 (define-key org-glance-overview-mode-map (kbd "g")
   (org-glance:interactive-lambda
@@ -123,7 +105,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (save-buffer)))
 
 (define-key org-glance-overview-mode-map (kbd "v")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (org-glance-overview:visit-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
@@ -151,11 +133,11 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 
 (define-key org-glance-overview-mode-map (kbd "k")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (org-glance-overview:kill-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "R")
-  (org-glance-overview:for-one
+  (org-glance-overview:apply-on-headline
     (org-glance-overview:move)))
 
 (define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
@@ -648,51 +630,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (let ((class (org-glance-headline:string-to-class (org-get-category))))
       (when (gethash class org-glance:classes)
         class))))
-
-;; (defmacro org-glance-doctor:when (predicate prompt &rest forms)
-;;   (declare (indent 2) (debug t))
-;;   `(when (and ,predicate (or current-prefix-arg (y-or-n-p (org-glance:format ,prompt))))
-;;      ,@forms))
-
-;; (cl-defun org-glance-overview:doctor ()
-;;   ;; - [ ] check if visited file is not headline archive file
-;;   ;; - [ ] check for view data structure: no empty directories etc
-;;   ;; - [x] check for view data structure: proper partitioning
-;;   ;; - [ ] check for nested views and ask to flatten them
-;;   ;; - [ ] check if original headline is stored in archive
-;;   ;; - [ ] check for PROPERTIES drawer indentation
-;;   ;; - [x] fix non-relative DIR properties
-
-;;   (when (org-glance-overview:pull)
-;;     (let* ((view-id (org-glance-overview:class))
-;;            (original-headline (org-glance-overview:original-headline))
-;;            (original-headline-location (org-glance-headline:file original-headline))
-;;            (dir (org-element-property :DIR original-headline))
-;;            (archive (org-element-property :ARCHIVE original-headline))
-;;            (main-role (org-glance-headline:main-role))
-;;            (title (org-glance-headline:title))
-;;            (raw-value (org-glance-headline:raw-value original-headline))
-;;            (now (format-time-string (org-time-stamp-format 'long 'inactive) (current-time))))
-
-;;       (org-glance-doctor:when (and dir (not (string= dir (abbreviate-file-name dir))))
-;;           "Headline \"${title}\" contains full path in DIR property. Abbreviate it?"
-;;         (org-glance:with-headline-materialized original-headline
-;;           (org-set-property "DIR" (abbreviate-file-name dir))))
-
-;;       (org-glance-doctor:when (and archive (not (string= archive (abbreviate-file-name archive))))
-;;           "Headline \"${title}\" contains full path in ARCHIVE property. Abbreviate it?"
-;;         (org-glance:with-headline-materialized original-headline
-;;           (org-set-property "ARCHIVE" (abbreviate-file-name archive))))
-
-;;       (org-glance-doctor:when (null main-role)
-;;           "Headline \"${title}\" is located outside of ${view-id} directory: ${original-headline-location}. Capture it?"
-;;         (let ((captured-headline (org-glance:with-headline-materialized original-headline
-;;                                    (org-glance-capture-headline-at-point view-id))))
-;;           (org-glance-overview:register-headline-in-metastore captured-headline view-id)
-;;           (org-glance-overview:register-headline-in-overview captured-headline view-id))
-;;         (org-glance-overview:register-headline-in-metastore (org-glance-overview:original-headline) view-id))
-
-;;       (org-glance-overview:pull))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
