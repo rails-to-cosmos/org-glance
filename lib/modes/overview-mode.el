@@ -418,7 +418,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                             :files files)
                 org-glance-overview-deferred-import-hash-table)
        (org-glance:log-info (format "Import of %s is deferred. %d files processed of %d" class current-progress (length files)))
-       (progress-reporter-done progress-reporter)
        (return nil)
      finally
      do
