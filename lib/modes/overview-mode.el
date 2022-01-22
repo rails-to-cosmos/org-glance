@@ -56,7 +56,6 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 ;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
-;; (define-key org-glance-overview-mode-map (kbd "#") #'org-glance-overview:comment)
 (define-key org-glance-overview-mode-map (kbd ",") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd ".") #'end-of-buffer)
@@ -700,15 +699,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (save-buffer)
              (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
              t))))
-
-(cl-defun org-glance-overview:comment ()
-  "Comment headline at point."
-  (interactive)
-  (org-glance:with-headline-materialized
-      (->> (org-glance-headline:at-point)
-           (org-glance-headline:id)
-           (org-glance-metastore:get-headline))
-    (org-toggle-comment)))
 
 (cl-defun org-glance-overview:archive ()
   "Archive headline at point."

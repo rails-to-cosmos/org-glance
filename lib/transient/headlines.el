@@ -30,7 +30,7 @@
     ("у" "Extract property" org-glance:extract)
     ("л" "Kill headline" org-glance:revoke)
     ("д" "Open link" org-glance:open)
-    ("ь" "Materialize" org-glance:materialize)]]
+    ("ь" "Materialize headline" org-glance:materialize)]]
   (interactive)
   (org-glance-init)
   (transient-setup 'org-glance-form-action--cyrillic))

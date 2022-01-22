@@ -30,8 +30,18 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Issues
-** TODO underscore in title
-** TODO generic classes for API interactions
+** DONE underscore in title
+CLOSED: [2022-01-22 Sat 11:34]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-01-22 Sat 11:34]
+:END:
+** CANCELLED generic classes for API interactions?
+CLOSED: [2022-01-22 Sat 11:34]
+:LOGBOOK:
+- State "CANCELLED"  from "TODO"       [2022-01-22 Sat 11:34]
+:END:
+** TODO sources for classes
+** TODO a lot of newlines in overview
 ** TODO fix tests
 ** TODO kill buffer after material apply
 ** TODO optimize "register" methods
