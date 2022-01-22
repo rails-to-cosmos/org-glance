@@ -406,17 +406,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      do
        (progress-reporter-update progress-reporter current-progress)
        (org-glance:with-file-visited file
-         (cl-loop
-            for pos in (org-element-map (org-element-parse-buffer 'headline) 'headline
-                         (lambda (el) (org-element-property :begin el)))
-            do
-              (goto-char pos)
-              (let ((headline (org-glance-headline:at-point)))
-                (when (-contains?
-                       (mapcar #'downcase (org-element-property :tags headline))
-                       (downcase (symbol-name class)))
-                  (org-glance-overview:register-headline-in-metastore headline class)
-                  (org-glance-overview:register-headline-in-overview headline class)))))
+         (org-element-map (org-element-parse-buffer 'headline) 'headline
+           (lambda (headline) (when (-contains?
+                                (mapcar #'downcase (org-element-property :tags headline))
+                                (downcase (symbol-name class)))
+                           (org-glance-overview:register-headline-in-metastore headline class)
+                           (org-glance-overview:register-headline-in-overview headline class)))))
      else
      do
        (puthash class (list :progress current-progress
