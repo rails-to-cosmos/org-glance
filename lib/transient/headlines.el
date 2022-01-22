@@ -11,11 +11,11 @@
    [("a" "Agenda" org-glance-overview:agenda*)
     ("o" "Overview" org-glance-overview)]]
   ["Actions"
-   [("+" "Capture" org-glance-capture)
-    ("e" "Extract" org-glance:extract)
-    ("k" "Kill" org-glance:revoke)
-    ("j" "Jump" org-glance:open)
-    ("m" "Materialize" org-glance:materialize)]]
+   [("+" "Capture headline" org-glance-capture)
+    ("e" "Extract property" org-glance:extract)
+    ("k" "Kill headline" org-glance:revoke)
+    ("l" "Open link" org-glance:open)
+    ("m" "Materialize headline" org-glance:materialize)]]
   (interactive)
   (org-glance-init)
   (transient-setup 'org-glance-form-action))
@@ -26,10 +26,10 @@
    [("ф" "Agenda" org-glance-overview:agenda*)
     ("щ" "Overview" org-glance-overview)]]
   ["Actions"
-   [("+" "Capture" org-glance-capture)
-    ("у" "Extract" org-glance:extract)
-    ("л" "Kill" org-glance:revoke)
-    ("о" "Jump" org-glance:open)
+   [("+" "Capture headline" org-glance-capture)
+    ("у" "Extract property" org-glance:extract)
+    ("л" "Kill headline" org-glance:revoke)
+    ("д" "Open link" org-glance:open)
     ("ь" "Materialize" org-glance:materialize)]]
   (interactive)
   (org-glance-init)
