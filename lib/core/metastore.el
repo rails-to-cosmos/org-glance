@@ -9,7 +9,7 @@
   lib.core.headline
   lib.utils.helpers)
 
-(cl-defun org-glance-metastore:write (file metastore)
+(cl-defun org-glance-metastore:save (metastore file)
   (declare (indent 1))
   (mkdir (file-name-directory file) 'parents)
   (with-temp-file file
@@ -27,12 +27,13 @@
 
 (cl-defun org-glance-metastore:create (file &optional headlines)
   "Create metastore from HEADLINES and write it to FILE."
-  (org-glance-metastore:write file
-    (cl-loop
-       with metastore = (make-hash-table :test 'equal)
-       for headline in headlines
-       do (org-glance-metastore:add-headline headline metastore)
-       finally (return metastore))))
+  (org-glance-metastore:save
+   (cl-loop
+      with metastore = (make-hash-table :test 'equal)
+      for headline in headlines
+      do (org-glance-metastore:add-headline headline metastore)
+      finally (return metastore))
+   file))
 
 (defun org-glance-metastore:read (file)
   "Read metastore from FILE."
