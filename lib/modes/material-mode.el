@@ -126,11 +126,22 @@
 
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
-        (cl-loop
-           for class in source-classes
-           do
-             (org-glance-overview:register-headline-in-overview source-headline class)
-             (org-glance-overview:register-headline-in-metastore source-headline class))
+        (if (memq 'archive source-classes)
+            (cl-loop
+               for class in source-classes
+               if (eql class 'archive)
+               do
+                 (org-glance-overview:register-headline-in-overview source-headline class)
+                 (org-glance-overview:register-headline-in-metastore source-headline class)
+               else
+               do
+                 (org-glance-overview:remove-headline-from-overview source-headline class)
+                 (org-glance-overview:remove-headline-from-metastore source-headline class))
+          (cl-loop
+             for class in source-classes
+             do
+               (org-glance-overview:register-headline-in-overview source-headline class)
+               (org-glance-overview:register-headline-in-metastore source-headline class)))
 
         (cl-loop
            for class in (seq-difference --org-glance-materialized-headline:classes source-classes)

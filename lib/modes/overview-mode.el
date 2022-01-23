@@ -429,7 +429,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            (goto-char (point-max))
            (let ((inhibit-read-only t))
              (cl-loop for overview in overviews
-                do (insert overview "\n"))))
+                do (insert overview "\n"))
+             (org-overview)))
 
          (puthash class (list :progress current-progress :files files)
                   org-glance-overview-deferred-import-hash-table)
@@ -447,7 +448,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
            (goto-char (point-max))
            (let ((inhibit-read-only t))
              (cl-loop for overview in overviews
-                do (insert overview "\n"))))
+                do (insert overview "\n"))
+             (org-glance-overview:order)
+             (org-overview)))
 
          (remhash class org-glance-overview-deferred-import-hash-table)
          (progress-reporter-done progress-reporter))))
