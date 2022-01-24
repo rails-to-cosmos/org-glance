@@ -14,7 +14,7 @@
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance:extract)
     ("k" "Kill headline" org-glance:revoke)
-    ("l" "Open link" org-glance:open)
+    ("j" "Open link" org-glance:open)
     ("m" "Materialize headline" org-glance:materialize)]]
   (interactive)
   (org-glance-init)
@@ -29,7 +29,7 @@
    [("+" "Capture headline" org-glance-capture)
     ("у" "Extract property" org-glance:extract)
     ("л" "Kill headline" org-glance:revoke)
-    ("д" "Open link" org-glance:open)
+    ("о" "Open link" org-glance:open)
     ("ь" "Materialize headline" org-glance:materialize)]]
   (interactive)
   (org-glance-init)
