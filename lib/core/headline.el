@@ -434,38 +434,28 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
   (org-glance:with-headline-at-point
-   (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
-                                                 (org-tss-filter-active)
-                                                 (org-tss-sort-timestamps))
-                        collect (org-element-property :raw-value timestamp)))
-         (header (save-excursion
-                   (goto-char (point-min))
-                   (org-end-of-meta-data)
-                   (s-trim (buffer-substring-no-properties (point-min) (point)))))
-         (relations (cl-loop
-                       for relation in (org-glance-headline-relations)
-                       when (eq (org-element-property :type relation) 'mention)
-                       collect relation into mentions
-                       when (memq (org-element-property :type relation) '(subtask subtask-done))
-                       collect relation into subtasks
-                       when (memq (org-element-property :type relation) '(project project-done))
-                       collect relation into projects
-                       finally (return (list :mentions mentions
-                                             :subtasks subtasks
-                                             :projects projects))))
-         (tags (org-get-tags-string))
-         (state (org-glance-headline:state))
-         (id (org-glance-headline:id))
-         (title (org-glance-headline:title))
-         (priority (org-glance-headline:priority))
-         (closed (org-element-property :closed (org-element-at-point)))
-         (schedule (org-glance-headline:scheduled))
-         (deadline (org-glance-headline:deadline))
-         (encrypted (org-glance-headline:encrypted-p))
-         (repeated (org-glance-headline:repeated-p))
-         (linked (org-glance-headline:contains-link?)))
-     (with-temp-buffer
-       (save-excursion
+   (flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items)))
+     (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
+                                                   (org-tss-filter-active)
+                                                   (org-tss-sort-timestamps))
+                          collect (org-element-property :raw-value timestamp)))
+           (header (save-excursion
+                     (goto-char (point-min))
+                     (org-end-of-meta-data)
+                     (s-trim (buffer-substring-no-properties (point-min) (point)))))
+           (relations (org-glance-headline-relations))
+           (tags (org-get-tags-string))
+           (state (org-glance-headline:state))
+           (id (org-glance-headline:id))
+           (title (org-glance-headline:title))
+           (priority (org-glance-headline:priority))
+           (closed (org-element-property :closed (org-element-at-point)))
+           (schedule (org-glance-headline:scheduled))
+           (deadline (org-glance-headline:deadline))
+           (encrypted (org-glance-headline:encrypted-p))
+           (repeated (org-glance-headline:repeated-p))
+           (linked (org-glance-headline:contains-link?)))
+       (with-temp-buffer
          (insert
           (concat
            "* "
@@ -508,37 +498,20 @@ FIXME. Unstable one. Refactor is needed."
 
            (org-glance-join-but-null "\n\n"
              (list
-              (when (or encrypted linked repeated)
-                (concat "- Usability characteristics"
-                        (org-glance-join-but-null "\n  - "
-                          (list
-                           (when encrypted "Encrypted")
-                           (when linked "Contains links to third-party resources")
-                           (when repeated (format "Repeated task%s"
-                                                  (if timestamps
-                                                      (format ", next active timestamp is %s" (car timestamps))
-                                                    "")))))))
 
-              (when (and timestamps (not repeated))
-                (concat "- Schedule"
-                        (org-glance-join-but-null "\n  - " timestamps)))
+              (when (or encrypted linked)
+                (concat "*Features*"
+                        (org-list
+                         (when encrypted "Encrypted")
+                         (when linked "Linked"))))
 
-              (when-let (projects (plist-get relations :projects))
-                (concat "- Projects [/]"
-                        (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter projects))))
+              (when timestamps
+                (concat "*Timestamps*" (apply #'org-list timestamps)))
 
-              (when-let (subtasks (plist-get relations :subtasks))
-                (concat "- Subtasks [/]"
-                        (org-glance-join-but-null "\n  " (mapcar #'org-glance-relation-interpreter subtasks))))
-
-              (when-let (mentions (plist-get relations :mentions))
-                (concat "- Mentions"
-                        (org-glance-join-but-null "\n  - "
-                          (mapcar #'org-glance-relation-interpreter mentions)))))))))
-       (condition-case nil
-           (org-update-checkbox-count-maybe)
-         (error nil))
-       (buffer-string)))))
+              (when relations
+                (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))))))
+         (org-update-checkbox-count-maybe 'all)
+         (buffer-string))))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
   `(save-excursion

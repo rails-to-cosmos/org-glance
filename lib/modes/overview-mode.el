@@ -25,6 +25,7 @@ ${custom-header}
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
 
+(defvar org-glance-overview-deferred-import-timer nil)
 (defvar org-glance-overview-deferred-import-hash-table (make-hash-table))
 
 ;;; heavy methods applied to all headlines from current view's scope
@@ -432,8 +433,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                 do (insert overview "\n"))
              (org-overview)))
 
-         (puthash class (list :progress current-progress :files files)
-                  org-glance-overview-deferred-import-hash-table)
+         (puthash class (list :progress current-progress :files files) org-glance-overview-deferred-import-hash-table)
+
+         (unless (memq org-glance-overview-deferred-import-timer timer-idle-list)
+           (timer-activate org-glance-overview-deferred-import-timer))
+
+         (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)
 
          (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
                                       class current-progress (length files)))
@@ -456,14 +461,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (progress-reporter-done progress-reporter))))
 
 (cl-defun org-glance-overview:deferred-import-daemon ()
-  (unless (hash-table-empty-p org-glance-overview-deferred-import-hash-table)
+  (if (hash-table-empty-p org-glance-overview-deferred-import-hash-table)
+      (cancel-timer org-glance-overview-deferred-import-timer)
     (let* ((class (first (hash-table-keys org-glance-overview-deferred-import-hash-table)))
            (config (gethash class org-glance-overview-deferred-import-hash-table))
            (files (plist-get config :files))
            (progress (plist-get config :progress)))
       (org-glance-overview:import-headlines-from-files class files progress))))
-
-(defvar org-glance-overview-deferred-import-timer (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines
@@ -664,6 +668,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   "Completely rebuild current overview file."
   (interactive)
   (let ((class-name (org-glance-overview:class)))
+    (when (gethash class-name org-glance-overview-deferred-import-hash-table)
+      (user-error "Scan is in progress, please wait"))
+
     (when (y-or-n-p (format "Recreate %s?" class-name))
       (let ((class (org-glance:get-class class-name))
             (files (--filter (not (s-contains? "sync-conflict" it))
