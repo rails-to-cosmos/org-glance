@@ -1,11 +1,7 @@
 (require 'org-glance-module)
 
-(org-glance:require
-  lib.utils.helpers
-  lib.models.Class)
-
 (cl-defun org-glance-headline-registry:create ()
-  "Hash table (id->headelin) that lists all registered headlines."
+  "Hash table (id->headline) that lists all registered headlines."
   (make-hash-table))
 
 (cl-defun org-glance-headline-registry:load (file)

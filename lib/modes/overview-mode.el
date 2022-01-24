@@ -219,7 +219,7 @@ If point is before first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance:capture-headline-at-point (class &optional (remove-original t) &rest args)
   (declare (indent 2))
   (save-excursion
-    (org-glance:ensure-at-heading)
+    (org-glance-ensure-at-heading)
     (let ((tag (downcase (symbol-name class)))
           (dir (org-glance:generate-dir-for-subtree-at-point class)))
       (mkdir dir 'parents)
@@ -302,7 +302,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
   (unless (org-glance:get-class org-glance-capture:class)
     (save-window-excursion
-      (org-glance-register-class org-glance-capture:class)))
+      (org-glance-class-registry.add-class org-glance-capture:class)))
 
   (let* ((id org-glance-capture:id)
          (class org-glance-capture:class)

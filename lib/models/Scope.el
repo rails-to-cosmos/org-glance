@@ -1,7 +1,6 @@
 (require 'org-glance-module)
 
-(defvar org-glance-scope:extensions
-  '("org" "org_archive"))
+(defvar org-glance-scope:extensions '("org" "org_archive"))
 
 (defvar org-glance-scope--default-scope-alist
   '((file-with-archives . -org-glance:file-with-archives)
@@ -30,16 +29,15 @@
 
 (cl-defmethod org-glance-scope ((file string))
   "Return list of file S if exists."
-  (cl-loop
-     for file in (cond
-                   ((not (f-exists? file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
-                   ((not (f-readable? file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
-                   ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*" t t)))
-                   ((with-temp-buffer
-                      (insert-file-contents file)
-                      (hack-local-variables)
-                      (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
-                   (t (list file)))
+  (cl-loop for file in (cond
+                         ((not (f-exists? file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
+                         ((not (f-readable? file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
+                         ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*" t t)))
+                         ((with-temp-buffer
+                            (insert-file-contents file)
+                            (hack-local-variables)
+                            (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
+                         (t (list file)))
      when (member (file-name-extension file) org-glance-scope:extensions)
      collect file))
 

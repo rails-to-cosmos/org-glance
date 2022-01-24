@@ -2,7 +2,7 @@
 
 (When "^I define class \"\\([^\"]+\\)\"$"
   (lambda (class)
-    (org-glance-register-class (intern class))))
+    (org-glance-class-registry.add-class (intern class))))
 
 (Then "^I should have \\([[:digit:]]+\\) active classe?s? in class registry$"
       (lambda (count)
@@ -10,8 +10,8 @@
 
 (When "^I create directory \"\\([^\"]+\\)\" in org glance directory$"
   (lambda (directory)
-    (org-glance--ensure-directory (f-join org-glance-directory directory))))
+    (org-glance-ensure-directory (f-join org-glance-directory directory))))
 
 (And "^I update class registry$"
   (lambda ()
-    (org-glance-class-registry:update org-glance-class-registry org-glance-directory)))
+    (org-glance-class-registry.save org-glance-class-registry org-glance-directory)))
