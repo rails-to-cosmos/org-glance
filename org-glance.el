@@ -168,28 +168,28 @@
                                                      (org-glance-overview:register-headline-in-metastore headline class)
                                                      (org-glance-overview:register-headline-in-overview headline class))))))))))
 
-;; (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
-;;   "Do only if headline has been cloned before auto repeat.
-;; Cleanup new headline considering auto-repeat ARGS.
+(cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
+  "Do only if headline has been cloned before auto repeat.
+Cleanup new headline considering auto-repeat ARGS.
 
-;; - Remove all data but PINNED of cloned headline."
-;;   (when (and
-;;          (or org-glance-material-mode org-glance-overview-mode)
-;;          org-glance-clone-on-repeat-p
-;;          (org-glance-headline:repeated-p))
-;;     (let ((contents (org-glance:with-headline-at-point
-;;                      (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
-;;                            (pinned (save-excursion
-;;                                      (cl-loop
-;;                                         while (search-forward "#+begin_pin" nil t)
-;;                                         collect (save-excursion
-;;                                                   (beginning-of-line)
-;;                                                   (buffer-substring-no-properties (point) (save-excursion
-;;                                                                                             (search-forward "#+end_pin" nil t)
-;;                                                                                             (point))))))))
-;;                        (s-join "\n\n" (append (list header) pinned))))))
-;;       (delete-region (point-min) (point-max))
-;;       (insert contents))))
+- Remove all data but PINNED of cloned headline."
+  (when (and
+         (or org-glance-material-mode org-glance-overview-mode)
+         org-glance-clone-on-repeat-p
+         (org-glance-headline:repeated-p))
+    (let ((contents (org-glance:with-headline-at-point
+                     (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
+                           (pinned (save-excursion
+                                     (cl-loop
+                                        while (search-forward "#+begin_pin" nil t)
+                                        collect (save-excursion
+                                                  (beginning-of-line)
+                                                  (buffer-substring-no-properties (point) (save-excursion
+                                                                                            (search-forward "#+end_pin" nil t)
+                                                                                            (point))))))))
+                       (s-join "\n\n" (append (list header) pinned))))))
+      (delete-region (point-min) (point-max))
+      (insert contents))))
 
 (cl-defmacro org-glance-choose-and-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.
@@ -224,8 +224,7 @@ after capture process has been finished."
 
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
-  ;; (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
-
+  (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
   (cl-loop
@@ -239,11 +238,6 @@ after capture process has been finished."
      do (let ((class-name (s-downcase (format "%s" class))))
           (unless (f-exists? (f-join org-glance-directory class-name))
             (org-glance-class-remove class))))
-
-  ;; (cl-loop
-  ;;    for class in '(posit thing class role ascertains)
-  ;;    unless (gethash class org-glance:classes nil)
-  ;;    do (org-glance-class-create class))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes))))
 
