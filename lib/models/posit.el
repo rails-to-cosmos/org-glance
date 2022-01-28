@@ -113,4 +113,4 @@ By default, assume role of the first appearance is 'referrer, and the others are
 ;;   "Set CLASS role to be equal 'class."
 ;;   (list class 'class))
 
-(org-glance:provide)
+(org-glance-provide)

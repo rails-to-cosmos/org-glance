@@ -45,4 +45,4 @@
   "Return list of files from buffer B."
   (list (condition-case nil (get-file-buffer b) (error b))))
 
-(org-glance:provide)
+(org-glance-provide)

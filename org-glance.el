@@ -56,7 +56,7 @@
   :group 'org-glance
   :type 'boolean)
 
-(org-glance:require
+(org-glance-require
   cl-generic
   cl-lib
   cl-macs

@@ -27,4 +27,4 @@ Return t if it is or nil otherwise."
    (f-directory? (f-join directory it))
    (directory-files directory nil "^[[:word:]]+")))
 
-(org-glance:provide)
+(org-glance-provide)

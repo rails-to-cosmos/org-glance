@@ -22,4 +22,4 @@
 (org-glance-exception-define org-glance-exception:CLASS-NOT-FOUND
   "Class not found")
 
-(org-glance:provide)
+(org-glance-provide)

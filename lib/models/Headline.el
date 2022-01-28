@@ -36,4 +36,4 @@ with properties and `org-element' of type `headline' in contents."
 (cl-defun org-glance-headline-contents (headline)
   (s-trim (org-element-interpret-data headline)))
 
-(org-glance:provide)
+(org-glance-provide)
