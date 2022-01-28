@@ -1,25 +1,32 @@
 Feature: Headline
-
   @headline
   Scenario: Create from element at point
     When I create an org file with content:
-"""
-* Google SRE Book :book:article:
-Managing Incidents
-"""
-    Then element transforms into 2 headlines
-    And 1st headline title should be "Google SRE Book"
-    And 1st headline should be a book
-    And 2nd headline title should be "Google SRE Book"
-    And 2nd headline should be an article
-    And 1st headline contents should be:
       """
       * Google SRE Book :book:
       Managing Incidents
       """
-    And 2nd headline contents should be:
+    Then headline title should be "Google SRE Book"
+    And headline should be a book
+    And headline contents should be:
       """
-      * Google SRE Book :article:
+      * Google SRE Book :book:
+      Managing Incidents
+      """
+
+  @headline
+  Scenario: Create from element at point
+    When I create an org file with content:
+      """
+      * Google SRE Book :book:article:
+      Managing Incidents
+      """
+    Then headline title should be "Google SRE Book"
+    And headline should be a book
+    And headline should be an article
+    And headline contents should be:
+      """
+      * Google SRE Book :book:article:
       Managing Incidents
       """
 
@@ -30,7 +37,6 @@ Managing Incidents
       *** Tags :article:
       Features and scenarios can be tagged using syntax @tag
       """
-    Then element transforms into headline
     And headline title should be "Tags"
     And headline should be an article
     And headline contents should be:
@@ -55,7 +61,7 @@ Managing Incidents
       """
 
   @headline
-  Scenario: Create from the inside, tags should be downcased
+  Scenario: Create from the inside
     When I create an org file with content:
       """
       * Vocal lesson :Task:
@@ -67,7 +73,7 @@ Managing Incidents
     And headline should be a task
     And headline contents should be:
       """
-      * Vocal lesson :task:
+      * Vocal lesson :Task:
       - Mozart
       - Bach
       """

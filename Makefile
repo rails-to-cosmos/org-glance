@@ -16,7 +16,6 @@ test:
 	${CASK} clean-elc
 	${CASK} build
 	${CASK} exec ecukes --tags headline --debug
-	${CASK} exec ecukes --tags classregistry --debug
 	${CASK} clean-elc
 
 it:  # run integration tests

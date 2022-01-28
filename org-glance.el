@@ -68,24 +68,20 @@
 
   lib.utils.helpers
 
-  lib.core.logging
-  lib.core.exceptions
+  lib.logging
+  lib.exceptions
 
   lib.models.headline
-  lib.models.class
-  lib.models.scope
+  lib.models.scope)
 
-  lib.controllers.headline-factory
-  lib.controllers.headline-registry
-  lib.controllers.class-registry)
+(declare-function org-glance-ensure-directory (org-glance-module-filename lib.utils.helpers))
 
-(defvar org-glance-class-registry (org-glance-class-registry.create))
-(defvar org-glance-headline-registry (org-glance-headline-registry:create))
+(defvar org-glance-classes (make-hash-table))
+(defvar org-glance-headlines (make-hash-table))
 
 (cl-defun org-glance-init ()
   "Update all changed entities from `org-glance-directory'."
-  (org-glance-ensure-directory org-glance-directory)
-  (org-glance-class-registry.save org-glance-class-registry org-glance-directory))
+  (org-glance-ensure-directory org-glance-directory))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

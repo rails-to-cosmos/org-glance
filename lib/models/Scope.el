@@ -8,7 +8,7 @@
     (agenda-with-archives . -org-glance:agenda-with-archives)))
 
 (cl-defgeneric org-glance-scope (_)
-  "Convert input to list of files if possible.")
+  "Convert generic input to the list of files.")
 
 (cl-defmethod org-glance-scope ((l sequence))
   "Convert L to flattened list of files."

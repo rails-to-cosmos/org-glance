@@ -1,8 +1,11 @@
 (require 'org-glance-module)
 
 (cl-defun org-glance-ensure-at-heading ()
+  "Ensure point is at heading.
+Return t if it is or nil otherwise."
   (unless (org-at-heading-p)
-    (org-back-to-heading-or-point-min)))
+    (org-back-to-heading-or-point-min))
+  (org-at-heading-p))
 
 (cl-defun org-glance-remove-links (&rest types)
   (save-excursion
