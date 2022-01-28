@@ -4,7 +4,7 @@
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
-;; Version: 1.0
+;; Version: 0.1.0
 
 ;; Keywords: org-mode tools
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
