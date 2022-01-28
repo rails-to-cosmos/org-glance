@@ -3,7 +3,7 @@
 (cl-defun org-glance-headline-at-point ()
   "Create headline from `org-element' at point.
 `org-glance-headline' is an `org-element' of type `org-data'
-with properties andd `org-element' of type `headline' in contents."
+with properties and `org-element' of type `headline' in contents."
   (save-excursion
     (when (org-glance-ensure-at-heading)
       (save-restriction
@@ -15,8 +15,10 @@ with properties andd `org-element' of type `headline' in contents."
                                                  (insert (or (org-element-property :TITLE headline)
                                                              (org-element-property :raw-value headline)
                                                              ""))
-                                                 (org-glance-replace-links-with-titles)
-                                                 (buffer-string)))
+                                                 (->> (org-element-parse-buffer)
+                                                      (org-glance-replace-links-with-titles)
+                                                      (org-element-interpret-data)
+                                                      (s-trim))))
 
           (org-element-put-property ast :tags (--map (intern (downcase it)) (org-element-property :tags headline)))
 
