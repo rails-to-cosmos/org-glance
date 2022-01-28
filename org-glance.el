@@ -1,6 +1,6 @@
 ;;; org-glance.el --- org-mode traversing. Fast and convenient.
 
-;; Copyright (C) 2018-2021 Dmitry Akatov
+;; Copyright (C) 2018-2022 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
