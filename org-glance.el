@@ -219,6 +219,7 @@ with some meta properties and `org-element' of type `headline' in contents."
       (let* ((ast (org-element-parse-buffer))
              (headline (car (org-element-contents ast))))
 
+        ;; Enrich basic ast with additional properties
         (org-element-put-property ast :title (with-temp-buffer
                                                (insert (or (org-element-property :TITLE headline)
                                                            (org-element-property :raw-value headline)
