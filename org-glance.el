@@ -33,17 +33,11 @@
 (require 'org)
 (require 'org-glance-module)
 
-(eval-and-compile
-  (cl-defmacro org-glance:interactive-lambda (&rest forms)
-    "Define interactive lambda function with FORMS in its body."
-    (declare (indent 0) (debug t))
-    `(lambda ()
-       (interactive)
-       ,@forms)))
-
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
+  :version "27.2"
+  :package-version "0.1.0"
   :group 'org)
 
 (defcustom org-glance-directory org-directory
@@ -61,23 +55,23 @@
   cl-lib
   cl-macs
   dash
-  eieio
   json
   seq
   subr-x
 
-  lib.utils.helpers
-
+  lib.helpers
   lib.logging
   lib.exceptions
 
-  lib.models.headline
-  lib.models.scope)
+  lib.models.headline)
 
 (declare-function org-glance-ensure-directory (org-glance-module-filename lib.utils.helpers))
 
-(defvar org-glance-classes (make-hash-table))
-(defvar org-glance-headlines (make-hash-table))
+(defvar org-glance-classes (make-hash-table)
+  "Class registry. Maps class name to class config.")
+
+(defvar org-glance-headlines (make-hash-table)
+  "Headline registry. Maps headline id symbol to headline ast.")
 
 (cl-defun org-glance-init ()
   "Update all changed entities from `org-glance-directory'."
