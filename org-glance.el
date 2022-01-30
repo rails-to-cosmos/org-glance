@@ -178,6 +178,7 @@ Cleanup new headline considering auto-repeat ARGS.
          org-glance-clone-on-repeat-p
          (org-glance-headline:repeated-p))
     (let ((contents (org-glance:with-headline-at-point
+                     (org-delete-property "LAST_REPEAT")
                      (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (1- (point)))))
                            (pinned (save-excursion
                                      (cl-loop
