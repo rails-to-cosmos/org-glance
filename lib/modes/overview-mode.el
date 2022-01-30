@@ -18,7 +18,6 @@
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
 #+CATEGORY: ${category}
-#+STARTUP: overview
 ${custom-header}
 ")
 
@@ -435,10 +434,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
          (puthash class (list :progress current-progress :files files) org-glance-overview-deferred-import-hash-table)
 
-         (unless (memq org-glance-overview-deferred-import-timer timer-idle-list)
-           (timer-activate org-glance-overview-deferred-import-timer))
-
-         (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)
+         (cond
+           ((null org-glance-overview-deferred-import-timer)
+            (setq org-glance-overview-deferred-import-timer
+                  (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
+           ((not (memq org-glance-overview-deferred-import-timer timer-idle-list))
+            (timer-activate org-glance-overview-deferred-import-timer)))
 
          (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
                                       class current-progress (length files)))
@@ -511,7 +512,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (read-only-mode 'toggle))
+  (read-only-mode 'toggle)
+  (org-overview))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
@@ -669,7 +671,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (let ((class-name (org-glance-overview:class)))
     (when (gethash class-name org-glance-overview-deferred-import-hash-table)
-      (user-error "Scan is in progress, please wait"))
+      (unless (memq org-glance-overview-deferred-import-timer timer-idle-list)
+        (timer-activate org-glance-overview-deferred-import-timer))
+      ;; (user-error "Scan is in progress, please wait")
+      )
 
     (when (y-or-n-p (format "Recreate %s?" class-name))
       (let ((class (org-glance:get-class class-name))
