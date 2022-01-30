@@ -58,7 +58,7 @@
   :type 'boolean)
 
 (defvar org-glance-classes (make-hash-table)
-  "Class registry. Maps class name to class config.")
+  "Class registry. Maps class name symbol to config.")
 
 (defvar org-glance-headlines (make-hash-table)
   "Headline registry. Maps headline id symbol to headline ast.")
@@ -69,11 +69,12 @@
 (define-error 'org-glance-error:PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread" 'org-glance-error)
 (define-error 'org-glance-error:METASTORE-OUTDATED "Metastore is outdated, please rebuild" 'org-glance-error)
 (define-error 'org-glance-error:HEADLINE-NOT-FOUND "Headline not found" 'org-glance-error)
+(define-error 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has already been registered" 'org-glance-error)
 (define-error 'org-glance-error:CLASS-NOT-FOUND "Class not found" 'org-glance-error)
 
 ;;; Logging
 (defconst org-glance-log-level-OFF most-positive-fixnum
-    "OFF is a special level that can be used to turn off logging.
+  "OFF is a special level that can be used to turn off logging.
 
 This level is initialized to `most-positive-fixnum'.")
 
@@ -161,19 +162,21 @@ This level is initialized to 300.")
   :group 'org-glance)
 
 (cl-defun org-glance-log (log-level format-string &rest args)
+  "Print FORMAT-STRING formatted with ARGS when LOG-LEVEL is acceptable.
+See `org-glance-log-level' for the details."
   (when (<= org-glance-log-level log-level)
     (apply #'message format-string args)))
 
 (cl-defun org-glance-log-warning (format-string &rest args)
-  "Log warning if `org-glance-log-level' allows."
+  "Log FORMAT-STRING formatted with ARGS in warning log level."
   (apply #'org-glance-log org-glance-log-level-WARNING format-string args))
 
 (cl-defun org-glance-log-info (format-string &rest args)
-  "Log info if `org-glance-log-level' allows."
+  "Log FORMAT-STRING formatted with ARGS in info log level."
   (apply #'org-glance-log org-glance-log-level-INFO format-string args))
 
 (cl-defun org-glance-log-debug (format-string &rest args)
-  "Log debug message if `org-glance-log-level' allows."
+  "Log FORMAT-STRING formatted with ARGS in debug log level."
   (apply #'org-glance-log org-glance-log-level-FINEST format-string args))
 
 ;;; Helpers
@@ -217,27 +220,38 @@ with some meta properties and `org-element' of type `headline' in contents."
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((ast (org-element-parse-buffer))
-             (headline (car (org-element-contents ast))))
+             (headline (car (org-element-contents ast)))
+             (title (with-temp-buffer
+                      (insert (or (org-element-property :TITLE headline)
+                                  (org-element-property :raw-value headline)
+                                  ""))
+                      (->> (org-element-parse-buffer)
+                           (org-glance-replace-links-with-titles)
+                           (org-element-interpret-data)
+                           (s-trim))))
+             (hash (with-temp-buffer
+                     (insert title)
+                     (buffer-hash)))
+             (tags (--map (downcase it) (org-element-property :tags headline))))
 
-        ;; Enrich basic ast with additional properties
-        (org-element-put-property ast :title (with-temp-buffer
-                                               (insert (or (org-element-property :TITLE headline)
-                                                           (org-element-property :raw-value headline)
-                                                           ""))
-                                               (->> (org-element-parse-buffer)
-                                                    (org-glance-replace-links-with-titles)
-                                                    (org-element-interpret-data)
-                                                    (s-trim))))
-
-        (org-element-put-property ast :tags (--map (intern (downcase it)) (org-element-property :tags headline)))
+        ;; enrich basic ast with additional properties
+        (org-element-put-property ast :title title)
+        (org-element-put-property ast :tags (--map (intern it) tags))
+        (org-element-put-property ast :id (intern (concat hash "_" (s-join "-" tags))))
 
         ;; no mutation restrictions on complete ast
         (org-element-put-property headline :level 1)
 
         ast))))
 
+(cl-defun org-glance-headline-id (headline)
+  (org-element-property :id headline))
+
 (cl-defun org-glance-headline-title (headline)
   (org-element-property :title headline))
+
+(cl-defun org-glance-headline-hash (headline)
+  (org-element-property :hash headline))
 
 (cl-defun org-glance-headline-tags (headline)
   (org-element-property :tags headline))
@@ -245,8 +259,14 @@ with some meta properties and `org-element' of type `headline' in contents."
 (cl-defun org-glance-headline-contents (headline)
   (s-trim (org-element-interpret-data headline)))
 
+(cl-defun org-glance-register-headline (headline)
+  (let ((id (org-glance-headline-id headline)))
+    (if (gethash id org-glance-headlines)
+        (signal 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has been already registered.")
+      (puthash id headline org-glance-headlines))))
+
 (cl-defun org-glance-init ()
-  "Update all changed entities from `org-glance-directory'."
+  "Update system state from `org-glance-directory'."
   (org-glance-ensure-directory org-glance-directory))
 
 (provide 'org-glance)
