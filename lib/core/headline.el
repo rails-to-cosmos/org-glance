@@ -510,7 +510,9 @@ FIXME. Unstable one. Refactor is needed."
 
               (when relations
                 (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))))))
-         (org-update-checkbox-count-maybe 'all)
+         (condition-case nil
+             (org-update-checkbox-count-maybe 'all)
+           (error nil))
          (buffer-string))))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)

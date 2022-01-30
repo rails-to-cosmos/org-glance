@@ -434,12 +434,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
          (puthash class (list :progress current-progress :files files) org-glance-overview-deferred-import-hash-table)
 
-         (cond
-           ((null org-glance-overview-deferred-import-timer)
-            (setq org-glance-overview-deferred-import-timer
-                  (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
-           ((not (memq org-glance-overview-deferred-import-timer timer-idle-list))
-            (timer-activate org-glance-overview-deferred-import-timer)))
+         (when (or (null org-glance-overview-deferred-import-timer)
+                   (not (memq org-glance-overview-deferred-import-timer timer-idle-list)))
+           (setq org-glance-overview-deferred-import-timer
+                 (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
 
          (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
                                       class current-progress (length files)))
