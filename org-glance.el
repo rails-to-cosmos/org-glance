@@ -262,7 +262,7 @@ with some meta properties and `org-element' of type `headline' in contents."
 (cl-defun org-glance-register-headline (headline)
   (let ((id (org-glance-headline-id headline)))
     (if (gethash id org-glance-headlines)
-        (signal 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has been already registered.")
+        (signal 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has already been registered.")
       (puthash id headline org-glance-headlines))))
 
 (cl-defun org-glance-init ()
