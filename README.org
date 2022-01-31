@@ -21,6 +21,7 @@ field of graph processing and visualization.
 #+end_src
 
 * Issues
+** TODO Use https://github.com/alphapapa/makem.sh
 ** TODO Clone feature (clone on repeat, clone-archive+reschedule)
 ** DONE Split capture and reschedule?
 CLOSED: [2021-10-23 Sat 13:24]
