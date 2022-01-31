@@ -179,7 +179,7 @@ Cleanup new headline considering auto-repeat ARGS.
          (org-glance-headline:repeated-p))
     (let ((contents (org-glance:with-headline-at-point
                      (org-delete-property "LAST_REPEAT")
-                     (let ((header (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point))))
+                     (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
                            (pinned (save-excursion
                                      (cl-loop
                                         while (search-forward "#+begin_pin" nil t)
