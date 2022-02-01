@@ -396,7 +396,6 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (cl-defun org-glance-overview:import-headlines-from-files (class files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of currents' overview class and add it to overview."
-  (interactive "fImport from directory: ")
   (let* ((tag (downcase (symbol-name class)))
          (metastore-location (-some->> class
                                org-glance:get-class
