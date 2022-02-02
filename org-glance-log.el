@@ -42,7 +42,7 @@ considerable importance and which will prevent normal program
 execution.
 
 They should be reasonably intelligible to end users and to system
-administrators. This level is initialized to 1000.")
+administrators.  This level is initialized to 1000.")
 
 (defconst org-glance-log-level-WARNING 900
   "WARNING is a message level indicating a potential problem.
@@ -70,7 +70,7 @@ configuration information, to assist in debugging problems that
 may be associated with particular configurations.
 
 For example, CONFIG message might include the CPU type, the
-graphics depth, the GUI look-and-feel, etc. This level is
+graphics depth, the GUI look-and-feel, etc.  This level is
 initialized to 700.")
 
 (defconst org-glance-log-level-FINE 500
@@ -89,13 +89,13 @@ will be broadly interesting to developers who do not have a
 specialized interest in the specific subsystem.
 
 FINE messages might include things like minor (recoverable)
-failures. Issues indicating potential performance problems are
-also worth logging as FINE. This level is initialized to 500.")
+failures.  Issues indicating potential performance problems are
+also worth logging as FINE.  This level is initialized to 500.")
 
 (defconst org-glance-log-level-FINER 400
   "FINER indicates a fairly detailed tracing message.
 By default logging calls for entering, returning, or throwing an
-exception are traced at this level. This level is initialized to
+exception are traced at this level.  This level is initialized to
 400.")
 
 (defconst org-glance-log-level-FINEST 300
@@ -118,21 +118,21 @@ This level is initialized to 300.")
                  (const :tag "ALL" ,org-glance-log-level-ALL))
   :group 'org-glance)
 
-(cl-defun org-glance-log (log-level format-string &rest args)
+(defun org-glance-log (log-level format-string &rest args)
   "Print FORMAT-STRING formatted with ARGS when LOG-LEVEL is acceptable.
 See `org-glance-log-level' for the details."
   (when (<= org-glance-log-level log-level)
     (apply #'message format-string args)))
 
-(cl-defun org-glance-log-warning (format-string &rest args)
+(defun org-glance-log-warning (format-string &rest args)
   "Log FORMAT-STRING formatted with ARGS in warning log level."
   (apply #'org-glance-log org-glance-log-level-WARNING format-string args))
 
-(cl-defun org-glance-log-info (format-string &rest args)
+(defun org-glance-log-info (format-string &rest args)
   "Log FORMAT-STRING formatted with ARGS in info log level."
   (apply #'org-glance-log org-glance-log-level-INFO format-string args))
 
-(cl-defun org-glance-log-debug (format-string &rest args)
+(defun org-glance-log-debug (format-string &rest args)
   "Log FORMAT-STRING formatted with ARGS in debug log level."
   (apply #'org-glance-log org-glance-log-level-FINEST format-string args))
 
