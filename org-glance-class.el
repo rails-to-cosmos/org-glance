@@ -1,12 +1,12 @@
-;;; org-glance.el --- org-mode traversing. Fast and convenient. -*- lexical-binding: t; -*-
+;;; org-glance-class.el --- class model for `org-glance'.
 
-;; Copyright (C) 2018-2022 Dmitry Akatov
+;; Copyright (C) 2022 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
-;; Created: 29 September, 2018
+;; Created: 2 February, 2022
 ;; Version: 0.1.0
 
-;; Keywords: org-mode tools
+;; Keywords: org-glance logging
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 
 ;; This file is not part of GNU Emacs.
@@ -30,22 +30,7 @@
 
 ;;; Code:
 
-(require 'org)
-(require 'org-element)
 
-(require 'org-glance-customs)
-(require 'org-glance-exceptions)
-(require 'org-glance-log)
 
-(require 'org-glance-class)
-(require 'org-glance-class-registry)
-
-(require 'org-glance-headline)
-(require 'org-glance-headline-registry)
-
-(defun org-glance-init ()
-  "Update system state from `org-glance-directory'."
-  (org-glance-ensure-directory org-glance-directory))
-
-(provide 'org-glance)
-;;; org-glance.el ends here
+(provide 'org-glance-class)
+;;; org-glance-class.el ends here

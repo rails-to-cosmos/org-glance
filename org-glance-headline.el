@@ -31,6 +31,7 @@
 ;;; Code:
 
 (require 'dash)
+(require 'org-glance-helpers)
 
 (defun org-glance-headline-create ()
   "Create headline from `org-element' at point.
