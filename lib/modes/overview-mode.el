@@ -158,8 +158,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
    "cancelled")
   "State-related ordering.")
 
-(cl-defun org-glance-overview:partition-builder ()
-  "Main method for partitioning headlines."
+(cl-defun org-glance-overview:partition-mapper ()
+  "Main method for partitioning headlines in overview."
   (let* ((class (org-glance-overview:class))
          (state-ordering-config (f-join (org-glance-overview:directory class) "task-states.el"))
          (state-ordering (if (and (file-exists-p state-ordering-config)
@@ -187,14 +187,14 @@ If point is before the first heading, prompt for headline and eval forms on it."
                   ((booleanp i) i)
                   (t nil))))
 
-(cl-defun org-glance-overview:partition-by (partition-builder &key (test #'equal) (comparator #'<))
+(cl-defun org-glance-overview:partition-by (partition-mapper &key (test #'equal) (comparator #'<))
   (declare (indent 2))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
       (outline-next-heading)
       (while (< (point) (point-max))
-        (let* ((group-state (funcall partition-builder))
+        (let* ((group-state (funcall partition-mapper))
                (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
                (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
           (with-current-buffer group-buffer
@@ -228,29 +228,35 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE overview to CLASS file."
   (org-glance:with-file-visited (org-glance-overview:location class)
-    (seq-let (id contents) (org-glance:with-headline-narrowed headline
-                             (list (org-glance-headline:id)
-                                   (org-glance-headline:overview)))
+    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
+                                       (list (org-glance-headline:id)
+                                             (org-glance-headline:overview)
+                                             (org-glance-overview:partition-mapper)))
       (save-restriction
         (widen)
-        (save-excursion
-          (condition-case nil
-              (progn
-                (org-glance-headline:search-buffer-by-id id)
-                (org-glance-overview:pull))
-            (org-glance-exception:HEADLINE-NOT-FOUND
-             (cond
-               ;; register archived entries only in archive class
-               ((and (memq 'archive (org-glance-headline:classes headline))
-                     (not (eql 'archive class)))
-                nil)
-               (t (let ((inhibit-read-only t))
-                    (unless (string-empty-p contents)
-                      (end-of-buffer)
-                      (when (eolp)
-                        (insert "\n"))
-                      (insert (s-trim contents))
-                      (save-buffer)))))))))))
+        (condition-case nil
+            (org-glance-overview:remove-headline-from-overview headline class)
+          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+        (let ((inhibit-read-only t)
+              (headline-seen-p nil))
+          (unless (or (string-empty-p contents)
+                      (and (memq 'archive (org-glance-headline:classes headline))
+                           (not (eql 'archive class))))
+            (goto-char (point-min))
+
+            (while (and (outline-next-heading)
+                        (org-glance-headline-p)
+                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
+              (when (org-glance-headline-p)
+                (setq headline-seen-p t)))
+
+            (when (and (not headline-seen-p)
+                       (not (org-glance-headline-p)))
+              (insert "\n"))
+
+            (insert (s-trim contents) "\n")
+
+            (save-buffer))))))
   headline)
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
@@ -787,7 +793,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           (end-of-headlines (point-max)))
 
       (cl-loop
-         for buffer in (org-glance-overview:partition-by #'org-glance-overview:partition-builder
+         for buffer in (org-glance-overview:partition-by #'org-glance-overview:partition-mapper
                            :comparator #'org-glance-overview:partition-comparator)
          do
            (goto-char (point-max))
