@@ -25,13 +25,18 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package allows you to manage bookmarks and travel around the
-;; digital world with an org-mode power behind your shoulders.
 
 ;;; Code:
 
+(require 'org-glance-class)
+
 (defvar org-glance-classes (make-hash-table)
   "Class registry.  Map class id to class config.")
+
+(defun org-glance-register-class (class)
+  "Add CLASS to `org-glance-classes'."
+  (let ((id (org-glance-class-id class)))
+    (puthash id class org-glance-classes)))
 
 (provide 'org-glance-class-registry)
 ;;; org-glance-class-registry.el ends here

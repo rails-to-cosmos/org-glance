@@ -25,12 +25,26 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package allows you to manage bookmarks and travel around the
-;; digital world with an org-mode power behind your shoulders.
 
 ;;; Code:
 
+(require 'cl-macs)
 
+(cl-defun org-glance-class-create (id &key capture-template header)
+  "Create `org-glance-class' instance with specified parameters.
+
+- ID is the unique identifier to manage class instances.
+- CAPTURE-TEMPLATE is the default template to capture class headlines.
+- HEADER is the custom header that will be added to `org-glance-class-overview' and materialized headline."
+  (declare (indent 1))
+  (cl-assert (symbolp id))
+  (list :id id
+        :capture-template capture-template
+        :header header))
+
+(defun org-glance-class-id (class)
+  "Get CLASS ID."
+  (plist-get class :id))
 
 (provide 'org-glance-class)
 ;;; org-glance-class.el ends here

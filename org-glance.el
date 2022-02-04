@@ -45,7 +45,12 @@
 
 (defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (org-glance-ensure-directory org-glance-directory))
+  (org-glance-ensure-directory org-glance-directory)
+  ;; Actualize `org-glance-class-registry'
+
+  ;; Storage partitioning schema: class/created-date/headline-id/headline.el
+  ;; Archive partitioning schema: class/closed-date/headline-id/headline.el
+  )
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

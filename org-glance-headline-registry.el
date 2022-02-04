@@ -25,8 +25,6 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package allows you to manage bookmarks and travel around the
-;; digital world with an org-mode power behind your shoulders.
 
 ;;; Code:
 
@@ -38,9 +36,7 @@
 (defun org-glance-register-headline (headline)
   "Add HEADLINE to `org-glance-headlines'."
   (let ((id (org-glance-headline-id headline)))
-    (if (gethash id org-glance-headlines)
-        (signal 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has already been registered.")
-      (puthash id headline org-glance-headlines))))
+    (puthash id headline org-glance-headlines)))
 
 (provide 'org-glance-headline-registry)
 ;;; org-glance-headline-registry.el ends here
