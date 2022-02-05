@@ -33,9 +33,13 @@
 (defvar org-glance-headlines (make-hash-table)
   "Headline registry.  Maps headline id symbol to headline ast.")
 
+(defun org-glance-headline-registry-generate-unique-id (headline)
+  "Generate unique ID for HEADLINE to store in registry."
+  (error "Not implemented"))
+
 (defun org-glance-register-headline (headline)
   "Add HEADLINE to `org-glance-headlines'."
-  (let ((id (org-glance-headline-id headline)))
+  (let ((id (org-glance-headline-registry-generate-unique-id headline)))
     (puthash id headline org-glance-headlines)))
 
 (provide 'org-glance-headline-registry)

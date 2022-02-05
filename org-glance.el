@@ -37,11 +37,11 @@
 (require 'org-glance-exceptions)
 (require 'org-glance-log)
 
-(require 'org-glance-class)
-(require 'org-glance-class-registry)
-
 (require 'org-glance-headline)
 (require 'org-glance-headline-registry)
+
+(require 'org-glance-class)
+(require 'org-glance-class-registry)
 
 (defun org-glance-init ()
   "Update system state from `org-glance-directory'."

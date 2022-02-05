@@ -38,3 +38,39 @@
   (lambda (file)
     (setq org-glance-test:current-headline
           (org-glance-headline-load (f-join org-glance-test:root-location file)))))
+
+(Then "^headline should contain links?$"
+      (lambda ()
+        (should (org-glance-headline-linked-p org-glance-test:current-headline))))
+
+(Then "^headline should not contain links?$"
+      (lambda ()
+        (should (not (org-glance-headline-linked-p org-glance-test:current-headline)))))
+
+(Then "^headline should be encrypted$"
+  (lambda ()
+    (should (org-glance-headline-encrypted-p org-glance-test:current-headline))))
+
+(Then "^headline should not be encrypted$"
+  (lambda ()
+    (should (not (org-glance-headline-encrypted-p org-glance-test:current-headline)))))
+
+(Then "^headline should contain custom properties$"
+  (lambda ()
+    (should (org-glance-headline-contains-custom-properties-p org-glance-test:current-headline))))
+
+(Then "^headline should not contain custom properties$"
+  (lambda ()
+    (should (not (org-glance-headline-contains-custom-properties-p org-glance-test:current-headline)))))
+
+(Then "^headline should be archived$"
+  (lambda ()
+    (should (org-glance-headline-archived-p org-glance-test:current-headline))))
+
+(Then "^headline should be commented$"
+  (lambda ()
+    (should (org-glance-headline-commented-p org-glance-test:current-headline))))
+
+(Then "^headline should be closed$"
+  (lambda ()
+    (should (org-glance-headline-closed-p org-glance-test:current-headline))))

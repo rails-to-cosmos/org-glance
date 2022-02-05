@@ -41,38 +41,51 @@ with some meta properties and `org-element' of type `headline' in contents."
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((ast (org-element-parse-buffer))
-             (headline (car (org-element-contents ast)))
+             (subtree (org-element-contents ast))
+             (contents (org-element-interpret-data subtree))
+             (headline (car subtree))
              (title (with-temp-buffer
                       (insert (or (org-element-property :TITLE headline)
                                   (org-element-property :raw-value headline)
                                   ""))
                       (->> (org-element-parse-buffer)
-                           (org-glance-replace-links-with-titles)
-                           (org-element-interpret-data)
-                           (s-trim))))
-             (hash (with-temp-buffer
-                     (insert title)
-                     (buffer-hash)))
+                           org-glance-replace-links-with-titles
+                           org-element-interpret-data
+                           substring-no-properties
+                           s-trim)))
              (tags (--map (downcase it) (org-element-property :tags headline))))
 
-        ;; enrich basic ast with additional properties
+        ;; enrich ast with additional properties
         (org-element-put-property ast :title title)
         (org-element-put-property ast :tags (--map (intern it) tags))
-        (org-element-put-property ast :id (intern (concat hash "_" (s-join "-" tags))))
+        (org-element-put-property ast :hash (with-temp-buffer
+                                              (insert title)
+                                              (buffer-hash)))
 
+        (org-element-put-property ast :location (list :file (buffer-file-name)
+                                                      :buffer (current-buffer)))
+
+        (org-element-put-property ast :features (bool-vector
+                                                 (org-element-property :archivedp headline)
+                                                 (org-element-property :commentedp headline)
+                                                 (org-element-property :closed headline)
+                                                 (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)
+                                                 (s-match-strings-all org-link-any-re contents)
+                                                 (s-match-strings-all "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$" contents)))
+
+        ;; normalize indentation
         (let ((indent-offset (1- (org-element-property :level headline))))
           (when (> indent-offset 0)
             (cl-loop
-               with ast-contents-copy = (org-element-copy (org-element-contents ast))
-               for headline in (org-element-map ast-contents-copy 'headline #'identity)
-               do (org-element-put-property headline :level (- (org-element-property :level headline) indent-offset))
-               finally do (org-element-set-contents ast ast-contents-copy))))
+               for headline in (org-element-map subtree 'headline #'identity)
+               for level = (org-element-property :level headline)
+               do (org-element-put-property headline :level (- level indent-offset)))))
 
         ast))))
 
-(defun org-glance-headline-id (headline)
-  "Get HEADLINE ID."
-  (org-element-property :id headline))
+;; (defun org-glance-headline-id (headline)
+;;   "Get HEADLINE ID."
+;;   (org-element-property :id headline))
 
 (defun org-glance-headline-title (headline)
   "Get HEADLINE title."
@@ -88,7 +101,14 @@ with some meta properties and `org-element' of type `headline' in contents."
 
 (defun org-glance-headline-contents (headline)
   "Interpret HEADLINE contents."
-  (s-trim (substring-no-properties (org-element-interpret-data (org-element-contents headline)))))
+  (->> headline
+       org-element-contents
+       org-element-interpret-data
+       substring-no-properties
+       s-trim))
+
+(defun org-glance-headline-dump (headline)
+  (cadr headline))
 
 (defun org-glance-headline-save (headline file)
   "Write HEADLINE to FILE."
@@ -101,6 +121,24 @@ with some meta properties and `org-element' of type `headline' in contents."
     (insert-file-contents file)
     (goto-char (point-min))
     (org-glance-headline-create)))
+
+(defun org-glance-headline-archived-p (headline)
+  (aref (org-element-property :features headline) 0))
+
+(defun org-glance-headline-commented-p (headline)
+  (aref (org-element-property :features headline) 1))
+
+(defun org-glance-headline-closed-p (headline)
+  (aref (org-element-property :features headline) 2))
+
+(defun org-glance-headline-encrypted-p (headline)
+  (aref (org-element-property :features headline) 3))
+
+(defun org-glance-headline-linked-p (headline)
+  (aref (org-element-property :features headline) 4))
+
+(defun org-glance-headline-contains-custom-properties-p (headline)
+  (aref (org-element-property :features headline) 5))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
