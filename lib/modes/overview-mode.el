@@ -171,9 +171,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (list
      (not (org-in-archived-heading-p)) ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
      (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
-     (or (-elem-index (downcase (org-glance-headline:state)) state-ordering) 0) ;; partition by state
-     (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
-     (or (org-glance-headline:priority) ?B))))
+     (or (-elem-index (downcase (or (org-element-property :todo-keyword (org-element-at-point)) "")) state-ordering) 0) ;; partition by state
+     ;; (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
+     (or (org-element-property :priority (org-element-at-point)) ?B))))
 
 (cl-defun org-glance-overview:partition-comparator (headline1 headline2)
   "Main method to compare HEADLINE1 with HEADLINE2."
@@ -187,14 +187,14 @@ If point is before the first heading, prompt for headline and eval forms on it."
                   ((booleanp i) i)
                   (t nil))))
 
-(cl-defun org-glance-overview:partition-by (partition-mapper &key (test #'equal) (comparator #'<))
-  (declare (indent 2))
+(cl-defun org-glance-overview:partition (&key using (test #'equal) (comparator #'<))
+  (declare (indent 0))
   (let ((buffers (make-hash-table :test test)))
     (save-excursion
       (goto-char (point-min))
       (outline-next-heading)
       (while (< (point) (point-max))
-        (let* ((group-state (funcall partition-mapper))
+        (let* ((group-state (funcall using))
                (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
                (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
           (with-current-buffer group-buffer
@@ -793,8 +793,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           (end-of-headlines (point-max)))
 
       (cl-loop
-         for buffer in (org-glance-overview:partition-by #'org-glance-overview:partition-mapper
-                           :comparator #'org-glance-overview:partition-comparator)
+         for buffer in (org-glance-overview:partition
+                         :using #'org-glance-overview:partition-mapper
+                         :comparator #'org-glance-overview:partition-comparator)
          do
            (goto-char (point-max))
            (insert (let ((standard-output 'ignore))
