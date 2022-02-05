@@ -30,11 +30,11 @@
     (setq org-glance-test:current-headline (org-glance-headline-create))))
 
 (And "^I save headline to file \"\\([^\"]+\\)\"$"
-  (lambda (arg)
-
-    ))
+  (lambda (file)
+    (org-glance-headline-save org-glance-test:current-headline
+                              (f-join org-glance-test:root-location file))))
 
 (Then "^I load headline from file \"\\([^\"]+\\)\"$"
-  (lambda (arg)
-
-    ))
+  (lambda (file)
+    (setq org-glance-test:current-headline
+          (org-glance-headline-load (f-join org-glance-test:root-location file)))))

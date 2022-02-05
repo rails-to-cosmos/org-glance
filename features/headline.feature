@@ -32,12 +32,13 @@ Feature: Headline
       Managing Incidents
       """
 
-  @headline
-  Scenario: Create from indented element at point
+  @headline @target
+  Scenario: Headline should have normalized indentation
     When I create an org file with content:
       """
       *** Tags :article:
       Features and scenarios can be tagged using syntax @tag
+      **** More indentations
       """
     And I create headline from element at point
     Then headline title should be "Tags"
@@ -46,6 +47,7 @@ Feature: Headline
       """
       * Tags :article:
       Features and scenarios can be tagged using syntax @tag
+      ** More indentations
       """
 
   @headline
@@ -87,15 +89,14 @@ Feature: Headline
   Scenario: Serde
     When I create an org file with content:
       """
-      * Driving lesson :Education:
+      *** Driving lesson :Education:
       """
-    And I save headline to file "driving.el"
-    Then I load headline from file "driving.el"
-    Then headline title should be "Vocal lesson"
-    And headline should be a task
+    And I create headline from element at point
+    And I save headline to file "driving.org"
+    And I load headline from file "driving.org"
+    Then headline title should be "Driving lesson"
+    And headline should be an education
     And headline contents should be:
       """
-      * Vocal lesson :Task:
-      - Mozart
-      - Bach
+      * Driving lesson :Education:
       """

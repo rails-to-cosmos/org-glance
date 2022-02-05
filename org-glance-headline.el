@@ -37,6 +37,7 @@
 with some meta properties and `org-element' of type `headline' in contents."
   (save-excursion
     (org-glance-ensure-at-heading)
+
     (save-restriction
       (org-narrow-to-subtree)
       (let* ((ast (org-element-parse-buffer))
@@ -59,8 +60,13 @@ with some meta properties and `org-element' of type `headline' in contents."
         (org-element-put-property ast :tags (--map (intern it) tags))
         (org-element-put-property ast :id (intern (concat hash "_" (s-join "-" tags))))
 
-        ;; no mutation restrictions on complete ast
-        (org-element-put-property headline :level 1)
+        (let ((indent-offset (1- (org-element-property :level headline))))
+          (when (> indent-offset 0)
+            (cl-loop
+               with ast-contents-copy = (org-element-copy (org-element-contents ast))
+               for headline in (org-element-map ast-contents-copy 'headline #'identity)
+               do (org-element-put-property headline :level (- (org-element-property :level headline) indent-offset))
+               finally do (org-element-set-contents ast ast-contents-copy))))
 
         ast))))
 
@@ -82,19 +88,19 @@ with some meta properties and `org-element' of type `headline' in contents."
 
 (defun org-glance-headline-contents (headline)
   "Interpret HEADLINE contents."
-  (s-trim (org-element-interpret-data headline)))
+  (s-trim (substring-no-properties (org-element-interpret-data (org-element-contents headline)))))
 
 (defun org-glance-headline-save (headline file)
   "Write HEADLINE to FILE."
-  (mkdir (file-name-directory file) 'parents)
   (with-temp-file file
-    (insert (prin1-to-string headline))))
+    (insert (org-glance-headline-contents headline))))
 
 (defun org-glance-headline-load (file)
   "Load headline from FILE."
   (with-temp-buffer
     (insert-file-contents file)
-    (read (buffer-string))))
+    (goto-char (point-min))
+    (org-glance-headline-create)))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
