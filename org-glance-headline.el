@@ -84,5 +84,17 @@ with some meta properties and `org-element' of type `headline' in contents."
   "Interpret HEADLINE contents."
   (s-trim (org-element-interpret-data headline)))
 
+(defun org-glance-headline-save (headline file)
+  "Write HEADLINE to FILE."
+  (mkdir (file-name-directory file) 'parents)
+  (with-temp-file file
+    (insert (prin1-to-string headline))))
+
+(defun org-glance-headline-load (file)
+  "Load headline from FILE."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (read (buffer-string))))
+
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
