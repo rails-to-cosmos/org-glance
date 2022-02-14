@@ -616,6 +616,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (when-let (location (org-glance-overview:location class))
       (if (file-exists-p location)
           (find-file location)
+        (org-glance-class-create class)
         (org-glance-overview:create class)))))
 
 (cl-defun org-glance-overview:agenda ()
