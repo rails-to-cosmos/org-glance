@@ -17,8 +17,10 @@
 
 (defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
 
-#+CATEGORY: ${category}
-${custom-header}
+${category}
+${todo-states}
+${todo-order}
+
 ")
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
@@ -31,7 +33,7 @@ ${custom-header}
 ;;; convention is to bind such methods to UPPERCASE KEYS
 
 ;; rebuild view and reread all files from view's scope
-(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:recreate)
+(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:reread)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -580,17 +582,23 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:refresh-widgets (&optional (class (org-glance-overview:class)))
   (interactive)
   (let* ((inhibit-read-only t)
-         (point (point))
-         (custom-header-file (f-join (org-glance-overview:directory class) "header.org"))
-         (custom-header (cond ((f-exists-p custom-header-file)
-                               (with-temp-buffer
-                                 (insert-file-contents custom-header-file)
-                                 (buffer-substring-no-properties (point-min) (point-max))))
-                              (t ""))))
+         (point (point)))
     (goto-char (point-min))
     (org-next-visible-heading 1)
     (kill-region (point-min) (point))
-    (insert (let ((category class))
+    (insert (let ((category (format "#+CATEGORY: %s" class))
+                  (todo-states (cl-loop
+                                  for todo-seq in org-todo-keywords
+                                  concat (concat "#+TODO: " (s-join " " (cdr todo-seq)) "\n")
+                                  into result
+                                  finally return (s-trim result)))
+                  (todo-order (concat "#+TODO_ORDER: " (cl-loop
+                                                          for state in org-glance-overview:state-ordering
+                                                          if (string-empty-p state)
+                                                          concat "_ " into result
+                                                          else
+                                                          concat (concat (upcase state) " ") into result
+                                                          finally return (s-trim result)))))
               (org-glance:format org-glance-overview:header)))
     (goto-char point)))
 
@@ -669,28 +677,30 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
        ,then
      ,@else))
 
-(cl-defun org-glance-overview:recreate ()
+(cl-defun org-glance-overview:reread ()
   "Completely rebuild current overview file."
   (interactive)
   (let ((class-name (org-glance-overview:class)))
     (when (gethash class-name org-glance-overview-deferred-import-hash-table)
-      (unless (memq org-glance-overview-deferred-import-timer timer-idle-list)
-        (timer-activate org-glance-overview-deferred-import-timer))
-      ;; (user-error "Scan is in progress, please wait")
-      )
+      (if (not (memq org-glance-overview-deferred-import-timer timer-idle-list))
+          (timer-activate org-glance-overview-deferred-import-timer)
+        ;; timer is already running
+        (when (y-or-n-p (format "%s is being rebuilt. Stop it?" class-name))
+          (remhash class-name org-glance-overview-deferred-import-hash-table))))
 
-    (when (y-or-n-p (format "Recreate %s?" class-name))
-      (let ((class (org-glance:get-class class-name))
-            (files (--filter (not (s-contains? "sync-conflict" it))
-                             (org-glance-scope org-glance-directory))))
+    (when (y-or-n-p (format "Clear %s metadata?" class-name))
+      (let ((class (org-glance:get-class class-name)))
         (save-buffer)
         (kill-buffer)
         (org-glance-metastore:create (org-glance-view:metastore-location class))
         (org-glance-overview:create class-name)
-        (org-glance-overview:import-headlines-from-files class-name files)
-        (org-glance-overview:order)
-        (let ((inhibit-read-only t))
-          (org-align-all-tags))))))
+        (when (y-or-n-p (format "Import headlines from %s?" org-glance-directory))
+          (let ((files (--filter (not (s-contains? "sync-conflict" it))
+                                 (org-glance-scope org-glance-directory))))
+            (org-glance-overview:import-headlines-from-files class-name files)
+            (org-glance-overview:order)
+            (let ((inhibit-read-only t))
+              (org-align-all-tags))))))))
 
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."

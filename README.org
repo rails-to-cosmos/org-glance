@@ -30,8 +30,9 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
-** TODO memos
 ** TODO class settings
+** TODO class sources
+** TODO memos (flashcard support)
 ** DONE underscore in title
 CLOSED: [2022-01-22 Sat 11:34]
 :LOGBOOK:
@@ -42,7 +43,6 @@ CLOSED: [2022-01-22 Sat 11:34]
 :LOGBOOK:
 - State "CANCELLED"  from "TODO"       [2022-01-22 Sat 11:34]
 :END:
-** TODO sources for classes
 ** TODO a lot of newlines in overview
 ** TODO fix tests
 ** TODO kill buffer after material apply
