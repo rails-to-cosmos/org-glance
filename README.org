@@ -30,6 +30,30 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
+
+** bindat
+#+begin_src emacs-lisp
+(require 'bindat)
+
+(setq data-spec
+      '((type      u8)
+        (id        strz 8)))
+
+(setq data (bindat-pack
+            data-spec
+            `((type . 2)
+              (id . "Test"))))
+
+(bindat-unpack data-spec data)
+
+(with-temp-file "/tmp/result.bin"
+  (insert data))
+
+(with-temp-buffer
+  (mm-disable-multibyte)
+  (insert-file-literally "/tmp/result.bin")
+  (bindat-unpack data-spec (buffer-string)))
+#+end_src
 ** TODO class settings
 ** TODO class sources
 ** TODO memos (flashcard support)
