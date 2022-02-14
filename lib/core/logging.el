@@ -104,4 +104,11 @@ This level is initialized to 300.")
   "Log debug message if `org-glance:log-level' allows."
   (apply #'org-glance:log org-glance.log-level.FINEST format-string args))
 
+(defmacro org-glance-with-debug-msg (msg &rest forms)
+  (declare (indent 1))
+  `(progn
+     (org-glance:log-debug ,msg)
+     ,@forms
+     (org-glance:log-debug (concat ,msg " done"))))
+
 (org-glance:provide)

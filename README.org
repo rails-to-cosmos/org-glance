@@ -30,7 +30,6 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
-
 ** bindat
 #+begin_src emacs-lisp
 (require 'bindat)

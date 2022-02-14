@@ -198,7 +198,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (while (< (point) (point-max))
         (let* ((group-state (funcall using))
                (group-buffer (get-buffer-create (concat "org-glance-overview-group:" (prin1-to-string group-state))))
-               (contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t)))))
+               (contents (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t t))))))
           (with-current-buffer group-buffer
             (org-mode)
             (unless (gethash group-state buffers)
@@ -428,10 +428,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                  (push (org-glance-headline:overview) overviews)))))))
        else
        do
-         (org-glance:log-debug "Persist metastore changes...")
-         (org-glance-metastore:save metastore metastore-location)
+         (org-glance-with-debug-msg "Persist metastore changes..."
+           (org-glance-metastore:save metastore metastore-location))
 
-         (org-glance:log-debug "Persist metastore changes... done")
          (org-glance:with-file-visited (org-glance-overview:location class)
            (goto-char (point-max))
            (let ((inhibit-read-only t))
@@ -451,10 +450,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (return nil)
        finally
        do
-         (org-glance:log-debug "Persist metastore changes...")
-         (org-glance-metastore:save metastore metastore-location)
+         (org-glance-with-debug-msg "Persist metastore changes..."
+           (org-glance-metastore:save metastore metastore-location))
 
-         (org-glance:log-debug "Persist metastore changes... done")
          (org-glance:with-file-visited (org-glance-overview:location class)
            (goto-char (point-max))
            (let ((inhibit-read-only t))
