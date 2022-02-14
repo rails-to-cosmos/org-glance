@@ -517,8 +517,10 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
   `(save-excursion
+     (org-glance-headline:search-parents)
+     (unless (org-glance-headline-p)
+       (user-error "Unable to find headline at point"))
      (save-restriction
-       (org-glance-headline:search-parents)
        (org-narrow-to-subtree)
        ,@forms)))
 
