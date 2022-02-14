@@ -29,7 +29,16 @@
 ;;; Code:
 
 (require 'dash)
+(require 'bindat)
 (require 'org-glance-helpers)
+
+(defvar org-glance-headline-feature-bindat-spec
+  '((archived byte)
+    (commented byte)
+    (closed byte)
+    (encrypted byte)
+    (linked byte)
+    (propertized byte)))
 
 (defun org-glance-headline-create ()
   "Create headline from `org-element' at point.
@@ -65,13 +74,15 @@ with some meta properties and `org-element' of type `headline' in contents."
         (org-element-put-property ast :location (list :file (buffer-file-name)
                                                       :buffer (current-buffer)))
 
-        (org-element-put-property ast :features (bool-vector
-                                                 (org-element-property :archivedp headline)
-                                                 (org-element-property :commentedp headline)
-                                                 (org-element-property :closed headline)
-                                                 (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)
-                                                 (s-match-strings-all org-link-any-re contents)
-                                                 (s-match-strings-all "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$" contents)))
+        (org-element-put-property ast :features (cl-flet ((bool-to-int (bool) (if (null bool) 0 1)))
+                                                  (bindat-pack
+                                                   org-glance-headline-feature-bindat-spec
+                                                   (list (cons 'archived (bool-to-int (org-element-property :archivedp headline)))
+                                                         (cons 'commented (bool-to-int (org-element-property :commentedp headline)))
+                                                         (cons 'closed (bool-to-int (org-element-property :closed headline)))
+                                                         (cons 'encrypted (bool-to-int (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+                                                         (cons 'linked (bool-to-int (s-match-strings-all org-link-any-re contents)))
+                                                         (cons 'propertized (bool-to-int (s-match-strings-all "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$" contents)))))))
 
         ;; normalize indentation
         (let ((indent-offset (1- (org-element-property :level headline))))
@@ -122,23 +133,27 @@ with some meta properties and `org-element' of type `headline' in contents."
     (goto-char (point-min))
     (org-glance-headline-create)))
 
+(defun org-glance-headline-features (headline)
+  (bindat-unpack org-glance-headline-feature-bindat-spec
+                 (org-element-property :features headline)))
+
 (defun org-glance-headline-archived-p (headline)
-  (aref (org-element-property :features headline) 0))
+  (= 1 (alist-get 'archived (org-glance-headline-features headline))))
 
 (defun org-glance-headline-commented-p (headline)
-  (aref (org-element-property :features headline) 1))
+  (= 1 (alist-get 'commented (org-glance-headline-features headline))))
 
 (defun org-glance-headline-closed-p (headline)
-  (aref (org-element-property :features headline) 2))
+  (= 1 (alist-get 'closed (org-glance-headline-features headline))))
 
 (defun org-glance-headline-encrypted-p (headline)
-  (aref (org-element-property :features headline) 3))
+  (= 1 (alist-get 'encrypted (org-glance-headline-features headline))))
 
 (defun org-glance-headline-linked-p (headline)
-  (aref (org-element-property :features headline) 4))
+  (= 1 (alist-get 'linked (org-glance-headline-features headline))))
 
-(defun org-glance-headline-contains-custom-properties-p (headline)
-  (aref (org-element-property :features headline) 5))
+(defun org-glance-headline-propertized-p (headline)
+  (= 1 (alist-get 'propertized (org-glance-headline-features headline))))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

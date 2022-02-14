@@ -57,11 +57,11 @@
 
 (Then "^headline should contain custom properties$"
   (lambda ()
-    (should (org-glance-headline-contains-custom-properties-p org-glance-test:current-headline))))
+    (should (org-glance-headline-propertized-p org-glance-test:current-headline))))
 
 (Then "^headline should not contain custom properties$"
   (lambda ()
-    (should (not (org-glance-headline-contains-custom-properties-p org-glance-test:current-headline)))))
+    (should (not (org-glance-headline-propertized-p org-glance-test:current-headline)))))
 
 (Then "^headline should be archived$"
   (lambda ()
