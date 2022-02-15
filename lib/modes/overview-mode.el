@@ -84,6 +84,10 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance:interactive-lambda
     (org-glance-overview:choose-headline)))
 
+;; (define-key org-glance-overview-mode-map (kbd "j")
+;;   (org-glance:interactive-lambda
+;;     (org-glance:open (org-glance-overview:choose-headline))))
+
 (define-key org-glance-overview-mode-map (kbd "F")
   (org-glance-overview:apply-on-headline
     (org-attach-reveal-in-emacs)))
