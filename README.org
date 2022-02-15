@@ -30,7 +30,11 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
-** bindat
+** DONE bindat
+CLOSED: [2022-02-15 Tue 23:03]
+:LOGBOOK:
+- State "DONE"       from              [2022-02-15 Tue 23:03]
+:END:
 #+begin_src emacs-lisp
 (require 'bindat)
 
@@ -66,8 +70,17 @@ CLOSED: [2022-01-22 Sat 11:34]
 :LOGBOOK:
 - State "CANCELLED"  from "TODO"       [2022-01-22 Sat 11:34]
 :END:
-** TODO a lot of newlines in overview
-** TODO fix tests
+** DONE a lot of newlines in overview
+CLOSED: [2022-02-15 Tue 23:03]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-02-15 Tue 23:03]
+:END:
+** CANCELLED fix tests (will be in rethinking-the-concept)
+CLOSED: [2022-02-15 Tue 23:03]
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2022-02-15 Tue 23:03]
+- State "DONE"       from "TODO"       [2022-02-15 Tue 23:03]
+:END:
 ** TODO kill buffer after material apply
 ** TODO optimize "register" methods
 ** TODO timedelta for downstream tasks

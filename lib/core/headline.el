@@ -49,7 +49,8 @@ metastore.")
         (:buffer . (:reader org-glance-headline:buffer :writer (lambda (hl)
                                                                  (condition-case nil
                                                                      (buffer-name (get-file-buffer (org-glance-headline:file hl)))
-                                                                   (wrong-type-argument (buffer-name))))))))
+                                                                   (wrong-type-argument (buffer-name))))))
+        (:closed . (:reader org-glance-headline:closed? :writer org-glance-headline:closed?))))
 
 (cl-defun org-glance-headline:serialize (headline)
   "Serialize HEADLINE to store it on disk."
@@ -101,7 +102,8 @@ metastore.")
 (cl-defun org-glance-headline:active? (&optional (headline (org-element-at-point)))
   (and (org-glance-headline-p headline)
        (not (org-glance-headline:commented? headline))
-       (not (org-glance-headline:archived? headline))))
+       (not (org-glance-headline:archived? headline))
+       (not (org-glance-headline:closed? headline))))
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
@@ -126,6 +128,10 @@ metastore.")
 
 (cl-defun org-glance-headline:archived? (&optional (headline (org-glance-headline:at-point)))
   (when (org-element-property :archivedp headline)
+    t))
+
+(cl-defun org-glance-headline:closed? (&optional (headline (org-glance-headline:at-point)))
+  (when (org-element-property :closed headline)
     t))
 
 (cl-defun org-glance-headline:raw-value (&optional (headline (org-glance-headline:at-point)))
