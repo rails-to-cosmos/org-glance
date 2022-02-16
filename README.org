@@ -30,6 +30,7 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
+** TODO clone id should be unique (postfix)
 ** DONE bindat
 CLOSED: [2022-02-15 Tue 23:03]
 :LOGBOOK:
