@@ -33,9 +33,15 @@
 (defvar org-glance-headlines (make-hash-table)
   "Headline registry.  Maps headline id symbol to headline ast.")
 
-;; (defun org-glance-headline-registry:headline-id (headline)
-;;   "Generate unique ID for HEADLINE to store it in registry."
-;;   (error "Not implemented"))
+;; ID, ORIGIN (file/buffer)
+
+;; ID should be unique.
+
+;; Features:
+;;; 1. Search headlines by ID
+;;;; ID -> ORIGIN, TITLE? (to search and act on headlines)
+;;; 2. Filter headlines
+;;;; ID -> FEATURES (to filter headlines)
 
 ;; (defun org-glance-headline-registry:headline-origin (headline)
 ;;   (org-element-put-property ast :origin (list :file (buffer-file-name) :buffer (current-buffer))))
