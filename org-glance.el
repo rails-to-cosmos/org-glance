@@ -148,25 +148,27 @@
     (org-glance:log-debug "Create overview")
     (org-glance-overview:create class)))
 
-(cl-defun org-glance-materialized-headline:clone-before-auto-repeat (&rest args)
+(cl-defun org-glance-materialized-headline:preserve-history-before-auto-repeat (&rest args)
   (when (and
          org-glance-clone-on-repeat-p
          (or org-glance-material-mode org-glance-overview-mode)
          (member (org-get-todo-state) org-done-keywords)
          (org-glance-headline:repeated-p))
-    (lexical-let ((contents (org-glance-headline-contents)))
-      (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
-                                           (with-temp-buffer
-                                             (insert contents)
-                                             (goto-char (point-min))
+    (let ((contents (org-glance-headline-contents)))
+      (save-window-excursion
+        (with-temp-buffer
+          (insert contents)
+          (goto-char (point-min))
 
-                                             (org-tss-reset-buffer-timestamps-except-earliest)
+          (org-tss-reset-buffer-timestamps-except-earliest)
 
-                                             (cl-loop
-                                                for class in (org-glance-headline:classes)
-                                                do (let ((headline (org-glance-capture-headline-at-point class)))
-                                                     (org-glance-overview:register-headline-in-metastore headline class)
-                                                     (org-glance-overview:register-headline-in-overview headline class))))))))))
+          (cl-loop
+             initially
+             for class in (org-glance-headline:classes)
+             do (let ((headline (org-glance-capture-headline-at-point class))
+                      (reference (org-glance-headline-reference)))
+                  (org-glance-overview:register-headline-in-metastore headline class)
+                  (org-glance-overview:register-headline-in-overview headline class))))))))
 
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
   "Do only if headline has been cloned before auto repeat.
@@ -178,7 +180,6 @@ Cleanup new headline considering auto-repeat ARGS.
          org-glance-clone-on-repeat-p
          (org-glance-headline:repeated-p))
     (let ((contents (org-glance:with-headline-at-point
-                     (org-delete-property "LAST_REPEAT")
                      (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
                            (pinned (save-excursion
                                      (cl-loop
@@ -190,7 +191,8 @@ Cleanup new headline considering auto-repeat ARGS.
                                                                                             (point))))))))
                        (s-join "\n\n" (append (list header) pinned))))))
       (delete-region (point-min) (point-max))
-      (insert contents))))
+      (insert contents)
+      (org-delete-property "LAST_REPEAT"))))
 
 (cl-defmacro org-glance-choose-and-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.
@@ -224,7 +226,7 @@ after capture process has been finished."
   (org-glance-overview-init)
 
   (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
-  (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:clone-before-auto-repeat (list :depth -90))
+  (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:preserve-history-before-auto-repeat (list :depth -90))
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
