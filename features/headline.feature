@@ -86,7 +86,7 @@ Feature: Headline
       """
 
   @headline
-  Scenario: Serde
+  Scenario: Headline should be serializable
     When I create an org file with content:
       """
       *** Driving lesson :Education:

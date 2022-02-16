@@ -33,14 +33,18 @@
 (defvar org-glance-headlines (make-hash-table)
   "Headline registry.  Maps headline id symbol to headline ast.")
 
-(defun org-glance-headline-registry-generate-unique-id (headline)
-  "Generate unique ID for HEADLINE to store in registry."
-  (error "Not implemented"))
+;; (defun org-glance-headline-registry:headline-id (headline)
+;;   "Generate unique ID for HEADLINE to store it in registry."
+;;   (error "Not implemented"))
 
-(defun org-glance-register-headline (headline)
+;; (defun org-glance-headline-registry:headline-origin (headline)
+;;   (org-element-put-property ast :origin (list :file (buffer-file-name) :buffer (current-buffer))))
+
+(defun org-glance-headline-registry:capture-headline-at-point ()
   "Add HEADLINE to `org-glance-headlines'."
-  (let ((id (org-glance-headline-registry-generate-unique-id headline)))
-    (puthash id headline org-glance-headlines)))
+  ;; (let ((id (org-glance-headline-registry:generate-id headline)))
+  ;;   (puthash id headline org-glance-headlines))
+  )
 
 (provide 'org-glance-headline-registry)
 ;;; org-glance-headline-registry.el ends here

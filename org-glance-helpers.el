@@ -32,14 +32,6 @@
 (require 'dash)
 (require 'org-element)
 
-(defun org-glance-ensure-at-heading ()
-  "Ensure point is at heading.
-Return t if it is or nil otherwise."
-  (unless (org-at-heading-p)
-    (org-back-to-heading-or-point-min))
-  (unless (org-at-heading-p)
-    (user-error "Headline not found")))
-
 (defun org-glance-replace-links-with-titles (ast)
   "Replace links with its titles in AST."
   (cl-loop for link in (org-element-map ast 'link #'identity)
