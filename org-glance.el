@@ -163,7 +163,6 @@
           (org-tss-reset-buffer-timestamps-except-earliest)
 
           (cl-loop
-             initially
              for class in (org-glance-headline:classes)
              do (let ((headline (org-glance-capture-headline-at-point class))
                       (reference (org-glance-headline-reference)))
