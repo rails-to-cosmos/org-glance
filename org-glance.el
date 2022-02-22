@@ -303,13 +303,17 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (let ((action (lambda (headline)
                   (org-glance:with-headline-materialized headline
-                    (let* ((links (--filter (not (s-contains? "org-glance" (car it))) (org-glance-buffer-links)))
-                           (position (cond
-                                       ((> (length links) 1) (cdr (assoc (org-completing-read "Open link: " links) links)))
-                                       ((= (length links) 1) (cdar links))
-                                       (t (user-error "Unable to find links in headline")))))
-                      (goto-char position)
-                      (org-open-at-point))))))
+                    (cl-loop
+                       for (link title pos) in (org-glance-parse-links)
+                       unless (s-starts-with-p "[[org-glance" link)
+                       collect (list title pos)
+                       into links
+                       finally
+                       do (goto-char (cond
+                                       ((> (length links) 1) (cadr (assoc (org-completing-read "Open link: " links) links #'string=)))
+                                       ((= (length links) 1) (cadar links))
+                                       (t (user-error "Unable to find links in headline"))))
+                         (org-open-at-point))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply

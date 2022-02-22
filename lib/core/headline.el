@@ -32,7 +32,7 @@ metastore.")
                                                                                           (save-restriction
                                                                                             (org-narrow-to-subtree)
                                                                                             ;; (org-end-of-meta-data t)
-                                                                                            (when (org-glance-buffer-links)
+                                                                                            (when (org-glance-parse-links-with-positions)
                                                                                               'contains-link))))))
         (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
                                                                                                        (save-excursion
@@ -137,6 +137,32 @@ metastore.")
 (cl-defun org-glance-headline:raw-value (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :raw-value headline))
 
+(cl-defun org-glance-parse-links ()
+  "Simple org-link parser, return list of cons cells (link . contents)."
+  (let ((descriptions (cl-loop for (key . val) in (org-glance-buffer-key-value-pairs)
+                         collect (cons val key)))
+        (links (cl-loop
+                  for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
+                  for beg = (org-element-property :begin element)
+                  for end = (org-element-property :end element)
+                  for title = (substring-no-properties
+                               (or (-some->> element
+                                     org-element-contents
+                                     org-element-interpret-data)
+                                   (org-element-property :raw-link element)))
+                  for link = (s-trim (buffer-substring-no-properties beg end))
+                  collect title into titles
+                  collect link into links
+                  collect beg into positions
+                  finally return (-zip links titles positions))))
+    (cl-loop
+       for (link title pos) in links
+       for description = (alist-get link descriptions nil nil #'string=)
+       when description
+       collect (list link description pos)
+       else
+       collect (list link title pos))))
+
 (cl-defun org-glance-remove-links (&rest types)
   (save-excursion
     (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
@@ -145,22 +171,6 @@ metastore.")
                  (id (cadr link)))
             (when (memq type types)
               (delete-region (match-beginning 0) (match-end 0)))))))
-
-(cl-defun org-glance-parse-links-with-contents ()
-  "Simple org-link parser, return list of cons cells (link . contents)."
-  (cl-loop
-     for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
-     for beg = (org-element-property :begin element)
-     for end = (org-element-property :end element)
-     for title = (substring-no-properties
-                  (or (-some->> element
-                        org-element-contents
-                        org-element-interpret-data)
-                      (org-element-property :raw-link element)))
-     for link = (s-trim (buffer-substring-no-properties beg end))
-     collect title into titles
-     collect link into links
-     finally return (-zip links titles)))
 
 (cl-defun org-glance-replace-links-with-titles ()
   (save-excursion
@@ -176,6 +186,19 @@ metastore.")
       (insert (or (org-element-property :TITLE headline)
                   (org-element-property :raw-value headline)
                   "")))
+    (org-glance-remove-links 'org-glance-overview 'org-glance-state)
+    (org-glance-replace-links-with-titles)
+    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+
+(cl-defun org-glance-headline:alias (&optional (headline (org-glance-headline:at-point)))
+  "Get title of HEADLINE considering alias property."
+  (with-temp-buffer
+    (save-excursion
+      (insert (or
+               (org-element-property :ALIAS headline)
+               (org-element-property :TITLE headline)
+               (org-element-property :raw-value headline)
+               "")))
     (org-glance-remove-links 'org-glance-overview 'org-glance-state)
     (org-glance-replace-links-with-titles)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
@@ -534,9 +557,8 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance:with-headline-at-point
    (let* ((id (org-glance-headline:id))
           (state (org-glance-headline:state))
-          (title (org-glance-headline:title))
-          (alias (org-element-property :ORG_GLANCE_ALIAS (org-element-at-point)))
-          (stateless-title (replace-regexp-in-string (format "^%s[[:space:]]*" state) "" title))
+          (alias (-some->> (org-glance-headline:alias)
+                   (replace-regexp-in-string (format "^%s[[:space:]]*" state) "")))
           (tags (org-glance-headline:tags))
           (class (s-join ", " (cl-loop
                                  for tag in tags
@@ -546,6 +568,6 @@ FIXME. Unstable one. Refactor is needed."
              class
              type
              id
-             (or alias stateless-title)))))
+             alias))))
 
 (org-glance:provide)

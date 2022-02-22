@@ -37,32 +37,22 @@
        (org-glance-class-location class)
        (org-element-property :raw-value (org-element-at-point))))))
 
-(defconst org-glance:key-value-pair-re "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$")
+(defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
 (cl-defun org-glance-buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
 Run completing read on keys and copy selected values to kill ring.
 
 Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
-  (goto-char (point-min))
-  (cl-loop
-     while (condition-case nil
-               (re-search-forward org-glance:key-value-pair-re)
-             (search-failed nil))
-     collect (s-trim (substring-no-properties (match-string 1))) into keys
-     collect (s-trim (substring-no-properties (match-string 2))) into vals
-     finally (return (-zip keys vals))))
-
-(cl-defun org-glance-buffer-links ()
-  "Retrieve all `org-link' positions from current buffer."
-  (remove-if #'null
-             (org-element-map (org-element-parse-buffer) 'link
-               (lambda (link)
-                 (let ((raw-link (org-element-property :raw-link link)))
-                   (unless (s-starts-with? "org-glance" raw-link)
-                     (let ((caption (substring-no-properties (or (nth 2 link) raw-link)))
-                           (position (org-element-property :begin link)))
-                       (cons caption position))))))))
+  (save-excursion
+    (goto-char (point-min))
+    (cl-loop
+       while (condition-case nil
+                 (re-search-forward org-glance:key-value-pair-re)
+               (search-failed nil))
+       collect (s-trim (substring-no-properties (match-string 1))) into keys
+       collect (s-trim (substring-no-properties (match-string 2))) into vals
+       finally (return (-zip keys vals)))))
 
 (cl-defun org-glance:list-directories (base-dir)
   (--filter
