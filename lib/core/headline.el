@@ -176,8 +176,8 @@ metastore.")
   (save-excursion
     (goto-char (point-min))
     (cl-loop
-       for (link . contents) in (org-glance-parse-links-with-contents)
-       do (save-excursion (replace-string link contents)))))
+       for (link title pos) in (org-glance-parse-links)
+       do (save-excursion (replace-string link title)))))
 
 (cl-defun org-glance-headline:title (&optional (headline (org-glance-headline:at-point)))
   "Get title of HEADLINE, cleanup links."
