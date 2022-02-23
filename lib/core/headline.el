@@ -32,7 +32,7 @@ metastore.")
                                                                                           (save-restriction
                                                                                             (org-narrow-to-subtree)
                                                                                             ;; (org-end-of-meta-data t)
-                                                                                            (when (org-glance-parse-links-with-positions)
+                                                                                            (when (org-glance-parse-links)
                                                                                               'contains-link))))))
         (:contains-property-p        . (:reader org-glance-headline:contains-property?       :writer (lambda (hl)
                                                                                                        (save-excursion
