@@ -30,6 +30,11 @@ field of graph processing and visualization.
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
+** gantt chart view
+1. *STARTED* Project       █████████████████████████
+      *DONE* Decomposition ▒▒▒▒▒▒▒
+      *TODO* Do something         ▒▒▒▒▒▒▒▒▒▒▒▒▒
+      *TODO* Publish report                    ▒▒▒▒▒
 ** TODO clone id should be unique (postfix)
 ** DONE bindat
 CLOSED: [2022-02-15 Tue 23:03]
