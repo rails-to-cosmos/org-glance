@@ -269,4 +269,12 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
 (cl-defun org-glance-materialized-headline-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
 
+(cl-defun org-glance-materialize-headline:refresh ()
+  (interactive)
+  (when-let (headline (org-glance-metastore:get-headline --org-glance-materialized-headline:id))
+    (let ((buffer (buffer-name)))
+      (kill-buffer buffer)
+      (org-glance-headline:materialize headline)
+      (switch-to-buffer buffer))))
+
 (org-glance:provide)
