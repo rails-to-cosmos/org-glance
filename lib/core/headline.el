@@ -496,8 +496,8 @@ FIXME. Unstable one. Refactor is needed."
                (concat "[#" (char-to-string priority) "]" " ")
              "")
            title
-           ;; " "
-           ;; tags
+           " "
+           tags
            "\n"
            (if closed
                (concat "CLOSED: "

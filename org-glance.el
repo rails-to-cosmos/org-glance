@@ -340,6 +340,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
         (funcall action headline)
       (org-glance-choose-and-apply
        :filter (lambda (headline)
+                 (pp headline)
                  (and
                   (org-glance-headline:active? headline)
                   (or (org-glance-headline:contains-property? headline)
