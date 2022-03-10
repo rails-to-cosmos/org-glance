@@ -424,14 +424,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (progress-reporter-update progress-reporter current-progress)
          (org-glance:with-file-visited file
            (org-element-map (org-element-parse-buffer 'headline) 'headline
-             (lambda (headline)
-               (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
-                 (when (and (member tag tags) (not (member 'archive tags)))
-                   (save-excursion
-                     (goto-char (org-element-property :begin headline))
-                     (let ((headline (org-glance-headline:at-point)))
-                       (org-glance-metastore:add-headline headline metastore)
-                       (push (org-glance-headline:overview) overviews))))))))
+             (lambda (element)
+               (save-excursion
+                 (goto-char (org-element-property :begin element))
+                 (let* ((headline (org-glance-headline:at-point))
+                        (tags (mapcar #'downcase (org-element-property :tags headline))))
+                   (when (and (member tag tags) (not (member 'archive tags)))
+                     (org-glance-metastore:add-headline headline metastore)
+                     (push (org-glance-headline:overview) overviews)))))))
        else
        do
          (org-glance-with-debug-msg "Persist metastore changes..."
@@ -465,7 +465,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (cl-loop for overview in overviews
                 do (insert overview "\n"))
              (org-glance-overview:order)
-             (org-overview)))
+             (org-overview)
+             (org-align-tags 'all)))
 
          (remhash class org-glance-overview-deferred-import-hash-table)
          (progress-reporter-done progress-reporter))))
