@@ -22,20 +22,29 @@ field of graph processing and visualization.
 
 * Issues
 ** TODO Use https://github.com/alphapapa/makem.sh
-** TODO Clone feature (clone on repeat, clone-archive+reschedule)
-** DONE Split capture and reschedule?
-CLOSED: [2021-10-23 Sat 13:24]
+** DONE Headline
+CLOSED: [2022-03-13 Sun 19:22]
 :LOGBOOK:
-- State "DONE"       from "TODO"       [2021-10-23 Sat 13:24]
+- State "DONE"       from              [2022-03-13 Sun 19:22]
 :END:
-** TODO Overview kill-headline should do materialization. Add tests
-** DONE Fix headline-at-point behavior
-CLOSED: [2021-10-13 Wed 14:28]
+Unmutable serializable data structure.
+** TODO Registries
+** TODO Materialization
+** TODO Overview [1/5]
+*** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:
-- State "DONE"       from "TODO"       [2021-10-13 Wed 14:28]
+- State "STARTED"    from "TODO"       [2021-09-12 Sun 14:06]
+CLOCK: [2021-09-12 Sun 14:06]--[2021-09-12 Sun 16:28] =>  2:22
+- Clocked out on [2021-09-12 Sun 16:28]
 :END:
-** TODO Gamification
-- [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
+*** TODO commented headlines restrictions
+*** TODO org-overview-mode: modify-sync headline feature
+*** DONE org-overview-mode: add headline feature
+CLOSED: [2021-08-26 Thu 10:40]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2021-08-26 Thu 10:40]
+:END:
+*** TODO org-glance:format issue for strings containing % symbol
 ** Anchor Modeling
 - =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
 - =Article= [[org-glance-visit:Article-20210826-9b1d041ca0c9581606151a2ae496115d][Modeling Conflicting, Unreliable, and Varying Information]]
@@ -65,89 +74,12 @@ Cache roles: employee/employer, contact/task
 *** [[https://www.data-to-viz.com/graph/edge_bundling.html][Hierarchical edge bundling – from Data to Viz]]
 *** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
 *** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
-** TODO Overview Mode
-*** TODO overview of all views registered with view-scoped actions
-:LOGBOOK:
-- State "STARTED"    from "TODO"       [2021-09-12 Sun 14:06]
-CLOCK: [2021-09-12 Sun 14:06]--[2021-09-12 Sun 16:28] =>  2:22
-- Clocked out on [2021-09-12 Sun 16:28]
-:END:
-*** TODO commented headlines restrictions
-*** TODO org-overview-mode: modify-sync headline feature
-*** DONE org-overview-mode: add headline feature
-CLOSED: [2021-08-26 Thu 10:40]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-08-26 Thu 10:40]
-:END:
-*** TODO org-glance:format issue for strings containing % symbol
-** TODO Headline API
-*** TODO headline API: add unit tests
-** TODO Agenda and Notifications
+** Materialization [0/0]
+** Agenda [0/0]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** Unsorted [5/18]
-*** TODO Resolve title collision by traversing dependencies
-*** TODO Handle capture cancelling
-*** TODO Clone repetitive headlines
-*** DONE [#A] make headline types implicit with headline grain
-CLOSED: [2021-10-01 Fri 16:40]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
-:END:
-*** DONE implement custom schedule (maybe for ledna)
-CLOSED: [2021-10-01 Fri 16:40]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
-:END:
-*** TODO high priority for current clocked-in dependencies in completing read
-*** DONE remove headline feature
-CLOSED: [2021-10-01 Fri 16:40]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
-:END:
-*** TODO capture templates support
-*** CANCELLED change metastore serialization format (elisp → json)
-CLOSED: [2021-10-01 Fri 16:40]
-:LOGBOOK:
-- State "CANCELLED"  from "TODO"       [2021-10-01 Fri 16:40]
-:END:
-*** TODO mutable states → publish-subscribe model
-- implement write ahead log
-- store initial state and diffs, then apply compaction
-- subscribe on changes
-*** DONE register headlines in metastore & overview on materialized sync
-CLOSED: [2021-09-12 Sun 13:45]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2021-09-12 Sun 13:45]
-:END:
-*** TODO refactor capture with org-refile
-*** TODO [#C] If summary is unregistered, prompt to register it before any user action
-*** TODO Read views from directory to minimize config
-:LOGBOOK:
-- State "STARTED"    from "TODO"       [2021-09-03 Fri 09:46]
-CLOCK: [2021-09-03 Fri 09:46]--[2021-09-03 Fri 18:15] =>  8:29
-- Clocked out on [2021-09-03 Fri 19:15]
-:END:
-*** TODO [#C] lexical binding breaks formatting
-*** TODO view-based materialized view buffer names: *materialized-event*
-*** TODO views github-like dashboards
-
-| #   | Jul | Aug | Sep | Oct | Nov | Dec |
-|-----+-----+-----+-----+-----+-----+-----|
-| Mon | ▬▬▬ | ### | ### | ### | ### | ### |
-| Tue | ▬▬▬ | ### | ### | ### | ### | ### |
-| Wed | ### | ### | ### | ### | ### | ### |
-| Thu | ### | ### | ### | ### | ### | ### |
-| Fri | ### | ### | ### | ### | ### | ### |
-| Sat | ### | ### | ### | ### | ### | ### |
-| Sun | ### | ### | ### | ### | ### | ### |
-
-*** TODO read-only flag for materialized views
-*** TODO full-text search
-*** TODO parse encrypted blocks in any point of subtree
-*** TODO make ARCHIVED/Commented entries inactive (it is populated by EXPORT, but not visible in OPEN/VISIT/MATERIALIZE)
-** TODO New Actions
-*** TODO Execute Babel Blocks and Retrieve Results
+** [#C] Gamification
+- [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 * Thoughts
 
 - [[https://github.com/narendraj9/emlib][emlib: a humble Machine Learning library]]

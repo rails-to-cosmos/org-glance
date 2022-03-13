@@ -81,43 +81,43 @@ Return t if it is or raise `user-error' otherwise."
 `org-glance-headline' is an `org-element' of type `org-data'
 with some meta properties and `org-element' of type `headline' in contents."
   (org-glance:with-heading-at-point
-    (let* ((ast (org-element-parse-buffer))
-           (subtree (org-element-contents ast))
-           (element (car subtree)))
+      (let* ((ast (org-element-parse-buffer))
+             (subtree (org-element-contents ast))
+             (element (car subtree)))
 
-      ;; normalize indentation
-      (let ((indent-offset (1- (org-element-property :level element))))
-        (when (> indent-offset 0)
-          (cl-loop
-             for headline in (org-element-map subtree 'headline #'identity)
-             for level = (org-element-property :level headline)
-             do (org-element-put-property headline :level (- level indent-offset)))))
+        ;; normalize indentation
+        (let ((indent-offset (1- (org-element-property :level element))))
+          (when (> indent-offset 0)
+            (cl-loop
+               for headline in (org-element-map subtree 'headline #'identity)
+               for level = (org-element-property :level headline)
+               do (org-element-put-property headline :level (- level indent-offset)))))
 
-      (let ((contents (->> subtree
-                           org-element-interpret-data
-                           substring-no-properties
-                           s-trim)))
-        (org-glance-headline
-         :title (with-temp-buffer
-                  (insert (or (org-element-property :TITLE element)
-                              (org-element-property :raw-value element)
-                              ""))
-                  (->> (org-element-parse-buffer)
-                       org-glance-replace-links-with-titles
-                       org-element-interpret-data
-                       substring-no-properties
-                       s-trim))
-         :class (--map (intern (downcase it)) (org-element-property :tags element))
-         :features (cl-flet ((bool-to-int (bool) (if (null bool) 0 1)))
-                     (bindat-pack
-                      org-glance-headline:features--bindat-spec
-                      (list (cons 'archived (bool-to-int (org-element-property :archivedp element)))
-                            (cons 'commented (bool-to-int (org-element-property :commentedp element)))
-                            (cons 'closed (bool-to-int (org-element-property :closed element)))
-                            (cons 'encrypted (bool-to-int (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
-                            (cons 'linked (bool-to-int (s-match-strings-all org-link-any-re contents)))
-                            (cons 'propertized (bool-to-int (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents))))))
-         :contents contents)))))
+        (let ((contents (->> subtree
+                             org-element-interpret-data
+                             substring-no-properties
+                             s-trim)))
+          (org-glance-headline
+           :title (with-temp-buffer
+                    (insert (or (org-element-property :TITLE element)
+                                (org-element-property :raw-value element)
+                                ""))
+                    (->> (org-element-parse-buffer)
+                         org-glance-replace-links-with-titles
+                         org-element-interpret-data
+                         substring-no-properties
+                         s-trim))
+           :class (--map (intern (downcase it)) (org-element-property :tags element))
+           :features (cl-flet ((bool-to-int (bool) (if (null bool) 0 1)))
+                       (bindat-pack
+                        org-glance-headline:features--bindat-spec
+                        (list (cons 'archived (bool-to-int (org-element-property :archivedp element)))
+                              (cons 'commented (bool-to-int (org-element-property :commentedp element)))
+                              (cons 'closed (bool-to-int (org-element-property :closed element)))
+                              (cons 'encrypted (bool-to-int (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+                              (cons 'linked (bool-to-int (s-match-strings-all org-link-any-re contents)))
+                              (cons 'propertized (bool-to-int (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents))))))
+           :contents contents)))))
 
 (cl-defmethod org-glance-headline:serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
