@@ -51,7 +51,7 @@
     :initarg :features))
   "Headline model.")
 
-(defvar org-glance-headline:feature--bindat-spec
+(defvar org-glance-headline:features--bindat-spec
   '((archived byte)
     (commented byte)
     (closed byte)
@@ -110,13 +110,13 @@ with some meta properties and `org-element' of type `headline' in contents."
          :class (--map (intern (downcase it)) (org-element-property :tags element))
          :features (cl-flet ((bool-to-int (bool) (if (null bool) 0 1)))
                      (bindat-pack
-                      org-glance-headline:feature--bindat-spec
+                      org-glance-headline:features--bindat-spec
                       (list (cons 'archived (bool-to-int (org-element-property :archivedp element)))
                             (cons 'commented (bool-to-int (org-element-property :commentedp element)))
                             (cons 'closed (bool-to-int (org-element-property :closed element)))
                             (cons 'encrypted (bool-to-int (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
                             (cons 'linked (bool-to-int (s-match-strings-all org-link-any-re contents)))
-                            (cons 'propertized (bool-to-int (s-match-strings-all "^\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$" contents))))))
+                            (cons 'propertized (bool-to-int (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents))))))
          :contents contents)))))
 
 (cl-defmethod org-glance-headline:serialize ((headline org-glance-headline))
@@ -141,7 +141,7 @@ with some meta properties and `org-element' of type `headline' in contents."
 (cl-defmethod org-glance-headline:features ((headline org-glance-headline))
   "Read HEADLINE features."
   (->> (slot-value headline 'features)
-       (bindat-unpack org-glance-headline:feature--bindat-spec)))
+       (bindat-unpack org-glance-headline:features--bindat-spec)))
 
 (cl-defmethod org-glance-headline:archived-p ((headline org-glance-headline))
   "Is HEADLINE archived?"

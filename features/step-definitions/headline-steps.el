@@ -55,7 +55,7 @@
   (lambda ()
     (should (not (org-glance-headline:encrypted-p org-glance-test:current-headline)))))
 
-(Then "^headline should contain custom properties$"
+(Then "^headline should be propertized$"
   (lambda ()
     (should (org-glance-headline:propertized-p org-glance-test:current-headline))))
 

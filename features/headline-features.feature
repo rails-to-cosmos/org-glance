@@ -27,7 +27,7 @@ Feature: Headline features
       Password: admin
       """
     And I create headline from element at point
-    Then headline should contain custom properties
+    Then headline should be propertized
 
   Scenario: Archivable
     When I create an org file with content:
