@@ -27,7 +27,7 @@
 
 (And "^I create headline from element at point$"
   (lambda ()
-    (setq org-glance-test:current-headline (org-glance-headline:create-from-heading-at-point))))
+    (setq org-glance-test:current-headline (org-glance-headline-at-point))))
 
 (And "^I save headline to file \"\\([^\"]+\\)\"$"
   (lambda (file)

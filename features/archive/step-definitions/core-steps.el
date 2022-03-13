@@ -55,7 +55,7 @@
        (should (= 0 (length (org-element-map (org-element-parse-buffer 'headline) 'headline (lambda (el) el)))))))
 
 (Then "^headline at point should contain links$"
-      (lambda () (should (->> (org-glance-headline:at-point)
+      (lambda () (should (->> (org-glance-headline-at-point)
                          org-glance-headline:id
                          org-glance-metastore:get-headline
                          org-glance-headline:contains-link-p))))
