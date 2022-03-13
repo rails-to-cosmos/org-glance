@@ -1,5 +1,5 @@
 Feature: Headline
-  Scenario: Should be creatable from org-element at point
+  Scenario: Should be creatable from org headline at point
     When I create an org file with content:
       """
       * Google SRE Book :book:article:

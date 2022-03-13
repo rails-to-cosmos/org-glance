@@ -9,8 +9,8 @@
       (lambda (expected-class)
         (let* ((expected-class (intern expected-class))
                (headline org-glance-test:current-headline)
-               (tags (org-glance-headline:tags headline)))
-          (should (memq expected-class tags)))))
+               (class (org-glance-headline:class headline)))
+          (should (memq expected-class class)))))
 
 (Then "^headline contents? should be:$"
       (lambda (expected-contents)
