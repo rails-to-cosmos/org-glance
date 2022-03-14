@@ -35,12 +35,7 @@
 (require 'org-glance-serializable)
 
 (defclass org-glance-headline (org-glance-serializable)
-  ((id
-    :initarg :id
-    :initform nil
-    :type symbol
-    :reader org-glance-headline:id)
-   (title
+  ((title
     :initarg :title
     :type string
     :reader org-glance-headline:title)
@@ -56,11 +51,55 @@
    (encrypted   :initarg :encrypted   :reader org-glance-headline:encrypted-p)
    (linked      :initarg :linked      :reader org-glance-headline:linked-p)
    (propertized :initarg :propertized :reader org-glance-headline:propertized-p)
+   (properties  :initarg :properties :reader org-glance-headline:properties)
    (file        :initarg :file        :reader org-glance-headline:file)
    (buffer      :initarg :buffer
                 :initform nil
                 :reader org-glance-headline:buffer))
   "Headline model.")
+
+(defun org-glance-headline-at-point ()
+  "Create headline from `org-element' at point.
+`org-glance-headline' is an `org-element' of type `org-data'
+with some meta properties and `org-element' of type `headline' in contents."
+  (org-glance:with-heading-at-point
+    (let* ((subtree (->> (org-element-parse-buffer)
+                         (org-element-contents)))
+           (element (car subtree)))
+
+      ;; normalize indentation
+      (let ((indent-offset (1- (org-element-property :level element))))
+        (when (> indent-offset 0)
+          (cl-loop
+             for headline in (org-element-map subtree 'headline #'identity)
+             for level = (org-element-property :level headline)
+             do (org-element-put-property headline :level (- level indent-offset)))))
+
+      (let ((contents (->> subtree
+                           org-element-interpret-data
+                           substring-no-properties
+                           s-trim)))
+        (org-glance-headline
+         :title (with-temp-buffer
+                  (insert (or (org-element-property :TITLE element)
+                              (org-element-property :raw-value element)
+                              ""))
+                  (->> (org-element-parse-buffer)
+                       org-glance-replace-links-with-titles
+                       org-element-interpret-data
+                       substring-no-properties
+                       s-trim))
+         :class (--map (intern (downcase it)) (org-element-property :tags element))
+         :archived (not (null (org-element-property :archivedp element)))
+         :commented (not (null (org-element-property :commentedp element)))
+         :closed (not (null (org-element-property :closed element)))
+         :encrypted (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+         :linked (not (null (s-match-strings-all org-link-any-re contents)))
+         :propertized (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
+         :properties (org-entry-properties)
+         :contents contents
+         :file (buffer-file-name)
+         :buffer (current-buffer))))))
 
 (cl-defmethod org-glance-headline:copy ((headline org-glance-headline) (slots list))
   (let ((args (cl-loop for slot in slots
@@ -68,6 +107,7 @@
                               (slot-value headline slot)))))
     (apply 'org-glance-headline args)))
 
+;; override
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
   (prin1-to-string (org-glance-headline:copy headline '(title class archived commented closed encrypted linked propertized contents file))))
