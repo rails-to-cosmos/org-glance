@@ -1,0 +1,35 @@
+#+begin_src emacs-lisp :results org
+(let ((domain (org-glance-headline-registry :id "store"))
+      (headline (save-excursion
+                  (goto-char (point-max))
+                  (org-glance-headline-at-point))))
+  (org-glance-headline:register headline domain)
+  (org-glance-headline:contents headline)
+  headline)
+#+end_src
+
+#+RESULTS:
+#+begin_src org
+#s(org-glance-headline hello world (class home) * DONE hello world                                                              :class:home:
+CLOSED: [2022-03-25 Fri 07:22]
+:PROPERTIES:
+:CUSTOM_ID: hello
+:CATEGORY: test
+:ORG_GLANCE__STORE__ID: class|home-25149:24738:148176:0-5eb63bbbe01eeed093cb22bb8f5acdc3
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-03-25 Fri 07:22]
+:END:
+headline contents nil nil t nil nil t ((ORG_GLANCE__STORE__ID . class|home-25149:24738:148176:0-5eb63bbbe01eeed093cb22bb8f5acdc3) (CATEGORY . test) (CUSTOM_ID . hello) (TIMESTAMP_IA . [2022-03-25 Fri 07:22]) (CLOSED . [2022-03-25 Fri 07:22]) (BLOCKED . ) (ALLTAGS . :class:home:) (TAGS . :class:home:) (FILE . /Users/dmitry.akatov/sync/stuff/org-glance/sandbox/headline-serde.org) (PRIORITY . B) (TODO . DONE) (ITEM . hello world)) /Users/dmitry.akatov/sync/stuff/org-glance/sandbox/headline-serde.org headline-serde.org)
+#+end_src
+
+* DONE hello world                                                              :class:home:
+CLOSED: [2022-03-25 Fri 07:22]
+:PROPERTIES:
+:CUSTOM_ID: hello
+:CATEGORY: test
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-03-25 Fri 07:22]
+:END:
+headline contents

@@ -101,7 +101,7 @@ with some meta properties and `org-element' of type `headline' in contents."
          :file (buffer-file-name)
          :buffer (current-buffer))))))
 
-(cl-defmethod org-glance-headline:copy ((headline org-glance-headline) (slots list))
+(cl-defmethod org-glance-headline-copy ((headline org-glance-headline) (slots list))
   (let ((args (cl-loop for slot in slots
                  append (list (intern (format ":%s" slot))
                               (slot-value headline slot)))))
@@ -110,7 +110,7 @@ with some meta properties and `org-element' of type `headline' in contents."
 ;; override
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
-  (prin1-to-string (org-glance-headline:copy headline '(title class archived commented closed encrypted linked propertized contents file))))
+  (prin1-to-string (org-glance-headline-copy headline '(title class archived commented closed encrypted linked propertized contents file))))
 
 (cl-defmacro org-glance:with-heading-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
@@ -121,16 +121,34 @@ with some meta properties and `org-element' of type `headline' in contents."
        (org-narrow-to-subtree)
        ,@forms)))
 
-(cl-defmethod org-glance-headline:save ((headline org-glance-headline) file)
+(cl-defmethod org-glance-headline-save ((headline org-glance-headline) file)
   "Write HEADLINE to FILE."
   (with-temp-file file
     (insert (org-glance-serialize headline))))
 
-(defun org-glance-headline:load (file)
+(defun org-glance-headline-load (file)
   "Load headline from FILE."
   (with-temp-buffer
     (insert-file-contents file)
     (org-glance-deserialize (buffer-string))))
+
+(cl-defmethod org-glance-headline-get-property ((headline org-glance-headline) key)
+  "Retrieve KEY from HEADLINE properties."
+  (alist-get key (org-glance-headline:properties headline) nil nil #'string=))
+
+(cl-defmethod org-glance-headline-set-property ((headline org-glance-headline) key (value string))
+  "Set HEADLINE property KEY to VALUE."
+  (let ((properties (org-glance-headline:properties headline)))
+    (setf (alist-get key properties nil t #'string=) value)
+    (setf (slot-value headline 'properties) properties)
+    (setf (slot-value headline 'contents)
+          (with-temp-buffer
+            (org-mode)
+            (save-excursion
+              (insert (org-glance-headline:contents headline))
+              (org-set-property key value)
+              (buffer-substring-no-properties (point-min) (point-max)))))
+    value))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

@@ -38,7 +38,7 @@
   (prin1-to-string object))
 
 (defun org-glance-deserialize (dump)
-  "Deserialize DUMP to object."
+  "Deserialize object from DUMP."
   (read dump))
 
 (provide 'org-glance-serializable)

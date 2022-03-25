@@ -44,8 +44,6 @@
 (require 'org-glance-class)
 (require 'org-glance-class-registry)
 
-(defvar org-glance-storage (org-glance-headline-registry))
-
 (defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (org-glance-ensure-directory org-glance-directory)

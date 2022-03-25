@@ -31,13 +31,13 @@
 
 (And "^I save headline to file \"\\([^\"]+\\)\"$"
   (lambda (file)
-    (org-glance-headline:save org-glance-test:current-headline
+    (org-glance-headline-save org-glance-test:current-headline
                               (f-join org-glance-test:root-location file))))
 
 (Then "^I load headline from file \"\\([^\"]+\\)\"$"
   (lambda (file)
     (setq org-glance-test:current-headline
-          (org-glance-headline:load (f-join org-glance-test:root-location file)))))
+          (org-glance-headline-load (f-join org-glance-test:root-location file)))))
 
 (Then "^headline should contain links?$"
       (lambda ()

@@ -1,4 +1,4 @@
-Feature: Headline
+Feature: Headline serde
   Scenario: Should be serializable
     When I create an org file with content:
       """

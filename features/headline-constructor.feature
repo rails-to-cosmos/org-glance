@@ -1,5 +1,5 @@
-Feature: Headline
-  Scenario: Should be creatable from org headline at point
+Feature: Headline constructor
+  Scenario: Create from org headline at point
     When I create an org file with content:
       """
       * Google SRE Book :book:article:
@@ -15,7 +15,7 @@ Feature: Headline
       Managing Incidents
       """
 
-  Scenario: Should be creatable from the inside
+  Scenario: Create from the inside
     When I create an org file with content:
       """
       * TODO Vocal lesson :Task:
