@@ -37,7 +37,7 @@
        (org-glance-class-location class)
        (org-element-property :raw-value (org-element-at-point))))))
 
-(defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)$")
+(defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
 (cl-defun org-glance-buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
