@@ -15,7 +15,7 @@
   (seq-let (month day year) date
     (format "%d-%02d-%02d" year month day)))
 
-(cl-defun org-glance-agenda-location (&optional (date (calendar-current-date)))
+(cl-defun org-glance-agenda-location (&optional (date (org-glance-agenda--read-date)))
   (-org-glance:make-file-directory
    (f-join org-glance-directory
            "agenda"
@@ -26,16 +26,23 @@
   nil nil org-glance-agenda-mode-map
   (read-only-mode 'toggle))
 
-(cl-defun org-glance-overview:calendar-widget (&optional (date (calendar-current-date)))
+(cl-defun org-glance-overview:calendar-widget (&optional (date (org-glance-agenda--read-date)))
   (with-temp-buffer
     (save-excursion
       (calendar-generate-month (car date) (caddr date) 0))
     (replace-regexp (format "[[:space:]]\\(%d\\)[[:space:]]" (cadr date)) " _\\1_ ")
     (buffer-string)))
 
-(cl-defun org-glance-agenda (&optional (date (calendar-current-date)))
-  (interactive)
 
+(cl-defun org-glance-agenda--read-date ()
+  (let ((ds (ts-parse (org-read-date))))
+    (list
+     (ts-month ds)
+     (ts-day ds)
+     (ts-year ds))))
+
+(cl-defun org-glance-agenda (&optional (date (org-glance-agenda--read-date)))
+  (interactive)
   (let ((agenda-location (org-glance-agenda-location date)))
 
     (with-temp-file agenda-location
