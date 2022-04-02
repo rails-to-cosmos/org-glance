@@ -31,6 +31,7 @@
 (require 'dash)
 (require 's)
 (require 'eieio)
+(require 'ol)
 
 (require 'org-glance-serializable)
 
@@ -58,6 +59,15 @@
                 :reader org-glance-headline:buffer))
   "Headline model.")
 
+(cl-defmacro org-glance:with-heading-at-point (&rest forms)
+  "Execute FORMS only if point is at heading."
+  (declare (indent 0))
+  `(save-excursion
+     (org-glance--ensure-at-heading)
+     (save-restriction
+       (org-narrow-to-subtree)
+       ,@forms)))
+
 (defun org-glance-headline-at-point ()
   "Create headline from `org-element' at point.
 `org-glance-headline' is an `org-element' of type `org-data'
@@ -76,19 +86,19 @@ with some meta properties and `org-element' of type `headline' in contents."
              do (org-element-put-property headline :level (- level indent-offset)))))
 
       (let ((contents (->> subtree
-                           org-element-interpret-data
-                           substring-no-properties
-                           s-trim)))
+                           (org-element-interpret-data)
+                           (substring-no-properties)
+                           (s-trim))))
         (org-glance-headline
          :title (with-temp-buffer
                   (insert (or (org-element-property :TITLE element)
                               (org-element-property :raw-value element)
                               ""))
                   (->> (org-element-parse-buffer)
-                       org-glance-replace-links-with-titles
-                       org-element-interpret-data
-                       substring-no-properties
-                       s-trim))
+                       (org-glance--links-to-titles)
+                       (org-element-interpret-data)
+                       (substring-no-properties)
+                       (s-trim)))
          :class (--map (intern (downcase it)) (org-element-property :tags element))
          :archived (not (null (org-element-property :archivedp element)))
          :commented (not (null (org-element-property :commentedp element)))
@@ -111,15 +121,6 @@ with some meta properties and `org-element' of type `headline' in contents."
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
   (prin1-to-string (org-glance-headline-copy headline '(title class archived commented closed encrypted linked propertized contents file))))
-
-(cl-defmacro org-glance:with-heading-at-point (&rest forms)
-  "Execute FORMS only if point is at heading."
-  (declare (indent 0))
-  `(save-excursion
-     (org-glance:ensure-at-heading)
-     (save-restriction
-       (org-narrow-to-subtree)
-       ,@forms)))
 
 (cl-defmethod org-glance-headline-save ((headline org-glance-headline) file)
   "Write HEADLINE to FILE."

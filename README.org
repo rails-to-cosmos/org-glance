@@ -22,13 +22,11 @@ field of graph processing and visualization.
 
 * Issues
 ** TODO Use https://github.com/alphapapa/makem.sh
-** DONE Headline
-CLOSED: [2022-03-13 Sun 19:22]
+** STARTED Registries
 :LOGBOOK:
-- State "DONE"       from              [2022-03-13 Sun 19:22]
+CLOCK: [2022-04-02 Sat 12:33]
+- State "STARTED"    from "TODO"       [2022-04-02 Sat 12:33]
 :END:
-Unmutable serializable data structure.
-** TODO Registries
 ** TODO Materialization
 ** TODO Overview [1/5]
 *** TODO overview of all views registered with view-scoped actions

@@ -1,4 +1,5 @@
 (require 'f)
+(require 'org-glance)
 
 (defvar org-glance-support-path
   (f-dirname load-file-name))
@@ -20,37 +21,28 @@
 (Setup  ;; Before anything has run
 
  ;; Implement directory structure for user and system data
- (defvar org-glance-test:root-location)
- (defvar org-glance-test:view-location)
- (defvar org-glance-test:user-location)
- (defvar org-glance-test:current-headline)
-
- (message "* Test suite has been started"))
+ (defvar org-glance-test--root-location)
+ (defvar org-glance-test--view-location)
+ (defvar org-glance-test--user-location)
+ (defvar org-glance-test--current-headline))
 
 (Before
  ;; Before each scenario is run
- (message "** Begin new scenario")
 
  (desktop-clear)
- (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
-       org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
-       org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
-       org-glance-directory org-glance-test:view-location
+ (setq org-glance-test--root-location (make-temp-file "org-glance-" 'directory)
+       org-glance-test--view-location (f-join org-glance-test--root-location "org-glance")
+       org-glance-test--user-location (f-join org-glance-test--root-location "user-data")
+       org-glance-directory org-glance-test--view-location
        org-glance:log-level -2305843009213693952
        org-glance-classes (make-hash-table)
-       org-glance-test:current-headline nil)
+       org-glance-test--current-headline nil)
 
- (mkdir org-glance-test:view-location)
- (mkdir org-glance-test:user-location)
-
- (message "*** Env")
- (message " org-glance-directory: %s" org-glance-directory)
- (message "*** StdOut"))
+ (mkdir org-glance-test--view-location)
+ (mkdir org-glance-test--user-location))
 
 (After
- (delete-directory org-glance-test:root-location t)
- (message "Remove scenario directory \"%s\"" org-glance-test:root-location)
- (message "End"))
+ (delete-directory org-glance-test--root-location t))
 
 (Teardown
  (message "** Teardown"))

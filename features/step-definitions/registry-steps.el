@@ -1,0 +1,4 @@
+(Given "^registry \"\\([^\"]+\\)\"$"
+  (lambda (arg)
+
+    ))

@@ -32,7 +32,7 @@
 (require 'dash)
 (require 'org-element)
 
-(defun org-glance:ensure-at-heading ()
+(defun org-glance--ensure-at-heading ()
   "Ensure point is at heading.
 Return t if it is or raise `user-error' otherwise."
   (unless (org-at-heading-p)
@@ -40,7 +40,7 @@ Return t if it is or raise `user-error' otherwise."
   (unless (org-at-heading-p)
     (user-error "Before the first headline")))
 
-(defun org-glance-replace-links-with-titles (ast)
+(defun org-glance--links-to-titles (ast)
   "Replace links with its titles in AST."
   (cl-loop for link in (org-element-map ast 'link #'identity)
      do (org-element-set-element link (or (-some->> link
@@ -49,7 +49,7 @@ Return t if it is or raise `user-error' otherwise."
                                           (org-element-property :raw-link link)))
      finally return ast))
 
-(defun org-glance-ensure-directory (directory)
+(defun org-glance--ensure-directory (directory)
   "Make DIRECTORY if not exist."
   (unless (f-exists? directory)
     (mkdir directory t)))

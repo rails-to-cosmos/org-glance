@@ -3,14 +3,14 @@
 (require 's)
 (require 'with-simulated-input)
 
-(When "^I create a file called \"\\([^\"]+\\)\" with content:$"
+(When "^I create a file called \"\\([^\"]+\\)\" with contents:$"
   (lambda (filename content)
-    (with-temp-file (f-join org-glance-test:user-location filename)
+    (with-temp-file (f-join org-glance-test--user-location filename)
       (insert content))))
 
 (And "^I find file \"\\([^\"]+\\)\"$"
      (lambda (filename)
-       (find-file (f-join org-glance-test:user-location filename))))
+       (find-file (f-join org-glance-test--user-location filename))))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
@@ -77,7 +77,7 @@
 
 (And "^I rename headline to \"\\([^\"]+\\)\"$"
      (lambda (new-title)
-       (should (org-glance:ensure-at-heading))
+       (should (org-glance--ensure-at-heading))
        (replace-string (org-glance-headline:title) new-title nil (point-min) (save-excursion (end-of-line) (point)))))
 
 (And "^I sync materialized headline$"

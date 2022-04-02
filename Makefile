@@ -15,7 +15,7 @@ build:
 test:
 	${CASK} clean-elc
 	${CASK} build
-	${CASK} exec ecukes --debug
+	${CASK} exec ecukes --debug --reporter spec --error-log ecukes.err
 	${CASK} clean-elc
 
 it:  # run integration tests

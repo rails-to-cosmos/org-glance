@@ -39,15 +39,14 @@
 
 (require 'org-glance-headline)
 (require 'org-glance-headline-header)
-(require 'org-glance-headline-registry)
+(require 'org-glance-registry)
 
 (require 'org-glance-class)
-(require 'org-glance-class-registry)
 
 (defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (org-glance-ensure-directory org-glance-directory)
-  ;; Read `org-glance-headline-registry' from `org-glance-directory'
+  (org-glance--ensure-directory org-glance-directory)
+  ;; Read `org-glance-registry' from `org-glance-directory'
 
   ;; Actualize `org-glance-class-registry'
 
