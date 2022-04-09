@@ -24,7 +24,9 @@
  (defvar org-glance-test--root-location)
  (defvar org-glance-test--view-location)
  (defvar org-glance-test--user-location)
- (defvar org-glance-test--current-headline))
+ (defvar org-glance-test--files)
+ (defvar org-glance-test--headlines)
+ (defvar org-glance-test--registries))
 
 (Before
  ;; Before each scenario is run
@@ -36,7 +38,9 @@
        org-glance-directory org-glance-test--view-location
        org-glance:log-level -2305843009213693952
        org-glance-classes (make-hash-table)
-       org-glance-test--current-headline nil)
+       org-glance-test--files (make-hash-table :test #'equal)
+       org-glance-test--headlines (make-hash-table :test #'equal)
+       org-glance-test--registries (make-hash-table :test #'equal))
 
  (mkdir org-glance-test--view-location)
  (mkdir org-glance-test--user-location))

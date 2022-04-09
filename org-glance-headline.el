@@ -151,5 +151,9 @@ with some meta properties and `org-element' of type `headline' in contents."
               (buffer-substring-no-properties (point-min) (point-max)))))
     value))
 
+(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
+  (string= (org-glance-headline:contents a)
+           (org-glance-headline:contents b)))
+
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

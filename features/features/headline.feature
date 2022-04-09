@@ -15,17 +15,18 @@ Feature: Headline
     And headline "sre" should be an article
 
   Scenario: Create from the inside
-    When I create an org file with contents:
+    Given file "tasks.org"
       """
       * TODO Vocal lesson :Task:
       - Mozart
       - Bach
       """
+    And I find file "tasks.org"
     And I goto the end of the buffer
-    And I create headline from element at point
-    Then headline title should be "Vocal lesson"
-    And headline should be a task
-    And headline contents should be:
+    And I create headline "vocals" from element at point
+    Then headline "vocals" title should be "Vocal lesson"
+    And headline "vocals" should be a task
+    And headline "vocals" contents should be:
       """
       * TODO Vocal lesson :Task:
       - Mozart
@@ -33,96 +34,89 @@ Feature: Headline
       """
 
   Scenario: Serializable
-    Given headline
+    Given headline "lesson"
       """
       *** Driving lesson :Education:
       - Key: Value
       """
-    And I save headline to file "driving.org"
-    And I load headline from file "driving.org"
-    Then headline title should be "Driving lesson"
-    And headline should be an education
-    And headline should be propertized
-    And headline contents should be:
-      """
-      * Driving lesson :Education:
-      - Key: Value
-      """
+    And I save headline "lesson" to file "driving.org"
+    And I load headline "driving" from file "driving.org"
+    Then headline "driving" title should be "Driving lesson"
+    And headline "driving" should be equal to headline "lesson"
 
   Scenario: Normalized (indent level = 1)
-    When I create an org file with contents:
+    Given headline "indented"
       """
       *** Tags :article:
       Features and scenarios can be tagged using syntax @tag
       **** More indentations
       """
-    And I create headline from element at point
-    Then headline title should be "Tags"
-    And headline should be an article
-    And headline contents should be:
+    Given headline "unindented"
       """
       * Tags :article:
       Features and scenarios can be tagged using syntax @tag
       ** More indentations
       """
+    Then headline "indented" should be equal to headline "unindented"
 
-  Scenario: No links in title allowed
-    Given headline
+  Scenario: No links in title
+    Given headline "bookmark"
       """
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
       - Uses fewer resources than other clients
       """
-    Then headline title should be "Transmission bookmark: Transmission Web UI"
-    And headline should be a bookmark
-    And headline contents should be:
+    Then headline "bookmark" title should be "Transmission bookmark: Transmission Web UI"
+    And headline "bookmark" should be a bookmark
+    And headline "bookmark" should contain link
+    And headline "bookmark" contents should be:
       """
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
       - Uses fewer resources than other clients
       """
 
   Scenario: Openable
-    Given headline
+    Given headline "bookmark"
       """
       * Release notes :Bookmark:
       - [[https://www.apple.com/workspace.htm][Release Notes]]
       """
-    Then headline should contain links
+    Then headline "bookmark" should contain links
 
   Scenario: Encryptable
-    Given headline
+    Given headline "bookmark"
       """
       * Release notes :Bookmark:
       aes-encrypted V 1.3-OCB-B-4-4-M
       ttT0N8RLii13eMJ+R25Z/o42dnw9M10+qZDOzH3PjMGzuVQYSxGuDZ2n8UUHwRvsQhgsizOGi4dE
       u65keAuJ/R1oskxb4dkIjFIW2ZLxoghkkb8j6xbLL9I=
       """
-    Then headline should be encrypted
+    Then headline "bookmark" should be encrypted
 
   Scenario: Propertizable
-    Given headline
+    Given headline "credentials"
       """
       * Credentials
       Login: admin
       Password: admin
       """
-    Then headline should be propertized
+    Then headline "credentials" should be propertized
 
   Scenario: Archivable
-    Given headline
+    Given headline "archive"
       """
       * Old stuff :ARCHIVE:
       """
-    Then headline should be archived
+    Then headline "archive" should be archived
 
   Scenario: Commentable
-    Given headline
+    Given headline "comment"
       """
       * COMMENT Implicit stuff
       """
-    Then headline should be commented
+    Then headline "comment" should be commented
 
   Scenario: Closable
-    Given headline
+    Given headline "done"
       """
       * DONE Hard work
       CLOSED: [2022-02-05 Sat 19:09]
@@ -130,4 +124,4 @@ Feature: Headline
       - State "DONE"       from "TODO"       [2022-02-05 Sat 19:09]
       :END:
       """
-    Then headline should be closed
+    Then headline "done" should be closed

@@ -5,3 +5,4 @@ ogpm-cache.el
 /dist/
 /README.org_archive
 /.ecukes-failing-scenarios
+/*.err

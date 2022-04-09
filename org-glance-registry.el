@@ -47,19 +47,27 @@
    ;; queries
    ))
 
-(cl-defmethod org-glance-registry:put
+(cl-defmethod org-glance-registry-put
     ((headline org-glance-headline)
      (registry org-glance-registry))
   "Put HEADLINE into REGISTRY."
-  (let ((id-key (upcase (s-join "__" (list "org_glance" (org-glance-registry:id registry) "id")))))
+  (let ((id-key (org-glance-registry:id-key registry)))
     (or
      (org-glance-headline-get-property headline id-key)
      (let ((id (org-glance-registry--generate-id registry headline)))
-       (org-glance-headline-set-property headline id-key id)))
+       (org-glance-headline-set-property headline id-key id)
+
+       ;; (puthash id headline (org-glance-headlines registry))
+       ))
 
     ;; apply changes to headline
-    ;; add headline to registry
     ))
+
+(cl-defmethod org-glance-registry:id-key ((registry org-glance-registry))
+  "Determine id key for the specified REGISTRY.
+
+This id key will be used to extract ids from existing headlines."
+  (upcase (s-join "__" (list "org_glance" (org-glance-registry:id registry) "id"))))
 
 (cl-defmethod org-glance-registry--generate-id
     ((registry org-glance-registry)
