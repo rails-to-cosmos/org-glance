@@ -522,8 +522,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (define-minor-mode org-glance-overview-mode
     "A minor read-only mode to use in overview files."
   nil nil org-glance-overview-mode-map
-  (read-only-mode 'toggle)
-  (org-overview))
+  (org-overview)
+  (read-only-mode +1))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
