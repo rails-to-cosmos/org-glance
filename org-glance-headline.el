@@ -32,6 +32,7 @@
 (require 's)
 (require 'eieio)
 (require 'ol)
+(require 'org)
 
 (require 'org-glance-serializable)
 
@@ -133,11 +134,11 @@ with some meta properties and `org-element' of type `headline' in contents."
     (insert-file-contents file)
     (org-glance-deserialize (buffer-string))))
 
-(cl-defmethod org-glance-headline-get-property ((headline org-glance-headline) key)
+(cl-defmethod org-glance-headline-property-get ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE properties."
-  (alist-get key (org-glance-headline:properties headline) nil nil #'string=))
+  (alist-get key (org-glance-headline:properties headline) default nil #'string=))
 
-(cl-defmethod org-glance-headline-set-property ((headline org-glance-headline) key (value string))
+(cl-defmethod org-glance-headline-property-set ((headline org-glance-headline) key (value string))
   "Set HEADLINE property KEY to VALUE."
   (let ((properties (org-glance-headline:properties headline)))
     (setf (alist-get key properties nil t #'string=) value)

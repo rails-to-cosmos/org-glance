@@ -5,12 +5,12 @@
 
 (When "^I create a file called \"\\([^\"]+\\)\" with contents:$"
   (lambda (filename content)
-    (with-temp-file (f-join org-glance-test--user-location filename)
+    (with-temp-file (f-join ecukes--user-location filename)
       (insert content))))
 
 (And "^I find file \"\\([^\"]+\\)\"$"
      (lambda (filename)
-       (find-file (f-join org-glance-test--user-location filename))))
+       (find-file (f-join ecukes--user-location filename))))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)

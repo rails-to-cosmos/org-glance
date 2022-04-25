@@ -53,12 +53,10 @@
   "Put HEADLINE into REGISTRY."
   (let ((id-key (org-glance-registry:id-key registry)))
     (or
-     (org-glance-headline-get-property headline id-key)
+     (org-glance-headline-property-get headline id-key)
      (let ((id (org-glance-registry--generate-id registry headline)))
-       (org-glance-headline-set-property headline id-key id)
-
-       ;; (puthash id headline (org-glance-headlines registry))
-       ))
+       (org-glance-headline-property-set headline id-key id)
+       (puthash id headline (org-glance-headlines registry))))
 
     ;; apply changes to headline
     ))
