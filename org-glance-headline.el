@@ -34,6 +34,7 @@
 (require 'ol)
 (require 'org)
 
+(require 'org-glance-helpers)
 (require 'org-glance-serializable)
 
 (defclass org-glance-headline (org-glance-serializable)
@@ -112,10 +113,17 @@ with some meta properties and `org-element' of type `headline' in contents."
          :file (buffer-file-name)
          :buffer (current-buffer))))))
 
+(cl-defmethod org-glance-headline:directory ((headline org-glance-headline))
+  (let ((file (org-glance-headline:file headline))
+        (buffer (org-glance-headline:buffer headline)))
+    (cond ((file-exists-p file) (file-name-directory file))
+          ((buffer-live-p buffer) (with-current-buffer buffer
+                                    default-directory)))))
+
 (cl-defmethod org-glance-headline-copy ((headline org-glance-headline) (slots list))
   (let ((args (cl-loop for slot in slots
-                 append (list (intern (format ":%s" slot))
-                              (slot-value headline slot)))))
+                    append (list (intern (format ":%s" slot))
+                                 (slot-value headline slot)))))
     (apply 'org-glance-headline args)))
 
 ;; override

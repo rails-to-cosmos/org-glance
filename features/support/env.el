@@ -26,7 +26,10 @@
  (defvar ecukes--user-location)
  (defvar ecukes--files)
  (defvar ecukes--headlines)
- (defvar ecukes--registries))
+ (defvar ecukes--registries)
+
+ (defun H (alias) (gethash alias ecukes--headlines))
+ (defun R (alias) (gethash alias ecukes--registries)))
 
 (Before
  ;; Before each scenario is run

@@ -51,15 +51,14 @@
     ((headline org-glance-headline)
      (registry org-glance-registry))
   "Put HEADLINE into REGISTRY."
-  (let ((id-key (org-glance-registry:id-key registry)))
-    (or
-     (org-glance-headline-property-get headline id-key)
-     (let ((id (org-glance-registry--generate-id registry headline)))
-       (org-glance-headline-property-set headline id-key id)
-       (puthash id headline (org-glance-headlines registry))))
-
-    ;; apply changes to headline
-    ))
+  ;; (org-glance-headline-materialize headline registry)
+  ;; (let ((id-key (org-glance-registry:id-key registry)))
+  ;;   (or
+  ;;    (org-glance-headline-property-get headline id-key)
+  ;;    (let ((id (org-glance-registry--generate-id registry headline)))
+  ;;      (org-glance-headline-property-set headline id-key id)
+  ;;      (puthash id headline (org-glance-headlines registry)))))
+  )
 
 (cl-defmethod org-glance-registry:id-key ((registry org-glance-registry))
   "Determine id key for the specified REGISTRY.
