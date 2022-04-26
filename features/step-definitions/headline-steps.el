@@ -1,3 +1,5 @@
+(require 'ecukes)
+(require 'ert)
 (require 'org-glance)
 
 (Then "^headline \"\\([^\"]+\\)\" title should be \"\\([^\"]+\\)\"$"
@@ -53,28 +55,26 @@
           (should (org-glance-headline:encrypted-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
-          (should (not (org-glance-headline:encrypted-p headline))))))
+      (lambda (headline)
+        (should-error (Then "headline \"%s\" should be encrypted" headline))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+      (lambda (headline)
+        (let ((headline (gethash headline ecukes--headlines)))
           (should (org-glance-headline:propertized-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be propertized$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
-          (should (not (org-glance-headline:propertized-p headline))))))
+      (lambda (headline)
+        (should-error (Then "headline \"%s\" should be propertized" headline))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+      (lambda (headline)
+        (let ((headline (gethash headline ecukes--headlines)))
           (should (org-glance-headline:archived-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+      (lambda (headline)
+        (let ((headline (gethash headline ecukes--headlines)))
           (should (org-glance-headline:commented-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
@@ -83,11 +83,11 @@
           (should (org-glance-headline:closed-p headline)))))
 
 (Given "^headline \"\\([^\"]+\\)\"$"
-       (lambda (name contents)
-         (let ((capture-file-name "org-glance--capture.org"))
-           (Given "file \"%s\"" capture-file-name contents)
-           (And "I find file \"%s\"" capture-file-name)
-           (And "I create headline \"%s\" from element at point" name))))
+       (lambda (headline contents)
+         (let ((file "org-glance--capture.org"))
+           (Given "file \"%s\"" file contents)
+           (And "I find file \"%s\"" file)
+           (And "I create headline \"%s\" from element at point" headline))))
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
       (lambda (name title)
