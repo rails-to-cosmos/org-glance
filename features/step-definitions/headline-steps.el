@@ -26,29 +26,26 @@
                              (buffer-substring-no-properties (point-min) (point-max))))))))
 
 (And "^I create headline \"\\([^\"]+\\)\" from element at point$"
-     (lambda (name)
-       (puthash name (org-glance-headline-at-point) ecukes--headlines)))
+     (lambda (headline)
+       (puthash headline (org-glance-headline-at-point) ecukes--headlines)))
 
 (And "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
-     (lambda (name file)
-       (let ((headline (gethash name ecukes--headlines)))
+     (lambda (headline file)
+       (let ((headline (gethash headline ecukes--headlines)))
          (org-glance-headline-save headline (f-join ecukes--root-location file)))))
 
 (Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
-      (lambda (name file)
-        (puthash name
-                 (org-glance-headline-load (f-join ecukes--root-location file))
-                 ecukes--headlines)))
+      (lambda (headline file)
+        (puthash headline (org-glance-headline-load (f-join ecukes--root-location file)) ecukes--headlines)))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+      (lambda (headline)
+        (let ((headline (gethash headline ecukes--headlines)))
           (should (org-glance-headline:linked-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not contain links?$"
-      (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
-          (should (not (org-glance-headline:linked-p headline))))))
+      (lambda (headline)
+        (should-error (Then "headline \"%s\" should contain links" headline))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (name)

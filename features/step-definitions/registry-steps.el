@@ -4,7 +4,7 @@
        (lambda (name)
          (puthash name (org-glance-registry :id name) ecukes--registries)))
 
-(When "^I put headline \"\\([^\"]+\\)\" into registry \"\\([^\"]+\\)\"$"
+(When "^I add \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (headline registry)
     (let ((headline (gethash headline ecukes--headlines))
           (registry (gethash registry ecukes--registries)))
@@ -16,14 +16,12 @@
               (count (string-to-number count)))
           (should (= (hash-table-count (org-glance-headlines registry)) count)))))
 
-(And "^headline \"\\([^\"]+\\)\" should have an ID in registry \"\\([^\"]+\\)\"$"
+(Then "^\"\\([^\"]+\\)\" should be registered in \"\\([^\"]+\\)\"$"
      (lambda (headline registry)
        (let ((headline (gethash headline ecukes--headlines))
              (registry (gethash registry ecukes--registries)))
-         (should (not (null (org-glance-headline-property-get headline (org-glance-registry:id-key registry))))))))
+         (should-not (null (org-glance-headline-property-get headline (org-glance-registry:id-key registry)))))))
 
-(Then "^headline \"\\([^\"]+\\)\" should not have an ID in registry \"\\([^\"]+\\)\"$"
+(Then "^\"\\([^\"]+\\)\" should not be registered in \"\\([^\"]+\\)\"$"
       (lambda (headline registry)
-        (let ((headline (gethash headline ecukes--headlines))
-              (registry (gethash registry ecukes--registries)))
-          (should (null (org-glance-headline-property-get headline (org-glance-registry:id-key registry)))))))
+        (should-error (Then "\"%s\" should be registered in \"%s\"" headline registry))))

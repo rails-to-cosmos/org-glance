@@ -1,16 +1,15 @@
 Feature: Registry
-  Scenario: Put and get
+  Scenario: Add headline to registry
     Given registry "dogs"
-    And headline "eric"
+    Given headline "eric"
       """
       * Eric :dog:
       """
 
-    Then headline "eric" should not have an ID in registry "dogs"
-
-    When I put headline "eric" into registry "dogs"
+    Then "eric" should not be registered in "dogs"
+    When I add "eric" to "dogs"
     Then registry "dogs" should contain 1 headline
-    And headline "eric" should have an ID in registry "dogs"
+    And "eric" should be registered in "dogs"
 
     # When I get headline by title "Eric" from registry "dogs"
     # Then this headline contents should be:
