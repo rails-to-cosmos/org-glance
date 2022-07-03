@@ -89,7 +89,6 @@ This is the anaphoric method, you can use HEADLINE in forms."
 (cl-defmacro org-glance-with-file (file &rest forms)
   (declare (indent 1))
   `(with-temp-file ,file
-     (org-mode)
      ,@forms))
 
 (cl-defmacro org-glance-loop-file (file &rest forms)
@@ -120,14 +119,13 @@ This is the anaphoric method, you can use HEADLINE in forms."
                       (org-glance-loop-file origin
                         (when (string= hash (org-glance-headline:hash headline))
                           (delete-region (point-min) (point-max))
-                          (org-glance-headline-property-remove new-headline "Origin")
-                          (org-glance-headline-property-remove new-headline "Hash")
+                          (org-glance-headline-property-remove new-headline "Hash" "Origin")
                           (insert (org-glance-headline:contents new-headline))
                           (org-glance-headline:hash new-headline))))))
-     (cond ((null new-hash) (user-error "Unable to apply changes to "))
+     (cond ((or (null new-hash) (null (car new-hash))) (user-error "Unable to apply changes"))
            ((string= (car new-hash) hash) (message "Nothing changed"))
            (t (org-set-property "Hash" (car new-hash))
-              (message "Changes applied")))))
+              (message "Changes applied to %s" origin)))))
 
   ;; (unless org-glance-material-mode--original-headline
   ;;   (org-glance-material-mode:ORIGINAL-HEADLINE-NOT-FOUND))
@@ -144,6 +142,12 @@ This is the anaphoric method, you can use HEADLINE in forms."
   ;; Check hashes
   ;; Write
   )
+
+;; (org-glance-loop-file "/tmp/org-glance-vYZTrF/tmp/phones.org"
+;;   (org-glance-materialize "/tmp/org-glance-vYZTrF/tmp/material.org" headline))
+
+;; (org-glance-loop-file "/tmp/org-glance-eQqFt5/tmp/phones.org"
+;;   (org-glance-headline:hash headline))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

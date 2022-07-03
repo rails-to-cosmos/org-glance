@@ -22,6 +22,7 @@
 
  ;; Implement directory structure for user and system data
  (defvar org-glance-test:root-location)
+ (defvar org-glance-test:temp-location)
  (defvar org-glance-test:view-location)
  (defvar org-glance-test:user-location)
  (defvar org-glance-test:files)
@@ -34,18 +35,18 @@
  (desktop-clear)
 
  (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
+       org-glance-test:temp-location (f-join org-glance-test:root-location "tmp")
        org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
        org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
        org-glance-directory org-glance-test:view-location
        org-glance-test:files (make-hash-table :test #'equal)
        org-glance-test:headlines (make-hash-table :test #'equal))
 
- (mkdir org-glance-test:view-location)
- (mkdir org-glance-test:user-location)
- (message "Root location: %s" org-glance-test:root-location)
- )
+ (f-mkdir-full-path org-glance-test:temp-location)
+ (f-mkdir-full-path org-glance-test:view-location)
+ (f-mkdir-full-path org-glance-test:user-location)
+ (message "Root location: %s" org-glance-test:root-location))
 
 (After
- (message "Files: %s" org-glance-test:files)
  ;; (delete-directory org-glance-test:root-location t)
  )

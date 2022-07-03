@@ -1,4 +1,6 @@
-(And "^I save current buffer$" #'save-buffer)
+(And "^I save buffer$" #'save-buffer)
+
+(And "^I kill buffer$" #'kill-buffer)
 
 (And "^I goto the end of the buffer$"
      (lambda ()

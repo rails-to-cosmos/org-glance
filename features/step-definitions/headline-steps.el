@@ -7,7 +7,8 @@
          (let ((file "org-glance--capture.org"))
            (Given "file \"%s\"" file contents)
            (And "I find file \"%s\"" file)
-           (And "I create headline \"%s\" from element at point" headline))))
+           (And "I create headline \"%s\" from element at point" headline)
+           (And "I kill buffer"))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)

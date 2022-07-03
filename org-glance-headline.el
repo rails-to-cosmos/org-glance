@@ -161,9 +161,9 @@ with additional properties and `org-element' of type `headline' in contents."
 
 (cl-defmethod org-glance-headline:hash ((headline org-glance-headline))
   "Serialize HEADLINE."
-  ;; (message "Create hash from string: \"%s\"" (org-glance-headline:contents headline))
-  ;; (message "Result hash: %s" (secure-hash 'md5 (org-glance-headline:contents headline)))
-  (secure-hash 'md5 (org-glance-headline:contents headline)))
+  (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline:contents headline)))
+  (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline:contents headline))))
+  (secure-hash 'md5 (s-trim (org-glance-headline:contents headline))))
 
 (cl-defmethod org-glance-headline-property-get ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE properties."
@@ -182,16 +182,19 @@ with additional properties and `org-element' of type `headline' in contents."
                                               (buffer-substring-no-properties (point-min) (point-max)))))
     value))
 
-(cl-defmethod org-glance-headline-property-remove ((headline org-glance-headline) key)
+(cl-defmethod org-glance-headline-property-remove ((headline org-glance-headline) &rest keys)
   "Set HEADLINE property KEY to VALUE."
   (let ((properties (org-glance-headline:properties headline)))
-    (setf (slot-value headline 'properties) (a-dissoc properties key)
-          (slot-value headline 'contents) (with-temp-buffer
-                                            (org-mode)
-                                            (save-excursion
-                                              (insert (org-glance-headline:contents headline)))
-                                            (org-delete-property key)
-                                            (buffer-substring-no-properties (point-min) (point-max))))))
+    (cl-loop for key in keys
+       do (setf (slot-value headline 'properties) (a-dissoc properties key)))
+    (setf (slot-value headline 'contents)
+          (with-temp-buffer
+            (org-mode)
+            (save-excursion
+              (insert (org-glance-headline:contents headline)))
+            (cl-loop for key in keys
+               do (org-delete-property key))
+            (buffer-substring-no-properties (point-min) (point-max))))))
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   (string= (org-glance-headline:contents a) (org-glance-headline:contents b)))
