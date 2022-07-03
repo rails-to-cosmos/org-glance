@@ -1,4 +1,4 @@
-;;; org-glance-headline.el --- headline model for `org-glance'.
+;;; org-glance-headline.el --- headline model for `org-glance'.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2022 Dmitry Akatov
 
@@ -28,90 +28,107 @@
 
 ;;; Code:
 
+(require 'a)
+(require 'bindat)
 (require 'dash)
-(require 's)
 (require 'eieio)
 (require 'ol)
 (require 'org)
+(require 'org-element)
+(require 's)
 
-(require 'org-glance-helpers)
-(require 'org-glance-serializable)
-
-(defclass org-glance-headline (org-glance-serializable)
-  ((title
-    :initarg :title
-    :type string
-    :reader org-glance-headline:title)
-   (class
-    :initarg :class
-    :type (satisfies (lambda (x) (or (symbolp x)
-                                (-all? #'symbolp x))))
-    :reader org-glance-headline:class)
-   (contents    :initarg :contents    :reader org-glance-headline:contents)
-   (archived    :initarg :archived    :reader org-glance-headline:archived-p)
-   (commented   :initarg :commented   :reader org-glance-headline:commented-p)
-   (closed      :initarg :closed      :reader org-glance-headline:closed-p)
-   (encrypted   :initarg :encrypted   :reader org-glance-headline:encrypted-p)
-   (linked      :initarg :linked      :reader org-glance-headline:linked-p)
+(defclass org-glance-headline nil
+  ((title :initarg :title :reader org-glance-headline:title :type string)
+   (class :initarg :class :reader org-glance-headline:class :type (satisfies (lambda (x) (or (symbolp x) (-all? #'symbolp x)))))
+   (contents :initarg :contents :reader org-glance-headline:contents)
+   (archived :initarg :archived :reader org-glance-headline:archived-p)
+   (commented :initarg :commented :reader org-glance-headline:commented-p)
+   (closed :initarg :closed :reader org-glance-headline:closed-p)
+   (encrypted :initarg :encrypted :reader org-glance-headline:encrypted-p)
+   (linked :initarg :linked :reader org-glance-headline:linked-p)
    (propertized :initarg :propertized :reader org-glance-headline:propertized-p)
-   (properties  :initarg :properties :reader org-glance-headline:properties)
-   (file        :initarg :file        :reader org-glance-headline:file)
-   (buffer      :initarg :buffer
-                :initform nil
-                :reader org-glance-headline:buffer))
+   (properties :initarg :properties :reader org-glance-headline:properties)
+   (file :initarg :file :reader org-glance-headline:file)
+   (buffer :initarg :buffer :reader org-glance-headline:buffer :initform nil))
   "Headline model.")
+
+(defvar org-glance-headline--bindat-spec
+  '((title str 255)
+    (file str 255)
+    (archived byte)
+    (commented byte)
+    (closed byte)
+    (encrypted byte)
+    (linked byte)
+    (propertized byte)))
+
+(defun org-glance:links-to-titles (ast)
+  "Replace links with its titles in AST."
+  (cl-loop for link in (org-element-map ast 'link #'identity)
+     do (org-element-set-element link (or (-some->> link
+                                            org-element-contents
+                                            org-element-interpret-data)
+                                          (org-element-property :raw-link link)))
+     finally return ast))
+
+(defun org-glance:ensure-at-heading ()
+  "Ensure point is at heading.
+Return t if it is or raise `user-error' otherwise."
+  (or (org-at-heading-p)
+      (progn
+        (org-back-to-heading-or-point-min)
+        (org-at-heading-p))))
 
 (cl-defmacro org-glance:with-heading-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
   (declare (indent 0))
   `(save-excursion
-     (org-glance--ensure-at-heading)
-     (save-restriction
-       (org-narrow-to-subtree)
-       ,@forms)))
+     (when (org-glance:ensure-at-heading)
+       (save-restriction
+         (org-narrow-to-subtree)
+         ,@forms))))
 
 (defun org-glance-headline-at-point ()
   "Create headline from `org-element' at point.
 `org-glance-headline' is an `org-element' of type `org-data'
-with some meta properties and `org-element' of type `headline' in contents."
+with additional properties and `org-element' of type `headline' in contents."
   (org-glance:with-heading-at-point
-    (let* ((subtree (->> (org-element-parse-buffer)
-                         (org-element-contents)))
-           (element (car subtree)))
-
-      ;; normalize indentation
-      (let ((indent-offset (1- (org-element-property :level element))))
-        (when (> indent-offset 0)
-          (cl-loop
-             for headline in (org-element-map subtree 'headline #'identity)
-             for level = (org-element-property :level headline)
-             do (org-element-put-property headline :level (- level indent-offset)))))
-
-      (let ((contents (->> subtree
-                           (org-element-interpret-data)
-                           (substring-no-properties)
-                           (s-trim))))
-        (org-glance-headline
-         :title (with-temp-buffer
-                  (insert (or (org-element-property :TITLE element)
-                              (org-element-property :raw-value element)
-                              ""))
-                  (->> (org-element-parse-buffer)
-                       (org-glance--links-to-titles)
-                       (org-element-interpret-data)
-                       (substring-no-properties)
-                       (s-trim)))
-         :class (--map (intern (downcase it)) (org-element-property :tags element))
-         :archived (not (null (org-element-property :archivedp element)))
-         :commented (not (null (org-element-property :commentedp element)))
-         :closed (not (null (org-element-property :closed element)))
-         :encrypted (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
-         :linked (not (null (s-match-strings-all org-link-any-re contents)))
-         :propertized (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
-         :properties (org-entry-properties)
-         :contents contents
-         :file (buffer-file-name)
-         :buffer (current-buffer))))))
+    (let* ((subtree (let* ((subtree (org-element-contents (org-element-parse-buffer)))
+                           (element (car subtree))
+                           ;; get offset of the topmost element:
+                           (indent-offset (1- (org-element-property :level element))))
+                      ;; side-effect on SUBTREE: we change indentation levels of all nested subtrees
+                      (when (> indent-offset 0)
+                        (cl-loop for headline in (org-element-map subtree 'headline #'identity)
+                           do (let ((level (org-element-property :level headline)))
+                                (org-element-put-property headline :level (- level indent-offset)))))
+                      subtree))
+           (element (car subtree))  ;; topmost heading of current headline
+           (contents (->> subtree
+                          org-element-interpret-data
+                          substring-no-properties
+                          s-trim)))
+      (org-glance-headline
+       :title (with-temp-buffer
+                (insert (or (org-element-property :TITLE element)
+                            (org-element-property :raw-value element)
+                            ""))
+                (->> (org-element-parse-buffer)
+                     org-glance:links-to-titles
+                     org-element-interpret-data
+                     substring-no-properties
+                     s-trim))
+       :class (--map (intern (downcase it)) (org-element-property :tags element))
+       :archived (org-element-property :archivedp element)
+       :commented (org-element-property :commentedp element)
+       :closed (org-element-property :closed element)
+       :encrypted (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+       :linked (not (null (s-match-strings-all org-link-any-re contents)))
+       :propertized (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
+       :properties (org-entry-properties)
+       :contents contents
+       :file (buffer-file-name)
+       :buffer (current-buffer)))))
 
 (cl-defmethod org-glance-headline:directory ((headline org-glance-headline))
   (let ((file (org-glance-headline:file headline))
@@ -121,48 +138,88 @@ with some meta properties and `org-element' of type `headline' in contents."
                                     default-directory)))))
 
 (cl-defmethod org-glance-headline-copy ((headline org-glance-headline) (slots list))
-  (let ((args (cl-loop for slot in slots
-                    append (list (intern (format ":%s" slot))
-                                 (slot-value headline slot)))))
-    (apply 'org-glance-headline args)))
+  (cl-loop for slot in slots
+     append (list (intern (format ":%s" slot)) (slot-value headline slot))
+     into result
+     finally return (apply 'org-glance-headline result)))
 
 ;; override
-(cl-defmethod org-glance-serialize ((headline org-glance-headline))
+(cl-defmethod org-glance-headline-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
   (prin1-to-string (org-glance-headline-copy headline '(title class archived commented closed encrypted linked propertized contents file))))
 
 (cl-defmethod org-glance-headline-save ((headline org-glance-headline) file)
   "Write HEADLINE to FILE."
   (with-temp-file file
-    (insert (org-glance-serialize headline))))
+    (insert (org-glance-headline-serialize headline))))
 
 (defun org-glance-headline-load (file)
   "Load headline from FILE."
   (with-temp-buffer
     (insert-file-contents file)
-    (org-glance-deserialize (buffer-string))))
+    (read (buffer-string))))
+
+(cl-defmethod org-glance-headline:hash ((headline org-glance-headline))
+  "Serialize HEADLINE."
+  ;; (message "Create hash from string: \"%s\"" (org-glance-headline:contents headline))
+  ;; (message "Result hash: %s" (secure-hash 'md5 (org-glance-headline:contents headline)))
+  (secure-hash 'md5 (org-glance-headline:contents headline)))
 
 (cl-defmethod org-glance-headline-property-get ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE properties."
-  (alist-get key (org-glance-headline:properties headline) default nil #'string=))
+  (alist-get (upcase key) (org-glance-headline:properties headline) default nil #'string=))
 
 (cl-defmethod org-glance-headline-property-set ((headline org-glance-headline) key (value string))
   "Set HEADLINE property KEY to VALUE."
   (let ((properties (org-glance-headline:properties headline)))
-    (setf (alist-get key properties nil t #'string=) value)
-    (setf (slot-value headline 'properties) properties)
-    (setf (slot-value headline 'contents)
-          (with-temp-buffer
-            (org-mode)
-            (save-excursion
-              (insert (org-glance-headline:contents headline))
-              (org-set-property key value)
-              (buffer-substring-no-properties (point-min) (point-max)))))
+    (setf (alist-get key properties nil t #'string=) value
+          (slot-value headline 'properties) properties
+          (slot-value headline 'contents) (with-temp-buffer
+                                            (org-mode)
+                                            (save-excursion
+                                              (insert (org-glance-headline:contents headline))
+                                              (org-set-property key value)
+                                              (buffer-substring-no-properties (point-min) (point-max)))))
     value))
 
+(cl-defmethod org-glance-headline-property-remove ((headline org-glance-headline) key)
+  "Set HEADLINE property KEY to VALUE."
+  (let ((properties (org-glance-headline:properties headline)))
+    (setf (slot-value headline 'properties) (a-dissoc properties key)
+          (slot-value headline 'contents) (with-temp-buffer
+                                            (org-mode)
+                                            (save-excursion
+                                              (insert (org-glance-headline:contents headline)))
+                                            (org-delete-property key)
+                                            (buffer-substring-no-properties (point-min) (point-max))))))
+
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
-  (string= (org-glance-headline:contents a)
-           (org-glance-headline:contents b)))
+  (string= (org-glance-headline:contents a) (org-glance-headline:contents b)))
+
+;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
+;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."
+;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
+;;     (bindat-pack
+;;      org-glance-headline--bindat-spec
+;;      (a-list 'title (string-as-unibyte (org-glance-headline:title headline))
+;;              'file (string-as-unibyte (org-glance-headline:file headline))
+;;              'archived (bool->int (org-glance-headline:archived-p headline))
+;;              'commented (bool->int (org-glance-headline:commented-p headline))
+;;              'closed (bool->int (org-glance-headline:closed-p headline))
+;;              'encrypted (bool->int (org-glance-headline:encrypted-p headline))
+;;              'linked (bool->int (org-glance-headline:linked-p headline))
+;;              'propertized (bool->int (org-glance-headline:propertized-p headline))))))
+
+;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
+;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))
+
+;; (cl-defmacro comment (&rest forms)
+;;   nil)
+
+;; (comment
+;;  (f-write-bytes (org-glance-headline:pack (org-glance-headline-at-point)) "/tmp/headline.bin")
+;;  (a-get (bindat-unpack org-glance-headline--bindat-spec (f-read-bytes "/tmp/headline.bin")) 'file)
+;;  (string-make-unibyte "hello"))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

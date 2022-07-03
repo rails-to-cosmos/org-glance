@@ -2,10 +2,12 @@
 (require 'ert)
 (require 'org-glance)
 
-(Then "^headline \"\\([^\"]+\\)\" title should be \"\\([^\"]+\\)\"$"
-      (lambda (name expected-title)
-        (let ((headline (gethash name ecukes--headlines)))
-          (should (string= expected-title (org-glance-headline:title headline))))))
+(Given "^headline \"\\([^\"]+\\)\"$"
+       (lambda (headline contents)
+         (let ((file "org-glance--capture.org"))
+           (Given "file \"%s\"" file contents)
+           (And "I find file \"%s\"" file)
+           (And "I create headline \"%s\" from element at point" headline))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
@@ -82,13 +84,6 @@
         (let ((headline (gethash name ecukes--headlines)))
           (should (org-glance-headline:closed-p headline)))))
 
-(Given "^headline \"\\([^\"]+\\)\"$"
-       (lambda (headline contents)
-         (let ((file "org-glance--capture.org"))
-           (Given "file \"%s\"" file contents)
-           (And "I find file \"%s\"" file)
-           (And "I create headline \"%s\" from element at point" headline))))
-
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
       (lambda (name title)
         (should
@@ -109,3 +104,17 @@
        (should (org-glance-headline-equal-p
                 (gethash a ecukes--headlines)
                 (gethash b ecukes--headlines)))))
+
+(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
+      (lambda (title)
+        (org-glance:with-heading-at-point
+          (org-beginning-of-line)
+          (org-kill-line)
+          (insert title))))
+
+(When "^I materialize headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
+  (lambda (headline file)
+    (org-glance-materialize file (gethash headline ecukes--headlines))))
+
+(And "^I commit changes$"
+  (lambda () (org-glance-commit)))

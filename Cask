@@ -9,6 +9,7 @@
 (depends-on "highlight")
 (depends-on "load-relative")
 (depends-on "s")
+(depends-on "a")
 (depends-on "transient")
 (depends-on "ts")
 

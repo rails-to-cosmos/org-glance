@@ -26,10 +26,7 @@
  (defvar ecukes--user-location)
  (defvar ecukes--files)
  (defvar ecukes--headlines)
- (defvar ecukes--registries)
-
- (defun H (alias) (gethash alias ecukes--headlines))
- (defun R (alias) (gethash alias ecukes--registries)))
+ (defun H (alias) (gethash alias ecukes--headlines)))
 
 (Before
  ;; Before each scenario is run
@@ -50,6 +47,3 @@
 
 (After
  (delete-directory ecukes--root-location t))
-
-(Teardown
- )

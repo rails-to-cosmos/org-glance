@@ -6,3 +6,4 @@ ogpm-cache.el
 /README.org_archive
 /.ecukes-failing-scenarios
 /*.err
+*.~undo-tree~

@@ -1,5 +1,5 @@
 Feature: Headline
-  Scenario: Create from org headline at point
+  Scenario: Create from headline at point: point at title
     Given headline "sre"
       """
       * Google SRE Book :book:article:
@@ -14,7 +14,7 @@ Feature: Headline
     And headline "sre" should be a book
     And headline "sre" should be an article
 
-  Scenario: Create from the inside
+  Scenario: Create from headline at point: point inside subtree
     Given file "tasks.org"
       """
       * TODO Vocal lesson :Task:
@@ -24,7 +24,7 @@ Feature: Headline
     And I find file "tasks.org"
     And I goto the end of the buffer
     And I create headline "vocals" from element at point
-    Then headline "vocals" title should be "Vocal lesson"
+    Then the title of headline "vocals" should be "Vocal lesson"
     And headline "vocals" should be a task
     And headline "vocals" contents should be:
       """
@@ -33,7 +33,7 @@ Feature: Headline
       - Bach
       """
 
-  Scenario: Serializable
+  Scenario: Serializable contents
     Given headline "lesson"
       """
       *** Driving lesson :Education:
@@ -41,10 +41,10 @@ Feature: Headline
       """
     And I save headline "lesson" to file "driving.org"
     And I load headline "driving" from file "driving.org"
-    Then headline "driving" title should be "Driving lesson"
+    Then the title of headline "driving" should be "Driving lesson"
     And headline "driving" should be equal to headline "lesson"
 
-  Scenario: Normalized (indent level = 1)
+  Scenario: Normalized indentation
     Given headline "indented"
       """
       *** Tags :article:
@@ -65,7 +65,7 @@ Feature: Headline
       * Transmission bookmark: [[http://127.0.0.1:9091/transmission/web/#upload][Transmission Web UI]] :bookmark:
       - Uses fewer resources than other clients
       """
-    Then headline "bookmark" title should be "Transmission bookmark: Transmission Web UI"
+    Then the title of headline "bookmark" should be "Transmission bookmark: Transmission Web UI"
     And headline "bookmark" should be a bookmark
     And headline "bookmark" should contain link
     And headline "bookmark" contents should be:
@@ -74,7 +74,7 @@ Feature: Headline
       - Uses fewer resources than other clients
       """
 
-  Scenario: Openable
+  Scenario: Headline contains links
     Given headline "bookmark"
       """
       * Release notes :Bookmark:
@@ -82,7 +82,7 @@ Feature: Headline
       """
     Then headline "bookmark" should contain links
 
-  Scenario: Encryptable
+  Scenario: Headline is encrypted
     Given headline "bookmark"
       """
       * Release notes :Bookmark:
@@ -92,7 +92,7 @@ Feature: Headline
       """
     Then headline "bookmark" should be encrypted
 
-  Scenario: Propertizable
+  Scenario: Headline contains properties specified by user
     Given headline "credentials"
       """
       * Credentials
@@ -101,21 +101,21 @@ Feature: Headline
       """
     Then headline "credentials" should be propertized
 
-  Scenario: Archivable
+  Scenario: Archived headline
     Given headline "archive"
       """
       * Old stuff :ARCHIVE:
       """
     Then headline "archive" should be archived
 
-  Scenario: Commentable
+  Scenario: Commented headline
     Given headline "comment"
       """
       * COMMENT Implicit stuff
       """
     Then headline "comment" should be commented
 
-  Scenario: Closable
+  Scenario: Closed headline
     Given headline "done"
       """
       * DONE Hard work
@@ -125,3 +125,29 @@ Feature: Headline
       :END:
       """
     Then headline "done" should be closed
+
+  Scenario: Materialize single headline
+    Given file "materializations.org"
+      """
+      """
+
+    Given file "phones.org"
+      """
+      * iPhone 3 :phone:
+      """
+
+    When I find file "phones.org"
+    And I create headline "iphone" from element at point
+    And I materialize headline "iphone" to file "materializations.org"
+    And I find file "materializations.org"
+    Then I set title of the headline at point to "iPhone 4"
+    And I commit changes
+    And I find file "phones.org"
+    And I create headline "new iphone" from element at point
+    Then the title of headline "new iphone" should be "iPhone 4"
+
+#   Scenario: Materialize multiple headlines
+#   Scenario: Materialize encrypted headline
+#   Scenario: Materialize multiple headlines and add a new one
+#   Scenario: Materialize non-file headline
+#   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file

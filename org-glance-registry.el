@@ -29,13 +29,9 @@
 ;;; Code:
 
 (require 'eieio)
-
-(require 'org-glance-helpers)
-(require 'org-glance-serializable)
 (require 'org-glance-headline)
-(require 'org-glance-headline-header)
 
-(defclass org-glance-registry (org-glance-serializable)
+(defclass org-glance-registry nil
   ((id
     :initarg :id
     :type string

@@ -18,8 +18,5 @@ test:
 	${CASK} exec ecukes
 	${CASK} clean-elc
 
-it:  # run integration tests
-	./script/it.sh
-
 clean:
 	${CASK} clean-elc
