@@ -21,29 +21,31 @@
 (Setup  ;; Before anything has run
 
  ;; Implement directory structure for user and system data
- (defvar ecukes--root-location)
- (defvar ecukes--view-location)
- (defvar ecukes--user-location)
- (defvar ecukes--files)
- (defvar ecukes--headlines)
- (defun H (alias) (gethash alias ecukes--headlines)))
+ (defvar org-glance-test:root-location)
+ (defvar org-glance-test:view-location)
+ (defvar org-glance-test:user-location)
+ (defvar org-glance-test:files)
+ (defvar org-glance-test:headlines)
+ (defun H (alias) (gethash alias org-glance-test:headlines)))
 
 (Before
  ;; Before each scenario is run
 
  (desktop-clear)
- (setq ecukes--root-location (make-temp-file "org-glance-" 'directory)
-       ecukes--view-location (f-join ecukes--root-location "org-glance")
-       ecukes--user-location (f-join ecukes--root-location "user-data")
-       org-glance-directory ecukes--view-location
-       org-glance:log-level -2305843009213693952
-       org-glance-classes (make-hash-table)
-       ecukes--files (make-hash-table :test #'equal)
-       ecukes--headlines (make-hash-table :test #'equal)
-       ecukes--registries (make-hash-table :test #'equal))
 
- (mkdir ecukes--view-location)
- (mkdir ecukes--user-location))
+ (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
+       org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
+       org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
+       org-glance-directory org-glance-test:view-location
+       org-glance-test:files (make-hash-table :test #'equal)
+       org-glance-test:headlines (make-hash-table :test #'equal))
+
+ (mkdir org-glance-test:view-location)
+ (mkdir org-glance-test:user-location)
+ (message "Root location: %s" org-glance-test:root-location)
+ )
 
 (After
- (delete-directory ecukes--root-location t))
+ (message "Files: %s" org-glance-test:files)
+ ;; (delete-directory org-glance-test:root-location t)
+ )

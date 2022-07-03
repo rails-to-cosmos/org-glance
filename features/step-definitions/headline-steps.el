@@ -12,13 +12,13 @@
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
         (let* ((expected-class (intern expected-class))
-               (headline (gethash name ecukes--headlines))
+               (headline (gethash name org-glance-test:headlines))
                (class (org-glance-headline:class headline)))
           (should (memq expected-class class)))))
 
 (Then "^headline \"\\([^\"]+\\)\" contents? should be:$"
       (lambda (name expected-contents)
-        (let* ((headline (gethash name ecukes--headlines))
+        (let* ((headline (gethash name org-glance-test:headlines))
                (contents (org-glance-headline:contents headline)))
           (should (string= (with-temp-buffer
                              (insert expected-contents)
@@ -31,20 +31,20 @@
 
 (And "^I create headline \"\\([^\"]+\\)\" from element at point$"
      (lambda (headline)
-       (puthash headline (org-glance-headline-at-point) ecukes--headlines)))
+       (puthash headline (org-glance-headline-at-point) org-glance-test:headlines)))
 
 (And "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
      (lambda (headline file)
-       (let ((headline (gethash headline ecukes--headlines)))
-         (org-glance-headline-save headline (f-join ecukes--root-location file)))))
+       (let ((headline (gethash headline org-glance-test:headlines)))
+         (org-glance-headline-save headline (f-join org-glance-test:root-location file)))))
 
 (Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
-        (puthash headline (org-glance-headline-load (f-join ecukes--root-location file)) ecukes--headlines)))
+        (puthash headline (org-glance-headline-load (f-join org-glance-test:root-location file)) org-glance-test:headlines)))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline)
-        (let ((headline (gethash headline ecukes--headlines)))
+        (let ((headline (gethash headline org-glance-test:headlines)))
           (should (org-glance-headline:linked-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not contain links?$"
@@ -53,7 +53,7 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+        (let ((headline (gethash name org-glance-test:headlines)))
           (should (org-glance-headline:encrypted-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
@@ -62,7 +62,7 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline)
-        (let ((headline (gethash headline ecukes--headlines)))
+        (let ((headline (gethash headline org-glance-test:headlines)))
           (should (org-glance-headline:propertized-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be propertized$"
@@ -71,29 +71,29 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
       (lambda (headline)
-        (let ((headline (gethash headline ecukes--headlines)))
+        (let ((headline (gethash headline org-glance-test:headlines)))
           (should (org-glance-headline:archived-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
       (lambda (headline)
-        (let ((headline (gethash headline ecukes--headlines)))
+        (let ((headline (gethash headline org-glance-test:headlines)))
           (should (org-glance-headline:commented-p headline)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
       (lambda (name)
-        (let ((headline (gethash name ecukes--headlines)))
+        (let ((headline (gethash name org-glance-test:headlines)))
           (should (org-glance-headline:closed-p headline)))))
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
       (lambda (name title)
         (should
          (string=
-          (org-glance-headline:title (gethash name ecukes--headlines))
+          (org-glance-headline:title (gethash name org-glance-test:headlines))
           title))))
 
 (And "^the contents of headline \"\\([^\"]+\\)\" should be:$"
      (lambda (name contents)
-       (let ((actual-headline (gethash name ecukes--headlines))
+       (let ((actual-headline (gethash name org-glance-test:headlines))
              (expected-headline (with-temp-buffer
                                   (insert contents)
                                   (org-glance-headline-at-point))))
@@ -102,19 +102,15 @@
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
        (should (org-glance-headline-equal-p
-                (gethash a ecukes--headlines)
-                (gethash b ecukes--headlines)))))
+                (gethash a org-glance-test:headlines)
+                (gethash b org-glance-test:headlines)))))
 
-(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
-      (lambda (title)
-        (org-glance:with-heading-at-point
-          (org-beginning-of-line)
-          (org-kill-line)
-          (insert title))))
+(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$" #'org-edit-headline)
 
 (When "^I materialize headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headline file)
-    (org-glance-materialize file (gethash headline ecukes--headlines))))
+    (org-glance-materialize (gethash file org-glance-test:files)
+      (gethash headline org-glance-test:headlines))))
 
 (And "^I commit changes$"
   (lambda () (org-glance-commit)))
