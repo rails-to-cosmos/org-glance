@@ -173,7 +173,33 @@ Feature: Headline
     And I create headline "new iphone" from element at point
     Then the title of headline "new iphone" should be "iPhone 5"
 
-#   Scenario: Materialize multiple headlines
+  Scenario: Materialize multiple headlines
+    Given file "materializations.org"
+      """
+      """
+
+    Given file "phones.org"
+      """
+      * iPhone 3 :phone:
+      * Samsung Galaxy Note 8 :phone:
+      """
+
+    When I find file "phones.org"
+    And I create headline "iphone" from element at point
+    And I goto the end of the buffer
+    And I create headline "samsung" from element at point
+    And I kill buffer
+
+    And I materialize headlines "iphone, samsung" to file "materializations.org"
+    And I find file "materializations.org"
+    Then I set title of the headline at point to "iPhone 4"
+    And I commit changes
+    And I save buffer
+
+    And I find file "phones.org"
+    And I create headline "new iphone" from element at point
+    Then the title of headline "new iphone" should be "iPhone 4"
+
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize multiple headlines and add a new one
 #   Scenario: Materialize non-file headline

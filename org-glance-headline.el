@@ -49,7 +49,8 @@
    (propertized :initarg :propertized :reader org-glance-headline:propertized-p)
    (properties :initarg :properties :reader org-glance-headline:properties)
    (file :initarg :file :reader org-glance-headline:file)
-   (buffer :initarg :buffer :reader org-glance-headline:buffer :initform nil))
+   ;; (buffer :initarg :buffer :reader org-glance-headline:buffer :initform nil)
+   )
   "Headline model.")
 
 (defvar org-glance-headline--bindat-spec
@@ -97,7 +98,7 @@ with additional properties and `org-element' of type `headline' in contents."
                            (element (car subtree))
                            ;; get offset of the topmost element:
                            (indent-offset (1- (org-element-property :level element))))
-                      ;; side-effect on SUBTREE: we change indentation levels of all nested subtrees
+                      ;; Consider side-effect on subtree: we change indentation levels of all nested subtrees
                       (when (> indent-offset 0)
                         (cl-loop for headline in (org-element-map subtree 'headline #'identity)
                            do (let ((level (org-element-property :level headline)))
@@ -127,15 +128,11 @@ with additional properties and `org-element' of type `headline' in contents."
        :propertized (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
        :properties (org-entry-properties)
        :contents contents
-       :file (buffer-file-name)
-       :buffer (current-buffer)))))
+       :file (buffer-file-name)))))
 
 (cl-defmethod org-glance-headline:directory ((headline org-glance-headline))
-  (let ((file (org-glance-headline:file headline))
-        (buffer (org-glance-headline:buffer headline)))
-    (cond ((file-exists-p file) (file-name-directory file))
-          ((buffer-live-p buffer) (with-current-buffer buffer
-                                    default-directory)))))
+  (let ((file (org-glance-headline:file headline)))
+    (cond ((file-exists-p file) (file-name-directory file)))))
 
 (cl-defmethod org-glance-headline-copy ((headline org-glance-headline) (slots list))
   (cl-loop for slot in slots
@@ -161,15 +158,21 @@ with additional properties and `org-element' of type `headline' in contents."
 
 (cl-defmethod org-glance-headline:hash ((headline org-glance-headline))
   "Serialize HEADLINE."
-  (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline:contents headline)))
-  (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline:contents headline))))
+  ;; (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline:contents headline)))
+  ;; (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline:contents headline))))
   (secure-hash 'md5 (s-trim (org-glance-headline:contents headline))))
 
-(cl-defmethod org-glance-headline-property-get ((headline org-glance-headline) key &optional default)
+(cl-defmethod org-glance-headline:get-property ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE properties."
   (alist-get (upcase key) (org-glance-headline:properties headline) default nil #'string=))
 
-(cl-defmethod org-glance-headline-property-set ((headline org-glance-headline) key (value string))
+(cl-defmethod org-glance-headline:pop-property ((headline org-glance-headline) key &optional default)
+  "Retrieve KEY from HEADLINE properties and remove it."
+  (prog1
+      (alist-get (upcase key) (org-glance-headline:properties headline) default nil #'string=)
+    (org-glance-headline:remove-property headline key)))
+
+(cl-defmethod org-glance-headline:set-property ((headline org-glance-headline) key (value string))
   "Set HEADLINE property KEY to VALUE."
   (let ((properties (org-glance-headline:properties headline)))
     (setf (alist-get key properties nil t #'string=) value
@@ -177,12 +180,12 @@ with additional properties and `org-element' of type `headline' in contents."
           (slot-value headline 'contents) (with-temp-buffer
                                             (org-mode)
                                             (save-excursion
-                                              (insert (org-glance-headline:contents headline))
-                                              (org-set-property key value)
-                                              (buffer-substring-no-properties (point-min) (point-max)))))
+                                              (insert (org-glance-headline:contents headline)))
+                                            (org-set-property key value)
+                                            (buffer-substring-no-properties (point-min) (point-max))))
     value))
 
-(cl-defmethod org-glance-headline-property-remove ((headline org-glance-headline) &rest keys)
+(cl-defmethod org-glance-headline:remove-property ((headline org-glance-headline) &rest keys)
   "Set HEADLINE property KEY to VALUE."
   (let ((properties (org-glance-headline:properties headline)))
     (cl-loop for key in keys
@@ -193,11 +196,15 @@ with additional properties and `org-element' of type `headline' in contents."
             (save-excursion
               (insert (org-glance-headline:contents headline)))
             (cl-loop for key in keys
-               do (org-delete-property key))
+               do (let ((inhibit-message t))
+                    (org-delete-property key)))
             (buffer-substring-no-properties (point-min) (point-max))))))
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   (string= (org-glance-headline:contents a) (org-glance-headline:contents b)))
+
+(cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
+  (insert (org-glance-headline:contents headline) "\n"))
 
 ;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
 ;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."

@@ -1,4 +1,5 @@
 (require 'f)
+(require 'dash)
 (require 'org-glance)
 
 (defvar org-glance-support-path
@@ -19,19 +20,18 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
-
- ;; Implement directory structure for user and system data
  (defvar org-glance-test:root-location)
  (defvar org-glance-test:temp-location)
  (defvar org-glance-test:view-location)
  (defvar org-glance-test:user-location)
  (defvar org-glance-test:files)
  (defvar org-glance-test:headlines)
- (defun H (alias) (gethash alias org-glance-test:headlines)))
+
+ (defun H (alias) (gethash alias org-glance-test:headlines))
+ (defun HS (aliases) (-map #'H (s-split ", " aliases)))
+ (defun F (alias) (gethash alias org-glance-test:files)))
 
 (Before
- ;; Before each scenario is run
-
  (desktop-clear)
 
  (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
@@ -50,3 +50,6 @@
 (After
  ;; (delete-directory org-glance-test:root-location t)
  )
+
+(Teardown
+ (setq default-directory org-glance-root-path))

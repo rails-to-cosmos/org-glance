@@ -103,15 +103,14 @@
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
        (should (org-glance-headline-equal-p
-                (gethash a org-glance-test:headlines)
-                (gethash b org-glance-test:headlines)))))
+                (H a)
+                (H b)))))
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$" #'org-edit-headline)
 
-(When "^I materialize headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
-  (lambda (headline file)
-    (org-glance-materialize (gethash file org-glance-test:files)
-      (gethash headline org-glance-test:headlines))))
+(When "^I materialize headlines? \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
+  (lambda (headlines file)
+    (org-glance-materialize (F file) (HS headlines))))
 
 (And "^I commit changes$"
   (lambda () (org-glance-commit)))

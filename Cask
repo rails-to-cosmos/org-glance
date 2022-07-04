@@ -5,11 +5,11 @@
 (package-file "org-glance.el")
 
 ;; core deps
+(depends-on "a")
 (depends-on "dash")
 (depends-on "highlight")
 (depends-on "load-relative")
 (depends-on "s")
-(depends-on "a")
 (depends-on "transient")
 (depends-on "ts")
 

@@ -32,6 +32,7 @@
 
 (require 'org)
 (require 'org-element)
+(require 'org-glance-headline)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -50,16 +51,6 @@
   :group 'org-glance
   :type 'boolean)
 
-(define-error 'org-glance-error "Unknown org-glance error" 'user-error)
-(define-error 'org-glance-error:SOURCE-CORRUPTED "Headline source corrupted, please reread" 'org-glance-error)
-(define-error 'org-glance-error:PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread" 'org-glance-error)
-(define-error 'org-glance-error:METASTORE-OUTDATED "Metastore is outdated, please rebuild" 'org-glance-error)
-(define-error 'org-glance-error:HEADLINE-NOT-FOUND "Headline not found" 'org-glance-error)
-(define-error 'org-glance-error:HEADLINE-ALREADY-REGISTERED "Headline has already been registered" 'org-glance-error)
-(define-error 'org-glance-error:CLASS-NOT-FOUND "Class not found" 'org-glance-error)
-
-(require 'org-glance-headline)
-
 (defvar org-glance-material-buffers (make-hash-table))
 
 (cl-defun org-glance-init ()
@@ -77,77 +68,123 @@
 
 (cl-defmacro org-glance-loop (&rest forms)
   "Loop over headlines and execute FORMS on each.
-This is the anaphoric method, you can use HEADLINE in forms."
-  `(cl-loop for pos in (org-element-map (org-element-parse-buffer 'headline) 'headline
-                         (lambda (headline) (org-element-property :begin headline)))
+This is the anaphoric method, you can use `_' to call headline in forms."
+  `(cl-loop for pos in (-non-nil
+                        (org-element-map (org-element-parse-buffer 'headline) 'headline
+                          (lambda (headline)
+                            (when (= (org-element-property :level headline) 1)
+                              (org-element-property :begin headline)))))
       collect (save-excursion
                 (goto-char pos)
-                (let ((headline (org-glance-headline-at-point)))
+                (let ((<headline> (org-glance-headline-at-point)))
                   (org-glance:with-heading-at-point
                     ,@forms)))))
 
 (cl-defmacro org-glance-with-file (file &rest forms)
   (declare (indent 1))
   `(with-temp-file ,file
+     (org-mode)
      ,@forms))
 
 (cl-defmacro org-glance-loop-file (file &rest forms)
   (declare (indent 1))
   `(org-glance-with-file ,file
      (insert-file-contents-literally ,file)
-     (org-glance-loop ,@forms)))
+     (org-glance-loop
+      (setf (slot-value <headline> 'file) ,file)
+      ,@forms)))
 
-(cl-defun org-glance-materialize (file &rest headlines)
+(cl-defmacro org-glance-loop-file-1 (file &rest forms)
+  (declare (indent 1))
+  `(car (-non-nil (org-glance-loop-file ,file ,@forms))))
+
+(cl-defmethod org-glance-materialize ((file string) (headline org-glance-headline))
+  (declare (indent 1))
+  (org-glance-with-file file
+    (if-let (file (org-glance-headline:file headline))
+        (progn
+          (org-glance-headline:set-property headline "Hash" (org-glance-headline:hash headline))
+          (org-glance-headline:set-property headline "Origin" (org-glance-headline:file headline))
+          (org-glance-headline:insert headline))
+      (warn "Unable to materialize headline without file origin"))))
+
+(cl-defmethod org-glance-materialize ((file string) (headlines list))
   (declare (indent 1))
   (org-glance-with-file file
     (--map (if-let (file (org-glance-headline:file it))
                (progn
-                 (org-glance-headline-property-set it "Hash" (org-glance-headline:hash it))
-                 (org-glance-headline-property-set it "Origin" (org-glance-headline:file it))
-                 (insert (org-glance-headline:contents it) "\n"))
+                 (org-glance-headline:set-property it "Hash" (org-glance-headline:hash it))
+                 (org-glance-headline:set-property it "Origin" (org-glance-headline:file it))
+                 (org-glance-headline:insert it))
              (warn "Unable to materialize headline without file origin"))
            headlines)))
 
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins."
   (interactive)
-  (org-glance-loop
-   (let* ((new-headline headline)
-          (origin (org-glance-headline-property-get new-headline "Origin"))
-          (hash (org-glance-headline-property-get new-headline "Hash"))
-          (new-hash (when (and origin hash)
-                      (org-glance-loop-file origin
-                        (when (string= hash (org-glance-headline:hash headline))
-                          (delete-region (point-min) (point-max))
-                          (org-glance-headline-property-remove new-headline "Hash" "Origin")
-                          (insert (org-glance-headline:contents new-headline))
-                          (org-glance-headline:hash new-headline))))))
-     (cond ((or (null new-hash) (null (car new-hash))) (user-error "Unable to apply changes"))
-           ((string= (car new-hash) hash) (message "Nothing changed"))
-           (t (org-set-property "Hash" (car new-hash))
-              (message "Changes applied to %s" origin)))))
 
-  ;; (unless org-glance-material-mode--original-headline
-  ;;   (org-glance-material-mode:ORIGINAL-HEADLINE-NOT-FOUND))
+  (let ((origins (make-hash-table :test #'equal))
+        (diffs (list)))
 
-  ;; (with-demoted-errors "Hook error: %s"
-  ;;   (run-hooks 'org-glance-before-materialize-sync-hook))
+    (org-glance-loop
+     (when-let (hash (org-glance-headline:pop-property <headline> "Hash"))
+       (let ((origin (org-glance-headline:pop-property <headline> "Origin"))
+             (modhash (org-glance-headline:hash <headline>)))
 
-  ;; (goto-char (point-min))
+         (cond ((gethash origin origins)
+                (puthash hash <headline> (gethash origin origins)))
+               (t (let ((new (make-hash-table :test #'equal)))
+                    (puthash hash <headline> new)
+                    (puthash origin new origins))))
 
-  ;; Ensure current buffer is materialized
+         (unless (string= modhash hash)
+           (cl-pushnew (a-list :hash modhash
+                               :pos (point))
+                       diffs)))))
 
-  ;; Narrow to headline
-  ;; Determine output location
-  ;; Check hashes
-  ;; Write
+    (cl-loop for origin being the hash-keys of origins
+       using (hash-values headlines)
+       do (with-temp-file origin  ;; overwrite origin on success
+            (-map #'org-glance-headline:insert
+                  (org-glance-loop-file origin
+                    (let* ((hash (org-glance-headline:hash <headline>))
+                           (uncommitted (gethash hash headlines)))
+                      (cond (uncommitted
+                             ;; we found origin of materialized headline
+                             ;; but do we need to make any changes?
+                             ;; let's check hashes
+                             uncommitted)
+                            (t
+                             ;; we don't have this headline in materialization
+                             ;; leave it as is
+                             <headline>)))))))
+
+    (cl-loop for diff in diffs
+       do (goto-char (a-get diff :pos))
+         (org-set-property "Hash" (a-get diff :hash))))
+
+  ;; (org-glance-loop
+  ;;  (let* ((changed headline)
+  ;;         (origin (org-glance-headline:pop-property changed "Origin"))
+  ;;         (src-hash (org-glance-headline:pop-property changed "Hash"))
+  ;;         (new-hash (when (and origin src-hash)
+  ;;                     (org-glance-loop-file-1 origin
+  ;;                       (when (string= src-hash (org-glance-headline:hash headline))
+  ;;                         (delete-region (point-min) (point-max))
+  ;;                         (insert (org-glance-headline:contents changed))
+  ;;                         (org-glance-headline:hash changed))))))
+  ;;    (cond ((null new-hash) (user-error "Origin not found: %s" src-hash))
+  ;;          ((string= new-hash src-hash) (message "Headline is up to date"))
+  ;;          (t (org-set-property "Hash" new-hash)))))
   )
 
-;; (org-glance-loop-file "/tmp/org-glance-vYZTrF/tmp/phones.org"
-;;   (org-glance-materialize "/tmp/org-glance-vYZTrF/tmp/material.org" headline))
+(org-glance-materialize "/tmp/material.org"
+                        (org-glance-loop-file "/tmp/input.org"
+                          <headline>))
 
-;; (org-glance-loop-file "/tmp/org-glance-eQqFt5/tmp/phones.org"
+;; (org-glance-loop-file "/tmp/org-glance-UUPIZF/tmp/phones.org"
 ;;   (org-glance-headline:hash headline))
+
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
