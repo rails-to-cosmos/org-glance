@@ -5,3 +5,8 @@
 (And "^I goto the end of the buffer$"
      (lambda ()
        (goto-char (point-max))))
+
+(And "^I go to the first headline$"
+  (lambda ()
+    (goto-char (point-min))
+    (outline-next-heading)))

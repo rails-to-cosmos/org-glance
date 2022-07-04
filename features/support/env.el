@@ -45,11 +45,11 @@
  (f-mkdir-full-path org-glance-test:temp-location)
  (f-mkdir-full-path org-glance-test:view-location)
  (f-mkdir-full-path org-glance-test:user-location)
- (message "Root location: %s" org-glance-test:root-location))
+ ;; (message "Root location: %s" org-glance-test:root-location)
+ )
 
 (After
- ;; (delete-directory org-glance-test:root-location t)
- )
+ (delete-directory org-glance-test:root-location t))
 
 (Teardown
  (setq default-directory org-glance-root-path))

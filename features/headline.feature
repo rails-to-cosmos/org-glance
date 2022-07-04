@@ -141,6 +141,7 @@ Feature: Headline
     And I kill buffer
     And I materialize headline "iphone" to file "materializations.org"
     And I find file "materializations.org"
+    And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
     And I commit changes
     And I save buffer
@@ -163,6 +164,7 @@ Feature: Headline
     And I kill buffer
     And I materialize headline "iphone" to file "materializations.org"
     And I find file "materializations.org"
+    And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
     And I commit changes
     And I save buffer
@@ -192,6 +194,7 @@ Feature: Headline
 
     And I materialize headlines "iphone, samsung" to file "materializations.org"
     And I find file "materializations.org"
+    And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
     And I commit changes
     And I save buffer
@@ -200,6 +203,7 @@ Feature: Headline
     And I create headline "new iphone" from element at point
     Then the title of headline "new iphone" should be "iPhone 4"
 
+#   Scenario: Materialize headline with contents before the first headline
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize multiple headlines and add a new one
 #   Scenario: Materialize non-file headline

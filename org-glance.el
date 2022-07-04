@@ -98,19 +98,11 @@ This is the anaphoric method, you can use `_' to call headline in forms."
   (declare (indent 1))
   `(car (-non-nil (org-glance-loop-file ,file ,@forms))))
 
-(cl-defmethod org-glance-materialize ((file string) (headline org-glance-headline))
+(cl-defun org-glance-materialize (file headlines)
+  "Insert HEADLINES into the FILE and provide ability to push changes to its origins."
   (declare (indent 1))
   (org-glance-with-file file
-    (if-let (file (org-glance-headline:file headline))
-        (progn
-          (org-glance-headline:set-property headline "Hash" (org-glance-headline:hash headline))
-          (org-glance-headline:set-property headline "Origin" (org-glance-headline:file headline))
-          (org-glance-headline:insert headline))
-      (warn "Unable to materialize headline without file origin"))))
-
-(cl-defmethod org-glance-materialize ((file string) (headlines list))
-  (declare (indent 1))
-  (org-glance-with-file file
+    (insert "#    -*- mode: org; mode: org-glance-material -*-\n\n")
     (--map (if-let (file (org-glance-headline:file it))
                (progn
                  (org-glance-headline:set-property it "Hash" (org-glance-headline:hash it))
@@ -161,30 +153,20 @@ This is the anaphoric method, you can use `_' to call headline in forms."
 
     (cl-loop for diff in diffs
        do (goto-char (a-get diff :pos))
-         (org-set-property "Hash" (a-get diff :hash))))
+         (org-set-property "Hash" (a-get diff :hash)))))
 
-  ;; (org-glance-loop
-  ;;  (let* ((changed headline)
-  ;;         (origin (org-glance-headline:pop-property changed "Origin"))
-  ;;         (src-hash (org-glance-headline:pop-property changed "Hash"))
-  ;;         (new-hash (when (and origin src-hash)
-  ;;                     (org-glance-loop-file-1 origin
-  ;;                       (when (string= src-hash (org-glance-headline:hash headline))
-  ;;                         (delete-region (point-min) (point-max))
-  ;;                         (insert (org-glance-headline:contents changed))
-  ;;                         (org-glance-headline:hash changed))))))
-  ;;    (cond ((null new-hash) (user-error "Origin not found: %s" src-hash))
-  ;;          ((string= new-hash src-hash) (message "Headline is up to date"))
-  ;;          (t (org-set-property "Hash" new-hash)))))
-  )
+(defvar org-glance-material-mode-map (make-sparse-keymap)
+  "Extend `org-mode' map with synchronization abilities.")
 
-(org-glance-materialize "/tmp/material.org"
-                        (org-glance-loop-file "/tmp/input.org"
-                          <headline>))
+(define-minor-mode org-glance-material-mode
+    "A minor mode to be activated only in materialized view editor."
+  nil nil org-glance-material-mode-map
+  (cond (org-glance-material-mode (add-hook 'before-save-hook #'org-glance-commit nil t))
+        (t (remove-hook 'before-save-hook #'org-glance-commit t))))
 
-;; (org-glance-loop-file "/tmp/org-glance-UUPIZF/tmp/phones.org"
-;;   (org-glance-headline:hash headline))
-
+;; (org-glance-materialize "/tmp/material.org"
+;;   (org-glance-loop-file "/tmp/input.org"
+;;     <headline>))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here
