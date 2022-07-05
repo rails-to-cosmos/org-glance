@@ -1,3 +1,9 @@
+(Given "^empty file \"\\([^\"]+\\)\"$"
+  (lambda (filename)
+    (let ((full-path (f-join org-glance-test:temp-location filename)))
+      (f-touch full-path)
+      (puthash filename full-path org-glance-test:files))))
+
 (Given "^file \"\\([^\"]+\\)\"$"
        (lambda (filename contents)
          (let ((full-path (f-join org-glance-test:temp-location filename)))

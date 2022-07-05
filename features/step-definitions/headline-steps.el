@@ -111,6 +111,3 @@
 (When "^I materialize headlines? \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headlines file)
     (org-glance-materialize (F file) (HS headlines))))
-
-(And "^I commit changes$"
-  (lambda () (org-glance-commit)))

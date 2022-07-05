@@ -142,8 +142,7 @@ Feature: Headline
     And I materialize headline "iphone" to file "material.org"
     And I find file "material.org"
     And I go to the first headline
-    Then I set title of the headline at point to "iPhone 4"
-    And I commit changes
+    And I set title of the headline at point to "iPhone 4"
     And I save buffer
     And I find file "origin.org"
     Then buffer string should be
@@ -167,9 +166,9 @@ Feature: Headline
     And I materialize headline "iphone" to file "material.org"
     And I find file "material.org"
     And I go to the first headline
-    Then I set title of the headline at point to "iPhone 4"
+    And I set title of the headline at point to "iPhone 4"
     And I save buffer
-    Then I set title of the headline at point to "iPhone 5"
+    And I set title of the headline at point to "iPhone 5"
     And I save buffer
     And I find file "origin.org"
     Then buffer string should be
@@ -178,14 +177,11 @@ Feature: Headline
       """
 
   Scenario: Materialize multiple headlines
+    Given empty file "material.org"
     Given file "origin.org"
       """
       * iPhone 3 :phone:
       * Samsung Galaxy Note 8 :phone:
-      """
-
-    Given file "material.org"
-      """
       """
 
     When I find file "origin.org"
@@ -193,13 +189,11 @@ Feature: Headline
     And I goto the end of the buffer
     And I create headline "samsung" from element at point
     And I kill buffer
-
     And I materialize headlines "iphone, samsung" to file "material.org"
     And I find file "material.org"
     And I go to the first headline
-    Then I set title of the headline at point to "iPhone 4"
+    And I set title of the headline at point to "iPhone 4"
     And I save buffer
-
     And I find file "origin.org"
     Then buffer string should be
       """
@@ -208,15 +202,12 @@ Feature: Headline
       """
 
   Scenario: Materialize headline with contents before the first headline
+    Given empty file "material.org"
     Given file "origin.org"
       """
       Some contents before the first headline.
 
       * iPhone 3 :phone:
-      """
-
-    Given file "material.org"
-      """
       """
 
     When I find file "origin.org"
@@ -226,8 +217,7 @@ Feature: Headline
     And I materialize headline "iphone" to file "material.org"
     And I find file "material.org"
     And I go to the first headline
-    Then I set title of the headline at point to "iPhone 4"
-    And I commit changes
+    And I set title of the headline at point to "iPhone 4"
     And I save buffer
     And I find file "origin.org"
     Then buffer string should be
