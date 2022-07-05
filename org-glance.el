@@ -156,7 +156,8 @@ the first heading, CDR is a list of `org-glance-headlines'."
                     (puthash origin new origins))))
 
          (unless (string= modhash hash)
-           (cl-pushnew (a-list :hash modhash
+           (cl-pushnew (a-list :modhash modhash
+                               :hash hash
                                :pos (point))
                        diffs)))))
 
@@ -180,8 +181,12 @@ the first heading, CDR is a list of `org-glance-headlines'."
 
     (cl-loop for diff in diffs
        do (goto-char (a-get diff :pos))
-       ;; tricky one: if hash function completely changes there should be problems
-         (org-set-property "Hash" (a-get diff :hash)))))
+         (let ((headline (org-glance-headline-at-point)))
+           (cond ((string= (a-get diff :hash) (org-glance-headline:get-property headline "Hash"))
+                  (org-set-property "Hash" (a-get diff :modhash))
+                  (message "Changes applied to headline \"%s\" " (org-glance-headline:title headline)))
+                 ;; if hash function completely changes there should be problems
+                 (t (message "Unable to find material headline at position %d" (a-get diff :pos))))))))
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
