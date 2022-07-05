@@ -13,6 +13,19 @@
 
 (add-to-list 'load-path org-glance-root-path)
 
+(defvar org-glance-test:root-location)
+(defvar org-glance-test:temp-location)
+(defvar org-glance-test:view-location)
+(defvar org-glance-test:user-location)
+(defvar org-glance-test:files)
+(defvar org-glance-test:headlines)
+
+(defun H (alias) (gethash alias org-glance-test:headlines))
+(defun HS (aliases) (-map #'H (s-split ", " aliases)))
+(defun F (alias) (gethash alias org-glance-test:files))
+(defun org-glance-test:normalize-string (s)
+  (s-trim (s-replace-regexp "[[:space:]]+" " " s)))
+
 ;; Ensure that we don't load old byte-compiled versions
 (let ((load-prefer-newer t))
   (require 'org-glance)
@@ -20,16 +33,7 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
- (defvar org-glance-test:root-location)
- (defvar org-glance-test:temp-location)
- (defvar org-glance-test:view-location)
- (defvar org-glance-test:user-location)
- (defvar org-glance-test:files)
- (defvar org-glance-test:headlines)
-
- (defun H (alias) (gethash alias org-glance-test:headlines))
- (defun HS (aliases) (-map #'H (s-split ", " aliases)))
- (defun F (alias) (gethash alias org-glance-test:files)))
+ )
 
 (Before
  (desktop-clear)

@@ -94,6 +94,32 @@ This is the anaphoric method, you can use `_' to call headline in forms."
       (setf (slot-value <headline> 'file) ,file)
       ,@forms)))
 
+(cl-defmacro org-glance-loop-file-ro (file &rest forms)
+  (declare (indent 1))
+  `(with-temp-buffer
+     (org-mode)
+     (insert-file-contents-literally ,file)
+     (org-glance-loop
+      (setf (slot-value <headline> 'file) ,file)
+      ,@forms)))
+
+(cl-defmacro org-glance-file-contents (file)
+  "Return list of FILE contents. CAR of the list is string before
+the first heading, CDR is a list of `org-glance-headlines'."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (org-mode)
+     (insert-file-contents-literally ,file)
+     (append
+      (list (buffer-substring-no-properties (point-min) (save-excursion
+                                                          (goto-char (point-min))
+                                                          (unless (org-at-heading-p)
+                                                            (outline-next-heading))
+                                                          (point))))
+      (org-glance-loop
+       (setf (slot-value <headline> 'file) ,file)
+       <headline>))))
+
 (cl-defmacro org-glance-loop-file-1 (file &rest forms)
   (declare (indent 1))
   `(car (-non-nil (org-glance-loop-file ,file ,@forms))))
@@ -135,24 +161,26 @@ This is the anaphoric method, you can use `_' to call headline in forms."
                        diffs)))))
 
     (cl-loop for origin being the hash-keys of origins
-       using (hash-values headlines)
+       using (hash-values material-headlines)
        do (with-temp-file origin  ;; overwrite origin on success
-            (-map #'org-glance-headline:insert
-                  (org-glance-loop-file origin
-                    (let* ((hash (org-glance-headline:hash <headline>))
-                           (uncommitted (gethash hash headlines)))
-                      (cond (uncommitted
-                             ;; we found origin of materialized headline
-                             ;; but do we need to make any changes?
-                             ;; let's check hashes
-                             uncommitted)
-                            (t
-                             ;; we don't have this headline in materialization
-                             ;; leave it as is
-                             <headline>)))))))
+            (cl-destructuring-bind (header &rest origin-headlines) (org-glance-file-contents origin)
+              (let ((header (s-trim header)))
+                (unless (string-empty-p header)
+                  (insert header "\n")))
+
+              (cl-loop for origin-headline in origin-headlines
+                 do (let* ((hash (org-glance-headline:hash origin-headline))
+                           (material-headline (gethash hash material-headlines))
+                           (result-headline (cond (material-headline material-headline)
+                                                  (t
+                                                   ;; we don't have this headline in materialization
+                                                   ;; leave it as is
+                                                   origin-headline))))
+                      (org-glance-headline:insert result-headline))))))
 
     (cl-loop for diff in diffs
        do (goto-char (a-get diff :pos))
+       ;; tricky one: if hash function completely changes there should be problems
          (org-set-property "Hash" (a-get diff :hash)))))
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
@@ -165,7 +193,7 @@ This is the anaphoric method, you can use `_' to call headline in forms."
         (t (remove-hook 'before-save-hook #'org-glance-commit t))))
 
 ;; (org-glance-materialize "/tmp/material.org"
-;;   (org-glance-loop-file "/tmp/input.org"
+;;   (org-glance-loop-file "/tmp/origin.org"
 ;;     <headline>))
 
 (provide 'org-glance)

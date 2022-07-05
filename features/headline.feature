@@ -127,83 +127,116 @@ Feature: Headline
     Then headline "done" should be closed
 
   Scenario: Materialize single headline once
-    Given file "materializations.org"
-      """
-      """
-
-    Given file "phones.org"
+    Given file "origin.org"
       """
       * iPhone 3 :phone:
       """
 
-    When I find file "phones.org"
+    Given file "material.org"
+      """
+      """
+
+    When I find file "origin.org"
     And I create headline "iphone" from element at point
     And I kill buffer
-    And I materialize headline "iphone" to file "materializations.org"
-    And I find file "materializations.org"
+    And I materialize headline "iphone" to file "material.org"
+    And I find file "material.org"
     And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
     And I commit changes
     And I save buffer
-    And I find file "phones.org"
-    And I create headline "new iphone" from element at point
-    Then the title of headline "new iphone" should be "iPhone 4"
+    And I find file "origin.org"
+    Then buffer string should be
+      """
+      * iPhone 4 :phone:
+      """
 
   Scenario: Materialize single headline twice
-    Given file "materializations.org"
-      """
-      """
-
-    Given file "phones.org"
+    Given file "origin.org"
       """
       * iPhone 3 :phone:
       """
 
-    When I find file "phones.org"
+    Given file "material.org"
+      """
+      """
+
+    When I find file "origin.org"
     And I create headline "iphone" from element at point
     And I kill buffer
-    And I materialize headline "iphone" to file "materializations.org"
-    And I find file "materializations.org"
+    And I materialize headline "iphone" to file "material.org"
+    And I find file "material.org"
     And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
-    And I commit changes
     And I save buffer
     Then I set title of the headline at point to "iPhone 5"
-    And I commit changes
     And I save buffer
-    And I find file "phones.org"
-    And I create headline "new iphone" from element at point
-    Then the title of headline "new iphone" should be "iPhone 5"
+    And I find file "origin.org"
+    Then buffer string should be
+      """
+      * iPhone 5 :phone:
+      """
 
   Scenario: Materialize multiple headlines
-    Given file "materializations.org"
-      """
-      """
-
-    Given file "phones.org"
+    Given file "origin.org"
       """
       * iPhone 3 :phone:
       * Samsung Galaxy Note 8 :phone:
       """
 
-    When I find file "phones.org"
+    Given file "material.org"
+      """
+      """
+
+    When I find file "origin.org"
     And I create headline "iphone" from element at point
     And I goto the end of the buffer
     And I create headline "samsung" from element at point
     And I kill buffer
 
-    And I materialize headlines "iphone, samsung" to file "materializations.org"
-    And I find file "materializations.org"
+    And I materialize headlines "iphone, samsung" to file "material.org"
+    And I find file "material.org"
+    And I go to the first headline
+    Then I set title of the headline at point to "iPhone 4"
+    And I save buffer
+
+    And I find file "origin.org"
+    Then buffer string should be
+      """
+      * iPhone 4 :phone:
+      * Samsung Galaxy Note 8 :phone:
+      """
+
+  Scenario: Materialize headline with contents before the first headline
+    Given file "origin.org"
+      """
+      Some contents before the first headline.
+
+      * iPhone 3 :phone:
+      """
+
+    Given file "material.org"
+      """
+      """
+
+    When I find file "origin.org"
+    And I go to the first headline
+    And I create headline "iphone" from element at point
+    And I kill buffer
+    And I materialize headline "iphone" to file "material.org"
+    And I find file "material.org"
     And I go to the first headline
     Then I set title of the headline at point to "iPhone 4"
     And I commit changes
     And I save buffer
+    And I find file "origin.org"
+    Then buffer string should be
+      """
+      Some contents before the first headline.
 
-    And I find file "phones.org"
-    And I create headline "new iphone" from element at point
-    Then the title of headline "new iphone" should be "iPhone 4"
+      * iPhone 4 :phone:
+      """
 
-#   Scenario: Materialize headline with contents before the first headline
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize multiple headlines and add a new one
 #   Scenario: Materialize non-file headline

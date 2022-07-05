@@ -10,3 +10,9 @@
   (lambda ()
     (goto-char (point-min))
     (outline-next-heading)))
+
+(Then "^buffer string should be"
+       (lambda (contents)
+         (should (string=
+                  (org-glance-test:normalize-string contents)
+                  (org-glance-test:normalize-string (buffer-substring-no-properties (point-min) (point-max)))))))

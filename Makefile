@@ -18,5 +18,11 @@ test:
 	${CASK} exec ecukes
 	${CASK} clean-elc
 
+test-unstable:
+	${CASK} clean-elc
+	${CASK} build
+	${CASK} exec ecukes --tags @unstable
+	${CASK} clean-elc
+
 clean:
 	${CASK} clean-elc
