@@ -4,7 +4,7 @@
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
 
-(cl-defstruct (org-glance-store (:constructor org-glance-store-create)
+(cl-defstruct (org-glance-store (:constructor org-glance-store)
                                 (:copier org-glance-store-copy))
   "Stores headlines."
   (headlines nil :type list))
@@ -21,7 +21,7 @@
     (insert "#    -*- mode: org; mode: org-glance-material -*-\n\n")
     (--map (if-let (file (org-glance-headline-origin it))
                (progn
-                 (org-glance-headline:set-org-property* it "Hash" (org-glance-headline-hash it))
+                 (org-glance-headline:set-org-property* it "Hash" (org-glance-hash it))
                  (org-glance-headline:set-org-property* it "Origin" (org-glance-headline-origin it))
                  (org-glance-headline-insert it))
              (warn "Unable to materialize headline without file origin"))
@@ -37,7 +37,7 @@
   (cl-loop for file in scope
      append (org-glance-loop-file file <headline>)
      into headlines
-     finally return (org-glance-store-create :headlines headlines)))
+     finally return (org-glance-store :headlines headlines)))
 
 (cl-defgeneric org-glance-store-export-headlines (store directory)
   "Save STORE headlines to DIRECTORY.

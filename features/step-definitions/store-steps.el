@@ -8,7 +8,7 @@
 
 (Given "^store \"\\([^\"]+\\)\"$"
        (lambda (store-name)
-         (puthash store-name (org-glance-store-create) org-glance-test-stores)))
+         (puthash store-name (org-glance-store) org-glance-test-stores)))
 
 (When "^I import headlines from directory \"\\([^\"]+\\)\" to store \"\\([^\"]+\\)\"$"
   (lambda (directory store-name)
@@ -23,4 +23,4 @@
 
 (When "^I materialize headlines? \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headlines file)
-    (org-glance-materialize (org-glance-store-create :headlines (HS headlines)) (F file))))
+    (org-glance-materialize (org-glance-store :headlines (HS headlines)) (F file))))

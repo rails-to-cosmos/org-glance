@@ -38,7 +38,7 @@
 (And "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
      (lambda (headline file)
        (let ((headline (gethash headline org-glance-test-headlines)))
-         (org-glance-headline-save headline (f-join org-glance-test-location file)))))
+         (org-glance-save headline (f-join org-glance-test-location file)))))
 
 (Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
@@ -99,11 +99,11 @@
              (expected-headline (with-temp-buffer
                                   (insert contents)
                                   (org-glance-headline-at-point))))
-         (should (org-glance-headline-equal-p actual-headline expected-headline)))))
+         (should (org-glance-equal-p actual-headline expected-headline)))))
 
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
-       (should (org-glance-headline-equal-p
+       (should (org-glance-equal-p
                 (H a)
                 (H b)))))
 

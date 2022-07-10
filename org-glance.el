@@ -41,12 +41,24 @@
 (cl-defgeneric org-glance-import (scope)
   "Extract objects from SCOPE.")
 
+(cl-defgeneric org-glance-serialize (object)
+  "Serialize OBJECT.")
+
+(cl-defgeneric org-glance-hash (object)
+  "Get hash of OBJECT.")
+
+(cl-defgeneric org-glance-save (object destination)
+  "Save OBJECT to DESTINATION.")
+
 (cl-defgeneric org-glance-headlines (object)
   "Retrieve list of `org-glance-headline' instances from OBJECT.")
 
 (cl-defgeneric org-glance-materialize (source target)
   "Materialize SOURCE to TARGET.
 After materialiation calling to `org-glance-commit' from TARGET should be applied to SOURCE.")
+
+(cl-defgeneric org-glance-equal-p (obj1 obj2)
+  "Return t if OBJ1 equals OBJ2.")
 
 (require 'org-glance-headline)
 (require 'org-glance-store)
@@ -87,7 +99,7 @@ After materialiation calling to `org-glance-commit' from TARGET should be applie
     (org-glance-loop
      (when-let (hash (org-glance-headline:pop-org-property* <headline> "Hash"))
        (let ((origin (org-glance-headline:pop-org-property* <headline> "Origin"))
-             (modhash (org-glance-headline-hash <headline>)))
+             (modhash (org-glance-hash <headline>)))
 
          (cond ((gethash origin origins)
                 (puthash hash <headline> (gethash origin origins)))
@@ -110,7 +122,7 @@ After materialiation calling to `org-glance-commit' from TARGET should be applie
                   (insert header "\n")))
 
               (cl-loop for origin-headline in origin-headlines
-                 do (let* ((hash (org-glance-headline-hash origin-headline))
+                 do (let* ((hash (org-glance-hash origin-headline))
                            (material-headline (gethash hash material-headlines))
                            (result-headline (cond (material-headline material-headline)
                                                   (t

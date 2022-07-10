@@ -41,7 +41,7 @@
 
 (require 'org-glance-helpers)
 
-(cl-defstruct (org-glance-headline (:constructor org-glance-headline-create)
+(cl-defstruct (org-glance-headline (:constructor org-glance-headline)
                                    (:copier org-glance-headline-copy))
   "Serializable headline with additional features on top of `org-element'."
   title
@@ -111,7 +111,7 @@ Return t if it is or raise `user-error' otherwise."
                           org-element-interpret-data
                           substring-no-properties
                           s-trim)))
-      (org-glance-headline-create
+      (org-glance-headline
        :title (with-temp-buffer
                 (insert (or (org-element-property :TITLE element)
                             (org-element-property :raw-value element)
@@ -133,28 +133,34 @@ Return t if it is or raise `user-error' otherwise."
        :org-properties (org-entry-properties)
        :user-properties nil))))
 
-(cl-defgeneric org-glance-headline-directory (headline)
-  "Get directory where HEADLINE is stored.")
+;; (cl-defgeneric org-glance-headline-directory (headline)
+;;   "Get directory where HEADLINE is stored.")
 
-(cl-defmethod org-glance-headline-directory ((headline org-glance-headline))
-  (let ((file (org-glance-headline-origin headline)))
-    (cond ((file-exists-p file) (file-name-directory file)))))
+;; (cl-defmethod org-glance-headline-directory ((headline org-glance-headline))
+;;   (let ((file (org-glance-headline-origin headline)))
+;;     (cond ((file-exists-p file) (file-name-directory file)))))
 
-(cl-defgeneric org-glance-headline-serialize (headline)
-  "Serialize HEADLINE.")
-
-(cl-defmethod org-glance-headline-serialize ((headline org-glance-headline))
+(cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
   (prin1-to-string headline))
 
-(cl-defgeneric org-glance-headline-save (headline file)
-  "Write HEADLINE to FILE.")
+(cl-defmethod org-glance-equal-p ((a org-glance-headline) (b org-glance-headline))
+  "Return t if A equals B."
+  (string= (org-glance-headline-contents a) (org-glance-headline-contents b)))
 
-(cl-defmethod org-glance-headline-save ((headline org-glance-headline) file)
+(cl-defmethod org-glance-save ((headline org-glance-headline) (file string))
+  "Write HEADLINE to FILE."
   (with-temp-file file
     (let ((standard-output (current-buffer))
           (print-circle t))
       (prin1 headline))))
+
+(cl-defmethod org-glance-hash ((headline org-glance-headline))
+  "Get hash of HEADLINE."
+  ;; (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline-contents headline)))
+  ;; (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline-contents headline))))
+  ;; (secure-hash 'md5 (s-trim (org-glance-headline-contents headline)))
+  (org-glance-headline-title headline))
 
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
@@ -162,17 +168,8 @@ Return t if it is or raise `user-error' otherwise."
     (insert-file-contents file)
     (read (current-buffer))))
 
-(cl-defgeneric org-glance-headline-hash (headline)
-  "Get hash of HEADLINE.")
-
-(cl-defmethod org-glance-headline-hash ((headline org-glance-headline))
-  ;; (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline-contents headline)))
-  ;; (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline-contents headline))))
-  ;; (secure-hash 'md5 (s-trim (org-glance-headline-contents headline)))
-  (org-glance-headline-title headline))
-
-(cl-defgeneric org-glance-headline:get-org-property (headline key default)
-  "Get org property specified by KEY from HEADLINE. If not found return DEFAULT.")
+(cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
+  (insert (org-glance-headline-contents headline) "\n"))
 
 (cl-defmethod org-glance-headline:get-org-property ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE org properties."
@@ -211,12 +208,6 @@ Return t if it is or raise `user-error' otherwise."
                do (let ((inhibit-message t))
                     (org-delete-property key)))
             (buffer-substring-no-properties (point-min) (point-max))))))
-
-(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
-  (string= (org-glance-headline-contents a) (org-glance-headline-contents b)))
-
-(cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
-  (insert (org-glance-headline-contents headline) "\n"))
 
 ;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
 ;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."
