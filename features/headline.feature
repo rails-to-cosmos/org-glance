@@ -1,5 +1,5 @@
 Feature: Headline
-  Scenario: Create from headline at point: point at title
+  Scenario: Create from headline at point (point at title)
     Given headline "sre"
       """
       * Google SRE Book :book:article:
@@ -14,7 +14,7 @@ Feature: Headline
     And headline "sre" should be a book
     And headline "sre" should be an article
 
-  Scenario: Create from headline at point: point inside subtree
+  Scenario: Create from headline at point (point inside subtree)
     Given file "tasks.org"
       """
       * TODO Vocal lesson :Task:
@@ -227,7 +227,7 @@ Feature: Headline
       * iPhone 4 :phone:
       """
 
+#   Scenario: Create headline from materialized buffer ? we need to now where to find location headline store
 #   Scenario: Materialize encrypted headline
-#   Scenario: Materialize multiple headlines and add a new one
 #   Scenario: Materialize non-file headline
 #   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file

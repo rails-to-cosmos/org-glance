@@ -32,7 +32,24 @@
 
 (require 'org)
 (require 'org-element)
+(require 'org-glance-helpers)
+(require 'org-glance-scope)
+
+(cl-defgeneric org-glance-cardinality (object)
+  "Return number of elements in OBJECT.")
+
+(cl-defgeneric org-glance-import (scope)
+  "Extract objects from SCOPE.")
+
+(cl-defgeneric org-glance-headlines (object)
+  "Retrieve list of `org-glance-headline' instances from OBJECT.")
+
+(cl-defgeneric org-glance-materialize (source target)
+  "Materialize SOURCE to TARGET.
+After materialiation calling to `org-glance-commit' from TARGET should be applied to SOURCE.")
+
 (require 'org-glance-headline)
+(require 'org-glance-store)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -46,96 +63,19 @@
   :group 'org-glance
   :type 'directory)
 
-(defcustom org-glance-clone-on-repeat-p nil
-  "Clone repeated headlines on complete."
-  :group 'org-glance
-  :type 'boolean)
-
-(defvar org-glance-material-buffers (make-hash-table))
-
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory t))
 
-  ;; Read `org-glance-registry' from `org-glance-directory'
+  ;; Read `org-glance-store' from `org-glance-directory'
 
-  ;; Actualize `org-glance-class-registry'
+  ;; Actualize `org-glance-class-store'
 
-  ;; Storage partitioning schema: class/created-date/headline-id/headline.el
-  ;; Archive partitioning schema: class/closed-date/headline-id/headline.el
+  ;; Headline -- node
+  ;; Relationship -- (headline1, headline2, class)
+  ;; Indexes on classes and timestamps
   )
-
-(cl-defmacro org-glance-loop (&rest forms)
-  "Loop over headlines and execute FORMS on each.
-This is the anaphoric method, you can use `_' to call headline in forms."
-  `(cl-loop for pos in (-non-nil
-                        (org-element-map (org-element-parse-buffer 'headline) 'headline
-                          (lambda (headline)
-                            (when (= (org-element-property :level headline) 1)
-                              (org-element-property :begin headline)))))
-      collect (save-excursion
-                (goto-char pos)
-                (let ((<headline> (org-glance-headline-at-point)))
-                  (org-glance:with-heading-at-point
-                    ,@forms)))))
-
-(cl-defmacro org-glance-with-file (file &rest forms)
-  (declare (indent 1))
-  `(with-temp-file ,file
-     (org-mode)
-     ,@forms))
-
-(cl-defmacro org-glance-loop-file (file &rest forms)
-  (declare (indent 1))
-  `(org-glance-with-file ,file
-     (insert-file-contents-literally ,file)
-     (org-glance-loop
-      (setf (slot-value <headline> 'file) ,file)
-      ,@forms)))
-
-(cl-defmacro org-glance-loop-file-ro (file &rest forms)
-  (declare (indent 1))
-  `(with-temp-buffer
-     (org-mode)
-     (insert-file-contents-literally ,file)
-     (org-glance-loop
-      (setf (slot-value <headline> 'file) ,file)
-      ,@forms)))
-
-(cl-defmacro org-glance-file-contents (file)
-  "Return list of FILE contents. CAR of the list is string before
-the first heading, CDR is a list of `org-glance-headlines'."
-  (declare (indent 1))
-  `(with-temp-buffer
-     (org-mode)
-     (insert-file-contents-literally ,file)
-     (append
-      (list (buffer-substring-no-properties (point-min) (save-excursion
-                                                          (goto-char (point-min))
-                                                          (unless (org-at-heading-p)
-                                                            (outline-next-heading))
-                                                          (point))))
-      (org-glance-loop
-       (setf (slot-value <headline> 'file) ,file)
-       <headline>))))
-
-(cl-defmacro org-glance-loop-file-1 (file &rest forms)
-  (declare (indent 1))
-  `(car (-non-nil (org-glance-loop-file ,file ,@forms))))
-
-(cl-defun org-glance-materialize (file headlines)
-  "Insert HEADLINES into the FILE and provide ability to push changes to its origins."
-  (declare (indent 1))
-  (org-glance-with-file file
-    (insert "#    -*- mode: org; mode: org-glance-material -*-\n\n")
-    (--map (if-let (file (org-glance-headline:file it))
-               (progn
-                 (org-glance-headline:set-property it "Hash" (org-glance-headline:hash it))
-                 (org-glance-headline:set-property it "Origin" (org-glance-headline:file it))
-                 (org-glance-headline:insert it))
-             (warn "Unable to materialize headline without file origin"))
-           headlines)))
 
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins."
@@ -145,9 +85,9 @@ the first heading, CDR is a list of `org-glance-headlines'."
         (diffs (list)))
 
     (org-glance-loop
-     (when-let (hash (org-glance-headline:pop-property <headline> "Hash"))
-       (let ((origin (org-glance-headline:pop-property <headline> "Origin"))
-             (modhash (org-glance-headline:hash <headline>)))
+     (when-let (hash (org-glance-headline:pop-org-property* <headline> "Hash"))
+       (let ((origin (org-glance-headline:pop-org-property* <headline> "Origin"))
+             (modhash (org-glance-headline-hash <headline>)))
 
          (cond ((gethash origin origins)
                 (puthash hash <headline> (gethash origin origins)))
@@ -170,21 +110,21 @@ the first heading, CDR is a list of `org-glance-headlines'."
                   (insert header "\n")))
 
               (cl-loop for origin-headline in origin-headlines
-                 do (let* ((hash (org-glance-headline:hash origin-headline))
+                 do (let* ((hash (org-glance-headline-hash origin-headline))
                            (material-headline (gethash hash material-headlines))
                            (result-headline (cond (material-headline material-headline)
                                                   (t
                                                    ;; we don't have this headline in materialization
                                                    ;; leave it as is
                                                    origin-headline))))
-                      (org-glance-headline:insert result-headline))))))
+                      (org-glance-headline-insert result-headline))))))
 
     (cl-loop for diff in diffs
        do (goto-char (a-get diff :pos))
          (let ((headline (org-glance-headline-at-point)))
-           (cond ((string= (a-get diff :hash) (org-glance-headline:get-property headline "Hash"))
+           (cond ((string= (a-get diff :hash) (org-glance-headline:get-org-property headline "Hash"))
                   (org-set-property "Hash" (a-get diff :modhash))
-                  (message "Changes applied to headline \"%s\" " (org-glance-headline:title headline)))
+                  (message "Changes applied to headline \"%s\" " (org-glance-headline-title headline)))
                  ;; if hash function completely changes there should be problems
                  (t (message "Unable to find material headline at position %d" (a-get diff :pos))))))))
 
@@ -196,10 +136,6 @@ the first heading, CDR is a list of `org-glance-headlines'."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode (add-hook 'before-save-hook #'org-glance-commit nil t))
         (t (remove-hook 'before-save-hook #'org-glance-commit t))))
-
-;; (org-glance-materialize "/tmp/material.org"
-;;   (org-glance-loop-file "/tmp/origin.org"
-;;     <headline>))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

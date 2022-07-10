@@ -1,6 +1,9 @@
+;; -*- lexical-binding: t; -*-
+
 (require 'f)
 (require 'dash)
 (require 'org-glance)
+(require 'org-glance-helpers)
 
 (defvar org-glance-support-path
   (f-dirname load-file-name))
@@ -13,16 +16,28 @@
 
 (add-to-list 'load-path org-glance-root-path)
 
-(defvar org-glance-test:root-location)
-(defvar org-glance-test:temp-location)
-(defvar org-glance-test:view-location)
-(defvar org-glance-test:user-location)
-(defvar org-glance-test:files)
-(defvar org-glance-test:headlines)
+(defvar org-glance-test-location)
+(defvar org-glance-test-files)
+(defvar org-glance-test-stores)
+(defvar org-glance-test-headlines)
 
-(defun H (alias) (gethash alias org-glance-test:headlines))
-(defun HS (aliases) (-map #'H (s-split ", " aliases)))
-(defun F (alias) (gethash alias org-glance-test:files))
+(defun H (alias)
+  "Get headline from test storage by ALIAS."
+  (gethash alias org-glance-test-headlines))
+
+(defun HS (aliases)
+  "Get headlines from test storage by ALIAS."
+  (-map #'H (s-split ", " aliases)))
+
+(defun F (alias)
+  "Get file from test storage by ALIAS."
+  (or (gethash alias org-glance-test-files)
+      (f-join org-glance-test-location alias)))
+
+(defun S (alias)
+  "Get storage from test storage by ALIAS."
+  (gethash alias org-glance-test-stores))
+
 (defun org-glance-test:normalize-string (s)
   (s-trim (s-replace-regexp "[[:space:]]+" " " s)))
 
@@ -37,23 +52,14 @@
 
 (Before
  (desktop-clear)
-
- (setq org-glance-test:root-location (make-temp-file "org-glance-" 'directory)
-       org-glance-test:temp-location (f-join org-glance-test:root-location "tmp")
-       org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
-       org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
-       org-glance-directory org-glance-test:view-location
-       org-glance-test:files (make-hash-table :test #'equal)
-       org-glance-test:headlines (make-hash-table :test #'equal))
-
- (f-mkdir-full-path org-glance-test:temp-location)
- (f-mkdir-full-path org-glance-test:view-location)
- (f-mkdir-full-path org-glance-test:user-location)
- ;; (message "Root location: %s" org-glance-test:root-location)
- )
+ (setq org-glance-test-location (make-temp-file "org-glance-" 'directory)
+       org-glance-test-files (make-hash-table :test #'equal)
+       org-glance-test-stores (make-hash-table :test #'equal)
+       org-glance-test-headlines (make-hash-table :test #'equal))
+ (f-mkdir-full-path org-glance-test-location))
 
 (After
- (delete-directory org-glance-test:root-location t))
+ (delete-directory org-glance-test-location t))
 
 (Teardown
  (setq default-directory org-glance-root-path))

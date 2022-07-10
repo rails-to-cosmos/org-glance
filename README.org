@@ -20,6 +20,13 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
+* Requirements
+** Linearizability
+** Deadlock-free
+** Wait-free
+** Efficient reads
+** Column filters (by *-p features and timestamps)
+** Fulltext search
 * Issues
 ** TODO Use https://github.com/alphapapa/makem.sh
 ** TODO Registries
@@ -28,7 +35,6 @@ field of graph processing and visualization.
 CLOCK: [2022-04-02 Sat 12:33]
 - State "STARTED"    from "TODO"       [2022-04-02 Sat 12:33]
 :END:
-** TODO Materialization
 ** TODO Overview [1/5]
 *** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:
@@ -73,11 +79,10 @@ Cache roles: employee/employer, contact/task
 *** [[https://www.data-to-viz.com/graph/edge_bundling.html][Hierarchical edge bundling – from Data to Viz]]
 *** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
 *** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
-** Materialization [0/0]
-** Agenda [0/0]
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** [#C] Gamification
+* Aesthetics
+** Gamification
 - [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]
 * Thoughts
 
@@ -90,6 +95,7 @@ Cache roles: employee/employer, contact/task
 - http://fastcompression.blogspot.com/p/lz4.html
 - https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
 - https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
+- [[http://people.csail.mit.edu/shanir/publications/OPODIS2006-BA.pdf][concurrent skip lists for index implementation]]
 
 * dist-packages
 
