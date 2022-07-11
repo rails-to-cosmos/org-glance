@@ -25,7 +25,6 @@ This is the anaphoric method, you can use `_' to call headline in forms."
   `(org-glance-with-file ,file
      (insert-file-contents-literally ,file)
      (org-glance-loop
-      (setf (org-glance-headline-origin <headline>) ,file)
       ,@forms)))
 
 (cl-defmacro org-glance-loop-file-ro (file &rest forms)
@@ -34,7 +33,6 @@ This is the anaphoric method, you can use `_' to call headline in forms."
      (org-mode)
      (insert-file-contents-literally ,file)
      (org-glance-loop
-      (setf (org-glance-headline-origin <headline>) ,file)
       ,@forms)))
 
 (cl-defmacro org-glance-file-contents (file)
@@ -50,9 +48,7 @@ the first heading, CDR is a list of `org-glance-headlines'."
                                                           (unless (org-at-heading-p)
                                                             (outline-next-heading))
                                                           (point))))
-      (org-glance-loop
-       (setf (org-glance-headline-origin <headline>) ,file)
-       <headline>))))
+      (org-glance-loop <headline>))))
 
 (cl-defmacro org-glance-loop-file-1 (file &rest forms)
   (declare (indent 1))

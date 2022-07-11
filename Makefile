@@ -18,10 +18,10 @@ test:
 	${CASK} exec ecukes
 	${CASK} clean-elc
 
-test-unstable:
+test-dev:
 	${CASK} clean-elc
 	${CASK} build
-	${CASK} exec ecukes --tags @unstable
+	${CASK} exec ecukes --tags @dev
 	${CASK} clean-elc
 
 clean:

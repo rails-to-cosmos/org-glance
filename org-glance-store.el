@@ -11,21 +11,23 @@
 
 (cl-defmethod org-glance-cardinality ((store org-glance-store))
   "Return number of headlines in STORE."
-  (let ((headlines (org-glance-store-headlines store)))
+  (let ((headlines (org-glance-headlines store)))
     (cond ((null headlines) 0)
-          (t (length headlines)))))
+          (t (cl-loop for (_ . h) in headlines
+                sum (length h))))))
 
 (cl-defmethod org-glance-materialize ((store org-glance-store) (file string))
-  "Insert STORE's headlines into the FILE and provide ability to push changes to its origins by calling `org-glance-commit'."
+  "Insert STORE into the FILE and provide ability to push changes to its origins by calling `org-glance-commit'."
   (org-glance-with-file file
     (insert "#    -*- mode: org; mode: org-glance-material -*-\n\n")
-    (--map (if-let (file (org-glance-headline-origin it))
-               (progn
-                 (org-glance-headline:set-org-property* it "Hash" (org-glance-hash it))
-                 (org-glance-headline:set-org-property* it "Origin" (org-glance-headline-origin it))
-                 (org-glance-headline-insert it))
-             (warn "Unable to materialize headline without file origin"))
-           (org-glance-store-headlines store))))
+    (cl-loop for (origin . headlines) in (org-glance-headlines store)
+       do (if origin
+              (cl-loop for headline in headlines
+                 do
+                   (org-glance-headline:set-org-property* headline "Hash" (org-glance-hash headline))
+                   (org-glance-headline:set-org-property* headline "Origin" origin)
+                   (org-glance-headline-insert headline))
+            (warn "Unable to materialize headline without file origin")))))
 
 (cl-defmethod org-glance-headlines ((store org-glance-store))
   "Retrieve headlines from STORE."
@@ -35,7 +37,7 @@
   "Read SCOPE recursively, extract `org-glance-headline' from
   each visited file then return new instance of `org-glance-store'."
   (cl-loop for file in scope
-     append (org-glance-loop-file file <headline>)
+     collect (cons file (org-glance-loop-file file <headline>))
      into headlines
      finally return (org-glance-store :headlines headlines)))
 

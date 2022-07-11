@@ -24,9 +24,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-;;; Commentary:
-;; Origin could be possibly moved from HEADLINE model.
-
 ;;; Code:
 
 (require 'a)
@@ -46,7 +43,6 @@
   "Serializable headline with additional features on top of `org-element'."
   title
   class
-  origin
   contents
   org-properties
   user-properties
@@ -59,7 +55,6 @@
 
 (defvar org-glance-headline--bindat-spec
   '((title str 255)
-    (origin str 255)
     (archived-p byte)
     (commented-p byte)
     (closed-p byte)
@@ -123,7 +118,6 @@ Return t if it is or raise `user-error' otherwise."
                      s-trim))
        :class (--map (intern (downcase it)) (org-element-property :tags element))
        :contents contents
-       :origin (buffer-file-name)
        :archived-p (org-element-property :archivedp element)
        :commented-p (org-element-property :commentedp element)
        :closed-p (org-element-property :closed element)
@@ -132,13 +126,6 @@ Return t if it is or raise `user-error' otherwise."
        :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
        :org-properties (org-entry-properties)
        :user-properties nil))))
-
-;; (cl-defgeneric org-glance-headline-directory (headline)
-;;   "Get directory where HEADLINE is stored.")
-
-;; (cl-defmethod org-glance-headline-directory ((headline org-glance-headline))
-;;   (let ((file (org-glance-headline-origin headline)))
-;;     (cond ((file-exists-p file) (file-name-directory file)))))
 
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
@@ -215,7 +202,6 @@ Return t if it is or raise `user-error' otherwise."
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
 ;;      (a-list 'title (string-as-unibyte (org-glance-headline-title headline))
-;;              'file (string-as-unibyte (org-glance-headline-origin headline))
 ;;              'archived (bool->int (org-glance-headline-archived-p headline))
 ;;              'commented (bool->int (org-glance-headline-commented-p headline))
 ;;              'closed (bool->int (org-glance-headline-closed-p headline))
