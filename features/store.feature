@@ -18,15 +18,7 @@ Feature: Store
     When I import store "TaskStore" from directory "tasks"
     Then store "TaskStore" should contain 4 headlines
 
-  Scenario: Filter by class
-  Scenario: Filter by user properties
-  Scenario: Filter by archived property
-  Scenario: Filter by commented property
-  Scenario: Filter by closed property
-  Scenario: Filter by encrypted property
-  Scenario: Filter by linked property
-
-  Scenario: Materialize store
+  Scenario: Materialize
     Given file "origin.org"
       """
       Some contents before the first headline.
@@ -55,3 +47,12 @@ Feature: Store
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize non-file headline
 #   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
+
+  Scenario: Filter by class
+  Scenario: Filter by user properties
+  Scenario: Filter by archived property
+  Scenario: Filter by commented property
+  Scenario: Filter by closed property
+  Scenario: Filter by encrypted property
+  Scenario: Filter by linked property
+  Scenario: Relative path in materialization

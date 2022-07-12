@@ -53,15 +53,6 @@
   linked-p
   propertized-p)
 
-(defvar org-glance-headline--bindat-spec
-  '((title str 255)
-    (archived-p byte)
-    (commented-p byte)
-    (closed-p byte)
-    (encrypted-p byte)
-    (linked-p byte)
-    (propertized-p byte)))
-
 (cl-defun org-glance:links-to-titles (ast)
   "Replace links with its titles in AST."
   (cl-loop for link in (org-element-map ast 'link #'identity)
@@ -146,8 +137,9 @@ Return t if it is or raise `user-error' otherwise."
   "Get hash of HEADLINE."
   ;; (message "Create hash from string: \"%s\"" (s-trim (org-glance-headline-contents headline)))
   ;; (message "Result hash: %s" (secure-hash 'md5 (s-trim (org-glance-headline-contents headline))))
-  ;; (secure-hash 'md5 (s-trim (org-glance-headline-contents headline)))
-  (org-glance-headline-title headline))
+  (secure-hash 'md5 (s-trim (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " " (org-glance-headline-contents headline))))
+  ;; (org-glance-headline-title headline)
+  )
 
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
@@ -195,6 +187,19 @@ Return t if it is or raise `user-error' otherwise."
                do (let ((inhibit-message t))
                     (org-delete-property key)))
             (buffer-substring-no-properties (point-min) (point-max))))))
+
+;; (cl-defmethod org-glance-headlines ((headline org-glance-headline))
+;;   "Return list of HEADLINE."
+;;   (list headline))
+
+;; (defvar org-glance-headline--bindat-spec
+;;   '((title str 255)
+;;     (archived-p byte)
+;;     (commented-p byte)
+;;     (closed-p byte)
+;;     (encrypted-p byte)
+;;     (linked-p byte)
+;;     (propertized-p byte)))
 
 ;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
 ;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."
