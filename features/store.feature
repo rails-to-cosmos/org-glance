@@ -18,7 +18,6 @@ Feature: Store
     When I import store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  @dev
   Scenario: Export
     Given store "Pets"
     Given file "pets.org" in directory "tasks/home"
