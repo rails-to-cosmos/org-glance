@@ -56,7 +56,7 @@ Feature: Store
       * Nokia :phone:
       """
 
-  Scenario: Materialize unicode
+  Scenario: Materialize headlines with unicode titles
     Given store "Cyrillic Notes"
     Given file "origin.org"
       """
@@ -79,6 +79,7 @@ Feature: Store
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize non-file headline
 #   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
+#   Optimize materialization: mark headlines as changed and apply only them
 
   Scenario: Filter by class
   Scenario: Filter by user properties

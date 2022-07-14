@@ -1,5 +1,24 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'dash)
+
+(cl-defmacro org-glance-memc (var bodyform handler)
+  "Memory consumption report."
+  (declare (indent 2))
+  `(cl-flet ((memc () (list
+                       cons-cells-consed
+                       floats-consed
+                       vector-cells-consed
+                       symbols-consed
+                       string-chars-consed
+                       intervals-consed
+                       strings-consed)))
+     (let ((initial-memory-consumption (memc))
+           final-memory-consumption)
+       (prog1 ,bodyform
+         (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
+           ,handler)))))
+
 (cl-defmacro org-glance-loop (&rest forms)
   "Loop over headlines and execute FORMS on each.
 This is the anaphoric method, you can use `_' to call headline in forms."
