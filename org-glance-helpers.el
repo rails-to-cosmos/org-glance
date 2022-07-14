@@ -18,12 +18,13 @@ This is the anaphoric method, you can use `_' to call headline in forms."
   (declare (indent 1))
   `(with-temp-file ,file
      (org-mode)
+     (set-buffer-multibyte t)
      ,@forms))
 
 (cl-defmacro org-glance-loop-file (file &rest forms)
   (declare (indent 1))
   `(org-glance-with-file ,file
-     (insert-file-contents-literally ,file)
+     (insert-file-contents ,file)
      (org-glance-loop
       ,@forms)))
 
@@ -31,7 +32,7 @@ This is the anaphoric method, you can use `_' to call headline in forms."
   (declare (indent 1))
   `(with-temp-buffer
      (org-mode)
-     (insert-file-contents-literally ,file)
+     (insert-file-contents ,file)
      (org-glance-loop
       ,@forms)))
 
@@ -41,7 +42,7 @@ the first heading, CDR is a list of `org-glance-headlines'."
   (declare (indent 1))
   `(with-temp-buffer
      (org-mode)
-     (insert-file-contents-literally ,file)
+     (insert-file-contents ,file)
      (append
       (list (buffer-substring-no-properties (point-min) (save-excursion
                                                           (goto-char (point-min))

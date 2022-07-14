@@ -42,7 +42,6 @@ Feature: Store
       * Nokia :phone:
       """
     Given empty file "material.org"
-
     When I import store "Phones" from file "origin.org"
     And I materialize store "Phones" to file "material.org"
     And I find file "material.org"
@@ -56,6 +55,25 @@ Feature: Store
 
       * iPhone 4 :phone:
       * Nokia :phone:
+      """
+
+  Scenario: Materialize unicode
+    Given store "Cyrillic Notes"
+    Given file "origin.org"
+      """
+      * Тест :note:
+      """
+    Given empty file "material.org"
+    When I import store "Cyrillic Notes" from file "origin.org"
+    And I materialize store "Cyrillic Notes" to file "material.org"
+    And I find file "material.org"
+    And I go to the first headline
+    And I set title of the headline at point to "Тест 2"
+    And I save buffer
+    And I find file "origin.org"
+    Then buffer string should be
+      """
+      * Тест 2 :note:
       """
 
 #   Scenario: Create headline from materialized buffer ? we need to now where to find location headline store
