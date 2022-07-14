@@ -1,6 +1,6 @@
 Feature: Store
-  Scenario: Import from directory
-    Given store "TaskStore"
+  Scenario: Import
+    Given store "Tasks"
     Given file "household.org" in directory "tasks/home"
       """
       * TODO Buy milk :Task:
@@ -15,10 +15,25 @@ Feature: Store
       """
       * Messy stuff of undo-tree, we should ignore it
       """
-    When I import store "TaskStore" from directory "tasks"
-    Then store "TaskStore" should contain 4 headlines
+    When I import store "Tasks" from directory "tasks"
+    Then store "Tasks" should contain 4 headlines
+
+  @dev
+  Scenario: Export
+    Given store "Pets"
+    Given file "pets.org" in directory "tasks/home"
+      """
+      * TODO Buy pet food :Task:
+      * TODO Vet :Task:
+      """
+    When I import store "Pets" from directory "tasks"
+    Then store "Pets" should contain 2 headlines
+    When I export store "Pets" to directory "export"
+    And I import store "Household" from directory "export"
+    Then store "Pets" should be equal to "Household"
 
   Scenario: Materialize
+    Given store "Phones"
     Given file "origin.org"
       """
       Some contents before the first headline.

@@ -29,12 +29,6 @@ field of graph processing and visualization.
 ** Fulltext search
 * Issues
 ** TODO Use https://github.com/alphapapa/makem.sh
-** TODO Registries
-:LOGBOOK:
-- State "DONE"       from "STARTED"    [2022-04-11 Mon 11:31]
-CLOCK: [2022-04-02 Sat 12:33]
-- State "STARTED"    from "TODO"       [2022-04-02 Sat 12:33]
-:END:
 ** TODO Overview [1/5]
 *** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:
@@ -97,6 +91,8 @@ Cache roles: employee/employer, contact/task
 - https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
 - [[http://people.csail.mit.edu/shanir/publications/OPODIS2006-BA.pdf][concurrent skip lists for index implementation]]
 
+** Scope
+*** invariants? we can provide invariant on import or persist it in metadata
 * dist-packages
 
 - https://github.com/skeeto/emacsql

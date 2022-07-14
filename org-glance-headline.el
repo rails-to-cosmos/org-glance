@@ -188,6 +188,12 @@ Return t if it is or raise `user-error' otherwise."
                     (org-delete-property key)))
             (buffer-substring-no-properties (point-min) (point-max))))))
 
+(cl-defmethod org-glance-export ((headline org-glance-headline) dest)
+  (cond ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and not empty."))
+        ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
+  (with-temp-file dest
+    (org-glance-headline-insert headline)))
+
 ;; (cl-defmethod org-glance-headlines ((headline org-glance-headline))
 ;;   "Return list of HEADLINE."
 ;;   (list headline))

@@ -41,6 +41,10 @@
 (cl-defgeneric org-glance-import (scope)
   "Extract objects from SCOPE.")
 
+(cl-defgeneric org-glance-export (obj dest)
+  "Export OBJ to DEST.
+It could apply partitioning schemas and write metadata to optimize further reads.")
+
 (cl-defgeneric org-glance-serialize (object)
   "Serialize OBJECT.")
 
@@ -90,7 +94,9 @@ After materialiation calling to `org-glance-commit' from TARGET should be applie
   )
 
 (cl-defun org-glance-commit ()
-  "Apply all changes of buffer headlines to its origins."
+  "Apply all changes of buffer headlines to its origins.
+
+TODO: It should be generalized to other materialization types somehow."
   (interactive)
 
   (let ((origins (make-hash-table :test #'equal))

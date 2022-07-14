@@ -22,9 +22,13 @@
            (store (org-glance-import scope)))
       (puthash store-name store org-glance-test-stores))))
 
+(When "^I export store \"\\([^\"]+\\)\" to directory \"\\([^\"]+\\)\"$"
+  (lambda (store-name dir-name)
+    (let ((store (S store-name)))
+      (org-glance-export store (f-join org-glance-test-location dir-name)))))
+
 (Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (store-name cardinality)
-        ;; (-all? #'org-glance-headline-p (org-glance-headlines store))
         (let ((store (S store-name)))
           (should (= (string-to-number cardinality)
                      (org-glance-cardinality store))))))
@@ -36,6 +40,10 @@
       (org-glance-materialize store file))))
 
 (And "^I print store \"\\([^\"]+\\)\"$"
-  (lambda (store-name)
-    (let ((store (S store-name)))
-      (pp store))))
+     (lambda (store-name)
+       (let ((store (S store-name)))
+         (pp store))))
+
+(Then "^store \"\\([^\"]+\\)\" should be equal to \"\\([^\"]+\\)\"$"
+      (lambda (store-1 store-2)
+        (should (org-glance-equal-p (S store-1) (S store-2)))))
