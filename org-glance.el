@@ -42,8 +42,7 @@
   "Extract objects from SCOPE.")
 
 (cl-defgeneric org-glance-export (obj dest)
-  "Export OBJ to DEST.
-It could apply partitioning schemas and write metadata to optimize further reads.")
+  "Export OBJ to DEST.")
 
 (cl-defgeneric org-glance-serialize (object)
   "Serialize OBJECT.")
@@ -96,21 +95,24 @@ After materialiation calling to `org-glance-commit' from TARGET should be applie
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins.
 
-TODO: It should be generalized to other materialization types somehow."
+TODO:
+- It should be generalized to other materialization types.
+- Rebuild store indexes."
   (interactive)
 
   (let ((origins (make-hash-table :test #'equal))
         (diffs (list)))
 
     (org-glance-loop
-     (when-let (hash (org-glance-headline:pop-org-property* <headline> "Hash"))
-       (let ((origin (org-glance-headline:pop-org-property* <headline> "Origin"))
-             (modhash (org-glance-hash <headline>)))
+     (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
+       (let ((origin (org-glance-headline:get-org-property <headline> "Origin"))
+             (modhash (org-glance-hash <headline>))
+             (clean-headline (org-glance-headline-remove-org-properties <headline> "Hash" "Origin")))
 
          (cond ((gethash origin origins)
-                (puthash hash <headline> (gethash origin origins)))
+                (puthash hash clean-headline (gethash origin origins)))
                (t (let ((new (make-hash-table :test #'equal)))
-                    (puthash hash <headline> new)
+                    (puthash hash clean-headline new)
                     (puthash origin new origins))))
 
          (unless (string= modhash hash)

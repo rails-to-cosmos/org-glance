@@ -20,31 +20,28 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
-* Requirements
-** Linearizability
-** Deadlock-free
-** Wait-free
-** Efficient reads
-** Column filters (by *-p features and timestamps)
-** Fulltext search
-* Issues
-** TODO Use https://github.com/alphapapa/makem.sh
-** TODO Overview [1/5]
-*** TODO overview of all views registered with view-scoped actions
+* TODO Optimize store reads with metadata
+* TODO Add tests for non-readable store source and dest
+* TODO Optimize `org-glance-commit`: sync only changed headlines
+* TODO Column filters (by *-p features and timestamps)
+* TODO Fulltext search
+* TODO Use https://github.com/alphapapa/makem.sh
+* TODO Overview [1/5]
+** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2021-09-12 Sun 14:06]
 CLOCK: [2021-09-12 Sun 14:06]--[2021-09-12 Sun 16:28] =>  2:22
 - Clocked out on [2021-09-12 Sun 16:28]
 :END:
-*** TODO commented headlines restrictions
-*** TODO org-overview-mode: modify-sync headline feature
-*** DONE org-overview-mode: add headline feature
+** TODO commented headlines restrictions
+** TODO org-overview-mode: modify-sync headline feature
+** DONE org-overview-mode: add headline feature
 CLOSED: [2021-08-26 Thu 10:40]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-08-26 Thu 10:40]
 :END:
-*** TODO org-glance:format issue for strings containing % symbol
-** Anchor Modeling
+** TODO org-glance:format issue for strings containing % symbol
+* Anchor Modeling
 - =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
 - =Article= [[org-glance-visit:Article-20210826-9b1d041ca0c9581606151a2ae496115d][Modeling Conflicting, Unreliable, and Varying Information]]
 - Implement anchormodeling logbook management (store appearance sets in logbook drawer).
@@ -61,20 +58,20 @@ Use posits in logbook drawer: [
 ]
 
 Cache roles: employee/employer, contact/task
-** Visualization
-*** [[https://observablehq.com/@mbostock/tree-of-life][Tree of Life / Mike Bostock / Observable]]
-*** [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
+* Visualization
+** [[https://observablehq.com/@mbostock/tree-of-life][Tree of Life / Mike Bostock / Observable]]
+** [[https://observablehq.com/@d3/gallery][Gallery / D3 / Observable]]
 - [[http://bl.ocks.org/NPashaP/96447623ef4d342ee09b][DashBoard - bl.ocks.org]]
 - [[http://bl.ocks.org/joews/9697914][Animated d3 word cloud - bl.ocks.org]]
 - [[http://bl.ocks.org/erkal/9746513][Random Graph Generator - bl.ocks.org]]
 - [[http://bl.ocks.org/chaitanyagurrapu/6007521][A Google calendar like display for temporal data using D3.Js - bl.ocks.org]]
 - [[http://bl.ocks.org/Jverma/887877fc5c2c2d99be10][Bar chart from external JSON file - bl.ocks.org]]
-*** [[https://dc-js.github.io/dc.js/][dc.js - Dimensional Charting Javascript Library]]
-*** [[https://www.data-to-viz.com/graph/edge_bundling.html][Hierarchical edge bundling – from Data to Viz]]
-*** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
-*** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
-** Completing Read [0/1]
-*** TODO build titles from all direct relations
+** [[https://dc-js.github.io/dc.js/][dc.js - Dimensional Charting Javascript Library]]
+** [[https://www.data-to-viz.com/graph/edge_bundling.html][Hierarchical edge bundling – from Data to Viz]]
+** [[https://bl.ocks.org/vasturiano/ded69192b8269a78d2d97e24211e64e0][Timelines Chart - bl.ocks.org]]
+** https://lliquid.github.io/homepage/files/ts13_edgebundle.pdf
+* Completing Read [0/1]
+** TODO build titles from all direct relations
 * Aesthetics
 ** Gamification
 - [[https://en.wikipedia.org/wiki/Colossal_Cave_Adventure][Colossal Cave Adventure - Wikipedia]]

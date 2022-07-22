@@ -33,17 +33,17 @@
 
 (cl-defmethod org-glance-scope ((file string))
   "Return list of file S if exists."
-  (let ((files-list (cond
-                      ((not (file-exists-p file)) (warn "File \"%s\" does not exist" file) nil)
-                      ((not (file-readable-p file)) (warn "File \"%s\" is not readable" file) nil)
-                      ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
-                      ;; Filter files in special modes: `org-glance-material' and `org-glance-overview' files.
-                      ;; ((with-temp-buffer
-                      ;;    (insert-file-contents file)
-                      ;;    (hack-local-variables)
-                      ;;    (alist-get 'org-glance-overview-mode (buffer-local-variables))) (warn "File \"%s\" is in `org-glance-overview' mode" file) nil)
-                      (t (list file)))))
-    (cl-loop for file in files-list
+  (let ((files (cond
+                 ((not (file-exists-p file)) (warn "File \"%s\" does not exist" file) nil)
+                 ((not (file-readable-p file)) (warn "File \"%s\" is not readable" file) nil)
+                 ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
+                 ;; Filter files in special modes: `org-glance-material' and `org-glance-overview' files.
+                 ;; ((with-temp-buffer
+                 ;;    (insert-file-contents file)
+                 ;;    (hack-local-variables)
+                 ;;    (alist-get 'org-glance-overview-mode (buffer-local-variables))) (warn "File \"%s\" is in `org-glance-overview' mode" file) nil)
+                 (t (list file)))))
+    (cl-loop for file in files
        when (and (file-equal-p file (file-name-sans-versions file))
                  (member (file-name-extension file) org-glance-scope-extensions))
        collect file)))

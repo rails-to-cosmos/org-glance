@@ -1,6 +1,5 @@
 Feature: Store
   Scenario: Import
-    Given store "Tasks"
     Given file "household.org" in directory "tasks/home"
       """
       * TODO Buy milk :Task:
@@ -15,64 +14,45 @@ Feature: Store
       """
       * Messy stuff of undo-tree, we should ignore it
       """
-    When I import store "Tasks" from directory "tasks"
+    Given store "Tasks" in directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  Scenario: Export
-    Given store "Pets"
-    Given file "pets.org" in directory "tasks/home"
-      """
-      * TODO Buy pet food :Task:
-      * TODO Vet :Task:
-      """
-    When I import store "Pets" from directory "tasks"
-    Then store "Pets" should contain 2 headlines
-    When I export store "Pets" to directory "export"
-    And I import store "Household" from directory "export"
-    Then store "Pets" should be equal to "Household"
+  # Scenario: Export
+  #   Given store "Pets"
+  #   Given file "pets.org" in directory "tasks/home"
+  #     """
+  #     * TODO Buy pet food :Task:
+  #     * TODO Vet :Task:
+  #     """
+  #   When I import store "Pets" from directory "tasks"
+  #   Then store "Pets" should contain 2 headlines
+  #   When I export store "Pets" to directory "export"
+  #   And I import store "Household" from directory "export"
+  #   Then store "Pets" should be equal to "Household"
 
   Scenario: Materialize
-    Given store "Phones"
-    Given file "origin.org"
+    Given file "phones/original.org"
       """
       Some contents before the first headline.
 
       * iPhone 3 :phone:
-      * Nokia :phone:
+      * Тест :phone:
       """
-    Given empty file "material.org"
-    When I import store "Phones" from file "origin.org"
-    And I materialize store "Phones" to file "material.org"
-    And I find file "material.org"
+    And empty file "output/material.org"
+    And store "Phones" in directory "phones"
+
+    When I materialize store "Phones" to file "output/material.org"
+    And I find file "output/material.org"
     And I go to the first headline
     And I set title of the headline at point to "iPhone 4"
     And I save buffer
-    And I find file "origin.org"
+    And I find file "phones/original.org"
     Then buffer string should be
       """
       Some contents before the first headline.
 
       * iPhone 4 :phone:
-      * Nokia :phone:
-      """
-
-  Scenario: Materialize headlines with unicode titles
-    Given store "Cyrillic Notes"
-    Given file "origin.org"
-      """
-      * Тест :note:
-      """
-    Given empty file "material.org"
-    When I import store "Cyrillic Notes" from file "origin.org"
-    And I materialize store "Cyrillic Notes" to file "material.org"
-    And I find file "material.org"
-    And I go to the first headline
-    And I set title of the headline at point to "Тест 2"
-    And I save buffer
-    And I find file "origin.org"
-    Then buffer string should be
-      """
-      * Тест 2 :note:
+      * Тест :phone:
       """
 
 #   Scenario: Create headline from materialized buffer ? we need to now where to find location headline store
@@ -88,4 +68,4 @@ Feature: Store
   Scenario: Filter by closed property
   Scenario: Filter by encrypted property
   Scenario: Filter by linked property
-  Scenario: Relative path in materialization
+  Scenario: Relative paths

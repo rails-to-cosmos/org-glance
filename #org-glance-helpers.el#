@@ -1,0 +1,7 @@
+;; -*- lexical-binding: t; -*-
+
+(require 'dash)
+
+
+
+(provide 'org-glance-helpers)
