@@ -11,22 +11,20 @@
   "Persistent store of headlines.
 Implements indexes to optimize reads.
 Builds and preserves indexes in actualized state."
-  (location nil :type string :read-only t :documentation "Directory where store persists.")
-  (headlines nil :type list :read-only t :documentation "List of headlines.")
-  (origins (make-hash-table) :read-only t :documentation "Headline to origin map."))
+  (location nil  :type string :read-only t :documentation "Directory where store persists.")
+  (headlines nil :type list   :read-only t :documentation "List of headlines.")
+  (origins (make-hash-table)  :read-only t :documentation "Headline to origin map."))
 
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
   (let ((origins (make-hash-table :test 'equal)))
-    (cl-loop for file in (org-glance-scope location)
-       append (cl-loop for headline in (org-glance-file-headlines file)
-                 do (puthash (org-glance-headline-hash headline) file origins)
-                 collect headline)
-       into headlines
-       finally return (org-glance-store--create
-                       :location location
-                       :headlines headlines
-                       :origins origins))))
+    (org-glance-store--create
+     :headlines (cl-loop for file in (org-glance-scope location)
+                   append (cl-loop for headline in (org-glance-file-headlines file)
+                             do (puthash (org-glance-headline-hash headline) file origins)
+                             collect headline))
+     :origins origins
+     :location location)))
 
 (cl-defun org-glance-store-headline-origin (store headline)
   (gethash (org-glance-headline-hash headline) (org-glance-store-origins store)))
@@ -75,7 +73,7 @@ to its origins by calling `org-glance-commit'."
               (org-glance-with-temp-file dest
                 (cl-loop for key being the hash-keys of index using (hash-values val)
                    do (cond ((null val) (insert key "\n"))
-                            (t (insert key " " (prin1-to-string val) "\n")))))))
+                            (t (insert key " " val "\n")))))))
 
     (let ((dimensions (list (a-list :name 'title    :map #'org-glance-headline-title)
                             (a-list :name 'archive  :filter #'org-glance-headline-archived-p)
@@ -109,7 +107,34 @@ to its origins by calling `org-glance-commit'."
               do (let-alist dimension
                    (save-index (gethash .:name index) (f-join dest "index" (symbol-name .:name) "0"))))))))
 
+(cl-defun org-glance-store-headline-index (location)
+  (cl-flet* ((rs (beg end) (buffer-substring-no-properties beg end))
+             (key () (rs (line-beginning-position) (+ (point) 32)))
+             (val () (rs (+ (point) 32 1) (line-end-position))))
+    (let ((sparse-index (make-hash-table :test 'equal)))
+      (with-temp-buffer
+        (insert-file-contents location)
+        (goto-char (point-min))
+        (cl-loop while (not (eobp))
+           do (let* ((key (key))
+                     (val (val))
+                     (unique-val val)
+                     (tryout 0))
+                (while (gethash unique-val sparse-index)
+                  (cl-incf tryout)
+                  (setq unique-val (format "%s (%d)" val tryout)))
+                (puthash unique-val key sparse-index))
+             (forward-line)))
+      sparse-index)))
+
 ;; (let ((store (org-glance-store "~/sync/views/song/resources")))
 ;;   (org-glance-save store "/tmp/songs"))
+
+;; (let ((index (org-glance-store-headline-index "/tmp/songs/index/title/0")))
+;;   (let* ((hash (gethash (completing-read "Headline: " index nil t) index))
+;;          (prefix (substring hash 0 2))
+;;          (postfix (substring hash 2 (length hash))))
+;;     (org-glance-map-file (f-join "/tmp/songs" "data" prefix postfix)
+;;       <headline>)))
 
 (provide 'org-glance-store)
