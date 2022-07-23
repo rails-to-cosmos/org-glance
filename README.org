@@ -20,7 +20,11 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
-* TODO Optimize store reads with metadata
+* STARTED Optimize store reads with metadata
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2022-07-23 Sat 14:12]
+CLOCK: [2022-07-23 Sat 14:12]
+:END:
 * TODO Add tests for non-readable store source and dest
 * TODO Optimize `org-glance-commit`: sync only changed headlines
 * TODO Column filters (by *-p features and timestamps)

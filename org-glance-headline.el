@@ -80,48 +80,61 @@ Return t if it is or raise `user-error' otherwise."
          (org-narrow-to-subtree)
          ,@forms))))
 
+(cl-defmacro org-glance-with-temp-file (file &rest forms)
+  (declare (indent 1))
+  `(progn
+     (mkdir (file-name-directory ,file) t)
+     (with-temp-file ,file
+       (org-mode)
+       ,@forms)))
+
+(cl-defmacro org-glance--with-temp-buffer (&rest forms)
+  `(with-temp-buffer
+     (org-mode)
+     ,@forms))
+
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (org-glance--with-heading-at-point
-   (let* ((subtree (let* ((subtree (org-element-contents (org-element-parse-buffer)))
-                          (element (car subtree))
-                          ;; get offset of the topmost element:
-                          (indent-offset (1- (org-element-property :level element))))
-                     ;; Consider side-effect on subtree: we change indentation levels of all nested subtrees
-                     (when (> indent-offset 0)
-                       (cl-loop for headline in (org-element-map subtree 'headline #'identity)
-                          do (let ((level (org-element-property :level headline)))
-                               (org-element-put-property headline :level (- level indent-offset)))))
-                     subtree))
-          (element (car subtree))  ;; topmost heading of current headline
-          (contents (->> subtree
-                         org-element-interpret-data
-                         substring-no-properties
-                         s-trim)))
-     (org-glance-headline :title (with-temp-buffer
-                                   (insert (or (org-element-property :TITLE element)
-                                               (org-element-property :raw-value element)
-                                               ""))
-                                   (->> (org-element-parse-buffer)
-                                        org-glance--links-to-titles
-                                        org-element-interpret-data
-                                        substring-no-properties
-                                        s-trim))
-                          :class (--map (intern (downcase it)) (org-element-property :tags element))
-                          :contents contents
-                          :archived-p (org-element-property :archivedp element)
-                          :commented-p (org-element-property :commentedp element)
-                          :closed-p (org-element-property :closed element)
-                          :encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
-                          :linked-p (not (null (s-match-strings-all org-link-any-re contents)))
-                          :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
-                          :org-properties (org-entry-properties)
-                          :user-properties nil
-                          :hash (->> contents
-                                     s-trim
-                                     downcase
-                                     (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
-                                     (secure-hash 'md5))))))
+    (let* ((subtree (let* ((subtree (org-element-contents (org-element-parse-buffer)))
+                           (element (car subtree))
+                           ;; get offset of the topmost element:
+                           (indent-offset (1- (org-element-property :level element))))
+                      ;; Consider side-effect on subtree: we change indentation levels of all nested subtrees
+                      (when (> indent-offset 0)
+                        (cl-loop for headline in (org-element-map subtree 'headline #'identity)
+                           do (let ((level (org-element-property :level headline)))
+                                (org-element-put-property headline :level (- level indent-offset)))))
+                      subtree))
+           (element (car subtree)) ;; topmost heading of current headline
+           (contents (->> subtree
+                          org-element-interpret-data
+                          substring-no-properties
+                          s-trim)))
+      (org-glance-headline :title (with-temp-buffer
+                                    (insert (or (org-element-property :TITLE element)
+                                                (org-element-property :raw-value element)
+                                                ""))
+                                    (->> (org-element-parse-buffer)
+                                         org-glance--links-to-titles
+                                         org-element-interpret-data
+                                         substring-no-properties
+                                         s-trim))
+                           :class (--map (intern (downcase it)) (org-element-property :tags element))
+                           :contents contents
+                           :archived-p (org-element-property :archivedp element)
+                           :commented-p (org-element-property :commentedp element)
+                           :closed-p (org-element-property :closed element)
+                           :encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+                           :linked-p (not (null (s-match-strings-all org-link-any-re contents)))
+                           :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
+                           :org-properties (org-entry-properties)
+                           :user-properties nil
+                           :hash (->> contents
+                                      s-trim
+                                      downcase
+                                      (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
+                                      (secure-hash 'md5))))))
 
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
@@ -138,10 +151,6 @@ Return t if it is or raise `user-error' otherwise."
           (print-circle t))
       (prin1 headline))))
 
-(cl-defmethod org-glance-hash ((headline org-glance-headline))
-  "Get hash of HEADLINE."
-  (org-glance-headline-hash headline))
-
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
   (with-temp-buffer
@@ -157,23 +166,21 @@ Return t if it is or raise `user-error' otherwise."
 
 (cl-defmethod org-glance-headline-set-org-properties ((headline org-glance-headline) key (value string))
   "Return new HEADLINE with property KEY set to VALUE."
-  (with-temp-buffer
-    (org-mode)
-    (save-excursion
-      (insert (org-glance-headline-contents headline)))
-    (org-set-property key value)
-    (org-glance-headline-at-point)))
+  (org-glance--with-temp-buffer
+   (insert (org-glance-headline-contents headline))
+   (goto-char (point-min))
+   (org-set-property key value)
+   (org-glance-headline-at-point)))
 
 (cl-defmethod org-glance-headline-remove-org-properties ((headline org-glance-headline) &rest keys)
   "Set HEADLINE property KEY to VALUE."
-  (let ((inhibit-message t))
-    (with-temp-buffer
-      (org-mode)
-      (save-excursion
-        (insert (org-glance-headline-contents headline)))
-      (cl-loop for key in keys
-         do (org-delete-property key))
-      (org-glance-headline-at-point))))
+  (org-glance--with-temp-buffer
+   (insert (org-glance-headline-contents headline))
+   (goto-char (point-min))
+   (let ((inhibit-message t))
+     (cl-loop for key in keys
+          do (org-delete-property key)))
+   (org-glance-headline-at-point)))
 
 (cl-defmethod org-glance-headline:pop-org-property ((headline org-glance-headline) key &optional default)
   "Retrieve KEY from HEADLINE properties, return new headline with KEY removed.
@@ -183,10 +190,10 @@ TODO: optimize it when key not found."
       (alist-get (upcase key) (org-glance-headline-org-properties headline) default nil #'string=)
     (org-glance-headline-remove-org-properties headline key)))
 
-(cl-defmethod org-glance-export ((headline org-glance-headline) dest)
-  (cond ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and not empty."))
+(cl-defun org-glance-headline-export (headline dest)
+  (cond ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
         ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
-  (with-temp-file dest
+  (org-glance-with-temp-file dest
     (org-glance-headline-insert headline)))
 
 (cl-defmethod org-glance-headlines ((headline org-glance-headline))
@@ -240,52 +247,25 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
        (when (= (org-element-property :level headline) 1)
          (org-element-property :begin headline))))))
 
-(cl-defmacro org-glance-loop (&rest forms)
-  "Loop over buffer headlines and execute FORMS on each.
+(cl-defmacro org-glance-map (&rest forms)
+  "Map buffer headlines and execute FORMS on each.
 This is the anaphoric method, you can use `<headline>' to call headline in forms."
   `(cl-loop for begin in (org-glance-buffer-headlines)
       collect (save-excursion
                 (goto-char begin)
                 (let ((<headline> (org-glance-headline-at-point)))
                   (org-glance--with-heading-at-point
-                   ,@forms)))))
+                    ,@forms)))))
 
-;; (cl-defmacro org-glance-map (&rest forms)
-;;   "Loop over buffer headlines and execute FORMS on each.
-
-;; FORMS should return `org-glance-headline' that will be persisted in current buffer after changes.
-
-;; This is the anaphoric method, you can use `<headline>' to call headline in forms."
-;;   `(cl-loop for begin in (org-glance-buffer-headlines)
-;;       collect (save-excursion
-;;                 (goto-char begin)
-;;                 (let ((<headline> (org-glance-headline-at-point)))
-;;                   (org-glance--with-heading-at-point
-;;                    (when-let (new-headline (progn ,@forms))
-;;                      (delete-region (point-min) (point-max))
-;;                      (org-glance-headline-insert new-headline)))))))
-
-(cl-defmacro org-glance-with-file (file &rest forms)
+(cl-defmacro org-glance-map-file (file &rest forms)
   (declare (indent 1))
-  `(with-temp-file ,file
-     (org-mode)
-     ,@forms))
-
-(cl-defmacro org-glance-loop-file (file &rest forms)
-  (declare (indent 1))
-  `(org-glance-with-file ,file
-     (insert-file-contents ,file)
-     (org-glance-loop ,@forms)))
-
-(cl-defmacro org-glance-loop-file-ro (file &rest forms)
-  (declare (indent 1))
-  `(with-temp-buffer
-     (insert-file-contents ,file)
-     (org-glance-loop ,@forms)))
+  `(org-glance--with-temp-buffer
+    (insert-file-contents ,file)
+    (org-glance-map ,@forms)))
 
 (cl-defun org-glance-file-headlines (file)
   "List FILE headlines."
-  (org-glance-loop-file-ro file <headline>))
+  (org-glance-map-file file <headline>))
 
 (cl-defmacro org-glance-file-contents (file)
   "Return list of FILE contents.
@@ -293,16 +273,15 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
 CAR of this list is a string before the first heading, CDR is a
 list of `org-glance-headline'."
   (declare (indent 1))
-  `(with-temp-buffer
-     (org-mode)
-     (insert-file-contents ,file)
-     (append
-      (list (buffer-substring-no-properties (point-min) (save-excursion
-                                                          (goto-char (point-min))
-                                                          (unless (org-at-heading-p)
-                                                            (outline-next-heading))
-                                                          (point))))
-      (org-glance-loop <headline>))))
+  `(org-glance--with-temp-buffer
+    (insert-file-contents ,file)
+    (append
+     (list (buffer-substring-no-properties (point-min) (save-excursion
+                                                         (goto-char (point-min))
+                                                         (unless (org-at-heading-p)
+                                                           (outline-next-heading))
+                                                         (point))))
+     (org-glance-map <headline>))))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

@@ -47,7 +47,7 @@
 (cl-defgeneric org-glance-serialize (object)
   "Serialize OBJECT.")
 
-(cl-defgeneric org-glance-hash (object)
+(cl-defgeneric org-glance-headline-hash (object)
   "Get hash of OBJECT.")
 
 (cl-defgeneric org-glance-save (object destination)
@@ -103,10 +103,10 @@ TODO:
   (let ((origins (make-hash-table :test #'equal))
         (diffs (list)))
 
-    (org-glance-loop
+    (org-glance-map
      (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
        (let ((origin (org-glance-headline:get-org-property <headline> "Origin"))
-             (modhash (org-glance-hash <headline>))
+             (modhash (org-glance-headline-hash <headline>))
              (clean-headline (org-glance-headline-remove-org-properties <headline> "Hash" "Origin")))
 
          (cond ((gethash origin origins)
@@ -130,7 +130,7 @@ TODO:
                   (insert header "\n")))
 
               (cl-loop for origin-headline in origin-headlines
-                 do (let* ((hash (org-glance-hash origin-headline))
+                 do (let* ((hash (org-glance-headline-hash origin-headline))
                            (material-headline (gethash hash material-headlines))
                            (result-headline (cond (material-headline material-headline)
                                                   (t
