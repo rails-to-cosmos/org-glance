@@ -40,9 +40,9 @@
        (let ((headline (gethash headline org-glance-test-headlines)))
          (org-glance-save headline (f-join org-glance-test-location file)))))
 
-(Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
-      (lambda (headline file)
-        (puthash headline (org-glance-headline-load (f-join org-glance-test-location file)) org-glance-test-headlines)))
+;; (Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
+;;       (lambda (headline file)
+;;         (puthash headline (org-glance-headline-read (f-join org-glance-test-location file)) org-glance-test-headlines)))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline)
@@ -90,7 +90,7 @@
       (lambda (name title)
         (should
          (string=
-          (org-glance-headline-title (gethash name org-glance-test-headlines))
+          (org-glance-title (gethash name org-glance-test-headlines))
           title))))
 
 (And "^the contents of headline \"\\([^\"]+\\)\" should be:$"
@@ -103,8 +103,6 @@
 
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
-       (should (org-glance-equal-p
-                (H a)
-                (H b)))))
+       (should (org-glance-equal-p (HEADLINE a) (HEADLINE b)))))
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$" #'org-edit-headline)

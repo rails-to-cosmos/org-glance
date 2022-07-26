@@ -1,0 +1,25 @@
+# I’ve always thought they were lighthouses
+
+* hello
+#+begin_src emacs-lisp
+(setq test-store (org-glance-store "/tmp/store"))
+
+(org-glance-materialize test-store "/tmp/store-mat.org")
+
+(org-glance-index-uniq (org-glance-store-i-title test-store))
+
+(setq test-index (org-glance-index (org-glance-headlines test-store)))
+(org-glance-store-put test-store (org-glance-headline-at-point))
+
+(a-get  'title)
+
+(org-glance-index-udim  'title)
+
+(completing-read "headline:" (org-glance-index-idim (org-glance-store-idx test-store) 'title))
+
+(setq test-store (org-glance-store-put test-store (org-glance-headline-at-point)))
+
+(setq test-store (org-glance-store-import test-store "~/sync/views/song/resources/2022-05-13_-8vFWhw"))
+
+(-unzip '((a b c) (1 2 3)))
+#+end_src

@@ -21,22 +21,26 @@
 (defvar org-glance-test-stores)
 (defvar org-glance-test-headlines)
 
-(defun H (alias)
+(defun HEADLINE (alias)
   "Get headline from test storage by ALIAS."
   (gethash alias org-glance-test-headlines))
 
-(defun HS (aliases)
+(defun HEADLINES (aliases)
   "Get headlines from test storage by ALIAS."
   (-map #'H (s-split ", " aliases)))
 
-(defun F (alias)
+(defun FILE (alias)
   "Get file from test storage by ALIAS."
   (or (gethash alias org-glance-test-files)
       (f-join org-glance-test-location alias)))
 
-(defun S (alias)
+(defun STORE (key)
   "Get storage from test storage by ALIAS."
-  (gethash alias org-glance-test-stores))
+  (gethash key org-glance-test-stores))
+
+(defun STORE>> (key val)
+  "Update store KEY with value VAL."
+  (puthash key val org-glance-test-stores))
 
 (defun org-glance-test:normalize-string (s)
   (s-trim (s-replace-regexp "[[:space:]]+" " " s)))

@@ -32,37 +32,10 @@
 
 (require 'org)
 (require 'org-element)
+(require 'org-glance-generics)
 (require 'org-glance-helpers)
+(require 'org-glance-index)
 (require 'org-glance-scope)
-
-(cl-defgeneric org-glance-cardinality (object)
-  "Return number of elements in OBJECT.")
-
-(cl-defgeneric org-glance-import (scope)
-  "Extract objects from SCOPE.")
-
-(cl-defgeneric org-glance-export (obj dest)
-  "Export OBJ to DEST.")
-
-(cl-defgeneric org-glance-serialize (object)
-  "Serialize OBJECT.")
-
-(cl-defgeneric org-glance-headline-hash (object)
-  "Get hash of OBJECT.")
-
-(cl-defgeneric org-glance-save (object destination)
-  "Save OBJECT to DESTINATION.")
-
-(cl-defgeneric org-glance-headlines (object)
-  "Retrieve list of `org-glance-headline' instances from OBJECT.")
-
-(cl-defgeneric org-glance-materialize (source target)
-  "Materialize SOURCE to TARGET.
-After materialiation calling to `org-glance-commit' from TARGET should be applied to SOURCE.")
-
-(cl-defgeneric org-glance-equal-p (obj1 obj2)
-  "Return t if OBJ1 equals OBJ2.")
-
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
@@ -99,54 +72,47 @@ TODO:
 - It should be generalized to other materialization types.
 - Rebuild store indexes."
   (interactive)
+  (let ((store (org-glance-store (buffer-local-value 'store (current-buffer)))))
+    (apply #'org-glance-store-put store
+           (-non-nil
+            (org-glance-map
+             (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
+               (let ((headline (org-glance-headline-remove-org-properties <headline> "Hash")))
+                 (unless (string= (org-glance-hash headline) hash)
+                   headline)))))))
 
-  (let ((origins (make-hash-table :test #'equal))
-        (diffs (list)))
+  ;; (let ((origins (make-hash-table :test #'equal))
+  ;;       (diffs (list)))
 
-    (org-glance-map
-     (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
-       (let ((origin (org-glance-headline:get-org-property <headline> "Origin"))
-             (modhash (org-glance-headline-hash <headline>))
-             (clean-headline (org-glance-headline-remove-org-properties <headline> "Hash" "Origin")))
 
-         (cond ((gethash origin origins)
-                (puthash hash clean-headline (gethash origin origins)))
-               (t (let ((new (make-hash-table :test #'equal)))
-                    (puthash hash clean-headline new)
-                    (puthash origin new origins))))
 
-         (unless (string= modhash hash)
-           (cl-pushnew (a-list :modhash modhash
-                               :hash hash
-                               :pos (point))
-                       diffs)))))
+  ;;   (cl-loop for origin being the hash-keys of origins
+  ;;      using (hash-values material-headlines)
+  ;;      do (with-temp-file origin ;; overwrite origin on success
+  ;;           (cl-destructuring-bind (header &rest origin-headlines) (org-glance-file-contents origin)
+  ;;             (let ((header (s-trim header)))
+  ;;               (unless (string-empty-p header)
+  ;;                 (insert header "\n")))
 
-    (cl-loop for origin being the hash-keys of origins
-       using (hash-values material-headlines)
-       do (with-temp-file origin  ;; overwrite origin on success
-            (cl-destructuring-bind (header &rest origin-headlines) (org-glance-file-contents origin)
-              (let ((header (s-trim header)))
-                (unless (string-empty-p header)
-                  (insert header "\n")))
+  ;;             (cl-loop for origin-headline in origin-headlines
+  ;;                do (let* ((hash (org-glance-hash origin-headline))
+  ;;                          (material-headline (gethash hash material-headlines))
+  ;;                          (result-headline (cond (material-headline material-headline)
+  ;;                                                 (t
+  ;;                                                  ;; we don't have this headline in materialization
+  ;;                                                  ;; leave it as is
+  ;;                                                  origin-headline))))
+  ;;                     (org-glance-headline-insert result-headline))))))
 
-              (cl-loop for origin-headline in origin-headlines
-                 do (let* ((hash (org-glance-headline-hash origin-headline))
-                           (material-headline (gethash hash material-headlines))
-                           (result-headline (cond (material-headline material-headline)
-                                                  (t
-                                                   ;; we don't have this headline in materialization
-                                                   ;; leave it as is
-                                                   origin-headline))))
-                      (org-glance-headline-insert result-headline))))))
-
-    (cl-loop for diff in diffs
-       do (goto-char (a-get diff :pos))
-         (let ((headline (org-glance-headline-at-point)))
-           (cond ((string= (a-get diff :hash) (org-glance-headline:get-org-property headline "Hash"))
-                  (org-set-property "Hash" (a-get diff :modhash))
-                  (message "Changes applied to headline \"%s\" " (org-glance-headline-title headline)))
-                 ;; if hash function completely changes there should be problems
-                 (t (message "Unable to find material headline at position %d" (a-get diff :pos))))))))
+  ;;   (cl-loop for diff in diffs
+  ;;      do (goto-char (a-get diff :pos))
+  ;;        (let ((headline (org-glance-headline-at-point)))
+  ;;          (cond ((string= (a-get diff :hash) (org-glance-headline:get-org-property headline "Hash"))
+  ;;                 (org-set-property "Hash" (a-get diff :modhash))
+  ;;                 (message "Changes applied to headline \"%s\" " (org-glance-title headline)))
+  ;;                ;; if hash function completely changes there should be problems
+  ;;                (t (message "Unable to find material headline at position %d" (a-get diff :pos)))))))
+  )
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")

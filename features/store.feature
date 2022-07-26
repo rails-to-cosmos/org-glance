@@ -1,5 +1,6 @@
 Feature: Store
   Scenario: Import
+    Given store "Tasks" in directory "store/tasks"
     Given file "household.org" in directory "tasks/home"
       """
       * TODO Buy milk :Task:
@@ -14,7 +15,9 @@ Feature: Store
       """
       * Messy stuff of undo-tree, we should ignore it
       """
-    Given store "Tasks" in directory "tasks"
+    Then store "Tasks" should contain 0 headlines
+
+    When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
   # Scenario: Export
@@ -30,28 +33,37 @@ Feature: Store
   #   And I import store "Household" from directory "export"
   #   Then store "Pets" should be equal to "Household"
 
+  @dev
   Scenario: Materialize
-    Given file "phones/original.org"
+    Given file "notes/phones/original.org"
       """
       Some contents before the first headline.
 
       * iPhone 3 :phone:
       * Тест :phone:
       """
-    And empty file "output/material.org"
-    And store "Phones" in directory "phones"
+    And empty file "views/material.org"
+    And store "Phones" in directory "stores/phones"
 
-    When I materialize store "Phones" to file "output/material.org"
-    And I find file "output/material.org"
+    When I import headlines to store "Phones" from directory "notes/phones"
+    Then store "Phones" should contain 2 headlines
+
+    When I materialize store "Phones" to file "views/material.org"
+    And I find file "views/material.org"
     And I go to the first headline
     And I set title of the headline at point to "iPhone 4"
     And I save buffer
-    And I find file "phones/original.org"
+
+    Then store "Phones" should contain headline "iPhone 4"
+    And store "Phones" should not contain headline "iPhone 3"
+
+    # Original file should not change
+    And I find file "notes/phones/original.org"
     Then buffer string should be
       """
       Some contents before the first headline.
 
-      * iPhone 4 :phone:
+      * iPhone 3 :phone:
       * Тест :phone:
       """
 

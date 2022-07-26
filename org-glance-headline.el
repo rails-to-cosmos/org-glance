@@ -37,11 +37,19 @@
 (require 's)
 
 (require 'org-glance-helpers)
+(require 'org-glance-scope)
 
-(cl-defstruct (org-glance-headline (:constructor org-glance-headline)
-                                   (:copier org-glance-headline-copy))
+(cl-defstruct (org-glance-headline* (:constructor org-glance-headline*)
+                                    (:copier nil))
+  "Limited edition of `org-glance-headline'."
+  (hash nil :type string :read-only t :documentation "Hash of original headline contents.")
+  (title nil :type string :read-only t :documentation "Original headline title."))
+
+(cl-defstruct (org-glance-headline
+                (:include org-glance-headline*)
+                (:constructor org-glance-headline)
+                (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
-  title
   class
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
   org-properties
@@ -51,47 +59,19 @@
   closed-p
   encrypted-p
   linked-p
-  propertized-p
-  hash)
+  propertized-p)
 
-(cl-defun org-glance--links-to-titles (ast)
-  "Replace links with its titles in AST."
-  (cl-loop for link in (org-element-map ast 'link #'identity)
-     do (org-element-set-element link (or (-some->> link
-                                            org-element-contents
-                                            org-element-interpret-data)
-                                          (org-element-property :raw-link link)))
-     finally return ast))
+(cl-defmethod org-glance-hash ((hl org-glance-headline))
+  (org-glance-headline-hash hl))
 
-(cl-defun org-glance--ensure-at-heading ()
-  "Ensure point is at heading.
-Return t if it is or raise `user-error' otherwise."
-  (or (org-at-heading-p)
-      (progn
-        (org-back-to-heading-or-point-min)
-        (org-at-heading-p))))
+(cl-defmethod org-glance-hash ((hl org-glance-headline*))
+  (org-glance-headline*-hash hl))
 
-(cl-defmacro org-glance--with-heading-at-point (&rest forms)
-  "Execute FORMS only if point is at heading."
-  (declare (indent 0))
-  `(save-excursion
-     (when (org-glance--ensure-at-heading)
-       (save-restriction
-         (org-narrow-to-subtree)
-         ,@forms))))
+(cl-defmethod org-glance-title ((hl org-glance-headline))
+  (org-glance-headline-title hl))
 
-(cl-defmacro org-glance-with-temp-file (file &rest forms)
-  (declare (indent 1))
-  `(progn
-     (mkdir (file-name-directory ,file) t)
-     (with-temp-file ,file
-       (org-mode)
-       ,@forms)))
-
-(cl-defmacro org-glance--with-temp-buffer (&rest forms)
-  `(with-temp-buffer
-     (org-mode)
-     ,@forms))
+(cl-defmethod org-glance-title ((hl org-glance-headline*))
+  (org-glance-headline*-title hl))
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
@@ -142,20 +122,18 @@ Return t if it is or raise `user-error' otherwise."
 
 (cl-defmethod org-glance-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
-  (string= (org-glance-headline-contents a) (org-glance-headline-contents b)))
+  (string= (org-glance-hash a) (org-glance-hash b)))
 
-(cl-defmethod org-glance-save ((headline org-glance-headline) (file string))
-  "Write HEADLINE to FILE."
-  (with-temp-file file
-    (let ((standard-output (current-buffer))
-          (print-circle t))
-      (prin1 headline))))
+(cl-defmethod org-glance-equal-p ((a org-glance-headline*) (b org-glance-headline*))
+  "Return t if A equals B."
+  (string= (org-glance-hash a) (org-glance-hash b)))
 
-(cl-defun org-glance-headline-load (file)
-  "Load headline from FILE."
-  (with-temp-buffer
-    (insert-file-contents file)
-    (read (current-buffer))))
+(cl-defmethod org-glance-save ((headline org-glance-headline) (dest string))
+  "Write HEADLINE to DEST."
+  (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
+    ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
+  (org-glance--with-temp-file dest
+    (org-glance-headline-insert headline)))
 
 (cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
   (insert (org-glance-headline-contents headline) "\n"))
@@ -190,12 +168,6 @@ TODO: optimize it when key not found."
       (alist-get (upcase key) (org-glance-headline-org-properties headline) default nil #'string=)
     (org-glance-headline-remove-org-properties headline key)))
 
-(cl-defun org-glance-headline-export (headline dest)
-  (cond ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
-        ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
-  (org-glance-with-temp-file dest
-    (org-glance-headline-insert headline)))
-
 (cl-defmethod org-glance-headlines ((headline org-glance-headline))
   "Return list with one HEADLINE."
   (list headline))
@@ -218,7 +190,7 @@ TODO: optimize it when key not found."
 ;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
-;;      (a-list 'title (string-as-unibyte (org-glance-headline-title headline))
+;;      (a-list 'title (string-as-unibyte (org-glance-title headline))
 ;;              'archived (bool->int (org-glance-headline-archived-p headline))
 ;;              'commented (bool->int (org-glance-headline-commented-p headline))
 ;;              'closed (bool->int (org-glance-headline-closed-p headline))
