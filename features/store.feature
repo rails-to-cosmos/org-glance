@@ -53,10 +53,8 @@ Feature: Store
     And I go to the first headline
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "Phones"
-    And I save buffer
 
     Then store "Phones" should contain headline "iPhone 4"
-
     # TODO: remove old headlines
     And store "Phones" should not contain headline "iPhone 3"
 
