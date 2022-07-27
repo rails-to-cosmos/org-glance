@@ -14,8 +14,7 @@ Implements indexes to optimize reads.
 Builds and preserves indexes in actualized state."
   (location nil  :type string :read-only t :documentation "Directory where we store all data..")
   (headlines nil :type list   :read-only t :documentation "List of headlines.")
-  (i-title nil   :type list   :read-only t :documentation "Inversed index for title completion."))
-
+  (i-title nil   :type list   :read-only t :documentation "Inversed index title->hash."))
 
 (cl-defgeneric org-glance-store-headline-location (haystack needle)
   "Return location of NEEDLE in HAYSTACK.")
@@ -41,8 +40,7 @@ Builds and preserves indexes in actualized state."
   headline)
 
 (cl-defmethod org-glance-store-headline-full ((store org-glance-store) (headline org-glance-headline*))
-  (car (org-glance-map-file (org-glance-store-headline-location store headline)
-         <headline>)))
+  (org-glance-headline-load (org-glance-store-headline-location store headline)))
 
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
@@ -92,8 +90,7 @@ Builds and preserves indexes in actualized state."
 ;; (cl-defun org-glance-store-choose (store)
 ;;   (let* ((index (org-glance-store-title-index store))
 ;;          (hash (gethash (completing-read "Headline: " index nil t) index)))
-;;     (car (org-glance-map-file (org-glance-store-headline-location store hash)
-;;            <headline>))))
+;;     (org-glance-headline-load (org-glance-store-headline-location store hash))))
 
 (cl-defmethod org-glance-headlines ((store org-glance-store))
   "Retrieve headlines from STORE."

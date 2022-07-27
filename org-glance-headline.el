@@ -255,5 +255,9 @@ list of `org-glance-headline'."
                                                          (point))))
      (org-glance-map <headline>))))
 
+(cl-defun org-glance-headline-load (file)
+  "Load headline from FILE."
+  (car (org-glance-map-file file <headline>)))
+
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

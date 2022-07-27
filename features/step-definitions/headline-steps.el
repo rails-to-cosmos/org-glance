@@ -40,9 +40,10 @@
        (let ((headline (gethash headline org-glance-test-headlines)))
          (org-glance-save headline (f-join org-glance-test-location file)))))
 
-;; (Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
-;;       (lambda (headline file)
-;;         (puthash headline (org-glance-headline-read (f-join org-glance-test-location file)) org-glance-test-headlines)))
+(Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
+      (lambda (headline file)
+        (puthash headline (org-glance-headline-load (f-join org-glance-test-location file))
+                 org-glance-test-headlines)))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline)

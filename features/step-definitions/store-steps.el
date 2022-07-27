@@ -58,3 +58,9 @@
        (let ((store (STORE store-name)))
          (should (not (a-get (org-glance-store-i-title store)
                              headline-title))))))
+
+(And "^I commit changes to store \"\\([^\"]+\\)\"$"
+     (lambda (store-name)
+       (let ((safe-local-variable-values (list (cons 'store (org-glance-store-location (STORE store-name))))))
+         (hack-local-variables))
+       (puthash store-name (org-glance-commit) org-glance-test-stores)))

@@ -35,6 +35,7 @@ Feature: Store
 
   @dev
   Scenario: Materialize
+    Given empty file "views/material.org"
     Given file "notes/phones/original.org"
       """
       Some contents before the first headline.
@@ -42,8 +43,7 @@ Feature: Store
       * iPhone 3 :phone:
       * Тест :phone:
       """
-    And empty file "views/material.org"
-    And store "Phones" in directory "stores/phones"
+    Given store "Phones" in directory "stores/phones"
 
     When I import headlines to store "Phones" from directory "notes/phones"
     Then store "Phones" should contain 2 headlines
@@ -52,6 +52,7 @@ Feature: Store
     And I find file "views/material.org"
     And I go to the first headline
     And I set title of the headline at point to "iPhone 4"
+    And I commit changes to store "Phones"
     And I save buffer
 
     Then store "Phones" should contain headline "iPhone 4"

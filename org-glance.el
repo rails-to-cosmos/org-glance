@@ -65,26 +65,23 @@
   ;; Indexes on classes and timestamps
   )
 
-(cl-defun org-glance-commit ()
-  "Apply all changes of buffer headlines to its origins.
+(cl-defun org-glance-commit (&optional (store (org-glance-store (buffer-local-value 'store (current-buffer)))))
+  "Apply all changes of buffer headlines to its origins in STORE.
 
 TODO:
 - It should be generalized to other materialization types.
-- Rebuild store indexes."
+- [x] Rebuild store indexes."
   (interactive)
-  (let ((store (org-glance-store (buffer-local-value 'store (current-buffer)))))
-    (apply #'org-glance-store-put store
-           (-non-nil
-            (org-glance-map
-             (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
-               (let ((headline (org-glance-headline-remove-org-properties <headline> "Hash")))
-                 (unless (string= (org-glance-hash headline) hash)
-                   headline)))))))
+  (apply #'org-glance-store-put store
+         (-non-nil
+          (org-glance-map
+           (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
+             (let ((headline (org-glance-headline-remove-org-properties <headline> "Hash")))
+               (unless (string= (org-glance-hash headline) hash)
+                 headline))))))
 
   ;; (let ((origins (make-hash-table :test #'equal))
   ;;       (diffs (list)))
-
-
 
   ;;   (cl-loop for origin being the hash-keys of origins
   ;;      using (hash-values material-headlines)

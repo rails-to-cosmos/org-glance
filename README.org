@@ -20,7 +20,6 @@ field of graph processing and visualization.
     :ensure aes)
 #+end_src
 
-* TODO Indexes → alist
 * TODO Add tests for non-readable store source and dest
 * TODO Optimize `org-glance-commit`: sync only changed headlines
 * TODO Column filters (by *-p features and timestamps)
