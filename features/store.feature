@@ -20,19 +20,6 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  # Scenario: Export
-  #   Given store "Pets"
-  #   Given file "pets.org" in directory "tasks/home"
-  #     """
-  #     * TODO Buy pet food :Task:
-  #     * TODO Vet :Task:
-  #     """
-  #   When I import store "Pets" from directory "tasks"
-  #   Then store "Pets" should contain 2 headlines
-  #   When I export store "Pets" to directory "export"
-  #   And I import store "Household" from directory "export"
-  #   Then store "Pets" should be equal to "Household"
-
   @dev
   Scenario: Materialize
     Given empty file "views/material.org"
