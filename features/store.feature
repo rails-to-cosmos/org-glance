@@ -56,6 +56,8 @@ Feature: Store
     And I save buffer
 
     Then store "Phones" should contain headline "iPhone 4"
+
+    # TODO: remove old headlines
     And store "Phones" should not contain headline "iPhone 3"
 
     # Original file should not change
