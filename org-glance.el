@@ -72,13 +72,14 @@ TODO:
 - It should be generalized to other materialization types.
 - [x] Rebuild store indexes."
   (interactive)
-  (apply #'org-glance-store-put store
-         (-non-nil
-          (org-glance-map
-           (when-let (hash (org-glance-headline:get-org-property <headline> "Hash"))
-             (let ((headline (org-glance-headline-remove-org-properties <headline> "Hash")))
-               (unless (string= (org-glance-hash headline) hash)
-                 headline))))))
+  (let ((headlines
+         (org-glance-map* (headline)
+           (when (not (string= (org-glance-headline:get-org-property headline "Hash")
+                               (org-glance-hash headline)))
+             (org-glance-headline-remove-org-properties headline "Hash")))))
+    (apply #'org-glance-store-put store headlines))
+
+  ;; TODO remove old headline from store
 
   ;; (let ((origins (make-hash-table :test #'equal))
   ;;       (diffs (list)))

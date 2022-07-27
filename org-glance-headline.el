@@ -160,14 +160,6 @@
           do (org-delete-property key)))
    (org-glance-headline-at-point)))
 
-(cl-defmethod org-glance-headline:pop-org-property ((headline org-glance-headline) key &optional default)
-  "Retrieve KEY from HEADLINE properties, return new headline with KEY removed.
-
-TODO: optimize it when key not found."
-  (prog1
-      (alist-get (upcase key) (org-glance-headline-org-properties headline) default nil #'string=)
-    (org-glance-headline-remove-org-properties headline key)))
-
 (cl-defmethod org-glance-headlines ((headline org-glance-headline))
   "Return list with one HEADLINE."
   (list headline))
@@ -218,6 +210,19 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
      (lambda (headline)
        (when (= (org-element-property :level headline) 1)
          (org-element-property :begin headline))))))
+
+(cl-defmacro org-glance-map* (var &rest forms)
+  "Map buffer headlines and execute FORMS on each.
+This is the anaphoric method, you can use `<headline>' to call headline in forms."
+  (declare (indent 1))
+  `(cl-loop for begin in (org-glance-buffer-headlines)
+      for result = (save-excursion
+                     (goto-char begin)
+                     (let ((,(car var) (org-glance-headline-at-point)))
+                       (org-glance--with-heading-at-point
+                         ,@forms)))
+      when (not (null result))
+      collect result))
 
 (cl-defmacro org-glance-map (&rest forms)
   "Map buffer headlines and execute FORMS on each.
