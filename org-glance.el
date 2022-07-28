@@ -70,30 +70,34 @@
 
 TODO:
 - It should be generalized to other materialization types.
-- [x] Rebuild store indexes."
+- [x] Rebuild store indexes.
+- Return store."
   (interactive)
   (when (local-variable-p 'org-glance-material-marks)
-    (cl-maphash (lambda (key val)
-                  (let* ((beg (a-get val :beg))
-                         (end (a-get val :end))
-                         (hash (a-get val :hash))
-                         (headline (save-excursion
-                                     (goto-char beg)
-                                     (org-glance-headline-at-point))))
-                    (if (not (string= hash (org-glance-hash headline)))
-                        (message "Headline \"%s\" has been removed from materialization. Changes ignored."
-                                 (org-glance-headline-title headline))
-                      (org-glance-store-put store headline)
-                      (let ((overlay (get-text-property beg :overlay)))
-                        (when overlay (delete-overlay overlay))
-                        (let ((overlay (make-overlay beg (1+ beg))))
-                          (add-text-properties beg end (list :hash (org-glance-headline-hash headline)
-                                                             :changed-p nil
-                                                             :overlay overlay))
-                          ;; FIXME when C-k C-k it draws next headline instead of origin
-                          (overlay-put overlay 'face '(:foreground "#27ae60")))))))
-                org-glance-material-marks)
-    (setq-local org-glance-material-marks (make-hash-table :test #'equal)))
+    (cl-loop for key being the hash-keys of org-glance-material-marks using (hash-values val)
+       collect (let* ((beg (a-get val :beg))
+                      (end (a-get val :end))
+                      (hash (a-get val :hash))
+                      (headline (save-excursion
+                                  (goto-char beg)
+                                  (org-glance-headline-at-point))))
+                 (if (not (string= hash (org-glance-hash headline)))
+                     (message "Headline \"%s\" has been removed from materialization. Changes ignored."
+                              (org-glance-headline-title headline))
+
+                   (let ((overlay (get-text-property beg :overlay)))
+                     (when overlay (delete-overlay overlay))
+                     (let ((overlay (make-overlay beg (1+ beg))))
+                       (add-text-properties beg end (list :hash (org-glance-headline-hash headline)
+                                                          :changed-p nil
+                                                          :overlay overlay))
+                       ;; FIXME when C-k C-k it draws next headline instead of origin
+                       (overlay-put overlay 'face '(:foreground "#27ae60"))))
+
+                   headline))
+       into headlines
+       finally return (prog1 (apply #'org-glance-store-put store (-non-nil headlines))
+                        (setq-local org-glance-material-marks (make-hash-table :test #'equal)))))
   ;; TODO remove old headline from store or mark for deletion
   ;; TODO work with stale links (broken)
   )
