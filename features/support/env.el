@@ -52,7 +52,8 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
- (setq inhibit-message t))
+ ;; (setq inhibit-message t)
+ )
 
 (Before
  (desktop-clear)
@@ -63,7 +64,9 @@
  (f-mkdir-full-path org-glance-test-location))
 
 (After
- (delete-directory org-glance-test-location t))
+ (pp org-glance-test-location)
+ ;; (delete-directory org-glance-test-location t)
+ )
 
 (Teardown
  (setq default-directory org-glance-root-path))

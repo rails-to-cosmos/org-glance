@@ -106,4 +106,8 @@
      (lambda (a b)
        (should (org-glance-equal-p (HEADLINE a) (HEADLINE b)))))
 
-(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$" #'org-edit-headline)
+(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
+      (lambda (title)
+        (org-edit-headline title)
+        (pp after-change-functions)
+        (mapc #'funcall after-change-functions)))

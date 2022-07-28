@@ -121,7 +121,11 @@ Builds and preserves indexes in actualized state."
   "Insert STORE headlines into the FILE and provide ability to push changes
 to its origins by calling `org-glance-commit'."
   (org-glance--with-temp-file file
-    (insert (format "#    -*- mode: org; mode: org-glance-material; store: \"%s\" -*-\n\n"
+    (insert (format "#  -*- mode: org; mode: org-glance-material -*-
+
+#+ORIGIN: %s
+
+"
                     (org-glance-store-location store)))
     (cl-loop for headline in (org-glance-headlines store)
        do
