@@ -25,7 +25,13 @@ Return t if it is or raise `user-error' otherwise."
   `(save-excursion
      (when (org-glance--ensure-at-heading)
        (save-restriction
-         (org-narrow-to-subtree)
+         (save-excursion
+           (save-match-data
+             (org-with-limited-levels
+              (narrow-to-region
+               (progn (org-back-to-heading t) (point))
+               (progn (org-end-of-subtree t t)
+                      (point))))))
          ,@forms))))
 
 (cl-defmacro org-glance--with-temp-file (file &rest forms)

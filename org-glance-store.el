@@ -82,6 +82,9 @@ Builds and preserves indexes in actualized state."
      :location (org-glance-store-location store)
      :headlines (append headlines (org-glance-headlines store)))))
 
+(cl-defun org-glance-store-get (store hash)
+  (car (--filter (string= (org-glance-hash it) hash) (org-glance-store-headlines store))))
+
 (cl-defun org-glance-store-import (store loc)
   "Add headlines from location LOC to STORE."
   (let ((headlines (-flatten (-map #'org-glance-file-headlines (org-glance-scope loc)))))
@@ -124,7 +127,7 @@ to its origins by calling `org-glance-commit'."
        do
          (let* ((headline (org-glance-store-headline-full store headline)))
            (-> headline
-               (org-glance-headline-set-org-properties "Hash" (org-glance-hash headline))
+               ;; (org-glance-headline-set-org-properties "Hash" (org-glance-hash headline))
                (org-glance-headline-insert))))))
 
 (provide 'org-glance-store)

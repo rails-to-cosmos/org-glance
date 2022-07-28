@@ -211,7 +211,7 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
        (when (= (org-element-property :level headline) 1)
          (org-element-property :begin headline))))))
 
-(cl-defmacro org-glance-map* (var &rest forms)
+(cl-defmacro org-glance-map (var &rest forms)
   "Map buffer headlines and execute FORMS on each.
 This is the anaphoric method, you can use `<headline>' to call headline in forms."
   (declare (indent 1))
@@ -224,21 +224,11 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
       when (not (null result))
       collect result))
 
-(cl-defmacro org-glance-map (&rest forms)
-  "Map buffer headlines and execute FORMS on each.
-This is the anaphoric method, you can use `<headline>' to call headline in forms."
-  `(cl-loop for begin in (org-glance-buffer-headlines)
-      collect (save-excursion
-                (goto-char begin)
-                (let ((<headline> (org-glance-headline-at-point)))
-                  (org-glance--with-heading-at-point
-                    ,@forms)))))
-
 (cl-defmacro org-glance-map-file (file &rest forms)
   (declare (indent 1))
   `(org-glance--with-temp-buffer
     (insert-file-contents ,file)
-    (org-glance-map ,@forms)))
+    (org-glance-map (<headline>) ,@forms)))
 
 (cl-defun org-glance-file-headlines (file)
   "List FILE headlines."
@@ -258,7 +248,7 @@ list of `org-glance-headline'."
                                                          (unless (org-at-heading-p)
                                                            (outline-next-heading))
                                                          (point))))
-     (org-glance-map <headline>))))
+     (org-glance-map (headline) headline))))
 
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
