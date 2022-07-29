@@ -3,16 +3,16 @@
 (require 'org-glance-store)
 
 (defvar org-glance-material-painter nil
-  "Timer instance.")
+  "Painter thread.")
 
 (defvar org-glance-material-origins (make-hash-table)
   "Buffer to origin alist.")
 
 (defvar org-glance-material-points* (make-hash-table)
-  "Changed points.")
+  "Changed (buffer . point) cons cells.")
 
 (defvar org-glance-material-markers* (make-hash-table)
-  "Changed markers.")
+  "Changed marker set to know what to commit.")
 
 (defvar org-glance-material-paint-q (list)
   "Marker queue to be processed by `org-glance-material-painter'.")
