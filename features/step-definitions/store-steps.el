@@ -64,6 +64,6 @@
        ;; (setq-local origin (org-glance-store-location (STORE store-name)))
        ;; (insert "123")
        (pp (buffer-string))
-       (pp org-glance-material-marks)
-       ;; (puthash store-name (org-glance-commit) org-glance-test-stores)
+       (pp org-glance-material-mode-markers)
+       ;; (puthash store-name (org-glance-material-mode-commit) org-glance-test-stores)
        ))

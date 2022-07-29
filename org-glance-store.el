@@ -119,7 +119,7 @@ Builds and preserves indexes in actualized state."
 
 (cl-defmethod org-glance-materialize ((store org-glance-store) (file string))
   "Insert STORE headlines into the FILE and provide ability to push changes
-to its origins by calling `org-glance-commit'."
+to its origins by calling `org-glance-material-mode-commit'."
   (org-glance--with-temp-file file
     (insert (format "#  -*- mode: org; mode: org-glance-material -*-
 

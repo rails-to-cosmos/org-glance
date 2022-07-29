@@ -21,7 +21,7 @@ field of graph processing and visualization.
 #+end_src
 
 * TODO Add tests for non-readable store source and dest
-* TODO Optimize `org-glance-commit`: sync only changed headlines
+* TODO Optimize `org-glance-material-mode-commit`: sync only changed headlines
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh

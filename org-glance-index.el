@@ -1,4 +1,4 @@
-(require 'org-glance-generics)
+(require 'org-glance-generic)
 
 ;; (defconst org-glance-index-dimensions
 ;;   (list (a-list :name 'title    :map #'org-glance-title)

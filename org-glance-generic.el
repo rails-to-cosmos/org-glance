@@ -24,9 +24,9 @@
 
 (cl-defgeneric org-glance-materialize (source target)
   "Materialize SOURCE to TARGET.
-After materialiation calling to `org-glance-commit' from TARGET should be applied to SOURCE.")
+After materialiation calling to `org-glance-material-mode-commit' from TARGET should be applied to SOURCE.")
 
 (cl-defgeneric org-glance-equal-p (obj1 obj2)
   "Return t if OBJ1 equals OBJ2.")
 
-(provide 'org-glance-generics)
+(provide 'org-glance-generic)
