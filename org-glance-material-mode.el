@@ -39,30 +39,33 @@
     "A minor mode to be activated only in materialized view editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let* ((store (org-glance-store (save-excursion
-                                           (goto-char (point-min))
-                                           (search-forward "#+ORIGIN: ")
-                                           (buffer-substring-no-properties (point) (point-at-eol)))))
-                (buffer (current-buffer))
-                (markers (org-glance-map (headline)
-                           (let ((hash (org-glance-hash headline)))
-                             (org-glance-material-marker
-                              :hash hash
-                              :beg (point-min)
-                              :end (point-max)
-                              :buffer buffer
-                              :overlay nil
-                              :changed-p nil
-                              :committed-p nil
-                              :persisted-p (when (org-glance-store-get store hash) t))))))
-           (with-mutex org-glance-material-mutex ;; mutation. Possible conflicts with painters/other threads
-             (puthash buffer store org-glance-material-origins)
-             (cl-loop for marker in (reverse markers) ;; reverse to be user-friendly and mark visible headlines first
-                do (push marker org-glance-material-paint-q)
-                  (add-text-properties (org-glance-material-marker-beg marker)
-                                       (org-glance-material-marker-end marker)
-                                       (list :marker marker))))
-           (org-glance-material-redisplay*))
+         (if-let (origin (save-excursion
+                           (goto-char (point-min))
+                           (search-forward "#+ORIGIN: ")
+                           (buffer-substring-no-properties (point) (point-at-eol))))
+             (let* ((store (org-glance-store origin))
+                    (buffer (current-buffer))
+                    (markers (org-glance-map (headline)
+                               (let ((hash (org-glance-hash headline)))
+                                 (org-glance-material-marker
+                                  :hash hash
+                                  :beg (point-min)
+                                  :end (point-max)
+                                  :buffer buffer
+                                  :overlay nil
+                                  :changed-p nil
+                                  :committed-p nil
+                                  :persisted-p (when (org-glance-store-get store hash) t))))))
+               (with-mutex org-glance-material-mutex ;; mutation. Possible conflicts with painters/other threads
+                 (puthash buffer store org-glance-material-origins)
+                 (cl-loop for marker in (reverse markers) ;; reverse to be user-friendly and mark visible headlines first
+                    do (push marker org-glance-material-paint-q)
+                      (add-text-properties (org-glance-material-marker-beg marker)
+                                           (org-glance-material-marker-end marker)
+                                           (list :marker marker))))
+               (org-glance-material-redisplay*))
+           (org-glance-material-mode -1)
+           (user-error "Unable to start material mode: origin property not found."))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-material-commit nil t))
