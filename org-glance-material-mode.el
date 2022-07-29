@@ -26,7 +26,7 @@
   (end nil         :type number :read-only nil   :documentation "End of headline.")
   (buffer nil      :type buffer :read-only t   :documentation "Materialized buffer.")
   (hash nil        :type string :read-only t   :documentation "Hash of headline origin.")
-  (overlay nil     :type number :read-only nil :documentation "Current overlay for status reporting.")
+  (overlay nil     :type object :read-only nil :documentation "Current overlay for status reporting.")
   (changed-p nil   :type bool   :read-only nil   :documentation "Has headline changed?")
   (persisted-p nil :type bool   :read-only t   :documentation "Whether headline has origin or not."))
 
@@ -56,12 +56,13 @@
                               :persisted-p (when (org-glance-store-get store hash) t))))))
            (with-mutex org-glance-material-mode-mutex ;; mutation. Possible conflicts with timers/other threads
              (cl-pushnew origin org-glance-material-mode-origins)
-             (cl-loop for marker in markers
+             (cl-loop for marker in (reverse markers)
                 do (add-text-properties (org-glance-material-mode-marker-beg marker)
                                         (org-glance-material-mode-marker-end marker)
-                                        (list :marker marker)))))
+                                        (list :marker marker))
+                  (push marker org-glance-material-mode-marker-queue))))
          (unless org-glance-material-mode-timer
-           (setq org-glance-material-mode-timer (run-with-timer 1 1 #'org-glance-material-mode-timer-tick)))
+           (setq org-glance-material-mode-timer (run-with-timer 0.1 0.1 #'org-glance-material-mode-timer-tick)))
          (add-hook 'post-command-hook #'org-glance-material-mode-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode-edit nil t)
          (add-hook 'before-save-hook #'org-glance-material-mode-commit nil t))
@@ -148,7 +149,6 @@
                                                  (delete-overlay overlay)
                                                  (setf (org-glance-material-mode-marker-overlay marker) nil)))
                 ((and (not persisted-p) (not overlay)) (with-mutex org-glance-material-mode-mutex
-                                                         (delete-overlay overlay)
                                                          (let ((overlay (make-overlay beg (1+ beg))))
                                                            (setf (org-glance-material-mode-marker-overlay marker) overlay)
                                                            (overlay-put overlay 'face '(:foreground "#e74c3c")))))))))))
