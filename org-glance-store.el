@@ -98,7 +98,7 @@ Builds and preserves indexes in actualized state."
 ;;          (hash (gethash (completing-read "Headline: " index nil t) index)))
 ;;     (org-glance-headline-load (org-glance-store-headline-location store hash))))
 
-(cl-defmethod org-glance-equal-p ((a org-glance-store) (b org-glance-store))
+(cl-defun org-glance-store-equal-p (a b)
   "Return t if A contains same headlines as B."
   (let ((sorted-a (cl-loop for headline in (org-glance-store-headlines a)
                      collect headline into result
@@ -109,7 +109,7 @@ Builds and preserves indexes in actualized state."
     (and (not (null sorted-a))
          (not (null sorted-b))
          (--all? (and (consp it)
-                      (org-glance-equal-p (car it) (cdr it)))
+                      (org-glance-headline-equal-p (car it) (cdr it)))
                  (-zip sorted-a sorted-b)))))
 
 (cl-defun org-glance-store-cardinality (store)

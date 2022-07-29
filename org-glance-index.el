@@ -13,7 +13,7 @@
 (cl-defun org-glance-index (headlines &key map filter)
   "Build index of HEADLINES."
   ;; mappers and filters should be generics and work properly with full and dummy headlines
-  (cl-loop for headline in (seq-uniq headlines #'org-glance-equal-p)
+  (cl-loop for headline in (seq-uniq headlines #'org-glance-headline-equal-p)
      when (or (not filter) (funcall filter headline))
      collect (cons (org-glance-headline-hash headline)
                    (when map (funcall map headline)))))

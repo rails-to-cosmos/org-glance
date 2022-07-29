@@ -100,11 +100,11 @@
              (expected-headline (with-temp-buffer
                                   (insert contents)
                                   (org-glance-headline-at-point))))
-         (should (org-glance-equal-p actual-headline expected-headline)))))
+         (should (org-glance-headline-equal-p actual-headline expected-headline)))))
 
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
-       (should (org-glance-equal-p (HEADLINE a) (HEADLINE b)))))
+       (should (org-glance-headline-equal-p (HEADLINE a) (HEADLINE b)))))
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
       (lambda (title)

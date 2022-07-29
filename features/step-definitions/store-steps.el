@@ -39,7 +39,7 @@
 
 (Then "^store \"\\([^\"]+\\)\" should be equal to \"\\([^\"]+\\)\"$"
       (lambda (store-1 store-2)
-        (should (org-glance-equal-p (STORE store-1) (STORE store-2)))))
+        (should (org-glance-store-equal-p (STORE store-1) (STORE store-2)))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\"$"
       (lambda (store-name headline-title)

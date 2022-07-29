@@ -134,11 +134,14 @@
   "Serialize HEADLINE."
   (prin1-to-string headline))
 
-(cl-defmethod org-glance-equal-p ((a org-glance-headline) (b org-glance-headline))
+(cl-defgeneric org-glance-headline-equal-p (a b)
+  "Return t if A equals B.")
+
+(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
   (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
-(cl-defmethod org-glance-equal-p ((a org-glance-headline*) (b org-glance-headline*))
+(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline*) (b org-glance-headline*))
   "Return t if A equals B."
   (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
