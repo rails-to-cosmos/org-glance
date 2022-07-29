@@ -61,4 +61,4 @@
 
 (And "^I commit changes to store \"\\([^\"]+\\)\"$"
      (lambda (store-name)
-       (puthash store-name (org-glance-material-mode-commit) org-glance-test-stores)))
+       (puthash store-name (org-glance-material-commit) org-glance-test-stores)))

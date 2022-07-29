@@ -4,8 +4,7 @@
 #+begin_src emacs-lisp
 (let ((store (-> (org-glance-store "/tmp/store")
                  (org-glance-store-put (org-glance-headline-from-string "* a")))))
-  (org-glance-materialize store "/tmp/mat.org")
-  )
+  (org-glance-materialize store "/tmp/mat.org"))
 #+end_src
 
 #+RESULTS:

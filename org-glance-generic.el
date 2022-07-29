@@ -22,10 +22,6 @@
 (cl-defgeneric org-glance-headlines (object)
   "Retrieve list of `org-glance-headline' instances from OBJECT.")
 
-(cl-defgeneric org-glance-materialize (source target)
-  "Materialize SOURCE to TARGET.
-After materialiation calling to `org-glance-material-mode-commit' from TARGET should be applied to SOURCE.")
-
 (cl-defgeneric org-glance-equal-p (obj1 obj2)
   "Return t if OBJ1 equals OBJ2.")
 

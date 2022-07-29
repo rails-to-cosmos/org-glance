@@ -82,6 +82,11 @@ Builds and preserves indexes in actualized state."
   "TODO currently is O(n), could be optimized with hash/tree ds."
   (car (--filter (string= (org-glance-hash it) hash) (org-glance-store-headlines store))))
 
+(cl-defun org-glance-store-rem (store hash)
+  "TODO currently is O(n), could be optimized with hash/tree ds."
+  (message "Remove \"%s\"" (org-glance-store-headline-location store hash))
+  store)
+
 (cl-defun org-glance-store-import (store loc)
   "Add headlines from location LOC to STORE."
   (let ((headlines (-flatten (-map #'org-glance-file-headlines (org-glance-scope loc)))))
@@ -113,22 +118,5 @@ Builds and preserves indexes in actualized state."
 (cl-defmethod org-glance-cardinality ((store org-glance-store))
   "Return number of headlines in STORE."
   (length (org-glance-headlines store)))
-
-(cl-defmethod org-glance-materialize ((store org-glance-store) (file string))
-  "Insert STORE headlines into the FILE and provide ability to push changes
-to its origins by calling `org-glance-material-mode-commit'."
-  (org-glance--with-temp-file file
-    (insert (format "#  -*- mode: org; mode: org-glance-material -*-
-
-#+ORIGIN: %s
-
-"
-                    (org-glance-store-location store)))
-    (cl-loop for headline in (org-glance-headlines store)
-       do
-         (let* ((headline (org-glance-store-headline-full store headline)))
-           (-> headline
-               ;; (org-glance-headline-set-org-properties "Hash" (org-glance-hash headline))
-               (org-glance-headline-insert))))))
 
 (provide 'org-glance-store)

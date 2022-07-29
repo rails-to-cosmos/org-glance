@@ -108,5 +108,5 @@
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
       (lambda (title)
-        (with-mutex org-glance-material-mode-mutex
+        (with-mutex org-glance-material-mutex
           (org-edit-headline title))))
