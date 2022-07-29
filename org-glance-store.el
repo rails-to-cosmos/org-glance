@@ -33,14 +33,17 @@ Builds and preserves indexes in actualized state."
         (postfix (substring hash 2 (length hash))))
     (f-join (org-glance-store-location store) "data" prefix postfix)))
 
-(cl-defgeneric org-glance-store-headline-full (store headline)
+(cl-defgeneric org-glance-store-headline (store headline)
   "Return fully qualified `org-glance-headline' from STORE using HEADLINE.")
 
-(cl-defmethod org-glance-store-headline-full ((_ org-glance-store) (headline org-glance-headline))
+(cl-defmethod org-glance-store-headline ((_ org-glance-store) (headline org-glance-headline))
   headline)
 
-(cl-defmethod org-glance-store-headline-full ((store org-glance-store) (headline org-glance-headline*))
+(cl-defmethod org-glance-store-headline ((store org-glance-store) (headline org-glance-headline*))
   (org-glance-headline-load (org-glance-store-headline-location store headline)))
+
+(cl-defmethod org-glance-store-headline ((store org-glance-store) (hash string))
+  (org-glance-headline-load (org-glance-store-headline-location store hash)))
 
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
@@ -93,10 +96,10 @@ Builds and preserves indexes in actualized state."
   (let ((headlines (-flatten (-map #'org-glance-file-headlines (org-glance-scope loc)))))
     (apply #'org-glance-store-put store headlines)))
 
-;; (cl-defun org-glance-store-choose (store)
-;;   (let* ((index (org-glance-store-title-index store))
-;;          (hash (gethash (completing-read "Headline: " index nil t) index)))
-;;     (org-glance-headline-load (org-glance-store-headline-location store hash))))
+(cl-defun org-glance-store-choose (store)
+  (let* ((titles (org-glance-store-i-title store))
+         (hash (alist-get (completing-read "Headline: " titles nil t) titles nil nil #'string=)))
+    (org-glance-store-headline store hash)))
 
 (cl-defun org-glance-store-equal-p (a b)
   "Return t if A contains same headlines as B."

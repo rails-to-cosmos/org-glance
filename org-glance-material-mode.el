@@ -91,7 +91,7 @@ to its origins by calling `org-glance-material-commit'."
   (org-glance--with-temp-file file
     (insert (format org-glance-material-header (org-glance-store-location store)))
     (cl-loop for headline in (org-glance-store-headlines store)
-       do (let ((headline (org-glance-store-headline-full store headline)))
+       do (let ((headline (org-glance-store-headline store headline)))
             (org-glance-headline-insert headline)))))
 
 (cl-defun org-glance-material-edit (&rest _)
