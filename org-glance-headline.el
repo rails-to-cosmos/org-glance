@@ -42,8 +42,8 @@
 (cl-defstruct (org-glance-headline* (:constructor org-glance-headline*)
                                     (:copier nil))
   "Limited edition of `org-glance-headline'."
-  (hash nil :type string :read-only t :documentation "Hash of original headline contents.")
-  (title nil :type string :read-only t :documentation "Original headline title."))
+  (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
+  (-title nil :type string :read-only t :documentation "Original headline title."))
 
 (cl-defstruct (org-glance-headline
                 (:include org-glance-headline*)
@@ -61,17 +61,23 @@
   linked-p
   propertized-p)
 
-(cl-defmethod org-glance-hash ((hl org-glance-headline))
-  (org-glance-headline-hash hl))
+(cl-defgeneric org-glance-headline-hash (object)
+  "Get hash of OBJECT.")
 
-(cl-defmethod org-glance-hash ((hl org-glance-headline*))
-  (org-glance-headline*-hash hl))
+(cl-defmethod org-glance-headline-hash ((headline org-glance-headline))
+  (org-glance-headline--hash headline))
 
-(cl-defmethod org-glance-title ((hl org-glance-headline))
-  (org-glance-headline-title hl))
+(cl-defmethod org-glance-headline-hash ((headline org-glance-headline*))
+  (org-glance-headline*--hash headline))
 
-(cl-defmethod org-glance-title ((hl org-glance-headline*))
-  (org-glance-headline*-title hl))
+(cl-defgeneric org-glance-headline-title (object)
+  "Get title of OBJECT.")
+
+(cl-defmethod org-glance-headline-title ((headline org-glance-headline))
+  (org-glance-headline--title headline))
+
+(cl-defmethod org-glance-headline-title ((headline org-glance-headline*))
+  (org-glance-headline*--title headline))
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
@@ -91,15 +97,20 @@
                           org-element-interpret-data
                           substring-no-properties
                           s-trim)))
-      (org-glance-headline :title (with-temp-buffer
-                                    (insert (or (org-element-property :TITLE element)
-                                                (org-element-property :raw-value element)
-                                                ""))
-                                    (->> (org-element-parse-buffer)
-                                         org-glance--links-to-titles
-                                         org-element-interpret-data
-                                         substring-no-properties
-                                         s-trim))
+      (org-glance-headline :-title (with-temp-buffer
+                                     (insert (or (org-element-property :TITLE element)
+                                                 (org-element-property :raw-value element)
+                                                 ""))
+                                     (->> (org-element-parse-buffer)
+                                          org-glance--links-to-titles
+                                          org-element-interpret-data
+                                          substring-no-properties
+                                          s-trim))
+                           :-hash (->> contents
+                                       s-trim
+                                       downcase
+                                       (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
+                                       (secure-hash 'md5))
                            :class (--map (intern (downcase it)) (org-element-property :tags element))
                            :contents contents
                            :archived-p (org-element-property :archivedp element)
@@ -109,12 +120,7 @@
                            :linked-p (not (null (s-match-strings-all org-link-any-re contents)))
                            :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
                            :org-properties (org-entry-properties)
-                           :user-properties nil
-                           :hash (->> contents
-                                      s-trim
-                                      downcase
-                                      (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
-                                      (secure-hash 'md5))))))
+                           :user-properties nil))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
@@ -124,19 +130,19 @@
    (outline-next-heading)
    (org-glance-headline-at-point)))
 
-(cl-defmethod org-glance-serialize ((headline org-glance-headline))
+(cl-defun org-glance-headline-serialize (headline)
   "Serialize HEADLINE."
   (prin1-to-string headline))
 
 (cl-defmethod org-glance-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
-  (string= (org-glance-hash a) (org-glance-hash b)))
+  (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
 (cl-defmethod org-glance-equal-p ((a org-glance-headline*) (b org-glance-headline*))
   "Return t if A equals B."
-  (string= (org-glance-hash a) (org-glance-hash b)))
+  (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
-(cl-defmethod org-glance-save ((headline org-glance-headline) (dest string))
+(cl-defmethod org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
@@ -190,7 +196,7 @@
 ;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
-;;      (a-list 'title (string-as-unibyte (org-glance-title headline))
+;;      (a-list 'title (string-as-unibyte (org-glance-headline-title headline))
 ;;              'archived (bool->int (org-glance-headline-archived-p headline))
 ;;              'commented (bool->int (org-glance-headline-commented-p headline))
 ;;              'closed (bool->int (org-glance-headline-closed-p headline))

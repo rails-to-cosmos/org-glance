@@ -1,7 +1,7 @@
-(require 'org-glance-generic)
+(require 'org-glance-headline)
 
 ;; (defconst org-glance-index-dimensions
-;;   (list (a-list :name 'title    :map #'org-glance-title)
+;;   (list (a-list :name 'title    :map #'org-glance-headline-title)
 ;;         ;; (a-list :name 'archive  :filter #'org-glance-headline-archived-p)
 ;;         ;; (a-list :name 'comment  :filter #'org-glance-headline-commented-p)
 ;;         ;; (a-list :name 'closed   :filter #'org-glance-headline-closed-p)
@@ -15,7 +15,7 @@
   ;; mappers and filters should be generics and work properly with full and dummy headlines
   (cl-loop for headline in (seq-uniq headlines #'org-glance-equal-p)
      when (or (not filter) (funcall filter headline))
-     collect (cons (org-glance-hash headline)
+     collect (cons (org-glance-headline-hash headline)
                    (when map (funcall map headline)))))
 
 (cl-defun org-glance-index-read (loc)

@@ -54,7 +54,7 @@
              (let* ((store (org-glance-store origin))
                     (buffer (current-buffer))
                     (markers (org-glance-map (headline)
-                               (let ((hash (org-glance-hash headline)))
+                               (let ((hash (org-glance-headline-hash headline)))
                                  (org-glance-material-marker
                                   :hash hash
                                   :beg (point-min)
@@ -100,12 +100,8 @@ to its origins by calling `org-glance-material-commit'."
   (puthash (get-text-property (point) :marker) t org-glance-material-points*)
   (org-glance-material-redisplay*))
 
-(cl-defun org-glance-material-redisplay* ()
-  (unless (and (threadp org-glance-material-painter)
-               (thread-alive-p org-glance-material-painter))
-    (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
-
 (cl-defun org-glance-material-redisplay ()
+  "Force redisplay all overlays in changed material buffers."
   ;; TODO should be optimized
   (with-mutex org-glance-material-mutex
     (cl-loop for marker being the hash-keys of org-glance-material-points*
@@ -119,7 +115,7 @@ to its origins by calling `org-glance-material-commit'."
                      (changed-p (org-glance-material-marker-changed-p marker))
                      (persisted-p (org-glance-material-marker-persisted-p marker))
                      (overlay (org-glance-material-marker-overlay marker))
-                     (hash-new (org-glance-hash headline))
+                     (hash-new (org-glance-headline-hash headline))
                      (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
                      (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
                      (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
@@ -184,6 +180,12 @@ to its origins by calling `org-glance-material-commit'."
                                                                  (setf (org-glance-material-marker-overlay marker) overlay)
                                                                  (overlay-put overlay 'face '(:foreground "#e74c3c")))))))))
        finally do (setq org-glance-material-paint-q nil))))
+
+(cl-defun org-glance-material-redisplay* ()
+  "Run `org-glance-material-redisplay' in separate thread."
+  (unless (and (threadp org-glance-material-painter)
+               (thread-alive-p org-glance-material-painter))
+    (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
 
 (cl-defun org-glance-material-commit ()
   "Apply all changes of buffer headlines to its origins in STORE.

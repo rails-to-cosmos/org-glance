@@ -21,11 +21,11 @@ Builds and preserves indexes in actualized state."
 
 (cl-defmethod org-glance-store-headline-location ((store org-glance-store) (headline org-glance-headline))
   "Return HEADLINE location from STORE."
-  (org-glance-store-headline-location store (org-glance-hash headline)))
+  (org-glance-store-headline-location store (org-glance-headline-hash headline)))
 
 (cl-defmethod org-glance-store-headline-location ((store org-glance-store) (headline org-glance-headline*))
   "Return HEADLINE location from STORE."
-  (org-glance-store-headline-location store (org-glance-hash headline)))
+  (org-glance-store-headline-location store (org-glance-headline-hash headline)))
 
 (cl-defmethod org-glance-store-headline-location ((store org-glance-store) (hash string))
   "Return HASH location from STORE."
@@ -59,17 +59,18 @@ Builds and preserves indexes in actualized state."
      :i-title (org-glance-index-uniq (org-glance-index-inversed i-title))
      :location location
      :headlines (cl-loop for (hash . title) in i-title
-                   collect (org-glance-headline* :title title :hash hash)))))
+                   collect (org-glance-headline* :-title title
+                                                 :-hash hash)))))
 
 (cl-defun org-glance-store-put (store &rest headlines)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it."
   (dolist (headline headlines)
     (let ((location (org-glance-store-headline-location store headline)))
       (unless (f-exists-p location) ;; TODO or read full headline if current is dummy?
-        (org-glance-save headline location))))
+        (org-glance-headline-save headline location))))
 
   (let ((i-title-old (org-glance-store-i-title store))
-        (i-title-new (org-glance-index headlines :map #'org-glance-title)))
+        (i-title-new (org-glance-index headlines :map #'org-glance-headline-title)))
     (org-glance-index-append i-title-new (f-join (org-glance-store-location store) "index" "title" "0"))
     (org-glance-store--create
      :i-title (org-glance-index-merge
@@ -80,7 +81,7 @@ Builds and preserves indexes in actualized state."
 
 (cl-defun org-glance-store-get (store hash)
   "TODO currently is O(n), could be optimized with hash/tree ds."
-  (car (--filter (string= (org-glance-hash it) hash) (org-glance-store-headlines store))))
+  (car (--filter (string= (org-glance-headline-hash it) hash) (org-glance-store-headlines store))))
 
 (cl-defun org-glance-store-rem (store hash)
   "TODO currently is O(n), could be optimized with hash/tree ds."
@@ -105,17 +106,17 @@ Builds and preserves indexes in actualized state."
   "Return t if A contains same headlines as B."
   (let ((sorted-a (cl-loop for headline in (org-glance-headlines a)
                      collect headline into result
-                     finally return (--sort (string< (org-glance-hash it) (org-glance-hash other)) result)))
+                     finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result)))
         (sorted-b (cl-loop for headline in (org-glance-headlines b)
                      collect headline into result
-                     finally return (--sort (string< (org-glance-hash it) (org-glance-hash other)) result))))
+                     finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result))))
     (and (not (null sorted-a))
          (not (null sorted-b))
          (--all? (and (consp it)
                       (org-glance-equal-p (car it) (cdr it)))
                  (-zip sorted-a sorted-b)))))
 
-(cl-defmethod org-glance-cardinality ((store org-glance-store))
+(cl-defun org-glance-store-cardinality (store)
   "Return number of headlines in STORE."
   (length (org-glance-headlines store)))
 
