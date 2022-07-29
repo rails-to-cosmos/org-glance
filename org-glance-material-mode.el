@@ -62,7 +62,7 @@
                   (add-text-properties (org-glance-material-marker-beg marker)
                                        (org-glance-material-marker-end marker)
                                        (list :marker marker))))
-           (org-glance-material-redisplay))
+           (org-glance-material-redisplay*))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-material-commit nil t))
@@ -95,13 +95,13 @@ to its origins by calling `org-glance-material-commit'."
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
   (puthash (cons (current-buffer) (point)) t org-glance-material-points*)
-  (org-glance-material-redisplay))
+  (org-glance-material-redisplay*))
+
+(cl-defun org-glance-material-redisplay* ()
+  (unless (and org-glance-material-painter (thread-alive-p org-glance-material-painter))
+    (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
 
 (cl-defun org-glance-material-redisplay ()
-  (unless (and org-glance-material-painter (thread-alive-p org-glance-material-painter))
-    (setq org-glance-material-painter (make-thread #'org-glance-material-paint "org-glance-material-painter"))))
-
-(cl-defun org-glance-material-paint ()
   (with-mutex org-glance-material-mutex
     (when org-glance-material-points*
       (cl-loop for bufpoint being the hash-keys of org-glance-material-points*
@@ -192,27 +192,23 @@ TODO:
 - Return store."
   (interactive)
   (with-mutex org-glance-material-mutex
-    (cl-loop for marker being the hash-keys of org-glance-material-markers*
-       with store = (gethash (current-buffer) org-glance-material-origins)
-       when (eq (current-buffer) (org-glance-material-marker-buffer marker))
-       collect (let ((headline (org-glance-headline-from-string
-                                (buffer-substring-no-properties
-                                 (org-glance-material-marker-beg marker)
-                                 (org-glance-material-marker-end marker)))))
-                 (setq store (-> store
-                                 (org-glance-store-rem (org-glance-material-marker-hash marker))
-                                 (org-glance-store-put headline)))
-                 (setf (org-glance-material-marker-changed-p marker) nil
-                       (org-glance-material-marker-committed-p marker) t
-                       (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
-                 (push marker org-glance-material-paint-q)
-                 marker)
-       into markers
-       finally return (progn (dolist (marker markers)
-                               (remhash marker org-glance-material-markers*))
-                             store)))
-
-  (org-glance-material-redisplay)
+    (let ((store (gethash (current-buffer) org-glance-material-origins)))
+      (cl-loop for marker being the hash-keys of org-glance-material-markers*
+         when (eq (current-buffer) (org-glance-material-marker-buffer marker))
+         do (let ((headline (org-glance-headline-from-string
+                             (buffer-substring-no-properties
+                              (org-glance-material-marker-beg marker)
+                              (org-glance-material-marker-end marker)))))
+              (setq store (-> store
+                              ;; (org-glance-store-rem (org-glance-material-marker-hash marker))
+                              (org-glance-store-put headline)))
+              (setf (org-glance-material-marker-changed-p marker) nil
+                    (org-glance-material-marker-committed-p marker) t
+                    (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
+              (push marker org-glance-material-paint-q)
+              (remhash marker org-glance-material-markers*)))
+      (org-glance-material-redisplay*)
+      store))
 
   ;; TODO remove old headline from store or mark for deletion
   ;; TODO work with stale links (broken)
