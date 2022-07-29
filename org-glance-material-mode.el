@@ -2,7 +2,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
-(defvar org-glance-material-mode-timer nil
+(defvar org-glance-material-mode-painter nil
   "Timer instance.")
 
 (defvar org-glance-material-mode-origins (make-hash-table)
@@ -15,7 +15,7 @@
   "Changed markers.")
 
 (defvar org-glance-material-mode-marker-queue (list)
-  "Marker queue to be processed by `org-glance-material-mode-timer'.")
+  "Marker queue to be processed by `org-glance-material-mode-painter'.")
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
@@ -25,7 +25,7 @@
 
 (cl-defstruct (org-glance-material-mode-marker (:constructor org-glance-material-mode-marker)
                                                (:copier nil))
-  "Sync metadata about headlines to be processed and visualized by `org-glance-material-mode-timer'."
+  "Sync metadata about headlines to be processed and visualized by `org-glance-material-mode-painter'."
   (beg nil         :type number :read-only nil :documentation "Beginning of headline.")
   (end nil         :type number :read-only nil :documentation "End of headline.")
   (buffer nil      :type buffer :read-only t   :documentation "Materialized buffer.")
@@ -55,15 +55,14 @@
                               :changed-p nil
                               :committed-p nil
                               :persisted-p (when (org-glance-store-get store hash) t))))))
-           (with-mutex org-glance-material-mode-mutex ;; mutation. Possible conflicts with timers/other threads
+           (with-mutex org-glance-material-mode-mutex ;; mutation. Possible conflicts with painters/other threads
              (puthash buffer store org-glance-material-mode-origins)
              (cl-loop for marker in (reverse markers) ;; reverse to be user-friendly and mark visible headlines first
                 do (push marker org-glance-material-mode-marker-queue)
                   (add-text-properties (org-glance-material-mode-marker-beg marker)
                                        (org-glance-material-mode-marker-end marker)
-                                       (list :marker marker)))))
-         (unless org-glance-material-mode-timer
-           (setq org-glance-material-mode-timer (run-with-timer 0.1 0.1 #'org-glance-material-mode-timer-tick)))
+                                       (list :marker marker))))
+           (org-glance-material-mode-redisplay))
          (add-hook 'post-command-hook #'org-glance-material-mode-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode-edit nil t)
          (add-hook 'before-save-hook #'org-glance-material-mode-commit nil t))
@@ -74,11 +73,16 @@
 
 (cl-defun org-glance-material-mode-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (puthash (cons (current-buffer) (point)) t org-glance-material-mode-changed-points))
+  (puthash (cons (current-buffer) (point)) t org-glance-material-mode-changed-points)
+  (org-glance-material-mode-redisplay))
 
-(cl-defun org-glance-material-mode-timer-tick ()
-  (when org-glance-material-mode-changed-points
-    (with-mutex org-glance-material-mode-mutex
+(cl-defun org-glance-material-mode-redisplay ()
+  (unless (and org-glance-material-mode-painter (thread-alive-p org-glance-material-mode-painter))
+    (setq org-glance-material-mode-painter (make-thread #'org-glance-material-mode-paint "org-glance-material-mode-painter"))))
+
+(cl-defun org-glance-material-mode-paint ()
+  (with-mutex org-glance-material-mode-mutex
+    (when org-glance-material-mode-changed-points
       (cl-loop for bufpoint being the hash-keys of org-glance-material-mode-changed-points
          for buffer = (car bufpoint)
          for point = (cdr bufpoint)
@@ -121,42 +125,42 @@
                                (org-glance-material-mode-marker-beg marker) (point-min)
                                (org-glance-material-mode-marker-end marker) (point-max))
                          (push marker org-glance-material-mode-marker-queue))))))))
-         finally do (clrhash org-glance-material-mode-changed-points))))
+         finally do (clrhash org-glance-material-mode-changed-points)))
 
-  (when org-glance-material-mode-marker-queue
-    (when-let (marker (with-mutex org-glance-material-mode-mutex
-                        (pop org-glance-material-mode-marker-queue)))
-      (let ((hash (org-glance-material-mode-marker-hash marker))
-            (buffer (org-glance-material-mode-marker-buffer marker))
-            (overlay (org-glance-material-mode-marker-overlay marker))
-            (beg (org-glance-material-mode-marker-beg marker))
-            (changed-p (org-glance-material-mode-marker-changed-p marker))
-            (committed-p (org-glance-material-mode-marker-committed-p marker))
-            (persisted-p (org-glance-material-mode-marker-persisted-p marker)))
-        (when (and (bufferp buffer) (buffer-live-p buffer))
-          (with-current-buffer buffer
-            (cond ((and changed-p (not overlay)) (with-mutex org-glance-material-mode-mutex
-                                                   (let ((overlay (make-overlay beg (1+ beg))))
-                                                     (setf (org-glance-material-mode-marker-overlay marker) overlay)
-                                                     (overlay-put overlay 'face '(:foreground "#ffcc00")))))
-                  ((and changed-p overlay committed-p) (with-mutex org-glance-material-mode-mutex
-                                                         (delete-overlay overlay)
+    (when org-glance-material-mode-marker-queue
+      (cl-loop for marker in org-glance-material-mode-marker-queue
+         do (let ((hash (org-glance-material-mode-marker-hash marker))
+                  (buffer (org-glance-material-mode-marker-buffer marker))
+                  (overlay (org-glance-material-mode-marker-overlay marker))
+                  (beg (org-glance-material-mode-marker-beg marker))
+                  (changed-p (org-glance-material-mode-marker-changed-p marker))
+                  (committed-p (org-glance-material-mode-marker-committed-p marker))
+                  (persisted-p (org-glance-material-mode-marker-persisted-p marker)))
+              (when (and (bufferp buffer) (buffer-live-p buffer))
+                (with-current-buffer buffer
+                  (cond ((and changed-p (not overlay)) (with-mutex org-glance-material-mode-mutex
                                                          (let ((overlay (make-overlay beg (1+ beg))))
-                                                           (setf (org-glance-material-mode-marker-overlay marker) overlay
-                                                                 (org-glance-material-mode-marker-committed-p marker) nil)
+                                                           (setf (org-glance-material-mode-marker-overlay marker) overlay)
                                                            (overlay-put overlay 'face '(:foreground "#ffcc00")))))
-                  ((and (not changed-p) overlay (not committed-p)) (with-mutex org-glance-material-mode-mutex
-                                                                     (delete-overlay overlay)
-                                                                     (setf (org-glance-material-mode-marker-overlay marker) nil)))
-                  ((and (not changed-p) overlay committed-p) (with-mutex org-glance-material-mode-mutex
+                        ((and changed-p overlay committed-p) (with-mutex org-glance-material-mode-mutex
                                                                (delete-overlay overlay)
                                                                (let ((overlay (make-overlay beg (1+ beg))))
-                                                                 (setf (org-glance-material-mode-marker-overlay marker) overlay)
-                                                                 (overlay-put overlay 'face '(:foreground "#27ae60")))))
-                  ((and (not persisted-p) (not overlay)) (with-mutex org-glance-material-mode-mutex
-                                                           (let ((overlay (make-overlay beg (1+ beg))))
-                                                             (setf (org-glance-material-mode-marker-overlay marker) overlay)
-                                                             (overlay-put overlay 'face '(:foreground "#e74c3c"))))))))))))
+                                                                 (setf (org-glance-material-mode-marker-overlay marker) overlay
+                                                                       (org-glance-material-mode-marker-committed-p marker) nil)
+                                                                 (overlay-put overlay 'face '(:foreground "#ffcc00")))))
+                        ((and (not changed-p) overlay (not committed-p)) (with-mutex org-glance-material-mode-mutex
+                                                                           (delete-overlay overlay)
+                                                                           (setf (org-glance-material-mode-marker-overlay marker) nil)))
+                        ((and (not changed-p) overlay committed-p) (with-mutex org-glance-material-mode-mutex
+                                                                     (delete-overlay overlay)
+                                                                     (let ((overlay (make-overlay beg (1+ beg))))
+                                                                       (setf (org-glance-material-mode-marker-overlay marker) overlay)
+                                                                       (overlay-put overlay 'face '(:foreground "#27ae60")))))
+                        ((and (not persisted-p) (not overlay)) (with-mutex org-glance-material-mode-mutex
+                                                                 (let ((overlay (make-overlay beg (1+ beg))))
+                                                                   (setf (org-glance-material-mode-marker-overlay marker) overlay)
+                                                                   (overlay-put overlay 'face '(:foreground "#e74c3c")))))))))
+         finally do (setq org-glance-material-mode-marker-queue nil)))))
 
 (cl-defun org-glance-material-mode-commit ()
   "Apply all changes of buffer headlines to its origins in STORE.
@@ -184,6 +188,8 @@ TODO:
        finally return (progn (dolist (marker markers)
                                (remhash marker org-glance-material-mode-changed-markers))
                              store)))
+
+  (org-glance-material-mode-redisplay)
 
   ;; TODO remove old headline from store or mark for deletion
   ;; TODO work with stale links (broken)
