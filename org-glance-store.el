@@ -83,6 +83,7 @@ Builds and preserves indexes in actualized state."
      :headlines (append headlines (org-glance-headlines store)))))
 
 (cl-defun org-glance-store-get (store hash)
+  "TODO currently is O(n), could be optimized with hash/tree ds."
   (car (--filter (string= (org-glance-hash it) hash) (org-glance-store-headlines store))))
 
 (cl-defun org-glance-store-import (store loc)
