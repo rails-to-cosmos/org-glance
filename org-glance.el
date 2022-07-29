@@ -43,7 +43,7 @@
   "Options concerning glancing entries."
   :tag "Org Glance"
   :version "27.2"
-  :package-version "0.1.0"
+  :package-version "1.0.0"
   :group 'org)
 
 (defcustom org-glance-directory org-directory
