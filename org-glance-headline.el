@@ -174,14 +174,6 @@
           do (org-delete-property key)))
    (org-glance-headline-at-point)))
 
-(cl-defmethod org-glance-headlines ((headline org-glance-headline))
-  "Return list with one HEADLINE."
-  (list headline))
-
-;; (cl-defmethod org-glance-headlines ((headline org-glance-headline))
-;;   "Return list of HEADLINE."
-;;   (list headline))
-
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
 ;;     (archived-p byte)

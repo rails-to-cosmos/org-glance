@@ -1,6 +1,3 @@
-(cl-defgeneric org-glance-headlines (object)
-  "Retrieve list of `org-glance-headline' instances from OBJECT.")
-
 (cl-defgeneric org-glance-equal-p (obj1 obj2)
   "Return t if OBJ1 equals OBJ2.")
 

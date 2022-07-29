@@ -77,7 +77,7 @@ Builds and preserves indexes in actualized state."
                i-title-old
                (org-glance-index-uniq (org-glance-index-inversed i-title-new)))
      :location (org-glance-store-location store)
-     :headlines (append headlines (org-glance-headlines store)))))
+     :headlines (append headlines (org-glance-store-headlines store)))))
 
 (cl-defun org-glance-store-get (store hash)
   "TODO currently is O(n), could be optimized with hash/tree ds."
@@ -98,16 +98,12 @@ Builds and preserves indexes in actualized state."
 ;;          (hash (gethash (completing-read "Headline: " index nil t) index)))
 ;;     (org-glance-headline-load (org-glance-store-headline-location store hash))))
 
-(cl-defmethod org-glance-headlines ((store org-glance-store))
-  "Retrieve headlines from STORE."
-  (org-glance-store-headlines store))
-
 (cl-defmethod org-glance-equal-p ((a org-glance-store) (b org-glance-store))
   "Return t if A contains same headlines as B."
-  (let ((sorted-a (cl-loop for headline in (org-glance-headlines a)
+  (let ((sorted-a (cl-loop for headline in (org-glance-store-headlines a)
                      collect headline into result
                      finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result)))
-        (sorted-b (cl-loop for headline in (org-glance-headlines b)
+        (sorted-b (cl-loop for headline in (org-glance-store-headlines b)
                      collect headline into result
                      finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result))))
     (and (not (null sorted-a))
@@ -118,6 +114,6 @@ Builds and preserves indexes in actualized state."
 
 (cl-defun org-glance-store-cardinality (store)
   "Return number of headlines in STORE."
-  (length (org-glance-headlines store)))
+  (length (org-glance-store-headlines store)))
 
 (provide 'org-glance-store)
