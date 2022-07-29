@@ -108,6 +108,5 @@
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
       (lambda (title)
-        (org-edit-headline title)
-        (pp after-change-functions)
-        (mapc #'funcall after-change-functions)))
+        (with-mutex org-glance-material-mode-mutex
+          (org-edit-headline title))))

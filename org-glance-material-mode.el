@@ -8,8 +8,11 @@
 (defvar org-glance-material-mode-origins (make-hash-table)
   "Buffer to origin alist.")
 
-(defvar org-glance-material-mode-changes (make-hash-table)
-  "Contains changed markers.")
+(defvar org-glance-material-mode-changed-points (make-hash-table)
+  "Changed points.")
+
+(defvar org-glance-material-mode-changed-markers (make-hash-table)
+  "Changed markers.")
 
 (defvar org-glance-material-mode-marker-queue (list)
   "Marker queue to be processed by `org-glance-material-mode-timer'.")
@@ -71,44 +74,55 @@
 
 (cl-defun org-glance-material-mode-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (org-glance--with-heading-at-point
-    (let* ((marker (get-text-property (point) :marker))
-           (hash-old (org-glance-material-mode-marker-hash marker))
-           (changed-p (org-glance-material-mode-marker-changed-p marker))
-           (persisted-p (org-glance-material-mode-marker-persisted-p marker))
-           (overlay (org-glance-material-mode-marker-overlay marker))
-           (headline (org-glance-headline-at-point)) ;; FIXME do not construct headline in future, optimize me
-           (hash-new (org-glance-hash headline))
-           (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
-           (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
-           (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
-      (cond
-        ((not persisted-p)
-         ;; skip it or prompt user to add it to store
-         ;; (when (yes-or-no-p "Attempt to change unsynced headline. Do you want to add it to store?")
-         ;;   ;; TODO sync it
-         ;;   )
-         )
-        (returned-to-unchanged-state-p
-         (with-mutex org-glance-material-mode-mutex
-           (setf (org-glance-material-mode-marker-changed-p marker) nil)
-           (push marker org-glance-material-mode-marker-queue)
-           (remhash marker org-glance-material-mode-changes)))
-        (first-change-p
-         (with-mutex org-glance-material-mode-mutex
-           (setf (org-glance-material-mode-marker-changed-p marker) t
-                 (org-glance-material-mode-marker-beg marker) (point-min)
-                 (org-glance-material-mode-marker-end marker) (point-max))
-           (push marker org-glance-material-mode-marker-queue)
-           (puthash marker t org-glance-material-mode-changes)))
-        (further-change-p
-         (with-mutex org-glance-material-mode-mutex
-           (setf (org-glance-material-mode-marker-changed-p marker) t
-                 (org-glance-material-mode-marker-beg marker) (point-min)
-                 (org-glance-material-mode-marker-end marker) (point-max))
-           (push marker org-glance-material-mode-marker-queue)))))))
+  (puthash (cons (current-buffer) (point)) t org-glance-material-mode-changed-points))
 
 (cl-defun org-glance-material-mode-timer-tick ()
+  (when org-glance-material-mode-changed-points
+    (with-mutex org-glance-material-mode-mutex
+      (cl-loop for bufpoint being the hash-keys of org-glance-material-mode-changed-points
+         for buffer = (car bufpoint)
+         for point = (cdr bufpoint)
+         do (with-current-buffer buffer
+              (save-excursion
+                (goto-char point)
+                (org-glance--with-heading-at-point
+                  (let* ((marker (get-text-property point :marker))
+                         (hash-old (org-glance-material-mode-marker-hash marker))
+                         (changed-p (org-glance-material-mode-marker-changed-p marker))
+                         (persisted-p (org-glance-material-mode-marker-persisted-p marker))
+                         (overlay (org-glance-material-mode-marker-overlay marker))
+                         (headline (org-glance-headline-at-point)) ;; FIXME do not construct headline in future, optimize me
+                         (hash-new (org-glance-hash headline))
+                         (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
+                         (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
+                         (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
+                    (cond
+                      ((not persisted-p)
+                       ;; skip it or prompt user to add it to store
+                       ;; (when (yes-or-no-p "Attempt to change unsynced headline. Do you want to add it to store?")
+                       ;;   ;; TODO sync it
+                       ;;   )
+                       )
+                      (returned-to-unchanged-state-p
+                       (progn
+                         (setf (org-glance-material-mode-marker-changed-p marker) nil)
+                         (push marker org-glance-material-mode-marker-queue)
+                         (remhash marker org-glance-material-mode-changed-markers)))
+                      (first-change-p
+                       (progn
+                         (setf (org-glance-material-mode-marker-changed-p marker) t
+                               (org-glance-material-mode-marker-beg marker) (point-min)
+                               (org-glance-material-mode-marker-end marker) (point-max))
+                         (push marker org-glance-material-mode-marker-queue)
+                         (puthash marker t org-glance-material-mode-changed-markers)))
+                      (further-change-p
+                       (progn
+                         (setf (org-glance-material-mode-marker-changed-p marker) t
+                               (org-glance-material-mode-marker-beg marker) (point-min)
+                               (org-glance-material-mode-marker-end marker) (point-max))
+                         (push marker org-glance-material-mode-marker-queue))))))))
+         finally do (clrhash org-glance-material-mode-changed-points))))
+
   (when org-glance-material-mode-marker-queue
     (when-let (marker (with-mutex org-glance-material-mode-mutex
                         (pop org-glance-material-mode-marker-queue)))
@@ -153,7 +167,7 @@ TODO:
 - Return store."
   (interactive)
   (with-mutex org-glance-material-mode-mutex
-    (cl-loop for marker being the hash-keys of org-glance-material-mode-changes
+    (cl-loop for marker being the hash-keys of org-glance-material-mode-changed-markers
        with store = (gethash (current-buffer) org-glance-material-mode-origins)
        when (eq (current-buffer) (org-glance-material-mode-marker-buffer marker))
        collect (let ((headline (org-glance-headline-from-string
@@ -168,7 +182,7 @@ TODO:
                  marker)
        into markers
        finally return (progn (dolist (marker markers)
-                               (remhash marker org-glance-material-mode-changes))
+                               (remhash marker org-glance-material-mode-changed-markers))
                              store)))
 
   ;; TODO remove old headline from store or mark for deletion
