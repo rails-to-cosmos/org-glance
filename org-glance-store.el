@@ -52,18 +52,14 @@ Builds and preserves indexes in actualized state."
            (org-glance-store--create :location location))))
 
 (cl-defun org-glance-store-read (location)
-  (unless (f-exists-p (f-join location "index" "title" "0"))
-    (user-error "Unable to read %s: index not found. Maybe you want to import store from it?" location))
-
-  (unless (f-readable-p (f-join location "index" "title" "0"))
-    (user-error "Unable to read %s: index not readable. Maybe you want to import store from it?" location))
-
-  (let ((i-title (org-glance-index-read (f-join location "index" "title" "0"))))
+  (let ((i-title (when (and (f-exists-p (f-join location "index" "title" "0"))
+                            (f-readable-p (f-join location "index" "title" "0")))
+                   (org-glance-index-read (f-join location "index" "title" "0")))))
     (org-glance-store--create
      :i-title (org-glance-index-uniq (org-glance-index-inversed i-title))
      :location location
      :headlines (cl-loop for (hash . title) in i-title
-             collect (org-glance-headline* :title title :hash hash)))))
+                   collect (org-glance-headline* :title title :hash hash)))))
 
 (cl-defun org-glance-store-put (store &rest headlines)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it."

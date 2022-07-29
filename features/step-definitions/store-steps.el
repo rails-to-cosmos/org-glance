@@ -61,9 +61,4 @@
 
 (And "^I commit changes to store \"\\([^\"]+\\)\"$"
      (lambda (store-name)
-       ;; (setq-local origin (org-glance-store-location (STORE store-name)))
-       ;; (insert "123")
-       (pp (buffer-string))
-       (pp org-glance-material-mode-markers)
-       ;; (puthash store-name (org-glance-material-mode-commit) org-glance-test-stores)
-       ))
+       (puthash store-name (org-glance-material-mode-commit) org-glance-test-stores)))

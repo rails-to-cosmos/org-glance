@@ -116,6 +116,14 @@
                                       (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
                                       (secure-hash 'md5))))))
 
+(cl-defun org-glance-headline-from-string (string)
+  "Create `org-glance-headline' from string."
+  (org-glance--with-temp-buffer
+   (insert string)
+   (goto-char (point-min))
+   (outline-next-heading)
+   (org-glance-headline-at-point)))
+
 (cl-defmethod org-glance-serialize ((headline org-glance-headline))
   "Serialize HEADLINE."
   (prin1-to-string headline))

@@ -1,3 +1,7 @@
+(require 'org-glance-generic)
+(require 'org-glance-headline)
+(require 'org-glance-store)
+
 (defvar org-glance-material-mode-timer nil
   "Timer instance.")
 
@@ -152,9 +156,10 @@ TODO:
     (cl-loop for marker being the hash-keys of org-glance-material-mode-changes
        with store = (gethash (current-buffer) org-glance-material-mode-origins)
        when (eq (current-buffer) (org-glance-material-mode-marker-buffer marker))
-       collect (let ((headline (save-excursion
-                                 (goto-char (org-glance-material-mode-marker-beg marker))
-                                 (org-glance-headline-at-point))))
+       collect (let ((headline (org-glance-headline-from-string
+                                (buffer-substring-no-properties
+                                 (org-glance-material-mode-marker-beg marker)
+                                 (org-glance-material-mode-marker-end marker)))))
                  (setq store (org-glance-store-put store headline)) ;; FIXME optimize
                  (setf (org-glance-material-mode-marker-changed-p marker) nil
                        (org-glance-material-mode-marker-committed-p marker) t
@@ -162,7 +167,8 @@ TODO:
                  (push marker org-glance-material-mode-marker-queue)
                  marker)
        into markers
-       finally return (progn (--map (remhash it org-glance-material-mode-changes) markers)
+       finally return (progn (dolist (marker markers)
+                               (remhash marker org-glance-material-mode-changes))
                              store)))
 
   ;; TODO remove old headline from store or mark for deletion
