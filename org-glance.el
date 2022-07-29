@@ -4,7 +4,7 @@
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
-;; Version: 0.1.0
+;; Version: 1.0.0
 
 ;; Keywords: org-mode tools
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -32,7 +32,6 @@
 
 (require 'org)
 (require 'org-element)
-(require 'org-glance-generic)
 (require 'org-glance-helpers)
 (require 'org-glance-index)
 (require 'org-glance-scope)

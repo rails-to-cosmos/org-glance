@@ -1,4 +1,3 @@
-(require 'org-glance-generic)
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
