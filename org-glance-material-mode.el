@@ -23,6 +23,14 @@
 (defvar org-glance-material-mutex (make-mutex "org-glance-material-mutex")
   "Thread synchronization.")
 
+(defconst org-glance-material-header
+  "#  -*- mode: org; mode: org-glance-material -*-
+
+#+ORIGIN: %s
+
+"
+  "Header template of material files.")
+
 (cl-defstruct (org-glance-material-marker (:constructor org-glance-material-marker)
                                           (:copier nil))
   "Sync metadata about headlines to be processed and visualized by `org-glance-material-painter'."
@@ -82,22 +90,14 @@ After materialiation calling to `org-glance-material-commit' from TARGET should 
   "Insert STORE headlines into the FILE and provide ability to push changes
 to its origins by calling `org-glance-material-commit'."
   (org-glance--with-temp-file file
-    (insert (format "#  -*- mode: org; mode: org-glance-material -*-
-
-#+ORIGIN: %s
-
-"
-                    (org-glance-store-location store)))
+    (insert (format org-glance-material-header (org-glance-store-location store)))
     (cl-loop for headline in (org-glance-headlines store)
-       do
-         (let* ((headline (org-glance-store-headline-full store headline)))
-           (-> headline
-               ;; (org-glance-headline-set-org-properties "Hash" (org-glance-hash headline))
-               (org-glance-headline-insert))))))
+       do (let ((headline (org-glance-store-headline-full store headline)))
+            (org-glance-headline-insert headline)))))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (puthash (cons (current-buffer) (point)) t org-glance-material-points*)
+  (puthash (get-text-property (point) :marker) t org-glance-material-points*)
   (org-glance-material-redisplay*))
 
 (cl-defun org-glance-material-redisplay* ()
@@ -106,50 +106,48 @@ to its origins by calling `org-glance-material-commit'."
     (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
 
 (cl-defun org-glance-material-redisplay ()
+  ;; TODO should be optimized
   (with-mutex org-glance-material-mutex
-    (cl-loop for bufpoint being the hash-keys of org-glance-material-points*
-       for buffer = (car bufpoint)
-       for point = (cdr bufpoint)
+    (cl-loop for marker being the hash-keys of org-glance-material-points*
+       for buffer = (org-glance-material-marker-buffer marker)
        when (buffer-live-p buffer)
        do (with-current-buffer buffer
-            (save-excursion
-              (goto-char point)
-              (org-glance--with-heading-at-point
-                (let* ((marker (get-text-property point :marker))
-                       (hash-old (org-glance-material-marker-hash marker))
-                       (changed-p (org-glance-material-marker-changed-p marker))
-                       (persisted-p (org-glance-material-marker-persisted-p marker))
-                       (overlay (org-glance-material-marker-overlay marker))
-                       (headline (org-glance-headline-at-point)) ;; FIXME do not construct headline in future, optimize me
-                       (hash-new (org-glance-hash headline))
-                       (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
-                       (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
-                       (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
-                  (cond
-                    ((not persisted-p)
-                     ;; skip it or prompt user to add it to store
-                     ;; (when (yes-or-no-p "Attempt to change unsynced headline. Do you want to add it to store?")
-                     ;;   ;; TODO sync it
-                     ;;   )
-                     )
-                    (returned-to-unchanged-state-p
-                     (progn
-                       (setf (org-glance-material-marker-changed-p marker) nil)
-                       (push marker org-glance-material-paint-q)
-                       (remhash marker org-glance-material-markers*)))
-                    (first-change-p
-                     (progn
-                       (setf (org-glance-material-marker-changed-p marker) t
-                             (org-glance-material-marker-beg marker) (point-min)
-                             (org-glance-material-marker-end marker) (point-max))
-                       (push marker org-glance-material-paint-q)
-                       (puthash marker t org-glance-material-markers*)))
-                    (further-change-p
-                     (progn
-                       (setf (org-glance-material-marker-changed-p marker) t
-                             (org-glance-material-marker-beg marker) (point-min)
-                             (org-glance-material-marker-end marker) (point-max))
-                       (push marker org-glance-material-paint-q))))))))
+            (org-glance-map-filter (headline)
+              (lambda () (string= (org-glance-material-marker-hash (get-text-property (point) :marker))
+                             (org-glance-material-marker-hash marker)))
+              (let* ((hash-old (org-glance-material-marker-hash marker))
+                     (changed-p (org-glance-material-marker-changed-p marker))
+                     (persisted-p (org-glance-material-marker-persisted-p marker))
+                     (overlay (org-glance-material-marker-overlay marker))
+                     (hash-new (org-glance-hash headline))
+                     (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
+                     (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
+                     (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
+                (cond
+                  ((not persisted-p)
+                   ;; skip it or prompt user to add it to store
+                   ;; (when (yes-or-no-p "Attempt to change unsynced headline. Do you want to add it to store?")
+                   ;;   ;; TODO sync it
+                   ;;   )
+                   )
+                  (returned-to-unchanged-state-p
+                   (progn
+                     (setf (org-glance-material-marker-changed-p marker) nil)
+                     (push marker org-glance-material-paint-q)
+                     (remhash marker org-glance-material-markers*)))
+                  (first-change-p
+                   (progn
+                     (setf (org-glance-material-marker-changed-p marker) t
+                           (org-glance-material-marker-beg marker) (point-min)
+                           (org-glance-material-marker-end marker) (point-max))
+                     (push marker org-glance-material-paint-q)
+                     (puthash marker t org-glance-material-markers*)))
+                  (further-change-p
+                   (progn
+                     (setf (org-glance-material-marker-changed-p marker) t
+                           (org-glance-material-marker-beg marker) (point-min)
+                           (org-glance-material-marker-end marker) (point-max))
+                     (push marker org-glance-material-paint-q)))))))
        finally do (clrhash org-glance-material-points*))
 
     (cl-loop for marker in org-glance-material-paint-q

@@ -232,6 +232,20 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
       when (not (null result))
       collect result))
 
+(cl-defmacro org-glance-map-filter (var filter &rest forms)
+  "Map buffer headlines and execute FORMS on each.
+This is the anaphoric method, you can use `<headline>' to call headline in forms."
+  (declare (indent 1))
+  `(cl-loop for begin in (org-glance-buffer-headlines)
+      for result = (save-excursion
+                     (goto-char begin)
+                     (when (funcall ,filter)
+                       (let ((,(car var) (org-glance-headline-at-point)))
+                         (org-glance--with-heading-at-point
+                           ,@forms))))
+      when (not (null result))
+      collect result))
+
 (cl-defmacro org-glance-map-file (file &rest forms)
   (declare (indent 1))
   `(org-glance--with-temp-buffer
