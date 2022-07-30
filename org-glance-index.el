@@ -18,19 +18,20 @@
      collect (cons (org-glance-headline-hash headline)
                    (when map (funcall map headline)))))
 
-(cl-defun org-glance-index-read (loc)
+(cl-defun org-glance-index-read (location)
   "Read index from LOC."
-  (when (and (f-exists-p loc) (f-readable-p loc))
-    (with-temp-buffer
-      (insert-file-contents loc)
-      (goto-char (point-min))
-      (cl-loop while (not (eobp))
-         collect (prog1
-                     (cons (buffer-substring-no-properties (line-beginning-position) (+ (point) 32))
-                           (buffer-substring-no-properties (+ (point) 32 1) (line-end-position)))
-                   (forward-line))
-         into index
-         finally return (seq-uniq index (lambda (a b) (string= (car a) (car b))))))))
+  (when (and (f-exists-p location) (f-readable-p location))
+    (let ((part-0 (f-join location "0")))
+      (with-temp-buffer
+        (insert-file-contents part-0)
+        (goto-char (point-min))
+        (cl-loop while (not (eobp))
+           collect (prog1
+                       (cons (buffer-substring-no-properties (line-beginning-position) (+ (point) 32))
+                             (buffer-substring-no-properties (+ (point) 32 1) (line-end-position)))
+                     (forward-line))
+           into index
+           finally return (seq-uniq index (lambda (a b) (string= (car a) (car b)))))))))
 
 (cl-defun org-glance-index-serialize (idx)
   "Serialize index IDX."
@@ -38,16 +39,20 @@
                (t (concat (car it) " " (cdr it))))
          idx))
 
-(cl-defun org-glance-index-write (idx loc)
-  "Write index IDX to LOC."
-  (org-glance--with-temp-file loc
+(cl-defun org-glance-index-write (idx location)
+  "Write index IDX to LOCATION."
+  (org-glance--with-temp-file location
     (insert (s-join "\n" (org-glance-index-serialize idx)))))
 
-(cl-defun org-glance-index-append (idx loc)
-  "Append index IDX to file LOC."
-  (cond ((and (f-exists-p loc) (f-empty-p loc)) (append-to-file (s-join "\n" (org-glance-index-serialize idx)) nil loc))
-        ((f-exists-p loc) (append-to-file (concat "\n" (s-join "\n" (org-glance-index-serialize idx))) nil loc))
-        (t (org-glance-index-write idx loc))))
+(cl-defun org-glance-index-append (idx location)
+  "Append index IDX to LOCATION."
+  (mkdir location t)
+  (let ((part-0 (f-join location "0")))
+    (cond ((and (f-exists-p part-0) (f-empty-p part-0))
+           (append-to-file (s-join "\n" (org-glance-index-serialize idx)) nil part-0))
+          ((f-exists-p part-0)
+           (append-to-file (concat "\n" (s-join "\n" (org-glance-index-serialize idx))) nil part-0))
+          (t (org-glance-index-write idx part-0)))))
 
 (cl-defun org-glance-index-inversed (idx)
   "Reverse index IDX."

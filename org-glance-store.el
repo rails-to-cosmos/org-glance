@@ -14,7 +14,7 @@ Implements indexes to optimize reads.
 Builds and preserves indexes in actualized state."
   (location nil  :type string :read-only t :documentation "Directory where we store all data..")
   (headlines nil :type list   :read-only t :documentation "List of headlines.")
-  (i-title nil   :type list   :read-only t :documentation "Inversed index title->hash."))
+  (i-title* nil   :type list   :read-only t :documentation "Inversed index title->hash."))
 
 (cl-defgeneric org-glance-store-headline-location (haystack needle)
   "Return location of NEEDLE in HAYSTACK.")
@@ -63,15 +63,12 @@ Builds and preserves indexes in actualized state."
            (org-glance-store--create :location location))))
 
 (cl-defun org-glance-store-read (location)
-  (let ((i-title (when (and (f-exists-p (f-join location "index" "title" "0"))
-                            (f-readable-p (f-join location "index" "title" "0")))
-                   (org-glance-index-read (f-join location "index" "title" "0")))))
+  (let ((i-title* (org-glance-index-read (f-join location "index" "title"))))
     (org-glance-store--create
-     :i-title (org-glance-index-uniq (org-glance-index-inversed i-title))
+     :i-title* (org-glance-index-uniq (org-glance-index-inversed i-title*))
      :location location
-     :headlines (cl-loop for (hash . title) in i-title
-                   collect (org-glance-headline* :-title title
-                                                 :-hash hash)))))
+     :headlines (cl-loop for (hash . title) in i-title*
+                   collect (org-glance-headline* :-title title :-hash hash)))))
 
 (cl-defun org-glance-store-put (store &rest headlines)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it."
@@ -79,13 +76,12 @@ Builds and preserves indexes in actualized state."
     (let ((location (org-glance-store-headline-location store headline)))
       (unless (f-exists-p location) ;; TODO or read full headline if current is dummy?
         (org-glance-headline-save headline location))))
-  (let ((i-title-old (org-glance-store-i-title store))
-        (i-title-new (org-glance-index headlines :map #'org-glance-headline-title)))
-    (org-glance-index-append i-title-new (f-join (org-glance-store-location store) "index" "title" "0"))
+
+  (let ((i-title*-old (org-glance-store-i-title* store))
+        (i-title*-new (org-glance-index headlines :map #'org-glance-headline-title)))
+    (org-glance-index-append i-title*-new (f-join (org-glance-store-location store) "index" "title"))
     (org-glance-store--create
-     :i-title (org-glance-index-merge
-               i-title-old
-               (org-glance-index-uniq (org-glance-index-inversed i-title-new)))
+     :i-title* (org-glance-index-merge i-title*-old (org-glance-index-uniq (org-glance-index-inversed i-title*-new)))
      :location (org-glance-store-location store)
      :headlines (append headlines (org-glance-store-headlines store)))))
 
@@ -104,7 +100,7 @@ Builds and preserves indexes in actualized state."
     (apply #'org-glance-store-put store headlines)))
 
 (cl-defun org-glance-store-choose (store)
-  (let* ((titles (org-glance-store-i-title store))
+  (let* ((titles (org-glance-store-i-title* store))
          (hash (alist-get (completing-read "Headline: " titles nil t) titles nil nil #'string=)))
     (org-glance-store-headline store hash)))
 

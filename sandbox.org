@@ -12,7 +12,8 @@
                "* a"
                "* b"
                "* c")))
-  (org-glance-materialize store "/tmp/mat.org"))
+  (org-glance-materialize store "/tmp/mat.org")
+  store)
 
 #+end_src
 

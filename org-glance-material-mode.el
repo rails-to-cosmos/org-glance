@@ -98,7 +98,6 @@ to its origins by calling `org-glance-material-commit'."
 
 (cl-defun org-glance-material-redisplay ()
   "Force redisplay all overlays in changed material buffers."
-  ;; TODO should be optimized
   (with-mutex org-glance-material-mutex
     (cl-loop for marker being the hash-keys of org-glance-material-points* using (hash-values point)
        for buffer = (org-glance-material-marker-buffer marker)
@@ -128,21 +127,21 @@ to its origins by calling `org-glance-material-commit'."
                       (returned-to-unchanged-state-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) nil)
-                         (org-glance-material-marker-overlay-refresh marker)
+                         (org-glance-material-marker-redisplay marker)
                          (remhash marker org-glance-material-markers*)))
                       (first-change-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) t
                                (org-glance-material-marker-beg marker) (point-min)
                                (org-glance-material-marker-end marker) (point-max))
-                         (org-glance-material-marker-overlay-refresh marker)
+                         (org-glance-material-marker-redisplay marker)
                          (puthash marker t org-glance-material-markers*)))
                       (further-change-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) t
                                (org-glance-material-marker-beg marker) (point-min)
                                (org-glance-material-marker-end marker) (point-max))
-                         (org-glance-material-marker-overlay-refresh marker)))))))))
+                         (org-glance-material-marker-redisplay marker)))))))))
        finally do (clrhash org-glance-material-points*))))
 
 (cl-defun org-glance-material-redisplay* ()
@@ -151,7 +150,7 @@ to its origins by calling `org-glance-material-commit'."
                (thread-alive-p org-glance-material-painter))
     (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
 
-(cl-defun org-glance-material-marker-overlay-refresh (marker)
+(cl-defun org-glance-material-marker-redisplay (marker)
   "Refresh MARKER overlay."
   (let ((hash (org-glance-material-marker-hash marker))
         (buffer (org-glance-material-marker-buffer marker))
@@ -189,7 +188,7 @@ to its origins by calling `org-glance-material-commit'."
                (overlay-put overlay 'face '(:foreground "#e74c3c"))))))))
 
 (cl-defun org-glance-material-commit ()
-  "Apply all changes of buffer headlines to its origins in STORE.
+  "Apply all changes of buffer headlines to its origins.
 
 TODO:
 - It should be generalized to other materialization types.
@@ -210,7 +209,7 @@ TODO:
               (setf (org-glance-material-marker-changed-p marker) nil
                     (org-glance-material-marker-committed-p marker) t
                     (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
-              (org-glance-material-marker-overlay-refresh marker)
+              (org-glance-material-marker-redisplay marker)
               (remhash marker org-glance-material-markers*)))
       (org-glance-material-redisplay*)
       store))

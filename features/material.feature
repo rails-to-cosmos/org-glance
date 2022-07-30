@@ -1,4 +1,5 @@
 Feature: Materialization and material mode
+  @dev
   Scenario: Materialize store
     Given empty file "views/material.org"
     And file "notes/phones/original.org"
@@ -17,8 +18,8 @@ Feature: Materialization and material mode
     And I find file "views/material.org"
     And I go to the first headline
     And I set title of the headline at point to "iPhone 4"
-    And I save buffer
     And I commit changes to store "Phones"
+    And I save buffer
 
     Then store "Phones" should contain headline "iPhone 4"
     # # TODO: remove old headlines

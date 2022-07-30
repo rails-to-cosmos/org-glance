@@ -44,11 +44,11 @@
 (Then "^store \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\"$"
       (lambda (store-name headline-title)
         (let ((store (STORE store-name)))
-          (should (a-get (org-glance-store-i-title store)
+          (should (a-get (org-glance-store-i-title* store)
                          headline-title)))))
 
 (And "^store \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\"$"
      (lambda (store-name headline-title)
        (let ((store (STORE store-name)))
-         (should (not (a-get (org-glance-store-i-title store)
+         (should (not (a-get (org-glance-store-i-title* store)
                              headline-title))))))
