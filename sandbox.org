@@ -7,6 +7,13 @@
   (org-glance-materialize store "/tmp/mat.org"))
 
 (org-glance-store-choose (org-glance-store "/tmp/store"))
+
+(let ((store (org-glance-store-from-scratch "/tmp/store"
+               "* a"
+               "* b"
+               "* c")))
+  (org-glance-materialize store "/tmp/mat.org"))
+
 #+end_src
 
 #+RESULTS:

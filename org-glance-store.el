@@ -45,6 +45,14 @@ Builds and preserves indexes in actualized state."
 (cl-defmethod org-glance-store-headline ((store org-glance-store) (hash string))
   (org-glance-headline-load (org-glance-store-headline-location store hash)))
 
+(cl-defun org-glance-store-from-scratch (location &rest headlines-as-a-strings)
+  (declare (indent 1))
+  (let ((store (org-glance-store location)))
+    (cl-loop for headline-string in headlines-as-a-strings
+       collect (org-glance-headline-from-string headline-string)
+       into headlines
+       finally return (apply #'org-glance-store-put store headlines))))
+
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
   (cond ((and (f-exists-p location) (f-readable-p location))
@@ -71,7 +79,6 @@ Builds and preserves indexes in actualized state."
     (let ((location (org-glance-store-headline-location store headline)))
       (unless (f-exists-p location) ;; TODO or read full headline if current is dummy?
         (org-glance-headline-save headline location))))
-
   (let ((i-title-old (org-glance-store-i-title store))
         (i-title-new (org-glance-index headlines :map #'org-glance-headline-title)))
     (org-glance-index-append i-title-new (f-join (org-glance-store-location store) "index" "title" "0"))

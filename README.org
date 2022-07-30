@@ -21,6 +21,9 @@ CLOSED: [2022-07-29 Fri 18:31]
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh
+* materialization
+** uniquify
+** think about case when headline becomes non-unique after editing
 * TODO Overview [1/5]
 ** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:
