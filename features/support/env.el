@@ -64,9 +64,7 @@
  (f-mkdir-full-path org-glance-test-location))
 
 (After
- (pp org-glance-test-location)
- ;; (delete-directory org-glance-test-location t)
- )
+ (delete-directory org-glance-test-location t))
 
 (Teardown
  (setq default-directory org-glance-root-path))
