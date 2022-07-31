@@ -16,10 +16,9 @@ Feature: Materialization and material mode
 
     When I materialize store "Phones" to file "views/material.org"
     And I find file "views/material.org"
-    And I go to the first headline
+    And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "Phones"
-    And I save buffer
 
     Then store "Phones" should contain headline with title "iPhone 4"
     And store "Phones" should not contain headline with title "iPhone 3"

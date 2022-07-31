@@ -10,6 +10,7 @@
 This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
+* fix wal reverse
 * garbage collector
 * DONE wal with instructions SET and RM
 CLOSED: [2022-07-31 Sun 12:31]

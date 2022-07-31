@@ -99,7 +99,8 @@ to its origins by calling `org-glance-material-commit'."
     (insert (format org-glance-material-header (org-glance-store-location store)))
     (cl-loop for headline in (org-glance-store-headlines store)
        do (let ((headline (org-glance-store-headline store headline)))
-            (org-glance-headline-insert headline)))))
+            (org-glance-headline-insert headline)))
+    store))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
@@ -207,29 +208,33 @@ TODO:
   (cl-loop for marker in (-non-nil (hash-table-keys org-glance-material-markers*))
      with store = (gethash (current-buffer) org-glance-material-stores)
      when (eq (current-buffer) (org-glance-material-marker-buffer marker))
-     collect (let ((headline (org-glance-headline-from-region (org-glance-material-marker-beg marker) (org-glance-material-marker-end marker))))
+     collect (let ((headline
+                    (org-glance-headline-from-region
+                     (org-glance-material-marker-beg marker)
+                     (org-glance-material-marker-end marker))))
                (cons headline marker))
      into h&ms
      finally return
-       (org-glance-store-commit
-        (-reduce-from
-         (lambda (store h&m) ;; pure transform
+       (prog1 (puthash (current-buffer)
+                       (org-glance-store-commit
+                        (-reduce-from
+                         (lambda (store h&m) ;; pure transform
+                           (cl-destructuring-bind (headline . marker) h&m
+                             (-> store
+                                 (org-glance-store-remove-headline-by-hash (org-glance-material-marker-hash marker))
+                                 (org-glance-store-put-headlines headline))))
+                         store
+                         h&ms))
+                       org-glance-material-stores)
+         (dolist (h&m h&ms) ;; overlay manager side-effects
            (cl-destructuring-bind (headline . marker) h&m
-             (-> store
-                 (org-glance-store-remove-headline-by-hash (org-glance-material-marker-hash marker))
-                 (org-glance-store-put-headlines headline))))
-         store
-         h&ms))
-     finally do
-       (dolist (h&m h&ms) ;; overlay manager side-effects
-         (cl-destructuring-bind (headline . marker) h&m
-           (with-mutex org-glance-material-overlay-manager--mutex
-             (setf (org-glance-material-marker-changed-p marker) nil
-                   (org-glance-material-marker-committed-p marker) t
-                   (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
-             (org-glance-material-marker-redisplay marker)
-             (remhash marker org-glance-material-markers*)))
-         (org-glance-material-overlay-manager-redisplay*)))
+             (with-mutex org-glance-material-overlay-manager--mutex
+               (setf (org-glance-material-marker-changed-p marker) nil
+                     (org-glance-material-marker-committed-p marker) t
+                     (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
+               (org-glance-material-marker-redisplay marker)
+               (remhash marker org-glance-material-markers*)))
+           (org-glance-material-overlay-manager-redisplay*))))
   ;; TODO work with deleted buffers in `org-glance-material-stores'
   )
 

@@ -24,7 +24,7 @@
                       (insert-file-contents-literally (f-join location "offset.el"))
                       (read (buffer-substring (point-min) (point-max)))))
                    ((null wal) (ts-now))
-                   (t (cl-destructuring-bind (ts instruction headline) (car (last wal))
+                   (t (cl-destructuring-bind (ts _ _) (car (last wal))
                         ts)))
      :memtbl wal)))
 
@@ -39,7 +39,7 @@
      for hash = (org-glance-headline-hash headline)
      when (and (not (gethash hash seen)) (eq instruction 'RM))
      do (f-delete (org-glance-store-headline-location store headline))
-     finally do (cl-destructuring-bind (ts instruction headline) (car wal)
+     finally do (cl-destructuring-bind (ts _ _) (car wal)
                   (with-temp-file (f-join (org-glance-store-location store) "offset.el")
                     (insert (prin1-to-string ts))))
      finally return store))
@@ -81,7 +81,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
 
 (cl-defun org-glance-store-get-headline-by-hash (store hash)
   "Return `org-glance-headline-header' from STORE searched by HASH."
-  (cl-loop for (ts instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
      when (string= hash (org-glance-headline-hash headline))
      return (cl-case instruction
               ('PUT headline)
@@ -89,15 +89,14 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
 
 (cl-defun org-glance-store-get-headline-by-title (store title)
   "Return `org-glance-headline-header' from STORE searched by TITLE."
-  (cl-loop for (ts instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
      for hash = (org-glance-headline-hash headline)
      with seen = (make-hash-table :test #'equal)
      if (and (string= title (org-glance-headline-title headline))
              (not (gethash hash seen))
              (eq instruction 'PUT))
      return headline
-     else if (and (string= title (org-glance-headline-title headline))
-                  (not (gethash hash seen))
+     else if (and (not (gethash hash seen))
                   (eq instruction 'RM))
      do (puthash hash t seen)))
 
@@ -123,7 +122,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
 
 (cl-defun org-glance-store-headlines (store)
   "Return all headlines from STORE."
-  (cl-loop for (ts instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
      for hash = (org-glance-headline-hash headline)
      with seen = (make-hash-table :test #'equal)
      when (and (eq instruction 'PUT) (not (gethash hash seen)))

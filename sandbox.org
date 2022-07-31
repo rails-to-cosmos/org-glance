@@ -10,6 +10,8 @@
         "* c")
       (org-glance-store-remove-headlines (org-glance-headline-header :-hash "6d0af4c806aa2a7d2573bd7f10137a40"))
       (org-glance-materialize "/tmp/store/mat.org")))
+
+(org-glance-store-get-headline-by-title (org-glance-store "/tmp/store") "a")
 #+end_src
 
 #+RESULTS:
