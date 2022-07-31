@@ -14,23 +14,6 @@
   (lambda (store-name location)
     (STORE>> store-name (org-glance-store-import (STORE store-name) (FILE location)))))
 
-;; (When "^I import store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
-;;   (lambda (store-name directory)
-;;     (let* ((scope (org-glance-scope (FILE directory)))
-;;            (store (org-glance-import scope)))
-;;       (puthash store-name store org-glance-test-stores))))
-
-;; (When "^I import store \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
-;;   (lambda (store-name file)
-;;     (let* ((scope (org-glance-scope (FILE file)))
-;;            (store (org-glance-import scope)))
-;;       (puthash store-name store org-glance-test-stores))))
-
-;; (When "^I export store \"\\([^\"]+\\)\" to directory \"\\([^\"]+\\)\"$"
-;;   (lambda (store-name dir-name)
-;;     (let ((store (STORE store-name)))
-;;       (org-glance-export store (f-join org-glance-test-location dir-name)))))
-
 (Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (store-name cardinality)
         (let ((store (STORE store-name)))
