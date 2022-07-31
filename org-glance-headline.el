@@ -39,14 +39,14 @@
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 
-(cl-defstruct (org-glance-headline* (:constructor org-glance-headline*)
-                                    (:copier nil))
+(cl-defstruct (org-glance-headline-header (:constructor org-glance-headline-header)
+                                          (:copier nil))
   "Limited edition of `org-glance-headline'."
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
   (-title nil :type string :read-only t :documentation "Original headline title."))
 
 (cl-defstruct (org-glance-headline
-                (:include org-glance-headline*)
+                (:include org-glance-headline-header)
                 (:constructor org-glance-headline)
                 (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
@@ -67,8 +67,8 @@
 (cl-defmethod org-glance-headline-hash ((headline org-glance-headline))
   (org-glance-headline--hash headline))
 
-(cl-defmethod org-glance-headline-hash ((headline org-glance-headline*))
-  (org-glance-headline*--hash headline))
+(cl-defmethod org-glance-headline-hash ((headline org-glance-headline-header))
+  (org-glance-headline-header--hash headline))
 
 (cl-defgeneric org-glance-headline-title (object)
   "Get title of OBJECT.")
@@ -76,8 +76,21 @@
 (cl-defmethod org-glance-headline-title ((headline org-glance-headline))
   (org-glance-headline--title headline))
 
-(cl-defmethod org-glance-headline-title ((headline org-glance-headline*))
-  (org-glance-headline*--title headline))
+(cl-defmethod org-glance-headline-title ((headline org-glance-headline-header))
+  (org-glance-headline-header--title headline))
+
+(cl-defgeneric org-glance-headline-dummy (headline)
+  "Make instance of `org-glance-headline-header' from HEADLINE.")
+
+(cl-defmethod org-glance-headline-dummy ((headline org-glance-headline))
+  "Make instance of `org-glance-headline-header' from HEADLINE."
+  (org-glance-headline-header
+   :-hash (org-glance-headline-hash headline)
+   :-title (org-glance-headline-title headline)))
+
+(cl-defmethod org-glance-headline-dummy ((headline org-glance-headline-header))
+  "Make instance of `org-glance-headline-header' from HEADLINE."
+  headline)
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
@@ -141,16 +154,17 @@
   "Return t if A equals B."
   (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
-(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline*) (b org-glance-headline*))
+(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline-header) (b org-glance-headline-header))
   "Return t if A equals B."
   (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
-(cl-defmethod org-glance-headline-save (headline dest)
+(cl-defun org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
   (org-glance--with-temp-file dest
-    (org-glance-headline-insert headline)))
+    (org-glance-headline-insert headline))
+  headline)
 
 (cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
   (insert (org-glance-headline-contents headline) "\n"))

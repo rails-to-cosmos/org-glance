@@ -21,7 +21,7 @@ Feature: Materialization and material mode
     And I commit changes to store "Phones"
     And I save buffer
 
-    Then store "Phones" should contain headline "iPhone 4"
+    Then store "Phones" should contain headline with title "iPhone 4"
     # # TODO: remove old headlines
     # And store "Phones" should not contain headline "iPhone 3"
 

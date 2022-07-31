@@ -10,6 +10,7 @@
 This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
+* wal with instructions SET and RM
 * TODO [#A] Actualize indexes of lsm-tree
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees

@@ -41,14 +41,12 @@
       (lambda (store-1 store-2)
         (should (org-glance-store-equal-p (STORE store-1) (STORE store-2)))))
 
-(Then "^store \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\"$"
+(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\"$"
       (lambda (store-name headline-title)
         (let ((store (STORE store-name)))
-          (should (a-get (org-glance-store-i-title* store)
-                         headline-title)))))
+          (should (org-glance-store-get-headline-by-title store headline-title)))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\"$"
+(And "^store \"\\([^\"]+\\)\" should not contain headline with title\"\\([^\"]+\\)\"$"
      (lambda (store-name headline-title)
        (let ((store (STORE store-name)))
-         (should (not (a-get (org-glance-store-i-title* store)
-                             headline-title))))))
+         (should (not (org-glance-store-get-headline-by-title store headline-title))))))

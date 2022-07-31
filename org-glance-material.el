@@ -16,7 +16,7 @@
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
 
-(defvar org-glance-material-mutex (make-mutex "org-glance-material-mutex")
+(defvar org-glance-material--mx-display (make-mutex "org-glance-material--mx-display")
   "Thread synchronization.")
 
 (defconst org-glance-material-header
@@ -39,37 +39,41 @@
   (persisted-p nil :type bool   :read-only t   :documentation "Whether headline has origin or not.")
   (committed-p nil :type bool   :read-only nil :documentation "Whether changes have been committed."))
 
+(cl-defun org-glance-material-store ()
+  "Get `org-glance-store' instance associated with current material buffer."
+  (when-let (origin (condition-case nil
+                        (save-excursion
+                          (goto-char (point-min))
+                          (search-forward "#+ORIGIN: ")
+                          (buffer-substring-no-properties (point) (point-at-eol)))
+                      (search-failed nil)))
+    (org-glance-store origin)))
+
 (define-minor-mode org-glance-material-mode
-    "A minor mode to be activated only in materialized view editor."
+    "A minor mode to be activated only in materialized view editor.
+This is the only point to consistently mutate state of underlying store.
+In other places `org-glance-store' should act like functional thread-safe append-only storage."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (if-let (origin (save-excursion
-                           (goto-char (point-min))
-                           (search-forward "#+ORIGIN: ")
-                           (buffer-substring-no-properties (point) (point-at-eol))))
-             (let* ((store (org-glance-store origin))
-                    (buffer (current-buffer))
-                    (markers (org-glance-map (headline)
-                               (let ((hash (org-glance-headline-hash headline)))
-                                 (org-glance-material-marker
-                                  :hash hash
-                                  :beg (point-min)
-                                  :end (point-max)
-                                  :buffer buffer
-                                  :overlay nil
-                                  :changed-p nil
-                                  :committed-p nil
-                                  :persisted-p (when (org-glance-store-get store hash) t))))))
-               (with-mutex org-glance-material-mutex ;; mutation. Possible conflicts with painters/other threads
-                 (puthash buffer store org-glance-material-origins)
-                 (cl-loop for marker in (reverse markers) ;; reverse to be user-friendly and mark visible headlines first
-                    do (add-text-properties (org-glance-material-marker-beg marker)
-                                            (org-glance-material-marker-end marker)
-                                            (list :marker marker))
-                      (puthash marker (org-glance-material-marker-beg marker) org-glance-material-points*)))
-               (org-glance-material-redisplay*))
-           (org-glance-material-mode -1)
-           (user-error "Unable to start material mode: origin property not found."))
+         (let ((store (org-glance-material-store)))
+           (when (null store)
+             (user-error "Unable to start material mode: associated store has not been found."))
+           (puthash (current-buffer) store org-glance-material-origins)
+           (org-glance-map (headline)
+             (let* ((hash (org-glance-headline-hash headline))
+                    (marker (org-glance-material-marker
+                             :hash hash
+                             :beg (point-min)
+                             :end (point-max)
+                             :buffer (current-buffer)
+                             :overlay nil
+                             :changed-p nil
+                             :committed-p nil
+                             :persisted-p (when (org-glance-store-get-headline-by-hash store hash) t))))
+               (add-text-properties (point-min) (point-max) (list :marker marker))
+               (with-mutex org-glance-material--mx-display
+                 (puthash marker (point-min) org-glance-material-points*))))
+           (org-glance-material-redisplay*))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-material-commit nil t))
@@ -97,12 +101,14 @@ to its origins by calling `org-glance-material-commit'."
   (org-glance-material-redisplay*))
 
 (cl-defun org-glance-material-redisplay ()
-  "Force redisplay all overlays in changed material buffers."
-  (with-mutex org-glance-material-mutex
+  "Actualize all overlays in changed material buffers."
+  (interactive)
+  (with-mutex org-glance-material--mx-display
     (cl-loop for marker being the hash-keys of org-glance-material-points* using (hash-values point)
-       for buffer = (org-glance-material-marker-buffer marker)
-       when (buffer-live-p buffer)
-       do (with-current-buffer buffer
+       when (and marker
+                 (org-glance-material-marker-buffer marker)
+                 (buffer-live-p (org-glance-material-marker-buffer marker)))
+       do (with-current-buffer (org-glance-material-marker-buffer marker)
             (save-excursion
               (goto-char point)
               (when (string= (org-glance-material-marker-hash (get-text-property point :marker))
@@ -119,11 +125,9 @@ to its origins by calling `org-glance-material-commit'."
                          (further-change-p (and (not (string= hash-old hash-new)) changed-p)))
                     (cond
                       ((not persisted-p)
-                       ;; skip it or prompt user to add it to store
-                       ;; (when (yes-or-no-p "Attempt to change unsynced headline. Do you want to add it to store?")
-                       ;;   ;; TODO sync it
-                       ;;   )
-                       )
+                       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
+                       ;;   (puthash marker org-glance-material-markers*))
+                       (org-glance-material-marker-redisplay marker))
                       (returned-to-unchanged-state-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) nil)
@@ -145,7 +149,7 @@ to its origins by calling `org-glance-material-commit'."
        finally do (clrhash org-glance-material-points*))))
 
 (cl-defun org-glance-material-redisplay* ()
-  "Run `org-glance-material-redisplay' in separate thread."
+  "Run `org-glance-material-marker-redisplay' in separate thread."
   (unless (and (threadp org-glance-material-painter)
                (thread-alive-p org-glance-material-painter))
     (setq org-glance-material-painter (make-thread #'org-glance-material-redisplay "org-glance-material-painter"))))
@@ -189,36 +193,35 @@ to its origins by calling `org-glance-material-commit'."
 
 (cl-defun org-glance-material-commit ()
   "Apply all changes of buffer headlines to its origins.
+Returns new store with changes reflected in WAL.
 
 TODO:
-- It should be generalized to other materialization types.
-- [x] Rebuild store indexes.
-- Return store."
+- It should be generalized to other materialization types."
   (interactive)
-  (with-mutex org-glance-material-mutex
-    (let ((store (gethash (current-buffer) org-glance-material-origins)))
-      (cl-loop for marker being the hash-keys of org-glance-material-markers*
-         when (eq (current-buffer) (org-glance-material-marker-buffer marker))
-         do (let ((headline (org-glance-headline-from-string
-                             (buffer-substring-no-properties
-                              (org-glance-material-marker-beg marker)
-                              (org-glance-material-marker-end marker)))))
-              (setq store (-> store
-                              ;; (org-glance-store-rem (org-glance-material-marker-hash marker))
-                              (org-glance-store-put headline)))
-              (setf (org-glance-material-marker-changed-p marker) nil
-                    (org-glance-material-marker-committed-p marker) t
-                    (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
-              (org-glance-material-marker-redisplay marker)
-              (remhash marker org-glance-material-markers*)))
-      (org-glance-material-redisplay*)
-      store))
-
-  ;; TODO remove old headline from store or mark for deletion
-  ;; TODO work with stale links (broken)
+  (let ((store (gethash (current-buffer) org-glance-material-origins)))
+    (cl-loop for marker being the hash-keys of org-glance-material-markers*
+       when (eq (current-buffer) (org-glance-material-marker-buffer marker))
+       do
+         (let ((headline (org-glance-headline-from-string
+                          (buffer-substring-no-properties
+                           (org-glance-material-marker-beg marker)
+                           (org-glance-material-marker-end marker)))))
+           (setq store ;; could be optimized
+                 (-> store
+                     (org-glance-store-rm (org-glance-headline-header :-hash (org-glance-material-marker-hash marker)))
+                     (org-glance-store-put headline)))
+           (setf (org-glance-material-marker-changed-p marker) nil
+                 (org-glance-material-marker-committed-p marker) t
+                 (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
+           (with-mutex org-glance-material--mx-display
+             (org-glance-material-marker-redisplay marker)
+             (remhash marker org-glance-material-markers*)))
+       finally do (org-glance-material-redisplay*)
+       finally return store))
+  ;; TODO work with deleted buffers in `org-glance-material-origins'
   )
 
 (cl-defun org-glance-material-debug (&rest _)
   (prin1 (get-text-property (point) :marker)))
 
-(provide 'org-glance-material-mode)
+(provide 'org-glance-material)

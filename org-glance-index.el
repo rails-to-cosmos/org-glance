@@ -10,6 +10,18 @@
 ;;         ;; (a-list :name 'property :filter #'org-glance-headline-propertized-p)
 ;;         ))
 
+(cl-defstruct (org-glance-index (:constructor org-glance-index--create)
+                                (:copier nil))
+  (location nil :type string :read-only t)
+  (memtbl-a nil :type list :read-only t)
+  (memtbl-b nil :type list :read-only nil)
+  (treshold 100 :type number :read-only t))
+
+;; GET: query B, query A, query SST location
+;; SET: write "SET" instruction to B
+;; RM: write "RM" instruction to B
+;; data field -- is store hash/id
+
 (cl-defun org-glance-index (headlines &key map filter)
   "Build index of HEADLINES."
   ;; mappers and filters should be generics and work properly with full and dummy headlines
@@ -26,11 +38,11 @@
         (insert-file-contents part-0)
         (goto-char (point-min))
         (cl-loop while (not (eobp))
-           collect (prog1
-                       (cons (buffer-substring-no-properties (line-beginning-position) (+ (point) 32))
-                             (buffer-substring-no-properties (+ (point) 32 1) (line-end-position)))
-                     (forward-line))
+           when (> (- (line-end-position) (line-beginning-position)) 32)
+           collect (cons (buffer-substring-no-properties (line-beginning-position) (+ (point) 32))
+                         (buffer-substring-no-properties (+ (point) 32 1) (line-end-position)))
            into index
+           do (forward-line)
            finally return (seq-uniq index (lambda (a b) (string= (car a) (car b)))))))))
 
 (cl-defun org-glance-index-serialize (idx)

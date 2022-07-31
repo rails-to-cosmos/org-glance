@@ -37,7 +37,7 @@
 (require 'org-glance-scope)
 (require 'org-glance-headline)
 (require 'org-glance-store)
-(require 'org-glance-material-mode)
+(require 'org-glance-material)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

@@ -2,19 +2,31 @@
 
 * hello
 #+begin_src emacs-lisp
-(let ((store (-> (org-glance-store "/tmp/store")
-                 (org-glance-store-put (org-glance-headline-from-string "* a")))))
-  (org-glance-materialize store "/tmp/mat.org"))
+(f-delete "/tmp/store" t)
 
-(org-glance-store-choose (org-glance-store "/tmp/store"))
+(-> (org-glance-store-from-scratch "/tmp/store"
+      "* a"
+      "* b"
+      "* c")
+    (org-glance-store-rm (org-glance-headline-header :-hash "6d0af4c806aa2a7d2573bd7f10137a40"))
+    (org-glance-materialize "/tmp/mat.org"))
 
-(let ((store (org-glance-store-from-scratch "/tmp/store"
-               "* a"
-               "* b"
-               "* c")))
-  (org-glance-materialize store "/tmp/mat.org")
-  store)
+(setq test-store (org-glance-store-from-scratch "/tmp/store"
+                   "* a"
+                   "* b"
+                   "* c"))
 
+(let ((store (org-glance-store-read "/tmp/store")))
+  (org-glance-store-headlines store))
+
+(org-glance-store-log-read "/tmp/store/wa.log")
+
+(length (org-glance-store-headlines test-store))
+(org-glance-store-headlines (org-glance-store-rm test-store "966ce2034a4cc7546f524ff9ef602832"))
+
+(org-glance-store-get-headline-by-hash test-store "966ce2034a4cc7546f524ff9ef602832")
+(org-glance-store-get-headline-by-hash (org-glance-store-rm test-store "966ce2034a4cc7546f524ff9ef602832")
+                      "966ce2034a4cc7546f524ff9ef602832")
 #+end_src
 
 #+RESULTS:

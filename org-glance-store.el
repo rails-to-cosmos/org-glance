@@ -4,17 +4,101 @@
 
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
-(require 'org-glance-index)
 (require 'org-glance-scope)
 
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
-  "Persistent store of headlines.
-Implements indexes to optimize reads.
-Builds and preserves indexes in actualized state."
-  (location nil  :type string :read-only t :documentation "Directory where we store all data..")
-  (headlines nil :type list   :read-only t :documentation "List of headlines.")
-  (i-title* nil   :type list   :read-only t :documentation "Inversed index title->hash."))
+  "Persistent store of headlines."
+  (location nil :type string :read-only t :documentation "Directory where we store all the data.")
+  (memtbl nil :type list :read-only t))
+
+(cl-defun org-glance-store-read (location)
+  "Read `org-glance-store' from LOCATION."
+  (org-glance-store--create
+   :location location
+   :memtbl (org-glance-store-log-read (f-join location "wa.log"))))
+
+(cl-defun org-glance-store-put (store &rest headlines)
+  "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
+
+Append PUT event to WAL and insert headlines to persistent storage."
+  (org-glance-store--create
+   :location (org-glance-store-location store)
+   :memtbl (cl-loop for headline in headlines
+              for location = (org-glance-store-headline-location store headline)
+              unless (f-exists-p location)
+              ;; could be made in separate thread
+              do (org-glance-headline-save headline location)
+              ;; no need to write fully qualified headlines, write only headers
+              collect (cons 'PUT (org-glance-headline-dummy headline))
+              into wal
+              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) "wa.log"))
+              finally return (append (org-glance-store-memtbl store) wal))))
+
+(cl-defun org-glance-store-rm (store &rest headlines)
+  "Return `org-glance-store' with HEADLINES removed from STORE.
+
+Append RM event to WAL, but not remove HEADLINES from persistent storage.
+Actual deletion is handled in a separate thread of `org-glance-material-mode'."
+  (org-glance-store--create
+   :location (org-glance-store-location store)
+   :memtbl (cl-loop for headline in headlines
+              collect (cons 'RM headline)
+              into wal
+              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) "wa.log"))
+              finally return (append (org-glance-store-memtbl store) wal))))
+
+(cl-defun org-glance-store-get-headline-by-hash (store hash)
+  "Return `org-glance-headline-header' from STORE searched by HASH."
+  (cl-loop for (instruction . headline) in (reverse (org-glance-store-memtbl store))
+     when (string= hash (org-glance-headline-hash headline))
+     return (cl-case instruction
+              ('PUT headline)
+              ('RM nil))))
+
+(cl-defun org-glance-store-get-headline-by-title (store title)
+  "Return `org-glance-headline-header' from STORE searched by TITLE."
+  (cl-loop for (instruction . headline) in (reverse (org-glance-store-memtbl store))
+     for hash = (org-glance-headline-hash headline)
+     with seen = (make-hash-table :test #'equal)
+     if (and (string= title (org-glance-headline-title headline))
+             (not (gethash hash seen))
+             (eq instruction 'PUT))
+     return headline
+     else if (and (string= title (org-glance-headline-title headline))
+                  (not (gethash hash seen))
+                  (eq instruction 'RM))
+     do (puthash hash t seen)))
+
+(cl-defun org-glance-store-log-read (location)
+  (when (and (f-exists-p location) (f-readable-p location))
+    (with-temp-buffer
+      (insert-file-contents-literally location)
+      (goto-char (point-min))
+      (cl-loop while (not (eobp))
+         collect (read (buffer-substring-no-properties (line-beginning-position) (line-end-position)))
+         do (forward-line)))))
+
+(cl-defun org-glance-store-log-append (log location)
+  (cl-loop for entry in log
+     collect (prin1-to-string entry)
+     into contents
+     finally do (cond ((and (f-exists-p location) (f-empty-p location))
+                       (append-to-file (s-join "\n" contents) nil location))
+                      ((f-exists-p location)
+                       (append-to-file (concat "\n" (s-join "\n" contents)) nil location))
+                      (t (org-glance--with-temp-file location
+                           (insert (s-join "\n" contents)))))))
+
+(cl-defun org-glance-store-headlines (store)
+  "Return all headlines from STORE."
+  (cl-loop for (instruction . headline) in (reverse (org-glance-store-memtbl store))
+     for hash = (org-glance-headline-hash headline)
+     with seen = (make-hash-table :test #'equal)
+     when (and (eq instruction 'PUT) (not (gethash hash seen)))
+     collect (puthash hash hash seen)
+     when (and (eq instruction 'RM) (not (gethash hash seen)))
+     do (puthash hash hash seen)))
 
 (cl-defgeneric org-glance-store-headline-location (haystack needle)
   "Return location of NEEDLE in HAYSTACK.")
@@ -23,7 +107,7 @@ Builds and preserves indexes in actualized state."
   "Return HEADLINE location from STORE."
   (org-glance-store-headline-location store (org-glance-headline-hash headline)))
 
-(cl-defmethod org-glance-store-headline-location ((store org-glance-store) (headline org-glance-headline*))
+(cl-defmethod org-glance-store-headline-location ((store org-glance-store) (headline org-glance-headline-header))
   "Return HEADLINE location from STORE."
   (org-glance-store-headline-location store (org-glance-headline-hash headline)))
 
@@ -39,7 +123,7 @@ Builds and preserves indexes in actualized state."
 (cl-defmethod org-glance-store-headline ((_ org-glance-store) (headline org-glance-headline))
   headline)
 
-(cl-defmethod org-glance-store-headline ((store org-glance-store) (headline org-glance-headline*))
+(cl-defmethod org-glance-store-headline ((store org-glance-store) (headline org-glance-headline-header))
   (org-glance-headline-load (org-glance-store-headline-location store headline)))
 
 (cl-defmethod org-glance-store-headline ((store org-glance-store) (hash string))
@@ -62,50 +146,21 @@ Builds and preserves indexes in actualized state."
         (t (mkdir location t)
            (org-glance-store--create :location location))))
 
-(cl-defun org-glance-store-read (location)
-  (let ((i-title* (org-glance-index-read (f-join location "index" "title"))))
-    (org-glance-store--create
-     :i-title* (org-glance-index-uniq (org-glance-index-inversed i-title*))
-     :location location
-     :headlines (cl-loop for (hash . title) in i-title*
-                   collect (org-glance-headline* :-title title :-hash hash)))))
-
-(cl-defun org-glance-store-put (store &rest headlines)
-  "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it."
-  (dolist (headline headlines)
-    (let ((location (org-glance-store-headline-location store headline)))
-      (unless (f-exists-p location) ;; TODO or read full headline if current is dummy?
-        (org-glance-headline-save headline location))))
-
-  (let ((i-title*-old (org-glance-store-i-title* store))
-        (i-title*-new (org-glance-index headlines :map #'org-glance-headline-title)))
-    (org-glance-index-append i-title*-new (f-join (org-glance-store-location store) "index" "title"))
-    (org-glance-store--create
-     :i-title* (org-glance-index-merge i-title*-old (org-glance-index-uniq (org-glance-index-inversed i-title*-new)))
-     :location (org-glance-store-location store)
-     :headlines (append headlines (org-glance-store-headlines store)))))
-
-(cl-defun org-glance-store-get (store hash)
-  "TODO currently is O(n), could be optimized with hash/tree ds."
-  (car (--filter (string= (org-glance-headline-hash it) hash) (org-glance-store-headlines store))))
-
-(cl-defun org-glance-store-rem (store hash)
-  "TODO currently is O(n), could be optimized with hash/tree ds."
-  (message "Remove \"%s\"" (org-glance-store-headline-location store hash))
-  store)
+;; (cl-defun org-glance-store-completing-read (store)
+;;   "Read headlines from STORE with completion."
+;;   (let* ((titles (org-glance-store-i-title* store))
+;;          (hash (alist-get (completing-read "Headline: " titles nil t) titles nil nil #'string=)))
+;;     (org-glance-store-headline store hash)))
 
 (cl-defun org-glance-store-import (store loc)
   "Add headlines from location LOC to STORE."
   (let ((headlines (-flatten (-map #'org-glance-file-headlines (org-glance-scope loc)))))
     (apply #'org-glance-store-put store headlines)))
 
-(cl-defun org-glance-store-choose (store)
-  (let* ((titles (org-glance-store-i-title* store))
-         (hash (alist-get (completing-read "Headline: " titles nil t) titles nil nil #'string=)))
-    (org-glance-store-headline store hash)))
-
 (cl-defun org-glance-store-equal-p (a b)
-  "Return t if A contains same headlines as B."
+  "Return t if A contains same headlines as B.
+
+TODO should be optimized to not read all headlines from store."
   (let ((sorted-a (cl-loop for headline in (org-glance-store-headlines a)
                      collect headline into result
                      finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result)))
@@ -119,7 +174,9 @@ Builds and preserves indexes in actualized state."
                  (-zip sorted-a sorted-b)))))
 
 (cl-defun org-glance-store-cardinality (store)
-  "Return number of headlines in STORE."
+  "Return number of headlines in STORE.
+
+TODO should be optimized to not read all headlines from store."
   (length (org-glance-store-headlines store)))
 
 (provide 'org-glance-store)
