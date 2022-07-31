@@ -41,7 +41,7 @@
       (lambda (store-1 store-2)
         (should (org-glance-store-equal-p (STORE store-1) (STORE store-2)))))
 
-(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in in-memory store$"
+(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in memory store$"
       (lambda (store-name title)
         (let ((store (STORE store-name)))
           (should (org-glance-store-get-headline-by-title store title)))))
@@ -59,7 +59,7 @@
                    do (puthash hash t seen)
                    finally return nil))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in in-memory store$"
+(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in memory store$"
      (lambda (store-name title)
        (let ((store (STORE store-name)))
          (should (not (org-glance-store-get-headline-by-title store title))))))

@@ -20,8 +20,8 @@ Feature: Materialization and material mode
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "Phones"
 
-    Then store "Phones" should contain headline with title "iPhone 4" in in-memory store
+    Then store "Phones" should contain headline with title "iPhone 4" in memory store
     Then store "Phones" should contain headline with title "iPhone 4" in persistent store
 
-    And store "Phones" should not contain headline with title "iPhone 3" in in-memory store
+    And store "Phones" should not contain headline with title "iPhone 3" in memory store
     And store "Phones" should not contain headline with title "iPhone 3" in persistent store
