@@ -8,7 +8,7 @@
   "Buffer to origin alist.")
 
 (defvar org-glance-material-offsets (make-hash-table)
-  "Buffer to last committed offset alist.")
+  "Buffer to last committed offset map.")
 
 (defvar org-glance-material-points* (make-hash-table)
   "Changed (buffer . point) cons cells.")
@@ -29,6 +29,7 @@
   "#  -*- mode: org; mode: org-glance-material -*-
 
 #+ORIGIN: %s
+#+OFFSET: %s
 
 "
   "Header template of material files.")
@@ -64,6 +65,7 @@ In other places `org-glance-store' should act like functional thread-safe append
          (let ((store (org-glance-material-store)))
            (when (null store)
              (user-error "Unable to start material mode: associated store has not been found."))
+           (puthash (current-buffer) (org-glance-store-offset store) org-glance-material-offsets)
            (puthash (current-buffer) store org-glance-material-stores)
            (org-glance-map (headline)
              (let* ((hash (org-glance-headline-hash headline))
@@ -96,7 +98,9 @@ After materialiation calling to `org-glance-material-commit' from TARGET should 
   "Insert STORE headlines into the FILE and provide ability to push changes
 to its origins by calling `org-glance-material-commit'."
   (org-glance--with-temp-file file
-    (insert (format org-glance-material-header (org-glance-store-location store)))
+    (insert (format org-glance-material-header
+                    (org-glance-store-location store)
+                    (org-glance-store-offset store)))
     (cl-loop for headline in (org-glance-store-headlines store)
        do (let ((headline (org-glance-store-headline store headline)))
             (org-glance-headline-insert headline)))

@@ -7,31 +7,48 @@
 (require 'org-glance-headline)
 (require 'org-glance-scope)
 
+(defconst org-glance-store-offset-filename "offset.el")
+(defconst org-glance-store-wal-filename "wa.log")
+
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
   "Persistent store of headlines."
   (location nil :type string :read-only t :documentation "Directory where we store all the data.")
   (offset nil :type list :read-only t :documentation "Last committed offset.")
-  (memtbl nil :type list :read-only t))
+  (wal nil :type list :read-only t))
+
+(cl-defun org-glance-store (location)
+  "Create persistent store from directory LOCATION."
+  (cond ((and (f-exists-p location) (f-readable-p location))
+         (org-glance-store-read location))
+        ((and (f-exists-p location) (not (f-readable-p location)))
+         (user-error "Store initialization failed. Location is not readable: %s" location))
+        (t (mkdir location t)
+           (org-glance-store--create
+            :location location
+            :offset (let ((now (ts-now)))
+                      (with-temp-file (f-join location org-glance-store-offset-filename)
+                        (insert (prin1-to-string now)))
+                      now)))))
 
 (cl-defun org-glance-store-read (location)
   "Read `org-glance-store' from LOCATION."
-  (let ((wal (org-glance-store-log-read (f-join location "wa.log"))))
+  (let ((wal (org-glance-store-log-read (f-join location org-glance-store-wal-filename))))
     (org-glance-store--create
      :location location
-     :offset (cond ((f-exists-p (f-join location "offset.el"))
+     :offset (cond ((f-exists-p (f-join location org-glance-store-offset-filename))
                     (with-temp-buffer
-                      (insert-file-contents-literally (f-join location "offset.el"))
+                      (insert-file-contents-literally (f-join location org-glance-store-offset-filename))
                       (read (buffer-substring (point-min) (point-max)))))
                    ((null wal) (ts-now))
                    (t (cl-destructuring-bind (ts _ _) (car (last wal))
                         ts)))
-     :memtbl wal)))
+     :wal wal)))
 
 (cl-defun org-glance-store-commit (store)
   "Persist STORE changes."
   (cl-loop
-     with wal = (reverse (org-glance-store-memtbl store))
+     with wal = (reverse (org-glance-store-wal store))
      for (ts instruction headline) in wal
      with last-committed-offset = (org-glance-store-offset store)
      with seen = (make-hash-table :test #'equal)
@@ -40,7 +57,7 @@
      when (and (not (gethash hash seen)) (eq instruction 'RM))
      do (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (ts _ _) (car wal)
-                  (with-temp-file (f-join (org-glance-store-location store) "offset.el")
+                  (with-temp-file (f-join (org-glance-store-location store) org-glance-store-offset-filename)
                     (insert (prin1-to-string ts))))
      finally return store))
 
@@ -51,7 +68,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
   (org-glance-store--create
    :location (org-glance-store-location store)
    :offset (org-glance-store-offset store)
-   :memtbl (cl-loop for headline in headlines
+   :wal (cl-loop for headline in headlines
               for location = (org-glance-store-headline-location store headline)
               unless (f-exists-p location)
               ;; could be made in separate thread
@@ -59,8 +76,8 @@ Append PUT event to WAL and insert headlines to persistent storage."
               ;; no need to write fully qualified headlines, write only headers
               collect (list (ts-now) 'PUT (org-glance-headline-dummy headline))
               into wal
-              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) "wa.log"))
-              finally return (append (org-glance-store-memtbl store) wal))))
+              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
+              finally return (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
   "Return `org-glance-store' with HEADLINES removed from STORE.
@@ -70,18 +87,18 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
   (org-glance-store--create
    :location (org-glance-store-location store)
    :offset (org-glance-store-offset store)
-   :memtbl (cl-loop for headline in headlines
+   :wal (cl-loop for headline in headlines
               collect (list (ts-now) 'RM headline)
               into wal
-              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) "wa.log"))
-              finally return (append (org-glance-store-memtbl store) wal))))
+              finally do (org-glance-store-log-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
+              finally return (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-remove-headline-by-hash (store hash)
   (org-glance-store-remove-headlines store (org-glance-headline-header :-hash hash)))
 
 (cl-defun org-glance-store-get-headline-by-hash (store hash)
   "Return `org-glance-headline-header' from STORE searched by HASH."
-  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-wal store))
      when (string= hash (org-glance-headline-hash headline))
      return (cl-case instruction
               ('PUT headline)
@@ -89,7 +106,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
 
 (cl-defun org-glance-store-get-headline-by-title (store title)
   "Return `org-glance-headline-header' from STORE searched by TITLE."
-  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-wal store))
      for hash = (org-glance-headline-hash headline)
      with seen = (make-hash-table :test #'equal)
      if (and (string= title (org-glance-headline-title headline))
@@ -122,7 +139,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
 
 (cl-defun org-glance-store-headlines (store)
   "Return all headlines from STORE."
-  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-memtbl store))
+  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-wal store))
      for hash = (org-glance-headline-hash headline)
      with seen = (make-hash-table :test #'equal)
      when (and (eq instruction 'PUT) (not (gethash hash seen)))
@@ -166,15 +183,6 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
        collect (org-glance-headline-from-string headline-string)
        into headlines
        finally return (apply #'org-glance-store-put-headlines store headlines))))
-
-(cl-defun org-glance-store (location)
-  "Create persistent store from directory LOCATION."
-  (cond ((and (f-exists-p location) (f-readable-p location))
-         (org-glance-store-read location))
-        ((and (f-exists-p location) (not (f-readable-p location)))
-         (user-error "Store initialization failed. Location is not readable: %s" location))
-        (t (mkdir location t)
-           (org-glance-store--create :location location))))
 
 ;; (cl-defun org-glance-store-completing-read (store)
 ;;   "Read headlines from STORE with completion."

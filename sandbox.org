@@ -8,10 +8,12 @@
         "* a"
         "* b"
         "* c")
+      (org-glance-materialize "/tmp/store/first.org")
       (org-glance-store-remove-headlines (org-glance-headline-header :-hash "6d0af4c806aa2a7d2573bd7f10137a40"))
-      (org-glance-materialize "/tmp/store/mat.org")))
+      (org-glance-materialize "/tmp/store/second.org")))
 
-(org-glance-store-get-headline-by-title (org-glance-store "/tmp/store") "a")
+;; (org-glance-store-get-headline-by-title (org-glance-store "/tmp/store") "a")
 #+end_src
 
 #+RESULTS:
+: #s(org-glance-store "/tmp/store" #s(ts nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil 1659273641.6004553) ((#s(ts nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil 1659273641.722865) PUT #s(org-glance-headline-header "96e3c10ceaf87bc2dc4bd9d95435361d" "a")) (#s(ts nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil 1659273641.7266984) PUT #s(org-glance-headline-header "6d0af4c806aa2a7d2573bd7f10137a40" "b")) (#s(ts nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil 1659273641.7303772) PUT #s(org-glance-headline-header "966ce2034a4cc7546f524ff9ef602832" "c")) (#s(ts nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil nil 1659273641.7544615) RM #s(org-glance-headline-header "6d0af4c806aa2a7d2573bd7f10137a40" nil))))

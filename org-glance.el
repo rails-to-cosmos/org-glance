@@ -33,7 +33,6 @@
 (require 'org)
 (require 'org-element)
 (require 'org-glance-helpers)
-(require 'org-glance-index)
 (require 'org-glance-scope)
 (require 'org-glance-headline)
 (require 'org-glance-store)
