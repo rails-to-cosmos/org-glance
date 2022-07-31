@@ -10,7 +10,12 @@
 This repository is nothing more than a brainstorming sandbox in a
 field of graph processing and visualization.
 
-* wal with instructions SET and RM
+* garbage collector
+* DONE wal with instructions SET and RM
+CLOSED: [2022-07-31 Sun 12:31]
+:LOGBOOK:
+- State "DONE"       from              [2022-07-31 Sun 12:31]
+:END:
 * TODO [#A] Actualize indexes of lsm-tree
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees

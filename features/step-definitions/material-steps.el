@@ -6,5 +6,5 @@
 
 (When "^I commit changes to store \"\\([^\"]+\\)\"$"
   (lambda (store-name)
-    (org-glance-material-redisplay)
+    (org-glance-material-overlay-manager-redisplay)
     (puthash store-name (org-glance-material-commit) org-glance-test-stores)))

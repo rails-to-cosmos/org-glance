@@ -143,6 +143,10 @@
    (outline-next-heading)
    (org-glance-headline-at-point)))
 
+(cl-defun org-glance-headline-from-region (beg end)
+  "Create `org-glance-headline' from region."
+  (org-glance-headline-from-string (buffer-substring-no-properties beg end)))
+
 (cl-defun org-glance-headline-serialize (headline)
   "Serialize HEADLINE."
   (prin1-to-string headline))

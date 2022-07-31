@@ -22,8 +22,7 @@ Feature: Materialization and material mode
     And I save buffer
 
     Then store "Phones" should contain headline with title "iPhone 4"
-    # # TODO: remove old headlines
-    # And store "Phones" should not contain headline "iPhone 3"
+    And store "Phones" should not contain headline with title "iPhone 3"
 
     # # Original file should not change
     # And I find file "notes/phones/original.org"

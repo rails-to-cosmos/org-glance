@@ -46,7 +46,7 @@
         (let ((store (STORE store-name)))
           (should (org-glance-store-get-headline-by-title store headline-title)))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline with title\"\\([^\"]+\\)\"$"
+(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\"$"
      (lambda (store-name headline-title)
        (let ((store (STORE store-name)))
          (should (not (org-glance-store-get-headline-by-title store headline-title))))))
