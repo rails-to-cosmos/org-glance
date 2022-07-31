@@ -42,12 +42,12 @@
                    do (puthash hash t seen)
                    finally return nil))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in memory store$"
+(Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in memory store$"
      (lambda (store-name title)
        (let ((store (STORE store-name)))
          (should (not (org-glance-store-get-headline-by-title store title))))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in persistent store$"
+(Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in persistent store$"
      (lambda (store-name title)
        (should (not (cl-loop with store = (STORE store-name)
                        for (_ instruction headline) in (reverse (org-glance-store-wal store))
