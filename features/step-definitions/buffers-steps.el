@@ -6,17 +6,6 @@
      (lambda ()
        (goto-char (point-max))))
 
-(And "^I go to the first headline$"
-     (lambda ()
-       (goto-char (point-min))
-       (unless (org-at-heading-p)
-         (outline-next-heading))))
-
-(And "^I go to headline with title \"\\([^\"]+\\)\"$"
-     (lambda (title)
-       (goto-char (point-min))
-       (search-forward (format "* %s" title))))
-
 (Then "^buffer string should be"
       (lambda (contents)
         (should (string=

@@ -16,7 +16,7 @@ Feature: Materialization and material mode
 
     When I materialize store "Phones" to file "views/material.org"
     And I find file "views/material.org"
-    And I go to headline with title "iPhone 3"
+    And I select headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "Phones"
 

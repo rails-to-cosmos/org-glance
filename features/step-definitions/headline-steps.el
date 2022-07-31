@@ -11,6 +11,17 @@
            (And "I create headline \"%s\" from element at point" headline)
            (And "I kill buffer"))))
 
+(When "^I select first headline$"
+  (lambda ()
+    (goto-char (point-min))
+    (unless (org-at-heading-p)
+      (outline-next-heading))))
+
+(When "^I select headline with title \"\\([^\"]+\\)\"$"
+  (lambda (title)
+    (goto-char (point-min))
+    (search-forward (format "* %s" title))))
+
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
         (let* ((expected-class (intern expected-class))
@@ -31,21 +42,21 @@
                              (org-align-tags 'all)
                              (buffer-substring-no-properties (point-min) (point-max))))))))
 
-(And "^I create headline \"\\([^\"]+\\)\" from element at point$"
-     (lambda (headline)
-       (puthash headline (org-glance-headline-at-point) org-glance-test-headlines)))
+(When "^I create headline \"\\([^\"]+\\)\" from element at point$"
+  (lambda (headline)
+    (puthash headline (org-glance-headline-at-point) org-glance-test-headlines)))
 
-(And "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
-     (lambda (headline file)
-       (let ((headline (gethash headline org-glance-test-headlines)))
-         (org-glance-headline-save headline (f-join org-glance-test-location file)))))
+(When "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
+  (lambda (headline file)
+    (let ((headline (gethash headline org-glance-test-headlines)))
+      (org-glance-headline-save headline (f-join org-glance-test-location file)))))
 
-(Then "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
+(When "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
         (puthash headline (org-glance-headline-load (f-join org-glance-test-location file))
                  org-glance-test-headlines)))
 
-(Then "^headline \"\\([^\"]+\\)\" should contain links?$"
+(When "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline)
         (let ((headline (gethash headline org-glance-test-headlines)))
           (should (org-glance-headline-linked-p headline)))))
