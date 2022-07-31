@@ -44,7 +44,8 @@
   (overlay nil     :type object :read-only nil :documentation "Current overlay for status reporting.")
   (changed-p nil   :type bool   :read-only nil :documentation "Has headline changed?")
   (persisted-p nil :type bool   :read-only t   :documentation "Whether headline has origin or not.")
-  (committed-p nil :type bool   :read-only nil :documentation "Whether changes have been committed."))
+  (committed-p nil :type bool   :read-only nil :documentation "Whether changes have been committed.")
+  (outdated-p nil  :type bool   :read-only t   :documentation "If there are changes that not reflected in current materialization."))
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
@@ -56,31 +57,45 @@
                       (search-failed nil)))
     (org-glance-store origin)))
 
+(cl-defun org-glance-material-offset ()
+  "Get actual wal offset associated with current material buffer."
+  (condition-case nil
+      (save-excursion
+        (goto-char (point-min))
+        (search-forward "#+OFFSET: ")
+        (read (buffer-substring-no-properties (point) (point-at-eol))))
+    (search-failed nil)))
+
 (define-minor-mode org-glance-material-mode
     "A minor mode to be activated only in materialized view editor.
 This is the only point to consistently mutate state of underlying store.
 In other places `org-glance-store' should act like functional thread-safe append-only storage."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let ((store (org-glance-material-store)))
+         (let ((store (org-glance-material-store))
+               (offset (org-glance-material-offset)))
            (when (null store)
              (user-error "Unable to start material mode: associated store has not been found."))
-           (puthash (current-buffer) (org-glance-store-offset store) org-glance-material-offsets)
            (puthash (current-buffer) store org-glance-material-stores)
+           (puthash (current-buffer) offset org-glance-material-offsets)
            (org-glance-map (headline)
-             (let* ((hash (org-glance-headline-hash headline))
-                    (marker (org-glance-material-marker
-                             :hash hash
-                             :beg (point-min)
-                             :end (point-max)
-                             :buffer (current-buffer)
-                             :overlay nil
-                             :changed-p nil
-                             :committed-p nil
-                             :persisted-p (when (org-glance-store-get-headline-by-hash store hash) t))))
-               (add-text-properties (point-min) (point-max) (list :marker marker))
-               (with-mutex org-glance-material-overlay-manager--mutex
-                 (puthash marker (point-min) org-glance-material-points*))))
+             (let ((hash (org-glance-headline-hash headline)))
+               (cl-destructuring-bind (headline-offset . headline)
+                   (org-glance-store-get-latest-offset-of-headline-by-hash store hash)
+                 (let ((marker (org-glance-material-marker
+                                :hash hash
+                                :beg (point-min)
+                                :end (point-max)
+                                :buffer (current-buffer)
+                                :overlay nil
+                                :changed-p nil
+                                :committed-p nil
+                                :persisted-p (not (null headline))
+                                :outdated-p (if (> headline-offset offset) t nil))))
+                   (add-text-properties (point-min) (point-max) (list :marker marker))
+                   (save-buffer) ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
+                   (with-mutex org-glance-material-overlay-manager--mutex
+                     (puthash marker (point-min) org-glance-material-points*))))))
            (org-glance-material-overlay-manager-redisplay*))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
@@ -90,21 +105,22 @@ In other places `org-glance-store' should act like functional thread-safe append
          (remove-hook 'after-change-functions #'org-glance-material-edit t)
          (remove-hook 'post-command-hook #'org-glance-material-debug t))))
 
-(cl-defgeneric org-glance-materialize (source target)
-  "Materialize SOURCE to TARGET.
-After materialiation calling to `org-glance-material-commit' from TARGET should be applied to SOURCE.")
-
-(cl-defmethod org-glance-materialize ((store org-glance-store) (file string))
-  "Insert STORE headlines into the FILE and provide ability to push changes
+(cl-defun org-glance-materialize (store dest)
+  "Insert STORE headlines into the DEST and provide ability to push changes
 to its origins by calling `org-glance-material-commit'."
-  (org-glance--with-temp-file file
-    (insert (format org-glance-material-header
-                    (org-glance-store-location store)
-                    (org-glance-store-offset store)))
-    (cl-loop for headline in (org-glance-store-headlines store)
-       do (let ((headline (org-glance-store-headline store headline)))
-            (org-glance-headline-insert headline)))
-    store))
+  (org-glance--with-temp-file dest
+    (insert (org-glance-store-material-header store))
+    (cl-loop
+       with location = (org-glance-store-location store)
+       with wal = (org-glance-store-wal store)
+       with offset = (cl-destructuring-bind (ts _ _) (car (last wal)) ts)
+       for hash in (org-glance-store-hashes store)
+       for headline = (org-glance-store-headline store hash)
+       do (org-glance-headline-insert headline)
+       finally return (org-glance-store--create
+                       :location location
+                       :offset offset
+                       :wal wal))))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
@@ -173,7 +189,8 @@ to its origins by calling `org-glance-material-commit'."
         (beg (org-glance-material-marker-beg marker))
         (changed-p (org-glance-material-marker-changed-p marker))
         (committed-p (org-glance-material-marker-committed-p marker))
-        (persisted-p (org-glance-material-marker-persisted-p marker)))
+        (persisted-p (org-glance-material-marker-persisted-p marker))
+        (outdated-p (org-glance-material-marker-outdated-p marker)))
     (cond ((and changed-p (not overlay))
            (progn
              (let ((overlay (make-overlay beg (1+ beg))))
@@ -196,6 +213,11 @@ to its origins by calling `org-glance-material-commit'."
              (let ((overlay (make-overlay beg (1+ beg))))
                (setf (org-glance-material-marker-overlay marker) overlay)
                (overlay-put overlay 'face '(:foreground "#27ae60")))))
+          (outdated-p
+           (progn
+             (let ((overlay (make-overlay beg (1+ beg))))
+               (setf (org-glance-material-marker-overlay marker) overlay)
+               (overlay-put overlay 'face '(:foreground "#749AF7")))))
           ((and (not persisted-p) (not overlay))
            (progn
              (let ((overlay (make-overlay beg (1+ beg))))
@@ -243,6 +265,13 @@ TODO:
   )
 
 (cl-defun org-glance-material-debug (&rest _)
-  (prin1 (get-text-property (point) :marker)))
+  (when-let (marker (get-text-property (point) :marker))
+    (message "%s" marker)))
+
+(cl-defun org-glance-store-material-header (store)
+  "Generate materialization header for STORE."
+  (format org-glance-material-header
+          (org-glance-store-location store)
+          (org-glance-store-offset store)))
 
 (provide 'org-glance-material)
