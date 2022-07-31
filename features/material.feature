@@ -20,15 +20,8 @@ Feature: Materialization and material mode
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "Phones"
 
-    Then store "Phones" should contain headline with title "iPhone 4"
-    And store "Phones" should not contain headline with title "iPhone 3"
+    Then store "Phones" should contain headline with title "iPhone 4" in in-memory store
+    Then store "Phones" should contain headline with title "iPhone 4" in persistent store
 
-    # # Original file should not change
-    # And I find file "notes/phones/original.org"
-    # Then buffer string should be
-    #   """
-    #   Some contents before the first headline.
-
-    #   * iPhone 3 :phone:
-    #   * Тест :phone:
-    #   """
+    And store "Phones" should not contain headline with title "iPhone 3" in in-memory store
+    And store "Phones" should not contain headline with title "iPhone 3" in persistent store

@@ -55,7 +55,9 @@
      while (> offset last-committed-offset)
      for hash = (org-glance-headline-hash headline)
      when (and (not (gethash hash seen)) (eq instruction 'RM))
-     do (f-delete (org-glance-store-headline-location store headline))
+     do
+       (message "DELETE %s" (org-glance-store-headline-location store headline))
+       (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (offset _ _) (car wal)
                   (with-temp-file (f-join (org-glance-store-location store) org-glance-store-offset-filename)
                     (insert (prin1-to-string offset))))

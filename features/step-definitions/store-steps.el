@@ -41,12 +41,38 @@
       (lambda (store-1 store-2)
         (should (org-glance-store-equal-p (STORE store-1) (STORE store-2)))))
 
-(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\"$"
-      (lambda (store-name headline-title)
+(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in in-memory store$"
+      (lambda (store-name title)
         (let ((store (STORE store-name)))
-          (should (org-glance-store-get-headline-by-title store headline-title)))))
+          (should (org-glance-store-get-headline-by-title store title)))))
 
-(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\"$"
-     (lambda (store-name headline-title)
+(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in persistent store$"
+      (lambda (store-name title)
+        (should (cl-loop with store = (STORE store-name)
+                   for (_ instruction headline) in (reverse (org-glance-store-wal store))
+                   for hash = (org-glance-headline-hash headline)
+                   with seen = (make-hash-table :test #'equal)
+                   if (and (string= title (org-glance-headline-title headline))
+                           (f-exists-p (org-glance-store-headline-location store hash)))
+                   return t
+                   else if (not (gethash hash seen))
+                   do (puthash hash t seen)
+                   finally return nil))))
+
+(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in in-memory store$"
+     (lambda (store-name title)
        (let ((store (STORE store-name)))
-         (should (not (org-glance-store-get-headline-by-title store headline-title))))))
+         (should (not (org-glance-store-get-headline-by-title store title))))))
+
+(And "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in persistent store$"
+     (lambda (store-name title)
+       (should (not (cl-loop with store = (STORE store-name)
+                       for (_ instruction headline) in (reverse (org-glance-store-wal store))
+                       for hash = (org-glance-headline-hash headline)
+                       with seen = (make-hash-table :test #'equal)
+                       if (and (string= title (org-glance-headline-title headline))
+                               (f-exists-p (org-glance-store-headline-location store hash)))
+                       return t
+                       else if (not (gethash hash seen))
+                       do (puthash hash t seen)
+                       finally return nil)))))
