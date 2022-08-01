@@ -49,13 +49,15 @@
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
-  (when-let (origin (condition-case nil
-                        (save-excursion
-                          (goto-char (point-min))
-                          (search-forward "#+ORIGIN: ")
-                          (buffer-substring-no-properties (point) (point-at-eol)))
-                      (search-failed nil)))
-    (org-glance-store origin)))
+  (or (gethash (current-buffer) org-glance-material-stores)
+      (puthash (current-buffer) (when-let (origin (condition-case nil
+                                                      (save-excursion
+                                                        (goto-char (point-min))
+                                                        (search-forward "#+ORIGIN: ")
+                                                        (buffer-substring-no-properties (point) (point-at-eol)))
+                                                    (search-failed nil)))
+                                  (org-glance-store origin))
+               org-glance-material-stores)))
 
 (cl-defun org-glance-material-offset ()
   "Get actual wal offset associated with current material buffer."
@@ -231,14 +233,17 @@ Returns new store with changes reflected in WAL.
 TODO:
 - It should be generalized to other materialization types."
   (interactive)
-  (cl-loop for marker in (-non-nil (hash-table-keys org-glance-material-markers*))
-     with store = (gethash (current-buffer) org-glance-material-stores)
+  (cl-loop with markers = (-non-nil (hash-table-keys org-glance-material-markers*))
+     with store = (org-glance-material-store)
+     for marker in markers
+
      when (eq (current-buffer) (org-glance-material-marker-buffer marker))
      collect (let ((headline
                     (org-glance-headline-from-region
                      (org-glance-material-marker-beg marker)
                      (org-glance-material-marker-end marker))))
                (cons headline marker))
+
      into h&ms
      finally return
        (prog1 (puthash (current-buffer)

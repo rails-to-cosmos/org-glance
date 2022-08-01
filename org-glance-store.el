@@ -49,15 +49,13 @@
   "Persist STORE changes."
   (cl-loop
      with wal = (reverse (org-glance-store-wal store))
-     for (offset instruction headline) in wal
      with last-committed-offset = (org-glance-store-offset store)
      with seen = (make-hash-table :test #'equal)
+     for (offset instruction headline) in wal
      while (> offset last-committed-offset)
      for hash = (org-glance-headline-hash headline)
      when (and (not (gethash hash seen)) (eq instruction 'RM))
-     do
-       (message "DELETE %s" (org-glance-store-headline-location store headline))
-       (f-delete (org-glance-store-headline-location store headline))
+     do (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (offset _ _) (car wal)
                   (with-temp-file (f-join (org-glance-store-location store) org-glance-store-offset-filename)
                     (insert (prin1-to-string offset))))
@@ -70,7 +68,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
   (let ((offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
-     :offset offset
+     :offset (org-glance-store-offset store)
      :wal (cl-loop
              for headline in headlines
              for location = (org-glance-store-headline-location store headline)
@@ -91,7 +89,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
   (let ((offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
-     :offset offset
+     :offset (org-glance-store-offset store)
      :wal (cl-loop for headline in headlines
              collect (list offset 'RM headline)
              into wal
