@@ -18,7 +18,7 @@
       (lambda (store-name cardinality)
         (let ((store (STORE store-name)))
           (should (= (string-to-number cardinality)
-                     (org-glance-store-cardinality store))))))
+                     (length (org-glance-store-hashes store)))))))
 
 (Then "^store \"\\([^\"]+\\)\" should be equal to \"\\([^\"]+\\)\"$"
       (lambda (store-1 store-2)

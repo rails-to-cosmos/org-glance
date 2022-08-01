@@ -224,10 +224,4 @@ TODO should be optimized to not read all headlines from store."
                       (org-glance-headline-equal-p (car it) (cdr it)))
                  (-zip sorted-a sorted-b)))))
 
-(cl-defun org-glance-store-cardinality (store)
-  "Return number of headlines in STORE.
-
-TODO should be optimized to not read all headlines from store."
-  (length (org-glance-store-hashes store)))
-
 (provide 'org-glance-store)
