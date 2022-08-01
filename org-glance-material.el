@@ -75,9 +75,8 @@
     (search-failed nil)))
 
 (define-minor-mode org-glance-material-mode
-    "A minor mode to be activated only in materialized view editor.
-This is the only point to consistently mutate state of underlying store.
-In other places `org-glance-store' should act like functional thread-safe append-only storage."
+    "A minor mode to be activated only in materialized view
+editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
          (let ((store (org-glance-material-store))

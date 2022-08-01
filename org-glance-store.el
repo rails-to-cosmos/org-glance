@@ -46,13 +46,19 @@
      :wal wal)))
 
 (cl-defun org-glance-store-commit (store)
-  "Persist STORE changes."
+  "Persist STORE changes. Update `org-glance-store-watermark'.
+
+This should be the only point to destructively change underlying
+persistent storage.
+
+In all other places `org-glance-store' should act like pure
+functional data structure."
   (cl-loop
      with wal = (reverse (org-glance-store-wal store))
-     with last-committed-offset = (org-glance-store-watermark store)
+     with watermark = (org-glance-store-watermark store)
      with seen = (make-hash-table :test #'equal)
      for (offset instruction headline) in wal
-     while (> offset last-committed-offset)
+     while (> offset watermark)
      for hash = (org-glance-headline-hash headline)
      when (and (not (gethash hash seen)) (eq instruction 'RM))
      do (f-delete (org-glance-store-headline-location store headline))
@@ -84,8 +90,11 @@ Append PUT event to WAL and insert headlines to persistent storage."
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
   "Return `org-glance-store' with HEADLINES removed from STORE.
 
-Append RM event to WAL, but not remove HEADLINES from persistent storage.
-Actual deletion is handled in a separate thread of `org-glance-material-mode'."
+Append RM event to WAL, but do not remove HEADLINES from the
+persistent storage. Watermark stays the same though.
+
+Actual deletion should be handled in a separate thread and
+achieved by calling `org-glance-store-commit' method."
   (let ((offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
