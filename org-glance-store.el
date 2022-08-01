@@ -7,14 +7,14 @@
 (require 'org-glance-headline)
 (require 'org-glance-scope)
 
-(defconst org-glance-store-offset-filename "offset.el")
+(defconst org-glance-store-watermark-filename "watermark.el")
 (defconst org-glance-store-wal-filename "wa.log")
 
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
   "Persistent store of headlines."
   (location nil :type string :read-only t :documentation "Directory where we store all the data.")
-  (offset nil :type float :read-only t :documentation "Last committed offset.")
+  (watermark nil :type float :read-only t :documentation "Offset behind which all RM methods were applied to persistent storage.")
   (wal nil :type list :read-only t))
 
 (cl-defun org-glance-store (location)
@@ -26,30 +26,30 @@
         (t (mkdir location t)
            (org-glance-store--create
             :location location
-            :offset (let ((now (float-time)))
-                      (with-temp-file (f-join location org-glance-store-offset-filename)
-                        (insert (prin1-to-string now)))
-                      now)))))
+            :watermark (let ((now (float-time)))
+                         (with-temp-file (f-join location org-glance-store-watermark-filename)
+                           (insert (prin1-to-string now)))
+                         now)))))
 
 (cl-defun org-glance-store-read (location)
   "Read `org-glance-store' from LOCATION."
   (let ((wal (org-glance-store-wal-read (f-join location org-glance-store-wal-filename))))
     (org-glance-store--create
      :location location
-     :offset (cond ((f-exists-p (f-join location org-glance-store-offset-filename))
-                    (with-temp-buffer
-                      (insert-file-contents-literally (f-join location org-glance-store-offset-filename))
-                      (read (buffer-substring (point-min) (point-max)))))
-                   ((null wal) (float-time))
-                   (t (cl-destructuring-bind (offset _ _) (car (last wal))
-                        offset)))
+     :watermark (cond ((f-exists-p (f-join location org-glance-store-watermark-filename))
+                       (with-temp-buffer
+                         (insert-file-contents-literally (f-join location org-glance-store-watermark-filename))
+                         (read (buffer-substring (point-min) (point-max)))))
+                      ((null wal) (float-time))
+                      (t (cl-destructuring-bind (offset _ _) (car (last wal))
+                           offset)))
      :wal wal)))
 
 (cl-defun org-glance-store-commit (store)
   "Persist STORE changes."
   (cl-loop
      with wal = (reverse (org-glance-store-wal store))
-     with last-committed-offset = (org-glance-store-offset store)
+     with last-committed-offset = (org-glance-store-watermark store)
      with seen = (make-hash-table :test #'equal)
      for (offset instruction headline) in wal
      while (> offset last-committed-offset)
@@ -57,7 +57,7 @@
      when (and (not (gethash hash seen)) (eq instruction 'RM))
      do (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (offset _ _) (car wal)
-                  (with-temp-file (f-join (org-glance-store-location store) org-glance-store-offset-filename)
+                  (with-temp-file (f-join (org-glance-store-location store) org-glance-store-watermark-filename)
                     (insert (prin1-to-string offset))))
      finally return store))
 
@@ -68,7 +68,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
   (let ((offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
-     :offset (org-glance-store-offset store)
+     :watermark (org-glance-store-watermark store)
      :wal (cl-loop
              for headline in headlines
              for location = (org-glance-store-headline-location store headline)
@@ -89,7 +89,7 @@ Actual deletion is handled in a separate thread of `org-glance-material-mode'."
   (let ((offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
-     :offset (org-glance-store-offset store)
+     :watermark (org-glance-store-watermark store)
      :wal (cl-loop for headline in headlines
              collect (list offset 'RM headline)
              into wal

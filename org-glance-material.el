@@ -31,8 +31,7 @@
 (defconst org-glance-material-header
   "#  -*- mode: org; mode: org-glance-material -*-
 
-#+ORIGIN: %s
-#+OFFSET: %s
+#+ORIGIN: %s:%s
 
 "
   "Header template of material files.")
@@ -57,7 +56,10 @@
                                                       (save-excursion
                                                         (goto-char (point-min))
                                                         (search-forward "#+ORIGIN: ")
-                                                        (buffer-substring-no-properties (point) (point-at-eol)))
+                                                        (buffer-substring-no-properties (point)
+                                                                                        (save-excursion
+                                                                                          (search-forward ":")
+                                                                                          (1- (point)))))
                                                     (search-failed nil)))
                                   (org-glance-store origin))
                org-glance-material--buffer-to-store)))
@@ -67,7 +69,8 @@
   (condition-case nil
       (save-excursion
         (goto-char (point-min))
-        (search-forward "#+OFFSET: ")
+        (search-forward "#+ORIGIN: ")
+        (search-forward ":")
         (read (buffer-substring-no-properties (point) (point-at-eol))))
     (search-failed nil)))
 
@@ -120,13 +123,13 @@ to its origins by calling `org-glance-material-commit'."
     (cl-loop
        with location = (org-glance-store-location store)
        with wal = (org-glance-store-wal store)
-       with offset = (cl-destructuring-bind (ts _ _) (car (last wal)) ts)
+       with watermark = (cl-destructuring-bind (ts _ _) (car (last wal)) ts)
        for hash in (org-glance-store-hashes store)
        for headline = (org-glance-store-headline store hash)
        do (org-glance-headline-insert headline)
        finally return (org-glance-store--create
                        :location location
-                       :offset offset
+                       :watermark watermark
                        :wal wal))))
 
 (cl-defun org-glance-material-edit (&rest _)
@@ -283,6 +286,6 @@ TODO:
   "Generate materialization header for STORE."
   (format org-glance-material-header
           (org-glance-store-location store)
-          (org-glance-store-offset store)))
+          (org-glance-store-watermark store)))
 
 (provide 'org-glance-material)

@@ -26,5 +26,9 @@ Feature: Materialization and material mode
     And store "Phones" should not contain headline with title "iPhone 3" in memory store
     And store "Phones" should not contain headline with title "iPhone 3" in persistent store
 
+# TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
 # Scenario: Edit store from two buffers, fast-forward change should be reflected in other buffer
+# Scenario: Material fast-forward commit: write outdated materialization commit scenarios
+# Scenario: Material offset should be set to actual state after commit
+# Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?
