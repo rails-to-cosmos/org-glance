@@ -4,17 +4,20 @@
 (defvar org-glance-overlay-manager nil
   "Painter thread.")
 
-(defvar org-glance-material-stores (make-hash-table)
+(defvar org-glance-material--buffer-to-store (make-hash-table)
   "Buffer to origin alist.")
 
-(defvar org-glance-material-offsets (make-hash-table)
+(defvar org-glance-material--buffer-to-offset (make-hash-table)
   "Buffer to last committed offset map.")
 
-(defvar org-glance-material-points* (make-hash-table)
-  "Changed (buffer . point) cons cells.")
+(defvar org-glance-material--marker-to-point (make-hash-table)
+  "Marker to point map.")
 
-(defvar org-glance-material-markers* (make-hash-table)
+(defvar org-glance-material--changed-markers-set (make-hash-table)
   "Set of changed markers.")
+
+(defvar org-glance-material--hash-to-marker (make-hash-table)
+  "Hash to marker map.")
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
@@ -49,7 +52,7 @@
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
-  (or (gethash (current-buffer) org-glance-material-stores)
+  (or (gethash (current-buffer) org-glance-material--buffer-to-store)
       (puthash (current-buffer) (when-let (origin (condition-case nil
                                                       (save-excursion
                                                         (goto-char (point-min))
@@ -57,7 +60,7 @@
                                                         (buffer-substring-no-properties (point) (point-at-eol)))
                                                     (search-failed nil)))
                                   (org-glance-store origin))
-               org-glance-material-stores)))
+               org-glance-material--buffer-to-store)))
 
 (cl-defun org-glance-material-offset ()
   "Get actual wal offset associated with current material buffer."
@@ -75,11 +78,12 @@ In other places `org-glance-store' should act like functional thread-safe append
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
          (let ((store (org-glance-material-store))
-               (offset (org-glance-material-offset)))
+               (offset (org-glance-material-offset))
+               (buffer (current-buffer)))
            (when (null store)
              (user-error "Unable to start material mode: associated store has not been found."))
-           (puthash (current-buffer) store org-glance-material-stores)
-           (puthash (current-buffer) offset org-glance-material-offsets)
+           (puthash buffer store org-glance-material--buffer-to-store)
+           (puthash buffer offset org-glance-material--buffer-to-offset)
            (org-glance-map (headline)
              (let ((hash (org-glance-headline-hash headline)))
                (cl-destructuring-bind (headline-offset . headline)
@@ -88,7 +92,7 @@ In other places `org-glance-store' should act like functional thread-safe append
                                 :hash hash
                                 :beg (point-min)
                                 :end (point-max)
-                                :buffer (current-buffer)
+                                :buffer buffer
                                 :overlay nil
                                 :changed-p nil
                                 :committed-p nil
@@ -97,7 +101,8 @@ In other places `org-glance-store' should act like functional thread-safe append
                    (add-text-properties (point-min) (point-max) (list :marker marker))
                    (save-buffer) ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
                    (with-mutex org-glance-material-overlay-manager--mutex
-                     (puthash marker (point-min) org-glance-material-points*))))))
+                     (puthash marker (point-min) org-glance-material--marker-to-point)
+                     (cl-pushnew marker (gethash hash org-glance-material--hash-to-marker)))))))
            (org-glance-material-overlay-manager-redisplay*))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
@@ -126,14 +131,15 @@ to its origins by calling `org-glance-material-commit'."
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (puthash (get-text-property (point) :marker) (point) org-glance-material-points*)
+  (with-mutex org-glance-material-overlay-manager--mutex
+    (puthash (get-text-property (point) :marker) (point) org-glance-material--marker-to-point))
   (org-glance-material-overlay-manager-redisplay*))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
   "Actualize all overlays in changed material buffers."
   (interactive)
   (with-mutex org-glance-material-overlay-manager--mutex
-    (cl-loop for marker being the hash-keys of org-glance-material-points* using (hash-values point)
+    (cl-loop for marker being the hash-keys of org-glance-material--marker-to-point using (hash-values point)
        when (and marker
                  (org-glance-material-marker-buffer marker)
                  (buffer-live-p (org-glance-material-marker-buffer marker)))
@@ -155,27 +161,27 @@ to its origins by calling `org-glance-material-commit'."
                     (cond
                       ((not persisted-p)
                        ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
-                       ;;   (puthash marker org-glance-material-markers*))
+                       ;;   (puthash marker org-glance-material--changed-markers-set))
                        (org-glance-material-marker-redisplay marker))
                       (returned-to-unchanged-state-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) nil)
                          (org-glance-material-marker-redisplay marker)
-                         (remhash marker org-glance-material-markers*)))
+                         (remhash marker org-glance-material--changed-markers-set)))
                       (first-change-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) t
                                (org-glance-material-marker-beg marker) (point-min)
                                (org-glance-material-marker-end marker) (point-max))
                          (org-glance-material-marker-redisplay marker)
-                         (puthash marker t org-glance-material-markers*)))
+                         (puthash marker t org-glance-material--changed-markers-set)))
                       (further-change-p
                        (progn
                          (setf (org-glance-material-marker-changed-p marker) t
                                (org-glance-material-marker-beg marker) (point-min)
                                (org-glance-material-marker-end marker) (point-max))
                          (org-glance-material-marker-redisplay marker)))))))))
-       finally do (clrhash org-glance-material-points*))))
+       finally do (clrhash org-glance-material--marker-to-point))))
 
 (cl-defun org-glance-material-overlay-manager-redisplay* ()
   "Run `org-glance-material-marker-redisplay' in separate thread."
@@ -233,7 +239,7 @@ Returns new store with changes reflected in WAL.
 TODO:
 - It should be generalized to other materialization types."
   (interactive)
-  (cl-loop with markers = (-non-nil (hash-table-keys org-glance-material-markers*))
+  (cl-loop with markers = (-non-nil (hash-table-keys org-glance-material--changed-markers-set))
      with store = (org-glance-material-store)
      for marker in markers
 
@@ -256,7 +262,7 @@ TODO:
                                  (org-glance-store-put-headlines headline))))
                          store
                          h&ms))
-                       org-glance-material-stores)
+                       org-glance-material--buffer-to-store)
          (dolist (h&m h&ms) ;; overlay manager side-effects
            (cl-destructuring-bind (headline . marker) h&m
              (with-mutex org-glance-material-overlay-manager--mutex
@@ -264,9 +270,9 @@ TODO:
                      (org-glance-material-marker-committed-p marker) t
                      (org-glance-material-marker-hash marker) (org-glance-headline-hash headline))
                (org-glance-material-marker-redisplay marker)
-               (remhash marker org-glance-material-markers*)))
+               (remhash marker org-glance-material--changed-markers-set)))
            (org-glance-material-overlay-manager-redisplay*))))
-  ;; TODO work with deleted buffers in `org-glance-material-stores'
+  ;; TODO work with deleted buffers in `org-glance-material--buffer-to-store'
   )
 
 (cl-defun org-glance-material-debug (&rest _)
