@@ -3,6 +3,10 @@
 (require 'ts)
 (require 'cl-macs)
 
+;; Experimental
+(require 'thunk)
+(require 'avl-tree)
+
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
 (require 'org-glance-scope)
@@ -13,9 +17,22 @@
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
   "Persistent store of headlines."
-  (location nil :type string :read-only t :documentation "Directory where we store all the data.")
-  (watermark nil :type float :read-only t :documentation "Offset behind which all RM methods were applied to persistent storage.")
-  (wal nil :type list :read-only t))
+  (location
+   nil
+   :type string
+   :read-only t
+   :documentation "Directory where we store all the data.")
+  (watermark
+   (float-time)
+   :type float
+   :read-only t
+   :documentation "Offset behind which all RM methods were
+   applied to persistent storage.")
+  (wal
+   nil
+   :type list
+   :read-only t
+   :documentation "Simple write ahead log."))
 
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
@@ -45,8 +62,8 @@
                            offset)))
      :wal wal)))
 
-(cl-defun org-glance-store-commit (store)
-  "Persist STORE changes. Update `org-glance-store-watermark'.
+(cl-defun org-glance-store-flush (store)
+  "Persist STORE changes. Update watermark.
 
 This should be the only point to destructively change underlying
 persistent storage.
@@ -60,7 +77,8 @@ functional data structure."
      for (offset instruction headline) in wal
      while (> offset watermark)
      for hash = (org-glance-headline-hash headline)
-     when (and (not (gethash hash seen)) (eq instruction 'RM))
+     for seen-p = (gethash hash seen)
+     when (and (not seen-p) (eq instruction 'RM))
      do (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (offset _ _) (car wal)
                   (with-temp-file (f-join (org-glance-store-location store) org-glance-store-watermark-filename)
@@ -71,7 +89,7 @@ functional data structure."
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
 
 Append PUT event to WAL and insert headlines to persistent storage."
-  (let ((offset (float-time)))
+  (let ((current-offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
      :watermark (org-glance-store-watermark store)
@@ -82,7 +100,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
              ;; could be made in separate thread
              do (org-glance-headline-save headline location)
              ;; no need to write fully qualified headlines, write only headers
-             collect (list offset 'PUT (org-glance-headline-dummy headline))
+             collect (list current-offset 'PUT (org-glance-headline-dummy headline))
              into wal
              finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
              finally return (append (org-glance-store-wal store) wal)))))
@@ -94,21 +112,33 @@ Append RM event to WAL, but do not remove HEADLINES from the
 persistent storage. Watermark stays the same though.
 
 Actual deletion should be handled in a separate thread and
-achieved by calling `org-glance-store-commit' method."
-  (let ((offset (float-time)))
+achieved by calling `org-glance-store-flush' method."
+  (let ((current-offset (float-time)))
     (org-glance-store--create
      :location (org-glance-store-location store)
      :watermark (org-glance-store-watermark store)
      :wal (cl-loop for headline in headlines
-             collect (list offset 'RM headline)
+             collect (list current-offset 'RM headline)
              into wal
              finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
              finally return (append (org-glance-store-wal store) wal)))))
 
+(cl-defun org-glance-store-filter-by-tag (store filter)
+  )
+
+(cl-defun org-glance-store-filter-by-active-timestamp (store filter)
+  )
+
+(cl-defun org-glance-store-filter-by-scheduled-property (store filter)
+  )
+
+(cl-defun org-glance-store-filter-by-title (store filter)
+  )
+
 (cl-defun org-glance-store-remove-headline-by-hash (store hash)
   (org-glance-store-remove-headlines store (org-glance-headline-header :-hash hash)))
 
-(cl-defun org-glance-store-get-latest-offset-of-headline-by-hash (store hash)
+(cl-defun org-glance-store-get-offset-by-hash (store hash)
   "Return latest committed (cons offset headline) from STORE searched by HASH."
   (cl-loop for (offset instruction headline) in
        (reverse (org-glance-store-wal-read
@@ -123,7 +153,7 @@ achieved by calling `org-glance-store-commit' method."
 (cl-defun org-glance-store-get-headline-by-hash (store hash)
   "Return `org-glance-headline-header' from STORE searched by HASH."
   (cl-destructuring-bind (_ . headline)
-      (org-glance-store-get-latest-offset-of-headline-by-hash store hash)
+      (org-glance-store-get-offset-by-hash store hash)
     headline))
 
 (cl-defun org-glance-store-get-headline-by-title (store title)

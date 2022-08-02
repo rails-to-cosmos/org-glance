@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
@@ -89,7 +91,7 @@ editor."
            (org-glance-map (headline)
              (let ((hash (org-glance-headline-hash headline)))
                (cl-destructuring-bind (headline-offset . headline)
-                   (org-glance-store-get-latest-offset-of-headline-by-hash store hash)
+                   (org-glance-store-get-offset-by-hash store hash)
                  (let ((marker (org-glance-material-marker
                                 :hash hash
                                 :beg (point-min)
@@ -150,7 +152,7 @@ to its origins by calling `org-glance-material-commit'."
               (goto-char point)
               (when (string= (org-glance-material-marker-hash (get-text-property point :marker))
                              (org-glance-material-marker-hash marker))
-                (org-glance--with-heading-at-point
+                (org-glance--with-headline-at-point
                   (let* ((headline (org-glance-headline-at-point))
                          (hash-old (org-glance-material-marker-hash marker))
                          (changed-p (org-glance-material-marker-changed-p marker))
@@ -255,7 +257,7 @@ TODO:
      into h&ms
      finally return
        (prog1 (puthash (current-buffer)
-                       (org-glance-store-commit
+                       (org-glance-store-flush
                         (-reduce-from
                          (lambda (store h&m) ;; pure transform
                            (cl-destructuring-bind (headline . marker) h&m

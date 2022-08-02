@@ -2,16 +2,7 @@
 
 (require 'dash)
 
-(cl-defun org-glance--links-to-titles (ast)
-  "Replace links with its titles in AST."
-  (cl-loop for link in (org-element-map ast 'link #'identity)
-     do (org-element-set-element link (or (-some->> link
-                                            org-element-contents
-                                            org-element-interpret-data)
-                                          (org-element-property :raw-link link)))
-     finally return ast))
-
-(cl-defun org-glance--ensure-at-heading ()
+(cl-defun org-glance--ensure-at-headline ()
   "Ensure point is at heading.
 Return t if it is or raise `user-error' otherwise."
   (or (org-at-heading-p)
@@ -19,11 +10,11 @@ Return t if it is or raise `user-error' otherwise."
         (org-back-to-heading-or-point-min)
         (org-at-heading-p))))
 
-(cl-defmacro org-glance--with-heading-at-point (&rest forms)
+(cl-defmacro org-glance--with-headline-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
   (declare (indent 0))
   `(save-excursion
-     (when (org-glance--ensure-at-heading)
+     (when (org-glance--ensure-at-headline)
        (save-restriction
          (save-excursion
            (save-match-data
@@ -47,15 +38,14 @@ Return t if it is or raise `user-error' otherwise."
      (org-mode)
      ,@forms))
 
-(cl-defmacro org-glance--doalist (list &rest body)
-  (declare (indent 1))
-  `(dolist (it ,list)
-     (let-alist it ,@body)))
-
-(cl-defmacro org-glance--mapalist (list &rest body)
-  (declare (indent 1))
-  `(cl-loop for it in ,list
-      collect (let-alist it ,@body)))
+(cl-defun org-glance--links-to-titles (ast)
+  "Replace links with its titles in AST."
+  (cl-loop for link in (org-element-map ast 'link #'identity)
+     do (org-element-set-element link (or (-some->> link
+                                            org-element-contents
+                                            org-element-interpret-data)
+                                          (org-element-property :raw-link link)))
+     finally return ast))
 
 (cl-defmacro org-glance-memc (var bodyform handler)
   "Memory consumption report."

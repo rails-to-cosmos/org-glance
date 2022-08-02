@@ -1,6 +1,6 @@
 # I’ve always thought they were lighthouses
 
-* hello
+* materialization
 #+begin_src emacs-lisp
 (progn
   (f-delete "/tmp/store" t)
@@ -15,3 +15,39 @@
 #+end_src
 
 #+RESULTS:
+
+* avl tree
+#+begin_src emacs-lisp
+(require 'avl-tree)
+
+(setq test-tree (avl-tree-create #'string>))
+
+(avl-tree-enter test-tree "a")
+(avl-tree-enter test-tree "b")
+(avl-tree-enter test-tree "c")
+(avl-tree-enter test-tree "d")
+
+(avl-tree-flatten test-tree)
+
+(avl-tree-stack test-tree)
+
+(avl-tree--cmpfun test-tree)
+
+(avl-tree--node-data (avl-tree--node-branch (avl-tree--dummyroot test-tree) 0))
+#+end_src
+
+* laziness
+#+begin_src emacs-lisp
+;; -*- lexical-binding: t; -*-
+
+(require 'thunk)
+
+(defun lazy-test ()
+  (interactive)
+  (thunk-let ((a 1)
+              (b (progn (message "side-effect!")
+                        2)))
+    (pp a)))
+
+(lazy-test)
+#+end_src

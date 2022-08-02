@@ -50,16 +50,16 @@
                 (:constructor org-glance-headline)
                 (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
-  class
+  (class nil :type list :read-only t :documentation "List of downcased tags.")
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
-  org-properties
-  user-properties
-  archived-p
-  commented-p
-  closed-p
-  encrypted-p
-  linked-p
-  propertized-p)
+  (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
+  (user-properties nil :type list :read-only t :documentation "Properties specified by user in headline contents.")
+  (archived-p nil :type bool :read-only t)
+  (commented-p nil :type bool :read-only t)
+  (closed-p nil :type bool :read-only t)
+  (encrypted-p nil :type bool :read-only t)
+  (linked-p nil :type bool :read-only t)
+  (propertized-p nil :type bool :read-only t))
 
 (cl-defgeneric org-glance-headline-hash (object)
   "Get hash of OBJECT.")
@@ -94,7 +94,7 @@
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
-  (org-glance--with-heading-at-point
+  (org-glance--with-headline-at-point
     (let* ((subtree (let* ((subtree (org-element-contents (org-element-parse-buffer)))
                            (element (car subtree))
                            ;; get offset of the topmost element:
@@ -110,30 +110,31 @@
                           org-element-interpret-data
                           substring-no-properties
                           s-trim)))
-      (org-glance-headline :-title (with-temp-buffer
-                                     (insert (or (org-element-property :TITLE element)
-                                                 (org-element-property :raw-value element)
-                                                 ""))
-                                     (->> (org-element-parse-buffer)
-                                          org-glance--links-to-titles
-                                          org-element-interpret-data
-                                          substring-no-properties
-                                          s-trim))
-                           :-hash (->> contents
-                                       s-trim
-                                       downcase
-                                       (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
-                                       (secure-hash 'md5))
-                           :class (--map (intern (downcase it)) (org-element-property :tags element))
-                           :contents contents
-                           :archived-p (org-element-property :archivedp element)
-                           :commented-p (org-element-property :commentedp element)
-                           :closed-p (org-element-property :closed element)
-                           :encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
-                           :linked-p (not (null (s-match-strings-all org-link-any-re contents)))
-                           :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
-                           :org-properties (org-entry-properties)
-                           :user-properties nil))))
+      (org-glance-headline
+       :-title (with-temp-buffer
+                 (insert (or (org-element-property :TITLE element)
+                             (org-element-property :raw-value element)
+                             ""))
+                 (->> (org-element-parse-buffer)
+                      org-glance--links-to-titles
+                      org-element-interpret-data
+                      substring-no-properties
+                      s-trim))
+       :-hash (->> contents
+                   s-trim
+                   downcase
+                   (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
+                   (secure-hash 'md5))
+       :class (--map (intern (downcase it)) (org-element-property :tags element))
+       :contents contents
+       :archived-p (org-element-property :archivedp element)
+       :commented-p (org-element-property :commentedp element)
+       :closed-p (org-element-property :closed element)
+       :encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+       :linked-p (not (null (s-match-strings-all org-link-any-re contents)))
+       :propertized-p (not (null (s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" contents)))
+       :org-properties (org-entry-properties)
+       :user-properties nil))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
@@ -246,7 +247,7 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
       for result = (save-excursion
                      (goto-char begin)
                      (let ((,(car var) (org-glance-headline-at-point)))
-                       (org-glance--with-heading-at-point
+                       (org-glance--with-headline-at-point
                          ,@forms)))
       when (not (null result))
       collect result))
@@ -260,7 +261,7 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
                      (goto-char begin)
                      (when (funcall ,filter)
                        (let ((,(car var) (org-glance-headline-at-point)))
-                         (org-glance--with-heading-at-point
+                         (org-glance--with-headline-at-point
                            ,@forms))))
       when (not (null result))
       collect result))
