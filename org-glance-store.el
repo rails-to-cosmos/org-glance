@@ -48,6 +48,16 @@
                            (insert (prin1-to-string now)))
                          now)))))
 
+(cl-defun org-glance-store-from-scratch (location &rest headlines-as-a-strings)
+  "Simplifies interactive debug. Creates store from LOCATION and puts headlines in it."
+  (declare (indent 1))
+  (let ((store (org-glance-store location)))
+    (cl-loop
+       for headline-string in headlines-as-a-strings
+       collect (org-glance-headline-from-string headline-string)
+       into headlines
+       finally return (apply #'org-glance-store-put-headlines store headlines))))
+
 (cl-defun org-glance-store-read (location)
   "Read `org-glance-store' from LOCATION."
   (let ((wal (org-glance-store-wal-read (f-join location org-glance-store-wal-filename))))
@@ -227,14 +237,6 @@ achieved by calling `org-glance-store-flush' method."
 
 (cl-defmethod org-glance-store-headline ((store org-glance-store) (hash string))
   (org-glance-headline-load (org-glance-store-headline-location store hash)))
-
-(cl-defun org-glance-store-from-scratch (location &rest headlines-as-a-strings)
-  (declare (indent 1))
-  (let ((store (org-glance-store location)))
-    (cl-loop for headline-string in headlines-as-a-strings
-       collect (org-glance-headline-from-string headline-string)
-       into headlines
-       finally return (apply #'org-glance-store-put-headlines store headlines))))
 
 ;; (cl-defun org-glance-store-completing-read (store)
 ;;   "Read headlines from STORE with completion."
