@@ -39,7 +39,7 @@
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 
-(cl-defstruct (org-glance-headline-header (:constructor org-glance-headline-header)
+(cl-defstruct (org-glance-headline-header (:constructor org-glance-headline-header--create)
                                           (:copier nil))
   "Limited edition of `org-glance-headline'."
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
@@ -79,16 +79,16 @@
 (cl-defmethod org-glance-headline-title ((headline org-glance-headline-header))
   (org-glance-headline-header--title headline))
 
-(cl-defgeneric org-glance-headline-dummy (headline)
+(cl-defgeneric org-glance-headline-header (headline)
   "Make instance of `org-glance-headline-header' from HEADLINE.")
 
-(cl-defmethod org-glance-headline-dummy ((headline org-glance-headline))
+(cl-defmethod org-glance-headline-header ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
-  (org-glance-headline-header
+  (org-glance-headline-header--create
    :-hash (org-glance-headline-hash headline)
    :-title (org-glance-headline-title headline)))
 
-(cl-defmethod org-glance-headline-dummy ((headline org-glance-headline-header))
+(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   headline)
 

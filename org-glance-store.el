@@ -112,7 +112,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
      with current-offset = (float-time)
      for headline in headlines
      for location = (org-glance-store-headline-location store headline)
-     for event = (list current-offset 'PUT (org-glance-headline-dummy headline))
+     for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
      unless (f-exists-p location)
      ;; could be made in a separate thread:
@@ -148,12 +148,11 @@ achieved by calling `org-glance-store-flush' method."
      collect event into wal
      collect title into titles
      finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
-     finally return
-       (org-glance-store--create
-        :location (org-glance-store-location store)
-        :watermark (org-glance-store-watermark store)
-        :-title->headline (apply #'a-dissoc title-headline titles)
-        :wal (append (org-glance-store-wal store) wal))))
+     finally return (org-glance-store--create
+                     :location (org-glance-store-location store)
+                     :watermark (org-glance-store-watermark store)
+                     :-title->headline (apply #'a-dissoc title-headline titles)
+                     :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)
   "Return actual headlines from WAL."
