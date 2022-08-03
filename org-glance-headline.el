@@ -46,7 +46,7 @@
   (-title nil :type string :read-only t :documentation "Original headline title."))
 
 (cl-defstruct (org-glance-headline (:include org-glance-headline-header)
-                                   (:constructor org-glance-headline)
+                                   (:constructor org-glance-headline--create)
                                    (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
   (class nil :type list :read-only t :documentation "List of downcased tags.")
@@ -109,7 +109,7 @@
                           org-element-interpret-data
                           substring-no-properties
                           s-trim)))
-      (org-glance-headline
+      (org-glance-headline--create
        :-title (with-temp-buffer
                  (insert (or (org-element-property :TITLE element)
                              (org-element-property :raw-value element)
