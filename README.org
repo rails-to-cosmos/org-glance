@@ -14,7 +14,11 @@
 CLOCK: [2022-08-02 Tue 08:04]--[2022-08-02 Tue 09:30] =>  1:26
 :END:
 
-** by title (choose headlines interactively)
+** DONE by title (choose headlines interactively)
+CLOSED: [2022-08-03 Wed 10:52]
+:LOGBOOK:
+- State "DONE"       from              [2022-08-03 Wed 10:52]
+:END:
 ** by class (build overviews)
 ** by state (build overviews)
 ** by active timestamps (build agenda views, interval trees?)

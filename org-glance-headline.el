@@ -45,10 +45,9 @@
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
   (-title nil :type string :read-only t :documentation "Original headline title."))
 
-(cl-defstruct (org-glance-headline
-                (:include org-glance-headline-header)
-                (:constructor org-glance-headline)
-                (:copier nil))
+(cl-defstruct (org-glance-headline (:include org-glance-headline-header)
+                                   (:constructor org-glance-headline)
+                                   (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
   (class nil :type list :read-only t :documentation "List of downcased tags.")
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
@@ -82,15 +81,15 @@
 (cl-defgeneric org-glance-headline-header (headline)
   "Make instance of `org-glance-headline-header' from HEADLINE.")
 
+(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
+  "Make instance of `org-glance-headline-header' from HEADLINE."
+  headline)
+
 (cl-defmethod org-glance-headline-header ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   (org-glance-headline-header--create
    :-hash (org-glance-headline-hash headline)
    :-title (org-glance-headline-title headline)))
-
-(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
-  "Make instance of `org-glance-headline-header' from HEADLINE."
-  headline)
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
