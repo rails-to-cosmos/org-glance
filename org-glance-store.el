@@ -108,28 +108,28 @@ functional data structure."
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
 
 Append PUT event to WAL and insert headlines to persistent storage."
-  (let ((current-offset (float-time)))
-    (org-glance-store--create
-     :location (org-glance-store-location store)
-     :watermark (org-glance-store-watermark store)
-     :-title->headline (apply #'a-assoc
-                             (org-glance-store--title->headline store)
-                             (cl-loop for headline in headlines
-                                collect (org-glance-headline-title headline)
-                                collect (org-glance-headline-hash headline)))
-     :wal (cl-loop
-             for headline in headlines
-             for location = (org-glance-store-headline-location store headline)
-             unless (f-exists-p location)
-             ;; could be made in a separate thread
-             do (org-glance-headline-save headline location)
-             ;; no need to write fully qualified headlines, write only headers
-             collect (list current-offset 'PUT (org-glance-headline-dummy headline))
-             into wal
-             ;; append to wal in persistent storage
-             finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
-             ;; return in-memory wal representation
-             finally return (append (org-glance-store-wal store) wal)))))
+  (cl-loop
+     with current-offset = (float-time)
+     for headline in headlines
+     for location = (org-glance-store-headline-location store headline)
+     for event = (list current-offset 'PUT (org-glance-headline-dummy headline))
+
+     unless (f-exists-p location)
+     ;; could be made in a separate thread:
+     do (org-glance-headline-save headline location)
+     ;; no need to write fully qualified headlines, write only headers
+
+     collect (org-glance-headline-title headline) into title->headline
+     collect (org-glance-headline-hash headline) into title->headline
+     collect event into wal
+     ;; append to wal in persistent storage
+     finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
+     ;; return in-memory wal representation
+     finally return (org-glance-store--create
+                     :location (org-glance-store-location store)
+                     :watermark (org-glance-store-watermark store)
+                     :-title->headline (apply #'a-assoc (org-glance-store--title->headline store) title->headline)
+                     :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
   "Return `org-glance-store' with HEADLINES removed from STORE.
