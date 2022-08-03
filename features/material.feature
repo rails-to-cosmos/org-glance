@@ -1,5 +1,4 @@
 Feature: Materialization and material mode
-  @dev
   Scenario: Materialize store
     Given empty file "views/material.org"
     And file "notes/phones/original.org"

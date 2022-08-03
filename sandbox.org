@@ -4,14 +4,17 @@
 #+begin_src emacs-lisp
 (progn
   (f-delete "/tmp/store" t)
-  (-> (org-glance-store-from-scratch "/tmp/store"
-        "* a"
-        "* b"
-        "* c")
-      (org-glance-materialize "/tmp/store/first.org")
-      (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
-      (org-glance-materialize "/tmp/store/second.org"))
+  (setq test-store
+        (-> (org-glance-store-from-scratch "/tmp/store"
+              "* a"
+              "* b"
+              "* c")
+            (org-glance-materialize "/tmp/store/first.org")
+            (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
+            (org-glance-materialize "/tmp/store/second.org")))
   (append-to-file "* d" nil "/tmp/store/first.org"))
+
+(org-glance-store-title->headline test-store)
 #+end_src
 
 #+RESULTS:
@@ -20,14 +23,26 @@
 #+begin_src emacs-lisp
 (require 'avl-tree)
 
-(setq test-tree (avl-tree-create #'string>))
+(cl-defstruct test-hl
+  (a nil :type string :read-only nil)
+  (b nil :type string :read-only nil))
 
-(avl-tree-enter test-tree "a")
-(avl-tree-enter test-tree "b")
-(avl-tree-enter test-tree "c")
-(avl-tree-enter test-tree "d")
+(setq test-tree (avl-tree-create (lambda (a b) (string> (test-hl-a b)
+                                                   (test-hl-a a))))
+      h1 (make-test-hl :a "a" :b "1")
+      h2 (make-test-hl :a "b" :b "2")
+      h3 (make-test-hl :a "c" :b "3")
+      h4 (make-test-hl :a "d" :b "4")
+      h5 (make-test-hl :a "a" :b "5"))
+
+(progn
+  (avl-tree-enter test-tree h1)
+  (avl-tree-enter test-tree h3)
+  (avl-tree-enter test-tree h2)
+  (avl-tree-enter test-tree h4))
 
 (avl-tree-flatten test-tree)
+(avl-tree-enter test-tree h5)
 
 (avl-tree-stack test-tree)
 

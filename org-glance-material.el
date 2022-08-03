@@ -122,16 +122,10 @@ to its origins by calling `org-glance-material-commit'."
   (org-glance--with-temp-file dest
     (insert (org-glance-store-material-header store))
     (cl-loop
-       with location = (org-glance-store-location store)
-       with wal = (org-glance-store-wal store)
-       with watermark = (cl-destructuring-bind (ts _ _) (car (last wal)) ts)
        for hash in (org-glance-store-hashes store)
        for headline = (org-glance-store-headline store hash)
        do (org-glance-headline-insert headline)
-       finally return (org-glance-store--create
-                       :location location
-                       :watermark watermark
-                       :wal wal))))
+       finally return store)))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
@@ -157,7 +151,6 @@ to its origins by calling `org-glance-material-commit'."
                          (hash-old (org-glance-material-marker-hash marker))
                          (changed-p (org-glance-material-marker-changed-p marker))
                          (persisted-p (org-glance-material-marker-persisted-p marker))
-                         (overlay (org-glance-material-marker-overlay marker))
                          (hash-new (org-glance-headline-hash headline))
                          (returned-to-unchanged-state-p (and (string= hash-old hash-new) changed-p))
                          (first-change-p (and (not (string= hash-old hash-new)) (not changed-p)))
@@ -195,9 +188,7 @@ to its origins by calling `org-glance-material-commit'."
 
 (cl-defun org-glance-material-marker-redisplay (marker)
   "Refresh MARKER overlay."
-  (let ((hash (org-glance-material-marker-hash marker))
-        (buffer (org-glance-material-marker-buffer marker))
-        (overlay (org-glance-material-marker-overlay marker))
+  (let ((overlay (org-glance-material-marker-overlay marker))
         (beg (org-glance-material-marker-beg marker))
         (changed-p (org-glance-material-marker-changed-p marker))
         (committed-p (org-glance-material-marker-committed-p marker))
