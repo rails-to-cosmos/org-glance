@@ -38,17 +38,32 @@ Feature: Store
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
     And store "Stories" should contain headline with title "Travel to Romania (2)" in persistent store
 
-#   Scenario: Create headline from materialized buffer ? we need to now where to find location headline store
-#   Scenario: Materialize encrypted headline
-#   Scenario: Materialize non-file headline
-#   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
-#   Optimize materialization: mark headlines as changed and apply only them
+  Scenario: Predicates
+    Given store "Stories" in directory "store/stories" with headlines
+      """
+      * TODO COMMENT Hiking in Troodos :Travel:
 
-  Scenario: Filter by class
-  Scenario: Filter by user properties
-  Scenario: Filter by archived property
-  Scenario: Filter by commented property
-  Scenario: Filter by closed property
+      * TODO Travel to Romania :ARCHIVE:
+        SCHEDULED: <2022-01-01 Sat>
+
+      * TODO Honeymoon in Dagestan :Family:
+        [[http:fsf.com]]
+
+        + Items: Backpack
+
+      * DONE Travel to Romania :Travel:
+        CLOSED: [2021-01-10 Sun 00:00] SCHEDULED: <2021-01-01 Fri>
+      """
+
+    Then store "Stories" should contain 4 headlines
+    And store "Stories" should contain 3 "TODO" headlines
+    And store "Stories" should contain 1 "DONE" headline
+    And store "Stories" should contain 1 commented headline
+    And store "Stories" should contain 1 closed headline
+    And store "Stories" should contain 1 archived headline
+    And store "Stories" should contain 1 linked headline
+    And store "Stories" should contain 1 propertized headline
+    And store "Stories" should contain 2 headlines of class "Travel"
+    And store "Stories" should contain 1 headline of class "Family"
+
   Scenario: Filter by encrypted property
-  Scenario: Filter by linked property
-  Scenario: Relative paths

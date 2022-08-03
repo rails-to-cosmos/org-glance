@@ -31,3 +31,8 @@ Feature: Materialization and material mode
 # Scenario: Material fast-forward commit: write outdated materialization commit scenarios
 # Scenario: Material offset should be set to actual state after commit
 # Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?
+
+#   Scenario: Materialize encrypted headline
+#   Scenario: Materialize non-file headline
+#   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
+#   Optimize materialization: mark headlines as changed and apply only them
