@@ -140,7 +140,8 @@
   (org-glance--with-temp-buffer
    (insert string)
    (goto-char (point-min))
-   (outline-next-heading)
+   (unless (org-at-heading-p)
+     (outline-next-heading))
    (org-glance-headline-at-point)))
 
 (cl-defun org-glance-headline-from-region (beg end)

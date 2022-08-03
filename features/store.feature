@@ -20,6 +20,24 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
+  Scenario: It's all about titles
+    Given store "Stories" in directory "store/stories" with headlines
+      """
+      * Hiking in Troodos
+      * Travel to Romania
+        SCHEDULED: <2022-01-01 Sat>
+      * Honeymoon in Dagestan
+      * Travel to Romania
+        CLOSED: [2021-01-10 Sun 00:00] SCHEDULED: <2021-01-01 Fri>
+      """
+
+    Then store "Stories" should contain 4 headlines
+    And store "Stories" should contain headline with title "Travel to Romania" in memory store
+    And store "Stories" should contain headline with title "Travel to Romania" in persistent store
+
+    And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
+    And store "Stories" should contain headline with title "Travel to Romania (2)" in persistent store
+
 #   Scenario: Create headline from materialized buffer ? we need to now where to find location headline store
 #   Scenario: Materialize encrypted headline
 #   Scenario: Materialize non-file headline

@@ -8,7 +8,22 @@
 
 (Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
        (lambda (store-name location)
-         (puthash store-name (org-glance-store (FILE location)) org-glance-test-stores)))
+         (puthash store-name
+                  (org-glance-store (FILE location))
+                  org-glance-test-stores)))
+
+(Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
+       (lambda (store-name location headlines)
+         (puthash store-name
+                  (apply #'org-glance-store-from-scratch
+                         (FILE location)
+                         (->> headlines
+                              (s-split "* ")
+                              (-map #'s-trim)
+                              (--filter (not (string-empty-p it)))
+                              (--map (concat "* " it)))
+                         )
+                  org-glance-test-stores)))
 
 (When "^I import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (store-name location)

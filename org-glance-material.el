@@ -91,7 +91,7 @@ editor."
            (org-glance-map (headline)
              (let ((hash (org-glance-headline-hash headline)))
                (cl-destructuring-bind (headline-offset . headline)
-                   (org-glance-store-get-offset-by-hash store hash)
+                   (org-glance-store-get-last-committed-offset-by-hash store hash)
                  (let ((marker (org-glance-material-marker
                                 :hash hash
                                 :beg (point-min)

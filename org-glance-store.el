@@ -76,9 +76,9 @@
                       (t (cl-destructuring-bind (offset _ _) (car (last wal))
                            offset)))
      :-title->headline (cl-loop for headline in (org-glance-store-wal-headlines wal)
-                         for hash = (org-glance-headline-hash headline)
-                         for title = (org-glance-headline-title headline)
-                         collect (cons title hash))
+                          for hash = (org-glance-headline-hash headline)
+                          for title = (org-glance-headline-title headline)
+                          collect (cons title hash))
      :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
@@ -170,7 +170,7 @@ achieved by calling `org-glance-store-flush' method."
    store
    (org-glance-store-get-headline-by-hash store hash)))
 
-(cl-defun org-glance-store-get-offset-by-hash (store hash)
+(cl-defun org-glance-store-get-last-committed-offset-by-hash (store hash)
   "Return latest committed (cons offset headline) from STORE searched by HASH."
   (cl-loop for (offset instruction headline) in
        (reverse (org-glance-store-wal-read
@@ -185,7 +185,7 @@ achieved by calling `org-glance-store-flush' method."
 (cl-defun org-glance-store-get-headline-by-hash (store hash)
   "Return `org-glance-headline-header' from STORE searched by HASH."
   (cl-destructuring-bind (_ . headline)
-      (org-glance-store-get-offset-by-hash store hash)
+      (org-glance-store-get-last-committed-offset-by-hash store hash)
     headline))
 
 (cl-defun org-glance-store-get-headline-by-title (store title)
