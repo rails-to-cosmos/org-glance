@@ -139,18 +139,21 @@ persistent storage. Watermark stays the same though.
 
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-store-flush' method."
-  (let ((current-offset (float-time)))
-    (org-glance-store--create
-     :location (org-glance-store-location store)
-     :watermark (org-glance-store-watermark store)
-     :-title->headline (apply #'a-dissoc (org-glance-store--title->headline store)
-                             (cl-loop for headline in headlines
-                                collect (org-glance-headline-title headline)))
-     :wal (cl-loop for headline in headlines
-             collect (list current-offset 'RM headline)
-             into wal
-             finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
-             finally return (append (org-glance-store-wal store) wal)))))
+  (cl-loop
+     with current-offset = (float-time)
+     with title-headline = (org-glance-store--title->headline store)
+     for headline in headlines
+     for event = (list current-offset 'RM headline)
+     for title = (org-glance-headline-title headline)
+     collect event into wal
+     collect title into titles
+     finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
+     finally return
+       (org-glance-store--create
+        :location (org-glance-store-location store)
+        :watermark (org-glance-store-watermark store)
+        :-title->headline (apply #'a-dissoc title-headline titles)
+        :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)
   "Return actual headlines from WAL."
