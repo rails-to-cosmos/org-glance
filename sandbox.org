@@ -11,13 +11,14 @@
               "* c")
             (org-glance-materialize "/tmp/store/first.org")
             (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
-            (org-glance-materialize "/tmp/store/second.org")))
+            ;; (org-glance-materialize "/tmp/store/second.org")
+            ))
   (append-to-file "* d" nil "/tmp/store/first.org"))
 
-(org-glance-store-title->headline test-store)
-#+end_src
+(org-glance-store-remove-headline-by-hash test-store "6d0af4c806aa2a7d2573bd7f10137a40")
 
-#+RESULTS:
+(a-dissoc (org-glance-store--title->headline test-store) "b")
+#+end_src
 
 * avl tree
 #+begin_src emacs-lisp

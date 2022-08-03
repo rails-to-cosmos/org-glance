@@ -28,7 +28,7 @@
    :read-only t
    :documentation "Offset behind which all destructive methods were
    applied to persistent storage.")
-  (title->headline (a-list) :type list :read-only t)
+  (-title->headline (a-list) :type list :read-only t)
   ;; (class->headline (a-list) :type list :read-only t)
   ;; (state->headline (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
@@ -75,7 +75,7 @@
                       ((null wal) (float-time))
                       (t (cl-destructuring-bind (offset _ _) (car (last wal))
                            offset)))
-     :title->headline (cl-loop for headline in (org-glance-store-wal-headlines wal)
+     :-title->headline (cl-loop for headline in (org-glance-store-wal-headlines wal)
                          for hash = (org-glance-headline-hash headline)
                          for title = (org-glance-headline-title headline)
                          collect (cons title hash))
@@ -112,8 +112,8 @@ Append PUT event to WAL and insert headlines to persistent storage."
     (org-glance-store--create
      :location (org-glance-store-location store)
      :watermark (org-glance-store-watermark store)
-     :title->headline (apply #'a-assoc
-                             (org-glance-store-title->headline store)
+     :-title->headline (apply #'a-assoc
+                             (org-glance-store--title->headline store)
                              (cl-loop for headline in headlines
                                 collect (org-glance-headline-title headline)
                                 collect (org-glance-headline-hash headline)))
@@ -143,7 +143,7 @@ achieved by calling `org-glance-store-flush' method."
     (org-glance-store--create
      :location (org-glance-store-location store)
      :watermark (org-glance-store-watermark store)
-     :title->headline (apply #'a-dissoc (org-glance-store-title->headline store)
+     :-title->headline (apply #'a-dissoc (org-glance-store--title->headline store)
                              (cl-loop for headline in headlines
                                 collect (org-glance-headline-title headline)))
      :wal (cl-loop for headline in headlines
@@ -164,7 +164,9 @@ achieved by calling `org-glance-store-flush' method."
      do (puthash hash t seen)))
 
 (cl-defun org-glance-store-remove-headline-by-hash (store hash)
-  (org-glance-store-remove-headlines store (org-glance-headline-header :-hash hash)))
+  (org-glance-store-remove-headlines
+   store
+   (org-glance-store-get-headline-by-hash store hash)))
 
 (cl-defun org-glance-store-get-offset-by-hash (store hash)
   "Return latest committed (cons offset headline) from STORE searched by HASH."
@@ -186,16 +188,7 @@ achieved by calling `org-glance-store-flush' method."
 
 (cl-defun org-glance-store-get-headline-by-title (store title)
   "Return `org-glance-headline-header' from STORE searched by TITLE."
-  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-wal store))
-     for hash = (org-glance-headline-hash headline)
-     with seen = (make-hash-table :test #'equal)
-     if (and (string= title (org-glance-headline-title headline))
-             (not (gethash hash seen))
-             (eq instruction 'PUT))
-     return headline
-     else if (and (not (gethash hash seen))
-                  (eq instruction 'RM))
-     do (puthash hash t seen)))
+  (a-get (org-glance-store--title->headline store) title))
 
 (cl-defun org-glance-store-wal-read (location)
   (when (and (f-exists-p location) (f-readable-p location))
