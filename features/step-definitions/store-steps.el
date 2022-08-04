@@ -21,8 +21,7 @@
                               (s-split "* ")
                               (-map #'s-trim)
                               (--filter (not (string-empty-p it)))
-                              (--map (concat "* " it)))
-                         )
+                              (--map (concat "* " it))))
                   org-glance-test-stores)))
 
 (When "^I import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
