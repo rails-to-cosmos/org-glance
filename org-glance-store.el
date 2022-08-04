@@ -211,7 +211,7 @@ STORAGE specifies where to lookup: 'memory or 'disk."
     ('disk (cl-loop
               with seen = (make-hash-table :test #'equal)
               with wal = (reverse (org-glance-store-wal store))
-              for (_ instruction headline) in wal
+              for (_ _ headline) in wal
               for hash = (org-glance-headline-hash headline)
               for headline-location = (org-glance-store-headline-location store hash)
               for seen-p = (gethash hash seen)
