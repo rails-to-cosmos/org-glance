@@ -24,10 +24,9 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
-        (let* ((expected-class (intern expected-class))
-               (headline (gethash name org-glance-test-headlines))
+        (let* ((headline (gethash name org-glance-test-headlines))
                (class (org-glance-headline-class headline)))
-          (should (memq expected-class class)))))
+          (should (member expected-class class)))))
 
 (Then "^headline \"\\([^\"]+\\)\" contents? should be:$"
       (lambda (name expected-contents)

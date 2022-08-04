@@ -18,22 +18,17 @@
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
   "Persistent store of headlines."
-  (location nil :type string :read-only t
-            :documentation "Directory where we store all the data.")
-  (watermark (float-time) :type float :read-only t
-             :documentation "Offset behind which all destructive
+  (location nil :type string :read-only t :documentation "Directory where we store all the data.")
+  (watermark (float-time) :type float :read-only t :documentation "Offset behind which all destructive
    methods were applied to persistent storage.")
   (-title->hash (a-list) :type list :read-only t)
   (-state->hash (a-list) :type list :read-only t)
+  (-class->hash (a-list) :type list :read-only t)
   ;; (class->headline (a-list) :type list :read-only t)
   ;; (state->headline (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
   ;; (lru-cache (a-list) :type list :read-only t)
-  (wal
-   nil
-   :type list
-   :read-only t
-   :documentation "Append-only event log."))
+  (wal nil :type list :read-only t :documentation "Append-only event log. TODO should be removed from memory store."))
 
 (cl-defun org-glance-store (location)
   "Create persistent store from directory LOCATION."
@@ -67,8 +62,10 @@
      for hash = (org-glance-headline-hash headline)
      for title = (org-glance-headline-title headline)
      for state = (org-glance-headline-state headline)
+     for classes = (org-glance-headline-class headline)
      collect (cons state hash) into state->hash
      collect (cons title hash) into title->hash
+     append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
      finally return (org-glance-store--create
                      :location location
                      :watermark (cond ((f-exists-p (f-join location org-glance-store-watermark-filename))
@@ -80,6 +77,7 @@
                                            offset)))
                      :-title->hash title->hash
                      :-state->hash state->hash
+                     :-class->hash class->hash
                      :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
@@ -120,6 +118,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for title = (org-glance-headline-title headline)
      for hash = (org-glance-headline-hash headline)
      for state = (org-glance-headline-state headline)
+     for classes = (org-glance-headline-class headline)
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
@@ -136,6 +135,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
           (puthash uniq-title hash title->headline))
 
      collect (cons state hash) into state->hash
+     append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
 
      collect event into wal
      ;; append to wal in persistent storage
@@ -149,8 +149,8 @@ Append PUT event to WAL and insert headlines to persistent storage."
                                           (cl-loop for title being the hash-keys of title->headline
                                              using (hash-values hash)
                                              append (list title hash)))
-                     :-state->hash (append (org-glance-store--state->hash store)
-                                           state->hash)
+                     :-state->hash (append (org-glance-store--state->hash store) state->hash)
+                     :-class->hash (append (org-glance-store--class->hash store) class->hash)
                      :wal (append store-wal wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
@@ -168,23 +168,31 @@ achieved by calling `org-glance-store-flush' method."
      with current-offset = (float-time)
      with title->hash = (org-glance-store--title->hash store)
      with state->hash = (org-glance-store--state->hash store)
-     with states = (make-hash-table)
+     with class->hash = (org-glance-store--class->hash store)
+     with removed-states = (make-hash-table)
+     with removed-classes = (make-hash-table)
      for headline in headlines
      for event = (list current-offset 'RM headline)
      for title = (org-glance-headline-title headline)
      for state = (org-glance-headline-state headline)
+     for classes = (org-glance-headline-class headline)
      for hash = (org-glance-headline-hash headline)
      collect event into wal
      collect title into titles
-     do (puthash (cons state hash) t states)
+     do (cl-loop for class in classes
+           do (puthash (cons class hash) t removed-classes))
+     do (puthash (cons state hash) t removed-states)
      finally do (org-glance-store-wal-append wal wal-location)
      finally return (org-glance-store--create
                      :location store-location
                      :watermark store-watermark
                      :-title->hash (apply #'a-dissoc title->hash titles)
                      :-state->hash (cl-loop for state in state->hash
-                                      when (not (gethash state states))
+                                      when (not (gethash state removed-states))
                                       collect state)
+                     :-class->hash (cl-loop for class in class->hash
+                                      when (not (gethash class removed-classes))
+                                      collect class)
                      :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)

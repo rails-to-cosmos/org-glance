@@ -61,11 +61,12 @@
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
      (lambda (store-name expected-count expected-state)
-       (let ((store (STORE store-name)))
-         (cl-loop for (state . hash) in (org-glance-store--state->hash store)
-            when (string= state expected-state)
-            count 1 into count
-            finally (should (= count (string-to-number expected-count)))))))
+       (cl-loop
+          with store = (STORE store-name)
+          for (state . hash) in (org-glance-store--state->hash store)
+          when (string= state expected-state)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
      (lambda (store cardinality)
@@ -93,6 +94,10 @@
     ))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
-  (lambda (store cardinality class)
-    (should nil)
-    ))
+  (lambda (store-name expected-count expected-class)
+    (cl-loop
+       with store = (STORE store-name)
+       for (class . hash) in (org-glance-store--class->hash store)
+       when (string= class (downcase expected-class))
+       count 1 into count
+       finally (should (= count (string-to-number expected-count))))))

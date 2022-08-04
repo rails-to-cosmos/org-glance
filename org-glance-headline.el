@@ -44,13 +44,13 @@
   "Limited edition of `org-glance-headline'."
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
   (-title nil :type string :read-only t :documentation "Original headline title.")
-  (-state nil :type string :read-only t :documentation "TODO state of headline."))
+  (-state nil :type string :read-only t :documentation "TODO state of headline.")
+  (-class nil :type list :read-only t :documentation "List of downcased tags."))
 
 (cl-defstruct (org-glance-headline (:include org-glance-headline-header)
                                    (:constructor org-glance-headline--create)
                                    (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
-  (class nil :type list :read-only t :documentation "List of downcased tags.")
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
   (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
   (user-properties nil :type list :read-only t :documentation "Properties specified by user in headline contents.")
@@ -79,19 +79,29 @@
 (cl-defmethod org-glance-headline-title ((headline org-glance-headline-header))
   (org-glance-headline-header--title headline))
 
+(cl-defgeneric org-glance-headline-class (object)
+  "Get class of OBJECT.")
+
+(cl-defmethod org-glance-headline-class ((headline org-glance-headline))
+  (org-glance-headline--class headline))
+
+(cl-defmethod org-glance-headline-class ((headline org-glance-headline-header))
+  (org-glance-headline-header--class headline))
+
 (cl-defgeneric org-glance-headline-header (headline)
   "Make instance of `org-glance-headline-header' from HEADLINE.")
-
-(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
-  "Make instance of `org-glance-headline-header' from HEADLINE."
-  headline)
 
 (cl-defmethod org-glance-headline-header ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   (org-glance-headline-header--create
    :-hash (org-glance-headline-hash headline)
    :-title (org-glance-headline-title headline)
-   :-state (org-glance-headline-state headline)))
+   :-state (org-glance-headline-state headline)
+   :-class (org-glance-headline-class headline)))
+
+(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
+  "Make instance of `org-glance-headline-header' from HEADLINE."
+  headline)
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
@@ -135,7 +145,7 @@
                    downcase
                    (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
                    (secure-hash 'md5))
-       :class (--map (intern (downcase it)) (org-element-property :tags element))
+       :-class (-map #'downcase (org-element-property :tags element))
        :contents contents
        :archived-p (org-element-property :archivedp element)
        :commented-p (org-element-property :commentedp element)

@@ -6,9 +6,9 @@
   (f-delete "/tmp/store" t)
   (setq test-store
         (-> (org-glance-store-from-scratch "/tmp/store"
-              "* TODO a
+              "* TODO a :Task:
 1"
-              "* DONE b"
+              "* DONE b :TAsk:"
               "* c"
               "* a
 2")

@@ -59,12 +59,11 @@ Feature: Store
     Then store "Stories" should contain 4 headlines
     And store "Stories" should contain 3 "TODO" headlines
     And store "Stories" should contain 1 "DONE" headline
+    And store "Stories" should contain 2 headlines of class "Travel"
+    And store "Stories" should contain 1 headline of class "Family"
     And store "Stories" should contain 1 commented headline
     And store "Stories" should contain 1 closed headline
     And store "Stories" should contain 1 archived headline
     And store "Stories" should contain 1 linked headline
     And store "Stories" should contain 1 propertized headline
-    And store "Stories" should contain 2 headlines of class "Travel"
-    And store "Stories" should contain 1 headline of class "Family"
-
   Scenario: Filter by encrypted property
