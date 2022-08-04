@@ -18,18 +18,13 @@
 (cl-defstruct (org-glance-store (:constructor org-glance-store--create)
                                 (:copier nil))
   "Persistent store of headlines."
-  (location
-   nil
-   :type string
-   :read-only t
-   :documentation "Directory where we store all the data.")
-  (watermark
-   (float-time)
-   :type float
-   :read-only t
-   :documentation "Offset behind which all destructive methods were
-   applied to persistent storage.")
-  (-title->headline (a-list) :type list :read-only t)
+  (location nil :type string :read-only t
+            :documentation "Directory where we store all the data.")
+  (watermark (float-time) :type float :read-only t
+             :documentation "Offset behind which all destructive
+   methods were applied to persistent storage.")
+  (-title->hash (a-list) :type list :read-only t)
+  (-state->hash (a-list) :type list :read-only t)
   ;; (class->headline (a-list) :type list :read-only t)
   ;; (state->headline (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
@@ -65,21 +60,27 @@
 
 (cl-defun org-glance-store-read (location)
   "Read `org-glance-store' from LOCATION."
-  (let ((wal (org-glance-store-wal-read (f-join location org-glance-store-wal-filename))))
-    (org-glance-store--create
-     :location location
-     :watermark (cond ((f-exists-p (f-join location org-glance-store-watermark-filename))
-                       (with-temp-buffer
-                         (insert-file-contents-literally (f-join location org-glance-store-watermark-filename))
-                         (read (buffer-substring (point-min) (point-max)))))
-                      ((null wal) (float-time))
-                      (t (cl-destructuring-bind (offset _ _) (car (last wal))
-                           offset)))
-     :-title->headline (cl-loop for headline in (org-glance-store-wal-headlines wal)
-                          for hash = (org-glance-headline-hash headline)
-                          for title = (org-glance-headline-title headline)
-                          collect (cons title hash))
-     :wal wal)))
+  (cl-loop
+     with wal = (org-glance-store-wal-read (f-join location org-glance-store-wal-filename))
+     with headlines = (org-glance-store-wal-headlines wal)
+     for headline in headlines
+     for hash = (org-glance-headline-hash headline)
+     for title = (org-glance-headline-title headline)
+     for state = (org-glance-headline-state headline)
+     collect (cons state hash) into state->hash
+     collect (cons title hash) into title->hash
+     finally return (org-glance-store--create
+                     :location location
+                     :watermark (cond ((f-exists-p (f-join location org-glance-store-watermark-filename))
+                                       (with-temp-buffer
+                                         (insert-file-contents-literally (f-join location org-glance-store-watermark-filename))
+                                         (read (buffer-substring (point-min) (point-max)))))
+                                      ((null wal) (float-time))
+                                      (t (cl-destructuring-bind (offset _ _) (car (last wal))
+                                           offset)))
+                     :-title->hash title->hash
+                     :-state->hash state->hash
+                     :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
   "Persist STORE changes. Update watermark.
@@ -118,19 +119,23 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for headline in headlines
      for title = (org-glance-headline-title headline)
      for hash = (org-glance-headline-hash headline)
+     for state = (org-glance-headline-state headline)
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
      unless (f-exists-p location) ;; could be made in a separate thread
-     do (org-glance-headline-save headline location)
      ;; no need to write fully qualified headlines, write only headers
+     do (org-glance-headline-save headline location)
 
+     ;; uniquify titles
      do (let ((uniq-title title)
               (tryout 1))
           (while (gethash uniq-title title->headline)
             (cl-incf tryout)
             (setq uniq-title (format "%s (%d)" title tryout)))
           (puthash uniq-title hash title->headline))
+
+     collect (cons state hash) into state->hash
 
      collect event into wal
      ;; append to wal in persistent storage
@@ -139,11 +144,13 @@ Append PUT event to WAL and insert headlines to persistent storage."
      finally return (org-glance-store--create
                      :location store-location
                      :watermark store-watermark
-                     :-title->headline (apply #'a-assoc
-                                              (org-glance-store--title->headline store)
-                                              (cl-loop for title being the hash-keys of title->headline
-                                                 using (hash-values hash)
-                                                 append (list title hash)))
+                     :-title->hash (apply #'a-assoc
+                                          (org-glance-store--title->hash store)
+                                          (cl-loop for title being the hash-keys of title->headline
+                                             using (hash-values hash)
+                                             append (list title hash)))
+                     :-state->hash (append (org-glance-store--state->hash store)
+                                           state->hash)
                      :wal (append store-wal wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
@@ -155,18 +162,29 @@ persistent storage. Watermark stays the same though.
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-store-flush' method."
   (cl-loop
+     with store-location = (org-glance-store-location store)
+     with store-watermark = (org-glance-store-watermark store)
+     with wal-location = (f-join store-location org-glance-store-wal-filename)
      with current-offset = (float-time)
-     with title-headline = (org-glance-store--title->headline store)
+     with title->hash = (org-glance-store--title->hash store)
+     with state->hash = (org-glance-store--state->hash store)
+     with states = (make-hash-table)
      for headline in headlines
      for event = (list current-offset 'RM headline)
      for title = (org-glance-headline-title headline)
+     for state = (org-glance-headline-state headline)
+     for hash = (org-glance-headline-hash headline)
      collect event into wal
      collect title into titles
-     finally do (org-glance-store-wal-append wal (f-join (org-glance-store-location store) org-glance-store-wal-filename))
+     do (puthash (cons state hash) t states)
+     finally do (org-glance-store-wal-append wal wal-location)
      finally return (org-glance-store--create
-                     :location (org-glance-store-location store)
-                     :watermark (org-glance-store-watermark store)
-                     :-title->headline (apply #'a-dissoc title-headline titles)
+                     :location store-location
+                     :watermark store-watermark
+                     :-title->hash (apply #'a-dissoc title->hash titles)
+                     :-state->hash (cl-loop for state in state->hash
+                                      when (not (gethash state states))
+                                      collect state)
                      :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)
@@ -222,7 +240,7 @@ STORAGE specifies where to lookup: 'memory or 'disk."
               else if (not seen-p)
               do (puthash hash t seen)
               finally return nil))
-    ('memory (a-get (org-glance-store--title->headline store) title))))
+    ('memory (a-get (org-glance-store--title->hash store) title))))
 
 (cl-defun org-glance-store-wal-read (location)
   (when (and (f-exists-p location) (f-readable-p location))
@@ -245,9 +263,10 @@ STORAGE specifies where to lookup: 'memory or 'disk."
 
 (cl-defun org-glance-store-hashes (store)
   "Return actual headline hashes from STORE."
-  (cl-loop for (_ instruction headline) in (reverse (org-glance-store-wal store))
-     for hash = (org-glance-headline-hash headline)
+  (cl-loop
      with seen = (make-hash-table :test #'equal)
+     for (_ instruction headline) in (reverse (org-glance-store-wal store))
+     for hash = (org-glance-headline-hash headline)
      when (and (eq instruction 'PUT) (not (gethash hash seen)))
      collect (puthash hash hash seen)
      when (and (eq instruction 'RM) (not (gethash hash seen)))
@@ -299,10 +318,13 @@ STORAGE specifies where to lookup: 'memory or 'disk."
 TODO should be optimized to not read all headlines from store."
   (let ((sorted-a (cl-loop for headline in (org-glance-store-hashes a)
                      collect headline into result
-                     finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result)))
+                     finally return (--sort (string< (org-glance-headline-title it)
+                                                     (org-glance-headline-title other))
+                                            result)))
         (sorted-b (cl-loop for headline in (org-glance-store-hashes b)
                      collect headline into result
-                     finally return (--sort (string< (org-glance-headline-hash it) (org-glance-headline-hash other)) result))))
+                     finally return (--sort (string< (org-glance-headline-title it)
+                                                     (org-glance-headline-title other)) result))))
     (and (not (null sorted-a))
          (not (null sorted-b))
          (--all? (and (consp it)

@@ -20,7 +20,6 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  @dev
   Scenario: It's all about titles
     Given store "Stories" in directory "store/stories" with headlines
       """
@@ -39,6 +38,7 @@ Feature: Store
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
     And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
 
+  @dev
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
       """

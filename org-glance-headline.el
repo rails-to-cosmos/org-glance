@@ -163,6 +163,20 @@
   "Return t if A equals B."
   (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
 
+(cl-defgeneric org-glance-headline-state (headline)
+  "Infer HEADLINE todo state from its title.")
+
+(cl-defmethod org-glance-headline-state ((headline org-glance-headline-header))
+  (org-glance--with-temp-buffer
+   (insert "* " (org-glance-headline-title headline))
+   (goto-char (point-min))
+   (unless (org-at-heading-p)
+     (outline-next-heading))
+   (org-get-todo-state)))
+
+(cl-defmethod org-glance-headline-state ((headline org-glance-headline))
+  (org-glance-headline-state (org-glance-headline-header headline)))
+
 (cl-defun org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))

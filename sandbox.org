@@ -1,6 +1,6 @@
 # I’ve always thought they were lighthouses
 
-* materialization
+* TODO materialization (org-get-todo-state)
 #+begin_src emacs-lisp
 (progn
   (f-delete "/tmp/store" t)
@@ -20,7 +20,7 @@
 
 (org-glance-store-hashes test-store)
 
-(org-glance-store--title->headline test-store)
+(org-glance-store--title->hash test-store)
 #+end_src
 
 * avl tree
