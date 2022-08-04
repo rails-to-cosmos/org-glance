@@ -8,7 +8,8 @@
         (-> (org-glance-store-from-scratch "/tmp/store"
               "* a"
               "* b"
-              "* c")
+              "* c"
+              "* a")
             (org-glance-materialize "/tmp/store/first.org")
             (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
             ;; (org-glance-materialize "/tmp/store/second.org")
@@ -51,6 +52,19 @@
 
 (avl-tree--node-data (avl-tree--node-branch (avl-tree--dummyroot test-tree) 0))
 #+end_src
+
+* hash table
+#+begin_src emacs-lisp
+(setq test-hash (make-hash-table))
+
+(puthash 'a 1 test-hash)
+(puthash 'b 2 test-hash)
+
+(maphash #'list test-hash)
+#+end_src
+
+#+RESULTS:
+: #s(hash-table size 65 test eql rehash-size 1.5 rehash-threshold 0.8125 data (a 1 b 2))
 
 * laziness
 #+begin_src emacs-lisp

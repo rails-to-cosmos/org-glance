@@ -37,7 +37,7 @@ Feature: Store
     And store "Stories" should contain headline with title "Travel to Romania" in persistent store
 
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
-    And store "Stories" should contain headline with title "Travel to Romania (2)" in persistent store
+    And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
 
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
