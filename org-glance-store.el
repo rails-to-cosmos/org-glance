@@ -199,9 +199,10 @@ achieved by calling `org-glance-store-flush' method."
      do (puthash hash t seen)))
 
 (cl-defun org-glance-store-remove-headline-by-hash (store hash)
-  (org-glance-store-remove-headlines
-   store
-   (org-glance-store-get-headline-by-hash store hash)))
+  "Return STORE with HASH removed."
+  (if-let (headline (org-glance-store-get-headline-by-hash store hash))
+      (org-glance-store-remove-headlines store headline)
+    store))
 
 (cl-defun org-glance-store-get-last-committed-offset-by-hash (store hash)
   "Return latest committed (cons offset headline) from STORE searched by HASH."

@@ -6,14 +6,14 @@
   (f-delete "/tmp/store" t)
   (setq test-store
         (-> (org-glance-store-from-scratch "/tmp/store"
-              "* a
+              "* TODO a
 1"
-              "* b"
+              "* DONE b"
               "* c"
               "* a
 2")
-            (org-glance-materialize "/tmp/store/first.org")
-            (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
+            ;; (org-glance-materialize "/tmp/store/first.org")
+            ;; (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
             ;; (org-glance-materialize "/tmp/store/second.org")
             ))
   (append-to-file "* d" nil "/tmp/store/first.org"))
@@ -21,6 +21,10 @@
 (org-glance-store-hashes test-store)
 
 (org-glance-store--title->hash test-store)
+(org-glance-store--state->hash test-store)
+(org-glance-store-wal test-store)
+
+(setq test-store2 (org-glance-store "/tmp/store"))
 #+end_src
 
 * avl tree

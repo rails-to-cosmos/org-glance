@@ -60,14 +60,17 @@
           (should (not (org-glance-store-get-headline-by-title store title 'disk))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
-  (lambda (store cardinality state)
-    (should nil)
-    ))
+     (lambda (store-name expected-count expected-state)
+       (let ((store (STORE store-name)))
+         (cl-loop for (state . hash) in (org-glance-store--state->hash store)
+            when (string= state expected-state)
+            count 1 into count
+            finally (should (= count (string-to-number expected-count)))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
-  (lambda (store cardinality)
-    (should nil)
-    ))
+     (lambda (store cardinality)
+       (should nil)
+       ))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
   (lambda (store cardinality)

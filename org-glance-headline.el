@@ -43,7 +43,8 @@
                                           (:copier nil))
   "Limited edition of `org-glance-headline'."
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
-  (-title nil :type string :read-only t :documentation "Original headline title."))
+  (-title nil :type string :read-only t :documentation "Original headline title.")
+  (-state nil :type string :read-only t :documentation "TODO state of headline."))
 
 (cl-defstruct (org-glance-headline (:include org-glance-headline-header)
                                    (:constructor org-glance-headline--create)
@@ -89,7 +90,8 @@
   "Make instance of `org-glance-headline-header' from HEADLINE."
   (org-glance-headline-header--create
    :-hash (org-glance-headline-hash headline)
-   :-title (org-glance-headline-title headline)))
+   :-title (org-glance-headline-title headline)
+   :-state (org-glance-headline-state headline)))
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
@@ -108,17 +110,26 @@
            (contents (->> subtree
                           org-element-interpret-data
                           substring-no-properties
-                          s-trim)))
+                          s-trim))
+           (title (or (org-element-property :TITLE element)
+                      (org-element-property :raw-value element)
+                      "")))
       (org-glance-headline--create
        :-title (with-temp-buffer
-                 (insert (or (org-element-property :TITLE element)
-                             (org-element-property :raw-value element)
-                             ""))
+                 (insert title)
                  (->> (org-element-parse-buffer)
                       org-glance--links-to-titles
                       org-element-interpret-data
                       substring-no-properties
                       s-trim))
+       :-state (org-glance--with-temp-buffer
+                (insert contents)
+                (goto-char (point-min))
+                (unless (org-at-heading-p)
+                  (outline-next-heading))
+                (-some->> (org-get-todo-state)
+                  substring-no-properties
+                  upcase))
        :-hash (->> contents
                    s-trim
                    downcase
@@ -167,15 +178,10 @@
   "Infer HEADLINE todo state from its title.")
 
 (cl-defmethod org-glance-headline-state ((headline org-glance-headline-header))
-  (org-glance--with-temp-buffer
-   (insert "* " (org-glance-headline-title headline))
-   (goto-char (point-min))
-   (unless (org-at-heading-p)
-     (outline-next-heading))
-   (org-get-todo-state)))
+  (org-glance-headline-header--state headline))
 
 (cl-defmethod org-glance-headline-state ((headline org-glance-headline))
-  (org-glance-headline-state (org-glance-headline-header headline)))
+  (org-glance-headline--state headline))
 
 (cl-defun org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."

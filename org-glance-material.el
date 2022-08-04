@@ -49,7 +49,7 @@
   (changed-p nil   :type bool   :read-only nil :documentation "Has headline changed?")
   (persisted-p nil :type bool   :read-only t   :documentation "Whether headline has origin or not.")
   (committed-p nil :type bool   :read-only nil :documentation "Whether changes have been committed.")
-  (outdated-p nil  :type bool   :read-only t   :documentation "If there are changes that not reflected in current materialization."))
+  (outdated-p nil  :type bool   :read-only t   :documentation "If there are changes that are not reflected in current materialization."))
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
