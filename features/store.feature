@@ -20,6 +20,7 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
+  @dev
   Scenario: It's all about titles
     Given store "Stories" in directory "store/stories" with headlines
       """

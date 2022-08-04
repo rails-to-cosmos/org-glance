@@ -53,13 +53,13 @@
                            (insert (prin1-to-string now)))
                          now)))))
 
-(cl-defun org-glance-store-from-scratch (location &rest headlines-as-a-strings)
+(cl-defun org-glance-store-from-scratch (location &rest strings)
   "Simplifies interactive debug. Creates store from LOCATION and puts headlines in it."
   (declare (indent 1))
   (let ((store (org-glance-store location)))
     (cl-loop
-       for headline-string in headlines-as-a-strings
-       collect (org-glance-headline-from-string headline-string)
+       for string in strings
+       collect (org-glance-headline-from-string string)
        into headlines
        finally return (apply #'org-glance-store-put-headlines store headlines))))
 

@@ -74,3 +74,38 @@
                        else if (not (gethash hash seen))
                        do (puthash hash t seen)
                        finally return nil)))))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
+  (lambda (store cardinality state)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
+  (lambda (store cardinality)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
+  (lambda (store cardinality)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) archived headlines?$"
+  (lambda (store cardinality)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) linked headlines?$"
+  (lambda (store cardinality)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) propertized headlines?$"
+  (lambda (store cardinality)
+    (should nil)
+    ))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
+  (lambda (store cardinality class)
+    (should nil)
+    ))
