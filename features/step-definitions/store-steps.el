@@ -42,38 +42,22 @@
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in memory store$"
       (lambda (store-name title)
         (let ((store (STORE store-name)))
-          (should (org-glance-store-get-headline-by-title store title)))))
+          (should (org-glance-store-get-headline-by-title store title 'memory)))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in persistent store$"
       (lambda (store-name title)
-        (should (cl-loop with store = (STORE store-name)
-                   for (_ instruction headline) in (reverse (org-glance-store-wal store))
-                   for hash = (org-glance-headline-hash headline)
-                   with seen = (make-hash-table :test #'equal)
-                   if (and (string= title (org-glance-headline-title headline))
-                           (f-exists-p (org-glance-store-headline-location store hash)))
-                   return t
-                   else if (not (gethash hash seen))
-                   do (puthash hash t seen)
-                   finally return nil))))
+        (let ((store (STORE store-name)))
+          (should (org-glance-store-get-headline-by-title store title 'disk)))))
 
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in memory store$"
      (lambda (store-name title)
        (let ((store (STORE store-name)))
-         (should (not (org-glance-store-get-headline-by-title store title))))))
+         (should (not (org-glance-store-get-headline-by-title store title 'memory))))))
 
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in persistent store$"
-     (lambda (store-name title)
-       (should (not (cl-loop with store = (STORE store-name)
-                       for (_ instruction headline) in (reverse (org-glance-store-wal store))
-                       for hash = (org-glance-headline-hash headline)
-                       with seen = (make-hash-table :test #'equal)
-                       if (and (string= title (org-glance-headline-title headline))
-                               (f-exists-p (org-glance-store-headline-location store hash)))
-                       return t
-                       else if (not (gethash hash seen))
-                       do (puthash hash t seen)
-                       finally return nil)))))
+      (lambda (store-name title)
+        (let ((store (STORE store-name)))
+          (should (not (org-glance-store-get-headline-by-title store title 'disk))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
   (lambda (store cardinality state)

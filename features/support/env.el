@@ -52,7 +52,7 @@
   (require 'ert))
 
 (Setup  ;; Before anything has run
- ;; (setq inhibit-message t)
+
  )
 
 (Before

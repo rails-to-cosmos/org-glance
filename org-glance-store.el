@@ -57,10 +57,9 @@
   "Simplifies interactive debug. Creates store from LOCATION and puts headlines in it."
   (declare (indent 1))
   (let ((store (org-glance-store location)))
-    (cl-loop
-       for string in strings
-       collect (org-glance-headline-from-string string)
-       into headlines
+    (cl-loop for string in strings
+       for headline = (org-glance-headline-from-string string)
+       collect headline into headlines
        finally return (apply #'org-glance-store-put-headlines store headlines))))
 
 (cl-defun org-glance-store-read (location)
@@ -114,8 +113,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
-     unless (f-exists-p location)
-     ;; could be made in a separate thread:
+     unless (f-exists-p location) ;; could be made in a separate thread
      do (org-glance-headline-save headline location)
      ;; no need to write fully qualified headlines, write only headers
 
@@ -188,9 +186,27 @@ achieved by calling `org-glance-store-flush' method."
       (org-glance-store-get-last-committed-offset-by-hash store hash)
     headline))
 
-(cl-defun org-glance-store-get-headline-by-title (store title)
-  "Return `org-glance-headline-header' from STORE searched by TITLE."
-  (a-get (org-glance-store--title->headline store) title))
+(cl-defun org-glance-store-get-headline-by-title (store title &optional (storage 'memory))
+  "Return `org-glance-headline-header' from STORE searched by TITLE.
+
+STORAGE specifies where to lookup: 'memory or 'disk."
+  (cl-case storage
+    ('disk (cl-loop
+              with seen = (make-hash-table :test #'equal)
+              with wal = (reverse (org-glance-store-wal store))
+              for (_ instruction headline) in wal
+              for hash = (org-glance-headline-hash headline)
+              for headline-location = (org-glance-store-headline-location store hash)
+              for seen-p = (gethash hash seen)
+              for removed-p = (eq instruction 'RM)
+              for title-matches-p = (string= title (org-glance-headline-title headline))
+              for headline-exists-p = (f-exists-p headline-location)
+              if (and title-matches-p headline-exists-p)
+              return (org-glance-headline-load headline-location) ;;
+              else if (not seen-p)
+              do (puthash hash t seen)
+              finally return nil))
+    ('memory (a-get (org-glance-store--title->headline store) title))))
 
 (cl-defun org-glance-store-wal-read (location)
   (when (and (f-exists-p location) (f-readable-p location))
