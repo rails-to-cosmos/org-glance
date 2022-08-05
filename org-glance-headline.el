@@ -386,27 +386,42 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
 (cl-defmacro org-glance-map (var &rest forms)
   "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
-  `(cl-loop for begin in (org-glance-buffer-headlines)
-      for result = (save-excursion
-                     (goto-char begin)
-                     (let ((,(car var) (org-glance-headline-at-point)))
-                       (org-glance--with-headline-at-point
-                         ,@forms)))
-      when (not (null result))
-      collect result))
+  `(save-excursion
+     (cl-loop
+        initially do (progn
+                       (goto-char (point-min))
+                       (unless (org-at-heading-p)
+                         (outline-next-heading)))
+        while (org-at-heading-p)
+        collect (save-excursion
+                  (let ((,(car var) (org-glance-headline-at-point)))
+                    (org-glance--with-headline-at-point ,@forms)))
+        into result
+        when (condition-case nil
+                 (outline-forward-same-level 1)
+               (error t))
+        return result)))
 
 (cl-defmacro org-glance-map-filter (var filter &rest forms)
   "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
-  `(cl-loop for begin in (org-glance-buffer-headlines)
-      for result = (save-excursion
-                     (goto-char begin)
-                     (when (funcall ,filter)
-                       (let ((,(car var) (org-glance-headline-at-point)))
-                         (org-glance--with-headline-at-point
-                           ,@forms))))
-      when (not (null result))
-      collect result))
+  `(save-excursion
+     (cl-loop
+        initially do (progn
+                       (goto-char (point-min))
+                       (unless (org-at-heading-p)
+                         (outline-next-heading)))
+        while (org-at-heading-p)
+        collect (save-excursion
+                  (when (funcall ,filter)
+                    (let ((,(car var) (org-glance-headline-at-point)))
+                      (org-glance--with-headline-at-point
+                        ,@forms))))
+        into result
+        when (condition-case nil
+                 (outline-forward-same-level 1)
+               (error t))
+        return (-non-nil result))))
 
 (cl-defmacro org-glance-file-contents (file)
   "Return list of FILE contents.
