@@ -384,8 +384,7 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
          (org-element-property :begin headline))))))
 
 (cl-defmacro org-glance-map (var &rest forms)
-  "Map buffer headlines and execute FORMS on each.
-This is the anaphoric method, you can use `<headline>' to call headline in forms."
+  "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
   `(cl-loop for begin in (org-glance-buffer-headlines)
       for result = (save-excursion
@@ -397,8 +396,7 @@ This is the anaphoric method, you can use `<headline>' to call headline in forms
       collect result))
 
 (cl-defmacro org-glance-map-filter (var filter &rest forms)
-  "Map buffer headlines and execute FORMS on each.
-This is the anaphoric method, you can use `<headline>' to call headline in forms."
+  "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
   `(cl-loop for begin in (org-glance-buffer-headlines)
       for result = (save-excursion
@@ -438,7 +436,12 @@ list of `org-glance-headline'."
 
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
-  (car (org-glance-map-file file <headline>)))
+  (org-glance--with-temp-buffer
+   (insert-file-contents file)
+   (goto-char (point-min))
+   (unless (org-at-heading-p)
+     (outline-next-heading))
+   (org-glance-headline-at-point)))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
