@@ -25,6 +25,8 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
 (org-glance-store-completing-read test-store)
 (org-glance-store-completing-read (org-glance-store-read "/tmp/store"))
 
+(org-glance-store-wal (org-glance-store-read "/tmp/store"))
+
 (org-glance-store-hashes test-store)
 
 (org-glance-store--title->hash test-store)

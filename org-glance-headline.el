@@ -175,7 +175,7 @@
   "Make instance of `org-glance-headline-header' from HEADLINE."
   headline)
 
-(cl-defun org-glance-headline-subtree--normalized ()
+(cl-defun org-glance-headline--ast-normalized ()
   (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))
                (element (car subtree))
                ;; get offset of the topmost element:
@@ -251,18 +251,17 @@
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (org-glance--with-headline-at-point
-    (let* ((subtree (org-glance-headline-subtree--normalized))
-           (element (car subtree)) ;; topmost heading of current headline
-           (contents (org-glance-headline--ast-contents subtree))
+    (let* ((ast (org-glance-headline--ast-normalized))
+           (contents (org-glance-headline--ast-contents ast))
            (user-properties (org-glance-headline--user-properties contents)))
       (org-glance-headline--create
-       :-title (org-glance-headline--ast-title subtree)
+       :-title (org-glance-headline--ast-title ast)
        :-state (org-glance-headline--ast-state contents)
        :-hash (org-glance-headline--ast-hash contents)
-       :-class (org-glance-headline--ast-class subtree)
-       :-commented-p (org-glance-headline--ast-commented-p subtree)
-       :-archived-p (org-glance-headline--ast-archived-p subtree)
-       :-closed-p (org-glance-headline--ast-closed-p subtree)
+       :-class (org-glance-headline--ast-class ast)
+       :-commented-p (org-glance-headline--ast-commented-p ast)
+       :-archived-p (org-glance-headline--ast-archived-p ast)
+       :-closed-p (org-glance-headline--ast-closed-p ast)
        :-encrypted-p (org-glance-headline--ast-encrypted-p contents)
        :-linked-p (org-glance-headline--ast-linked-p contents)
        :-propertized-p (not (null user-properties))
