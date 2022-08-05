@@ -45,7 +45,8 @@
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
   (-title nil :type string :read-only t :documentation "Original headline title.")
   (-state nil :type string :read-only t :documentation "TODO state of headline.")
-  (-class nil :type list :read-only t :documentation "List of downcased tags."))
+  (-class nil :type list :read-only t :documentation "List of downcased tags.")
+  (-commented-p nil :type boolean :read-only t :documentation "Is the headline commented?"))
 
 (cl-defstruct (org-glance-headline (:include org-glance-headline-header)
                                    (:constructor org-glance-headline--create)
@@ -55,7 +56,6 @@
   (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
   (user-properties nil :type list :read-only t :documentation "Properties specified by user in headline contents.")
   (archived-p nil :type bool :read-only t)
-  (commented-p nil :type bool :read-only t)
   (closed-p nil :type bool :read-only t)
   (encrypted-p nil :type bool :read-only t)
   (linked-p nil :type bool :read-only t)
@@ -88,6 +88,15 @@
 (cl-defmethod org-glance-headline-class ((headline org-glance-headline-header))
   (org-glance-headline-header--class headline))
 
+(cl-defgeneric org-glance-headline-commented-p (headline)
+  "Return t if HEADLINE is commented and nil otherwise.")
+
+(cl-defmethod org-glance-headline-commented-p ((headline org-glance-headline))
+  (org-glance-headline--commented-p headline))
+
+(cl-defmethod org-glance-headline-commented-p ((headline org-glance-headline-header))
+  (org-glance-headline-header--commented-p headline))
+
 (cl-defgeneric org-glance-headline-header (headline)
   "Make instance of `org-glance-headline-header' from HEADLINE.")
 
@@ -97,7 +106,8 @@
    :-hash (org-glance-headline-hash headline)
    :-title (org-glance-headline-title headline)
    :-state (org-glance-headline-state headline)
-   :-class (org-glance-headline-class headline)))
+   :-class (org-glance-headline-class headline)
+   :-commented-p (org-glance-headline-commented-p headline)))
 
 (cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
   "Make instance of `org-glance-headline-header' from HEADLINE."
@@ -146,9 +156,9 @@
                    (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
                    (secure-hash 'md5))
        :-class (-map #'downcase (org-element-property :tags element))
+       :-commented-p (not (null (org-element-property :commentedp element)))
        :contents contents
        :archived-p (org-element-property :archivedp element)
-       :commented-p (org-element-property :commentedp element)
        :closed-p (org-element-property :closed element)
        :encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
        :linked-p (not (null (s-match-strings-all org-link-any-re contents)))

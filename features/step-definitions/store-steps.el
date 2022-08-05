@@ -68,9 +68,13 @@
           finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
-     (lambda (store cardinality)
-       (should nil)
-       ))
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (commented-p . hash) in (org-glance-store--commented->hash store)
+          unless (null commented-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
   (lambda (store cardinality)

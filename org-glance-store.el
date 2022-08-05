@@ -24,6 +24,7 @@
   (-title->hash (a-list) :type list :read-only t)
   (-state->hash (a-list) :type list :read-only t)
   (-class->hash (a-list) :type list :read-only t)
+  (-commented->hash (a-list) :type list :read-only t)
   ;; (class->headline (a-list) :type list :read-only t)
   ;; (state->headline (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
@@ -63,8 +64,10 @@
      for title = (org-glance-headline-title headline)
      for state = (org-glance-headline-state headline)
      for classes = (org-glance-headline-class headline)
+     for commented = (org-glance-headline-commented-p headline)
      collect (cons state hash) into state->hash
      collect (cons title hash) into title->hash
+     collect (cons commented hash) into commented->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
      finally return (org-glance-store--create
                      :location location
@@ -78,6 +81,7 @@
                      :-title->hash title->hash
                      :-state->hash state->hash
                      :-class->hash class->hash
+                     :-commented->hash commented->hash
                      :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
@@ -119,6 +123,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for hash = (org-glance-headline-hash headline)
      for state = (org-glance-headline-state headline)
      for classes = (org-glance-headline-class headline)
+     for commented = (org-glance-headline-commented-p headline)
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
@@ -135,6 +140,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
           (puthash uniq-title hash title->headline))
 
      collect (cons state hash) into state->hash
+     collect (cons commented hash) into commented->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
 
      collect event into wal
@@ -151,6 +157,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
                                              append (list title hash)))
                      :-state->hash (append (org-glance-store--state->hash store) state->hash)
                      :-class->hash (append (org-glance-store--class->hash store) class->hash)
+                     :-commented->hash (append (org-glance-store--commented->hash store) commented->hash)
                      :wal (append store-wal wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
@@ -169,12 +176,15 @@ achieved by calling `org-glance-store-flush' method."
      with title->hash = (org-glance-store--title->hash store)
      with state->hash = (org-glance-store--state->hash store)
      with class->hash = (org-glance-store--class->hash store)
+     with commented->hash = (org-glance-store--commented->hash store)
      with removed-states = (make-hash-table)
      with removed-classes = (make-hash-table)
+     with removed-commented = (make-hash-table)
      for headline in headlines
      for event = (list current-offset 'RM headline)
      for title = (org-glance-headline-title headline)
      for state = (org-glance-headline-state headline)
+     for commented-p = (org-glance-headline-commented-p headline)
      for classes = (org-glance-headline-class headline)
      for hash = (org-glance-headline-hash headline)
      collect event into wal
@@ -182,6 +192,7 @@ achieved by calling `org-glance-store-flush' method."
      do (cl-loop for class in classes
            do (puthash (cons class hash) t removed-classes))
      do (puthash (cons state hash) t removed-states)
+     do (puthash (cons commented-p hash) t removed-commented)
      finally do (org-glance-store-wal-append wal wal-location)
      finally return (org-glance-store--create
                      :location store-location
@@ -193,6 +204,9 @@ achieved by calling `org-glance-store-flush' method."
                      :-class->hash (cl-loop for class in class->hash
                                       when (not (gethash class removed-classes))
                                       collect class)
+                     :-commented->hash (cl-loop for commented in commented->hash
+                                          when (not (gethash commented removed-commented))
+                                          collect commented)
                      :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)
