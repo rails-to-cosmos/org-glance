@@ -318,28 +318,6 @@
 (cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
   (insert (org-glance-headline-contents headline) "\n"))
 
-(cl-defmethod org-glance-headline:get-org-property ((headline org-glance-headline) key &optional default)
-  "Retrieve KEY from HEADLINE org properties."
-  (alist-get (upcase key) (org-glance-headline-org-properties headline) default nil #'string=))
-
-(cl-defmethod org-glance-headline-set-org-properties ((headline org-glance-headline) key (value string))
-  "Return new HEADLINE with property KEY set to VALUE."
-  (org-glance--with-temp-buffer
-   (insert (org-glance-headline-contents headline))
-   (goto-char (point-min))
-   (org-set-property key value)
-   (org-glance-headline-at-point)))
-
-(cl-defmethod org-glance-headline-remove-org-properties ((headline org-glance-headline) &rest keys)
-  "Set HEADLINE property KEY to VALUE."
-  (org-glance--with-temp-buffer
-   (insert (org-glance-headline-contents headline))
-   (goto-char (point-min))
-   (let ((inhibit-message t))
-     (cl-loop for key in keys
-          do (org-delete-property key)))
-   (org-glance-headline-at-point)))
-
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
 ;;     (archived-p byte)
@@ -372,16 +350,6 @@
 ;;  (f-write-bytes (org-glance-headline:pack (org-glance-headline-at-point)) "/tmp/headline.bin")
 ;;  (a-get (bindat-unpack org-glance-headline--bindat-spec (f-read-bytes "/tmp/headline.bin")) 'file)
 ;;  (string-make-unibyte "hello"))
-
-(cl-defun org-glance-buffer-headlines ()
-  "Return list of buffer headline positions (:begin of org-element).
-
-This function defines the meaning of `org-glance-headline': non-nil org-element of level 1."
-  (-non-nil
-   (org-element-map (org-element-parse-buffer 'headline) 'headline
-     (lambda (headline)
-       (when (= (org-element-property :level headline) 1)
-         (org-element-property :begin headline))))))
 
 (cl-defmacro org-glance-map (var &rest forms)
   "Map buffer headlines and execute FORMS on each binding headline to VAR."
