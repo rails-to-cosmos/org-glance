@@ -35,6 +35,7 @@
 (require 'org)
 (require 'org-element)
 (require 's)
+(require 'thunk)
 
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
@@ -174,63 +175,96 @@
   "Make instance of `org-glance-headline-header' from HEADLINE."
   headline)
 
+(cl-defun org-glance-headline-subtree--normalized ()
+  (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))
+               (element (car subtree))
+               ;; get offset of the topmost element:
+               (indent-offset (1- (org-element-property :level element))))
+    ;; Consider side-effect on subtree: we change indentation levels of all nested subtrees
+    (when (> indent-offset 0)
+      (cl-loop for headline in (org-element-map subtree 'headline #'identity)
+         for level = (org-element-property :level headline)
+         do (org-element-put-property headline :level (- level indent-offset))))
+    subtree))
+
+(cl-defun org-glance-headline--user-properties (contents)
+  (cl-loop for (_ key value)
+     in (append (s-match-strings-all org-glance-user-property-1-re contents)
+                (s-match-strings-all org-glance-user-property-2-re contents))
+     when (not (member key org-special-properties))
+     collect (cons key value) into result
+     finally return (seq-uniq result #'(lambda (a b) (and (string= (car a) (car b))
+                                                     (string= (cdr a) (cdr b)))))))
+
+(cl-defun org-glance-headline--ast-contents (ast)
+  (->> ast
+       org-element-interpret-data
+       substring-no-properties
+       s-trim))
+
+(cl-defun org-glance-headline--ast-title (ast)
+  (with-temp-buffer
+    (insert (or (org-element-property :TITLE (car ast))
+                (org-element-property :raw-value (car ast))
+                ""))
+    (->> (org-element-parse-buffer)
+         org-glance--links-to-titles
+         org-element-interpret-data
+         substring-no-properties
+         s-trim)))
+
+(cl-defun org-glance-headline--ast-state (contents)
+  (org-glance--with-temp-buffer
+   (insert contents)
+   (goto-char (point-min))
+   (unless (org-at-heading-p)
+     (outline-next-heading))
+   (-some->> (org-get-todo-state)
+     substring-no-properties
+     upcase)))
+
+(cl-defun org-glance-headline--ast-hash (contents)
+  (->> contents
+       s-trim
+       downcase
+       (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
+       (secure-hash 'md5)))
+
+(cl-defun org-glance-headline--ast-class (ast)
+  (-map #'downcase (org-element-property :tags (car ast))))
+
+(cl-defun org-glance-headline--ast-commented-p (ast)
+  (not (null (org-element-property :commentedp (car ast)))))
+
+(cl-defun org-glance-headline--ast-closed-p (ast)
+  (not (null (org-element-property :closed (car ast)))))
+
+(cl-defun org-glance-headline--ast-archived-p (ast)
+  (not (null (org-element-property :archivedp (car ast)))))
+
+(cl-defun org-glance-headline--ast-encrypted-p (contents)
+  (not (null (s-match-strings-all org-glance-encrypted-re contents))))
+
+(cl-defun org-glance-headline--ast-linked-p (contents)
+  (not (null (s-match-strings-all org-link-any-re contents))))
+
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (org-glance--with-headline-at-point
-    (let* ((subtree (let* ((subtree (org-element-contents (org-element-parse-buffer)))
-                           (element (car subtree))
-                           ;; get offset of the topmost element:
-                           (indent-offset (1- (org-element-property :level element))))
-                      ;; Consider side-effect on subtree: we change indentation levels of all nested subtrees
-                      (when (> indent-offset 0)
-                        (cl-loop for headline in (org-element-map subtree 'headline #'identity)
-                           do (let ((level (org-element-property :level headline)))
-                                (org-element-put-property headline :level (- level indent-offset)))))
-                      subtree))
+    (let* ((subtree (org-glance-headline-subtree--normalized))
            (element (car subtree)) ;; topmost heading of current headline
-           (contents (->> subtree
-                          org-element-interpret-data
-                          substring-no-properties
-                          s-trim))
-           (title (or (org-element-property :TITLE element)
-                      (org-element-property :raw-value element)
-                      ""))
-           (user-properties
-            (cl-loop
-               for (_ key value)
-               in (append (s-match-strings-all org-glance-user-property-1-re contents)
-                          (s-match-strings-all org-glance-user-property-2-re contents))
-               when (not (member key org-special-properties))
-               collect (cons key value) into result
-               finally return (seq-uniq result #'(lambda (a b) (and (string= (car a) (car b))
-                                                               (string= (cdr a) (cdr b))))))))
+           (contents (org-glance-headline--ast-contents subtree))
+           (user-properties (org-glance-headline--user-properties contents)))
       (org-glance-headline--create
-       :-title (with-temp-buffer
-                 (insert title)
-                 (->> (org-element-parse-buffer)
-                      org-glance--links-to-titles
-                      org-element-interpret-data
-                      substring-no-properties
-                      s-trim))
-       :-state (org-glance--with-temp-buffer
-                (insert contents)
-                (goto-char (point-min))
-                (unless (org-at-heading-p)
-                  (outline-next-heading))
-                (-some->> (org-get-todo-state)
-                  substring-no-properties
-                  upcase))
-       :-hash (->> contents
-                   s-trim
-                   downcase
-                   (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
-                   (secure-hash 'md5))
-       :-class (-map #'downcase (org-element-property :tags element))
-       :-commented-p (not (null (org-element-property :commentedp element)))
-       :-archived-p (not (null (org-element-property :archivedp element)))
-       :-closed-p (not (null (org-element-property :closed element)))
-       :-encrypted-p (not (null (s-match-strings-all org-glance-encrypted-re contents)))
-       :-linked-p (not (null (s-match-strings-all org-link-any-re contents)))
+       :-title (org-glance-headline--ast-title subtree)
+       :-state (org-glance-headline--ast-state contents)
+       :-hash (org-glance-headline--ast-hash contents)
+       :-class (org-glance-headline--ast-class subtree)
+       :-commented-p (org-glance-headline--ast-commented-p subtree)
+       :-archived-p (org-glance-headline--ast-archived-p subtree)
+       :-closed-p (org-glance-headline--ast-closed-p subtree)
+       :-encrypted-p (org-glance-headline--ast-encrypted-p contents)
+       :-linked-p (org-glance-headline--ast-linked-p contents)
        :-propertized-p (not (null user-properties))
        :contents contents
        :org-properties (org-entry-properties)
