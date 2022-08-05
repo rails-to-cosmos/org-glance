@@ -402,43 +402,6 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
                (error t))
         return result)))
 
-(cl-defmacro org-glance-map-filter (var filter &rest forms)
-  "Map buffer headlines and execute FORMS on each binding headline to VAR."
-  (declare (indent 1))
-  `(save-excursion
-     (cl-loop
-        initially do (progn
-                       (goto-char (point-min))
-                       (unless (org-at-heading-p)
-                         (outline-next-heading)))
-        while (org-at-heading-p)
-        collect (save-excursion
-                  (when (funcall ,filter)
-                    (let ((,(car var) (org-glance-headline-at-point)))
-                      (org-glance--with-headline-at-point
-                        ,@forms))))
-        into result
-        when (condition-case nil
-                 (outline-forward-same-level 1)
-               (error t))
-        return (-non-nil result))))
-
-(cl-defmacro org-glance-file-contents (file)
-  "Return list of FILE contents.
-
-CAR of this list is a string before the first heading, CDR is a
-list of `org-glance-headline'."
-  (declare (indent 1))
-  `(org-glance--with-temp-buffer
-    (insert-file-contents ,file)
-    (append
-     (list (buffer-substring-no-properties (point-min) (save-excursion
-                                                         (goto-char (point-min))
-                                                         (unless (org-at-heading-p)
-                                                           (outline-next-heading))
-                                                         (point))))
-     (org-glance-map (headline) headline))))
-
 (cl-defun org-glance-headline-load (file)
   "Load headline from FILE."
   (org-glance--with-temp-buffer
