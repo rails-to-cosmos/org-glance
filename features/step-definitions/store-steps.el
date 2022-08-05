@@ -112,11 +112,20 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) encrypted headlines?$"
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (encrypted-p . hash) in (org-glance-store--encrypted->hash store)
+          unless (null encrypted-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
+
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
-  (lambda (store-name expected-count expected-class)
-    (cl-loop
-       with store = (STORE store-name)
-       for (class . hash) in (org-glance-store--class->hash store)
-       when (string= class (downcase expected-class))
-       count 1 into count
-       finally (should (= count (string-to-number expected-count))))))
+     (lambda (store-name expected-count expected-class)
+       (cl-loop
+          with store = (STORE store-name)
+          for (class . hash) in (org-glance-store--class->hash store)
+          when (string= class (downcase expected-class))
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))

@@ -29,6 +29,7 @@
   (-closed->hash (a-list) :type list :read-only t)
   (-linked->hash (a-list) :type list :read-only t)
   (-propertized->hash (a-list) :type list :read-only t)
+  (-encrypted->hash (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
   ;; (lru-cache (a-list) :type list :read-only t)
   (wal nil :type list :read-only t :documentation "Append-only event log. TODO should be removed from memory store."))
@@ -54,13 +55,16 @@
     (cl-loop for string in strings
        for headline = (org-glance-headline-from-string string)
        collect headline into headlines
-       finally return (apply #'org-glance-store-put-headlines store headlines))))
+       finally do (apply #'org-glance-store-put-headlines store headlines)
+       finally return (org-glance-store-read location))))
 
 (cl-defun org-glance-store-read (location)
   "Read `org-glance-store' from LOCATION."
   (cl-loop
      with wal = (org-glance-store-wal-read (f-join location org-glance-store-wal-filename))
      with headlines = (org-glance-store-wal-headlines wal)
+     with title->hash = (make-hash-table :test #'equal)
+
      for headline in headlines
      for hash = (org-glance-headline-hash headline)
      for title = (org-glance-headline-title headline)
@@ -71,13 +75,16 @@
      for closed = (org-glance-headline-closed-p headline)
      for linked = (org-glance-headline-linked-p headline)
      for propertized = (org-glance-headline-propertized-p headline)
+     for encrypted = (org-glance-headline-encrypted-p headline)
+
+     do (org-glance-store--uniquify title hash title->hash)
      collect (cons state hash) into state->hash
-     collect (cons title hash) into title->hash
      collect (cons commented hash) into commented->hash
      collect (cons archived hash) into archived->hash
      collect (cons closed hash) into closed->hash
      collect (cons linked hash) into linked->hash
      collect (cons propertized hash) into propertized->hash
+     collect (cons encrypted hash) into encrypted->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
      finally return (org-glance-store--create
                      :location location
@@ -88,7 +95,9 @@
                                       ((null wal) (float-time))
                                       (t (cl-destructuring-bind (offset _ _) (car (last wal))
                                            offset)))
-                     :-title->hash title->hash
+                     :-title->hash (cl-loop for title being the hash-keys of title->hash
+                                      using (hash-values hash)
+                                      collect (list title hash))
                      :-state->hash state->hash
                      :-class->hash class->hash
                      :-commented->hash commented->hash
@@ -96,6 +105,7 @@
                      :-closed->hash closed->hash
                      :-linked->hash linked->hash
                      :-propertized->hash propertized->hash
+                     :-encrypted->hash encrypted->hash
                      :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
@@ -127,7 +137,7 @@ functional data structure."
 Append PUT event to WAL and insert headlines to persistent storage."
   (cl-loop
      with current-offset = (float-time)
-     with title->headline = (make-hash-table :test #'equal)
+     with title->hash = (make-hash-table :test #'equal)
      with store-location = (org-glance-store-location store)
      with store-watermark = (org-glance-store-watermark store)
      with store-wal = (org-glance-store-wal store)
@@ -142,20 +152,14 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for closed = (org-glance-headline-closed-p headline)
      for linked = (org-glance-headline-linked-p headline)
      for propertized = (org-glance-headline-propertized-p headline)
+     for encrypted = (org-glance-headline-encrypted-p headline)
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
      unless (f-exists-p location) ;; could be made in a separate thread
      ;; no need to write fully qualified headlines, write only headers
      do (org-glance-headline-save headline location)
-
-     ;; uniquify titles
-     do (let ((uniq-title title)
-              (tryout 1))
-          (while (gethash uniq-title title->headline)
-            (cl-incf tryout)
-            (setq uniq-title (format "%s (%d)" title tryout)))
-          (puthash uniq-title hash title->headline))
+     do (org-glance-store--uniquify title hash title->hash)
 
      collect (cons state hash) into state->hash
      collect (cons commented hash) into commented->hash
@@ -163,6 +167,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
      collect (cons closed hash) into closed->hash
      collect (cons linked hash) into linked->hash
      collect (cons propertized hash) into propertized->hash
+     collect (cons encrypted hash) into encrypted->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
 
      collect event into wal
@@ -174,7 +179,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
                      :watermark store-watermark
                      :-title->hash (apply #'a-assoc
                                           (org-glance-store--title->hash store)
-                                          (cl-loop for title being the hash-keys of title->headline
+                                          (cl-loop for title being the hash-keys of title->hash
                                              using (hash-values hash)
                                              append (list title hash)))
                      :-state->hash (append (org-glance-store--state->hash store) state->hash)
@@ -184,6 +189,7 @@ Append PUT event to WAL and insert headlines to persistent storage."
                      :-closed->hash (append (org-glance-store--closed->hash store) closed->hash)
                      :-linked->hash (append (org-glance-store--linked->hash store) linked->hash)
                      :-propertized->hash (append (org-glance-store--propertized->hash store) propertized->hash)
+                     :-encrypted->hash (append (org-glance-store--encrypted->hash store) encrypted->hash)
                      :wal (append store-wal wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
@@ -207,6 +213,7 @@ achieved by calling `org-glance-store-flush' method."
      with closed->hash = (org-glance-store--closed->hash store)
      with linked->hash = (org-glance-store--linked->hash store)
      with propertized->hash = (org-glance-store--propertized->hash store)
+     with encrypted->hash = (org-glance-store--encrypted->hash store)
      with removed-states = (make-hash-table)
      with removed-classes = (make-hash-table)
      with removed-commented = (make-hash-table)
@@ -214,6 +221,7 @@ achieved by calling `org-glance-store-flush' method."
      with removed-closed = (make-hash-table)
      with removed-linked = (make-hash-table)
      with removed-propertized = (make-hash-table)
+     with removed-encrypted = (make-hash-table)
      for headline in headlines
      for event = (list current-offset 'RM headline)
      for title = (org-glance-headline-title headline)
@@ -223,6 +231,7 @@ achieved by calling `org-glance-store-flush' method."
      for closed = (org-glance-headline-closed-p headline)
      for linked = (org-glance-headline-linked-p headline)
      for propertized = (org-glance-headline-propertized-p headline)
+     for encrypted = (org-glance-headline-encrypted-p headline)
      for classes = (org-glance-headline-class headline)
      for hash = (org-glance-headline-hash headline)
      collect event into wal
@@ -235,6 +244,7 @@ achieved by calling `org-glance-store-flush' method."
      do (puthash (cons closed hash) t removed-closed)
      do (puthash (cons linked hash) t removed-linked)
      do (puthash (cons propertized hash) t removed-propertized)
+     do (puthash (cons encrypted hash) t removed-encrypted)
      finally do (org-glance-store-wal-append wal wal-location)
      finally return (org-glance-store--create
                      :location store-location
@@ -260,7 +270,19 @@ achieved by calling `org-glance-store-flush' method."
                                        collect linked)
                      :-propertized->hash (cl-loop for propertized in propertized->hash
                                             when (not (gethash propertized removed-propertized))
-                                            collect propertized)                                                                                :wal (append (org-glance-store-wal store) wal))))
+                                            collect propertized)
+                     :-encrypted->hash (cl-loop for encrypted in encrypted->hash
+                                            when (not (gethash encrypted removed-encrypted))
+                                            collect encrypted)
+                     :wal (append (org-glance-store-wal store) wal))))
+
+(cl-defun org-glance-store--uniquify (key value hash-table)
+  (let ((uniq-key key)
+        (tryout 1))
+    (while (gethash uniq-key hash-table)
+      (cl-incf tryout)
+      (setq uniq-key (format "%s (%d)" key tryout)))
+    (puthash uniq-key value hash-table)))
 
 (cl-defun org-glance-store-wal-headlines (wal)
   "Return actual headlines from WAL."
@@ -377,11 +399,11 @@ STORAGE specifies where to lookup: 'memory or 'disk."
 (cl-defmethod org-glance-store-headline ((store org-glance-store) (hash string))
   (org-glance-headline-load (org-glance-store-headline-location store hash)))
 
-;; (cl-defun org-glance-store-completing-read (store)
-;;   "Read headlines from STORE with completion."
-;;   (let* ((titles (org-glance-store-i-title* store))
-;;          (hash (alist-get (completing-read "Headline: " titles nil t) titles nil nil #'string=)))
-;;     (org-glance-store-headline store hash)))
+(cl-defun org-glance-store-completing-read (store)
+  "Read headlines from STORE with completion."
+  (let* ((title->hash (org-glance-store--title->hash store))
+         (hash (alist-get (completing-read "Headline: " title->hash nil t) title->hash nil nil #'string=)))
+    (org-glance-store-headline store hash)))
 
 (cl-defun org-glance-store-import (store loc)
   "Add headlines from location LOC to STORE."

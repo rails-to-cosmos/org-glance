@@ -39,14 +39,6 @@
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 
-(defconst org-glance-user-property-1-re
-  "[[:blank:]]+\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
-  "How to parse user specified properties.")
-
-(defconst org-glance-user-property-2-re
-  "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
-  "How to parse user specified properties.")
-
 (cl-defstruct (org-glance-headline-header (:constructor org-glance-headline-header--create)
                                           (:copier nil))
   "Limited edition of `org-glance-headline'."
@@ -68,6 +60,17 @@
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
   (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
   (user-properties nil :type list :read-only t :documentation "Properties specified by user in headline contents."))
+
+(defconst org-glance-encrypted-re "aes-encrypted V [0-9]+.[0-9]+-.+\n"
+  "Encrypted header pattern.")
+
+(defconst org-glance-user-property-1-re
+  "[[:blank:]]+\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
+  "How to parse user specified properties.")
+
+(defconst org-glance-user-property-2-re
+  "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
+  "How to parse user specified properties.")
 
 (cl-defgeneric org-glance-headline-hash (object)
   "Get hash of OBJECT.")
@@ -224,9 +227,9 @@
                    (secure-hash 'md5))
        :-class (-map #'downcase (org-element-property :tags element))
        :-commented-p (not (null (org-element-property :commentedp element)))
-       :-archived-p (org-element-property :archivedp element)
-       :-closed-p (org-element-property :closed element)
-       :-encrypted-p (not (null (s-match-strings-all "aes-encrypted V [0-9]+.[0-9]+-.+\n" contents)))
+       :-archived-p (not (null (org-element-property :archivedp element)))
+       :-closed-p (not (null (org-element-property :closed element)))
+       :-encrypted-p (not (null (s-match-strings-all org-glance-encrypted-re contents)))
        :-linked-p (not (null (s-match-strings-all org-link-any-re contents)))
        :-propertized-p (not (null user-properties))
        :contents contents

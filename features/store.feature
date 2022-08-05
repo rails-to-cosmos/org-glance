@@ -37,23 +37,26 @@ Feature: Store
 
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
     And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
-(s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" (buffer-substring-no-properties (point-min) (point-max)))
-  @dev
+
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
       """
       * TODO COMMENT Hiking in Troodos :Travel:
+      aes-encrypted V 1.3-OCB-B-4-4-M
+      1/tktn7J+sRqmM2KLefQQZtIYV/FAOcDn+Rs/s5Nm17pNMFtusnXrgrjwzxWFk8F4YSBdCbbRwzl
+      wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41
 
       * TODO Travel to Romania :ARCHIVE:
         SCHEDULED: <2022-01-01 Sat>
 
-      * TODO Honeymoon in Dagestan :Family:
+      * TODO Secret honeymoon in Dagestan :Family:
         [[http:fsf.com]]
 
         + Items: Backpack
 
       * DONE Travel to Romania :Travel:
         CLOSED: [2021-01-10 Sun 00:00] SCHEDULED: <2021-01-01 Fri>
+
       """
 
     Then store "Stories" should contain 4 headlines
@@ -66,4 +69,4 @@ Feature: Store
     And store "Stories" should contain 1 closed headline
     And store "Stories" should contain 1 linked headline
     And store "Stories" should contain 1 propertized headline
-  Scenario: Filter by encrypted property
+    And store "Stories" should contain 1 encrypted headline
