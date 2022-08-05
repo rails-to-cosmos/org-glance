@@ -254,7 +254,7 @@ TODO:
                            (cl-destructuring-bind (headline . marker) h&m
                              (-> store
                                  (org-glance-store-remove-headline-by-hash (org-glance-material-marker-hash marker))
-                                 (org-glance-store-put-headlines headline))))
+                                 (org-glance-store-put-headlines (list headline)))))
                          store
                          h&ms))
                        org-glance-material--buffer-to-store)

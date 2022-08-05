@@ -55,7 +55,7 @@
     (cl-loop for string in strings
        for headline = (org-glance-headline-from-string string)
        collect headline into headlines
-       finally do (apply #'org-glance-store-put-headlines store headlines)
+       finally do (org-glance-store-put-headlines store headlines)
        finally return (org-glance-store-read location))))
 
 (cl-defun org-glance-store-read (location)
@@ -131,7 +131,7 @@ functional data structure."
                     (insert (prin1-to-string offset))))
      finally return store))
 
-(cl-defun org-glance-store-put-headlines (store &rest headlines)
+(cl-defun org-glance-store-put-headlines (store headlines)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
 
 Append PUT event to WAL and insert headlines to persistent storage."
@@ -407,8 +407,12 @@ STORAGE specifies where to lookup: 'memory or 'disk."
 
 (cl-defun org-glance-store-import (store loc)
   "Add headlines from location LOC to STORE."
-  (let ((headlines (-flatten (-map #'org-glance-file-headlines (org-glance-scope loc)))))
-    (apply #'org-glance-store-put-headlines store headlines)))
+  (cl-loop for file in (org-glance-scope loc)
+     append (org-glance--with-temp-buffer
+             (insert-file-contents file)
+             (org-glance-map (headline) headline))
+     into headlines
+     finally return (org-glance-store-put-headlines store headlines)))
 
 (cl-defun org-glance-store-equal-p (a b)
   "Return t if A contains same headlines as B.

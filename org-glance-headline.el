@@ -408,16 +408,6 @@ This function defines the meaning of `org-glance-headline': non-nil org-element 
       when (not (null result))
       collect result))
 
-(cl-defmacro org-glance-map-file (file &rest forms)
-  (declare (indent 1))
-  `(org-glance--with-temp-buffer
-    (insert-file-contents ,file)
-    (org-glance-map (<headline>) ,@forms)))
-
-(cl-defun org-glance-file-headlines (file)
-  "List FILE headlines."
-  (org-glance-map-file file <headline>))
-
 (cl-defmacro org-glance-file-contents (file)
   "Return list of FILE contents.
 
