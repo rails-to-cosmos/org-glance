@@ -76,25 +76,41 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
-  (lambda (store cardinality)
-    (should nil)
-    ))
-
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) archived headlines?$"
-  (lambda (store cardinality)
-    (should nil)
-    ))
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (archived-p . hash) in (org-glance-store--archived->hash store)
+          unless (null archived-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
+
+(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (closed-p . hash) in (org-glance-store--closed->hash store)
+          unless (null closed-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) linked headlines?$"
-  (lambda (store cardinality)
-    (should nil)
-    ))
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (linked-p . hash) in (org-glance-store--linked->hash store)
+          unless (null linked-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) propertized headlines?$"
-  (lambda (store cardinality)
-    (should nil)
-    ))
+     (lambda (store-name expected-count)
+       (cl-loop
+          with store = (STORE store-name)
+          for (propertized-p . hash) in (org-glance-store--propertized->hash store)
+          unless (null propertized-p)
+          count 1 into count
+          finally (should (= count (string-to-number expected-count))))))
 
 (And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
   (lambda (store-name expected-count expected-class)

@@ -37,7 +37,7 @@ Feature: Store
 
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
     And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
-
+(s-match-strings-all "\\([[:word:],[:blank:],_]+\\)\\:[[:blank:]]*\\(.*\\)" (buffer-substring-no-properties (point-min) (point-max)))
   @dev
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
@@ -61,9 +61,9 @@ Feature: Store
     And store "Stories" should contain 1 "DONE" headline
     And store "Stories" should contain 2 headlines of class "Travel"
     And store "Stories" should contain 1 headline of class "Family"
+    And store "Stories" should contain 1 archived headline
     And store "Stories" should contain 1 commented headline
     And store "Stories" should contain 1 closed headline
-    And store "Stories" should contain 1 archived headline
     And store "Stories" should contain 1 linked headline
     And store "Stories" should contain 1 propertized headline
   Scenario: Filter by encrypted property

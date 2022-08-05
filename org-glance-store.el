@@ -24,9 +24,11 @@
   (-title->hash (a-list) :type list :read-only t)
   (-state->hash (a-list) :type list :read-only t)
   (-class->hash (a-list) :type list :read-only t)
+  (-archived->hash (a-list) :type list :read-only t)
   (-commented->hash (a-list) :type list :read-only t)
-  ;; (class->headline (a-list) :type list :read-only t)
-  ;; (state->headline (a-list) :type list :read-only t)
+  (-closed->hash (a-list) :type list :read-only t)
+  (-linked->hash (a-list) :type list :read-only t)
+  (-propertized->hash (a-list) :type list :read-only t)
   ;; (ts->headline (a-list) :type list :read-only t) ;; interval tree
   ;; (lru-cache (a-list) :type list :read-only t)
   (wal nil :type list :read-only t :documentation "Append-only event log. TODO should be removed from memory store."))
@@ -65,9 +67,17 @@
      for state = (org-glance-headline-state headline)
      for classes = (org-glance-headline-class headline)
      for commented = (org-glance-headline-commented-p headline)
+     for archived = (org-glance-headline-archived-p headline)
+     for closed = (org-glance-headline-closed-p headline)
+     for linked = (org-glance-headline-linked-p headline)
+     for propertized = (org-glance-headline-propertized-p headline)
      collect (cons state hash) into state->hash
      collect (cons title hash) into title->hash
      collect (cons commented hash) into commented->hash
+     collect (cons archived hash) into archived->hash
+     collect (cons closed hash) into closed->hash
+     collect (cons linked hash) into linked->hash
+     collect (cons propertized hash) into propertized->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
      finally return (org-glance-store--create
                      :location location
@@ -82,6 +92,10 @@
                      :-state->hash state->hash
                      :-class->hash class->hash
                      :-commented->hash commented->hash
+                     :-archived->hash archived->hash
+                     :-closed->hash closed->hash
+                     :-linked->hash linked->hash
+                     :-propertized->hash propertized->hash
                      :wal wal)))
 
 (cl-defun org-glance-store-flush (store)
@@ -124,6 +138,10 @@ Append PUT event to WAL and insert headlines to persistent storage."
      for state = (org-glance-headline-state headline)
      for classes = (org-glance-headline-class headline)
      for commented = (org-glance-headline-commented-p headline)
+     for archived = (org-glance-headline-archived-p headline)
+     for closed = (org-glance-headline-closed-p headline)
+     for linked = (org-glance-headline-linked-p headline)
+     for propertized = (org-glance-headline-propertized-p headline)
      for location = (org-glance-store-headline-location store headline)
      for event = (list current-offset 'PUT (org-glance-headline-header headline))
 
@@ -141,6 +159,10 @@ Append PUT event to WAL and insert headlines to persistent storage."
 
      collect (cons state hash) into state->hash
      collect (cons commented hash) into commented->hash
+     collect (cons archived hash) into archived->hash
+     collect (cons closed hash) into closed->hash
+     collect (cons linked hash) into linked->hash
+     collect (cons propertized hash) into propertized->hash
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
 
      collect event into wal
@@ -158,6 +180,10 @@ Append PUT event to WAL and insert headlines to persistent storage."
                      :-state->hash (append (org-glance-store--state->hash store) state->hash)
                      :-class->hash (append (org-glance-store--class->hash store) class->hash)
                      :-commented->hash (append (org-glance-store--commented->hash store) commented->hash)
+                     :-archived->hash (append (org-glance-store--archived->hash store) archived->hash)
+                     :-closed->hash (append (org-glance-store--closed->hash store) closed->hash)
+                     :-linked->hash (append (org-glance-store--linked->hash store) linked->hash)
+                     :-propertized->hash (append (org-glance-store--propertized->hash store) propertized->hash)
                      :wal (append store-wal wal))))
 
 (cl-defun org-glance-store-remove-headlines (store &rest headlines)
@@ -177,14 +203,26 @@ achieved by calling `org-glance-store-flush' method."
      with state->hash = (org-glance-store--state->hash store)
      with class->hash = (org-glance-store--class->hash store)
      with commented->hash = (org-glance-store--commented->hash store)
+     with archived->hash = (org-glance-store--archived->hash store)
+     with closed->hash = (org-glance-store--closed->hash store)
+     with linked->hash = (org-glance-store--linked->hash store)
+     with propertized->hash = (org-glance-store--propertized->hash store)
      with removed-states = (make-hash-table)
      with removed-classes = (make-hash-table)
      with removed-commented = (make-hash-table)
+     with removed-archived = (make-hash-table)
+     with removed-closed = (make-hash-table)
+     with removed-linked = (make-hash-table)
+     with removed-propertized = (make-hash-table)
      for headline in headlines
      for event = (list current-offset 'RM headline)
      for title = (org-glance-headline-title headline)
      for state = (org-glance-headline-state headline)
-     for commented-p = (org-glance-headline-commented-p headline)
+     for commented = (org-glance-headline-commented-p headline)
+     for archived = (org-glance-headline-archived-p headline)
+     for closed = (org-glance-headline-closed-p headline)
+     for linked = (org-glance-headline-linked-p headline)
+     for propertized = (org-glance-headline-propertized-p headline)
      for classes = (org-glance-headline-class headline)
      for hash = (org-glance-headline-hash headline)
      collect event into wal
@@ -192,7 +230,11 @@ achieved by calling `org-glance-store-flush' method."
      do (cl-loop for class in classes
            do (puthash (cons class hash) t removed-classes))
      do (puthash (cons state hash) t removed-states)
-     do (puthash (cons commented-p hash) t removed-commented)
+     do (puthash (cons commented hash) t removed-commented)
+     do (puthash (cons archived hash) t removed-archived)
+     do (puthash (cons closed hash) t removed-closed)
+     do (puthash (cons linked hash) t removed-linked)
+     do (puthash (cons propertized hash) t removed-propertized)
      finally do (org-glance-store-wal-append wal wal-location)
      finally return (org-glance-store--create
                      :location store-location
@@ -207,7 +249,18 @@ achieved by calling `org-glance-store-flush' method."
                      :-commented->hash (cl-loop for commented in commented->hash
                                           when (not (gethash commented removed-commented))
                                           collect commented)
-                     :wal (append (org-glance-store-wal store) wal))))
+                     :-archived->hash (cl-loop for archived in archived->hash
+                                         when (not (gethash archived removed-archived))
+                                         collect archived)
+                     :-closed->hash (cl-loop for closed in closed->hash
+                                       when (not (gethash closed removed-closed))
+                                       collect closed)
+                     :-linked->hash (cl-loop for linked in linked->hash
+                                       when (not (gethash linked removed-linked))
+                                       collect linked)
+                     :-propertized->hash (cl-loop for propertized in propertized->hash
+                                            when (not (gethash propertized removed-propertized))
+                                            collect propertized)                                                                                :wal (append (org-glance-store-wal store) wal))))
 
 (cl-defun org-glance-store-wal-headlines (wal)
   "Return actual headlines from WAL."
