@@ -58,7 +58,7 @@
         (let ((store (STORE store-name)))
           (should (not (org-glance-store-get-headline-by-title store title 'disk))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
      (lambda (store-name expected-count expected-state)
        (cl-loop
           with store = (STORE store-name)
@@ -67,7 +67,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) commented headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -76,7 +76,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) archived headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) archived headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -85,7 +85,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) closed headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -94,7 +94,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) linked headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) linked headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -103,7 +103,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) propertized headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) propertized headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -112,7 +112,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) encrypted headlines?$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) encrypted headlines?$"
      (lambda (store-name expected-count)
        (cl-loop
           with store = (STORE store-name)
@@ -121,7 +121,7 @@
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
 
-(And "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
+(Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines? of class \"\\([^\"]+\\)\"$"
      (lambda (store-name expected-count expected-class)
        (cl-loop
           with store = (STORE store-name)
@@ -129,3 +129,13 @@
           when (string= class (downcase expected-class))
           count 1 into count
           finally (should (= count (string-to-number expected-count))))))
+
+(When "^I filter headlines of class \"\\([^\"]+\\)\" of store \"\\([^\"]+\\)\" to store \"\\([^\"]+\\)\"$"
+  (lambda (expected-class src dst)
+    (let ((store (STORE src)))
+      (puthash dst
+               (org-glance-store-copy store (lambda (headline)
+                                              (member
+                                               (downcase expected-class)
+                                               (org-glance-headline-class headline))))
+               org-glance-test-stores))))

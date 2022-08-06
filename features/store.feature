@@ -70,3 +70,16 @@ Feature: Store
     And store "Stories" should contain 1 linked headline
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
+
+  @dev
+  Scenario: Filters
+    Given store "Pets" in directory "store/pets" with headlines
+      """
+      * Yummi :Pomeranian:
+      * Eric :Pomeranian:
+      * Tanik :Human:
+      """
+    When I filter headlines of class "Pomeranian" of store "Pets" to store "Pomeranians"
+    Then store "Pomeranians" should contain headline with title "Yummi" in memory store
+    And store "Pomeranians" should contain headline with title "Eric" in memory store
+    And store "Pomeranians" should contain headline with title "Tanik" in persistent store
