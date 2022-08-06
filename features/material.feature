@@ -5,7 +5,6 @@ Feature: Materialization
       * iPhone 3 :phone:
       * Тест :phone:
       """
-    Given empty file "views/material.org"
 
     When I materialize store "Old phones" to file "views/material.org"
     And I find file "views/material.org"
@@ -13,15 +12,27 @@ Feature: Materialization
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "New phones"
 
-
     Then store "New phones" should contain headline with title "iPhone 4" in memory store
     And store "New phones" should contain headline with title "iPhone 4" in persistent store
     And store "New phones" should not contain headline with title "iPhone 3" in memory store
 
-    # Think when to delete headlines. For now we will preserve all headlines in persistent store
+    # TODO: Think about when to delete headlines. For now we will preserve all headlines in persistent store
     # And store "New phones" should not contain headline with title "iPhone 3" in persistent store
     And store "Old phones" should contain headline with title "iPhone 3" in memory store
     And store "Old phones" should contain headline with title "iPhone 3" in persistent store
+
+  Scenario: 1+ materializations
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      * DONE Tame Impala Concert :Music:
+      * CANCELLED PHP Specialization :Cringe:
+      """
+    When I filter headlines of class "Hike" of store "Adventures" to store "Hikes"
+    And I filter headlines of state "STARTED" of store "Adventures" to store "Started"
+    And I filter headlines of state "DONE, CANCELLED" of store "Adventures" to store "Archive"
+    And I filter headlines of state "Hike, Music" of store "Adventures" to store "Hobby"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed

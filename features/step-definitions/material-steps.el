@@ -1,5 +1,6 @@
 (When "^I materialize store \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (store-name file-name)
+    (Given "empty file \"%s\"" file-name)
     (let ((file (FILE file-name))
           (store (STORE store-name)))
       (org-glance-materialize store file))))
