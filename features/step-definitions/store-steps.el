@@ -134,7 +134,7 @@
   (lambda (expected-class src dst)
     (let ((store (STORE src)))
       (puthash dst
-               (org-glance-store-copy store (lambda (headline)
+               (org-glance-store-filter store (lambda (headline)
                                               (member
                                                (downcase expected-class)
                                                (org-glance-headline-class headline))))

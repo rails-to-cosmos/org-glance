@@ -71,7 +71,6 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
-  @dev
   Scenario: Filters
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -83,3 +82,4 @@ Feature: Store
     Then store "Pomeranians" should contain headline with title "Yummi" in memory store
     And store "Pomeranians" should contain headline with title "Eric" in memory store
     And store "Pomeranians" should contain headline with title "Tanik" in persistent store
+    And store "Pomeranians" should not contain headline with title "Tanik" in memory store

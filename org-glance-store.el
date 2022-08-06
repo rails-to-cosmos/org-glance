@@ -141,7 +141,7 @@ functional data structure."
         :-encrypted->hash encrypted->hash
         :wal wal)))
 
-(cl-defun org-glance-store-copy (store &optional filter)
+(cl-defun org-glance-store-filter (store filter)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES filtered by FILTER."
   (cl-loop
      with current-offset = (float-time)
@@ -165,25 +165,25 @@ functional data structure."
 
      when filtered-p
      do (org-glance-store--uniquify title hash title->hash)
-       when filtered-p
+     when filtered-p
      collect (cons hash headline) into hash->headline
-       when filtered-p
+     when filtered-p
      collect (cons state hash) into state->hash
-       when filtered-p
+     when filtered-p
      collect (cons commented hash) into commented->hash
-       when filtered-p
+     when filtered-p
      collect (cons archived hash) into archived->hash
-       when filtered-p
+     when filtered-p
      collect (cons closed hash) into closed->hash
-       when filtered-p
+     when filtered-p
      collect (cons linked hash) into linked->hash
-       when filtered-p
+     when filtered-p
      collect (cons propertized hash) into propertized->hash
-       when filtered-p
+     when filtered-p
      collect (cons encrypted hash) into encrypted->hash
-       when filtered-p
+     when filtered-p
      append (or (--map (cons it hash) classes) (list (cons nil hash))) into class->hash
-       when filtered-p
+     when filtered-p
      collect event into wal
 
      finally return
