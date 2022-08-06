@@ -82,3 +82,5 @@ Feature: Store
     And store "Pomeranians" should contain headline with title "Eric" in memory store
     And store "Pomeranians" should contain headline with title "Tanik" in persistent store
     And store "Pomeranians" should not contain headline with title "Tanik" in memory store
+    And store "Pomeranians" should contain 2 headlines of class "Pomeranian"
+    And store "Pomeranians" should contain 0 headlines of class "Human"
