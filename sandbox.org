@@ -2,10 +2,11 @@
 
 * TODO materialization (org-get-todo-state)
 #+begin_src emacs-lisp
-(progn
-  (f-delete "/tmp/store" t)
+
+(let ((dst "/tmp/store"))
+  (f-delete dst t)
   (setq test-store
-        (-> (org-glance-store-from-scratch "/tmp/store"
+        (-> (org-glance-store-from-scratch dst
               "* TODO a :Task:
 1"
               "* DONE b :TAsk:"
@@ -15,11 +16,12 @@ aes-encrypted V 1.3-OCB-B-4-4-M
 wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
               "* COMMENT a
 2")
-            (org-glance-materialize "/tmp/store/first.org")
-            ;; (org-glance-store-remove-headline-by-hash "6d0af4c806aa2a7d2573bd7f10137a40")
-            ;; (org-glance-materialize "/tmp/store/second.org")
-            ))
-  (append-to-file "* d" nil "/tmp/store/first.org"))
+            (org-glance-materialize (f-join dst "main.org"))
+            (org-glance-store-filter #'org-glance-headline-commented-p)
+            (org-glance-materialize (f-join dst "commented.org"))))
+  ;; emulate source destruction
+  ;; (append-to-file "* d" nil (f-join dst "main.org"))
+  )
 
 (org-glance-store-wal test-store)
 (org-glance-store-completing-read test-store)

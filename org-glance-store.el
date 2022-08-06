@@ -22,9 +22,7 @@
   (watermark (float-time) :type float :read-only t :documentation "Offset behind which all destructive
    methods were applied to persistent storage.")
 
-  ;; lru cache
-  (-hash->headline (a-list) :type list :read-only t)
-
+  (-hash->headline (a-list) :type list :read-only t)  ;; should be lru cache
   ;; indexes
   (-title->hash (a-list) :type list :read-only t)
   (-state->hash (a-list) :type list :read-only t)
@@ -84,7 +82,8 @@ functional data structure."
      for hash = (org-glance-headline-hash headline)
      for seen-p = (gethash hash seen)
      when (and (not seen-p) (eq instruction 'RM))
-     do (f-delete (org-glance-store-headline-location store headline))
+     ;; think about when to delete headlines
+     ;; do (f-delete (org-glance-store-headline-location store headline))
      finally do (cl-destructuring-bind (offset _ _) (car wal)
                   (with-temp-file (org-glance-store/ store org-glance-store-watermark-filename)
                     (insert (prin1-to-string offset))))

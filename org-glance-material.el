@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'cl-lib)
+(require 'cl-macs)
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
@@ -40,7 +42,7 @@
 
 (cl-defstruct (org-glance-material-marker (:constructor org-glance-material-marker)
                                           (:copier nil))
-  "Sync metadata about headlines to be processed and visualized by `org-glance-overlay-manager'."
+  "Sync headline metadata to be processed and visualized by `org-glance-overlay-manager'."
   (beg nil         :type number :read-only nil :documentation "Beginning of headline.")
   (end nil         :type number :read-only nil :documentation "End of headline.")
   (buffer nil      :type buffer :read-only t   :documentation "Materialized buffer.")

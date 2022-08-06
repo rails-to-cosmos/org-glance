@@ -17,7 +17,7 @@
     (unless (org-at-heading-p)
       (outline-next-heading))))
 
-(When "^I select headline with title \"\\([^\"]+\\)\"$"
+(When "^I go to headline with title \"\\([^\"]+\\)\"$"
   (lambda (title)
     (goto-char (point-min))
     (search-forward (format "* %s" title))))

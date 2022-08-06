@@ -3,11 +3,15 @@ Feature: Store
     Given store "Tasks" in directory "store/tasks"
     Given file "household.org" in directory "tasks/home"
       """
+      Some contents before the first headline.
+
       * TODO Buy milk :Task:
       * TODO Buy eggs :Task:
       """
     Given file "management.org" in directory "tasks/office"
       """
+      Some contents before the first headline.
+
       * TODO Read mail :Task:
       * TODO Procrastinate :Task:
       """
