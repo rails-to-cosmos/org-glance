@@ -34,7 +34,6 @@ Feature: Store
     Then store "Stories" should contain 4 headlines
     And store "Stories" should contain headline with title "Travel to Romania" in memory store
     And store "Stories" should contain headline with title "Travel to Romania" in persistent store
-
     And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
     And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
 
