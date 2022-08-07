@@ -26,13 +26,17 @@ Feature: Materialization
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
+      * STARTED Music Festival :Hike:Music:
       * DONE Tame Impala Concert :Music:
-      * CANCELLED PHP Specialization :Cringe:
+      * DONE Kamchatka :Hike:
+      * CANCELLED PHP Course :Cringe:
       """
-    When I filter headlines of class "Hike" of store "Adventures" to store "Hikes"
-    And I filter headlines of state "STARTED" of store "Adventures" to store "Started"
-    And I filter headlines of state "DONE, CANCELLED" of store "Adventures" to store "Archive"
-    And I filter headlines of state "Hike, Music" of store "Adventures" to store "Hobby"
+    When I filter ":Hike:" "Adventures" to "Hikes"
+    And I filter "STARTED" "Adventures" to "Active"
+    And I filter "DONE OR CANCELLED" "Adventures" to "Archive"
+    And I filter ":Hike: OR :Music:" "Adventures" to "Hobby"
+    And I filter ":Hike: AND :Music:" "Adventures" to "Fun"
+    And I filter ":Hike: AND DONE" "Adventures" to "Memories"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
