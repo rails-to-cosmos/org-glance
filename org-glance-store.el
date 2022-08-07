@@ -203,6 +203,10 @@ functional data structure."
         :-encrypted->hash encrypted->hash
         :wal wal)))
 
+(cl-defun org-glance-store-filter-expr (query)
+  (lambda (headline)
+    t))
+
 (cl-defun org-glance-store-put-headlines (store headlines)
   "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
 

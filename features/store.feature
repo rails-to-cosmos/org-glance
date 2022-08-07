@@ -88,3 +88,23 @@ Feature: Store
     And store "Pomeranians" should not contain headline with title "Tanik" in memory store
     And store "Pomeranians" should contain 2 headlines of class "Pomeranian"
     And store "Pomeranians" should contain 0 headlines of class "Human"
+
+  Scenario: Filter queries
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      * STARTED Music Festival :Hike:Music:
+      * DONE Tame Impala Concert :Music:
+      * DONE Kamchatka :Hike:
+      * CANCELLED PHP Course :Cringe:
+      """
+    And store "Hikes" from ":Hike:" "Adventures"
+    And store "Active" from "STARTED" "Adventures"
+    And store "Archive" from "DONE OR CANCELLED" "Adventures"
+    And store "Hobby" from ":Hike: OR :Music:" "Adventures"
+    And store "Fun" from ":Hike: AND :Music:" "Adventures"
+    And store "Memories" from ":Hike: AND DONE" "Adventures"
+
+    Then store "Hikes" should contain 3 headlines
+    Then store "Hikes" should contain 3 headlines of class "Hike"

@@ -21,22 +21,22 @@ Feature: Materialization
     And store "Old phones" should contain headline with title "iPhone 3" in memory store
     And store "Old phones" should contain headline with title "iPhone 3" in persistent store
 
-  Scenario: 1+ materializations
-    Given store "Adventures" in directory "stories/adventures" with headlines
-      """
-      * TODO Niagara Waterfalls :Hike:
-      * STARTED Troodos Mountains :Hike:
-      * STARTED Music Festival :Hike:Music:
-      * DONE Tame Impala Concert :Music:
-      * DONE Kamchatka :Hike:
-      * CANCELLED PHP Course :Cringe:
-      """
-    When I filter ":Hike:" "Adventures" to "Hikes"
-    And I filter "STARTED" "Adventures" to "Active"
-    And I filter "DONE OR CANCELLED" "Adventures" to "Archive"
-    And I filter ":Hike: OR :Music:" "Adventures" to "Hobby"
-    And I filter ":Hike: AND :Music:" "Adventures" to "Fun"
-    And I filter ":Hike: AND DONE" "Adventures" to "Memories"
+  # Scenario: 1+ materializations
+  #   Given store "Adventures" in directory "stories/adventures" with headlines
+  #     """
+  #     * TODO Niagara Waterfalls :Hike:
+  #     * STARTED Troodos Mountains :Hike:
+  #     * STARTED Music Festival :Hike:Music:
+  #     * DONE Tame Impala Concert :Music:
+  #     * DONE Kamchatka :Hike:
+  #     * CANCELLED PHP Course :Cringe:
+  #     """
+  #   When I create store "Hikes" from ":Hike:" "Adventures"
+  #   And I create store "Active" from "STARTED" "Adventures"
+  #   And I create store "Archive" from "DONE OR CANCELLED" "Adventures"
+  #   And I create store "Hobby" from ":Hike: OR :Music:" "Adventures"
+  #   And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
+  #   And I create store "Memories" from ":Hike: AND DONE" "Adventures"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed

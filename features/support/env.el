@@ -36,7 +36,10 @@
 
 (defun STORE (key)
   "Get storage from test storage by ALIAS."
-  (gethash key org-glance-test-stores))
+  (or (gethash key org-glance-test-stores)
+      (error "Store \"%s\" is not registered in the system. Available stores: \"%s\""
+             key
+             (s-join "\", \"" (hash-table-keys org-glance-test-stores)))))
 
 (defun STORE>> (key val)
   "Update store KEY with value VAL."
