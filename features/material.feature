@@ -7,7 +7,6 @@ Feature: Materialization
       """
 
     When I materialize store "Old phones" to file "views/material.org"
-    And I find file "views/material.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "New phones"
@@ -15,11 +14,30 @@ Feature: Materialization
     Then store "New phones" should contain headline with title "iPhone 4" in memory store
     And store "New phones" should contain headline with title "iPhone 4" in persistent store
     And store "New phones" should not contain headline with title "iPhone 3" in memory store
-
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in persistent store
     # And store "New phones" should not contain headline with title "iPhone 3" in persistent store
+
     And store "Old phones" should contain headline with title "iPhone 3" in memory store
     And store "Old phones" should contain headline with title "iPhone 3" in persistent store
+
+  Scenario: Change headlines
+    Given store "Pets" in directory "store/pets" with headlines
+      """
+      * Yummi :Pomeranian:
+      * Eric :Pomeranian:
+      * Tanik :Human:
+      """
+    When I materialize store "Old phones" to file "views/material.org"
+    And I go to headline with title "Yummi"
+
+  # Scenario: Add new headline
+  #   Given store "Pets" in directory "store/pets" with headlines
+  #     """
+  #     * Yummi :Pomeranian:
+  #     * Eric :Pomeranian:
+  #     * Tanik :Human:
+  #     """
+  #   When I materialize store "Old phones" to file "views/material.org"
 
   # Scenario: 1+ materializations
   #   Given store "Adventures" in directory "stories/adventures" with headlines

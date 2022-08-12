@@ -2,7 +2,6 @@
 
 * TODO materialization (org-get-todo-state)
 #+begin_src emacs-lisp
-
 (let ((dst "/tmp/store"))
   (f-delete dst t)
   (setq test-store

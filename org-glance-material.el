@@ -53,6 +53,26 @@
   (committed-p nil :type bool   :read-only nil :documentation "Whether changes have been committed.")
   (outdated-p nil  :type bool   :read-only t   :documentation "If there are changes that are not reflected in current materialization."))
 
+(cl-defun org-glance-store-declare-materialization (store file-name)
+  "Declare that STORE has been materialized in FILE-NAME."
+  (append-to-file
+   (format "%s:%f\n" file-name (org-glance-store-watermark store))
+   nil
+   (org-glance-store/ store org-glance-store-materializations-filename)))
+
+(cl-defun org-glance-materialize (store dest)
+  "Insert STORE headlines into the DEST and provide ability to push changes
+to its origins by calling `org-glance-material-commit'."
+  (org-glance--with-temp-file dest
+    (cl-loop
+       initially
+         (org-glance-store-declare-materialization store dest)
+         (insert (org-glance-material-header store))
+       for hash in (org-glance-store-hashes store)
+       for headline = (org-glance-store-headline store hash)
+       do (org-glance-headline-insert headline)
+       finally return store)))
+
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
   (or (gethash (current-buffer) org-glance-material--buffer-to-store)
@@ -112,22 +132,16 @@ editor."
            (org-glance-material-overlay-manager-redisplay*))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
-         (add-hook 'before-save-hook #'org-glance-material-commit nil t))
+         (add-hook 'before-save-hook #'org-glance-material-commit nil t)
+         (add-hook 'org-insert-heading-hook #'org-glance-material-new-heading nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-material-commit t)
          (remove-hook 'after-change-functions #'org-glance-material-edit t)
-         (remove-hook 'post-command-hook #'org-glance-material-debug t))))
+         (remove-hook 'post-command-hook #'org-glance-material-debug t)
+         (remove-hook 'org-insert-heading-hook #'org-glance-material-new-heading t))))
 
-(cl-defun org-glance-materialize (store dest)
-  "Insert STORE headlines into the DEST and provide ability to push changes
-to its origins by calling `org-glance-material-commit'."
-  (org-glance--with-temp-file dest
-    (insert (org-glance-store-material-header store))
-    (cl-loop
-       for hash in (org-glance-store-hashes store)
-       for headline = (org-glance-store-headline store hash)
-       do (org-glance-headline-insert headline)
-       finally return store)))
+(cl-defun org-glance-material-new-heading ()
+  (message "New heading captured!"))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
@@ -276,7 +290,7 @@ TODO:
   (when-let (marker (get-text-property (point) :marker))
     (message "%s" marker)))
 
-(cl-defun org-glance-store-material-header (store)
+(cl-defun org-glance-material-header (store)
   "Generate materialization header for STORE."
   (format org-glance-material-header
           (org-glance-store-location store)

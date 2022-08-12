@@ -136,8 +136,9 @@
                                                  (downcase expected-class)
                                                  (org-glance-headline-class headline))))))))
 
-(Given "^store \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\"$"
-       (lambda (dst-store-name filter-expr src-store-name)
+(Given "^\"\\([^\"]+\\)\" \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
+       (lambda (filter-expr store-name src-store-name)
          (let ((store (STORE src-store-name)))
            (STORE>> dst-store-name
-                    (org-glance-store-filter store (org-glance-store-filter-expr filter-expr))))))
+                    (org-glance-store-filter store (org-glance-store-filter-expr filter-expr))))
+         ))

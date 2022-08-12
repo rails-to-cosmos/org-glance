@@ -3,7 +3,8 @@
     (Given "empty file \"%s\"" file-name)
     (let ((file (FILE file-name))
           (store (STORE store-name)))
-      (org-glance-materialize store file))))
+      (org-glance-materialize store file)
+      (find-file file))))
 
 (When "^I commit changes to store \"\\([^\"]+\\)\"$"
   (lambda (store-name)

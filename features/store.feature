@@ -89,22 +89,23 @@ Feature: Store
     And store "Pomeranians" should contain 2 headlines of class "Pomeranian"
     And store "Pomeranians" should contain 0 headlines of class "Human"
 
-  Scenario: Filter queries
-    Given store "Adventures" in directory "stories/adventures" with headlines
-      """
-      * TODO Niagara Waterfalls :Hike:
-      * STARTED Troodos Mountains :Hike:
-      * STARTED Music Festival :Hike:Music:
-      * DONE Tame Impala Concert :Music:
-      * DONE Kamchatka :Hike:
-      * CANCELLED PHP Course :Cringe:
-      """
-    And store "Hikes" from ":Hike:" "Adventures"
-    And store "Active" from "STARTED" "Adventures"
-    And store "Archive" from "DONE OR CANCELLED" "Adventures"
-    And store "Hobby" from ":Hike: OR :Music:" "Adventures"
-    And store "Fun" from ":Hike: AND :Music:" "Adventures"
-    And store "Memories" from ":Hike: AND DONE" "Adventures"
+  # Scenario: Filter queries
+  #   Given store "Adventures" in directory "stories/adventures" with headlines
+  #     """
+  #     * TODO Niagara Waterfalls :Hike:
+  #     * STARTED Troodos Mountains :Hike:
+  #     * STARTED Music Festival :Hike:Music:
+  #     * DONE Tame Impala Concert :Music:
+  #     * DONE Kamchatka :Hike:
+  #     * CANCELLED PHP Course :Cringe:
+  #     """
 
-    Then store "Hikes" should contain 3 headlines
-    Then store "Hikes" should contain 3 headlines of class "Hike"
+  #   And ":Hike:" "Adventures" as "Hikes"
+  #   And "STARTED" "Adventures" as "Active"
+  #   And ":Cringe: AND (DONE OR CANCELLED)" "Adventures" as "Archive"
+  #   And ":Hike: OR :Music:" "Adventures" as "Hobby"
+  #   And ":Hike: AND :Music:" "Adventures" as "Fun"
+  #   And ":Hike: AND DONE" "Adventures" as "Memories"
+
+  #   Then store "Hikes" should contain 3 headlines
+  #   And store "Hikes" should contain 3 headlines of class "Hike"
