@@ -36,7 +36,7 @@ CLOSED: [2022-08-12 Fri 15:07]
 * https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
 * fix wal reversal
 * garbage collector
-* DONE wal with instructions SET and RM
+* DONE wal with types SET and RM
 CLOSED: [2022-07-31 Sun 12:31]
 :LOGBOOK:
 - State "DONE"       from              [2022-07-31 Sun 12:31]
@@ -45,7 +45,7 @@ CLOSED: [2022-07-31 Sun 12:31]
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees
 * TODO Add tests for non-readable store source and dest
-* DONE Optimize `org-glance-material-commit`: sync only changed headlines
+* DONE Optimize `org-glance-commit`: sync only changed headlines
 CLOSED: [2022-07-29 Fri 18:31]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-07-29 Fri 18:31]

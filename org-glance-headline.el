@@ -40,8 +40,9 @@
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 
-(cl-defstruct (org-glance-headline-header (:constructor org-glance-headline-header--create)
-                                          (:copier nil))
+(cl-defstruct (org-glance-headline-header
+                (:constructor org-glance-headline-header--create)
+                (:copier nil))
   "Limited edition of `org-glance-headline'."
   (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
   (-title nil :type string :read-only t :documentation "Original headline title.")
@@ -54,9 +55,10 @@
   (-linked-p nil :type boolean :read-only t :documentation "Does the headline contain org links?")
   (-propertized-p nil :type bool :read-only t :documentation "Does the headline contain user properties?"))
 
-(cl-defstruct (org-glance-headline (:include org-glance-headline-header)
-                                   (:constructor org-glance-headline--create)
-                                   (:copier nil))
+(cl-defstruct (org-glance-headline
+                (:include org-glance-headline-header)
+                (:constructor org-glance-headline--create)
+                (:copier nil))
   "Serializable headline with additional features on top of `org-element'."
   (contents nil :type string :read-only t :documentation "Raw contents of headline.")
   (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
@@ -73,13 +75,13 @@
   "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
   "How to parse user specified properties.")
 
-(cl-defgeneric org-glance-headline-hash (object)
+(cl-defgeneric org-glance-headline:hash (object)
   "Get hash of OBJECT.")
 
-(cl-defmethod org-glance-headline-hash ((headline org-glance-headline))
+(cl-defmethod org-glance-headline:hash ((headline org-glance-headline))
   (org-glance-headline--hash headline))
 
-(cl-defmethod org-glance-headline-hash ((headline org-glance-headline-header))
+(cl-defmethod org-glance-headline:hash ((headline org-glance-headline-header))
   (org-glance-headline-header--hash headline))
 
 (cl-defgeneric org-glance-headline-title (object)
@@ -160,7 +162,7 @@
 (cl-defmethod org-glance-headline-header ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   (org-glance-headline-header--create
-   :-hash (org-glance-headline-hash headline)
+   :-hash (org-glance-headline:hash headline)
    :-title (org-glance-headline-title headline)
    :-state (org-glance-headline-state headline)
    :-class (org-glance-headline-class headline)
@@ -291,11 +293,11 @@
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
-  (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
+  (string= (org-glance-headline:hash a) (org-glance-headline:hash b)))
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline-header) (b org-glance-headline-header))
   "Return t if A equals B."
-  (string= (org-glance-headline-hash a) (org-glance-headline-hash b)))
+  (string= (org-glance-headline:hash a) (org-glance-headline:hash b)))
 
 (cl-defgeneric org-glance-headline-state (headline)
   "Infer HEADLINE todo state from its title.")

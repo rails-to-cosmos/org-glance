@@ -1,21 +1,21 @@
 Feature: Store
-  Scenario: Import
+  Scenario: Import Store
     Given store "Tasks" in directory "store/tasks"
-    Given file "household.org" in directory "tasks/home"
+    And file "tasks/home/household.org"
       """
       Some contents before the first headline.
 
       * TODO Buy milk :Task:
       * TODO Buy eggs :Task:
       """
-    Given file "management.org" in directory "tasks/office"
+    And file "tasks/office/management.org"
       """
       Some contents before the first headline.
 
       * TODO Read mail :Task:
       * TODO Procrastinate :Task:
       """
-    Given file "tasks.org.~undo-tree~" in directory "tasks/office"
+    And file "tasks/office/tasks.org.~undo-tree~"
       """
       * Messy stuff of undo-tree, we should ignore it
       """
@@ -24,7 +24,17 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  Scenario: It's all about titles
+  # Scenario: Store from Scratch
+  #   Given store "Songs" in directory "songs" with headlines
+  #     """
+  #     * Tae Zori
+  #     * Al Sok
+  #     """
+  #   Then store "Songs" should contain 2 staged changes
+  #   And store "Songs" should contain 0 committed changes
+
+  @dev
+  Scenario: It's All About Titles
     Given store "Stories" in directory "store/stories" with headlines
       """
       * Hiking in Troodos
@@ -36,10 +46,10 @@ Feature: Store
       """
 
     Then store "Stories" should contain 4 headlines
-    And store "Stories" should contain headline with title "Travel to Romania" in memory store
-    And store "Stories" should contain headline with title "Travel to Romania" in persistent store
-    And store "Stories" should contain headline with title "Travel to Romania (2)" in memory store
-    And store "Stories" should not contain headline with title "Travel to Romania (2)" in persistent store
+    And store "Stories" should contain headline with title "Travel to Romania" in staging layer
+    And store "Stories" should not contain headline with title "Travel to Romania" in committed layer
+    # And store "Stories" should contain headline with title "Travel to Romania (2)" in staging layer
+    # And store "Stories" should not contain headline with title "Travel to Romania (2)" in committed layer
 
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
@@ -74,6 +84,7 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
+  @dev
   Scenario: Filters
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -82,10 +93,12 @@ Feature: Store
       * Tanik :Human:
       """
     When I filter headlines of class "Pomeranian" of store "Pets" to store "Pomeranians"
-    Then store "Pomeranians" should contain headline with title "Yummi" in memory store
-    And store "Pomeranians" should contain headline with title "Eric" in memory store
-    And store "Pomeranians" should contain headline with title "Tanik" in persistent store
-    And store "Pomeranians" should not contain headline with title "Tanik" in memory store
+    Then store "Pomeranians" should contain headline with title "Yummi" in staging layer
+    Then store "Pomeranians" should not contain headline with title "Yummi" in committed layer
+    And store "Pomeranians" should contain headline with title "Eric" in staging layer
+    And store "Pomeranians" should not contain headline with title "Eric" in committed layer
+    And store "Pomeranians" should not contain headline with title "Tanik" in committed layer
+    And store "Pomeranians" should not contain headline with title "Tanik" in staging layer
     And store "Pomeranians" should contain 2 headlines of class "Pomeranian"
     And store "Pomeranians" should contain 0 headlines of class "Human"
 

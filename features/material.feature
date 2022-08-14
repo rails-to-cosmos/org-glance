@@ -11,24 +11,26 @@ Feature: Materialization
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "New phones"
 
-    Then store "New phones" should contain headline with title "iPhone 4" in memory store
-    And store "New phones" should contain headline with title "iPhone 4" in persistent store
-    And store "New phones" should not contain headline with title "iPhone 3" in memory store
-    # TODO: Think about when to delete headlines. For now we will preserve all headlines in persistent store
-    # And store "New phones" should not contain headline with title "iPhone 3" in persistent store
+    Then store "New phones" should contain headline with title "iPhone 4" in committed layer
+    And store "New phones" should not contain headline with title "iPhone 4" in staging layer
+    And store "New phones" should not contain headline with title "iPhone 3" in staging layer
+    # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
+    # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
+    And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-    And store "Old phones" should contain headline with title "iPhone 3" in memory store
-    And store "Old phones" should contain headline with title "iPhone 3" in persistent store
-
-  Scenario: Change headlines
-    Given store "Pets" in directory "store/pets" with headlines
-      """
-      * Yummi :Pomeranian:
-      * Eric :Pomeranian:
-      * Tanik :Human:
-      """
-    When I materialize store "Old phones" to file "views/material.org"
-    And I go to headline with title "Yummi"
+  # @dev
+  # Scenario: Change headlines
+  #   Given store "Pets" in directory "store/pets" with headlines
+  #     """
+  #     * Yummi :Pomeranian:
+  #     * Eric :Pomeranian:
+  #     * Tanik :Human:
+  #     """
+  #   When I materialize store "Pets" to file "views/material.org"
+  #   And I go to headline with title "Yummi"
+  #   And I insert " the dog"
+  #   Then headline materialization at point should be changed
+  #   And headline materialization at point should not be outdated
 
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines

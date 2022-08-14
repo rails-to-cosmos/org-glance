@@ -12,10 +12,3 @@
 (Then "^I find file \"\\([^\"]+\\)\"$"
       (lambda (filename)
         (find-file (gethash filename org-glance-test-files))))
-
-(Given "^file \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
-       (lambda (file directory contents)
-         (f-mkdir-full-path (f-join org-glance-test-location directory))
-         (let ((full-path (f-join org-glance-test-location directory file)))
-           (f-write contents 'utf-8 full-path)
-           (puthash file full-path org-glance-test-files))))
