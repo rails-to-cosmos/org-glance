@@ -30,14 +30,6 @@
 (defvar org-glance-material-garbage-collector--mutex (make-mutex)
   "Mutex for material garbage collector.")
 
-(cl-defun org-glance-material-header (store)
-  "Generate materialization header for STORE."
-  (format "#  -*- mode: org; mode: org-glance-material -*-
-
-#+ORIGIN: %s:%s
-
-" (org-glance-store:location store) 0.0))
-
 (cl-defstruct (org-glance-material-marker (:constructor org-glance-material-marker--create)
                                           (:copier nil))
   "Sync headline metadata to be processed and visualized by `org-glance-overlay-manager'."
@@ -60,21 +52,6 @@
           :persisted-p (org-glance-material-marker-persisted-p marker)
           :committed-p (org-glance-material-marker-committed-p marker)
           :offset (org-glance-material-marker-offset marker))))
-
-;; (cl-defun org-glance-store-declare-materialization (store file-name)
-;;   "Declare that STORE has been materialized in FILE-NAME."
-;;   (let ((target (org-glance-store/ store org-glance-store-materializations-filename)))
-;;     (f-touch target)
-;;     (append-to-file file-name nil target)))
-
-(cl-defun org-glance-materialize (store dest)
-  "Insert STORE headlines into the DEST and provide ability to sync changes
-with its origins by calling `org-glance-commit'."
-  (org-glance--with-temp-file dest
-    ;; (org-glance-store-declare-materialization store dest)
-    (insert (org-glance-material-header store))
-    (dolist (headline (org-glance-store:headlines store))
-      (org-glance-headline-insert (org-glance-store:get store (org-glance-headline:hash headline))))))
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."

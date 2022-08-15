@@ -7,6 +7,10 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* STARTED Fix materialization and prepare to relations
+:LOGBOOK:
+- State "STARTED"    from              [2022-08-15 Mon 10:20]
+:END:
 * PENDING filter store headlines [3/3]
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-08-02 Tue 09:30]

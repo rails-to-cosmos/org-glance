@@ -5,7 +5,7 @@
 (let ((dst "/tmp/store"))
   (f-delete dst t)
   ;; (setq test-store
-;;         (-> (org-glance-store-from-scratch dst
+;;         (-> (org-glance-store:from-scratch dst
 ;;               "* TODO a :Task:
 ;; 1"
 ;;               "* DONE b :TAsk:"
@@ -19,7 +19,7 @@
 
 (let ((dst "/tmp/store"))
   (f-delete dst t)
-  (setq test-store (org-glance-store-from-scratch dst
+  (setq test-store (org-glance-store:from-scratch dst
                      "* TODO a :Task:
 1"
                      "* DONE b :TAsk:"
@@ -40,12 +40,11 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
 (length (org-glance-changelog:flatten (org-glance-store:changelog* test-store)))
 (length (org-glance-changelog:flatten (org-glance-store:changelog test-store)))
 
-(let ((store (org-glance-store-from-scratch "/tmp/store"
+(let ((store (org-glance-store:from-scratch "/tmp/store"
                "* a"
                "* b")))
   (cl-assert (= 2 (length (org-glance-changelog:flatten (org-glance-store:changelog* store)))))
-  (cl-assert (= 0 (length (org-glance-changelog:flatten (org-glance-store:changelog store)))))
-  (org-glance-materialize store "/tmp/store/material.org"))
+  (cl-assert (= 0 (length (org-glance-changelog:flatten (org-glance-store:changelog store))))))
 
 (org-glance-store:put test-store (org-glance-headline-from-string "* a"))
 (org-glance-store:remove test-store (org-glance-headline-from-string "* a"))
@@ -73,7 +72,7 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
 
 (setq test-store2 (org-glance-store "/tmp/store"))
 
-(org-glance-store-from-scratch "/tmp/store"
+(org-glance-store:from-scratch "/tmp/store"
   "* TODO a :Task:
 1"
   "* DONE b :TAsk:"

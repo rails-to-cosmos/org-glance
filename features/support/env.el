@@ -19,31 +19,43 @@
 (defvar org-glance-test-location)
 (defvar org-glance-test-files)
 (defvar org-glance-test-stores)
+(defvar org-glance-test-views)
 (defvar org-glance-test-headlines)
 
-(defun HEADLINE (alias)
+(defun org-glance-test:get-headline (alias)
   "Get headline from test storage by ALIAS."
   (gethash alias org-glance-test-headlines))
 
-(defun HEADLINES (aliases)
+(defun org-glance-test:get-headlines (aliases)
   "Get headlines from test storage by ALIAS."
   (-map #'H (s-split ", " aliases)))
 
-(defun FILE (alias)
+(defun org-glance-test:get-file (alias)
   "Get file from test storage by ALIAS."
   (or (gethash alias org-glance-test-files)
       (f-join org-glance-test-location alias)))
 
-(defun STORE (key)
+(defun org-glance-test:put-store (key val)
+  "Update store KEY with value VAL."
+  (puthash key val org-glance-test-stores))
+
+(defun org-glance-test:get-store (key)
   "Get storage from test storage by ALIAS."
   (or (gethash key org-glance-test-stores)
       (error "Store \"%s\" is not registered in the system. Available stores: \"%s\""
              key
              (s-join "\", \"" (hash-table-keys org-glance-test-stores)))))
 
-(defun STORE>> (key val)
+(defun org-glance-test:put-view (key val)
   "Update store KEY with value VAL."
-  (puthash key val org-glance-test-stores))
+  (puthash key val org-glance-test-views))
+
+(defun org-glance-test:get-view (key)
+  "Get storage from test storage by ALIAS."
+  (or (gethash key org-glance-test-views)
+      (error "Store \"%s\" is not registered in the system. Available views: \"%s\""
+             key
+             (s-join "\", \"" (hash-table-keys org-glance-test-views)))))
 
 (defun org-glance-test:normalize-string (s)
   (s-trim (s-replace-regexp "[[:space:]]+" " " s)))
@@ -63,11 +75,15 @@
  (setq org-glance-test-location (make-temp-file "org-glance-" 'directory)
        org-glance-test-files (make-hash-table :test #'equal)
        org-glance-test-stores (make-hash-table :test #'equal)
+       org-glance-test-views (make-hash-table :test #'equal)
        org-glance-test-headlines (make-hash-table :test #'equal))
  (f-mkdir-full-path org-glance-test-location))
 
 (After
  (delete-directory org-glance-test-location t))
+
+(Fail
+ (message "Scenario has failed. Please check out test directory for details: %s" org-glance-test-location))
 
 (Teardown
  (setq default-directory org-glance-root-path))

@@ -18,10 +18,10 @@ test:
 	${CASK} exec ecukes
 	${CASK} clean-elc
 
-test-dev:
+debug:
 	${CASK} clean-elc
 	${CASK} build
-	${CASK} exec ecukes --tags @dev --debug
+	${CASK} exec ecukes --tags @debug --debug
 	${CASK} clean-elc
 
 clean:

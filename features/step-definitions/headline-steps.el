@@ -114,7 +114,7 @@
 
 (And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
-       (should (org-glance-headline-equal-p (HEADLINE a) (HEADLINE b)))))
+       (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
 
 (Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
       (lambda (title)

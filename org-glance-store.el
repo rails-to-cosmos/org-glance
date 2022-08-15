@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'a)
+(require 'f)
 (require 'ts)
 (require 'cl-macs)
 (require 'cl-lib)
@@ -10,6 +11,7 @@
 (require 'thunk)
 
 (require 'org-glance-helpers)
+(require 'org-glance-types)
 (require 'org-glance-headline)
 (require 'org-glance-scope)
 (require 'org-glance-changelog)
@@ -17,12 +19,6 @@
 
 (defconst org-glance-store-log-location "wa.log")
 (defconst org-glance-store-materializations-filename "materializations.el")
-
-(cl-deftype org-glance-store:location ()
-  '(satisfies org-glance-store:location-p))
-
-(cl-defun org-glance-store:location-p (location)
-  (and (f-dir-p location) (f-readable-p location)))
 
 (cl-deftype org-glance-store-event ()
   '(satisfies org-glance-store-event-p))
@@ -42,31 +38,132 @@
 (cl-defun org-glance-store:event-id (event)
   (org-glance-headline:hash (org-glance-event-state event)))
 
+(defmacro eieio-declare-slot (name)
+  "Declares slot to be available at runtime."
+  `(eval-when-compile (cl-pushnew ,name eieio--known-slot-names)))
+
 (defclass org-glance-store nil
   ((location
+    :type org-glance-directory
     :initarg :location
-    :allocation :instance
     :documentation "Directory containing all the data."
-    :reader org-glance-store:location
-    :type org-glance-store:location)
+    :reader org-glance-store:location)
    (changelog*
+    :type org-glance-store-log
     :initarg :changelog*
     :initform (org-glance-changelog:create nil #'org-glance-store:event-id)
     :documentation "In-memory changelog."
-    :reader org-glance-store:changelog*
-    :type org-glance-store-log)
+    :reader org-glance-store:changelog*)
    (changelog
+    :type org-glance-store-log
     :initarg :changelog
     :initform (org-glance-changelog:create nil #'org-glance-store:event-id)
     :documentation "Persisted changelog."
-    :reader org-glance-store:changelog
-    :type org-glance-store-log)
+    :reader org-glance-store:changelog)
    (cache
+    :type hash-table
     :initarg :cache
     :initform (make-hash-table :test #'equal)
     :documentation "Changelog persisted on disk."
-    :reader org-glance-store:cache
-    :type hash-table)))
+    :reader org-glance-store:cache)
+   (views
+    :type list
+    :initarg :views
+    :initform nil
+    :documentation "List of views associated with store."
+    :reader org-glance-store:views)))
+
+;; Avoid warnings
+(eieio-declare-slots :location)
+(eieio-declare-slots :materializations)
+(eieio-declare-slots :store)
+(eieio-declare-slots :view)
+(eieio-declare-slots :views)
+
+(declare-function f-mkdir-full-path 'f)
+
+(cl-deftype org-glance-materialization-list ()
+  '(satisfies org-glance-materialization-list-p))
+
+(cl-defun org-glance-materialization-list-p (list)
+  (cl-every #'org-glance-materialization-p list))
+
+(defclass org-glance-view nil
+  ((store
+    :type org-glance-store
+    :initarg :store
+    :reader org-glance-view:store
+    :documentation "Original `org-glance-store' instance.")
+   (predicate
+    :type function
+    :initarg :predicate
+    :reader org-glance-view:predicate
+    :documentation "Predicate that takes one argument of type
+    `org-glance-headline' and is guaranteed to be `t' for each
+    headline per `org-glance-view' instance.")
+   (materializations
+    :type org-glance-materialization-list
+    :initarg :materializations
+    :initform nil
+    :documentation "Keep track of materializations."
+    :reader org-glance-view:materializations)))
+
+(defclass org-glance-materialization nil
+  ((view
+    :type org-glance-view
+    :initarg :view
+    :reader org-glance-materialization:view
+    :documentation "View that is represented by the materialization.")
+   (location
+    :type org-glance-file
+    :initarg :location
+    :reader org-glance-materialization:location
+    :documentation "Location where materialization persists.")))
+
+(defmacro org-glance-> (object &rest slots)
+  (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
+             slots
+             :initial-value object))
+
+(cl-defmethod org-glance-materialization:header ((materialization org-glance-materialization))
+  "Generate header for MATERIALIZATION."
+  (format
+   "#  -*- mode: org; mode: org-glance-material -*-
+
+#+ORIGIN: %s:0.0
+
+"
+   (org-glance-> materialization :view :store :location)))
+
+(cl-defmethod org-glance-view:materialize ((view org-glance-view) (location string))
+  (f-mkdir-full-path (file-name-directory location))
+  (let ((materialization (org-glance-materialization :view view :location location)))
+    (org-glance--with-temp-file location
+      (insert (org-glance-materialization:header materialization))
+      (cl-dolist (headline (org-glance-store:headlines (org-glance-view:store view)))
+        (when (funcall (org-glance-view:predicate view) headline)
+          (org-glance-headline-insert
+           (org-glance-store:get
+            (org-glance-view:store view)
+            (org-glance-headline:hash headline))))))
+    (cl-pushnew materialization (slot-value view :materializations))))
+
+(cl-defun org-glance-store:view (store predicate)
+  (let ((view (org-glance-view :store store :predicate predicate)))
+    (cl-pushnew view (slot-value store :views))
+    view))
+
+(cl-defun org-glance-store:from-scratch (location &rest strings)
+  "Creates store from LOCATION, puts headlines in it and flushes it on disk.
+
+All changes are stored in memory before you call `org-glance-store:flush' explicitly."
+  (declare (indent 1))
+  (f-mkdir-full-path location)
+  (let ((store (org-glance-store :location location)))
+    (dolist (string strings)
+      (org-glance-store:put store (org-glance-headline-from-string string)))
+    (org-glance-store:flush store)
+    store))
 
 (cl-defun org-glance-store:read (location)
   "Read `org-glance-store' from LOCATION."
@@ -76,15 +173,8 @@
                (f-join location org-glance-store-log-location)
                #'org-glance-store:event-id)))
 
-(cl-defun org-glance-store-from-scratch (location &rest strings)
-  "Simplifies interactive debug. Creates store from LOCATION and puts headlines in it."
-  (declare (indent 1))
-  (let ((store (org-glance-store :location location)))
-    (dolist (string strings)
-      (org-glance-store:put store (org-glance-headline-from-string string)))
-    store))
-
-(cl-defun org-glance-store/ (store location)
+(cl-defun org-glance-store:/ (store location)
+  "Resolve relative LOCATION to full path in context of STORE."
   (apply #'f-join (org-glance-store:location store) (s-split "/" location)))
 
 (cl-defun org-glance-store:flush (store)
@@ -101,7 +191,7 @@ persistent storage.
 In all other places `org-glance-store' should act like pure
 functional data structure."
   (org-glance-changelog:write (org-glance-store:changelog* store)
-                        (org-glance-store/ store org-glance-store-log-location))
+                        (org-glance-store:/ store org-glance-store-log-location))
   (while (not (org-glance-changelog:empty-p (org-glance-store:changelog* store)))
     (let ((event (org-glance-changelog:pop (org-glance-store:changelog* store))))
       (cl-typecase event
@@ -109,11 +199,11 @@ functional data structure."
          ;; if (org-glance-event:RM-p event)
          ;; do (puthash seen hash)
          ;; TODO think about when to delete headlines
-         ;; (f-delete (org-glance-store:headline-location store headline))
+         ;; (f-delete (org-glance-store:locate store headline))
          nil)
         (org-glance-event:PUT
          (let* ((headline (org-glance-store:get store (org-glance-store:event-id event)))
-                (location (org-glance-store:headline-location store headline)))
+                (location (org-glance-store:locate store headline)))
            (unless (f-exists-p location)
              (org-glance-headline-save headline location)
              (org-glance-changelog:push (org-glance-store:changelog store) event))))))))
@@ -131,91 +221,11 @@ functional data structure."
      :changelog* (org-glance-changelog:filter (org-glance-store:changelog* store) filter)
      :changelog (org-glance-changelog:filter (org-glance-store:changelog store) filter))))
 
-;; (cl-defun org-glance-store:filter-normalize (stmt)
-;;   "Convert STMT to prefix notation.
-;; Each substring is a run of \"valid\" characters, i.e., letters, colons for tags and AND/OR expressions.
-
-;; - :TAG: words wrapped in colons match org-mode tag.
-;; - TODO uppercase words match org-mode states.
-;; - AND/OR expressions could be used.
-;; - Use parentheses to prioritize expressions."
-;;   (cl-loop
-;;      with stack = (list)
-;;      with output = (list)
-;;      with operators = (a-list "|" 1
-;;                               "&" 2
-;;                               "=" 3)
-;;      for c across-ref (->> stmt
-;;                            (string-replace "&" "")
-;;                            (string-replace "|" "")
-;;                            (string-replace "=" "")
-;;                            (s-replace "and" " & ")
-;;                            (s-replace "or" " | ")
-;;                            (s-replace-regexp " \\([A-Z]+\\)" "(state = \\1)")
-;;                            (s-replace-regexp ":\\([a-zA-Z0-9]+\\):" "(class = \\1)")
-;;                            (s-replace-regexp "[ ]+" " ")
-;;                            downcase
-;;                            s-trim
-;;                            (format "(%s)")
-;;                            reverse
-;;                            (s-replace-all (a-list "(" ")" ")" "(")))
-;;      for char = (string c)
-
-;;      if
-;;        (s-matches-p "^[:]?[a-zA-Z0-9 ]+[:]?$" char)
-;;      do
-;;        (push char output)
-
-;;      else if
-;;        (string= "(" char)
-;;      do
-;;        (push char stack)
-;;        (push ")" output)
-
-;;      else if
-;;        (string= ")" char)
-;;      do
-;;        (while (and stack (not (string= (car stack) "(")))
-;;          (push (concat (pop stack) " ") output)
-;;          (push "(" output))
-;;        (pop stack) ;; remove '('
-
-;;      else if
-;;        (a-get operators char) ;; operator found
-;;      do
-;;        (while (< (a-get operators char 0)
-;;                  (a-get operators (car stack) 0))
-;;          (push (concat (pop stack) " ") output)
-;;          (push "(" output))
-;;        (push char stack)
-
-;;      finally do
-;;        (while stack
-;;          (push (concat (pop stack) " ") output))
-
-;;      finally return (s-join "" output)))
-
-;; (org-glance-store:filter-normalize ":a1:  AND :b2: OR CANCELLED AND DONE OR TODO")
-
-;; (apply #'string (org-glance-store:filter-tokenize ":a1:  AND :b2: OR CANCELLED"))
-
-;; (-reduce #'list (org-glance-store:filter-tokenize ":a1: AND :b2: OR CANCELLED AND DONE"))
-;; (string (aref "aello" 0))
-
-;; (org-glance-store:filter-tokenize ":a1:")
-
-;; (s-match-strings-all "([[:word:][:blank:]:]+)" ":a1: AND :b2: AND (:c3: OR (TODO AND DONE OR :d3:)")
-;; (s-match-strings-all ":[[:word:]_]+:" ":a1: AND :b2: AND (:c3: OR (:c2: AND DONE)")
-
-;; (org-glance-store:filter-tokenize "Hello")
-
 (cl-defun org-glance-store:put (store headline)
-  "Return new `org-glance-store' instance by copying STORE with HEADLINES registered in it.
-Append PUT event to WAL and insert headlines to persistent storage.
-
+  "Put HEADLINE to STORE.
 TODO: Transaction."
   (org-glance-changelog:push (org-glance-store:changelog* store)
-                       (org-glance-event:PUT (org-glance-headline-header headline)))
+                             (org-glance-event:PUT (org-glance-headline-header headline)))
   (puthash (org-glance-headline:hash headline) headline (org-glance-store:cache store)))
 
 (cl-defun org-glance-store:remove (store headline)
@@ -244,7 +254,7 @@ achieved by calling `org-glance-store:flush' method."
                 (string= (org-glance-headline:hash headline) hash))
       return headline)
    (org-glance--with-temp-buffer
-    (insert-file-contents (org-glance-store:headline-location store hash))
+    (insert-file-contents (org-glance-store:locate store hash))
     (goto-char (point-min))
     (unless (org-at-heading-p)
       (outline-next-heading))
@@ -260,18 +270,18 @@ achieved by calling `org-glance-store:flush' method."
      when (org-glance-event:PUT-p event)
      collect (org-glance-event-state event)))
 
-(cl-defgeneric org-glance-store:headline-location (store headline)
+(cl-defgeneric org-glance-store:locate (store headline)
   "Return location of HEADLINE in STORE.")
 
-(cl-defmethod org-glance-store:headline-location ((store org-glance-store) (headline org-glance-headline))
+(cl-defmethod org-glance-store:locate ((store org-glance-store) (headline org-glance-headline))
   "Return HEADLINE location from STORE."
-  (org-glance-store:headline-location store (org-glance-headline:hash headline)))
+  (org-glance-store:locate store (org-glance-headline:hash headline)))
 
-(cl-defmethod org-glance-store:headline-location ((store org-glance-store) (headline org-glance-headline-header))
+(cl-defmethod org-glance-store:locate ((store org-glance-store) (headline org-glance-headline-header))
   "Return HEADLINE location from STORE."
-  (org-glance-store:headline-location store (org-glance-headline:hash headline)))
+  (org-glance-store:locate store (org-glance-headline:hash headline)))
 
-(cl-defmethod org-glance-store:headline-location ((store org-glance-store) (hash string))
+(cl-defmethod org-glance-store:locate ((store org-glance-store) (hash string))
   "Return HASH location from STORE."
   (let ((prefix (substring hash 0 2))
         (postfix (substring hash 2 (length hash))))

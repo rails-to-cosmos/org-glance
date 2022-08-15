@@ -1,12 +1,15 @@
 Feature: Materialization
+  @debug
   Scenario: Basic materialization
-    Given store "Old phones" in directory "store/phones" with headlines
+    Given store "Phones" in directory "store/phones" with headlines
       """
-      * iPhone 3 :phone:
-      * Тест :phone:
+      * iPhone 3 :Apple:
+      * Йотафон :Trash:
       """
 
-    When I materialize store "Old phones" to file "views/material.org"
+    When I create view "Apple Phones" from "Apple" "Phones"
+    And I materialize view "Apple Phones" to file "views/apple.org"
+    And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "New phones"
@@ -14,9 +17,11 @@ Feature: Materialization
     Then store "New phones" should contain headline with title "iPhone 4" in committed layer
     And store "New phones" should not contain headline with title "iPhone 4" in staging layer
     And store "New phones" should not contain headline with title "iPhone 3" in staging layer
+    And store "New phones" should not contain headline with title "iPhone 3" in committed layer
+
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
-    And store "Old phones" should contain headline with title "iPhone 3" in staging layer
+    # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
   # @dev
   # Scenario: Change headlines

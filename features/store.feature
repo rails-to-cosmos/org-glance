@@ -30,8 +30,8 @@ Feature: Store
       * Tae Zori
       * Al Sok
       """
-    Then 2 staged changes should be in store "Songs"
-    And 0 committed changes should be in store "Songs"
+    Then 0 staged changes should be in store "Songs"
+    And 2 committed changes should be in store "Songs"
     When I flush store "Songs"
     Then 0 staged changes should be in store "Songs"
     And 2 committed changes should be in store "Songs"
@@ -48,8 +48,9 @@ Feature: Store
       """
 
     Then store "Stories" should contain 4 headlines
-    And store "Stories" should contain headline with title "Travel to Romania" in staging layer
-    And store "Stories" should not contain headline with title "Travel to Romania" in committed layer
+    And store "Stories" should contain headline with title "Travel to Romania" in committed layer
+    And store "Stories" should not contain headline with title "Travel to Romania" in staging layer
+    # TODO Test title uniqueness
     # And store "Stories" should contain headline with title "Travel to Romania (2)" in staging layer
     # And store "Stories" should not contain headline with title "Travel to Romania (2)" in committed layer
 
@@ -86,22 +87,27 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
-  Scenario: Filters
+  Scenario: Views
     Given store "Pets" in directory "store/pets" with headlines
       """
       * Yummi :Pomeranian:
       * Eric :Pomeranian:
       * Tanik :Human:
       """
-    When I filter headlines of class "Pomeranian" of store "Pets" to store "Pomeranians"
-    Then store "Pomeranians" should contain headline with title "Yummi" in staging layer
-    Then store "Pomeranians" should not contain headline with title "Yummi" in committed layer
-    And store "Pomeranians" should contain headline with title "Eric" in staging layer
-    And store "Pomeranians" should not contain headline with title "Eric" in committed layer
-    And store "Pomeranians" should not contain headline with title "Tanik" in committed layer
-    And store "Pomeranians" should not contain headline with title "Tanik" in staging layer
-    And store "Pomeranians" should contain 2 headlines of class "Pomeranian"
-    And store "Pomeranians" should contain 0 headlines of class "Human"
+
+    When I create view "Pomeranians" from "Pomeranian" "Pets"
+    And I materialize view "Pomeranians" to "views/pomeranians.org"
+    And I create view "Humans" from "Human" "Pets"
+    And I materialize view "Humans" to "views/humans.org"
+
+    # Then store "Pets" should contain headline with title "Yummi" in staging layer
+    # And store "Pets" should not contain headline with title "Yummi" in committed layer
+    # And store "Pets" should contain headline with title "Eric" in staging layer
+    # And store "Pets" should not contain headline with title "Eric" in committed layer
+    # And store "Pets" should not contain headline with title "Tanik" in committed layer
+    # And store "Pets" should not contain headline with title "Tanik" in staging layer
+    # And store "Pets" should contain 2 headlines of class "Pomeranian"
+    # And store "Pets" should contain 0 headlines of class "Human"
 
   # Scenario: Filter queries
   #   Given store "Adventures" in directory "stories/adventures" with headlines

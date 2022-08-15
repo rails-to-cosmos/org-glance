@@ -6,7 +6,7 @@
 (require 'org-glance-event)
 
 (cl-defstruct (org-glance-changelog (:constructor org-glance-changelog--create)
-                              (:copier nil))
+                                    (:copier nil))
   (events nil :type list :read-only nil)
   (hash-test #'equal :type function :read-only t)
   (id-determinator #'identity :type function :read-only t :documentation "Unique event ID determinator."))

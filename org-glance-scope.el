@@ -2,6 +2,13 @@
 
 (require 'org)
 (require 'files)
+(require 'org-glance-types)
+
+(cl-deftype org-glance-scope ()
+  '(satisfies org-glance-scope-p))
+
+(cl-defun org-glance-scope-p (scope)
+  (cl-every #'org-glance-file-p scope))
 
 (defvar org-glance-scope-extensions
   '("org" "org_archive"))
