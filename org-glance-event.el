@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 (cl-defstruct (org-glance-event
                 (:constructor org-glance-event--create)
                 (:copier org-glance-event--copy))

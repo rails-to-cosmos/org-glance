@@ -17,18 +17,6 @@
 ;; 2")))
   )
 
-(let ((expected-class "Human")
-      (store (org-glance-store-from-scratch "/tmp/store"
-               "* Yummi :Pomeranian:"
-               "* Tanik :Human:"
-               "* Eric :Pomeranian:")))
-  (org-glance-store:filter
-   store
-   (lambda (headline)
-     (member
-      (downcase expected-class)
-      (org-glance-headline-class headline)))))
-
 (let ((dst "/tmp/store"))
   (f-delete dst t)
   (setq test-store (org-glance-store-from-scratch dst
@@ -42,27 +30,26 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
                      "* COMMENT a
 2"))
   ;; emulate source destruction
-  ;; (append-to-file "* d" nil (f-join dst "main.org"))
+  (append-to-file "* d" nil (f-join dst "main.org"))
   )
 
-(org-glance-store-staged-changes test-store)
-(org-glance-store-committed-changes test-store)
-
+(org-glance-store:changelog* test-store)
+(org-glance-store:changelog test-store)
 (org-glance-store:flush test-store)
 
-(length (org-glance-log:flatten (org-glance-store-staged-changes test-store)))
-(length (org-glance-log:flatten (org-glance-store-committed-changes test-store)))
+(length (org-glance-changelog:flatten (org-glance-store:changelog* test-store)))
+(length (org-glance-changelog:flatten (org-glance-store:changelog test-store)))
 
 (let ((store (org-glance-store-from-scratch "/tmp/store"
                "* a"
                "* b")))
-  (cl-assert (= 2 (length (org-glance-log:flatten (org-glance-store-staged-changes store)))))
-  (cl-assert (= 0 (length (org-glance-log:flatten (org-glance-store-committed-changes store)))))
+  (cl-assert (= 2 (length (org-glance-changelog:flatten (org-glance-store:changelog* store)))))
+  (cl-assert (= 0 (length (org-glance-changelog:flatten (org-glance-store:changelog store)))))
   (org-glance-materialize store "/tmp/store/material.org"))
 
 (org-glance-store:put test-store (org-glance-headline-from-string "* a"))
 (org-glance-store:remove test-store (org-glance-headline-from-string "* a"))
-(org-glance-store-committed-changes test-store)
+(org-glance-store:changelog test-store)
 (org-glance-store:flush test-store)
 
 (let ((store (org-glance-store "/tmp/store")))

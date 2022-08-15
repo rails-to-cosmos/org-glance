@@ -1,5 +1,5 @@
 Feature: Store
-  Scenario: Import Store
+  Scenario: Import from org-mode files
     Given store "Tasks" in directory "store/tasks"
     And file "tasks/home/household.org"
       """
@@ -24,17 +24,19 @@ Feature: Store
     When I import headlines to store "Tasks" from directory "tasks"
     Then store "Tasks" should contain 4 headlines
 
-  # Scenario: Store from Scratch
-  #   Given store "Songs" in directory "songs" with headlines
-  #     """
-  #     * Tae Zori
-  #     * Al Sok
-  #     """
-  #   Then store "Songs" should contain 2 staged changes
-  #   And store "Songs" should contain 0 committed changes
+  Scenario: Create from scratch
+    Given store "Songs" in directory "songs" with headlines
+      """
+      * Tae Zori
+      * Al Sok
+      """
+    Then 2 staged changes should be in store "Songs"
+    And 0 committed changes should be in store "Songs"
+    When I flush store "Songs"
+    Then 0 staged changes should be in store "Songs"
+    And 2 committed changes should be in store "Songs"
 
-  @dev
-  Scenario: It's All About Titles
+  Scenario: It's all about titles
     Given store "Stories" in directory "store/stories" with headlines
       """
       * Hiking in Troodos
@@ -84,7 +86,6 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
-  @dev
   Scenario: Filters
     Given store "Pets" in directory "store/pets" with headlines
       """

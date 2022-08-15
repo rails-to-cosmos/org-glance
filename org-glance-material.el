@@ -2,6 +2,7 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+
 (require 'org-glance-headline)
 (require 'org-glance-store)
 
@@ -35,7 +36,7 @@
 
 #+ORIGIN: %s:%s
 
-" (org-glance-store-location store) 0.0))
+" (org-glance-store:location store) 0.0))
 
 (cl-defstruct (org-glance-material-marker (:constructor org-glance-material-marker--create)
                                           (:copier nil))

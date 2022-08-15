@@ -7,25 +7,41 @@
 (require 'org-glance-scope)
 
 (Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
-       (lambda (store-name location)
-         (STORE>> store-name (org-glance-store:create (FILE location)))))
+       (lambda (store-name relative-location)
+         (let ((location (FILE relative-location)))
+           (f-mkdir-full-path location)
+           (STORE>> store-name (org-glance-store :location location)))))
 
 (Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
-       (lambda (store-name location headlines)
-         (STORE>> store-name
-                  (apply #'org-glance-store-from-scratch
-                         (FILE location)
-                         (->> headlines
-                              (s-split "* ")
-                              (-map #'s-trim)
-                              (--filter (not (string-empty-p it)))
-                              (--map (concat "* " it)))))))
+       (lambda (store-name relative-location headlines)
+         (let ((location (FILE relative-location)))
+           (f-mkdir-full-path location)
+           (let ((store (apply #'org-glance-store-from-scratch
+                               location
+                               (->> headlines
+                                    (s-split "* ")
+                                    (-map #'s-trim)
+                                    (--filter (not (string-empty-p it)))
+                                    (--map (concat "* " it))))))
+             (STORE>> store-name store)))))
 
 (When "^I import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (store-name location)
     (let ((store (STORE store-name)))
-      (org-glance-store-import store (FILE location))
+      (org-glance-store:import store (FILE location))
       store)))
+
+(Then "^\\([[:digit:]]+\\) staged changes should be in store \"\\([^\"]+\\)\"$"
+      (lambda (expected-change-count store-name)
+        (let ((store (STORE store-name)))
+          (should (= (string-to-number expected-change-count)
+                     (org-glance-changelog:length (org-glance-store:changelog* store)))))))
+
+(Then "^\\([[:digit:]]+\\) committed changes should be in store \"\\([^\"]+\\)\"$"
+  (lambda (expected-change-count store-name)
+    (let ((store (STORE store-name)))
+      (should (= (string-to-number expected-change-count)
+                 (org-glance-changelog:length (org-glance-store:changelog store)))))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (store-name expected-count)
@@ -33,16 +49,12 @@
           (should (= (string-to-number expected-count)
                      (length (org-glance-store:headlines store)))))))
 
-(Then "^store \"\\([^\"]+\\)\" should be equal to \"\\([^\"]+\\)\"$"
-      (lambda (store-1 store-2)
-        (should (org-glance-store-equal-p (STORE store-1) (STORE store-2)))))
-
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
         (let* ((store (STORE store-name))
-               (event (org-glance-log:last
-                       (org-glance-log:filter
-                        (org-glance-store-staged-changes store)
+               (event (org-glance-changelog:last
+                       (org-glance-changelog:filter
+                        (org-glance-store:changelog* store)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (and event (org-glance-event:PUT-p event))))))
@@ -50,9 +62,9 @@
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
         (let* ((store (STORE store-name))
-               (event (org-glance-log:last
-                       (org-glance-log:filter
-                        (org-glance-store-committed-changes store)
+               (event (org-glance-changelog:last
+                       (org-glance-changelog:filter
+                        (org-glance-store:changelog store)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (and event (org-glance-event:PUT-p event))))))
@@ -60,9 +72,9 @@
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
         (let* ((store (STORE store-name))
-               (event (org-glance-log:last
-                       (org-glance-log:filter
-                        (org-glance-store-staged-changes store)
+               (event (org-glance-changelog:last
+                       (org-glance-changelog:filter
+                        (org-glance-store:changelog* store)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (or (null event) (org-glance-event:RM-p event))))))
@@ -70,9 +82,9 @@
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
         (let* ((store (STORE store-name))
-               (event (org-glance-log:last
-                       (org-glance-log:filter
-                        (org-glance-store-committed-changes store)
+               (event (org-glance-changelog:last
+                       (org-glance-changelog:filter
+                        (org-glance-store:changelog store)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (or (null event) (org-glance-event:RM-p event))))))
@@ -174,3 +186,8 @@
          (let ((store (STORE src-store-name)))
            (STORE>> dst-store-name
                     (org-glance-store:filter store (org-glance-store:filter-expr filter-expr))))))
+
+(When "^I flush store \"\\([^\"]+\\)\"$"
+  (lambda (store-name)
+    (let ((store (STORE store-name)))
+      (org-glance-store:flush store))))
