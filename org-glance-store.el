@@ -16,6 +16,7 @@
 (require 'org-glance-scope)
 (require 'org-glance-changelog)
 (require 'org-glance-event)
+(require 'org-glance-view)
 
 (defconst org-glance-store-log-location "wa.log")
 (defconst org-glance-store-materializations-filename "materializations.el")
@@ -74,79 +75,9 @@
     :reader org-glance-store:views)))
 
 ;; Avoid warnings
-(eieio-declare-slots :location)
-(eieio-declare-slots :materializations)
-(eieio-declare-slots :store)
-(eieio-declare-slots :view)
-(eieio-declare-slots :views)
-
 (declare-function f-mkdir-full-path 'f)
-
-(cl-deftype org-glance-materialization-list ()
-  '(satisfies org-glance-materialization-list-p))
-
-(cl-defun org-glance-materialization-list-p (list)
-  (cl-every #'org-glance-materialization-p list))
-
-(defclass org-glance-view nil
-  ((store
-    :type org-glance-store
-    :initarg :store
-    :reader org-glance-view:store
-    :documentation "Original `org-glance-store' instance.")
-   (predicate
-    :type function
-    :initarg :predicate
-    :reader org-glance-view:predicate
-    :documentation "Predicate that takes one argument of type
-    `org-glance-headline' and is guaranteed to be `t' for each
-    headline per `org-glance-view' instance.")
-   (materializations
-    :type org-glance-materialization-list
-    :initarg :materializations
-    :initform nil
-    :documentation "Keep track of materializations."
-    :reader org-glance-view:materializations)))
-
-(defclass org-glance-materialization nil
-  ((view
-    :type org-glance-view
-    :initarg :view
-    :reader org-glance-materialization:view
-    :documentation "View that is represented by the materialization.")
-   (location
-    :type org-glance-file
-    :initarg :location
-    :reader org-glance-materialization:location
-    :documentation "Location where materialization persists.")))
-
-(defmacro org-glance-> (object &rest slots)
-  (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
-             slots
-             :initial-value object))
-
-(cl-defmethod org-glance-materialization:header ((materialization org-glance-materialization))
-  "Generate header for MATERIALIZATION."
-  (format
-   "#  -*- mode: org; mode: org-glance-material -*-
-
-#+ORIGIN: %s:0.0
-
-"
-   (org-glance-> materialization :view :store :location)))
-
-(cl-defmethod org-glance-view:materialize ((view org-glance-view) (location string))
-  (f-mkdir-full-path (file-name-directory location))
-  (let ((materialization (org-glance-materialization :view view :location location)))
-    (org-glance--with-temp-file location
-      (insert (org-glance-materialization:header materialization))
-      (cl-dolist (headline (org-glance-store:headlines (org-glance-view:store view)))
-        (when (funcall (org-glance-view:predicate view) headline)
-          (org-glance-headline-insert
-           (org-glance-store:get
-            (org-glance-view:store view)
-            (org-glance-headline:hash headline))))))
-    (cl-pushnew materialization (slot-value view :materializations))))
+(eieio-declare-slots :location)
+(eieio-declare-slots :views)
 
 (cl-defun org-glance-store:view (store predicate)
   (let ((view (org-glance-view :store store :predicate predicate)))

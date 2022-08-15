@@ -1,6 +1,12 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'dash)
+(require 'cl-macs)
+
+(defmacro org-glance-> (object &rest slots)
+  (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
+             slots
+             :initial-value object))
 
 (cl-defun org-glance--ensure-at-headline ()
   "Ensure point is at heading.
