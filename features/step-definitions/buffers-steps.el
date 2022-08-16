@@ -1,8 +1,10 @@
 (When "^I save buffer$" #'save-buffer)
 (When "^I kill buffer$" #'kill-buffer)
 (When "^I kill current buffer$" #'kill-buffer)
-(When "^I goto the end of the buffer$" #'end-of-buffer)
-(When "^I print buffer contents$" (lambda () (pp (buffer-string))))
+
+(When "^I goto the end of the buffer$"
+  (lambda ()
+    (goto-char (point-max))))
 
 (Then "^buffer string should be"
       (lambda (contents)
