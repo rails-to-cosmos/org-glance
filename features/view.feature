@@ -16,12 +16,15 @@ Feature: Materialization
     And I commit changes to store "New phones"
     And I save buffer
 
-    Then store "New phones" should contain headline with title "iPhone 4" in committed layer
-    And store "New phones" should not contain headline with title "iPhone 4" in staging layer
-    And store "New phones" should not contain headline with title "iPhone 3" in staging layer
-    # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
-    And store "New phones" should not contain headline with title "Йотафон" in staging layer
-    # And store "New phones" should not contain headline with title "Йотафон" in committed layer
+    Then store "Phones" should contain headline with title "iPhone 4" in committed layer
+    And store "Phones" should not contain headline with title "iPhone 4" in staging layer
+    And store "Phones" should not contain headline with title "iPhone 3" in staging layer
+    # And store "Phones" should not contain headline with title "iPhone 3" in committed layer
+    And store "Phones" should not contain headline with title "Йотафон" in staging layer
+    # And store "Phones" should not contain headline with title "Йотафон" in committed layer
+
+    And store "Phones" should be equal to buffer store
+    And view "Apple Phones" should be equal to buffer view
 
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
@@ -50,7 +53,7 @@ Feature: Materialization
   #     """
   #   When I materialize store "Old phones" to file "views/material.org"
 
-  # Scenario: 1+ materializations
+  # Scenario: Multiple views
   #   Given store "Adventures" in directory "stories/adventures" with headlines
   #     """
   #     * TODO Niagara Waterfalls :Hike:

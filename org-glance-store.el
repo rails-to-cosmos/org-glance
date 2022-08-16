@@ -68,10 +68,10 @@
     :documentation "Changelog persisted on disk."
     :reader org-glance-store:cache)
    (views
-    :type list
+    :type hash-table
     :initarg :views
-    :initform nil
-    :documentation "List of views associated with store."
+    :initform (make-hash-table)
+    :documentation "Views associated with store by predicate key."
     :reader org-glance-store:views)))
 
 ;; Avoid warnings
@@ -83,24 +83,25 @@
   "List of stores registered in system.")
 
 (cl-defun org-glance-store:view (store predicate)
-  (let ((view (org-glance-view :store store :predicate predicate)))
-    (cl-pushnew view (slot-value store :views))
-    view))
+  (or (gethash predicate (slot-value store :views))
+      (let ((view (org-glance-view :store store :predicate predicate)))
+        (puthash predicate view (slot-value store :views))
+        view)))
 
 (cl-defun org-glance-store:from-scratch (location &rest strings)
   "Creates store from LOCATION, puts headlines in it and flushes it on disk.
 
+It destructs store in `org-glance-stores' hashtable.
+
 All changes are stored in memory before you call `org-glance-store:flush' explicitly."
   (declare (indent 1))
-  (or (gethash location org-glance-stores)
-      (progn
-        (f-mkdir-full-path location)
-        (let ((store (org-glance-store :location location)))
-          (dolist (string strings)
-            (org-glance-store:put store (org-glance-headline-from-string string)))
-          (org-glance-store:flush store)
-          (puthash location store org-glance-stores)
-          store))))
+  (f-mkdir-full-path location)
+  (let ((store (org-glance-store :location location)))
+    (dolist (string strings)
+      (org-glance-store:put store (org-glance-headline-from-string string)))
+    (org-glance-store:flush store)
+    (puthash location store org-glance-stores)
+    store))
 
 (cl-defun org-glance-store:read (location)
   "Read `org-glance-store' from LOCATION."

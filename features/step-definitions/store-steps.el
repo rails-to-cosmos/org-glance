@@ -183,3 +183,8 @@
   (lambda (store-name)
     (let ((store (org-glance-test:get-store store-name)))
       (org-glance-store:flush store))))
+
+(Then "^store \"\\([^\"]+\\)\" should be equal to buffer store$"
+      (lambda (store-name)
+        (let ((store (org-glance-test:get-store store-name)))
+          (should (eq store (org-glance-materialization:get-buffer-store))))))

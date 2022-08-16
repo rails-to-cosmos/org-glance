@@ -3,13 +3,12 @@
     (Given "empty file \"%s\"" file-name)
     (let* ((file (org-glance-test:get-file file-name))
            (view (org-glance-test:get-view view-name)))
-      (org-glance-view:materialize view file))))
+      (org-glance-view:materialization view file))))
 
 (When "^I commit changes to store \"\\([^\"]+\\)\"$"
   (lambda (store-name)
-    (org-glance-material-overlay-manager-redisplay) ;; refactor, unlink "overlay" term
-    (org-glance-commit)
-    (org-glance-test:put-store store-name (org-glance-material-store))))
+    (org-glance-material-overlay-manager-redisplay)
+    (org-glance-commit)))
 
 (Then "^headline materialization at point should be changed$"
       (lambda ()

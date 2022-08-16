@@ -43,6 +43,8 @@
 
 (cl-defun org-glance-material-marker-print (marker)
   (prin1 (a-list
+          :beg (org-glance-material-marker-beg marker)
+          :end (org-glance-material-marker-end marker)
           :hash (org-glance-material-marker-hash marker)
           :overlay (org-glance-material-marker-overlay marker)
           :changed-p (org-glance-material-marker-changed-p marker)
@@ -50,30 +52,12 @@
           :committed-p (org-glance-material-marker-committed-p marker)
           :offset (org-glance-material-marker-offset marker))))
 
-(cl-defun org-glance-material-store ()
-  "Get `org-glance-store' instance associated with current material buffer."
-  (let ((location (save-excursion
-                    (goto-char (point-min))
-                    (search-forward "#+STORE: ")
-                    (buffer-substring-no-properties (point) (line-end-position)))))
-    (org-glance-store:read location)))
-
-(cl-defun org-glance-material-offset ()
-  "Get actual wal offset associated with current material buffer."
-  (condition-case nil
-      (save-excursion
-        (goto-char (point-min))
-        (search-forward "#+ORIGIN: ")
-        (search-forward ":")
-        (read (buffer-substring-no-properties (point) (point-at-eol))))
-    (search-failed nil)))
-
 (define-minor-mode org-glance-material-mode
     "A minor mode to be activated only in materialized view
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let ((store (org-glance-material-store))
+         (let ((store (org-glance-materialization:get-buffer-store))
                (buffer (current-buffer)))
            (when (null store) (user-error "Unable to start material mode: associated store has not been found."))
            (org-glance-map (headline)
@@ -216,7 +200,7 @@ TODO:
   (interactive)
   (cl-loop
      with markers = (-non-nil (hash-table-keys org-glance-material--changed-markers-set))
-     with store = (org-glance-material-store)
+     with store = (org-glance-materialization:get-buffer-store)
      for marker in markers
      when (eq (current-buffer) (org-glance-material-marker-buffer marker))
      for headline = (org-glance-headline-from-region
