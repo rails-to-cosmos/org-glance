@@ -48,11 +48,11 @@
 (When "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headline file)
     (let ((headline (gethash headline org-glance-test-headlines)))
-      (org-glance-headline-save headline (f-join org-glance-test-location file)))))
+      (org-glance-headline-save headline (f-join org-glance-test:location file)))))
 
 (When "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
-        (puthash headline (org-glance-headline-load (f-join org-glance-test-location file))
+        (puthash headline (org-glance-headline-load (f-join org-glance-test:location file))
                  org-glance-test-headlines)))
 
 (When "^headline \"\\([^\"]+\\)\" should contain links?$"

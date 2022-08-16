@@ -9,9 +9,6 @@
 (defvar org-glance-overlay-manager nil
   "Painter thread.")
 
-(defvar org-glance-material--buffer-to-store (make-hash-table)
-  "Buffer to origin alist.")
-
 (defvar org-glance-material--marker-to-point (make-hash-table)
   "Marker to point map.")
 
@@ -55,16 +52,11 @@
 
 (cl-defun org-glance-material-store ()
   "Get `org-glance-store' instance associated with current material buffer."
-  (or (gethash (current-buffer) org-glance-material--buffer-to-store)
-      (puthash (current-buffer)
-               (org-glance-store:read (save-excursion
-                                        (goto-char (point-min))
-                                        (search-forward "#+ORIGIN: ")
-                                        (buffer-substring-no-properties (point)
-                                                                        (save-excursion
-                                                                          (search-forward ":")
-                                                                          (1- (point))))))
-               org-glance-material--buffer-to-store)))
+  (let ((location (save-excursion
+                    (goto-char (point-min))
+                    (search-forward "#+STORE: ")
+                    (buffer-substring-no-properties (point) (line-end-position)))))
+    (org-glance-store:read location)))
 
 (cl-defun org-glance-material-offset ()
   "Get actual wal offset associated with current material buffer."
@@ -84,7 +76,6 @@ editor."
          (let ((store (org-glance-material-store))
                (buffer (current-buffer)))
            (when (null store) (user-error "Unable to start material mode: associated store has not been found."))
-           (puthash buffer store org-glance-material--buffer-to-store)
            (org-glance-map (headline)
              (let* ((hash (org-glance-headline:hash headline)))
                (let ((marker (org-glance-material-marker--create
@@ -233,7 +224,7 @@ TODO:
                      (org-glance-material-marker-end marker))
      do (org-glance-store:put store headline)
      finally do (org-glance-store:flush store))
-  ;; TODO work with deleted buffers in `org-glance-material--buffer-to-store'
+  ;; TODO work with deleted buffers
   )
 
 (cl-defun org-glance-material-debug (&rest _)

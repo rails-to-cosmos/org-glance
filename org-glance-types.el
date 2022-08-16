@@ -20,4 +20,11 @@
   (and (f-dir-p location)
        (f-readable-p location)))
 
+(cl-deftype org-glance-predicate ()
+  '(satisfies org-glance-predicate-p))
+
+(cl-defun org-glance-predicate-p (symbol)
+  (and (symbolp symbol)
+       (fboundp symbol)))
+
 (provide 'org-glance-types)

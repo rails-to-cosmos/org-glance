@@ -3,14 +3,14 @@
 (require 'eieio)
 (require 'org-glance-helpers)
 
-(eieio-declare-slots :view)
+(eieio-declare-slots :view :predicate)
 
 (defclass org-glance-materialization nil
   ((view
     :type org-glance-view
     :initarg :view
     :reader org-glance-materialization:view
-    :documentation "View that is represented by the materialization.")
+    :documentation "Backlink to source of materialization.")
    (location
     :type org-glance-file
     :initarg :location
@@ -28,9 +28,11 @@
   (format
    "#  -*- mode: org; mode: org-glance-material -*-
 
-#+ORIGIN: %s:0.0
+#+STORE: %s
+#+PREDICATE: %s
 
 "
-   (org-glance-> materialization :view :store :location)))
+   (org-glance-> materialization :view :store :location)
+   (org-glance-> materialization :view :predicate)))
 
 (provide 'org-glance-materialization)

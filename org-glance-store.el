@@ -79,6 +79,9 @@
 (eieio-declare-slots :location)
 (eieio-declare-slots :views)
 
+(defvar org-glance-stores (make-hash-table :test #'equal)
+  "List of stores registered in system.")
+
 (cl-defun org-glance-store:view (store predicate)
   (let ((view (org-glance-view :store store :predicate predicate)))
     (cl-pushnew view (slot-value store :views))
@@ -89,20 +92,26 @@
 
 All changes are stored in memory before you call `org-glance-store:flush' explicitly."
   (declare (indent 1))
-  (f-mkdir-full-path location)
-  (let ((store (org-glance-store :location location)))
-    (dolist (string strings)
-      (org-glance-store:put store (org-glance-headline-from-string string)))
-    (org-glance-store:flush store)
-    store))
+  (or (gethash location org-glance-stores)
+      (progn
+        (f-mkdir-full-path location)
+        (let ((store (org-glance-store :location location)))
+          (dolist (string strings)
+            (org-glance-store:put store (org-glance-headline-from-string string)))
+          (org-glance-store:flush store)
+          (puthash location store org-glance-stores)
+          store))))
 
 (cl-defun org-glance-store:read (location)
   "Read `org-glance-store' from LOCATION."
-  (org-glance-store
-   :location location
-   :changelog (org-glance-changelog:read
-               (f-join location org-glance-store-log-location)
-               #'org-glance-store:event-id)))
+  (or (gethash location org-glance-stores)
+      (puthash location
+               (org-glance-store
+                :location location
+                :changelog (org-glance-changelog:read
+                            (f-join location org-glance-store-log-location)
+                            #'org-glance-store:event-id))
+               org-glance-stores)))
 
 (cl-defun org-glance-store:/ (store location)
   "Resolve relative LOCATION to full path in context of STORE."

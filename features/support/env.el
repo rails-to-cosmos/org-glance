@@ -16,7 +16,7 @@
 
 (add-to-list 'load-path org-glance-root-path)
 
-(defvar org-glance-test-location)
+(defvar org-glance-test:location)
 (defvar org-glance-test-files)
 (defvar org-glance-test-stores)
 (defvar org-glance-test-views)
@@ -33,7 +33,7 @@
 (defun org-glance-test:get-file (alias)
   "Get file from test storage by ALIAS."
   (or (gethash alias org-glance-test-files)
-      (f-join org-glance-test-location alias)))
+      (f-join org-glance-test:location alias)))
 
 (defun org-glance-test:put-store (key val)
   "Update store KEY with value VAL."
@@ -72,18 +72,21 @@
 
 (Before
  (desktop-clear)
- (setq org-glance-test-location (make-temp-file "org-glance-" 'directory)
+ (setq org-glance-test:location (make-temp-file "org-glance-" 'directory)
        org-glance-test-files (make-hash-table :test #'equal)
        org-glance-test-stores (make-hash-table :test #'equal)
        org-glance-test-views (make-hash-table :test #'equal)
        org-glance-test-headlines (make-hash-table :test #'equal))
- (f-mkdir-full-path org-glance-test-location))
+ (f-mkdir-full-path org-glance-test:location)
+ (f-touch (f-join org-glance-test:location "ecukes.lock")))
 
 (After
- (delete-directory org-glance-test-location t))
+ (when (f-exists-p (f-join org-glance-test:location "ecukes.lock"))
+   (delete-directory org-glance-test:location t)))
 
 (Fail
- (message "Scenario has failed. Please check out test directory for details: %s" org-glance-test-location))
+ (message "Scenario has failed. Please check out test directory for details: %s" org-glance-test:location)
+ (f-delete (f-join org-glance-test:location "ecukes.lock")))
 
 (Teardown
  (setq default-directory org-glance-root-path))

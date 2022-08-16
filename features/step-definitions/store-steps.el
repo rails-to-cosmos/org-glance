@@ -173,20 +173,6 @@
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
-(When "^I create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\"$"
-  (lambda (view-name class-name store-name)
-    (let* ((store (org-glance-test:get-store store-name))
-           (view (org-glance-store:view
-                  store
-                  (lambda (headline)
-                    (member (downcase class-name) (org-glance-headline-class headline))))))
-      (org-glance-test:put-view view-name view))))
-
-(When "^I materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
-  (lambda (view-name file-name)
-    (let ((view (org-glance-test:get-view view-name)))
-      (org-glance-view:materialize view (org-glance-test:get-file file-name)))))
-
 ;; (Given "^\"\\([^\"]+\\)\" \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
 ;;        (lambda (filter-expr store-name src-store-name)
 ;;          (let ((store (org-glance-test:get-store src-store-name)))

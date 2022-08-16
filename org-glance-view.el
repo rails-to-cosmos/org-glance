@@ -3,6 +3,7 @@
 (require 'f)
 (require 'eieio)
 (require 'org-glance-materialization)
+(require 'org-glance-types)
 
 (declare-function f-mkdir-full-path 'f)
 (eieio-declare-slots :materializations)
@@ -15,7 +16,7 @@
     :reader org-glance-view:store
     :documentation "Original `org-glance-store' instance.")
    (predicate
-    :type function
+    :type org-glance-predicate
     :initarg :predicate
     :reader org-glance-view:predicate
     :documentation "Predicate that takes one argument of type

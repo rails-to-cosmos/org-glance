@@ -4,6 +4,7 @@ Feature: Materialization
     Given store "Phones" in directory "store/phones" with headlines
       """
       * iPhone 3 :Apple:
+      * iPhone 7 :Apple:
       * Йотафон :Trash:
       """
 
@@ -13,11 +14,14 @@ Feature: Materialization
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
     And I commit changes to store "New phones"
+    And I save buffer
 
     Then store "New phones" should contain headline with title "iPhone 4" in committed layer
     And store "New phones" should not contain headline with title "iPhone 4" in staging layer
     And store "New phones" should not contain headline with title "iPhone 3" in staging layer
-    And store "New phones" should not contain headline with title "iPhone 3" in committed layer
+    # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
+    And store "New phones" should not contain headline with title "Йотафон" in staging layer
+    # And store "New phones" should not contain headline with title "Йотафон" in committed layer
 
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
