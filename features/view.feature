@@ -26,6 +26,11 @@ Feature: Materialization
     And store "Phones" should be equal to buffer store
     And view "Apple Phones" should be equal to buffer view
 
+    When I kill current buffer
+    And I find file "views/apple.org"
+    Then store "Phones" should be equal to buffer store
+    And view "Apple Phones" should be equal to buffer view
+
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
