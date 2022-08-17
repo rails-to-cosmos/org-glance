@@ -1,7 +1,10 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'a)
+
 (require 'f)
+(declare-function f-mkdir-full-path 'f)
+
 (require 'ts)
 (require 'cl-macs)
 (require 'cl-lib)
@@ -39,11 +42,7 @@
 (cl-defun org-glance-store:event-id (event)
   (org-glance-headline:hash (org-glance-event-state event)))
 
-(defmacro eieio-declare-slot (name)
-  "Declares slot to be available at runtime."
-  `(eval-when-compile (cl-pushnew ,name eieio--known-slot-names)))
-
-(defclass org-glance-store nil
+(org-glance-class org-glance-store nil
   ((location
     :type org-glance-directory
     :initarg :location
@@ -73,11 +72,6 @@
     :initform (make-hash-table)
     :documentation "Views associated with store by predicate key."
     :reader org-glance-store:views)))
-
-;; Avoid warnings
-(declare-function f-mkdir-full-path 'f)
-(eieio-declare-slots :location)
-(eieio-declare-slots :views)
 
 (defvar org-glance-stores (make-hash-table :test #'equal)
   "List of stores registered in system.")

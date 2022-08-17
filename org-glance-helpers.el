@@ -3,6 +3,13 @@
 (require 'dash)
 (require 'cl-macs)
 
+(defmacro org-glance-class (name superclasses slots &rest options-and-doc)
+  "`defclass' wrapper that avoids compile-time slot declaration warnings."
+  (declare (indent 3))
+  `(progn
+     (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
+     (defclass ,name ,superclasses ,slots ,@options-and-doc)))
+
 (defmacro org-glance-> (object &rest slots)
   (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
              slots

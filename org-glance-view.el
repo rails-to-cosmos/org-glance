@@ -6,15 +6,14 @@
 (require 'org-glance-types)
 
 (declare-function f-mkdir-full-path 'f)
-(eieio-declare-slots :materializations)
-(eieio-declare-slots :store)
 
-(defclass org-glance-view nil
+(org-glance-class org-glance-view nil
   ((store
     :type org-glance-store
     :initarg :store
     :reader org-glance-view:store
     :documentation "Original `org-glance-store' instance.")
+   ;; available TODO states etc
    (predicate
     :type org-glance-predicate
     :initarg :predicate

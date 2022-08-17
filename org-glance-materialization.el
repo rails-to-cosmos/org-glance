@@ -3,19 +3,21 @@
 (require 'eieio)
 (require 'org-glance-helpers)
 
-(eieio-declare-slots :view :predicate)
 
-(defclass org-glance-materialization nil
-  ((view
-    :type org-glance-view
-    :initarg :view
-    :reader org-glance-materialization:view
-    :documentation "Backlink to source of materialization.")
-   (location
-    :type org-glance-file
-    :initarg :location
-    :reader org-glance-materialization:location
-    :documentation "Location where materialization persists.")))
+
+;; (macroexpand '(org-glance-class org-glance-materialization nil ((view :type string) (location :type string))))
+
+(org-glance-class org-glance-materialization nil
+    ((view
+      :type org-glance-view
+      :initarg :view
+      :reader org-glance-materialization:view
+      :documentation "Backlink to source of materialization.")
+     (location
+      :type org-glance-file
+      :initarg :location
+      :reader org-glance-materialization:location
+      :documentation "Location where materialization persists.")))
 
 (cl-defun org-glance-materialization:header (materialization)
   "Generate header for MATERIALIZATION."
