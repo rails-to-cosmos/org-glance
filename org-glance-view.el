@@ -7,26 +7,28 @@
 
 (declare-function f-mkdir-full-path 'f)
 
+(defvar org-glance-views (make-hash-table :test #'equal))
+
 (org-glance-class org-glance-view nil
-  ((store
-    :type org-glance-store
-    :initarg :store
-    :reader org-glance-view:store
-    :documentation "Original `org-glance-store' instance.")
-   ;; available TODO states etc
-   (predicate
-    :type org-glance-predicate
-    :initarg :predicate
-    :reader org-glance-view:predicate
-    :documentation "Predicate that takes one argument of type
+    ((store
+      :type org-glance-store
+      :initarg :store
+      :reader org-glance-view:store
+      :documentation "Original `org-glance-store' instance.")
+     ;; available TODO states etc
+     (predicate
+      :type org-glance-predicate
+      :initarg :predicate
+      :reader org-glance-view:predicate
+      :documentation "Predicate that takes one argument of type
     `org-glance-headline' and is guaranteed to be `t' for each
     headline per `org-glance-view' instance.")
-   (materializations
-    :type hash-table
-    :initarg :materializations
-    :initform (make-hash-table :test #'equal)
-    :documentation "Keep track of materializations."
-    :reader org-glance-view:materializations)))
+     (materializations
+      :type hash-table
+      :initarg :materializations
+      :initform (make-hash-table :test #'equal)
+      :documentation "Keep track of materializations."
+      :reader org-glance-view:materializations)))
 
 (cl-defun org-glance-view:materialization (view location)
   (let ((true-location (file-truename location)))
