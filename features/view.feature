@@ -45,7 +45,7 @@ Feature: Materialization
     And I materialize view "Pomeranians" to file "views/pomeranians.org"
     And I find file "views/pomeranians.org"
     And I go to headline with title "Yummi"
-    And I insert " the dog"
+    And I insert " the cat"
     Then marker at point should be changed
     And marker at point should not be committed
     And marker at point should not be outdated
