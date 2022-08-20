@@ -33,23 +33,23 @@
       :reader org-glance-materialization:changes
       :documentation "Set of changed markers.")))
 
-(defclass org-glance-marker-state nil
-  ((changed
-    :type boolean
-    :initarg :changed
-    :initform nil)
-   (persisted
-    :type boolean
-    :initarg :persisted
-    :initform t)
-   (committed
-    :type boolean
-    :initarg :committed
-    :initform nil)
-   (outdated
-    :type boolean
-    :initarg :outdated
-    :initform nil)))
+(org-glance-class org-glance-marker-state nil
+    ((changed
+      :type boolean
+      :initarg :changed
+      :initform nil)
+     (persisted
+      :type boolean
+      :initarg :persisted
+      :initform t)
+     (committed
+      :type boolean
+      :initarg :committed
+      :initform nil)
+     (outdated
+      :type boolean
+      :initarg :outdated
+      :initform nil)))
 
 (org-glance-class org-glance-marker nil
     ((beg
