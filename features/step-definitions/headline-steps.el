@@ -104,7 +104,7 @@
           (org-glance-headline-title (gethash name org-glance-test-headlines))
           title))))
 
-(And "^the contents of headline \"\\([^\"]+\\)\" should be:$"
+(Then "^the contents of headline \"\\([^\"]+\\)\" should be:$"
      (lambda (name contents)
        (let ((actual-headline (gethash name org-glance-test-headlines))
              (expected-headline (with-temp-buffer
@@ -112,11 +112,11 @@
                                   (org-glance-headline-at-point))))
          (should (org-glance-headline-equal-p actual-headline expected-headline)))))
 
-(And "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
+(Then "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
      (lambda (a b)
        (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
 
-(Then "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
+(When "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
       (lambda (title)
         (with-mutex org-glance-material-overlay-manager--mutex
           (org-edit-headline title))))

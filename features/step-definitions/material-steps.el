@@ -13,14 +13,17 @@
 (Then "^marker at point should be changed$"
       (lambda ()
         (org-glance-material-overlay-manager-redisplay)
-
         (when-let (marker (org-glance-marker:at-point))
           (org-glance-materialization:update (org-glance-buffer-materialization)))
-
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :changed)))))
+
+(Then "^marker at point should not be changed$"
+      (lambda ()
+        (org-glance-material-overlay-manager-redisplay)
+        (when-let (marker (org-glance-marker:at-point))
+          (org-glance-materialization:update (org-glance-buffer-materialization)))
+        (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :changed))))))
 
 (Then "^marker at point should not be outdated$"
       (lambda ()
-        (when-let (marker (org-glance-marker:at-point))
-          (org-glance-marker:print marker)
-          (should (not (org-glance-marker:outdated-p marker))))))
+        (should (not (org-glance-> (org-glance-marker:at-point) :state :outdated)))))

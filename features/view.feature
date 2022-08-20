@@ -34,8 +34,7 @@ Feature: Materialization
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  @debug
-  Scenario: Change headlines
+  Scenario: Change headline
     Given store "Pets" in directory "store/pets" with headlines
       """
       * Yummi :Pomeranian:
@@ -48,7 +47,11 @@ Feature: Materialization
     And I go to headline with title "Yummi"
     And I insert " the dog"
     Then marker at point should be changed
-    # And marker at point should not be outdated
+    And marker at point should not be outdated
+
+    When I set title of the headline at point to "Yummi"
+    Then marker at point should not be changed
+    And marker at point should not be outdated
 
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines
