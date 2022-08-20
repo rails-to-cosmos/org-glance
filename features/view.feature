@@ -1,5 +1,4 @@
 Feature: Materialization
-  @debug
   Scenario: Basic materialization
     Given store "Phones" in directory "store/phones" with headlines
       """
@@ -35,19 +34,21 @@ Feature: Materialization
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  # @dev
-  # Scenario: Change headlines
-  #   Given store "Pets" in directory "store/pets" with headlines
-  #     """
-  #     * Yummi :Pomeranian:
-  #     * Eric :Pomeranian:
-  #     * Tanik :Human:
-  #     """
-  #   When I materialize store "Pets" to file "views/material.org"
-  #   And I go to headline with title "Yummi"
-  #   And I insert " the dog"
-  #   Then headline materialization at point should be changed
-  #   And headline materialization at point should not be outdated
+  @debug
+  Scenario: Change headlines
+    Given store "Pets" in directory "store/pets" with headlines
+      """
+      * Yummi :Pomeranian:
+      * Eric :Pomeranian:
+      * Tanik :Human:
+      """
+    When I create view "Pomeranians" from "Pomeranian" "Pets"
+    And I materialize view "Pomeranians" to file "views/pomeranians.org"
+    And I find file "views/pomeranians.org"
+    And I go to headline with title "Yummi"
+    And I insert " the dog"
+    Then marker at point should be changed
+    # And marker at point should not be outdated
 
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines

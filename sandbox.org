@@ -17,7 +17,7 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
 
   (setq test-view (org-glance-store:view test-store #'org-glance-headline-header-p))
 
-  (org-glance-view:materialization test-view (f-join dst "main.org"))
+  (org-glance-view:materialize test-view (f-join dst "main.org"))
   ;; emulate source corruption
   (append-to-file "* d" nil (f-join dst "main.org"))
   )

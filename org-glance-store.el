@@ -241,7 +241,7 @@ achieved by calling `org-glance-store:flush' method."
   (dolist (file (org-glance-scope location))
     (org-glance--with-temp-buffer
      (insert-file-contents file)
-     (org-glance-map (headline)
+     (org-glance-map-headlines (headline)
        (org-glance-store:put store headline)))))
 
 (provide 'org-glance-store)

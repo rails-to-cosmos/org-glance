@@ -80,4 +80,12 @@ Return t if it is or raise `user-error' otherwise."
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
 
+(cl-defun org-glance-debug (&rest args)
+  (let ((buffer (get-buffer-create "*glance*")))
+    (with-current-buffer buffer
+      (delete-region (point-min) (point-max))
+      (cl-loop for arg in args
+         collect (prin1-to-string arg t) into result
+         finally (insert (s-join "\n" result))))))
+
 (provide 'org-glance-helpers)

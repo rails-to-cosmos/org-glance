@@ -33,16 +33,34 @@
       :reader org-glance-materialization:changes
       :documentation "Set of changed markers.")))
 
+(defclass org-glance-marker-state nil
+  ((changed
+    :type boolean
+    :initarg :changed
+    :initform nil)
+   (persisted
+    :type boolean
+    :initarg :persisted
+    :initform t)
+   (committed
+    :type boolean
+    :initarg :committed
+    :initform nil)
+   (outdated
+    :type boolean
+    :initarg :outdated
+    :initform nil)))
+
 (org-glance-class org-glance-marker nil
     ((beg
       :type number
       :initarg :beg
-      :reader org-glance-marker:beg nil
+      :reader org-glance-marker:beg
       :documentation "Beginning of headline.")
      (end
       :type number
       :initarg :end
-      :reader org-glance-marker:end nil
+      :reader org-glance-marker:end
       :documentation "End of headline.")
      (buffer
       :type buffer
@@ -65,30 +83,37 @@
       :initarg :overlay
       :reader org-glance-marker:overlay
       :documentation "Current overlay for status reporting.")
-     (changed-p
-      :type boolean
-      :initarg :changed-p
-      :reader org-glance-marker:changed-p
-      :documentation "Has headline changed?")
-     (persisted-p
-      :type boolean
-      :initarg :persisted-p
-      :reader org-glance-marker:persisted-p
-      :documentation "Whether headline has origin or not.")
-     (committed-p
-      :type boolean
-      :initarg :committed-p
-      :reader org-glance-marker:committed-p
-      :documentation "Whether changes have been committed.")
-     (outdated-p
-      :type boolean
-      :initarg :outdated-p
-      :reader org-glance-marker:outdated-p
-      :documentation "If there are changes that are not reflected in current materialization."))
+     (state
+      :type org-glance-marker-state
+      :initarg :state
+      :reader org-glance-marker:state))
   "Metadata of materializations.")
 
 (cl-defun org-glance-marker:at-point ()
   (get-text-property (point) :marker))
+
+(cl-defun org-glance-marker:get-actual-state (marker headline)
+  (let ((hash-old (org-glance-marker:hash marker))
+        (hash-new (org-glance-headline:hash headline)))
+    (org-glance-marker-state
+     :changed (not (string= hash-old hash-new))
+     :persisted (org-glance-> marker :state :persisted))))
+
+(cl-defun org-glance-marker-live-p (marker)
+  (and marker
+       (org-glance-marker:buffer marker)
+       (buffer-live-p (org-glance-marker:buffer marker))))
+
+(cl-defmacro org-glance-map-markers (var &rest forms)
+  (declare (indent 1))
+  `(org-glance-map-headlines (headline)
+     (let ((,(car var) (org-glance-marker
+                        :hash (org-glance-headline:hash headline)
+                        :beg (point-min) ;; beginning of headline in narrowed buffer
+                        :end (point-max) ;; end of headline in narrowed buffer
+                        :buffer (current-buffer)
+                        :state (org-glance-marker-state))))
+       ,@forms)))
 
 (cl-defun org-glance-materialization:header (materialization)
   "Generate header for MATERIALIZATION."
@@ -123,23 +148,7 @@
   (let ((filename (file-truename (buffer-file-name))))
     (or (gethash filename org-glance-materializations)
         (let ((view (org-glance-materialization:get-buffer-view)))
-          (puthash filename (org-glance-view:materialization view filename) org-glance-materializations)))))
-
-(cl-defun org-glance-materialization:prepare-markers (materialization)
-  (org-glance-map (headline)
-    (let ((marker (org-glance-marker
-                   :hash (org-glance-headline:hash headline)
-                   :beg (point-min)
-                   :end (point-max)
-                   :buffer (current-buffer)
-                   :overlay (make-overlay (point-min) (point-min))
-                   :changed-p nil
-                   :committed-p nil
-                   :persisted-p (not (null headline))
-                   :outdated-p nil)))
-      (add-text-properties (point-min) (point-max) (list :marker marker))
-      ;; (save-buffer) ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-      (puthash marker (point-min) (org-glance-> materialization :marker->point)))))
+          (puthash filename (org-glance-view:materialize view filename) org-glance-materializations)))))
 
 (cl-defun org-glance-materialization:update (materialization)
   (puthash (org-glance-marker:at-point) (point) (org-glance-> materialization :marker->point)))
@@ -149,9 +158,7 @@
   `(cl-loop
       for marker being the hash-keys of (org-glance-> ,materialization :marker->point)
       using (hash-values point)
-      when (and marker
-                (org-glance-marker:buffer marker)
-                (buffer-live-p (org-glance-marker:buffer marker)))
+      when (org-glance-marker-live-p marker)
       do (with-current-buffer (org-glance-marker:buffer marker)
            (save-excursion
              (save-restriction
@@ -174,9 +181,7 @@
   `(cl-loop
       with materialization = ,(cadr spec)
       for marker being the hash-keys of (org-glance-> materialization :changes)
-      when (and marker
-                (org-glance-marker:buffer marker)
-                (eq (current-buffer) (org-glance-marker:buffer marker)))
+      when (org-glance-marker-live-p marker)
       do (with-current-buffer (org-glance-marker:buffer marker)
            (save-excursion
              (save-restriction
@@ -184,24 +189,41 @@
                (let ((,(car spec) marker))
                  ,@body))))))
 
+(cl-defun org-glance-headline:from-marker (marker)
+  (org-glance-headline-from-region
+   (org-glance-marker:beg marker)
+   (org-glance-marker:end marker)))
+
 (cl-defun org-glance-materialization:commit (materialization)
   (let ((store (org-glance-> materialization :view :store)))
     (org-glance-materialization:do-changes (marker materialization)
-      (let ((headline (org-glance-headline-from-region
-                       (org-glance-marker:beg marker)
-                       (org-glance-marker:end marker))))
+      (let ((headline (org-glance-headline:from-marker marker)))
         (org-glance-store:put store headline)))
     (org-glance-store:flush store)))
 
-(cl-defun org-glance-marker:print (marker)
-  (prin1 (a-list
-          :beg (org-glance-> marker :beg)
-          :end (org-glance-> marker :end)
-          :hash (org-glance-> marker :hash)
-          :overlay (org-glance-> marker :overlay)
-          :changed-p (org-glance-> marker :changed-p)
-          :persisted-p (org-glance-> marker :persisted-p)
-          :committed-p (org-glance-> marker :committed-p)
-          :offset (org-glance-> marker :offset))))
+(cl-defun org-glance-marker:prin1-to-string (marker)
+  (prin1-to-string
+   (a-list
+    :beg (org-glance-> marker :beg)
+    :end (org-glance-> marker :end)
+    :hash (org-glance-> marker :hash)
+    :overlay (when (slot-boundp marker :overlay)
+               (org-glance-> marker :overlay))
+    :changed (org-glance-> marker :state :changed)
+    :persisted (org-glance-> marker :state :persisted)
+    :committed (org-glance-> marker :state :committed)
+    :offset (org-glance-> marker :offset))
+   t))
+
+(cl-defun org-glance-state:prin1-to-string (state)
+  (with-temp-buffer
+    (insert (json-encode-alist
+             (a-list
+              :changed (org-glance-> state :changed)
+              :persisted (org-glance-> state :persisted)
+              :committed (org-glance-> state :committed)
+              :outdated (org-glance-> state :outdated))))
+    (json-pretty-print-buffer)
+    (buffer-substring-no-properties (point-min) (point-max))))
 
 (provide 'org-glance-materialization)

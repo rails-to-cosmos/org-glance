@@ -26,7 +26,7 @@
 (When "^I materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (view-name file-name)
     (let ((view (org-glance-test:get-view view-name)))
-      (org-glance-view:materialization view (org-glance-test:get-file file-name)))))
+      (org-glance-view:materialize view (org-glance-test:get-file file-name)))))
 
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)

@@ -9,6 +9,6 @@
        (lambda (file)
          (Given "file \"%s\"" file "")))
 
-(Then "^I find file \"\\([^\"]+\\)\"$"
+(When "^I find file \"\\([^\"]+\\)\"$"
       (lambda (filename)
         (find-file (gethash filename org-glance-test-files))))

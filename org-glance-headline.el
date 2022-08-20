@@ -352,7 +352,7 @@
 ;;  (a-get (bindat-unpack org-glance-headline--bindat-spec (f-read-bytes "/tmp/headline.bin")) 'file)
 ;;  (string-make-unibyte "hello"))
 
-(cl-defmacro org-glance-map (var &rest forms)
+(cl-defmacro org-glance-map-headlines (var &rest forms)
   "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
   `(save-excursion

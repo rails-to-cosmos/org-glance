@@ -30,9 +30,10 @@
       :documentation "Keep track of materializations."
       :reader org-glance-view:materializations)))
 
-(cl-defun org-glance-view:materialization (view location)
+(cl-defun org-glance-view:materialize (view location)
+  "Materialize VIEW to LOCATION."
   (let ((true-location (file-truename location)))
-    (or (gethash true-location (slot-value view :materializations))
+    (or (gethash true-location (org-glance-view:materializations view))
         (progn (f-mkdir-full-path (file-name-directory true-location))
                (let ((materialization (org-glance-materialization :view view :location true-location)))
                  (org-glance--with-temp-file true-location
