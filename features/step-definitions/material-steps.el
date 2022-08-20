@@ -27,3 +27,11 @@
 (Then "^marker at point should not be outdated$"
       (lambda ()
         (should (not (org-glance-> (org-glance-marker:at-point) :state :outdated)))))
+
+(Then "^marker at point should be committed$"
+      (lambda ()
+        (should (org-glance-> (org-glance-marker:at-point) :state :committed))))
+
+(Then "^marker at point should not be committed$"
+      (lambda ()
+        (should (not (org-glance-> (org-glance-marker:at-point) :state :committed)))))
