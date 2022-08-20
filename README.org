@@ -36,6 +36,9 @@ CLOSED: [2022-08-12 Fri 15:07]
 ** by active timestamps (build agenda views, interval trees?)
 ** in-memory lru cache (hash-table)
 ** by relations (todo)
+* materialization corner-cases [0/2]
+** TODO headline indented by user
+** TODO org-link inserted
 * add tests on materialized offsets
 * https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
 * fix wal reversal

@@ -21,8 +21,8 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance:with-m13n
-           (org-glance-materialization:prepare-markers m13n))
+         (let ((materialization (org-glance-buffer-materialization)))
+           (org-glance-materialization:prepare-markers materialization))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-commit nil t)
@@ -38,15 +38,15 @@ editor."
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (org-glance:with-m13n
-    (org-glance-materialization:edit m13n))
+  (let ((materialization (org-glance-buffer-materialization)))
+    (org-glance-materialization:update materialization))
   (org-glance-material-overlay-manager-redisplay*))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
   "Actualize all overlays in changed material buffers."
   (interactive)
-  (org-glance:with-m13n
-    (org-glance-materialization:do-markers m13n
+  (let ((materialization (org-glance-buffer-materialization)))
+    (org-glance-materialization:do-markers materialization
       (let* ((marker (org-glance-marker:at-point))
              (headline (org-glance-headline-at-point))
              (hash-old (org-glance-marker:hash marker))
@@ -65,14 +65,14 @@ editor."
            (progn
              (setf (org-glance-> marker :changed-p) nil)
              (org-glance-material-mode:update-marker-overlay marker)
-             (remhash marker (org-glance-> m13n :changes))))
+             (remhash marker (org-glance-> materialization :changes))))
           (first-change-p
            (progn
              (setf (org-glance-> marker :changed-p) t
                    (org-glance-> marker :beg) (point-min)
                    (org-glance-> marker :end) (point-max))
              (org-glance-material-mode:update-marker-overlay marker)
-             (puthash marker t (org-glance-> m13n :changes))))
+             (puthash marker t (org-glance-> materialization :changes))))
           (further-change-p
            (progn
              (setf (org-glance-> marker :changed-p) t
@@ -135,14 +135,8 @@ Returns new store with changes reflected in WAL.
 TODO:
 - It should be generalized to other materialization types."
   (interactive)
-  (org-glance:with-store
-    (org-glance-materialization:do-changes (org-glance-materialization:get-buffer-materialization)
-      (let* ((marker (org-glance-marker:at-point))
-             (headline (org-glance-headline-from-region
-                        (org-glance-marker:beg marker)
-                        (org-glance-marker:end marker))))
-        (org-glance-store:put store headline)))
-    (org-glance-store:flush store)))
+  (org-glance-materialization:commit
+   (org-glance-buffer-materialization)))
 
 (cl-defun org-glance-material-debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))

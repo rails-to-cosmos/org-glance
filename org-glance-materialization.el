@@ -4,6 +4,9 @@
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
 
+(defalias 'org-glance-buffer-store 'org-glance-materialization:get-buffer-store)
+(defalias 'org-glance-buffer-materialization 'org-glance-materialization:get-buffer-materialization)
+
 (defvar org-glance-materializations (make-hash-table :test #'equal))
 
 (org-glance-class org-glance-materialization nil
@@ -82,17 +85,7 @@
       :initarg :outdated-p
       :reader org-glance-marker:outdated-p
       :documentation "If there are changes that are not reflected in current materialization."))
-  "Materialized headlines metadata.")
-
-(cl-defmacro org-glance:with-m13n (&rest forms)
-  (declare (indent 0))
-  `(let ((m13n (org-glance-materialization:get-buffer-materialization)))
-     ,@forms))
-
-(cl-defmacro org-glance:with-store (&rest forms)
-  (declare (indent 0))
-  `(let ((store (org-glance-materialization:get-buffer-store)))
-     ,@forms))
+  "Metadata of materializations.")
 
 (cl-defun org-glance-marker:at-point ()
   (get-text-property (point) :marker))
@@ -148,7 +141,7 @@
       ;; (save-buffer) ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
       (puthash marker (point-min) (org-glance-> materialization :marker->point)))))
 
-(cl-defun org-glance-materialization:edit (materialization)
+(cl-defun org-glance-materialization:update (materialization)
   (puthash (org-glance-marker:at-point) (point) (org-glance-> materialization :marker->point)))
 
 (cl-defmacro org-glance-materialization:do-markers (materialization &rest forms)
@@ -169,10 +162,18 @@
                  (org-glance--with-headline-at-point
                    ,@forms)))))))
 
-(cl-defmacro org-glance-materialization:do-changes (materialization &rest forms)
-  (declare (indent 1))
+(cl-defmacro org-glance-materialization:do-changes (spec &rest body)
+  "Loop over changed markers in current buffer binding each marker to VAL and executing BODY.
+
+\(fn (VAR MATERIALIZATION) BODY...)"
+  (declare (indent 1) (debug ((symbolp form &optional form) body)))
+  (unless (consp spec)
+    (signal 'wrong-type-argument (list 'consp spec)))
+  (unless (= 2 (length spec))
+    (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
   `(cl-loop
-      for marker being the hash-keys of (org-glance-> ,materialization :changes)
+      with materialization = ,(cadr spec)
+      for marker being the hash-keys of (org-glance-> materialization :changes)
       when (and marker
                 (org-glance-marker:buffer marker)
                 (eq (current-buffer) (org-glance-marker:buffer marker)))
@@ -180,7 +181,17 @@
            (save-excursion
              (save-restriction
                (widen)
-               ,@forms)))))
+               (let ((,(car spec) marker))
+                 ,@body))))))
+
+(cl-defun org-glance-materialization:commit (materialization)
+  (let ((store (org-glance-> materialization :view :store)))
+    (org-glance-materialization:do-changes (marker materialization)
+      (let ((headline (org-glance-headline-from-region
+                       (org-glance-marker:beg marker)
+                       (org-glance-marker:end marker))))
+        (org-glance-store:put store headline)))
+    (org-glance-store:flush store)))
 
 (cl-defun org-glance-marker:print (marker)
   (prin1 (a-list

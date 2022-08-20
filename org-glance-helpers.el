@@ -11,7 +11,7 @@
      (defclass ,name ,superclasses ,slots ,@options-and-doc)))
 
 (defmacro org-glance-> (object &rest slots)
-  "Recursively get SLOTS from OBJECT.
+  "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
 Example: (org-glance-> materialization :view :store :location)"
   (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
