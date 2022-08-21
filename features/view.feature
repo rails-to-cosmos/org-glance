@@ -70,6 +70,21 @@ Feature: Materialization
     And marker at point should not be changed
     And 0 markers should be changed
 
+    When I create view "Human Beings" from "Human" "Pets"
+    And I materialize view "Human Beings" to "views/humans.org"
+    And I append to file "views/humans.org"
+      """
+      * Some external corruption
+      """
+    And I find file "views/humans.org"
+    And I go to headline with title "Tanik"
+
+    Then marker at point should not be corrupted
+
+    When I go to headline with title "Some external corruption"
+
+    Then marker at point should be corrupted
+
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines
   #     """

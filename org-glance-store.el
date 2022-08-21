@@ -58,19 +58,19 @@
     :type org-glance-store-log
     :initarg :changelog
     :initform (org-glance-changelog:create nil #'org-glance-store:event-id)
-    :documentation "Persisted changelog."
+    :documentation "Persistent changelog."
     :reader org-glance-store:changelog)
    (cache
     :type hash-table
     :initarg :cache
     :initform (make-hash-table :test #'equal)
-    :documentation "Changelog persisted on disk."
+    :documentation "LRU cache with headlines."
     :reader org-glance-store:cache)
    (views
     :type hash-table
     :initarg :views
     :initform (make-hash-table)
-    :documentation "Views associated with store by predicate key."
+    :documentation "Views associated with store by predicate."
     :reader org-glance-store:views)))
 
 (defvar org-glance-stores (make-hash-table :test #'equal)

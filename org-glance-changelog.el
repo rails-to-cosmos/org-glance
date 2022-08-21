@@ -32,7 +32,7 @@
        reverse
        (mapcar #'prin1-to-string)
        (s-join "\n")
-       (s-trim)))
+       s-trim))
 
 (cl-defmacro org-glance-changelog:push (log event)
   "Append ENTRIES to LOG."

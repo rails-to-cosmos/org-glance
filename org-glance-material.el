@@ -53,7 +53,7 @@ editor."
          (old-state (org-glance-> marker :state))
          (new-state (org-glance-marker:get-actual-state marker headline)))
     (cond
-      ;; ((not (org-glance-> old-state :persisted))
+      ;; ((not (org-glance-> old-state :corrupted))
       ;;  ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
       ;;  ;;   (puthash marker org-glance-material--changed-markers-set))
       ;;  (org-glance-marker:redisplay marker))

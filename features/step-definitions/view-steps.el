@@ -66,3 +66,11 @@
 (Then "^marker at point should not be committed$"
       (lambda ()
         (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :committed))))))
+
+(Then "^marker at point should be corrupted$"
+      (lambda ()
+        (should (eq t (org-glance-> (org-glance-marker:at-point) :state :corrupted)))))
+
+(Then "^marker at point should not be corrupted$"
+      (lambda ()
+        (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :corrupted))))))

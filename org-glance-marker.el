@@ -8,10 +8,10 @@
       :type boolean
       :initarg :changed
       :initform nil)
-     (persisted
+     (corrupted
       :type boolean
-      :initarg :persisted
-      :initform t)
+      :initarg :corrupted
+      :initform nil)
      (committed
       :type boolean
       :initarg :committed
@@ -103,7 +103,7 @@
                          (prin1-to-string (org-glance-> marker :overlay)))
               :state (a-list
                       :changed (org-glance-> marker :state :changed)
-                      :persisted (org-glance-> marker :state :persisted)
+                      :corrupted (org-glance-> marker :state :corrupted)
                       :committed (org-glance-> marker :state :committed)
                       :outdated (org-glance-> marker :state :outdated))
               :offset (org-glance-> marker :offset))))
@@ -124,7 +124,7 @@
         (marked (slot-boundp marker :overlay))
         (changed (org-glance-> marker :state :changed))
         (committed (org-glance-> marker :state :committed))
-        (persisted (org-glance-> marker :state :persisted))
+        (corrupted (org-glance-> marker :state :corrupted))
         (outdated (org-glance-> marker :state :outdated)))
     (cond ((and changed (not marked))
            (let ((overlay (make-overlay beg (1+ beg))))
@@ -152,7 +152,7 @@
              (let ((overlay (make-overlay beg (1+ beg))))
                (setf (org-glance-> marker :overlay) overlay)
                (overlay-put overlay 'face '(:foreground "#749AF7")))))
-          ((and (not persisted) (not marked))
+          ((and corrupted (not marked))
            (let ((overlay (make-overlay beg (1+ beg))))
              (setf (org-glance-> marker :overlay) overlay)
              (overlay-put overlay 'face '(:foreground "#e74c3c")))))))
