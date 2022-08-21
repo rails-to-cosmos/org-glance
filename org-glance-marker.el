@@ -75,15 +75,16 @@
      :changed (not (string= hash-old hash-new))
      :persisted (org-glance-> marker :state :persisted))))
 
-(cl-defmacro org-glance-map-markers (var &rest forms)
+(cl-defmacro org-glance-marker:map-buffer (var &rest forms)
   (declare (indent 1))
-  `(org-glance-map-headlines (headline)
-     (let ((,(car var) (org-glance-marker
-                        :hash (org-glance-headline:hash headline)
-                        :beg (point-min) ;; beginning of headline in narrowed buffer
-                        :end (point-max) ;; end of headline in narrowed buffer
-                        :buffer (current-buffer)
-                        :state (org-glance-marker-state))))
+  `(org-glance-headline:map-buffer (headline)
+     (let ((,(car var)
+            (org-glance-marker
+             :hash (org-glance-headline:hash headline)
+             :beg (point-min) ;; beginning of headline in narrowed buffer
+             :end (point-max) ;; end of headline in narrowed buffer
+             :buffer (current-buffer)
+             :state (org-glance-marker-state))))
        ,@forms)))
 
 (cl-defun org-glance-marker:headline (marker)
@@ -93,28 +94,29 @@
    (org-glance-marker:end marker)))
 
 (cl-defun org-glance-marker:prin1-to-string (marker)
-  (prin1-to-string
-   (a-list
-    :beg (org-glance-> marker :beg)
-    :end (org-glance-> marker :end)
-    :hash (org-glance-> marker :hash)
-    :overlay (when (slot-boundp marker :overlay)
-               (org-glance-> marker :overlay))
-    :changed (org-glance-> marker :state :changed)
-    :persisted (org-glance-> marker :state :persisted)
-    :committed (org-glance-> marker :state :committed)
-    :offset (org-glance-> marker :offset))
-   t))
-
-(cl-defun org-glance-state:prin1-to-string (state)
   (with-temp-buffer
     (insert (json-encode-alist
              (a-list
-              :changed (org-glance-> state :changed)
-              :persisted (org-glance-> state :persisted)
-              :committed (org-glance-> state :committed)
-              :outdated (org-glance-> state :outdated))))
+              :beg (org-glance-> marker :beg)
+              :end (org-glance-> marker :end)
+              :hash (org-glance-> marker :hash)
+              :overlay (when (slot-boundp marker :overlay)
+                         (prin1-to-string (org-glance-> marker :overlay)))
+              :state (a-list
+                      :changed (org-glance-> marker :state :changed)
+                      :persisted (org-glance-> marker :state :persisted)
+                      :committed (org-glance-> marker :state :committed)
+                      :outdated (org-glance-> marker :state :outdated))
+              :offset (org-glance-> marker :offset))))
     (json-pretty-print-buffer)
     (buffer-substring-no-properties (point-min) (point-max))))
+
+(cl-defmacro org-glance-marker:with-current-buffer (marker &rest forms)
+  (declare (indent 1))
+  `(with-current-buffer (org-glance-marker:buffer ,marker)
+     (save-excursion
+       (save-restriction
+         (widen)
+         ,@forms))))
 
 (provide 'org-glance-marker)

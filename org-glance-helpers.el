@@ -14,9 +14,8 @@
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
 Example: (org-glance-> materialization :view :store :location)"
-  (cl-reduce (lambda (acc slot) `(slot-value ,acc (quote ,slot)))
-             slots
-             :initial-value object))
+  (declare (indent 1))
+  (cl-reduce (lambda (acc slot) `(slot-value ,acc ,slot)) slots :initial-value object))
 
 (cl-defun org-glance--ensure-at-headline ()
   "Ensure point is at heading.

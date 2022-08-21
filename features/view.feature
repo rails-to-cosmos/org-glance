@@ -1,5 +1,5 @@
 Feature: Materialization
-  Scenario: Basic materialization
+  Scenario: Basic Materialization
     Given store "Phones" in directory "store/phones" with headlines
       """
       * iPhone 3 :Apple:
@@ -8,11 +8,11 @@ Feature: Materialization
       """
 
     When I create view "Apple Phones" from "Apple" "Phones"
-    And I materialize view "Apple Phones" to file "views/apple.org"
+    And I materialize view "Apple Phones" to "views/apple.org"
     And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
-    And I commit changes to store "New phones"
+    And I commit changes
     And I save buffer
 
     Then store "Phones" should contain headline with title "iPhone 4" in committed layer
@@ -34,30 +34,40 @@ Feature: Materialization
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  Scenario: Simple editing
+  @debug
+  Scenario: Consistent Editing
     Given store "Pets" in directory "store/pets" with headlines
       """
       * Yummi :Pomeranian:
       * Eric :Pomeranian:
       * Tanik :Human:
       """
+
     When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialize view "Pomeranians" to file "views/pomeranians.org"
+    And I materialize view "Pomeranians" to "views/pomeranians.org"
     And I find file "views/pomeranians.org"
     And I go to headline with title "Yummi"
     And I insert " the cat"
+
     Then marker at point should be changed
     And marker at point should not be committed
-    And marker at point should not be outdated
+    And 1 marker should be changed
 
     When I set title of the headline at point to "Yummi"
+
     Then marker at point should not be changed
-    And marker at point should not be outdated
+    And 0 markers should be changed
 
     When I go to headline with title "Eric"
     And I insert " the dog"
-    And I save buffer
+
+    Then marker at point should be changed
+
+    When I commit changes
+
     Then marker at point should be committed
+
+    # And 0 markers should be changed
 
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines

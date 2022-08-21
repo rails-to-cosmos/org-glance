@@ -117,6 +117,6 @@
        (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
 
 (When "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
-      (lambda (title)
-        (with-mutex org-glance-material-overlay-manager--mutex
-          (org-edit-headline title))))
+  (lambda (title)
+    (org-edit-headline title)
+    (org-glance-material-overlay-manager-redisplay)))

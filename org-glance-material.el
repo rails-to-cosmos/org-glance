@@ -22,7 +22,7 @@ editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
          (let ((materialization (org-glance-buffer-materialization)))
-           (org-glance-map-markers (marker)
+           (org-glance-marker:map-buffer (marker)
              (add-text-properties (point-min) (point-max) (list :marker marker))
              ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
              ;; (save-buffer)
@@ -63,16 +63,16 @@ editor."
            ;;   (puthash marker org-glance-material--changed-markers-set))
            (org-glance-material-mode:update-marker-overlay marker))
           ((and (not (org-glance-> new-state :changed))
-                (slot-boundp marker :overlay))
+                (org-glance-> marker :state :changed))
            (setf (org-glance-> marker :state :changed) nil)
            (org-glance-material-mode:update-marker-overlay marker)
-           (remhash marker (org-glance-> materialization :changes)))
+           (cl-remf (org-glance-> materialization :changes) marker))
           ((org-glance-> new-state :changed)
            (setf (org-glance-> marker :state :changed) t
                  (org-glance-> marker :beg) (point-min)
                  (org-glance-> marker :end) (point-max))
            (org-glance-material-mode:update-marker-overlay marker)
-           (puthash marker t (org-glance-> materialization :changes))))))))
+           (cl-pushnew marker (org-glance-> materialization :changes))))))))
 
 (cl-defun org-glance-material-overlay-manager-redisplay* ()
   "Run `org-glance-material-marker-redisplay' in separate thread."
@@ -122,7 +122,6 @@ editor."
 
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins.
-Returns new store with changes reflected in WAL.
 
 TODO:
 - It should be generalized to other materialization types."
@@ -138,8 +137,13 @@ TODO:
       (org-glance-material-edit))
 
     (org-glance-debug
+     this-command
+     "* Marker:"
      (org-glance-marker:prin1-to-string marker)
-     (org-glance-state:prin1-to-string (org-glance-> marker :state)))
+     "* Changes:"
+     (s-join "\n" (mapcar #'org-glance-marker:prin1-to-string
+                          (org-glance-> (org-glance-buffer-materialization)
+                            :changes))))
 
     (hlt-highlight-region (org-glance-> marker :beg)
                           (org-glance-> marker :end)

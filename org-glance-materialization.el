@@ -27,9 +27,9 @@
       :reader org-glance-materialization:marker->point
       :documentation "Maps markers to points.")
      (changes
-      :type hash-table
+      :type list
       :initarg :changes
-      :initform (make-hash-table)
+      :initform nil
       :reader org-glance-materialization:changes
       :documentation "Set of changed markers.")))
 
@@ -87,31 +87,35 @@
                  (org-glance--with-headline-at-point
                    ,@forms)))))))
 
-(cl-defmacro org-glance-materialization:do-changes (spec &rest body)
+(cl-defmacro org-glance-materialization:pop-changes (spec &rest forms)
   "Loop over changed markers in current buffer binding each marker to VAL and executing BODY.
 
 \(fn (VAR MATERIALIZATION) BODY...)"
-  (declare (indent 1) (debug ((symbolp form &optional form) body)))
+  ;; TODO lock, possible data loss
+  (declare (indent 1) (debug ((symbolp form &optional form) forms)))
   (unless (consp spec)
     (signal 'wrong-type-argument (list 'consp spec)))
   (unless (= 2 (length spec))
     (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
   `(cl-loop
       with materialization = ,(cadr spec)
-      for marker being the hash-keys of (org-glance-> materialization :changes)
+      while (org-glance-> materialization :changes)
+      for marker = (pop (org-glance-> materialization :changes))
       when (org-glance-marker:live-p marker)
-      do (with-current-buffer (org-glance-marker:buffer marker)
-           (save-excursion
-             (save-restriction
-               (widen)
-               (let ((,(car spec) marker))
-                 ,@body))))))
+      do (org-glance-marker:with-current-buffer marker
+           (let ((,(car spec) marker))
+             ,@forms))))
 
 (cl-defun org-glance-materialization:commit (materialization)
   (let ((store (org-glance-> materialization :view :store)))
-    (org-glance-materialization:do-changes (marker materialization)
+    (org-glance-materialization:pop-changes (marker materialization)
+      (message "Commit %s" (org-glance-marker:prin1-to-string marker))
       (let ((headline (org-glance-marker:headline marker)))
-        (org-glance-store:put store headline)))
+        (org-glance-store:put store headline))
+      (setf (org-glance-> marker :state :committed) t
+            (org-glance-> marker :state :changed) nil)
+      (message "After commit %s" (org-glance-marker:prin1-to-string marker))
+      )
     (org-glance-store:flush store)))
 
 (provide 'org-glance-materialization)

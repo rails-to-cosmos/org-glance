@@ -1,3 +1,8 @@
+(When "^I insert \"\\([^\"]+\\)\"$"
+  (lambda (thing)
+    (insert thing)
+    (org-glance-material-overlay-manager-redisplay)))
+
 (When "^I save buffer$" #'save-buffer)
 (When "^I kill buffer$" #'kill-buffer)
 (When "^I kill current buffer$" #'kill-buffer)
