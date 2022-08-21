@@ -42,7 +42,6 @@ editor."
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
   ;; (org-glance-material-overlay-manager-redisplay*)
-
   (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
@@ -57,19 +56,19 @@ editor."
       ;; ((not (org-glance-> old-state :persisted))
       ;;  ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
       ;;  ;;   (puthash marker org-glance-material--changed-markers-set))
-      ;;  (org-glance-material-mode:update-marker-overlay marker))
+      ;;  (org-glance-marker:redisplay marker))
       ((and (org-glance-> old-state :changed)
             (not (org-glance-> new-state :changed)))
        (setf (org-glance-> marker :state :changed) nil)
        (cl-remf (org-glance-> materialization :changes) marker)
-       (org-glance-material-mode:update-marker-overlay marker))
+       (org-glance-marker:redisplay marker))
       ((org-glance-> new-state :changed)
        (org-glance--with-headline-at-point
          (setf (org-glance-> marker :state :changed) t
                (org-glance-> marker :beg) (point-min)
                (org-glance-> marker :end) (point-max)))
-       (org-glance-material-mode:update-marker-overlay marker)
-       (cl-pushnew marker (org-glance-> materialization :changes))))))
+       (cl-pushnew marker (org-glance-> materialization :changes))
+       (org-glance-marker:redisplay marker)))))
 
 (cl-defun org-glance-material-overlay-manager-redisplay* ()
   "Run `org-glance-material-marker-redisplay' in separate thread."
@@ -77,45 +76,6 @@ editor."
                (thread-alive-p org-glance-overlay-manager))
     (setq org-glance-overlay-manager
           (make-thread #'org-glance-material-overlay-manager-redisplay "org-glance-overlay-manager"))))
-
-(cl-defun org-glance-material-mode:update-marker-overlay (marker)
-  "Refresh MARKER overlay."
-  (let ((beg (org-glance-> marker :beg))
-        (marked (slot-boundp marker :overlay))
-        (changed (org-glance-> marker :state :changed))
-        (committed (org-glance-> marker :state :committed))
-        (persisted (org-glance-> marker :state :persisted))
-        (outdated (org-glance-> marker :state :outdated)))
-    (cond ((and changed (not marked))
-           (let ((overlay (make-overlay beg (1+ beg))))
-             (setf (org-glance-> marker :overlay) overlay)
-             (overlay-put overlay 'face '(:foreground "#ffcc00"))))
-          ((and changed committed marked)
-           (let ((overlay (make-overlay beg (1+ beg))))
-             (delete-overlay (org-glance-> marker :overlay))
-             (slot-makeunbound marker :overlay)
-             (setf (org-glance-> marker :overlay) overlay
-                   (org-glance-> marker :state :committed) nil)
-             (overlay-put overlay 'face '(:foreground "#ffcc00"))))
-          ((and (not changed) (not committed) marked)
-           (progn
-             (delete-overlay (org-glance-> marker :overlay))
-             (slot-makeunbound marker :overlay)))
-          ((and (not changed) marked committed)
-           (progn
-             (delete-overlay (org-glance-> marker :overlay))
-             (let ((overlay (make-overlay beg (1+ beg))))
-               (setf (org-glance-> marker :overlay) overlay)
-               (overlay-put overlay 'face '(:foreground "#27ae60")))))
-          (outdated
-           (progn
-             (let ((overlay (make-overlay beg (1+ beg))))
-               (setf (org-glance-> marker :overlay) overlay)
-               (overlay-put overlay 'face '(:foreground "#749AF7")))))
-          ((and (not persisted) (not marked))
-           (let ((overlay (make-overlay beg (1+ beg))))
-             (setf (org-glance-> marker :overlay) overlay)
-             (overlay-put overlay 'face '(:foreground "#e74c3c")))))))
 
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins.

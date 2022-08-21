@@ -72,8 +72,7 @@
   (let ((hash-old (org-glance-marker:hash marker))
         (hash-new (org-glance-headline:hash headline)))
     (org-glance-marker-state
-     :changed (not (string= hash-old hash-new))
-     :persisted (org-glance-> marker :state :persisted))))
+     :changed (not (string= hash-old hash-new)))))
 
 (cl-defmacro org-glance-marker:map-buffer (var &rest forms)
   (declare (indent 1))
@@ -118,5 +117,44 @@
        (save-restriction
          (widen)
          ,@forms))))
+
+(cl-defun org-glance-marker:redisplay (marker)
+  "Refresh MARKER overlay."
+  (let ((beg (org-glance-> marker :beg))
+        (marked (slot-boundp marker :overlay))
+        (changed (org-glance-> marker :state :changed))
+        (committed (org-glance-> marker :state :committed))
+        (persisted (org-glance-> marker :state :persisted))
+        (outdated (org-glance-> marker :state :outdated)))
+    (cond ((and changed (not marked))
+           (let ((overlay (make-overlay beg (1+ beg))))
+             (setf (org-glance-> marker :overlay) overlay)
+             (overlay-put overlay 'face '(:foreground "#ffcc00"))))
+          ((and changed committed marked)
+           (delete-overlay (org-glance-> marker :overlay))
+           (slot-makeunbound marker :overlay)
+           (let ((overlay (make-overlay beg (1+ beg))))
+             (setf (org-glance-> marker :overlay) overlay
+                   (org-glance-> marker :state :committed) nil)
+             (overlay-put overlay 'face '(:foreground "#ffcc00"))))
+          ((and (not changed) (not committed) marked)
+           (progn
+             (delete-overlay (org-glance-> marker :overlay))
+             (slot-makeunbound marker :overlay)))
+          ((and (not changed) marked committed)
+           (progn
+             (delete-overlay (org-glance-> marker :overlay))
+             (let ((overlay (make-overlay beg (1+ beg))))
+               (setf (org-glance-> marker :overlay) overlay)
+               (overlay-put overlay 'face '(:foreground "#27ae60")))))
+          (outdated
+           (progn
+             (let ((overlay (make-overlay beg (1+ beg))))
+               (setf (org-glance-> marker :overlay) overlay)
+               (overlay-put overlay 'face '(:foreground "#749AF7")))))
+          ((and (not persisted) (not marked))
+           (let ((overlay (make-overlay beg (1+ beg))))
+             (setf (org-glance-> marker :overlay) overlay)
+             (overlay-put overlay 'face '(:foreground "#e74c3c")))))))
 
 (provide 'org-glance-marker)

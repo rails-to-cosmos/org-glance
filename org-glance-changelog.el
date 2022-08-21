@@ -31,7 +31,8 @@
        org-glance-changelog:flatten
        reverse
        (mapcar #'prin1-to-string)
-       (s-join "\n")))
+       (s-join "\n")
+       (s-trim)))
 
 (cl-defmacro org-glance-changelog:push (log event)
   "Append ENTRIES to LOG."

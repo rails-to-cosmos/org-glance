@@ -88,7 +88,8 @@
         (org-glance-store:put store headline)
         (setf (org-glance-> marker :state :committed) t
               (org-glance-> marker :state :changed) nil
-              (org-glance-> marker :hash) (org-glance-headline:hash headline))))
+              (org-glance-> marker :hash) (org-glance-headline:hash headline))
+        (org-glance-marker:redisplay marker)))
     (org-glance-store:flush store)))
 
 (provide 'org-glance-materialization)
