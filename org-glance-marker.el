@@ -66,25 +66,14 @@
 
 (cl-defun org-glance-marker:at-point ()
   "Return instance of `org-glance-marker' from text at point."
-  (get-text-property (point) :marker))
+  ;; avoid strange behaviour on (point) == (point-max)
+  (get-text-property (min (point) (1- (point-max))) :marker))
 
 (cl-defun org-glance-marker:get-actual-state (marker headline)
   (let ((hash-old (org-glance-marker:hash marker))
         (hash-new (org-glance-headline:hash headline)))
     (org-glance-marker-state
      :changed (not (string= hash-old hash-new)))))
-
-(cl-defmacro org-glance-marker:map-buffer (var &rest forms)
-  (declare (indent 1))
-  `(org-glance-headline:map-buffer (headline)
-     (let ((,(car var)
-            (org-glance-marker
-             :hash (org-glance-headline:hash headline)
-             :beg (point-min) ;; beginning of headline in narrowed buffer
-             :end (point-max) ;; end of headline in narrowed buffer
-             :buffer (current-buffer)
-             :state (org-glance-marker-state))))
-       ,@forms)))
 
 (cl-defun org-glance-marker:headline (marker)
   "Create instance of `org-glance-headline' from MARKER."

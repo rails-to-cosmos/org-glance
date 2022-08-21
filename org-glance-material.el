@@ -21,11 +21,23 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance-marker:map-buffer (marker)
-           (add-text-properties (point-min) (point-max) (list :marker marker))
-           ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-           ;; (save-buffer)
-           )
+         (let ((store (org-glance-materialization:get-buffer-store)))
+           (org-glance-headline:map-buffer (headline)
+             (let* ((hash (org-glance-headline:hash headline))
+                    (marker (org-glance-marker
+                             :hash hash
+                             :beg (point-min) ;; beginning of headline in narrowed buffer
+                             :end (point-max) ;; end of headline in narrowed buffer
+                             :buffer (current-buffer)
+                             :state (org-glance-marker-state
+                                     ;; FIXME Getting full headline is unneccessary
+                                     :corrupted (null (org-glance-store:in store hash))
+                                     ))))
+               (add-text-properties (point-min) (point-max) (list :marker marker))
+               ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
+               ;; (save-buffer)
+               )))
+
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-commit nil t)

@@ -198,6 +198,18 @@ achieved by calling `org-glance-store:flush' method."
                headline
                (org-glance-store:cache store))))))
 
+(cl-defun org-glance-store:in (store hash)
+  "Return t if HASH is in STORE, nil otherwise."
+  (or (not (null (gethash hash (org-glance-store:cache store) nil)))
+      (cl-loop for event in (org-glance-changelog:flatten (org-glance-store:changelog* store))
+         for headline = (org-glance-event-state event)
+         when (and (org-glance-event:PUT-p event)
+                   (org-glance-headline-p headline)
+                   (string= (org-glance-headline:hash headline) hash))
+         return t)
+      (and (f-exists-p (org-glance-store:locate store hash))
+           (f-readable-p (org-glance-store:locate store hash)))))
+
 (cl-defun org-glance-store:headlines (store)
   "Return actual headline hashes from STORE."
   (cl-loop
