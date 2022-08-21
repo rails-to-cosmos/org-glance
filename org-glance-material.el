@@ -21,12 +21,11 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let ((materialization (org-glance-buffer-materialization)))
-           (org-glance-marker:map-buffer (marker)
-             (add-text-properties (point-min) (point-max) (list :marker marker))
-             ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-             ;; (save-buffer)
-             ))
+         (org-glance-marker:map-buffer (marker)
+           (add-text-properties (point-min) (point-max) (list :marker marker))
+           ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
+           ;; (save-buffer)
+           )
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-commit nil t)
