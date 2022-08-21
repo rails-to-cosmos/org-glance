@@ -62,10 +62,12 @@ Feature: Materialization
     And I insert " the dog"
 
     Then marker at point should be changed
+    And marker at point should not be committed
 
     When I commit changes
 
     Then marker at point should be committed
+    And marker at point should not be changed
 
     # And 0 markers should be changed
 
