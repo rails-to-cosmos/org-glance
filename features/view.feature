@@ -68,8 +68,7 @@ Feature: Materialization
 
     Then marker at point should be committed
     And marker at point should not be changed
-
-    # And 0 markers should be changed
+    And 0 markers should be changed
 
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines

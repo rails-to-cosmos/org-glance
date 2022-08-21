@@ -74,9 +74,8 @@
     (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
   `(cl-loop
       with materialization = ,(cadr spec)
-      with changes = (org-glance-> materialization :changes)
-      while changes
-      for marker = (pop changes)
+      while (org-glance-> materialization :changes)
+      for marker = (pop (org-glance-> materialization :changes))
       when (org-glance-marker:live-p marker)
       do (org-glance-marker:with-current-buffer marker
            (let ((,(car spec) marker))
