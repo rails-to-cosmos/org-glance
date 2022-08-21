@@ -47,15 +47,12 @@
 (Then "^marker at point should be changed$"
       (lambda ()
         (when-let (marker (org-glance-marker:at-point))
-          (org-glance-materialization:update (org-glance-buffer-materialization))
           (should (member marker (org-glance-> (org-glance-buffer-materialization)
                                    :changes))))
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :changed)))))
 
 (Then "^marker at point should not be changed$"
       (lambda ()
-        (when-let (marker (org-glance-marker:at-point))
-          (org-glance-materialization:update (org-glance-buffer-materialization)))
         (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :changed))))))
 
 (Then "^marker at point should not be outdated$"
@@ -64,9 +61,7 @@
 
 (Then "^marker at point should be committed$"
       (lambda ()
-        (message "Actual %s" (org-glance-marker:prin1-to-string (org-glance-marker:at-point)))
-        ;; (should (eq t (org-glance-> (org-glance-marker:at-point) :state :committed)))
-        ))
+        (should (eq t (org-glance-> (org-glance-marker:at-point) :state :committed)))))
 
 (Then "^marker at point should not be committed$"
       (lambda ()

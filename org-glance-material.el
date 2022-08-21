@@ -26,7 +26,7 @@ editor."
              (add-text-properties (point-min) (point-max) (list :marker marker))
              ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
              ;; (save-buffer)
-             (puthash marker (point-min) (org-glance-> materialization :marker->point))))
+             ))
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-commit nil t)
@@ -42,37 +42,35 @@ editor."
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  (let ((materialization (org-glance-buffer-materialization)))
-    (org-glance-materialization:update materialization))
   ;; (org-glance-material-overlay-manager-redisplay*)
-  (org-glance-material-overlay-manager-redisplay)
-  )
+
+  (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
   "Actualize all overlays in changed material buffers."
   (interactive)
-  (let ((materialization (org-glance-buffer-materialization)))
-    (org-glance-materialization:do-markers materialization
-      (let* ((marker (org-glance-marker:at-point))
-             (headline (org-glance-headline-at-point))
-             (old-state (org-glance-> marker :state))
-             (new-state (org-glance-marker:get-actual-state marker headline)))
-        (cond
-          ((not (org-glance-> old-state :persisted))
-           ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
-           ;;   (puthash marker org-glance-material--changed-markers-set))
-           (org-glance-material-mode:update-marker-overlay marker))
-          ((and (not (org-glance-> new-state :changed))
-                (org-glance-> marker :state :changed))
-           (setf (org-glance-> marker :state :changed) nil)
-           (org-glance-material-mode:update-marker-overlay marker)
-           (cl-remf (org-glance-> materialization :changes) marker))
-          ((org-glance-> new-state :changed)
-           (setf (org-glance-> marker :state :changed) t
-                 (org-glance-> marker :beg) (point-min)
-                 (org-glance-> marker :end) (point-max))
-           (org-glance-material-mode:update-marker-overlay marker)
-           (cl-pushnew marker (org-glance-> materialization :changes))))))))
+  (let* ((materialization (org-glance-buffer-materialization))
+         (marker (org-glance-marker:at-point))
+         (headline (org-glance-headline-at-point))
+         (old-state (org-glance-> marker :state))
+         (new-state (org-glance-marker:get-actual-state marker headline)))
+    (cond
+      ;; ((not (org-glance-> old-state :persisted))
+      ;;  ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
+      ;;  ;;   (puthash marker org-glance-material--changed-markers-set))
+      ;;  (org-glance-material-mode:update-marker-overlay marker))
+      ((and (org-glance-> old-state :changed)
+            (not (org-glance-> new-state :changed)))
+       (setf (org-glance-> marker :state :changed) nil)
+       (cl-remf (org-glance-> materialization :changes) marker)
+       (org-glance-material-mode:update-marker-overlay marker))
+      ((org-glance-> new-state :changed)
+       (org-glance--with-headline-at-point
+         (setf (org-glance-> marker :state :changed) t
+               (org-glance-> marker :beg) (point-min)
+               (org-glance-> marker :end) (point-max)))
+       (org-glance-material-mode:update-marker-overlay marker)
+       (cl-pushnew marker (org-glance-> materialization :changes))))))
 
 (cl-defun org-glance-material-overlay-manager-redisplay* ()
   "Run `org-glance-material-marker-redisplay' in separate thread."

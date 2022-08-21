@@ -7,6 +7,17 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* DONE fix marker→point behaviour
+CLOSED: [2022-08-21 Sun 13:16]
+:LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-08-21 Sun 13:16]
+- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:48]
+- State "STARTED"    from "PENDING"    [2022-08-21 Sun 12:36]
+CLOCK: [2022-08-21 Sun 12:36]--[2022-08-21 Sun 12:48] =>  0:12
+- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:36]
+- State "STARTED"    from              [2022-08-21 Sun 12:33]
+CLOCK: [2022-08-21 Sun 12:33]--[2022-08-21 Sun 12:36] =>  0:03
+:END:
 * STARTED Fix materialization and prepare to relations
 :LOGBOOK:
 - State "STARTED"    from              [2022-08-15 Mon 10:20]

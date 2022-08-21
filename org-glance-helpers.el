@@ -80,7 +80,7 @@ Return t if it is or raise `user-error' otherwise."
            ,handler)))))
 
 (cl-defun org-glance-debug (&rest args)
-  (let ((buffer (get-buffer-create "*glance*")))
+  (let ((buffer (get-buffer-create "*glance-debug*")))
     (with-current-buffer buffer
       (delete-region (point-min) (point-max))
       (cl-loop for arg in args

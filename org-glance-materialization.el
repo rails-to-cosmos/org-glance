@@ -20,12 +20,6 @@
       :initarg :location
       :reader org-glance-materialization:location
       :documentation "Location where materialization persists.")
-     (marker->point
-      :type hash-table
-      :initarg :marker->point
-      :initform (make-hash-table)
-      :reader org-glance-materialization:marker->point
-      :documentation "Maps markers to points.")
      (changes
       :type list
       :initarg :changes
@@ -68,25 +62,6 @@
         (let ((view (org-glance-materialization:get-buffer-view)))
           (puthash filename (org-glance-view:materialize view filename) org-glance-materializations)))))
 
-(cl-defun org-glance-materialization:update (materialization)
-  (puthash (org-glance-marker:at-point) (point) (org-glance-> materialization :marker->point)))
-
-(cl-defmacro org-glance-materialization:do-markers (materialization &rest forms)
-  (declare (indent 1))
-  `(cl-loop
-      for marker being the hash-keys of (org-glance-> ,materialization :marker->point)
-      using (hash-values point)
-      when (org-glance-marker:live-p marker)
-      do (with-current-buffer (org-glance-marker:buffer marker)
-           (save-excursion
-             (save-restriction
-               (widen)
-               (goto-char point)
-               (when (string= (org-glance-marker:hash (org-glance-marker:at-point))
-                              (org-glance-marker:hash marker))
-                 (org-glance--with-headline-at-point
-                   ,@forms)))))))
-
 (cl-defmacro org-glance-materialization:pop-changes (spec &rest forms)
   "Loop over changed markers in current buffer binding each marker to VAL and executing BODY.
 
@@ -99,8 +74,9 @@
     (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
   `(cl-loop
       with materialization = ,(cadr spec)
-      while (org-glance-> materialization :changes)
-      for marker = (pop (org-glance-> materialization :changes))
+      with changes = (org-glance-> materialization :changes)
+      while changes
+      for marker = (pop changes)
       when (org-glance-marker:live-p marker)
       do (org-glance-marker:with-current-buffer marker
            (let ((,(car spec) marker))
@@ -109,13 +85,11 @@
 (cl-defun org-glance-materialization:commit (materialization)
   (let ((store (org-glance-> materialization :view :store)))
     (org-glance-materialization:pop-changes (marker materialization)
-      (message "Commit %s" (org-glance-marker:prin1-to-string marker))
       (let ((headline (org-glance-marker:headline marker)))
-        (org-glance-store:put store headline))
-      (setf (org-glance-> marker :state :committed) t
-            (org-glance-> marker :state :changed) nil)
-      (message "After commit %s" (org-glance-marker:prin1-to-string marker))
-      )
+        (org-glance-store:put store headline)
+        (setf (org-glance-> marker :state :committed) t
+              (org-glance-> marker :state :changed) nil
+              (org-glance-> marker :hash) (org-glance-headline:hash headline))))
     (org-glance-store:flush store)))
 
 (provide 'org-glance-materialization)
