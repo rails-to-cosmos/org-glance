@@ -67,7 +67,11 @@
 (cl-defun org-glance-marker:at-point ()
   "Return instance of `org-glance-marker' from text at point."
   ;; avoid strange behaviour on (point) == (point-max)
-  (get-text-property (min (point) (1- (point-max))) :marker))
+  (or (get-text-property (point) :marker)
+      (save-excursion
+        (goto-char (point-max))
+        (org-back-to-heading-or-point-min)
+        (get-text-property (point) :marker))))
 
 (cl-defun org-glance-marker:get-actual-state (marker headline)
   (let ((hash-old (org-glance-marker:hash marker))

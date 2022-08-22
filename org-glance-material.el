@@ -37,7 +37,11 @@ editor."
                (org-glance-marker:redisplay marker)
                ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
                ;; (save-buffer)
-               )))
+               ))
+           (add-text-properties (1- (point-max)) (point-max) (list :marker (save-excursion
+                                                                             (goto-char (point-max))
+                                                                             (org-back-to-heading-or-point-min)
+                                                                             (get-text-property (point) :marker)))))
 
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
@@ -67,8 +71,8 @@ editor."
          (new-state (org-glance-marker:get-actual-state marker headline)))
     (cond
       ((org-glance-> old-state :corrupted)
-       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
-       ;;   (puthash marker org-glance-material--changed-markers-set))
+       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store or remove from materialization?")
+       ;;   )
        (org-glance-marker:redisplay marker))
       ((and (org-glance-> old-state :changed)
             (not (org-glance-> new-state :changed)))
@@ -83,12 +87,12 @@ editor."
        (cl-pushnew marker (org-glance-> materialization :changes))
        (org-glance-marker:redisplay marker)))))
 
-(cl-defun org-glance-material-overlay-manager-redisplay* ()
-  "Run `org-glance-material-marker-redisplay' in separate thread."
-  (unless (and (threadp org-glance-overlay-manager)
-               (thread-alive-p org-glance-overlay-manager))
-    (setq org-glance-overlay-manager
-          (make-thread #'org-glance-material-overlay-manager-redisplay "org-glance-overlay-manager"))))
+;; (cl-defun org-glance-material-overlay-manager-redisplay* ()
+;;   "Run `org-glance-material-marker-redisplay' in separate thread."
+;;   (unless (and (threadp org-glance-overlay-manager)
+;;                (thread-alive-p org-glance-overlay-manager))
+;;     (setq org-glance-overlay-manager
+;;           (make-thread #'org-glance-material-overlay-manager-redisplay "org-glance-overlay-manager"))))
 
 (cl-defun org-glance-commit ()
   "Apply all changes of buffer headlines to its origins.

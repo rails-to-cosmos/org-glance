@@ -85,6 +85,10 @@ Feature: Materialization
 
     Then marker at point should be corrupted
 
+    When I insert ": let's change this"
+
+    Then marker at point should be corrupted
+
   # TODO: Test visual representation of markers
 
   # Scenario: Add new headline

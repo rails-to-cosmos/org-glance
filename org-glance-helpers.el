@@ -35,9 +35,8 @@ Return t if it is or raise `user-error' otherwise."
            (save-match-data
              (org-with-limited-levels
               (narrow-to-region
-               (progn (org-back-to-heading t) (point))
-               (progn (org-end-of-subtree t t)
-                      (point))))))
+               (save-excursion (org-back-to-heading t) (point))
+               (save-excursion (org-end-of-subtree t t))))))
          ,@forms))))
 
 (cl-defmacro org-glance--with-temp-file (file &rest forms)
