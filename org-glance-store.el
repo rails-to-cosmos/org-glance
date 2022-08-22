@@ -188,7 +188,7 @@ achieved by calling `org-glance-store:flush' method."
                 (org-glance-headline-p headline)
                 (string= (org-glance-headline:hash headline) hash))
       return headline)
-   (org-glance--with-temp-buffer
+   (org-glance:with-temp-buffer
     (insert-file-contents (org-glance-store:locate store hash))
     (goto-char (point-min))
     (unless (org-at-heading-p)
@@ -251,7 +251,7 @@ achieved by calling `org-glance-store:flush' method."
 (cl-defun org-glance-store:import (store location)
   "Add headlines from LOCATION to STORE."
   (dolist (file (org-glance-scope location))
-    (org-glance--with-temp-buffer
+    (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map-buffer (headline)
        (org-glance-store:put store headline)))))

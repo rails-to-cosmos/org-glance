@@ -34,7 +34,6 @@ Feature: Materialization
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  @debug
   Scenario: Consistent Editing
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -89,18 +88,11 @@ Feature: Materialization
 
     Then marker at point should be corrupted
 
-  # TODO: Test visual representation of markers
+    When I insert " :thing:"
 
-  # Scenario: Add new headline
-  #   Given store "Pets" in directory "store/pets" with headlines
-  #     """
-  #     * Yummi :Pomeranian:
-  #     * Eric :Pomeranian:
-  #     * Tanik :Human:
-  #     """
-  #   When I materialize store "Old phones" to file "views/material.org"
+    Then marker at point should be corrupted
 
-  # Scenario: Multiple views
+  # Scenario: Consistent Editing of Multiple Views
   #   Given store "Adventures" in directory "stories/adventures" with headlines
   #     """
   #     * TODO Niagara Waterfalls :Hike:
@@ -116,6 +108,17 @@ Feature: Materialization
   #   And I create store "Hobby" from ":Hike: OR :Music:" "Adventures"
   #   And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
   #   And I create store "Memories" from ":Hike: AND DONE" "Adventures"
+
+  # Scenario: Test visual representation of markers
+  # Scenario: Remove headline
+  # Scenario: Add new headline
+  #   Given store "Pets" in directory "store/pets" with headlines
+  #     """
+  #     * Yummi :Pomeranian:
+  #     * Eric :Pomeranian:
+  #     * Tanik :Human:
+  #     """
+  #   When I materialize store "Old phones" to file "views/material.org"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed

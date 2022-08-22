@@ -130,7 +130,7 @@
              (setf (org-glance-> marker :overlay) overlay
                    (org-glance-> marker :state :committed) nil)
              (overlay-put overlay 'face '(:foreground "#ffcc00"))))
-          ((and (not changed) (not committed) marked)
+          ((and (not changed) (not committed) (not corrupted) marked)
            (progn
              (delete-overlay (org-glance-> marker :overlay))
              (slot-makeunbound marker :overlay)))

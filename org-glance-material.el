@@ -38,10 +38,11 @@ editor."
                ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
                ;; (save-buffer)
                ))
-           (add-text-properties (1- (point-max)) (point-max) (list :marker (save-excursion
-                                                                             (goto-char (point-max))
-                                                                             (org-back-to-heading-or-point-min)
-                                                                             (get-text-property (point) :marker)))))
+           (add-text-properties (1- (point-max)) (point-max)
+                                (list :marker (save-excursion
+                                                (goto-char (point-max))
+                                                (org-back-to-heading-or-point-min)
+                                                (get-text-property (point) :marker)))))
 
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)

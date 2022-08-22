@@ -47,7 +47,7 @@ Return t if it is or raise `user-error' otherwise."
        (org-mode)
        ,@forms)))
 
-(cl-defmacro org-glance--with-temp-buffer (&rest forms)
+(cl-defmacro org-glance:with-temp-buffer (&rest forms)
   `(with-temp-buffer
      (org-mode)
      ,@forms))

@@ -216,7 +216,7 @@
          s-trim)))
 
 (cl-defun org-glance-headline--ast-state (contents)
-  (org-glance--with-temp-buffer
+  (org-glance:with-temp-buffer
    (insert contents)
    (goto-char (point-min))
    (unless (org-at-heading-p)
@@ -273,7 +273,7 @@
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
-  (org-glance--with-temp-buffer
+  (org-glance:with-temp-buffer
    (insert string)
    (goto-char (point-min))
    (unless (org-at-heading-p)
@@ -371,9 +371,9 @@
                (error t))
         return result)))
 
-(cl-defun org-glance-headline-load (file)
+(cl-defun org-glance-headline:read (file)
   "Load headline from FILE."
-  (org-glance--with-temp-buffer
+  (org-glance:with-temp-buffer
    (insert-file-contents file)
    (goto-char (point-min))
    (unless (org-at-heading-p)

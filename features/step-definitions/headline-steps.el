@@ -52,7 +52,7 @@
 
 (When "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
-        (puthash headline (org-glance-headline-load (f-join org-glance-test:location file))
+        (puthash headline (org-glance-headline:read (f-join org-glance-test:location file))
                  org-glance-test-headlines)))
 
 (When "^headline \"\\([^\"]+\\)\" should contain links?$"

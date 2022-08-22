@@ -54,12 +54,13 @@
 
 (cl-defun org-glance-changelog:write (log location)
   (let ((contents (org-glance-changelog:contents log)))
-    (cond ((and (f-exists-p location) (f-empty-p location))
-           (append-to-file contents nil location))
-          ((f-exists-p location)
-           (append-to-file (concat "\n" contents) nil location))
-          (t (org-glance--with-temp-file location
-               (insert contents))))))
+    (when (not (string-empty-p contents))
+      (cond ((and (f-exists-p location) (f-empty-p location))
+             (append-to-file contents nil location))
+            ((f-exists-p location)
+             (append-to-file (concat "\n" contents) nil location))
+            (t (org-glance--with-temp-file location
+                 (insert contents)))))))
 
 (cl-defun org-glance-changelog:merge (lhs rhs)
   (cl-assert (eq (org-glance-changelog-id-determinator lhs) (org-glance-changelog-id-determinator rhs)))
