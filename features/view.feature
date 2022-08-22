@@ -85,6 +85,8 @@ Feature: Materialization
 
     Then marker at point should be corrupted
 
+  # TODO: Test visual representation of markers
+
   # Scenario: Add new headline
   #   Given store "Pets" in directory "store/pets" with headlines
   #     """

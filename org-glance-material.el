@@ -34,6 +34,7 @@ editor."
                                      :corrupted (null (org-glance-store:in store hash))
                                      ))))
                (add-text-properties (point-min) (point-max) (list :marker marker))
+               (org-glance-marker:redisplay marker)
                ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
                ;; (save-buffer)
                )))
@@ -57,7 +58,7 @@ editor."
   (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
-  "Actualize all overlays in changed material buffers."
+  "Actualize marker overlay."
   (interactive)
   (let* ((materialization (org-glance-buffer-materialization))
          (marker (org-glance-marker:at-point))
@@ -65,10 +66,10 @@ editor."
          (old-state (org-glance-> marker :state))
          (new-state (org-glance-marker:get-actual-state marker headline)))
     (cond
-      ;; ((not (org-glance-> old-state :corrupted))
-      ;;  ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
-      ;;  ;;   (puthash marker org-glance-material--changed-markers-set))
-      ;;  (org-glance-marker:redisplay marker))
+      ((org-glance-> old-state :corrupted)
+       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store?")
+       ;;   (puthash marker org-glance-material--changed-markers-set))
+       (org-glance-marker:redisplay marker))
       ((and (org-glance-> old-state :changed)
             (not (org-glance-> new-state :changed)))
        (setf (org-glance-> marker :state :changed) nil)
