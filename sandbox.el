@@ -3,6 +3,9 @@
 
 (let ((dst "/tmp/store"))
   (f-delete dst t)
+  (defvar test-store)
+  (defvar test-view)
+
   (setq test-store (org-glance-store:from-scratch dst
                      "* TODO a :Task:
 1"

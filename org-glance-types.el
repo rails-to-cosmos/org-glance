@@ -5,7 +5,6 @@
 
 (cl-deftype org-glance-file () '(satisfies org-glance-file-p))
 (cl-deftype org-glance-directory () '(satisfies org-glance-directory-p))
-(cl-deftype org-glance-predicate () '(satisfies org-glance-predicate-p))
 
 (cl-defun org-glance-file-p (location)
   "Determine if LOCATION is a readable org-mode file."
@@ -17,9 +16,5 @@
   "Determine if LOCATION is a readable directory."
   (and (f-dir-p location)
        (f-readable-p location)))
-
-(cl-defun org-glance-predicate-p (symbol)
-  (and (symbolp symbol)
-       (fboundp symbol)))
 
 (provide 'org-glance-types)

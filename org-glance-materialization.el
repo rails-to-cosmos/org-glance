@@ -32,28 +32,36 @@
   (s-join "\n"
           (list "#  -*- mode: org; mode: org-glance-material -*-"
                 ""
-                (format "#+STORE: %s" (org-glance-> materialization :view :store :location))
-                (format "#+PREDICATE: %s" (org-glance-> materialization :view :predicate))
+                (concat
+                 (format "#+TYPE: %s" (org-glance-> materialization :view :store :location))
+                 (if (string-empty-p (org-glance-> materialization :view :type))
+                     ""
+                   (concat " :: " (org-glance-> materialization :view :type))))
                 ""
                 "")))
 
-(cl-defun org-glance-materialization:get-property (property &optional (mapper #'identity))
-  (funcall mapper (save-excursion
-                    (goto-char (point-min))
-                    (search-forward (format "#+%s: " property))
-                    (buffer-substring-no-properties (point) (line-end-position)))))
+(cl-defun org-glance-materialization:get-property (property)
+  (save-excursion
+    (goto-char (point-min))
+    (search-forward (format "#+%s: " property))
+    (buffer-substring-no-properties (point) (line-end-position))))
 
 (cl-defun org-glance-materialization:get-buffer-store ()
-  "Get `org-glance-store' instance associated with current buffer."
-  (let ((location (org-glance-materialization:get-property "STORE")))
-    (org-glance-store:read location)))
+  "Get `org-glance-store' associated with current buffer."
+  (thread-last (org-glance-materialization:get-property "TYPE")
+    (s-split " :: ")
+    cl-first
+    org-glance-store:read))
 
 (cl-defun org-glance-materialization:get-buffer-view ()
-  "Get `org-glance-view' instance associated with current buffer."
-  (let ((store (org-glance-materialization:get-buffer-store))
-        (predicate (org-glance-materialization:get-property "PREDICATE" #'intern)))
-    (or (gethash (cons predicate store) org-glance-views)
-        (puthash (cons predicate store) (org-glance-store:view store predicate) org-glance-views))))
+  "Get `org-glance-view' associated with current buffer."
+  (let* ((store (org-glance-materialization:get-buffer-store))
+         (type (thread-last (org-glance-materialization:get-property "TYPE")
+                 (s-split " :: ")
+                 cl-second))
+         (key (cons store type)))
+    (or (gethash key org-glance-views)
+        (puthash key (org-glance-store:view store type) org-glance-views))))
 
 (cl-defun org-glance-materialization:get-buffer-materialization ()
   "Get `org-glance-materialization' instance associated with current buffer."

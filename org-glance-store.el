@@ -69,17 +69,17 @@
    (views
     :type hash-table
     :initarg :views
-    :initform (make-hash-table)
-    :documentation "Views associated with store by predicate."
+    :initform (make-hash-table :test #'equal)
+    :documentation "Views associated with store by type."
     :reader org-glance-store:views)))
 
 (defvar org-glance-stores (make-hash-table :test #'equal)
   "List of stores registered in system.")
 
-(cl-defun org-glance-store:view (store predicate)
-  (or (gethash predicate (slot-value store :views))
-      (let ((view (org-glance-view :store store :predicate predicate)))
-        (puthash predicate view (slot-value store :views))
+(cl-defun org-glance-store:view (store type)
+  (or (gethash type (org-glance-> store :views))
+      (let ((view (org-glance-view :store store :type type)))
+        (puthash type view (org-glance-> store :views))
         view)))
 
 (cl-defun org-glance-store:from-scratch (location &rest strings)

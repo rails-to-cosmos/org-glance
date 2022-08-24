@@ -12,14 +12,9 @@
 (require 'org-glance-view)
 
 (When "^I create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\"$"
-  (lambda (view-name class-name store-name)
-
-    ;; TODO make proper query parser here
-    (defun org-glance-test-class-filter (headline)
-      (member (downcase class-name) (org-glance-headline-class headline)))
-
-    (let* ((store (org-glance-test:get-store store-name))
-           (view (org-glance-store:view store #'org-glance-test-class-filter)))
+  (lambda (view-name type store-name)
+    (let ((view (thread-first (org-glance-test:get-store store-name)
+                  (org-glance-store:view type))))
       (org-glance-test:put-view view-name view))))
 
 (When "^I materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
