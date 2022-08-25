@@ -36,8 +36,8 @@
 
 (cl-defun org-glance-store-log-p (log)
   (and (org-glance-changelog-p log)
-       (cl-every #'org-glance-store-event-p (org-glance-changelog-events log))
-       (eq #'org-glance-store:event-id (org-glance-changelog-test log))))
+       (cl-every #'org-glance-store-event-p (org-glance-> log :events))
+       (eq #'org-glance-store:event-id (org-glance-> log :key))))
 
 (cl-defun org-glance-store:event-id (event)
   (org-glance-headline:hash (org-glance-event-state event)))
@@ -51,13 +51,13 @@
    (changelog*
     :type org-glance-store-log
     :initarg :changelog*
-    :initform (org-glance-changelog:create nil #'org-glance-store:event-id)
+    :initform (org-glance-changelog :key #'org-glance-store:event-id)
     :documentation "In-memory changelog."
     :reader org-glance-store:changelog*)
    (changelog
     :type org-glance-store-log
     :initarg :changelog
-    :initform (org-glance-changelog:create nil #'org-glance-store:event-id)
+    :initform (org-glance-changelog :key #'org-glance-store:event-id)
     :documentation "Persistent changelog."
     :reader org-glance-store:changelog)
    (cache
@@ -102,7 +102,7 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
   "Read `org-glance-store' from LOCATION."
   (or (gethash location org-glance-stores)
       (let ((changelog (org-glance-changelog:read (f-join location org-glance-store:log-location)
-                         :test #'org-glance-store:event-id)))
+                         :key #'org-glance-store:event-id)))
         (puthash location (org-glance-store :location location :changelog changelog) org-glance-stores))))
 
 (cl-defun org-glance-store:offset (store)
@@ -129,7 +129,7 @@ In all other places `org-glance-store' should act like pure
 functional data structure.
 
 Return last committed offset."
-  (dolist (event (reverse (org-glance-changelog-events (org-glance-store:changelog* store))))
+  (dolist (event (reverse (org-glance-> (org-glance-store:changelog* store) :events)))
     (cl-typecase event
       (org-glance-event:RM
        ;; if (org-glance-event:RM-p event)
@@ -145,7 +145,8 @@ Return last committed offset."
            (org-glance-changelog:push (org-glance-> store :changelog) event))))))
   (org-glance-changelog:write (org-glance-> store :changelog)
                               (org-glance-store:/ store org-glance-store:log-location))
-  (setf (org-glance-> store :changelog*) (org-glance-changelog:create nil #'org-glance-store:event-id))
+  (setf (org-glance-> store :changelog*)
+        (org-glance-changelog :key #'org-glance-store:event-id))
   (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
