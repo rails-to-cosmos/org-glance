@@ -106,7 +106,7 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
         (puthash location (org-glance-store :location location :changelog changelog) org-glance-stores))))
 
 (cl-defun org-glance-store:offset (store)
-  (if-let (event (org-glance-changelog:last (org-glance-store:changelog store)))
+  (if-let (event (org-glance-changelog:last (org-glance-> store :changelog)))
       (org-glance-event-offset event)
     0))
 
@@ -188,7 +188,7 @@ achieved by calling `org-glance-store:flush' method."
 3. Search in persistent storage."
   (or
    (gethash hash (org-glance-store:cache store))
-   (cl-loop for event in (org-glance-changelog:flatten (org-glance-store:changelog* store))
+   (cl-loop for event in (org-glance-changelog:flatten (org-glance-> store :changelog*))
       for headline = (org-glance-event-state event)
       when (and (org-glance-event:PUT-p event)
                 (org-glance-headline-p headline)
@@ -207,7 +207,7 @@ achieved by calling `org-glance-store:flush' method."
 (cl-defun org-glance-store:in (store hash)
   "Return t if HASH is in STORE, nil otherwise."
   (or (not (null (gethash hash (org-glance-store:cache store) nil)))
-      (cl-loop for event in (org-glance-changelog:flatten (org-glance-store:changelog* store))
+      (cl-loop for event in (org-glance-changelog:flatten (org-glance-> store :changelog*))
          for headline = (org-glance-event-state event)
          when (and (org-glance-event:PUT-p event)
                    (org-glance-headline-p headline)
@@ -251,8 +251,8 @@ achieved by calling `org-glance-store:flush' method."
 (cl-defun org-glance-store:events (store)
   (org-glance-changelog:flatten
    (org-glance-changelog:merge
-    (org-glance-store:changelog* store)
-    (org-glance-store:changelog store))))
+    (org-glance-> store :changelog*)
+    (org-glance-> store :changelog))))
 
 (cl-defun org-glance-store:import (store location)
   "Add headlines from LOCATION to STORE."
