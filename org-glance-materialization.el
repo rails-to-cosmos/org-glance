@@ -13,38 +13,47 @@
     ((view
       :type org-glance-view
       :initarg :view
-      :reader org-glance-materialization:view
       :documentation "Backlink to source of materialization.")
      (location
       :type org-glance-file
       :initarg :location
-      :reader org-glance-materialization:location
       :documentation "Location where materialization persists.")
      (changes
       :type list
       :initarg :changes
       :initform nil
-      :reader org-glance-materialization:changes
-      :documentation "Set of changed markers.")))
+      :documentation "Set of changed markers.")
+     (offset
+      :type float
+      :initarg :offset)))
+
+;; TODO implement material offsets
+;; On commit check if our offset is latest
+;;  Latest -- proceed, update offset and header
+;;  Not latest -- rebase, last write wins or user diff
+;; On material mode check if our offset is latest, update offset and header
 
 (cl-defun org-glance-materialization:header (materialization)
   "Generate header for MATERIALIZATION."
   (s-join "\n"
           (list "#  -*- mode: org; mode: org-glance-material -*-"
                 ""
-                (concat
-                 (format "#+TYPE: %s" (org-glance-> materialization :view :store :location))
-                 (if (string-empty-p (org-glance-> materialization :view :type))
-                     ""
-                   (concat " :: " (org-glance-> materialization :view :type))))
+                (format "#+TYPE: %s :: %s"
+                        (org-glance-> materialization :view :store :location)
+                        (org-glance-> materialization :view :type))
+                (format "#+OFFSET: %s"
+                        (org-glance-> materialization :offset))
                 ""
                 "")))
 
 (cl-defun org-glance-materialization:get-property (property)
   (save-excursion
     (goto-char (point-min))
-    (search-forward (format "#+%s: " property))
-    (buffer-substring-no-properties (point) (line-end-position))))
+    (condition-case nil
+        (progn
+          (search-forward (format "#+%s: " property))
+          (buffer-substring-no-properties (point) (line-end-position)))
+      (search-failed nil))))
 
 (cl-defun org-glance-materialization:get-buffer-store ()
   "Get `org-glance-store' associated with current buffer."
@@ -58,10 +67,8 @@
   (let* ((store (org-glance-materialization:get-buffer-store))
          (type (thread-last (org-glance-materialization:get-property "TYPE")
                  (s-split " :: ")
-                 cl-second))
-         (key (cons store type)))
-    (or (gethash key org-glance-views)
-        (puthash key (org-glance-store:view store type) org-glance-views))))
+                 cl-second)))
+    (org-glance-store:view store type)))
 
 (cl-defun org-glance-materialization:get-buffer-materialization ()
   "Get `org-glance-materialization' instance associated with current buffer."
@@ -70,8 +77,8 @@
         (let ((view (org-glance-materialization:get-buffer-view)))
           (puthash filename (org-glance-view:materialize view filename) org-glance-materializations)))))
 
-(cl-defmacro org-glance-materialization:pop-changes (spec &rest forms)
-  "Loop over changed markers in current buffer binding each marker to VAL and executing BODY.
+(cl-defmacro org-glance-materialization:map-changes (spec &rest forms)
+  "Pop changed markers one by one from current buffer binding each marker to VAL and executing BODY.
 
 \(fn (VAR MATERIALIZATION) BODY...)"
   ;; TODO lock, possible data loss
@@ -85,13 +92,13 @@
       while (org-glance-> materialization :changes)
       for marker = (pop (org-glance-> materialization :changes))
       when (org-glance-marker:live-p marker)
-      do (org-glance-marker:with-current-buffer marker
-           (let ((,(car spec) marker))
-             ,@forms))))
+      collect (org-glance-marker:with-current-buffer marker
+                (let ((,(car spec) marker))
+                  ,@forms))))
 
 (cl-defun org-glance-materialization:commit (materialization)
   (let ((store (org-glance-> materialization :view :store)))
-    (org-glance-materialization:pop-changes (marker materialization)
+    (org-glance-materialization:map-changes (marker materialization)
       (let ((headline (org-glance-marker:headline marker)))
         (org-glance-store:put store headline)
         (setf (org-glance-> marker :state :committed) t

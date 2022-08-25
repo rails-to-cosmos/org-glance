@@ -7,8 +7,6 @@
 
 (declare-function f-mkdir-full-path 'f)
 
-(defvar org-glance-views (make-hash-table :test #'equal))
-
 (org-glance-class org-glance-view nil
     ((store
       :type org-glance-store
@@ -39,7 +37,9 @@
   (let ((true-location (file-truename location)))
     (or (gethash true-location (org-glance-> view :materializations))
         (progn (f-mkdir-full-path (file-name-directory true-location))
-               (let ((materialization (org-glance-materialization :view view :location true-location)))
+               (let ((materialization (org-glance-materialization :view view
+                                                                  :location true-location
+                                                                  :offset (org-glance-store:offset (org-glance-> view :store)))))
                  (org-glance--with-temp-file true-location
                    (insert (org-glance-materialization:header materialization))
                    (cl-dolist (headline (org-glance-store:headlines (org-glance-view:store view)))

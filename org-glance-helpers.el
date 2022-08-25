@@ -79,11 +79,12 @@ Return t if it is or raise `user-error' otherwise."
            ,handler)))))
 
 (cl-defun org-glance-debug (&rest args)
-  (let ((buffer (get-buffer-create "*glance-debug*")))
+  (let ((buffer (get-buffer-create "*org-glance-debug*")))
     (with-current-buffer buffer
       (delete-region (point-min) (point-max))
       (cl-loop for arg in args
          collect (prin1-to-string arg t) into result
-         finally (insert (s-join "\n" result))))))
+         finally (insert (s-join "\n" result))))
+    (switch-to-buffer-other-frame buffer)))
 
 (provide 'org-glance-helpers)

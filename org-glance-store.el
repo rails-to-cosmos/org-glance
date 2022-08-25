@@ -21,8 +21,8 @@
 (require 'org-glance-event)
 (require 'org-glance-view)
 
-(defconst org-glance-store-log-location "wa.log")
-(defconst org-glance-store-materializations-filename "materializations.el")
+(defconst org-glance-store:log-location "wa.log")
+(defconst org-glance-store:offset-location "offset.el")
 
 (cl-deftype org-glance-store-event ()
   '(satisfies org-glance-store-event-p))
@@ -37,7 +37,7 @@
 (cl-defun org-glance-store-log-p (log)
   (and (org-glance-changelog-p log)
        (cl-every #'org-glance-store-event-p (org-glance-changelog-events log))
-       (eq #'org-glance-store:event-id (org-glance-changelog-id-determinator log))))
+       (eq #'org-glance-store:event-id (org-glance-changelog-test log))))
 
 (cl-defun org-glance-store:event-id (event)
   (org-glance-headline:hash (org-glance-event-state event)))
@@ -93,6 +93,8 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
   (let ((store (org-glance-store :location location)))
     (dolist (string strings)
       (org-glance-store:put store (org-glance-headline-from-string string)))
+
+    (org-glance-debug store)
     (org-glance-store:flush store)
     (puthash location store org-glance-stores)
     store))
@@ -100,13 +102,14 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
 (cl-defun org-glance-store:read (location)
   "Read `org-glance-store' from LOCATION."
   (or (gethash location org-glance-stores)
-      (puthash location
-               (org-glance-store
-                :location location
-                :changelog (org-glance-changelog:read
-                            (f-join location org-glance-store-log-location)
-                            #'org-glance-store:event-id))
-               org-glance-stores)))
+      (let ((changelog (org-glance-changelog:read (f-join location org-glance-store:log-location)
+                         :test #'org-glance-store:event-id)))
+        (puthash location (org-glance-store :location location :changelog changelog) org-glance-stores))))
+
+(cl-defun org-glance-store:offset (store)
+  (if-let (event (org-glance-changelog:last (org-glance-store:changelog store)))
+      (org-glance-event-offset event)
+    0))
 
 (cl-defun org-glance-store:/ (store location)
   "Resolve relative LOCATION to full path in context of STORE."
@@ -125,23 +128,24 @@ persistent storage.
 
 In all other places `org-glance-store' should act like pure
 functional data structure."
-  (org-glance-changelog:write (org-glance-store:changelog* store)
-                        (org-glance-store:/ store org-glance-store-log-location))
-  (while (not (org-glance-changelog:empty-p (org-glance-store:changelog* store)))
-    (let ((event (org-glance-changelog:pop (org-glance-store:changelog* store))))
-      (cl-typecase event
-        (org-glance-event:RM
-         ;; if (org-glance-event:RM-p event)
-         ;; do (puthash seen hash)
-         ;; TODO think about when to delete headlines
-         ;; (f-delete (org-glance-store:locate store headline))
-         nil)
-        (org-glance-event:PUT
-         (let* ((headline (org-glance-store:get store (org-glance-store:event-id event)))
-                (location (org-glance-store:locate store headline)))
-           (unless (f-exists-p location)
-             (org-glance-headline-save headline location)
-             (org-glance-changelog:push (org-glance-store:changelog store) event))))))))
+  (org-glance-changelog:write
+   (org-glance-store:changelog* store)
+   (org-glance-store:/ store org-glance-store:log-location))
+  (dolist (event (reverse (org-glance-changelog-events (org-glance-store:changelog* store))))
+    (cl-typecase event
+      (org-glance-event:RM
+       ;; if (org-glance-event:RM-p event)
+       ;; do (puthash seen hash)
+       ;; TODO think about when to delete headlines
+       ;; (f-delete (org-glance-store:locate store headline))
+       nil)
+      (org-glance-event:PUT
+       (let* ((headline (org-glance-store:get store (org-glance-store:event-id event)))
+              (location (org-glance-store:locate store headline)))
+         (unless (f-exists-p location)
+           (org-glance-headline-save headline location)
+           (org-glance-changelog:push (org-glance-store:changelog store) event))))))
+  (setf (org-glance-> store :changelog*) (org-glance-changelog:create nil #'org-glance-store:event-id)))
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 
@@ -160,7 +164,7 @@ functional data structure."
   "Put HEADLINE to STORE.
 TODO: Transaction."
   (org-glance-changelog:push (org-glance-store:changelog* store)
-                             (org-glance-event:PUT (org-glance-headline-header headline)))
+    (org-glance-event:PUT (org-glance-headline-header headline)))
   (puthash (org-glance-headline:hash headline) headline (org-glance-store:cache store)))
 
 (cl-defun org-glance-store:remove (store headline)

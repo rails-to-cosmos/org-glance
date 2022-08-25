@@ -7,6 +7,7 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* remove changelog*
 * DONE fix marker→point behaviour
 CLOSED: [2022-08-21 Sun 13:16]
 :LOGBOOK:
