@@ -15,7 +15,11 @@
 
 Example: (org-glance-> materialization :view :store :location)"
   (declare (indent 1))
-  (cl-reduce (lambda (acc slot) `(slot-value ,acc ,slot)) slots :initial-value object))
+  (cl-reduce
+   (lambda (acc slot)
+     `(slot-value ,acc ,slot))
+   slots
+   :initial-value object))
 
 (cl-defun org-glance--ensure-at-headline ()
   "Ensure point is at heading.
@@ -46,6 +50,11 @@ Return t if it is or raise `user-error' otherwise."
      (with-temp-file ,file
        (org-mode)
        ,@forms)))
+
+(cl-defun org-glance:append-to-file (string file)
+  (cond ((and (f-exists-p file) (f-readable-p file)) (append-to-file (concat "\n" string) nil file))
+        ((not (f-exists-p file)) (append-to-file string nil file))
+        (t (user-error "Unable to write file %s" file))))
 
 (cl-defmacro org-glance:with-temp-buffer (&rest forms)
   `(with-temp-buffer

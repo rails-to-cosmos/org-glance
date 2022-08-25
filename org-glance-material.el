@@ -13,9 +13,6 @@
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
 
-(defvar org-glance-material-overlay-manager--mutex (make-mutex)
-  "Mutex for material overlay manager.")
-
 (define-minor-mode org-glance-material-mode
     "A minor mode to be activated only in materialized view
 editor."
@@ -31,8 +28,7 @@ editor."
                              :buffer (current-buffer)
                              :state (org-glance-marker-state
                                      ;; FIXME Getting full headline is unneccessary
-                                     :corrupted (null (org-glance-store:in store hash))
-                                     ))))
+                                     :corrupted (null (org-glance-store:in store hash))))))
                (add-text-properties (point-min) (point-max) (list :marker marker))
                (org-glance-marker:redisplay marker)
                ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
@@ -59,7 +55,6 @@ editor."
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
-  ;; (org-glance-material-overlay-manager-redisplay*)
   (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()

@@ -42,11 +42,11 @@
                                                                   :offset (org-glance-store:offset (org-glance-> view :store)))))
                  (org-glance--with-temp-file true-location
                    (insert (org-glance-materialization:header materialization))
-                   (cl-dolist (headline (org-glance-store:headlines (org-glance-view:store view)))
+                   (cl-dolist (headline (org-glance-store:headlines (org-glance-> view :store)))
                      (when (org-glance-view:filter view headline)
                        (org-glance-headline-insert
                         (org-glance-store:get
-                         (org-glance-view:store view)
+                         (org-glance-> view :store)
                          (org-glance-headline:hash headline))))))
                  (puthash true-location materialization (org-glance-> view :materializations)))))))
 

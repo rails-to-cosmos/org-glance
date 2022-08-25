@@ -25,44 +25,37 @@
     ((beg
       :type number
       :initarg :beg
-      :reader org-glance-marker:beg
       :documentation "Beginning of headline.")
      (end
       :type number
       :initarg :end
-      :reader org-glance-marker:end
       :documentation "End of headline.")
      (buffer
       :type buffer
       :initarg :buffer
-      :reader org-glance-marker:buffer
       :documentation "Materialized buffer.")
      (hash
       :type string
       :initarg :hash
-      :reader org-glance-marker:hash
       :documentation "Hash of headline origin.")
      (offset
       :initform 0
       :initarg :offset
       :type number
-      :reader org-glance-marker:offset
       :documentation "Actual offset of headline.")
      (overlay
       :type overlay
       :initarg :overlay
-      :reader org-glance-marker:overlay
       :documentation "Current overlay for status reporting.")
      (state
       :type org-glance-marker-state
-      :initarg :state
-      :reader org-glance-marker:state))
+      :initarg :state))
   "Metadata of materializations.")
 
 (cl-defun org-glance-marker:live-p (marker)
   (and marker
-       (org-glance-marker:buffer marker)
-       (buffer-live-p (org-glance-marker:buffer marker))))
+       (org-glance-> marker :buffer)
+       (buffer-live-p (org-glance-> marker :buffer))))
 
 (cl-defun org-glance-marker:at-point ()
   "Return instance of `org-glance-marker' from text at point."
@@ -74,7 +67,7 @@
         (get-text-property (point) :marker))))
 
 (cl-defun org-glance-marker:get-actual-state (marker headline)
-  (let ((hash-old (org-glance-marker:hash marker))
+  (let ((hash-old (org-glance-> marker :hash))
         (hash-new (org-glance-headline:hash headline)))
     (org-glance-marker-state
      :changed (not (string= hash-old hash-new)))))
@@ -82,8 +75,8 @@
 (cl-defun org-glance-marker:headline (marker)
   "Create instance of `org-glance-headline' from MARKER."
   (org-glance-headline-from-region
-   (org-glance-marker:beg marker)
-   (org-glance-marker:end marker)))
+   (org-glance-> marker :beg)
+   (org-glance-> marker :end)))
 
 (cl-defun org-glance-marker:prin1-to-string (marker)
   (with-temp-buffer
@@ -105,7 +98,7 @@
 
 (cl-defmacro org-glance-marker:with-current-buffer (marker &rest forms)
   (declare (indent 1))
-  `(with-current-buffer (org-glance-marker:buffer ,marker)
+  `(with-current-buffer (org-glance-> ,marker :buffer)
      (save-excursion
        (save-restriction
          (widen)

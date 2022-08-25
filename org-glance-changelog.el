@@ -10,8 +10,8 @@
              :initarg :events
              :initform nil)
      (test :type function
-                :initarg :test
-                :initform #'equal)
+           :initarg :test
+           :initform #'equal)
      (key :type function
           :initarg :key
           :initform #'identity)))

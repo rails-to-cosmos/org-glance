@@ -21,8 +21,7 @@
 (require 'org-glance-event)
 (require 'org-glance-view)
 
-(defconst org-glance-store:log-location "wa.log")
-(defconst org-glance-store:offset-location "offset.el")
+(defconst org-glance-store:log-location "WAL")
 
 (cl-deftype org-glance-store-event ()
   '(satisfies org-glance-store-event-p))
@@ -30,14 +29,14 @@
 (cl-deftype org-glance-store-log ()
   '(satisfies org-glance-store-log-p))
 
-(cl-defun org-glance-store-event-p (event)
-  (and (org-glance-event-p event)
-       (org-glance-headline-header-p (org-glance-event-state event))))
+(cl-defun org-glance-store-event-p (object)
+  (and (org-glance-event-p object)
+       (org-glance-headline-header-p (org-glance-event-state object))))
 
-(cl-defun org-glance-store-log-p (log)
-  (and (org-glance-changelog-p log)
-       (cl-every #'org-glance-store-event-p (org-glance-> log :events))
-       (eq #'org-glance-store:event-id (org-glance-> log :key))))
+(cl-defun org-glance-store-log-p (object)
+  (and (org-glance-changelog-p object)
+       (cl-every #'org-glance-store-event-p (org-glance-> object :events))
+       (eq #'org-glance-store:event-id (org-glance-> object :key))))
 
 (cl-defun org-glance-store:event-id (event)
   (org-glance-headline:hash (org-glance-event-state event)))
@@ -46,14 +45,12 @@
   ((location
     :type org-glance-directory
     :initarg :location
-    :documentation "Directory containing all the data."
-    :reader org-glance-store:location)
+    :documentation "Directory containing all the data.")
    (changelog*
     :type org-glance-store-log
     :initarg :changelog*
     :initform (org-glance-changelog :key #'org-glance-store:event-id)
-    :documentation "In-memory changelog."
-    :reader org-glance-store:changelog*)
+    :documentation "In-memory changelog.")
    (changelog
     :type org-glance-store-log
     :initarg :changelog
@@ -64,8 +61,7 @@
     :type hash-table
     :initarg :cache
     :initform (make-hash-table :test #'equal)
-    :documentation "LRU cache with headlines."
-    :reader org-glance-store:cache)
+    :documentation "LRU cache with headlines.")
    (views
     :type hash-table
     :initarg :views
@@ -93,7 +89,6 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
   (let ((store (org-glance-store :location location)))
     (dolist (string strings)
       (org-glance-store:put store (org-glance-headline-from-string string)))
-
     (org-glance-store:flush store)
     (puthash location store org-glance-stores)
     store))
@@ -112,7 +107,7 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
 
 (cl-defun org-glance-store:/ (store location)
   "Resolve relative LOCATION to full path in context of STORE."
-  (apply #'f-join (org-glance-store:location store) (s-split "/" location)))
+  (apply #'f-join (org-glance-> store :location) (s-split "/" location)))
 
 (cl-defun org-glance-store:flush (store)
   "Persist STORE changes.
@@ -129,7 +124,7 @@ In all other places `org-glance-store' should act like pure
 functional data structure.
 
 Return last committed offset."
-  (dolist (event (reverse (org-glance-> (org-glance-store:changelog* store) :events)))
+  (dolist (event (reverse (org-glance-> store :changelog* :events)))
     (cl-typecase event
       (org-glance-event:RM
        ;; if (org-glance-event:RM-p event)
@@ -151,23 +146,12 @@ Return last committed offset."
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 
-(cl-defun org-glance-store:filter (store func)
-  "Return new `org-glance-store' instance by copying STORE with HEADLINES filtered by FUNC."
-  (let ((filter (lambda (event)
-                  (and
-                   (org-glance-event:PUT-p event)
-                   (funcall func (org-glance-event-state event))))))
-    (org-glance-store
-     :location (org-glance-store:location store)
-     :changelog* (org-glance-changelog:filter (org-glance-store:changelog* store) filter)
-     :changelog (org-glance-changelog:filter (org-glance-store:changelog store) filter))))
-
 (cl-defun org-glance-store:put (store headline)
   "Put HEADLINE to STORE.
 TODO: Transaction."
-  (org-glance-changelog:push (org-glance-store:changelog* store)
+  (org-glance-changelog:push (org-glance-> store :changelog*)
     (org-glance-event:PUT (org-glance-headline-header headline)))
-  (puthash (org-glance-headline:hash headline) headline (org-glance-store:cache store)))
+  (puthash (org-glance-headline:hash headline) headline (org-glance-> store :cache)))
 
 (cl-defun org-glance-store:remove (store headline)
   "Return `org-glance-store' with HEADLINES removed from STORE.
@@ -177,8 +161,8 @@ persistent storage.
 
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-store:flush' method."
-  (org-glance-changelog:push (org-glance-store:changelog* store) (org-glance-event:RM headline))
-  (remhash (org-glance-headline:hash headline) (org-glance-store:cache store)))
+  (org-glance-changelog:push (org-glance-> store :changelog*) (org-glance-event:RM headline))
+  (remhash (org-glance-headline:hash headline) (org-glance-> store :cache)))
 
 (cl-defun org-glance-store:get (store hash)
   "Return fully qualified `org-glance-headline' by hash.
@@ -186,27 +170,26 @@ achieved by calling `org-glance-store:flush' method."
 1. (TODO) Search in LRU cache.
 2. Search in staged changes.
 3. Search in persistent storage."
-  (or
-   (gethash hash (org-glance-store:cache store))
-   (cl-loop for event in (org-glance-changelog:flatten (org-glance-> store :changelog*))
-      for headline = (org-glance-event-state event)
-      when (and (org-glance-event:PUT-p event)
-                (org-glance-headline-p headline)
-                (string= (org-glance-headline:hash headline) hash))
-      return headline)
-   (org-glance:with-temp-buffer
-    (insert-file-contents (org-glance-store:locate store hash))
-    (goto-char (point-min))
-    (unless (org-at-heading-p)
-      (outline-next-heading))
-    (let ((headline (org-glance-headline-at-point)))
-      (puthash (org-glance-headline:hash headline)
-               headline
-               (org-glance-store:cache store))))))
+  (or (gethash hash (org-glance-> store :cache))
+      (cl-loop for event in (org-glance-changelog:flatten (org-glance-> store :changelog*))
+         for headline = (org-glance-event-state event)
+         when (and (org-glance-event:PUT-p event)
+                   (org-glance-headline-p headline)
+                   (string= (org-glance-headline:hash headline) hash))
+         return headline)
+      (org-glance:with-temp-buffer
+       (insert-file-contents (org-glance-store:locate store hash))
+       (goto-char (point-min))
+       (unless (org-at-heading-p)
+         (outline-next-heading))
+       (let ((headline (org-glance-headline-at-point)))
+         (puthash (org-glance-headline:hash headline)
+                  headline
+                  (org-glance-> store :cache))))))
 
 (cl-defun org-glance-store:in (store hash)
   "Return t if HASH is in STORE, nil otherwise."
-  (or (not (null (gethash hash (org-glance-store:cache store) nil)))
+  (or (not (null (gethash hash (org-glance-> store :cache) nil)))
       (cl-loop for event in (org-glance-changelog:flatten (org-glance-> store :changelog*))
          for headline = (org-glance-event-state event)
          when (and (org-glance-event:PUT-p event)
@@ -238,7 +221,7 @@ achieved by calling `org-glance-store:flush' method."
   "Return HASH location from STORE."
   (let ((prefix (substring hash 0 2))
         (postfix (substring hash 2 (length hash))))
-    (f-join (org-glance-store:location store) "data" prefix postfix)))
+    (f-join (org-glance-> store :location) "data" prefix postfix)))
 
 ;; (cl-defun org-glance-store-completing-read (store)
 ;;   "Read headlines from STORE with completion."

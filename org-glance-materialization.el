@@ -87,7 +87,7 @@
         (let ((view (org-glance-materialization:get-buffer-view)))
           (puthash filename (org-glance-view:materialize view filename) org-glance-materializations)))))
 
-(cl-defmacro org-glance-materialization:map-changes (spec &rest forms)
+(cl-defmacro org-glance-materialization:pop-changes (spec &rest forms)
   "Pop changed markers one by one from current buffer binding each marker to VAL and executing BODY.
 
 \(fn (VAR MATERIALIZATION) BODY...)"
@@ -106,9 +106,12 @@
 
 (cl-defun org-glance-materialization:commit (materialization)
   (let ((store (org-glance-> materialization :view :store)))
-    (org-glance-materialization:map-changes (marker materialization)
+    (org-glance-materialization:pop-changes (marker materialization)
       (let ((headline (org-glance-marker:headline marker)))
         (org-glance-store:put store headline)
+        (org-glance:append-to-file
+         (format "%s %s" (org-glance-> marker :hash) (org-glance-headline:hash headline))
+         (org-glance-store:/ store "CHANGELOG"))
         (setf (org-glance-> marker :state :committed) t
               (org-glance-> marker :state :changed) nil
               (org-glance-> marker :hash) (org-glance-headline:hash headline))

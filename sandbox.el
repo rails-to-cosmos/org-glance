@@ -13,18 +13,23 @@
                      "* TODO a :Task:
 1"
                      "* DONE b :TAsk:"
-                     "* COMMENT c
+                     "* COMMENT c :Comment:Task:Crypt:
 aes-encrypted V 1.3-OCB-B-4-4-M
 1/tktn7J+sRqmM2KLefQQZtIYV/FAOcDn+Rs/s5Nm17pNMFtusnXrgrjwzxWFk8F4YSBdCbbRwzl
 wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
-                     "* COMMENT d
+                     "* COMMENT d :Comment:
 2"))
 
-  (setq test-view (org-glance-store:view test-store "Task"))
-  (org-glance-view:materialize test-view (f-join dst "main.org"))
+  (org-glance-view:materialize
+   (org-glance-store:view test-store "Task")
+   (f-join dst "task.org"))
+
+  (org-glance-view:materialize
+   (org-glance-store:view test-store "Comment")
+   (f-join dst "comment.org"))
 
   ;; emulate source corruption
-  (append-to-file "* d" nil (f-join dst "main.org"))
+  (append-to-file "* d" nil (f-join dst "task.org"))
 
   (find-file "/tmp/store")
   )
