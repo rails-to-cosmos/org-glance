@@ -94,7 +94,6 @@ All changes are stored in memory before you call `org-glance-store:flush' explic
     (dolist (string strings)
       (org-glance-store:put store (org-glance-headline-from-string string)))
 
-    (org-glance-debug store)
     (org-glance-store:flush store)
     (puthash location store org-glance-stores)
     store))
