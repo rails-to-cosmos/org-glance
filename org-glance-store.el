@@ -126,10 +126,9 @@ This should be the only point to destructively change underlying
 persistent storage.
 
 In all other places `org-glance-store' should act like pure
-functional data structure."
-  (org-glance-changelog:write
-   (org-glance-store:changelog* store)
-   (org-glance-store:/ store org-glance-store:log-location))
+functional data structure.
+
+Return last committed offset."
   (dolist (event (reverse (org-glance-changelog-events (org-glance-store:changelog* store))))
     (cl-typecase event
       (org-glance-event:RM
@@ -143,8 +142,11 @@ functional data structure."
               (location (org-glance-store:locate store headline)))
          (unless (f-exists-p location)
            (org-glance-headline-save headline location)
-           (org-glance-changelog:push (org-glance-store:changelog store) event))))))
-  (setf (org-glance-> store :changelog*) (org-glance-changelog:create nil #'org-glance-store:event-id)))
+           (org-glance-changelog:push (org-glance-> store :changelog) event))))))
+  (org-glance-changelog:write (org-glance-> store :changelog)
+                              (org-glance-store:/ store org-glance-store:log-location))
+  (setf (org-glance-> store :changelog*) (org-glance-changelog:create nil #'org-glance-store:event-id))
+  (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 

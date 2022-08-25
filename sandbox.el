@@ -1,4 +1,9 @@
 (let ((dst "/tmp/store"))
+  (progn ;; reload glance
+    (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
+    (clrhash org-glance-stores)
+    (clrhash org-glance-materializations))
+
   (f-delete dst t)
 
   (defvar test-store)
@@ -15,11 +20,13 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
                      "* COMMENT d
 2"))
 
-  ;; (setq test-view (org-glance-store:view test-store "Task"))
-  ;; (org-glance-view:materialize test-view (f-join dst "main.org"))
+  (setq test-view (org-glance-store:view test-store "Task"))
+  (org-glance-view:materialize test-view (f-join dst "main.org"))
 
   ;; emulate source corruption
-  ;; (append-to-file "* d" nil (f-join dst "main.org"))
+  (append-to-file "* d" nil (f-join dst "main.org"))
+
+  (find-file "/tmp/store")
   )
 
 ;; (cl-assert (> (org-glance-event-offset (car (org-glance-store:events test-store)))
@@ -29,8 +36,3 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
   (push 1 res)
   (push 2 res)
   res)
-
-(progn ;; reload glance
-  (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
-  (clrhash org-glance-stores)
-  (clrhash org-glance-materializations))

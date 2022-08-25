@@ -55,6 +55,16 @@
           (buffer-substring-no-properties (point) (line-end-position)))
       (search-failed nil))))
 
+(cl-defun org-glance-materialization:set-property (property value)
+  (save-excursion
+    (goto-char (point-min))
+    (condition-case nil
+        (progn
+          (search-forward (format "#+%s: " property))
+          (delete-region (point) (line-end-position))
+          (insert (prin1-to-string value)))
+      (search-failed nil))))
+
 (cl-defun org-glance-materialization:get-buffer-store ()
   "Get `org-glance-store' associated with current buffer."
   (thread-last (org-glance-materialization:get-property "TYPE")
@@ -83,10 +93,8 @@
 \(fn (VAR MATERIALIZATION) BODY...)"
   ;; TODO lock, possible data loss
   (declare (indent 1) (debug ((symbolp form &optional form) forms)))
-  (unless (consp spec)
-    (signal 'wrong-type-argument (list 'consp spec)))
-  (unless (= 2 (length spec))
-    (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
+  (unless (consp spec) (signal 'wrong-type-argument (list 'consp spec)))
+  (unless (= 2 (length spec)) (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
   `(cl-loop
       with materialization = ,(cadr spec)
       while (org-glance-> materialization :changes)
@@ -105,6 +113,7 @@
               (org-glance-> marker :state :changed) nil
               (org-glance-> marker :hash) (org-glance-headline:hash headline))
         (org-glance-marker:redisplay marker)))
-    (org-glance-store:flush store)))
+    (let ((offset (org-glance-store:flush store)))
+      (org-glance-materialization:set-property "OFFSET" offset))))
 
 (provide 'org-glance-materialization)

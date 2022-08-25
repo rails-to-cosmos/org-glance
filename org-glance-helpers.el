@@ -84,7 +84,6 @@ Return t if it is or raise `user-error' otherwise."
       (delete-region (point-min) (point-max))
       (cl-loop for arg in args
          collect (prin1-to-string arg t) into result
-         finally (insert (s-join "\n" result))))
-    (switch-to-buffer-other-frame buffer)))
+         finally (insert (s-join "\n" result))))))
 
 (provide 'org-glance-helpers)
