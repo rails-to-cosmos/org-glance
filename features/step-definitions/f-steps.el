@@ -9,11 +9,11 @@
        (lambda (file)
          (Given "file \"%s\"" file "")))
 
-(When "^I find file \"\\([^\"]+\\)\"$"
+(When "^I? ?find file \"\\([^\"]+\\)\"$"
       (lambda (filename)
         (find-file (gethash filename org-glance-test-files))))
 
-(When "^I append to file \"\\([^\"]+\\)\"$"
+(When "^I? ?append to file \"\\([^\"]+\\)\"$"
   (lambda (filename new-contents)
     (let ((file (org-glance-test:get-file filename)))
       (append-to-file new-contents nil file))))

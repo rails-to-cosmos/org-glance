@@ -45,7 +45,10 @@ Feature: Materialization
     When I create view "Pomeranians" from "Pomeranian" "Pets"
     And I materialize view "Pomeranians" to "views/pomeranians.org"
     And I find file "views/pomeranians.org"
-    And I go to headline with title "Yummi"
+
+    Then current buffer should contain 2 headlines
+
+    When I go to headline with title "Yummi"
     And I insert " the cat"
 
     Then marker at point should be changed
@@ -61,6 +64,7 @@ Feature: Materialization
     And I insert " the dog"
 
     Then marker at point should be changed
+    And 1 marker should be changed
     And marker at point should not be committed
 
     When I commit changes
@@ -92,22 +96,68 @@ Feature: Materialization
 
     Then marker at point should be corrupted
 
-  # Scenario: Consistent Editing of Multiple Views
-  #   Given store "Adventures" in directory "stories/adventures" with headlines
-  #     """
-  #     * TODO Niagara Waterfalls :Hike:
-  #     * STARTED Troodos Mountains :Hike:
-  #     * STARTED Music Festival :Hike:Music:
-  #     * DONE Tame Impala Concert :Music:
-  #     * DONE Kamchatka :Hike:
-  #     * CANCELLED PHP Course :Cringe:
-  #     """
-  #   When I create store "Hikes" from ":Hike:" "Adventures"
-  #   And I create store "Active" from "STARTED" "Adventures"
-  #   And I create store "Archive" from "DONE OR CANCELLED" "Adventures"
-  #   And I create store "Hobby" from ":Hike: OR :Music:" "Adventures"
-  #   And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
-  #   And I create store "Memories" from ":Hike: AND DONE" "Adventures"
+  @debug
+  Scenario: Changing Headline Todo State
+    Given store "Wishlist" in directory "nerdy" with headlines
+      """
+      * TODO Tatinek :Peppa:
+      * TODO Peppa Pig :Peppa:
+      * TODO Samovar :Friends:
+      """
+
+    When I create view "Pigs" from "Peppa" "Wishlist"
+    And materialize view "Pigs" to "views/pigs.org"
+    And find file "views/pigs.org"
+    And go to headline with title "Peppa Pig"
+
+    Then marker at point should not be changed
+    And 0 markers should be changed
+
+    When I set headline todo state to "DONE"
+    Then marker at point should be changed
+    And 1 marker should be changed
+
+  Scenario: Consistent Editing of Multiple Views
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      * STARTED Music Festival :Hike:Music:
+      * DONE Tame Impala Concert :Music:
+      * DONE Kamchatka :Hike:
+      * CANCELLED PHP Course :Cringe:
+      """
+
+    When I create view "Hikes" from "Hike" "Adventures"
+    And create view "Fun" from "Music" "Adventures"
+    And materialize view "Hikes" to "views/hikes.org"
+    And materialize view "Fun" to "views/fun.org"
+    And find file "views/hikes.org"
+
+    Then current buffer should contain 4 headlines
+    And current buffer offset should be latest
+    And current materialization offset should be latest
+
+    When I go to headline with title "Niagara Waterfalls"
+    And insert " 2022"
+    And save buffer
+
+    Then current buffer should contain 4 headlines
+    And current buffer offset should be latest
+    And current materialization offset should be latest
+
+    When I find file "views/fun.org"
+    And go to headline with title "Tame Impala Concert"
+
+    Then current buffer should contain 2 headlines
+    And current buffer offset should not be latest
+
+    # And I create view "Active" from "STARTED" "Adventures"
+    # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
+    # And I create store "Hobby" from "Hike OR Music" "Adventures"
+
+    # And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
+    # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
 
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline

@@ -27,7 +27,7 @@
                                     (--map (concat "* " it))))))
              (org-glance-test:put-store store-name store)))))
 
-(When "^I import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
+(When "^I? ?import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (store-name location)
     (let ((store (org-glance-test:get-store store-name)))
       (org-glance-store:import store (org-glance-test:get-file location))
@@ -43,7 +43,7 @@
   (lambda (expected-change-count store-name)
     (let ((store (org-glance-test:get-store store-name)))
       (should (= (string-to-number expected-change-count)
-                 (org-glance-changelog:length (org-glance-store:changelog store)))))))
+                 (org-glance-changelog:length (org-glance-> store :changelog)))))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (store-name expected-count)
@@ -66,7 +66,7 @@
         (let* ((store (org-glance-test:get-store store-name))
                (event (org-glance-changelog:last
                        (org-glance-changelog:filter
-                        (org-glance-store:changelog store)
+                        (org-glance-> store :changelog)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (and event (org-glance-event:PUT-p event))))))
@@ -86,7 +86,7 @@
         (let* ((store (org-glance-test:get-store store-name))
                (event (org-glance-changelog:last
                        (org-glance-changelog:filter
-                        (org-glance-store:changelog store)
+                        (org-glance-> store :changelog)
                         (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
                                             title))))))
           (should (or (null event) (org-glance-event:RM-p event))))))
@@ -173,7 +173,7 @@
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
-(When "^I flush store \"\\([^\"]+\\)\"$"
+(When "^I? ?flush store \"\\([^\"]+\\)\"$"
   (lambda (store-name)
     (let ((store (org-glance-test:get-store store-name)))
       (org-glance-store:flush store))))

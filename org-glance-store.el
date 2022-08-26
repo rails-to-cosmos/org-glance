@@ -55,8 +55,7 @@
     :type org-glance-store-log
     :initarg :changelog
     :initform (org-glance-changelog :key #'org-glance-store:event-id)
-    :documentation "Persistent changelog."
-    :reader org-glance-store:changelog)
+    :documentation "Persistent changelog.")
    (cache
     :type hash-table
     :initarg :cache

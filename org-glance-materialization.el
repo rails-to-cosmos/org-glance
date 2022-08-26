@@ -117,6 +117,7 @@
               (org-glance-> marker :hash) (org-glance-headline:hash headline))
         (org-glance-marker:redisplay marker)))
     (let ((offset (org-glance-store:flush store)))
-      (org-glance-materialization:set-property "OFFSET" offset))))
+      (org-glance-materialization:set-property "OFFSET" offset)
+      (setf (org-glance-> materialization :offset) offset))))
 
 (provide 'org-glance-materialization)

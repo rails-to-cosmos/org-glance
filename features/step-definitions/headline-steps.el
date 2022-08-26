@@ -11,16 +11,16 @@
            (And "I create headline \"%s\" from element at point" headline)
            (And "I kill buffer"))))
 
-(When "^I select first headline$"
+(When "^I? ?select first headline$"
   (lambda ()
     (goto-char (point-min))
     (unless (org-at-heading-p)
       (outline-next-heading))))
 
-(When "^I go to headline with title \"\\([^\"]+\\)\"$"
+(When "^I? ?go to headline with title \"\\([^\"]+\\)\"$"
   (lambda (title)
     (goto-char (point-min))
-    (search-forward (format "* %s" title))))
+    (re-search-forward (format "^*\\([A-Z ]+\\)?%s" title))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
@@ -41,16 +41,16 @@
                              (org-align-tags 'all)
                              (buffer-substring-no-properties (point-min) (point-max))))))))
 
-(When "^I create headline \"\\([^\"]+\\)\" from element at point$"
+(When "^I? ?create headline \"\\([^\"]+\\)\" from element at point$"
   (lambda (headline)
     (puthash headline (org-glance-headline-at-point) org-glance-test-headlines)))
 
-(When "^I save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
+(When "^I? ?save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headline file)
     (let ((headline (gethash headline org-glance-test-headlines)))
       (org-glance-headline-save headline (f-join org-glance-test:location file)))))
 
-(When "^I load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
+(When "^I? ?load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
         (puthash headline (org-glance-headline:read (f-join org-glance-test:location file))
                  org-glance-test-headlines)))
@@ -116,7 +116,18 @@
      (lambda (a b)
        (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
 
-(When "^I set title of the headline at point to \"\\([^\"]+\\)\"$"
+(When "^I? ?set title of the headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
     (org-edit-headline title)
     (org-glance-material-overlay-manager-redisplay)))
+
+(Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
+  (lambda (expected-count)
+    (let ((actual-count 0))
+      (org-glance-headline:map-buffer (headline)
+        (cl-incf actual-count))
+      (should (= actual-count (string-to-number expected-count))))))
+
+(And "^I? ?set headline todo state to \"\\([^\"]+\\)\"$"
+     (lambda (state)
+       (org-todo state)))
