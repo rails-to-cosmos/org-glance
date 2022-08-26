@@ -7,9 +7,6 @@
 (require 'org-glance-materialization)
 (require 'org-glance-store)
 
-(defvar org-glance-overlay-manager nil
-  "Painter thread that provides visual feedback.")
-
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
 
@@ -40,33 +37,28 @@ editor."
                                                 (org-back-to-heading-or-point-min)
                                                 (get-text-property (point) :marker)))))
 
-         (add-hook 'post-command-hook #'org-glance-material-debug nil t)
-         (add-hook 'post-command-hook #'org-glance-material-edit nil t)
-         ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
-         (add-hook 'before-save-hook #'org-glance-commit nil t)
-         (add-hook 'org-insert-heading-hook #'org-glance-material-new-heading nil t)
-         (add-hook 'org-after-todo-state-change-hook #'org-glance-material:todo-state-change nil t))
+         (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
+         (add-hook 'post-command-hook #'org-glance-material-mode:after-change nil t)
+         ;; (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
+         (add-hook 'before-save-hook #'org-glance-material-mode:commit nil t)
+         (add-hook 'org-insert-heading-hook #'org-glance-material-mode:update nil t)
+         (add-hook 'org-after-tags-change-hook #'org-glance-material-mode:update nil t)
+         (add-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update nil t))
         (t
-         (remove-hook 'before-save-hook #'org-glance-commit t)
-         ;; (remove-hook 'after-change-functions #'org-glance-material-edit t)
-         (remove-hook 'post-command-hook #'org-glance-material-debug t)
-         (remove-hook 'post-command-hook #'org-glance-material-edit t)
-         (remove-hook 'org-insert-heading-hook #'org-glance-material-new-heading t)
-         (remove-hook 'org-after-todo-state-change-hook #'org-glance-material:todo-state-change t))))
+         (remove-hook 'before-save-hook #'org-glance-material-mode:commit t)
+         (remove-hook 'org-after-tags-change-hook #'org-glance-material-mode:update t)
+         ;; (remove-hook 'after-change-functions #'org-glance-material-mode:update t)
+         (remove-hook 'post-command-hook #'org-glance-material-mode:debug t)
+         (remove-hook 'post-command-hook #'org-glance-material-mode:after-change t)
+         (remove-hook 'org-insert-heading-hook #'org-glance-material-mode:update t)
+         (remove-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update t))))
 
-(cl-defun org-glance-material-new-heading ()
-  (message "New heading captured!")
-  (org-glance-material-overlay-manager-redisplay))
-
-(cl-defun org-glance-material-edit (&rest _)
+(cl-defun org-glance-material-mode:after-change (&rest _)
   "Mark current headline as changed in current buffer."
   (when (member this-command '(org-self-insert-command org-delete-backward-char))
-    (org-glance-material-overlay-manager-redisplay)))
+    (org-glance-material-mode:update)))
 
-(cl-defun org-glance-material:todo-state-change (&rest args)
-  (org-glance-material-overlay-manager-redisplay))
-
-(cl-defun org-glance-material-overlay-manager-redisplay ()
+(cl-defun org-glance-material-mode:update (&rest _)
   "Actualize marker overlay."
   (interactive)
   (let* ((materialization (org-glance-buffer-materialization))
@@ -92,28 +84,24 @@ editor."
        (cl-pushnew marker (org-glance-> materialization :changes))
        (org-glance-marker:redisplay marker)))))
 
-;; (cl-defun org-glance-material-overlay-manager-redisplay* ()
+;; (cl-defun org-glance-material-mode:update* ()
 ;;   "Run `org-glance-material-marker-redisplay' in separate thread."
 ;;   (unless (and (threadp org-glance-overlay-manager)
 ;;                (thread-alive-p org-glance-overlay-manager))
 ;;     (setq org-glance-overlay-manager
-;;           (make-thread #'org-glance-material-overlay-manager-redisplay "org-glance-overlay-manager"))))
+;;           (make-thread #'org-glance-material-mode:update "org-glance-overlay-manager"))))
 
-(cl-defun org-glance-commit ()
+(cl-defun org-glance-material-mode:commit ()
   "Apply all changes of buffer headlines to its origins.
 
 TODO:
 - It should be generalized to other materialization types."
   (interactive)
-  (org-glance-materialization:commit
-   (org-glance-buffer-materialization)))
+  (org-glance-materialization:commit (org-glance-buffer-materialization)))
 
-(cl-defun org-glance-material-debug (&rest _)
+(cl-defun org-glance-material-mode:debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))
     (hlt-unhighlight-region)
-
-
-
     (org-glance-debug
      this-command
      "* Marker:"
@@ -127,4 +115,4 @@ TODO:
                           (org-glance-> marker :end)
                           'region)))
 
-(provide 'org-glance-material)
+(provide 'org-glance-material-mode)

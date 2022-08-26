@@ -64,7 +64,7 @@ CLOSED: [2022-07-31 Sun 12:31]
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees
 * TODO Add tests for non-readable store source and dest
-* DONE Optimize `org-glance-commit`: sync only changed headlines
+* DONE Optimize `org-glance-material-mode:commit`: sync only changed headlines
 CLOSED: [2022-07-29 Fri 18:31]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-07-29 Fri 18:31]

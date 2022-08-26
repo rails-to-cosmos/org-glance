@@ -96,8 +96,7 @@ Feature: Materialization
 
     Then marker at point should be corrupted
 
-  @debug
-  Scenario: Changing Headline Todo State
+  Scenario: Change Headline Todo State
     Given store "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
@@ -114,6 +113,27 @@ Feature: Materialization
     And 0 markers should be changed
 
     When I set headline todo state to "DONE"
+    Then marker at point should be changed
+    And 1 marker should be changed
+
+  @debug
+  Scenario: Change Headline Tags
+    Given store "Wishlist" in directory "nerdy" with headlines
+      """
+      * TODO Tatinek :Peppa:
+      * TODO Peppa Pig :Peppa:
+      * TODO Samovar :Friends:
+      """
+
+    When I create view "Pigs" from "Peppa" "Wishlist"
+    And materialize view "Pigs" to "views/pigs.org"
+    And find file "views/pigs.org"
+    And go to headline with title "Peppa Pig"
+
+    Then marker at point should not be changed
+    And 0 markers should be changed
+
+    When I set headline tags to ":Beacon:"
     Then marker at point should be changed
     And 1 marker should be changed
 

@@ -119,7 +119,7 @@
 (When "^I? ?set title of the headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
     (org-edit-headline title)
-    (org-glance-material-overlay-manager-redisplay)))
+    (org-glance-material-mode:update)))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)
@@ -132,3 +132,8 @@
      (lambda (state)
        (let ((inhibit-message t))
          (org-todo state))))
+
+(And "^I? ?set headline tags? to \"\\([^\"]+\\)\"$"
+     (lambda (tags)
+       (let ((inhibit-message t))
+         (org-set-tags tags))))

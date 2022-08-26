@@ -1,7 +1,7 @@
 (When "^I? ?insert \"\\([^\"]+\\)\"$"
   (lambda (thing)
     (insert thing)
-    (org-glance-material-overlay-manager-redisplay)))
+    (org-glance-material-mode:update)))
 
 (When "^I? ?save buffer$" #'save-buffer)
 (When "^I? ?kill buffer$" #'kill-buffer)

@@ -37,7 +37,7 @@
 
 (When "^I? ?commit changes$"
   (lambda ()
-    (org-glance-commit)))
+    (org-glance-material-mode:commit)))
 
 (Then "^marker at point should be changed$"
       (lambda ()
