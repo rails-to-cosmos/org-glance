@@ -17,22 +17,22 @@
                   (org-glance-store:view type))))
       (org-glance-test:put-view view-name view))))
 
-(When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
+(When "^I? ?materialise view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (view-name file-name)
     (Given "empty file \"%s\"" file-name)
     (let* ((file (org-glance-test:get-file file-name))
            (view (org-glance-test:get-view view-name)))
-      (org-glance-view:materialize view file))))
+      (org-glance-view:materialise view file))))
 
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)
         (let ((view (org-glance-test:get-view view-name)))
-          (should (eq view (org-glance-materialization:get-buffer-view))))))
+          (should (eq view (org-glance-materialisation:get-buffer-view))))))
 
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
         (should (= (string-to-number changed-markers-count)
-                   (length (org-glance-> (org-glance-buffer-materialization)
+                   (length (org-glance-> (org-glance-buffer-materialisation)
                              :changes))))))
 
 (When "^I? ?commit changes$"
@@ -42,7 +42,7 @@
 (Then "^marker at point should be changed$"
       (lambda ()
         (when-let (marker (org-glance-marker:at-point))
-          (should (member marker (org-glance-> (org-glance-buffer-materialization)
+          (should (member marker (org-glance-> (org-glance-buffer-materialisation)
                                    :changes))))
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :changed)))))
 
@@ -72,28 +72,28 @@
 
 (Then "^current buffer offset should be latest$"
       (lambda ()
-        (let* ((materialization (org-glance-buffer-materialization))
-               (store (org-glance-> materialization :view :store)))
-          (should (= (read (org-glance-materialization:get-property "OFFSET"))
+        (let* ((materialisation (org-glance-buffer-materialisation))
+               (store (org-glance-> materialisation :view :store)))
+          (should (= (read (org-glance-materialisation:get-property "OFFSET"))
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
-(Then "^current materialization offset should be latest$"
+(Then "^current materialisation offset should be latest$"
       (lambda ()
-        (let* ((materialization (org-glance-buffer-materialization))
-               (store (org-glance-> materialization :view :store)))
-          (should (= (org-glance-> materialization :offset)
+        (let* ((materialisation (org-glance-buffer-materialisation))
+               (store (org-glance-> materialisation :view :store)))
+          (should (= (org-glance-> materialisation :offset)
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
-        (let* ((materialization (org-glance-buffer-materialization))
-               (store (org-glance-> materialization :view :store)))
-          (should (< (read (org-glance-materialization:get-property "OFFSET"))
+        (let* ((materialisation (org-glance-buffer-materialisation))
+               (store (org-glance-> materialisation :view :store)))
+          (should (< (read (org-glance-materialisation:get-property "OFFSET"))
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
-(Then "^current materialization offset should not be latest$"
+(Then "^current materialisation offset should not be latest$"
       (lambda ()
-        (let* ((materialization (org-glance-buffer-materialization))
-               (store (org-glance-> materialization :view :store)))
-          (should (< (org-glance-> materialization :offset)
+        (let* ((materialisation (org-glance-buffer-materialisation))
+               (store (org-glance-> materialisation :view :store)))
+          (should (< (org-glance-> materialisation :offset)
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))

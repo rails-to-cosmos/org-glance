@@ -87,7 +87,7 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
-  # TODO conflicting materializations: same location but different predicates
+  # TODO conflicting materialisations: same location but different predicates
 
   Scenario: Views
     Given store "Pets" in directory "store/pets" with headlines
@@ -98,9 +98,9 @@ Feature: Store
       """
 
     When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialize view "Pomeranians" to "views/pomeranians.org"
+    And I materialise view "Pomeranians" to "views/pomeranians.org"
     And I create view "Humans" from "Human" "Pets"
-    And I materialize view "Humans" to "views/humans.org"
+    And I materialise view "Humans" to "views/humans.org"
 
     # Then store "Pets" should contain headline with title "Yummi" in staging layer
     # And store "Pets" should not contain headline with title "Yummi" in committed layer

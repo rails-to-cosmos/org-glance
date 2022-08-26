@@ -1,5 +1,5 @@
-Feature: Materialization
-  Scenario: Basic Materialization
+Feature: Materialisation
+  Scenario: Basic Materialisation
     Given store "Phones" in directory "store/phones" with headlines
       """
       * iPhone 3 :Apple:
@@ -8,7 +8,7 @@ Feature: Materialization
       """
 
     When I create view "Apple Phones" from "Apple" "Phones"
-    And I materialize view "Apple Phones" to "views/apple.org"
+    And I materialise view "Apple Phones" to "views/apple.org"
     And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
@@ -43,7 +43,7 @@ Feature: Materialization
       """
 
     When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialize view "Pomeranians" to "views/pomeranians.org"
+    And I materialise view "Pomeranians" to "views/pomeranians.org"
     And I find file "views/pomeranians.org"
 
     Then current buffer should contain 2 headlines
@@ -74,7 +74,7 @@ Feature: Materialization
     And 0 markers should be changed
 
     When I create view "Human Beings" from "Human" "Pets"
-    And I materialize view "Human Beings" to "views/humans.org"
+    And I materialise view "Human Beings" to "views/humans.org"
     And I append to file "views/humans.org"
       """
       * Some external corruption
@@ -105,7 +105,7 @@ Feature: Materialization
       """
 
     When I create view "Pigs" from "Peppa" "Wishlist"
-    And materialize view "Pigs" to "views/pigs.org"
+    And materialise view "Pigs" to "views/pigs.org"
     And find file "views/pigs.org"
     And go to headline with title "Peppa Pig"
 
@@ -126,7 +126,7 @@ Feature: Materialization
       """
 
     When I create view "Pigs" from "Peppa" "Wishlist"
-    And materialize view "Pigs" to "views/pigs.org"
+    And materialise view "Pigs" to "views/pigs.org"
     And find file "views/pigs.org"
     And go to headline with title "Peppa Pig"
 
@@ -150,13 +150,13 @@ Feature: Materialization
 
     When I create view "Hikes" from "Hike" "Adventures"
     And create view "Fun" from "Music" "Adventures"
-    And materialize view "Hikes" to "views/hikes.org"
-    And materialize view "Fun" to "views/fun.org"
+    And materialise view "Hikes" to "views/hikes.org"
+    And materialise view "Fun" to "views/fun.org"
     And find file "views/hikes.org"
 
     Then current buffer should contain 4 headlines
     And current buffer offset should be latest
-    And current materialization offset should be latest
+    And current materialisation offset should be latest
 
     When I go to headline with title "Niagara Waterfalls"
     And insert " 2022"
@@ -164,7 +164,7 @@ Feature: Materialization
 
     Then current buffer should contain 4 headlines
     And current buffer offset should be latest
-    And current materialization offset should be latest
+    And current materialisation offset should be latest
 
     When I find file "views/fun.org"
     And go to headline with title "Tame Impala Concert"
@@ -188,16 +188,16 @@ Feature: Materialization
   #     * Eric :Pomeranian:
   #     * Tanik :Human:
   #     """
-  #   When I materialize store "Old phones" to file "views/material.org"
+  #   When I materialise store "Old phones" to file "views/material.org"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
 # Scenario: Edit store from two buffers, fast-forward change should be reflected in other buffer
-# Scenario: Material fast-forward commit: write outdated materialization commit scenarios
+# Scenario: Material fast-forward commit: write outdated materialisation commit scenarios
 # Scenario: Material offset should be set to actual state after commit
 # Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?
 
-#   Scenario: Materialize encrypted headline
-#   Scenario: Materialize non-file headline
-#   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
-#   Optimize materialization: mark headlines as changed and apply only them
+#   Scenario: Materialise encrypted headline
+#   Scenario: Materialise non-file headline
+#   Scenario: Materialise multiple headlines, some encrypted, some not, some non-file
+#   Optimize materialisation: mark headlines as changed and apply only them

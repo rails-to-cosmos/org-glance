@@ -2,7 +2,7 @@
 
 (require 'f)
 (require 'eieio)
-(require 'org-glance-materialization)
+(require 'org-glance-materialisation)
 (require 'org-glance-types)
 
 (declare-function f-mkdir-full-path 'f)
@@ -21,33 +21,33 @@
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
-     (materializations
+     (materialisations
       :type hash-table
-      :initarg :materializations
+      :initarg :materialisations
       :initform (make-hash-table :test #'equal)
-      :documentation "Keep track of materializations.")))
+      :documentation "Keep track of materialisations.")))
 
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
   (let ((type (org-glance-> view :type)))
     (member (downcase type) (org-glance-headline-class headline))))
 
-(cl-defun org-glance-view:materialize (view location)
-  "Materialize VIEW to LOCATION."
+(cl-defun org-glance-view:materialise (view location)
+  "Materialise VIEW to LOCATION."
   (let ((true-location (file-truename location)))
-    (or (gethash true-location (org-glance-> view :materializations))
+    (or (gethash true-location (org-glance-> view :materialisations))
         (progn (f-mkdir-full-path (file-name-directory true-location))
-               (let ((materialization (org-glance-materialization :view view
+               (let ((materialisation (org-glance-materialisation :view view
                                                                   :location true-location
                                                                   :offset (org-glance-store:offset (org-glance-> view :store)))))
                  (org-glance--with-temp-file true-location
-                   (insert (org-glance-materialization:header materialization))
+                   (insert (org-glance-materialisation:header materialisation))
                    (cl-dolist (headline (org-glance-store:headlines (org-glance-> view :store)))
                      (when (org-glance-view:filter view headline)
                        (org-glance-headline-insert
                         (org-glance-store:get
                          (org-glance-> view :store)
                          (org-glance-headline:hash headline))))))
-                 (puthash true-location materialization (org-glance-> view :materializations)))))))
+                 (puthash true-location materialisation (org-glance-> view :materialisations)))))))
 
 (provide 'org-glance-view)

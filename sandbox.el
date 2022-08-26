@@ -2,7 +2,7 @@
   (progn ;; reload glance
     (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
     (clrhash org-glance-stores)
-    (clrhash org-glance-materializations))
+    (clrhash org-glance-materialisations))
 
   (f-delete dst t)
 
@@ -20,11 +20,11 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
                      "* COMMENT d :Comment:
 2"))
 
-  (org-glance-view:materialize
+  (org-glance-view:materialise
    (org-glance-store:view test-store "Task")
    (f-join dst "task.org"))
 
-  (org-glance-view:materialize
+  (org-glance-view:materialise
    (org-glance-store:view test-store "Comment")
    (f-join dst "comment.org"))
 

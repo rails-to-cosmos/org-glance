@@ -33,7 +33,7 @@
      (buffer
       :type buffer
       :initarg :buffer
-      :documentation "Materialized buffer.")
+      :documentation "Materialised buffer.")
      (hash
       :type string
       :initarg :hash
@@ -50,7 +50,7 @@
      (state
       :type org-glance-marker-state
       :initarg :state))
-  "Metadata of materializations.")
+  "Metadata of materialisations.")
 
 (cl-defun org-glance-marker:live-p (marker)
   (and marker
