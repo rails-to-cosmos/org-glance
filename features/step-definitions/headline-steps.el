@@ -130,4 +130,5 @@
 
 (And "^I? ?set headline todo state to \"\\([^\"]+\\)\"$"
      (lambda (state)
-       (org-todo state)))
+       (let ((inhibit-message t))
+         (org-todo state))))

@@ -41,20 +41,29 @@ editor."
                                                 (get-text-property (point) :marker)))))
 
          (add-hook 'post-command-hook #'org-glance-material-debug nil t)
+         (add-hook 'post-command-hook #'org-glance-material-edit nil t)
          ;; (add-hook 'after-change-functions #'org-glance-material-edit nil t)
          (add-hook 'before-save-hook #'org-glance-commit nil t)
-         (add-hook 'org-insert-heading-hook #'org-glance-material-new-heading nil t))
+         (add-hook 'org-insert-heading-hook #'org-glance-material-new-heading nil t)
+         (add-hook 'org-after-todo-state-change-hook #'org-glance-material:todo-state-change nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-commit t)
          ;; (remove-hook 'after-change-functions #'org-glance-material-edit t)
          (remove-hook 'post-command-hook #'org-glance-material-debug t)
-         (remove-hook 'org-insert-heading-hook #'org-glance-material-new-heading t))))
+         (remove-hook 'post-command-hook #'org-glance-material-edit t)
+         (remove-hook 'org-insert-heading-hook #'org-glance-material-new-heading t)
+         (remove-hook 'org-after-todo-state-change-hook #'org-glance-material:todo-state-change t))))
 
 (cl-defun org-glance-material-new-heading ()
-  (message "New heading captured!"))
+  (message "New heading captured!")
+  (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-edit (&rest _)
   "Mark current headline as changed in current buffer."
+  (when (member this-command '(org-self-insert-command org-delete-backward-char))
+    (org-glance-material-overlay-manager-redisplay)))
+
+(cl-defun org-glance-material:todo-state-change (&rest args)
   (org-glance-material-overlay-manager-redisplay))
 
 (cl-defun org-glance-material-overlay-manager-redisplay ()
@@ -103,8 +112,7 @@ TODO:
   (when-let (marker (org-glance-marker:at-point))
     (hlt-unhighlight-region)
 
-    (when (member this-command '(org-self-insert-command org-delete-backward-char))
-      (org-glance-material-edit))
+
 
     (org-glance-debug
      this-command
