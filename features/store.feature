@@ -87,7 +87,7 @@ Feature: Store
     And store "Stories" should contain 1 propertized headline
     And store "Stories" should contain 1 encrypted headline
 
-  # TODO conflicting materialisations: same location but different predicates
+  # TODO conflicting mews: same location but different predicates
 
   Scenario: Views
     Given store "Pets" in directory "store/pets" with headlines

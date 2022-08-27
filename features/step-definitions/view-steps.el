@@ -27,12 +27,12 @@
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)
         (let ((view (org-glance-test:get-view view-name)))
-          (should (eq view (org-glance-materialisation:get-buffer-view))))))
+          (should (eq view (org-glance-mew:get-buffer-view))))))
 
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
         (should (= (string-to-number changed-markers-count)
-                   (length (org-glance-> (org-glance-buffer-materialisation)
+                   (length (org-glance-> (org-glance-buffer-mew)
                              :changes))))))
 
 (When "^I? ?commit changes$"
@@ -42,7 +42,7 @@
 (Then "^marker at point should be changed$"
       (lambda ()
         (when-let (marker (org-glance-marker:at-point))
-          (should (member marker (org-glance-> (org-glance-buffer-materialisation)
+          (should (member marker (org-glance-> (org-glance-buffer-mew)
                                    :changes))))
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :changed)))))
 
@@ -72,28 +72,36 @@
 
 (Then "^current buffer offset should be latest$"
       (lambda ()
-        (let* ((materialisation (org-glance-buffer-materialisation))
-               (store (org-glance-> materialisation :view :store)))
-          (should (= (read (org-glance-materialisation:get-property "OFFSET"))
+        (let* ((mew (org-glance-buffer-mew))
+               (store (org-glance-> mew :view :store)))
+          (should (= (read (org-glance-mew:get-property "OFFSET"))
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
-(Then "^current materialisation offset should be latest$"
+(Then "^current mew offset should be latest$"
       (lambda ()
-        (let* ((materialisation (org-glance-buffer-materialisation))
-               (store (org-glance-> materialisation :view :store)))
-          (should (= (org-glance-> materialisation :offset)
+        (let* ((mew (org-glance-buffer-mew))
+               (store (org-glance-> mew :view :store)))
+          (should (= (org-glance-> mew :offset)
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
-        (let* ((materialisation (org-glance-buffer-materialisation))
-               (store (org-glance-> materialisation :view :store)))
-          (should (< (read (org-glance-materialisation:get-property "OFFSET"))
+        (let* ((mew (org-glance-buffer-mew))
+               (store (org-glance-> mew :view :store)))
+          (should (< (read (org-glance-mew:get-property "OFFSET"))
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
 
-(Then "^current materialisation offset should not be latest$"
+(Then "^current mew offset should not be latest$"
       (lambda ()
-        (let* ((materialisation (org-glance-buffer-materialisation))
-               (store (org-glance-> materialisation :view :store)))
-          (should (< (org-glance-> materialisation :offset)
+        (let* ((mew (org-glance-buffer-mew))
+               (store (org-glance-> mew :view :store)))
+          (should (< (org-glance-> mew :offset)
                      (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
+
+(Then "^I shouldn't be able to commit$"
+      (lambda ()
+        (should (eq nil (condition-case nil
+                            (progn
+                              (org-glance-mew:commit (org-glance-buffer-mew))
+                              t)
+                          (error nil))))))

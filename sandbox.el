@@ -2,7 +2,7 @@
   (progn ;; reload glance
     (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
     (clrhash org-glance-stores)
-    (clrhash org-glance-materialisations))
+    (clrhash org-glance-mews))
 
   (f-delete dst t)
 

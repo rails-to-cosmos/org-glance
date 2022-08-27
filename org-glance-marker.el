@@ -50,7 +50,7 @@
      (state
       :type org-glance-marker-state
       :initarg :state))
-  "Metadata of materialisations.")
+  "Metadata of mews.")
 
 (cl-defun org-glance-marker:live-p (marker)
   (and marker

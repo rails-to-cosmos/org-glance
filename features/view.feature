@@ -1,5 +1,5 @@
-Feature: Materialisation
-  Scenario: Basic Materialisation
+Feature: Mew
+  Scenario: Basic Mew
     Given store "Phones" in directory "store/phones" with headlines
       """
       * iPhone 3 :Apple:
@@ -116,7 +116,6 @@ Feature: Materialisation
     Then marker at point should be changed
     And 1 marker should be changed
 
-  @debug
   Scenario: Change Headline Tags
     Given store "Wishlist" in directory "nerdy" with headlines
       """
@@ -156,7 +155,7 @@ Feature: Materialisation
 
     Then current buffer should contain 4 headlines
     And current buffer offset should be latest
-    And current materialisation offset should be latest
+    And current mew offset should be latest
 
     When I go to headline with title "Niagara Waterfalls"
     And insert " 2022"
@@ -164,13 +163,16 @@ Feature: Materialisation
 
     Then current buffer should contain 4 headlines
     And current buffer offset should be latest
-    And current materialisation offset should be latest
+    And current mew offset should be latest
 
     When I find file "views/fun.org"
     And go to headline with title "Tame Impala Concert"
 
     Then current buffer should contain 2 headlines
     And current buffer offset should not be latest
+
+    When I fetch store changes to current buffer
+    And I go to headline with title "Niagara Waterfalls 2022"
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
@@ -193,11 +195,11 @@ Feature: Materialisation
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
 # Scenario: Edit store from two buffers, fast-forward change should be reflected in other buffer
-# Scenario: Material fast-forward commit: write outdated materialisation commit scenarios
+# Scenario: Material fast-forward commit: write outdated mew commit scenarios
 # Scenario: Material offset should be set to actual state after commit
 # Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?
 
 #   Scenario: Materialise encrypted headline
 #   Scenario: Materialise non-file headline
 #   Scenario: Materialise multiple headlines, some encrypted, some not, some non-file
-#   Optimize materialisation: mark headlines as changed and apply only them
+#   Optimize mew: mark headlines as changed and apply only them

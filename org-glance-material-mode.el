@@ -4,7 +4,7 @@
 (require 'cl-macs)
 
 (require 'org-glance-headline)
-(require 'org-glance-materialisation)
+(require 'org-glance-mew)
 (require 'org-glance-store)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
@@ -15,7 +15,7 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let ((store (org-glance-materialisation:get-buffer-store)))
+         (let ((store (org-glance-mew:get-buffer-store)))
            (org-glance-headline:map-buffer (headline)
              (let* ((hash (org-glance-headline:hash headline))
                     (marker (org-glance-marker
@@ -61,27 +61,27 @@ editor."
 (cl-defun org-glance-material-mode:update (&rest _)
   "Actualize marker overlay."
   (interactive)
-  (let* ((materialisation (org-glance-buffer-materialisation))
+  (let* ((mew (org-glance-buffer-mew))
          (marker (org-glance-marker:at-point))
          (headline (org-glance-headline-at-point))
          (old-state (org-glance-> marker :state))
          (new-state (org-glance-marker:get-actual-state marker headline)))
     (cond
       ((org-glance-> old-state :corrupted)
-       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store or remove from materialisation?")
+       ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store or remove from mew?")
        ;;   )
        (org-glance-marker:redisplay marker))
       ((and (org-glance-> old-state :changed)
             (not (org-glance-> new-state :changed)))
        (setf (org-glance-> marker :state :changed) nil)
-       (cl-remf (org-glance-> materialisation :changes) marker)
+       (cl-remf (org-glance-> mew :changes) marker)
        (org-glance-marker:redisplay marker))
       ((org-glance-> new-state :changed)
        (org-glance--with-headline-at-point
          (setf (org-glance-> marker :state :changed) t
                (org-glance-> marker :beg) (point-min)
                (org-glance-> marker :end) (point-max)))
-       (cl-pushnew marker (org-glance-> materialisation :changes))
+       (cl-pushnew marker (org-glance-> mew :changes))
        (org-glance-marker:redisplay marker)))))
 
 ;; (cl-defun org-glance-material-mode:update* ()
@@ -95,9 +95,9 @@ editor."
   "Apply all changes of buffer headlines to its origins.
 
 TODO:
-- It should be generalized to other materialisation types."
+- It should be generalized to other mew types."
   (interactive)
-  (org-glance-materialisation:commit (org-glance-buffer-materialisation)))
+  (org-glance-mew:commit (org-glance-buffer-mew)))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))
@@ -108,7 +108,7 @@ TODO:
      (org-glance-marker:prin1-to-string marker)
      "* Changes:"
      (s-join "\n" (mapcar #'org-glance-marker:prin1-to-string
-                          (org-glance-> (org-glance-buffer-materialisation)
+                          (org-glance-> (org-glance-buffer-mew)
                             :changes))))
 
     (hlt-highlight-region (org-glance-> marker :beg)

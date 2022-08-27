@@ -181,4 +181,4 @@
 (Then "^store \"\\([^\"]+\\)\" should be equal to buffer store$"
       (lambda (store-name)
         (let ((store (org-glance-test:get-store store-name)))
-          (should (eq store (org-glance-materialisation:get-buffer-store))))))
+          (should (eq store (org-glance-mew:get-buffer-store))))))

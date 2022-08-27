@@ -148,9 +148,10 @@ Return last committed offset."
 (cl-defun org-glance-store:put (store headline)
   "Put HEADLINE to STORE.
 TODO: Transaction."
-  (org-glance-changelog:push (org-glance-> store :changelog*)
-    (org-glance-event:PUT (org-glance-headline-header headline)))
-  (puthash (org-glance-headline:hash headline) headline (org-glance-> store :cache)))
+  (let ((event (org-glance-event:PUT (org-glance-headline-header headline))))
+    (org-glance-changelog:push (org-glance-> store :changelog*) event)
+    (puthash (org-glance-headline:hash headline) headline (org-glance-> store :cache))
+    (org-glance-event-offset event)))
 
 (cl-defun org-glance-store:remove (store headline)
   "Return `org-glance-store' with HEADLINES removed from STORE.

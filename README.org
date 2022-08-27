@@ -19,7 +19,7 @@ CLOCK: [2022-08-21 Sun 12:36]--[2022-08-21 Sun 12:48] =>  0:12
 - State "STARTED"    from              [2022-08-21 Sun 12:33]
 CLOCK: [2022-08-21 Sun 12:33]--[2022-08-21 Sun 12:36] =>  0:03
 :END:
-* STARTED Fix materialisation and prepare to relations
+* STARTED Fix mew and prepare to relations
 :LOGBOOK:
 - State "STARTED"    from              [2022-08-15 Mon 10:20]
 :END:
@@ -48,7 +48,7 @@ CLOSED: [2022-08-12 Fri 15:07]
 ** by active timestamps (build agenda views, interval trees?)
 ** in-memory lru cache (hash-table)
 ** by relations (todo)
-* materialisation corner-cases [0/2]
+* mew corner-cases [0/2]
 ** TODO headline indented by user
 ** TODO org-link inserted
 * add tests on materialised offsets
@@ -72,7 +72,7 @@ CLOSED: [2022-07-29 Fri 18:31]
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh
-* materialisation
+* mew
 ** uniquify
 ** think about case when headline becomes non-unique after editing
 * TODO Overview [1/5]
