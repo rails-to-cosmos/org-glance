@@ -60,6 +60,13 @@
 (defun org-glance-test:normalize-string (s)
   (s-trim (s-replace-regexp "[[:space:]]+" " " s)))
 
+(cl-defun org-glance-test:changelog-contains-headline-with-title (title changelog)
+  (let ((filter (lambda (event)
+                  (cl-typecase event
+                    (org-glance-event:RM nil)
+                    (org-glance-event:PUT (string= title (org-glance-> event :headline :title)))))))
+    (not (null (org-glance-changelog:last (org-glance-changelog:filter changelog filter))))))
+
 ;; Ensure that we don't load old byte-compiled versions
 (let ((load-prefer-newer t))
   (require 'org-glance)

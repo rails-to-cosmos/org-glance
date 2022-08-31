@@ -2,6 +2,7 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'highlight)
 
 (require 'org-glance-headline)
 (require 'org-glance-mew)
@@ -17,7 +18,7 @@ editor."
   (cond (org-glance-material-mode
          (let ((store (org-glance-mew:get-buffer-store)))
            (org-glance-headline:map-buffer (headline)
-             (let* ((hash (org-glance-headline:hash headline))
+             (let* ((hash (org-glance-> headline :hash))
                     (marker (org-glance-marker
                              :hash hash
                              :beg (point-min) ;; beginning of headline in narrowed buffer
@@ -61,7 +62,7 @@ editor."
 (cl-defun org-glance-material-mode:update (&rest _)
   "Actualize marker overlay."
   (interactive)
-  (let* ((mew (org-glance-buffer-mew))
+  (let* ((mew (org-glance-buffer:mew))
          (marker (org-glance-marker:at-point))
          (headline (org-glance-headline-at-point))
          (old-state (org-glance-> marker :state))
@@ -97,7 +98,7 @@ editor."
 TODO:
 - It should be generalized to other mew types."
   (interactive)
-  (org-glance-mew:commit (org-glance-buffer-mew)))
+  (org-glance-mew:commit (org-glance-buffer:mew)))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))
@@ -108,7 +109,7 @@ TODO:
      (org-glance-marker:prin1-to-string marker)
      "* Changes:"
      (s-join "\n" (mapcar #'org-glance-marker:prin1-to-string
-                          (org-glance-> (org-glance-buffer-mew)
+                          (org-glance-> (org-glance-buffer:mew)
                             :changes))))
 
     (hlt-highlight-region (org-glance-> marker :beg)

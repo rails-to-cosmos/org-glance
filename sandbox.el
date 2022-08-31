@@ -1,8 +1,7 @@
 (let ((dst "/tmp/store"))
   (progn ;; reload glance
     (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
-    (clrhash org-glance-stores)
-    (clrhash org-glance-mews))
+    (clrhash org-glance-stores))
 
   (f-delete dst t)
 
@@ -34,8 +33,8 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
   (find-file "/tmp/store")
   )
 
-;; (cl-assert (> (org-glance-event-offset (car (org-glance-store:events test-store)))
-;;               (org-glance-event-offset (car (last (org-glance-store:events test-store))))))
+;; (cl-assert (> (org-glance-> (car (org-glance-store:events test-store)) :offset)
+;;               (org-glance-> (car (last (org-glance-store:events test-store))) :offset)))
 
 (let ((res nil))
   (push 1 res)

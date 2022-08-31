@@ -68,7 +68,7 @@
 
 (cl-defun org-glance-marker:get-actual-state (marker headline)
   (let ((hash-old (org-glance-> marker :hash))
-        (hash-new (org-glance-headline:hash headline)))
+        (hash-new (org-glance-> headline :hash)))
     (org-glance-marker-state
      :changed (not (string= hash-old hash-new)))))
 

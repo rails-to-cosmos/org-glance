@@ -39,30 +39,68 @@
 
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
+(require 'org-glance-event)
 
-(cl-defstruct (org-glance-headline-header
-                (:constructor org-glance-headline-header--create)
-                (:copier nil))
-  "Limited edition of `org-glance-headline'."
-  (-hash nil :type string :read-only t :documentation "Hash of original headline contents.")
-  (-title nil :type string :read-only t :documentation "Original headline title.")
-  (-state nil :type string :read-only t :documentation "TODO state of headline.")
-  (-class nil :type list :read-only t :documentation "List of downcased tags.")
-  (-commented-p nil :type boolean :read-only t :documentation "Is the headline commented?")
-  (-archived-p nil :type boolean :read-only t :documentation "Is the headline archived?")
-  (-closed-p nil :type boolean :read-only t :documentation "Is the headline closed?")
-  (-encrypted-p nil :type boolean :read-only t :documentation "Is the headline encrypted?")
-  (-linked-p nil :type boolean :read-only t :documentation "Does the headline contain org links?")
-  (-propertized-p nil :type bool :read-only t :documentation "Does the headline contain user properties?"))
+(cl-deftype org-glance-headline.Hash () 'string)
 
-(cl-defstruct (org-glance-headline
-                (:include org-glance-headline-header)
-                (:constructor org-glance-headline--create)
-                (:copier nil))
-  "Serializable headline with additional features on top of `org-element'."
-  (contents nil :type string :read-only t :documentation "Raw contents of headline.")
-  (org-properties nil :type list :read-only t :documentation "Org-mode properties.")
-  (user-properties nil :type list :read-only t :documentation "Properties specified by user in headline contents."))
+;; Extend events suitable for headlines
+(org-glance-class org-glance-event:PUT (org-glance-event)
+    ((headline :type org-glance-headline-header
+               :initarg :headline)))
+
+(org-glance-class org-glance-event:RM (org-glance-event)
+    ((hash :type org-glance-headline.Hash
+           :initarg :hash)))
+
+(cl-defun org-glance-event:id (event)
+  (cl-typecase event
+    (org-glance-event:PUT (org-glance-> event :headline :hash))
+    (org-glance-event:RM (org-glance-> event :hash))))
+
+(org-glance-class org-glance-headline-header ()
+    ((hash :type org-glance-headline.Hash
+           :initarg :hash
+           :documentation "Hash of original headline contents.")
+     (title :type string
+            :initarg :title
+            :documentation "Original headline title.")
+     (state :type string
+            :initarg :state
+            :documentation "TODO state of headline.")
+     (class :type list
+            :initarg :class
+            :documentation "List of downcased tags.")
+     (commented-p :type boolean
+                  :initarg :commented-p
+                  :documentation "Is the headline commented?")
+     (archived-p :type boolean
+                 :initarg :archived-p
+                 :documentation "Is the headline archived?")
+     (closed-p :type boolean
+               :initarg :closed-p
+               :documentation "Is the headline closed?")
+     (encrypted-p :type boolean
+                  :initarg :encrypted-p
+                  :documentation "Is the headline encrypted?")
+     (linked-p :type boolean
+               :initarg :linked-p
+               :documentation "Does the headline contain org links?")
+     (propertized-p :type boolean
+                    :initarg :propertized-p
+                    :documentation "Does the headline contain user properties?"))
+  "Limited edition of `org-glance-headline'.")
+
+(org-glance-class org-glance-headline (org-glance-headline-header)
+    ((contents :type string
+               :initarg :contents
+               :documentation "Raw contents of headline.")
+     (org-properties :type list
+                     :initarg :org-properties
+                     :documentation "Org-mode properties.")
+     (user-properties :type list
+                      :initarg :user-properties
+                      :documentation "Properties specified by user in headline contents."))
+  "Serializable headline with additional features on top of `org-element'.")
 
 (defconst org-glance-encrypted-re "aes-encrypted V [0-9]+.[0-9]+-.+\n"
   "Encrypted header pattern.")
@@ -75,105 +113,24 @@
   "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
   "How to parse user specified properties.")
 
-(cl-defgeneric org-glance-headline:hash (object)
-  "Get hash of OBJECT.")
-
-(cl-defmethod org-glance-headline:hash ((headline org-glance-headline))
-  (org-glance-headline--hash headline))
-
-(cl-defmethod org-glance-headline:hash ((headline org-glance-headline-header))
-  (org-glance-headline-header--hash headline))
-
-(cl-defgeneric org-glance-headline-title (object)
-  "Get title of OBJECT.")
-
-(cl-defmethod org-glance-headline-title ((headline org-glance-headline))
-  (org-glance-headline--title headline))
-
-(cl-defmethod org-glance-headline-title ((headline org-glance-headline-header))
-  (org-glance-headline-header--title headline))
-
-(cl-defgeneric org-glance-headline-class (object)
-  "Get class of OBJECT.")
-
-(cl-defmethod org-glance-headline-class ((headline org-glance-headline))
-  (org-glance-headline--class headline))
-
-(cl-defmethod org-glance-headline-class ((headline org-glance-headline-header))
-  (org-glance-headline-header--class headline))
-
-(cl-defgeneric org-glance-headline-commented-p (headline)
-  "Return t if HEADLINE is commented and nil otherwise.")
-
-(cl-defmethod org-glance-headline-commented-p ((headline org-glance-headline))
-  (org-glance-headline--commented-p headline))
-
-(cl-defmethod org-glance-headline-commented-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--commented-p headline))
-
-(cl-defgeneric org-glance-headline-closed-p (headline)
-  "Return t if HEADLINE is closed and nil otherwise.")
-
-(cl-defmethod org-glance-headline-closed-p ((headline org-glance-headline))
-  (org-glance-headline--closed-p headline))
-
-(cl-defmethod org-glance-headline-closed-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--closed-p headline))
-
-(cl-defgeneric org-glance-headline-archived-p (headline)
-  "Return t if HEADLINE is archived and nil otherwise.")
-
-(cl-defmethod org-glance-headline-archived-p ((headline org-glance-headline))
-  (org-glance-headline--archived-p headline))
-
-(cl-defmethod org-glance-headline-archived-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--archived-p headline))
-
-(cl-defgeneric org-glance-headline-encrypted-p (headline)
-  "Return t if HEADLINE is encrypted and nil otherwise.")
-
-(cl-defmethod org-glance-headline-encrypted-p ((headline org-glance-headline))
-  (org-glance-headline--encrypted-p headline))
-
-(cl-defmethod org-glance-headline-encrypted-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--encrypted-p headline))
-
-(cl-defgeneric org-glance-headline-linked-p (headline)
-  "Return t if HEADLINE is linked and nil otherwise.")
-
-(cl-defmethod org-glance-headline-linked-p ((headline org-glance-headline))
-  (org-glance-headline--linked-p headline))
-
-(cl-defmethod org-glance-headline-linked-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--linked-p headline))
-
-(cl-defgeneric org-glance-headline-propertized-p (headline)
-  "Return t if HEADLINE is propertized and nil otherwise.")
-
-(cl-defmethod org-glance-headline-propertized-p ((headline org-glance-headline))
-  (org-glance-headline--propertized-p headline))
-
-(cl-defmethod org-glance-headline-propertized-p ((headline org-glance-headline-header))
-  (org-glance-headline-header--propertized-p headline))
-
-(cl-defgeneric org-glance-headline-header (headline)
+(cl-defgeneric org-glance-headline-header:from-headline (headline)
   "Make instance of `org-glance-headline-header' from HEADLINE.")
 
-(cl-defmethod org-glance-headline-header ((headline org-glance-headline))
+(cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
-  (org-glance-headline-header--create
-   :-hash (org-glance-headline:hash headline)
-   :-title (org-glance-headline-title headline)
-   :-state (org-glance-headline-state headline)
-   :-class (org-glance-headline-class headline)
-   :-commented-p (org-glance-headline-commented-p headline)
-   :-archived-p (org-glance-headline-archived-p headline)
-   :-closed-p (org-glance-headline-closed-p headline)
-   :-encrypted-p (org-glance-headline-encrypted-p headline)
-   :-linked-p (org-glance-headline-linked-p headline)
-   :-propertized-p (org-glance-headline-propertized-p headline)))
+  (org-glance-headline-header
+   :hash (org-glance-> headline :hash)
+   :title (org-glance-> headline :title)
+   :state (org-glance-> headline :state)
+   :class (org-glance-> headline :class)
+   :commented-p (org-glance-> headline :commented-p)
+   :archived-p (org-glance-> headline :archived-p)
+   :closed-p (org-glance-> headline :closed-p)
+   :encrypted-p (org-glance-> headline :encrypted-p)
+   :linked-p (org-glance-> headline :linked-p)
+   :propertized-p (org-glance-> headline :propertized-p)))
 
-(cl-defmethod org-glance-headline-header ((headline org-glance-headline-header))
+(cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline-header))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   headline)
 
@@ -250,23 +207,30 @@
 (cl-defun org-glance-headline--ast-linked-p (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
+(pcase 123
+  ((and (pred stringp) foo) foo)
+  ((pred null) 1)
+  (foo foo))
+
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (org-glance--with-headline-at-point
     (let* ((ast (org-glance-headline--ast-normalized))
            (contents (org-glance-headline--ast-contents ast))
            (user-properties (org-glance-headline--user-properties contents)))
-      (org-glance-headline--create
-       :-title (org-glance-headline--ast-title ast)
-       :-state (org-glance-headline--ast-state contents)
-       :-hash (org-glance-headline--ast-hash contents)
-       :-class (org-glance-headline--ast-class ast)
-       :-commented-p (org-glance-headline--ast-commented-p ast)
-       :-archived-p (org-glance-headline--ast-archived-p ast)
-       :-closed-p (org-glance-headline--ast-closed-p ast)
-       :-encrypted-p (org-glance-headline--ast-encrypted-p contents)
-       :-linked-p (org-glance-headline--ast-linked-p contents)
-       :-propertized-p (not (null user-properties))
+      (org-glance-headline
+       :title (org-glance-headline--ast-title ast)
+       :state (pcase (org-glance-headline--ast-state contents)
+                ((pred null) "")
+                (state state))
+       :hash (org-glance-headline--ast-hash contents)
+       :class (org-glance-headline--ast-class ast)
+       :commented-p (org-glance-headline--ast-commented-p ast)
+       :archived-p (org-glance-headline--ast-archived-p ast)
+       :closed-p (org-glance-headline--ast-closed-p ast)
+       :encrypted-p (org-glance-headline--ast-encrypted-p contents)
+       :linked-p (org-glance-headline--ast-linked-p contents)
+       :propertized-p (not (null user-properties))
        :contents contents
        :org-properties (org-entry-properties)
        :user-properties user-properties))))
@@ -293,20 +257,11 @@
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
-  (string= (org-glance-headline:hash a) (org-glance-headline:hash b)))
+  (string= (org-glance-> a :hash) (org-glance-> b :hash)))
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline-header) (b org-glance-headline-header))
   "Return t if A equals B."
-  (string= (org-glance-headline:hash a) (org-glance-headline:hash b)))
-
-(cl-defgeneric org-glance-headline-state (headline)
-  "Infer HEADLINE todo state from its title.")
-
-(cl-defmethod org-glance-headline-state ((headline org-glance-headline-header))
-  (org-glance-headline-header--state headline))
-
-(cl-defmethod org-glance-headline-state ((headline org-glance-headline))
-  (org-glance-headline--state headline))
+  (string= (org-glance-> a :hash) (org-glance-> b :hash)))
 
 (cl-defun org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."
@@ -317,7 +272,7 @@
   headline)
 
 (cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
-  (insert (org-glance-headline-contents headline) "\n"))
+  (insert (org-glance-> headline :contents) "\n"))
 
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
@@ -333,13 +288,13 @@
 ;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
-;;      (a-list 'title (string-as-unibyte (org-glance-headline-title headline))
-;;              'archived (bool->int (org-glance-headline-archived-p headline))
-;;              'commented (bool->int (org-glance-headline-commented-p headline))
-;;              'closed (bool->int (org-glance-headline-closed-p headline))
-;;              'encrypted (bool->int (org-glance-headline-encrypted-p headline))
-;;              'linked (bool->int (org-glance-headline-linked-p headline))
-;;              'propertized (bool->int (org-glance-headline-propertized-p headline))))))
+;;      (a-list 'title (string-as-unibyte (org-glance-> headline :title))
+;;              'archived (bool->int (org-glance-> headline :archived-p))
+;;              'commented (bool->int (org-glance-> headline :commented-p))
+;;              'closed (bool->int (org-glance-> headline :closed-p))
+;;              'encrypted (bool->int (org-glance-> headline :encrypted-p))
+;;              'linked (bool->int (org-glance-> headline :linked-p))
+;;              'propertized (bool->int (org-glance-> headline :propertized-p))))))
 
 ;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
 ;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))

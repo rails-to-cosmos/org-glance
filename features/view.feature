@@ -136,6 +136,7 @@ Feature: Mew
     Then marker at point should be changed
     And 1 marker should be changed
 
+  @debug
   Scenario: Consistent Editing of Multiple Views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -159,6 +160,7 @@ Feature: Mew
 
     When I go to headline with title "Niagara Waterfalls"
     And insert " 2022"
+    And I commit changes
     And save buffer
 
     Then current buffer should contain 4 headlines
@@ -172,7 +174,7 @@ Feature: Mew
     And current buffer offset should not be latest
 
     When I fetch store changes to current buffer
-    And I go to headline with title "Niagara Waterfalls 2022"
+    # Then headline with title "Niagara Waterfalls 2022" should be in current buffer
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"

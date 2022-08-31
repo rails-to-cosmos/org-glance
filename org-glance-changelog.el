@@ -4,6 +4,7 @@
 
 (require 'org-glance-helpers)
 (require 'org-glance-event)
+(require 'org-glance-headline)
 
 (org-glance-class org-glance-changelog nil
     ((events :type list
@@ -11,17 +12,14 @@
              :initform nil)
      (test :type function
            :initarg :test
-           :initform #'equal)
-     (key :type function
-          :initarg :key
-          :initform #'identity)))
+           :initform #'equal)))
 
 (cl-defun org-glance-changelog:flatten (changelog)
   "Return list of LOG events deduplicated."
   (cl-loop
      with seen = (make-hash-table :test (org-glance-> changelog :test))
      for event in (org-glance-> changelog :events)
-     for key = (funcall (org-glance-> changelog :key) event)
+     for key = (org-glance-event:id event)
      unless (gethash key seen)
      collect (prog1 event (puthash key t seen))))
 
@@ -43,18 +41,18 @@
   "Pop from LOG."
   `(pop (org-glance-> ,changelog :events)))
 
-(cl-defun org-glance-changelog:read (location &key test)
+(cl-defun org-glance-changelog:read (location)
   (declare (indent 1))
   (cond ((and (f-exists-p location) (f-readable-p location))
          (with-temp-buffer
            (insert-file-contents location)
-           (let ((result (org-glance-changelog :key test)))
+           (let ((result (org-glance-changelog)))
              (while (not (eobp))
                (org-glance-changelog:push result
                  (read (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
                (forward-line))
              result)))
-        (t (org-glance-changelog :key test))))
+        (t (org-glance-changelog))))
 
 (cl-defun org-glance-changelog:write (changelog location)
   (let ((contents (org-glance-changelog:contents changelog)))
@@ -63,11 +61,10 @@
         (insert contents)))))
 
 (cl-defun org-glance-changelog:merge (lhs rhs)
-  (cl-assert (eq (org-glance-> lhs :key) (org-glance-> rhs :key)))
   (cl-assert (eq (org-glance-> lhs :test) (org-glance-> rhs :test)))
-  (org-glance-changelog :events (append (org-glance-> lhs :events) (org-glance-> rhs :events))
-                        :key (org-glance-> lhs :key)
-                        :test (org-glance-> lhs :test)))
+  (org-glance-changelog
+   :events (append (org-glance-> lhs :events) (org-glance-> rhs :events))
+   :test (org-glance-> lhs :test)))
 
 (cl-defun org-glance-changelog:last (changelog)
   (car (org-glance-> changelog :events)))
@@ -77,9 +74,9 @@
      for event in (org-glance-changelog:flatten changelog)
      when (funcall func event)
      collect event into events
-     finally return (org-glance-changelog :events events
-                                          :key (org-glance-> changelog :key)
-                                          :test (org-glance-> changelog :test))))
+     finally return (org-glance-changelog
+                     :events events
+                     :test (org-glance-> changelog :test))))
 
 (cl-defun org-glance-changelog:length (changelog)
   (length (org-glance-> changelog :events)))

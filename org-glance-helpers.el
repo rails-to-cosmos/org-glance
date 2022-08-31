@@ -2,6 +2,7 @@
 
 (require 'dash)
 (require 'cl-macs)
+(require 'eieio)
 
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."

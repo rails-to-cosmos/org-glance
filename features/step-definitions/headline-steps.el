@@ -25,13 +25,13 @@
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
         (let* ((headline (gethash name org-glance-test-headlines))
-               (class (org-glance-headline-class headline)))
+               (class (org-glance-> headline :class)))
           (should (member expected-class class)))))
 
 (Then "^headline \"\\([^\"]+\\)\" contents? should be:$"
       (lambda (name expected-contents)
         (let* ((headline (gethash name org-glance-test-headlines))
-               (contents (org-glance-headline-contents headline)))
+               (contents (org-glance-> headline :contents)))
           (should (string= (with-temp-buffer
                              (insert expected-contents)
                              (org-align-tags 'all)
@@ -58,7 +58,7 @@
 (When "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline)
         (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-headline-linked-p headline)))))
+          (should (org-glance-> headline :linked-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not contain links?$"
       (lambda (headline)
@@ -67,7 +67,7 @@
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (name)
         (let ((headline (gethash name org-glance-test-headlines)))
-          (should (org-glance-headline-encrypted-p headline)))))
+          (should (org-glance-> headline :encrypted-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
       (lambda (headline)
@@ -76,7 +76,7 @@
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline)
         (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-headline-propertized-p headline)))))
+          (should (org-glance-> headline :propertized-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be propertized$"
       (lambda (headline)
@@ -85,23 +85,23 @@
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
       (lambda (headline)
         (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-headline-archived-p headline)))))
+          (should (org-glance-> headline :archived-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
       (lambda (headline)
         (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-headline-commented-p headline)))))
+          (should (org-glance-> headline :commented-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
       (lambda (name)
         (let ((headline (gethash name org-glance-test-headlines)))
-          (should (org-glance-headline-closed-p headline)))))
+          (should (org-glance-> headline :closed-p)))))
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
       (lambda (name title)
         (should
          (string=
-          (org-glance-headline-title (gethash name org-glance-test-headlines))
+          (org-glance-> (gethash name org-glance-test-headlines) :title)
           title))))
 
 (Then "^the contents of headline \"\\([^\"]+\\)\" should be:$"
@@ -137,3 +137,13 @@
      (lambda (tags)
        (let ((inhibit-message t))
          (org-set-tags tags))))
+
+(Then "^headline with title \"\\([^\"]+\\)\" should be in current buffer$"
+      (lambda (title)
+        (goto-char (point-min))
+        (should (condition-case nil
+                    (progn
+                      (re-search-forward (format "^*\\([A-Z ]+\\)?%s" title))
+                      (string= (org-glance-> (org-glance-headline-at-point) :title)
+                               title))
+                  (search-failed nil)))))

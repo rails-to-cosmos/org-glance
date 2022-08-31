@@ -53,43 +53,23 @@
 
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
-        (let* ((store (org-glance-test:get-store store-name))
-               (event (org-glance-changelog:last
-                       (org-glance-changelog:filter
-                        (org-glance-> store :changelog*)
-                        (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
-                                            title))))))
-          (should (and event (org-glance-event:PUT-p event))))))
+        (let ((store (org-glance-test:get-store store-name)))
+          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog*))))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
-        (let* ((store (org-glance-test:get-store store-name))
-               (event (org-glance-changelog:last
-                       (org-glance-changelog:filter
-                        (org-glance-> store :changelog)
-                        (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
-                                            title))))))
-          (should (and event (org-glance-event:PUT-p event))))))
+        (let ((store (org-glance-test:get-store store-name)))
+          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog))))))
 
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
-        (let* ((store (org-glance-test:get-store store-name))
-               (event (org-glance-changelog:last
-                       (org-glance-changelog:filter
-                        (org-glance-> store :changelog*)
-                        (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
-                                            title))))))
-          (should (or (null event) (org-glance-event:RM-p event))))))
+        (let ((store (org-glance-test:get-store store-name)))
+          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog*)))))))
 
 (Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
-        (let* ((store (org-glance-test:get-store store-name))
-               (event (org-glance-changelog:last
-                       (org-glance-changelog:filter
-                        (org-glance-> store :changelog)
-                        (lambda (event) (string= (org-glance-headline-title (org-glance-event-state event))
-                                            title))))))
-          (should (or (null event) (org-glance-event:RM-p event))))))
+        (let ((store (org-glance-test:get-store store-name)))
+          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog)))))))
 
 (Then "^store \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
       (lambda (store-name expected-count expected-state)
@@ -97,8 +77,9 @@
            with store = (org-glance-test:get-store store-name)
            with events = (org-glance-store:events store)
            for event in events
-           when (and (org-glance-event:PUT-p event)
-                     (string= (org-glance-headline-state (org-glance-event-state event)) expected-state))
+           when (cl-typecase event
+                  (org-glance-event:PUT (string= (org-glance-> event :headline :state) expected-state))
+                  (org-glance-event:RM nil))
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -107,7 +88,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for commented-p = (org-glance-headline-commented-p headline)
+           for commented-p = (org-glance-> headline :commented-p)
            unless (null commented-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -117,7 +98,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for archived-p = (org-glance-headline-archived-p headline)
+           for archived-p = (org-glance-> headline :archived-p)
            unless (null archived-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -127,7 +108,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for closed-p = (org-glance-headline-closed-p headline)
+           for closed-p = (org-glance-> headline :closed-p)
            unless (null closed-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -137,7 +118,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for linked-p = (org-glance-headline-linked-p headline)
+           for linked-p = (org-glance-> headline :linked-p)
            unless (null linked-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -147,7 +128,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for propertized-p = (org-glance-headline-propertized-p headline)
+           for propertized-p = (org-glance-> headline :propertized-p)
            unless (null propertized-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -157,7 +138,7 @@
         (cl-loop
            with store = (org-glance-test:get-store store-name)
            for headline in (org-glance-store:headlines store)
-           for encrypted-p = (org-glance-headline-encrypted-p headline)
+           for encrypted-p = (org-glance-> headline :encrypted-p)
            unless (null encrypted-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -166,9 +147,8 @@
       (lambda (store-name expected-count expected-class)
         (cl-loop
            with store = (org-glance-test:get-store store-name)
-           for event in (org-glance-store:events store)
-           for headline = (org-glance-event-state event)
-           for class = (org-glance-headline-class headline)
+           for headline in (org-glance-store:headlines store)
+           for class = (org-glance-> headline :class)
            when (member (downcase expected-class) class)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))

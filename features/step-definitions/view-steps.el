@@ -32,7 +32,7 @@
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
         (should (= (string-to-number changed-markers-count)
-                   (length (org-glance-> (org-glance-buffer-mew)
+                   (length (org-glance-> (org-glance-buffer:mew)
                              :changes))))))
 
 (When "^I? ?commit changes$"
@@ -42,7 +42,7 @@
 (Then "^marker at point should be changed$"
       (lambda ()
         (when-let (marker (org-glance-marker:at-point))
-          (should (member marker (org-glance-> (org-glance-buffer-mew)
+          (should (member marker (org-glance-> (org-glance-buffer:mew)
                                    :changes))))
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :changed)))))
 
@@ -72,36 +72,40 @@
 
 (Then "^current buffer offset should be latest$"
       (lambda ()
-        (let* ((mew (org-glance-buffer-mew))
+        (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
           (should (= (read (org-glance-mew:get-property "OFFSET"))
-                     (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
+                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should be latest$"
       (lambda ()
-        (let* ((mew (org-glance-buffer-mew))
+        (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
           (should (= (org-glance-> mew :offset)
-                     (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
+                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
-        (let* ((mew (org-glance-buffer-mew))
+        (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
           (should (< (read (org-glance-mew:get-property "OFFSET"))
-                     (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
+                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should not be latest$"
       (lambda ()
-        (let* ((mew (org-glance-buffer-mew))
+        (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
           (should (< (org-glance-> mew :offset)
-                     (org-glance-event-offset (org-glance-changelog:last (org-glance-> store :changelog))))))))
+                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()
         (should (eq nil (condition-case nil
                             (progn
-                              (org-glance-mew:commit (org-glance-buffer-mew))
+                              (org-glance-mew:commit (org-glance-buffer:mew))
                               t)
                           (error nil))))))
+
+(When "^I fetch store changes to current buffer$"
+  (lambda ()
+    (org-glance-mew:fetch (org-glance-buffer:mew))))
