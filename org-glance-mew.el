@@ -18,6 +18,10 @@
       :type org-glance-file
       :initarg :location
       :documentation "Location where mew persists.")
+     (markers
+      :type hash-table
+      :initarg :markers
+      :initform (make-hash-table :test #'equal))
      (changes
       :type list
       :initarg :changes
@@ -107,43 +111,93 @@
                 (let ((,(car spec) marker))
                   ,@forms))))
 
+(cl-defun org-glance-mew:create-marker (mew hash beg end buf)
+  (let ((marker (org-glance-marker
+                 :hash hash
+                 :beg beg
+                 :end end ;; end of headline in narrowed buffer
+                 :buffer buf
+                 :state (org-glance-marker-state
+                         ;; FIXME Getting full headline is unneccessary
+                         :corrupted (null (org-glance-store:in (org-glance-> mew :view :store) hash))))))
+    (puthash hash marker (org-glance-> mew :markers))
+    (with-current-buffer buf
+      (add-text-properties beg end (list :marker marker))
+      (org-glance-marker:redisplay marker))
+    marker))
+
+(cl-defun org-glance-mew:delete-marker (mew hash)
+  (when-let (marker (gethash hash (org-glance-> mew :markers)))
+    (with-current-buffer (org-glance-> marker :buffer)
+      (remove-text-properties (org-glance-> marker :beg)
+                              (org-glance-> marker :end)
+                              (list :marker marker)))
+    (remhash hash (org-glance-> mew :markers))))
+
+(cl-defun org-glance-mew:update-headline (mew old-hash new-hash)
+  (pcase (gethash old-hash (org-glance-> mew :markers))
+    ((and marker (guard (not (null marker)))) ;; marker exists, let's go and update headline
+     ;; assume that all marker positions are consistent by material-mode hooks
+     (save-excursion
+       (goto-char (org-glance-> marker :beg))
+       (org-glance--with-headline-at-point
+         (delete-region (point-min) (point-max))
+         (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
+         (org-glance-mew:create-marker mew
+                                       new-hash
+                                       (point-min)
+                                       (point-max)
+                                       (current-buffer))
+         (org-glance-mew:delete-marker mew old-hash))))
+    (otherwise nil)))
+
 (cl-defun org-glance-mew:fetch (mew)
   (let ((store (org-glance-> mew :view :store)))
     (unless (= (org-glance-store:offset store) (org-glance-> mew :offset))
-      (let ((events (--take-while (> (org-glance-> it :offset) (org-glance-> mew :offset))
-                                  (org-glance-store:events store))))
-        ;; (pp events)
-        ))))
+      (dolist (event (--take-while (> (org-glance-> it :offset)
+                                      (org-glance-> mew :offset))
+                                   (org-glance-store:events store)))
+        (cl-typecase event
+          (org-glance-event:UPDATE
+           (org-glance-mew:update-headline mew (org-glance-> event :hash) (org-glance-> event :headline :hash))
+           (org-glance-mew:set-offset mew (org-glance-> event :offset)))
+          (otherwise (user-error "Not implemented yet")))))))
+
+(defun org-glance-fetch ()
+  (interactive)
+  (org-glance-mew:fetch (org-glance-mew:get-buffer-mew)))
+
+(cl-defun org-glance-mew:set-offset (mew offset)
+  (declare (indent 1))
+  (org-glance-mew:set-property "OFFSET" offset)
+  (setf (org-glance-> mew :offset) offset))
 
 (cl-defun org-glance-mew:commit (mew)
   (let ((store (org-glance-> mew :view :store)))
     (unless (= (org-glance-store:offset store) (org-glance-> mew :offset))
       ;; merge new changes
 
-      ;; (when (y-or-n-p "Your changes could be reflected only if you pull changes from store. Proceed?")
+      (when (y-or-n-p "New changes appeared. Fetch?")
+        (org-glance-mew:fetch mew)))
 
-      ;;   )
-      (user-error "Halt")
-      )
     ;; TODO take lock
     (org-glance-mew:pop-changes (marker mew)
       (let* ((headline (org-glance-marker:headline marker))
-             (offset (org-glance-store:put store headline))
              (old-hash (org-glance-> marker :hash))
              (new-hash (org-glance-> headline :hash)))
-        (org-glance-store:remove store old-hash)
+        (let ((offset (org-glance-store:update store old-hash headline)))
+          (setf (org-glance-> marker :state :committed) t
+                (org-glance-> marker :state :changed) nil
+                (org-glance-> marker :offset) offset
+                (org-glance-> marker :hash) new-hash)
+          (org-glance-marker:redisplay marker))
         ;; (org-glance:append-to-file (format "%s %s %s"
         ;;                                    offset
         ;;                                    (org-glance-> marker :hash)
         ;;                                    (org-glance-> headline :hash))
         ;;                            (org-glance-store:/ store "CHANGELOG"))
-        (setf (org-glance-> marker :state :committed) t
-              (org-glance-> marker :state :changed) nil
-              (org-glance-> marker :offset) offset
-              (org-glance-> marker :hash) new-hash)
-        (org-glance-marker:redisplay marker)))
-    (let ((offset (org-glance-store:flush store)))
-      (org-glance-mew:set-property "OFFSET" offset)
-      (setf (org-glance-> mew :offset) offset))))
+        ))
+    (org-glance-mew:set-offset mew
+      (org-glance-store:flush store))))
 
 (provide 'org-glance-mew)

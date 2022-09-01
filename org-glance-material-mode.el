@@ -16,22 +16,22 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (let ((store (org-glance-mew:get-buffer-store)))
+
+         (let ((store (org-glance-mew:get-buffer-store))
+               (mew (org-glance-mew:get-buffer-mew)))
+
            (org-glance-headline:map-buffer (headline)
-             (let* ((hash (org-glance-> headline :hash))
-                    (marker (org-glance-marker
-                             :hash hash
-                             :beg (point-min) ;; beginning of headline in narrowed buffer
-                             :end (point-max) ;; end of headline in narrowed buffer
-                             :buffer (current-buffer)
-                             :state (org-glance-marker-state
-                                     ;; FIXME Getting full headline is unneccessary
-                                     :corrupted (null (org-glance-store:in store hash))))))
-               (add-text-properties (point-min) (point-max) (list :marker marker))
-               (org-glance-marker:redisplay marker)
-               ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-               ;; (save-buffer)
-               ))
+             (org-glance-mew:create-marker
+              mew
+              (org-glance-> headline :hash)
+              (point-min)
+              (point-max)
+              (current-buffer))
+             ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
+             ;; (save-buffer)
+             )
+
+           ;; do we really need this hack?
            (add-text-properties (1- (point-max)) (point-max)
                                 (list :marker (save-excursion
                                                 (goto-char (point-max))
@@ -44,7 +44,9 @@ editor."
          (add-hook 'before-save-hook #'org-glance-material-mode:commit nil t)
          (add-hook 'org-insert-heading-hook #'org-glance-material-mode:update nil t)
          (add-hook 'org-after-tags-change-hook #'org-glance-material-mode:update nil t)
-         (add-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update nil t))
+         (add-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update nil t)
+
+         (org-glance-mew:fetch (org-glance-mew:get-buffer-mew)))
         (t
          (remove-hook 'before-save-hook #'org-glance-material-mode:commit t)
          (remove-hook 'org-after-tags-change-hook #'org-glance-material-mode:update t)
@@ -79,6 +81,13 @@ editor."
        (org-glance-marker:redisplay marker))
       ((org-glance-> new-state :changed)
        (org-glance--with-headline-at-point
+         (let ((beg-diff (- (point-min) (org-glance-> marker :beg)))
+               (end-diff (- (point-max) (org-glance-> marker :end))))
+           ;; TODO beg diff
+           (when (/= 0 end-diff)
+             (dolist (marker (--filter (> (org-glance-> it :end) (org-glance-> marker :end))
+                                       (hash-table-values (org-glance-> mew :markers))))
+               (cl-incf (org-glance-> marker :beg) end-diff))))
          (setf (org-glance-> marker :state :changed) t
                (org-glance-> marker :beg) (point-min)
                (org-glance-> marker :end) (point-max)))

@@ -142,7 +142,7 @@ Feature: Mew
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
-      * STARTED Music Festival :Hike:Music:
+      * TODO Music Festival :Hike:Music:
       * DONE Tame Impala Concert :Music:
       * DONE Kamchatka :Hike:
       * CANCELLED PHP Course :Cringe:
@@ -158,7 +158,7 @@ Feature: Mew
     And current buffer offset should be latest
     And current mew offset should be latest
 
-    When I go to headline with title "Niagara Waterfalls"
+    When I go to headline with title "Music Festival"
     And insert " 2022"
     And I commit changes
     And save buffer
@@ -168,13 +168,11 @@ Feature: Mew
     And current mew offset should be latest
 
     When I find file "views/fun.org"
-    And go to headline with title "Tame Impala Concert"
-
     Then current buffer should contain 2 headlines
-    And current buffer offset should not be latest
+    And current buffer offset should be latest
 
-    When I fetch store changes to current buffer
-    # Then headline with title "Niagara Waterfalls 2022" should be in current buffer
+    Then headline with title "Music Festival" should not be in current buffer
+    And headline with title "Music Festival 2022" should be in current buffer
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"

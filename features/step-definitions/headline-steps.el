@@ -140,10 +140,13 @@
 
 (Then "^headline with title \"\\([^\"]+\\)\" should be in current buffer$"
       (lambda (title)
-        (goto-char (point-min))
-        (should (condition-case nil
-                    (progn
-                      (re-search-forward (format "^*\\([A-Z ]+\\)?%s" title))
-                      (string= (org-glance-> (org-glance-headline-at-point) :title)
-                               title))
-                  (search-failed nil)))))
+        (should (--any (eq it t)
+                       (org-glance-headline:map-buffer (headline)
+                         ;; (message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
+                         (string= (org-glance-> headline :title) title))))))
+
+(Then "^headline with title \"\\([^\"]+\\)\" should not be in current buffer$"
+      (lambda (title)
+        (should (not (--any (eq it t)
+                            (org-glance-headline:map-buffer (headline)
+                              (string= (org-glance-> headline :title) title)))))))

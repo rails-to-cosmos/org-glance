@@ -78,7 +78,7 @@
            with events = (org-glance-store:events store)
            for event in events
            when (cl-typecase event
-                  (org-glance-event:PUT (string= (org-glance-> event :headline :state) expected-state))
+                  ((or org-glance-event:PUT org-glance-event:UPDATE) (string= (org-glance-> event :headline :state) expected-state))
                   (org-glance-event:RM nil))
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))

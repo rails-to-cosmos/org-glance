@@ -16,12 +16,7 @@
 
 (cl-defun org-glance-changelog:flatten (changelog)
   "Return list of LOG events deduplicated."
-  (cl-loop
-     with seen = (make-hash-table :test (org-glance-> changelog :test))
-     for event in (org-glance-> changelog :events)
-     for key = (org-glance-event:id event)
-     unless (gethash key seen)
-     collect (prog1 event (puthash key t seen))))
+  (org-glance-> changelog :events))
 
 (cl-defun org-glance-changelog:contents (changelog)
   "Return LOG contents as a string."
@@ -36,10 +31,6 @@
   "Append ENTRIES to LOG."
   (declare (indent 1))
   `(push ,event (org-glance-> ,changelog :events)))
-
-(cl-defmacro org-glance-changelog:pop (changelog)
-  "Pop from LOG."
-  `(pop (org-glance-> ,changelog :events)))
 
 (cl-defun org-glance-changelog:read (location)
   (declare (indent 1))

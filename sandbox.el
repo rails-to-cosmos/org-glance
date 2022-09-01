@@ -33,9 +33,6 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
   (find-file "/tmp/store")
   )
 
-;; (cl-assert (> (org-glance-> (car (org-glance-store:events test-store)) :offset)
-;;               (org-glance-> (car (last (org-glance-store:events test-store))) :offset)))
-
 (let ((res nil))
   (push 1 res)
   (push 2 res)

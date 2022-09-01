@@ -52,10 +52,11 @@
     ((hash :type org-glance-headline.Hash
            :initarg :hash)))
 
-(cl-defun org-glance-event:id (event)
-  (cl-typecase event
-    (org-glance-event:PUT (org-glance-> event :headline :hash))
-    (org-glance-event:RM (org-glance-> event :hash))))
+(org-glance-class org-glance-event:UPDATE (org-glance-event)
+    ((hash :type org-glance-headline.Hash
+           :initarg :hash)
+     (headline :type org-glance-headline-header
+               :initarg :headline)))
 
 (org-glance-class org-glance-headline-header ()
     ((hash :type org-glance-headline.Hash
