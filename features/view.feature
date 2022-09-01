@@ -152,7 +152,8 @@ Feature: Mew
     And create view "Fun" from "Music" "Adventures"
     And materialise view "Hikes" to "views/hikes.org"
     And materialise view "Fun" to "views/fun.org"
-    And find file "views/hikes.org"
+
+    And find file "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 4 headlines
     And current buffer offset should be latest
@@ -167,12 +168,19 @@ Feature: Mew
     And current buffer offset should be latest
     And current mew offset should be latest
 
-    When I find file "views/fun.org"
+    When I find file "views/fun.org" as "*fun*"
     Then current buffer should contain 2 headlines
+    # Fetching changes on file visiting
     And current buffer offset should be latest
 
     Then headline with title "Music Festival" should not be in current buffer
     And headline with title "Music Festival 2022" should be in current buffer
+
+    When I go to headline with title "Music Festival 2022"
+
+    Then marker at point should not be changed
+    And marker at point should not be corrupted
+    And marker at point should not be committed
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"

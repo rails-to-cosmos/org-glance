@@ -13,6 +13,11 @@
       (lambda (filename)
         (find-file (gethash filename org-glance-test-files))))
 
+(When "^I? ?find file \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
+      (lambda (filename buffer)
+        (find-file (gethash filename org-glance-test-files))
+        (rename-buffer buffer)))
+
 (When "^I? ?append to file \"\\([^\"]+\\)\"$"
   (lambda (filename new-contents)
     (let ((file (org-glance-test:get-file filename)))

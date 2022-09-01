@@ -143,12 +143,12 @@
        (org-glance--with-headline-at-point
          (delete-region (point-min) (point-max))
          (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
+         (org-glance-mew:delete-marker mew old-hash)
          (org-glance-mew:create-marker mew
                                        new-hash
                                        (point-min)
                                        (point-max)
-                                       (current-buffer))
-         (org-glance-mew:delete-marker mew old-hash))))
+                                       (current-buffer)))))
     (otherwise nil)))
 
 (cl-defun org-glance-mew:fetch (mew)
