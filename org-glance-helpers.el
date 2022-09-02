@@ -33,16 +33,14 @@ Return t if it is or raise `user-error' otherwise."
 (cl-defmacro org-glance--with-headline-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
   (declare (indent 0))
-  `(save-excursion
-     (when (org-glance--ensure-at-headline)
-       (save-restriction
-         (save-excursion
-           (save-match-data
-             (org-with-limited-levels
-              (narrow-to-region
-               (save-excursion (org-back-to-heading t) (point))
-               (save-excursion (org-end-of-subtree t t))))))
-         ,@forms))))
+  `(save-match-data
+     (save-excursion
+       (when (org-glance--ensure-at-headline)
+         (save-restriction
+           (narrow-to-region
+            (save-excursion (org-back-to-heading t) (point))
+            (save-excursion (org-end-of-subtree t t)))
+           ,@forms)))))
 
 (cl-defmacro org-glance--with-temp-file (file &rest forms)
   (declare (indent 1))
