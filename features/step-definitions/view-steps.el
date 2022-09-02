@@ -54,6 +54,10 @@
       (lambda ()
         (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :outdated))))))
 
+(Then "^marker at point should be outdated$"
+      (lambda ()
+        (should (eq t (org-glance-> (org-glance-marker:at-point) :state :outdated)))))
+
 (Then "^marker at point should be committed$"
       (lambda ()
         (should (eq t (org-glance-> (org-glance-marker:at-point) :state :committed)))))
@@ -69,6 +73,13 @@
 (Then "^marker at point should not be corrupted$"
       (lambda ()
         (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :corrupted))))))
+
+(Then "^marker at point should be up-to-date$"
+      (lambda ()
+        (And "marker at point should not be changed")
+        (And "marker at point should not be corrupted")
+        (And "marker at point should not be committed")
+        (And "marker at point should not be outdated")))
 
 (Then "^current buffer offset should be latest$"
       (lambda ()
@@ -98,6 +109,12 @@
           (should (< (org-glance-> mew :offset)
                      (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
+(And "^current buffer should be up-to-date$"
+  (lambda ()
+    (And "current buffer offset should be latest")
+    (And "current mew offset should be latest")
+    (And "0 markers should be changed")))
+
 (Then "^I shouldn't be able to commit$"
       (lambda ()
         (should (eq nil (condition-case nil
@@ -109,3 +126,12 @@
 (When "^I fetch store changes to current buffer$"
   (lambda ()
     (org-glance-mew:fetch (org-glance-buffer:mew))))
+
+(And "^markers should be binded to headlines$"
+  (lambda ()
+    (should (--all-p (eq it t)
+                     (org-glance-headline:map-buffer (headline)
+                       (let ((marker (org-glance-marker:at-point)))
+                         (and marker
+                              (= (org-glance-> marker :beg) (point-min))
+                              (= (org-glance-> marker :end) (point-max)))))))))

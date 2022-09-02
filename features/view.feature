@@ -156,8 +156,8 @@ Feature: Mew
     And find file "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 4 headlines
-    And current buffer offset should be latest
-    And current mew offset should be latest
+    And current buffer should be up-to-date
+    And markers should be binded to headlines
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
@@ -165,22 +165,45 @@ Feature: Mew
     And save buffer
 
     Then current buffer should contain 4 headlines
-    And current buffer offset should be latest
-    And current mew offset should be latest
+    And current buffer should be up-to-date
+    And markers should be binded to headlines
 
-    When I find file "views/fun.org" as "*fun*"
-    Then current buffer should contain 2 headlines
-    # Fetching changes on file visiting
-    And current buffer offset should be latest
+    # When I find file "views/fun.org" as "*fun*"
 
-    Then headline with title "Music Festival" should not be in current buffer
-    And headline with title "Music Festival 2022" should be in current buffer
+    # Then current buffer should contain 2 headlines
+    # # Fetching changes on file visit
+    # And current buffer should be up-to-date
+    # And headline with title "Music Festival" should not be in current buffer
+    # And headline with title "Music Festival 2022" should be in current buffer
 
-    When I go to headline with title "Music Festival 2022"
+    # When I go to headline with title "Music Festival 2022"
 
-    Then marker at point should not be changed
-    And marker at point should not be corrupted
-    And marker at point should not be committed
+    # Then marker at point should be up-to-date
+
+    # When I set title of the headline at point to "Music Festival 2023"
+
+    # Then marker at point should be changed
+    # And marker at point should not be committed
+    # And 1 marker should be changed
+    # And marker at point should not be corrupted
+    # And marker at point should not be outdated
+
+    # When I commit changes
+    # And switch to buffer "*hikes*"
+
+    # Then headline with title "Music Festival 2022" should not be in current buffer
+    # And headline with title "Music Festival 2023" should be in current buffer
+
+
+
+
+
+    # go to headline with title "Music Festival 2022"
+
+    # Then marker at point should not be changed
+    # And marker at point should not be corrupted
+    # And marker at point should be committed
+    # And marker at point should be outdated
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
@@ -188,6 +211,8 @@ Feature: Mew
 
     # And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
+
+  # Test marker beg ... end boundaries on editing
 
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline

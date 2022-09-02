@@ -21,12 +21,7 @@ editor."
                (mew (org-glance-mew:get-buffer-mew)))
 
            (org-glance-headline:map-buffer (headline)
-             (org-glance-mew:create-marker
-              mew
-              (org-glance-> headline :hash)
-              (point-min)
-              (point-max)
-              (current-buffer))
+             (org-glance-mew:create-marker mew (org-glance-> headline :hash))
              ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
              ;; (save-buffer)
              )
