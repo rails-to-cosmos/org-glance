@@ -8,7 +8,7 @@ Feature: Mew
       """
 
     When I create view "Apple Phones" from "Apple" "Phones"
-    And I materialise view "Apple Phones" to "views/apple.org"
+    And I materialize view "Apple Phones" to "views/apple.org"
     And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
@@ -34,6 +34,7 @@ Feature: Mew
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
+  @debug
   Scenario: Consistent Editing
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -43,10 +44,11 @@ Feature: Mew
       """
 
     When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialise view "Pomeranians" to "views/pomeranians.org"
+    And I materialize view "Pomeranians" to "views/pomeranians.org"
     And I find file "views/pomeranians.org"
 
     Then current buffer should contain 2 headlines
+    And markers should be binded to headlines
 
     When I go to headline with title "Yummi"
     And I insert " the cat"
@@ -54,11 +56,13 @@ Feature: Mew
     Then marker at point should be changed
     And marker at point should not be committed
     And 1 marker should be changed
+    And markers should be binded to headlines
 
     When I set title of the headline at point to "Yummi"
 
     Then marker at point should not be changed
     And 0 markers should be changed
+    And markers should be binded to headlines
 
     When I go to headline with title "Eric"
     And I insert " the dog"
@@ -74,7 +78,7 @@ Feature: Mew
     And 0 markers should be changed
 
     When I create view "Human Beings" from "Human" "Pets"
-    And I materialise view "Human Beings" to "views/humans.org"
+    And I materialize view "Human Beings" to "views/humans.org"
     And I append to file "views/humans.org"
       """
       * Some external corruption
@@ -105,7 +109,7 @@ Feature: Mew
       """
 
     When I create view "Pigs" from "Peppa" "Wishlist"
-    And materialise view "Pigs" to "views/pigs.org"
+    And materialize view "Pigs" to "views/pigs.org"
     And find file "views/pigs.org"
     And go to headline with title "Peppa Pig"
 
@@ -115,6 +119,7 @@ Feature: Mew
     When I set headline todo state to "DONE"
     Then marker at point should be changed
     And 1 marker should be changed
+    And markers should be binded to headlines
 
   Scenario: Change Headline Tags
     Given store "Wishlist" in directory "nerdy" with headlines
@@ -125,7 +130,7 @@ Feature: Mew
       """
 
     When I create view "Pigs" from "Peppa" "Wishlist"
-    And materialise view "Pigs" to "views/pigs.org"
+    And materialize view "Pigs" to "views/pigs.org"
     And find file "views/pigs.org"
     And go to headline with title "Peppa Pig"
 
@@ -135,8 +140,8 @@ Feature: Mew
     When I set headline tags to ":Beacon:"
     Then marker at point should be changed
     And 1 marker should be changed
+    And markers should be binded to headlines
 
-  @debug
   Scenario: Consistent Editing of Multiple Views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -150,8 +155,8 @@ Feature: Mew
 
     When I create view "Hikes" from "Hike" "Adventures"
     And create view "Fun" from "Music" "Adventures"
-    And materialise view "Hikes" to "views/hikes.org"
-    And materialise view "Fun" to "views/fun.org"
+    And materialize view "Hikes" to "views/hikes.org"
+    And materialize view "Fun" to "views/fun.org"
 
     And find file "views/hikes.org" as "*hikes*"
 
@@ -223,7 +228,7 @@ Feature: Mew
   #     * Eric :Pomeranian:
   #     * Tanik :Human:
   #     """
-  #   When I materialise store "Old phones" to file "views/material.org"
+  #   When I materialize store "Old phones" to file "views/material.org"
 
 # TODO:
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
@@ -232,7 +237,7 @@ Feature: Mew
 # Scenario: Material offset should be set to actual state after commit
 # Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?
 
-#   Scenario: Materialise encrypted headline
-#   Scenario: Materialise non-file headline
-#   Scenario: Materialise multiple headlines, some encrypted, some not, some non-file
+#   Scenario: Materialize encrypted headline
+#   Scenario: Materialize non-file headline
+#   Scenario: Materialize multiple headlines, some encrypted, some not, some non-file
 #   Optimize mew: mark headlines as changed and apply only them

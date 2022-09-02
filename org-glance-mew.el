@@ -21,16 +21,17 @@
      (markers
       :type hash-table
       :initarg :markers
-      :initform (make-hash-table :test #'equal))
+      :initform (make-hash-table :test #'equal)
+      :documentation "Hash to marker.")
      (changes
       :type list
       :initarg :changes
       :initform nil
-      :documentation "List of currently changed markers.")
+      :documentation "List of changed markers.")
      (offset
       :type float
       :initarg :offset))
-  "Materialised viEW.")
+  "Materialized viEW.")
 
 ;; TODO implement material offsets
 ;; On commit check if our offset is latest
@@ -92,7 +93,7 @@
   (let ((filename (file-truename (buffer-file-name))))
     (or (gethash filename org-glance-mews)
         (let ((view (org-glance-mew:get-buffer-view)))
-          (puthash filename (org-glance-view:materialise view filename) org-glance-mews)))))
+          (puthash filename (org-glance-view:materialize view filename) org-glance-mews)))))
 
 (cl-defmacro org-glance-mew:pop-changes (spec &rest forms)
   "Pop changed markers one by one from current buffer binding each marker to VAL and executing BODY.

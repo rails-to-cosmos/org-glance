@@ -29,8 +29,8 @@
   (let ((type (org-glance-> view :type)))
     (member (downcase type) (org-glance-> headline :class))))
 
-(cl-defun org-glance-view:materialise (view location)
-  "Materialise VIEW to LOCATION."
+(cl-defun org-glance-view:materialize (view location)
+  "Materialize VIEW to LOCATION."
   (let ((true-location (file-truename location)))
     (or (gethash true-location (org-glance-> view :mews))
         (progn (f-mkdir-full-path (file-name-directory true-location))

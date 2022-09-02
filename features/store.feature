@@ -98,9 +98,9 @@ Feature: Store
       """
 
     When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialise view "Pomeranians" to "views/pomeranians.org"
+    And I materialize view "Pomeranians" to "views/pomeranians.org"
     And I create view "Humans" from "Human" "Pets"
-    And I materialise view "Humans" to "views/humans.org"
+    And I materialize view "Humans" to "views/humans.org"
 
     # Then store "Pets" should contain headline with title "Yummi" in staging layer
     # And store "Pets" should not contain headline with title "Yummi" in committed layer

@@ -12,7 +12,7 @@
   "Extend `org-mode' map with synchronization abilities.")
 
 (define-minor-mode org-glance-material-mode
-    "A minor mode to be activated only in materialised view
+    "A minor mode to be activated only in materialized view
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
@@ -59,6 +59,7 @@ editor."
 (cl-defun org-glance-material-mode:update (&rest _)
   "Actualize marker overlay."
   (interactive)
+  (message "Change command: %s" last-command)
   (let* ((mew (org-glance-buffer:mew))
          (marker (org-glance-marker:at-point))
          (headline (org-glance-headline-at-point))

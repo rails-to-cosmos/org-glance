@@ -21,11 +21,11 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
                        "* COMMENT d :Comment:
 2"))
 
-    (org-glance-view:materialise
+    (org-glance-view:materialize
      (org-glance-store:view test-store "Task")
      (f-join dst "task.org"))
 
-    (org-glance-view:materialise
+    (org-glance-view:materialize
      (org-glance-store:view test-store "Comment")
      (f-join dst "comment.org"))
 

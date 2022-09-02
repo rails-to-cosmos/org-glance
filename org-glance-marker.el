@@ -33,7 +33,7 @@
      (buffer
       :type buffer
       :initarg :buffer
-      :documentation "Materialised buffer.")
+      :documentation "Materialized buffer.")
      (hash
       :type string
       :initarg :hash

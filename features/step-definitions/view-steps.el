@@ -17,12 +17,12 @@
                   (org-glance-store:view type))))
       (org-glance-test:put-view view-name view))))
 
-(When "^I? ?materialise view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
+(When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (view-name file-name)
     (Given "empty file \"%s\"" file-name)
     (let* ((file (org-glance-test:get-file file-name))
            (view (org-glance-test:get-view view-name)))
-      (org-glance-view:materialise view file))))
+      (org-glance-view:materialize view file))))
 
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)

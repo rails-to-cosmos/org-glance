@@ -7,7 +7,8 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* remove changelog*
+* TODO consistent markers and all the tests
+* consider collisions
 * DONE fix marker→point behaviour
 CLOSED: [2022-08-21 Sun 13:16]
 :LOGBOOK:
@@ -19,8 +20,10 @@ CLOCK: [2022-08-21 Sun 12:36]--[2022-08-21 Sun 12:48] =>  0:12
 - State "STARTED"    from              [2022-08-21 Sun 12:33]
 CLOCK: [2022-08-21 Sun 12:33]--[2022-08-21 Sun 12:36] =>  0:03
 :END:
-* STARTED Fix mew and prepare to relations
+* DONE Fix mew and prepare to relations
+CLOSED: [2022-09-02 Fri 11:20]
 :LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-09-02 Fri 11:20]
 - State "STARTED"    from              [2022-08-15 Mon 10:20]
 :END:
 * PENDING filter store headlines [3/3]
@@ -51,7 +54,7 @@ CLOSED: [2022-08-12 Fri 15:07]
 * mew corner-cases [0/2]
 ** TODO headline indented by user
 ** TODO org-link inserted
-* add tests on materialised offsets
+* add tests on materialized offsets
 * https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
 * fix wal reversal
 * garbage collector
