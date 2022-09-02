@@ -22,26 +22,6 @@ Example: (org-glance-> mew :view :store :location)"
    slots
    :initial-value object))
 
-(cl-defun org-glance--ensure-at-headline ()
-  "Ensure point is at heading.
-Return t if it is or raise `user-error' otherwise."
-  (or (org-at-heading-p)
-      (progn
-        (org-back-to-heading-or-point-min)
-        (org-at-heading-p))))
-
-(cl-defmacro org-glance--with-headline-at-point (&rest forms)
-  "Execute FORMS only if point is at heading."
-  (declare (indent 0))
-  `(save-match-data
-     (save-excursion
-       (when (org-glance--ensure-at-headline)
-         (save-restriction
-           (narrow-to-region
-            (save-excursion (org-back-to-heading t) (point))
-            (save-excursion (org-end-of-subtree t t)))
-           ,@forms)))))
-
 (cl-defmacro org-glance--with-temp-file (file &rest forms)
   (declare (indent 1))
   `(progn
@@ -93,5 +73,52 @@ Return t if it is or raise `user-error' otherwise."
       (cl-loop for arg in args
          collect (prin1-to-string arg t) into result
          finally (insert (s-join "\n" result))))))
+
+(cl-defun org-glance:before-first-headline-p ()
+  (save-match-data
+    (org-before-first-heading-p)))
+
+(cl-defun org-glance:first-headline-pos ()
+  (save-excursion
+    (goto-char (point-min))
+    (outline-next-heading)
+    (point)))
+
+(defun org-glance-sandbox ()
+  (interactive)
+  (let ((dst "/tmp/store"))
+    (progn ;; reload glance
+      (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
+      (clrhash org-glance-stores))
+
+    (f-delete dst t)
+
+    (defvar test-store)
+    (defvar test-view)
+
+    (setq test-store (org-glance-store:from-scratch dst
+                       "* TODO a :Task:
+1"
+                       "* DONE b :TAsk:"
+                       "* COMMENT c :Comment:Task:Crypt:
+aes-encrypted V 1.3-OCB-B-4-4-M
+1/tktn7J+sRqmM2KLefQQZtIYV/FAOcDn+Rs/s5Nm17pNMFtusnXrgrjwzxWFk8F4YSBdCbbRwzl
+wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
+                       "* COMMENT d :Comment:
+2"))
+
+    (org-glance-view:materialize
+     (org-glance-store:view test-store "Task")
+     (f-join dst "task.org"))
+
+    (org-glance-view:materialize
+     (org-glance-store:view test-store "Comment")
+     (f-join dst "comment.org"))
+
+    ;; emulate source corruption
+    (append-to-file "* d" nil (f-join dst "task.org"))
+
+    (find-file "/tmp/store")
+    ))
 
 (provide 'org-glance-helpers)

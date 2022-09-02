@@ -34,7 +34,6 @@ Feature: Mew
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  @debug
   Scenario: Consistent Editing
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -48,7 +47,7 @@ Feature: Mew
     And I find file "views/pomeranians.org"
 
     Then current buffer should contain 2 headlines
-    And markers should be binded to headlines
+    And markers should be consistent
 
     When I go to headline with title "Yummi"
     And I insert " the cat"
@@ -56,13 +55,13 @@ Feature: Mew
     Then marker at point should be changed
     And marker at point should not be committed
     And 1 marker should be changed
-    And markers should be binded to headlines
+    And markers should be consistent
 
     When I set title of the headline at point to "Yummi"
 
     Then marker at point should not be changed
     And 0 markers should be changed
-    And markers should be binded to headlines
+    And markers should be consistent
 
     When I go to headline with title "Eric"
     And I insert " the dog"
@@ -100,6 +99,7 @@ Feature: Mew
 
     Then marker at point should be corrupted
 
+  @debug
   Scenario: Change Headline Todo State
     Given store "Wishlist" in directory "nerdy" with headlines
       """
@@ -119,7 +119,7 @@ Feature: Mew
     When I set headline todo state to "DONE"
     Then marker at point should be changed
     And 1 marker should be changed
-    And markers should be binded to headlines
+    And markers should be consistent
 
   Scenario: Change Headline Tags
     Given store "Wishlist" in directory "nerdy" with headlines
@@ -140,7 +140,7 @@ Feature: Mew
     When I set headline tags to ":Beacon:"
     Then marker at point should be changed
     And 1 marker should be changed
-    And markers should be binded to headlines
+    And markers should be consistent
 
   Scenario: Consistent Editing of Multiple Views
     Given store "Adventures" in directory "stories/adventures" with headlines
@@ -162,7 +162,7 @@ Feature: Mew
 
     Then current buffer should contain 4 headlines
     And current buffer should be up-to-date
-    And markers should be binded to headlines
+    And markers should be consistent
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
@@ -171,7 +171,7 @@ Feature: Mew
 
     Then current buffer should contain 4 headlines
     And current buffer should be up-to-date
-    And markers should be binded to headlines
+    And markers should be consistent
 
     # When I find file "views/fun.org" as "*fun*"
 

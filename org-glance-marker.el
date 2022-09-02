@@ -38,11 +38,6 @@
       :type string
       :initarg :hash
       :documentation "Hash of headline origin.")
-     (offset
-      :initform 0
-      :initarg :offset
-      :type number
-      :documentation "Actual offset of headline.")
      (overlay
       :type overlay
       :initarg :overlay
@@ -61,12 +56,13 @@
   "Return instance of `org-glance-marker' from text at point."
   ;; avoid strange behaviour on (point) == (point-max)
   (or (get-text-property (point) :marker)
-      (save-excursion
-        (goto-char (point-max))
-        (org-back-to-heading-or-point-min)
-        (get-text-property (point) :marker))))
+      (save-match-data
+        (save-excursion
+          (goto-char (point-max))
+          (org-back-to-heading-or-point-min)
+          (get-text-property (point) :marker)))))
 
-(cl-defun org-glance-marker:get-actual-state (marker headline)
+(cl-defun org-glance-marker:update-state (marker headline)
   (let ((hash-old (org-glance-> marker :hash))
         (hash-new (org-glance-> headline :hash)))
     (org-glance-marker-state
@@ -74,9 +70,11 @@
 
 (cl-defun org-glance-marker:headline (marker)
   "Create instance of `org-glance-headline' from MARKER."
-  (org-glance-headline-from-region
-   (org-glance-> marker :beg)
-   (org-glance-> marker :end)))
+  (let ((headline (org-glance-headline-from-region
+                   (org-glance-> marker :beg)
+                   (org-glance-> marker :end))))
+    (cl-assert (org-glance-> headline :hash) (org-glance-> marker :hash))
+    headline))
 
 (cl-defun org-glance-marker:prin1-to-string (marker)
   (with-temp-buffer
@@ -91,8 +89,7 @@
                       :changed (org-glance-> marker :state :changed)
                       :corrupted (org-glance-> marker :state :corrupted)
                       :committed (org-glance-> marker :state :committed)
-                      :outdated (org-glance-> marker :state :outdated))
-              :offset (org-glance-> marker :offset))))
+                      :outdated (org-glance-> marker :state :outdated)))))
     (json-pretty-print-buffer)
     (buffer-substring-no-properties (point-min) (point-max))))
 

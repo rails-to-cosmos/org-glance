@@ -42,6 +42,10 @@
                    (insert (org-glance-mew:header mew))
                    (cl-dolist (headline (org-glance-store:headlines (org-glance-> view :store)))
                      (when (org-glance-view:filter view headline)
+
+                       (unless (slot-boundp mew :first-headline-pos)
+                         (setf (org-glance-> mew :first-headline-pos) (point)))
+
                        (org-glance-headline-insert
                         (org-glance-store:get
                          (org-glance-> view :store)

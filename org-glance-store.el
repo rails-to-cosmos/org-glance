@@ -276,7 +276,7 @@ TODO: Transaction."
   (dolist (file (org-glance-scope location))
     (org-glance:with-temp-buffer
      (insert-file-contents file)
-     (org-glance-headline:map-buffer (headline)
+     (org-glance-headline:map (headline)
        (org-glance-store:put store headline)))))
 
 (provide 'org-glance-store)

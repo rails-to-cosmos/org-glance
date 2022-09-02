@@ -85,29 +85,29 @@
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (= (read (org-glance-mew:get-property "OFFSET"))
-                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
+          (should (org-glance-time:eq (read (org-glance-mew:get-property "OFFSET"))
+                                      (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (= (org-glance-> mew :offset)
-                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
+          (should (org-glance-time:eq (org-glance-> mew :offset)
+                                      (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (< (read (org-glance-mew:get-property "OFFSET"))
-                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
+          (should (org-glance-time:lt (read (org-glance-mew:get-property "OFFSET"))
+                                      (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should not be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (< (org-glance-> mew :offset)
-                     (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
+          (should (org-glance-time:lt (org-glance-> mew :offset)
+                                      (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (And "^current buffer should be up-to-date$"
   (lambda ()
@@ -127,11 +127,17 @@
   (lambda ()
     (org-glance-mew:fetch (org-glance-buffer:mew))))
 
-(And "^markers should be binded to headlines$"
+(And "^markers should be consistent$"
   (lambda ()
     (should (--all-p (eq it t)
-                     (org-glance-headline:map-buffer (headline)
+                     (org-glance-headline:map (headline)
                        (let ((marker (org-glance-marker:at-point)))
+                         (message "Marker %d %d"
+                                  (org-glance-> marker :beg)
+                                  (org-glance-> marker :end))
+                         (message "Headline %d %d"
+                                  (point-min)
+                                  (point-max))
                          (and marker
                               (= (org-glance-> marker :beg) (point-min))
                               (= (org-glance-> marker :end) (point-max)))))))))

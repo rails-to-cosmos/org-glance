@@ -124,7 +124,7 @@
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)
     (let ((actual-count 0))
-      (org-glance-headline:map-buffer (headline)
+      (org-glance-headline:map (headline)
         (cl-incf actual-count))
       (should (= actual-count (string-to-number expected-count))))))
 
@@ -141,12 +141,12 @@
 (Then "^headline with title \"\\([^\"]+\\)\" should be in current buffer$"
       (lambda (title)
         (should (--any (eq it t)
-                       (org-glance-headline:map-buffer (headline)
+                       (org-glance-headline:map (headline)
                          ;; (message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
                          (string= (org-glance-> headline :title) title))))))
 
 (Then "^headline with title \"\\([^\"]+\\)\" should not be in current buffer$"
       (lambda (title)
         (should (not (--any (eq it t)
-                            (org-glance-headline:map-buffer (headline)
+                            (org-glance-headline:map (headline)
                               (string= (org-glance-> headline :title) title)))))))

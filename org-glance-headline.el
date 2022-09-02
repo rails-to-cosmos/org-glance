@@ -215,7 +215,7 @@
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
-  (org-glance--with-headline-at-point
+  (org-glance-headline:with-headline-at-point
     (let* ((ast (org-glance-headline--ast-normalized))
            (contents (org-glance-headline--ast-contents ast))
            (user-properties (org-glance-headline--user-properties contents)))
@@ -308,7 +308,7 @@
 ;;  (a-get (bindat-unpack org-glance-headline--bindat-spec (f-read-bytes "/tmp/headline.bin")) 'file)
 ;;  (string-make-unibyte "hello"))
 
-(cl-defmacro org-glance-headline:map-buffer (var &rest forms)
+(cl-defmacro org-glance-headline:map (var &rest forms)
   "Map buffer headlines and execute FORMS on each binding headline to VAR."
   (declare (indent 1))
   `(save-excursion
@@ -320,7 +320,7 @@
         while (org-at-heading-p)
         collect (save-excursion
                   (let ((,(car var) (org-glance-headline-at-point)))
-                    (org-glance--with-headline-at-point ,@forms)))
+                    (org-glance-headline:with-headline-at-point ,@forms)))
         into result
         when (condition-case nil
                  (outline-forward-same-level 1)
@@ -335,6 +335,26 @@
    (unless (org-at-heading-p)
      (outline-next-heading))
    (org-glance-headline-at-point)))
+
+(cl-defun org-glance-headline:back-to-headline ()
+  "Ensure point is at heading.
+Return t if it is or raise `user-error' otherwise."
+  (or (org-at-heading-p)
+      (progn
+        (org-back-to-heading-or-point-min)
+        (org-at-heading-p))))
+
+(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
+  "Execute FORMS only if point is at heading."
+  (declare (indent 0))
+  `(save-match-data
+     (save-excursion
+       (when (org-glance-headline:back-to-headline)
+         (save-restriction
+           (narrow-to-region
+            (save-excursion (org-back-to-heading t) (point))
+            (save-excursion (org-end-of-subtree t t)))
+           ,@forms)))))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
