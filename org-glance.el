@@ -38,6 +38,8 @@
 (require 'org-glance-store)
 (require 'org-glance-material-mode)
 
+(require 'org-glance-buffer)
+
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"

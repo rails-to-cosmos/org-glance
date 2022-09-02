@@ -59,7 +59,6 @@ editor."
 (cl-defun org-glance-material-mode:update (&rest _)
   "Actualize marker overlay."
   (interactive)
-  (message "Change command: %s" last-command)
   (let* ((mew (org-glance-buffer:mew))
          (marker (org-glance-marker:at-point))
          (headline (org-glance-headline-at-point))
