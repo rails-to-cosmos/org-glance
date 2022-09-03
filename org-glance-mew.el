@@ -91,10 +91,11 @@
 
 (cl-defun org-glance-mew:get-buffer-mew ()
   "Get `org-glance-mew' instance associated with current buffer."
-  (let ((filename (file-truename (buffer-file-name))))
-    (or (gethash filename org-glance-mews)
-        (let ((view (org-glance-mew:get-buffer-view)))
-          (puthash filename (org-glance-view:materialize view filename) org-glance-mews)))))
+  (when (buffer-file-name)
+    (let ((filename (file-truename (buffer-file-name))))
+      (or (gethash filename org-glance-mews)
+          (let ((view (org-glance-mew:get-buffer-view)))
+            (puthash filename (org-glance-view:materialize view filename) org-glance-mews))))))
 
 (cl-defmacro org-glance-mew:pop-changes (spec &rest forms)
   "Pop changed markers one by one from current buffer binding each marker to VAR and executing FORMS.
@@ -210,8 +211,9 @@
 
       (org-glance-mew:set-offset mew (org-glance-store:flush store))
 
-      (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
-        (org-glance-mew:fetch another-mew)))))
+      ;; (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
+      ;;   (org-glance-mew:fetch another-mew))
+      )))
 
 (cl-defun org-glance-mew:normalize-marker (mew marker)
   (org-glance-headline:with-headline-at-point
@@ -232,7 +234,6 @@
   (org-glance-headline:map (headline)
     (org-glance-mew:create-marker mew (org-glance-> headline :hash))
     ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-    ;; (save-buffer)
-    ))
+    (save-buffer)))
 
 (provide 'org-glance-mew)
