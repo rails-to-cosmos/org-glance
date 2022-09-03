@@ -66,7 +66,7 @@
   (save-excursion
     (goto-char (point-min))
     (condition-case nil
-        (progn
+        (let ((inhibit-modification-hooks t))
           (search-forward (format "#+%s: " property))
           (delete-region (point) (line-end-position))
           (insert (prin1-to-string value)))
@@ -144,10 +144,11 @@
      (org-glance-mew:with-mew-buffer mew
        (goto-char (org-glance-> marker :beg))
        (org-glance-headline:with-headline-at-point
-         (org-glance-mew:delete-marker mew old-hash)
-         (delete-region (point-min) (point-max))
-         (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
-         (org-glance-mew:create-marker mew new-hash))))
+         (let ((inhibit-modification-hooks t))
+           (org-glance-mew:delete-marker mew old-hash)
+           (delete-region (point-min) (point-max))
+           (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
+           (org-glance-mew:create-marker mew new-hash)))))
     (_ (error "Marker %s not found for UPDATE in buffer %s (available markers: %s)"
               old-hash
               (current-buffer)

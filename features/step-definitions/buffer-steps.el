@@ -23,7 +23,3 @@
         (should (string=
                  (org-glance-test:normalize-string contents)
                  (org-glance-test:normalize-string (buffer-substring-no-properties (point-min) (point-max)))))))
-
-(And "^switch to buffer \"\\([^\"]+\\)\"$"
-  (lambda (buffer)
-    (switch-to-buffer buffer)))

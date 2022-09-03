@@ -179,7 +179,6 @@ Feature: Consistent Edit
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
-    And markers should be consistent
     And commit changes
 
     Then current buffer should contain 4 headlines
@@ -206,14 +205,19 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And marker at point should not be corrupted
     And marker at point should not be outdated
-    And markers should be consistent
 
     When I commit changes
-    And switch to buffer "*hikes*"
 
-    Then headline with title "Music Festival 2022" should not be in current buffer
+    Then markers should be consistent
+
+    When I switch to buffer "*hikes*"
+
+    Then I should be in buffer "*hikes*"
+    And headline with title "Music Festival 2022" should not be in current buffer
     And headline with title "Music Festival 2023" should be in current buffer
     And markers should be consistent
+    And current buffer offset should be latest
+    And current mew offset should be latest
 
     When I go to headline with title "Music Festival 2023"
 
@@ -222,7 +226,7 @@ Feature: Consistent Edit
     And marker at point should not be committed
     And marker at point should not be outdated
 
-    When I save buffer
+    When I commit changes
     # And I append to file "views/fun.org"
     #   """
     #   * Some external corruption

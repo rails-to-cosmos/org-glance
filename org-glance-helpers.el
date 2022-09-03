@@ -83,6 +83,11 @@ Example: (org-glance-> mew :view :store :location)"
   (let ((dst "/tmp/store"))
     (progn ;; reload glance
 
+      (defvar test-store)
+      (defvar test-view)
+      (defvar org-glance-mews)
+      (defvar org-glance-stores)
+
       (clrhash org-glance-mews)
       (clrhash org-glance-stores)
 
@@ -91,8 +96,6 @@ Example: (org-glance-> mew :view :store :location)"
 
     (f-delete dst t)
 
-    (defvar test-store)
-    (defvar test-view)
 
     (setq test-store (org-glance-store:from-scratch dst
                        "* TODO a :Task:
