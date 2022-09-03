@@ -211,7 +211,7 @@ Feature: Consistent Edit
     When I commit changes
     And switch to buffer "*hikes*"
 
-    # Then headline with title "Music Festival 2022" should not be in current buffer
+    Then headline with title "Music Festival 2022" should not be in current buffer
     # And headline with title "Music Festival 2023" should be in current buffer
 
     # go to headline with title "Music Festival 2022"

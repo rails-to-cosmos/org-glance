@@ -209,9 +209,8 @@
       (let ((offset (org-glance-store:flush store)))
         (org-glance-mew:set-offset mew offset))
 
-      ;; (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
-      ;;   (org-glance-mew:fetch another-mew))
-      )))
+      (dolist (mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
+        (org-glance-mew:fetch mew)))))
 
 (cl-defun org-glance-mew:normalize-markers (mew)
   (dolist (marker (hash-table-values (org-glance-> mew :markers)))
