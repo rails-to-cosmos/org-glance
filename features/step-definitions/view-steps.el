@@ -139,5 +139,8 @@
                      ;;   (message "Diff: \"%s\"" (buffer-substring-no-properties
                      ;;                            (org-glance-> marker :end)
                      ;;                            (point-max))))
-                     (and marker (= (org-glance-> marker :beg) (point-min)) (= (org-glance-> marker :end) (point-max)))))))
+                     (and marker
+                          (string= (org-glance-> marker :hash) (org-glance-> headline :hash))
+                          (= (org-glance-> marker :beg) (point-min))
+                          (= (org-glance-> marker :end) (point-max)))))))
          (should (--all-p (eq it t) hc)))))
