@@ -146,9 +146,9 @@
        (save-excursion
          (goto-char (org-glance-> marker :beg))
          (org-glance-headline:with-headline-at-point
+           (org-glance-mew:delete-marker mew old-hash)
            (delete-region (point-min) (point-max))
            (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
-           (org-glance-mew:delete-marker mew old-hash)
            (org-glance-mew:create-marker mew new-hash))))
       (_ (error "Marker %s not found for UPDATE in buffer %s" old-hash (current-buffer))))))
 
@@ -209,11 +209,21 @@
                 (org-glance-> marker :hash) new-hash)
           (org-glance-marker:redisplay marker)))
 
-      (org-glance-mew:set-offset mew (org-glance-store:flush store))
+      (let ((offset (org-glance-store:flush store)))
+        (org-glance-mew:set-offset mew offset))
+
+      (org-glance-mew:normalize-markers mew)
 
       ;; (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
       ;;   (org-glance-mew:fetch another-mew))
       )))
+
+(cl-defun org-glance-mew:normalize-markers (mew)
+  (dolist (marker (hash-table-values (org-glance-> mew :markers)))
+    (org-glance-mew:with-mew-buffer mew
+      (org-glance-headline:map (headline)
+        (when (string= (org-glance-> headline :hash) (org-glance-> marker :hash))
+          (org-glance-mew:normalize-marker mew marker))))))
 
 (cl-defun org-glance-mew:normalize-marker (mew marker)
   (org-glance-headline:with-headline-at-point

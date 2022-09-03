@@ -50,7 +50,7 @@ editor."
                   (org-glance-mew:normalize-marker mew marker)
                   (setf (org-glance-> marker :state :changed) t)
                   (cl-pushnew marker (org-glance-> mew :changes))))
-             (org-glance-marker:redisplay marker)))))
+           (org-glance-marker:redisplay marker)))))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))

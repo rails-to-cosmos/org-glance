@@ -154,7 +154,6 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers should be consistent
 
-  @debug
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -179,6 +178,7 @@ Feature: Consistent Edit
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
+    And markers should be consistent
     And commit changes
 
     Then current buffer should contain 4 headlines
@@ -186,33 +186,32 @@ Feature: Consistent Edit
     And markers should be consistent
 
     When I find file "views/fun.org" as "*fun*"
+    And I fetch store changes
+
     Then current buffer should contain 2 headlines
-    # Fetching changes on file visit
     And current buffer should be up to date
+    And markers should be consistent
     And headline with title "Music Festival" should not be in current buffer
     And headline with title "Music Festival 2022" should be in current buffer
 
-    # When I go to headline with title "Music Festival 2022"
+    When I go to headline with title "Music Festival 2022"
 
-    # Then marker at point should be up to date
+    Then marker at point should be up to date
 
-    # When I set title of the headline at point to "Music Festival 2023"
+    When I set title of the headline at point to "Music Festival 2023"
 
-    # Then marker at point should be changed
-    # And marker at point should not be committed
-    # And 1 marker should be changed
-    # And marker at point should not be corrupted
-    # And marker at point should not be outdated
+    Then marker at point should be changed
+    And marker at point should not be committed
+    And 1 marker should be changed
+    And marker at point should not be corrupted
+    And marker at point should not be outdated
+    And markers should be consistent
 
     # When I commit changes
     # And switch to buffer "*hikes*"
 
     # Then headline with title "Music Festival 2022" should not be in current buffer
     # And headline with title "Music Festival 2023" should be in current buffer
-
-
-
-
 
     # go to headline with title "Music Festival 2022"
 
