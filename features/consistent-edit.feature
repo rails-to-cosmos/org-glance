@@ -182,7 +182,9 @@ Feature: Consistent Edit
     And markers positions and hashes should be consistent
 
     When I go to headline with title "Music Festival"
-    And insert " 2022"
+    And set title of the headline at point to "Music Festival 2022"
+    And go to headline with title "Kamchatka"
+    And set title of the headline at point to "Kamchatka 2019"
     And commit changes
 
     Then current buffer should contain 4 headlines

@@ -148,11 +148,7 @@
            (org-glance-mew:delete-marker mew old-hash)
            (delete-region (point-min) (point-max))
            (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
-           (org-glance-mew:create-marker mew new-hash)))))
-    (_ (error "Marker %s not found for UPDATE in buffer %s (available markers: %s)"
-              old-hash
-              (current-buffer)
-              (hash-table-values (org-glance-> mew :markers))))))
+           (org-glance-mew:create-marker mew new-hash)))))))
 
 (cl-defmacro org-glance-mew:with-mew-buffer (mew &rest forms)
   (declare (indent 1))
@@ -175,7 +171,9 @@
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
-             (org-glance-mew:update-headline mew (org-glance-> event :hash) (org-glance-> event :headline :hash))
+             (org-glance-mew:update-headline mew
+                                             (org-glance-> event :hash)
+                                             (org-glance-> event :headline :hash))
              (org-glance-mew:set-offset mew (org-glance-> event :offset)))
             (otherwise (user-error "events PUT and DEL not implemented yet"))))))))
 
