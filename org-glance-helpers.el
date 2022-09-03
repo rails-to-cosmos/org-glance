@@ -121,4 +121,8 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
     (find-file "/tmp/store")
     ))
 
+(cl-defmacro org-glance-comment (&rest _)
+  (declare (indent 0))
+  t)
+
 (provide 'org-glance-helpers)

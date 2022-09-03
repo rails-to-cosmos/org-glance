@@ -2,6 +2,7 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'thunk)
 (require 'highlight)
 
 (require 'org-glance-headline)
@@ -34,76 +35,58 @@ editor."
                                                 (get-text-property (point) :marker)))))
 
          (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
-         ;; (add-hook 'post-command-hook #'org-glance-material-mode:after-change nil t)
-         ;; (add-hook 'org-insert-heading-hook #'org-glance-material-mode:update nil t)
-         ;; (add-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update nil t)
-         ;; (add-hook 'org-after-tags-change-hook #'org-glance-material-mode:update nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
          (add-hook 'before-save-hook #'org-glance-material-mode:commit nil t)
          (org-glance-mew:fetch (org-glance-mew:get-buffer-mew)))
         (t
          (remove-hook 'before-save-hook #'org-glance-material-mode:commit t)
-         ;; (remove-hook 'org-after-tags-change-hook #'org-glance-material-mode:update t)
-         ;; (remove-hook 'post-command-hook #'org-glance-material-mode:after-change t)
-         ;; (remove-hook 'org-insert-heading-hook #'org-glance-material-mode:update t)
-         ;; (remove-hook 'org-after-todo-state-change-hook #'org-glance-material-mode:update t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t)
          (remove-hook 'post-command-hook #'org-glance-material-mode:debug t))))
 
-(cl-defun org-glance-material-mode:update (&rest _)
+(cl-defun org-glance-material-mode:move-markers (mew beg diff)
+  (when (/= 0 diff)
+    (dolist (marker (--filter (>= (org-glance-> it :beg) beg)
+                              (hash-table-values (org-glance-> mew :markers))))
+      (cl-incf (org-glance-> marker :beg) diff)
+      (cl-incf (org-glance-> marker :end) diff))))
+
+(cl-defun org-glance-material-mode:normalize-marker (mew marker)
+  (org-glance-headline:with-headline-at-point
+    (let ((diff (- (point-max) (org-glance-> marker :end))))
+      (org-glance-material-mode:move-markers mew (org-glance-> marker :end) diff))
+    (setf (org-glance-> marker :beg) (point-min)
+          (org-glance-> marker :end) (point-max))))
+
+(cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
-  (let ((mew (org-glance-buffer:mew)))
-    (cond ((org-glance:before-first-headline-p)
-           (let ((diff (- (org-glance:first-headline-pos) (org-glance-> mew :first-headline-pos))))
-             (when (/= 0 diff)
-               (setf (org-glance-> mew :first-headline-pos) (org-glance:first-headline-pos))
-               (dolist (marker (hash-table-values (org-glance-> mew :markers)))
-                 (cl-incf (org-glance-> marker :beg) diff)
-                 (cl-incf (org-glance-> marker :end) diff)))))
+  (thunk-let ((mew (org-glance-buffer:mew))
+              (headline (org-glance-headline-at-point))
+              (marker (org-glance-marker:at-point change-end))
+              (before-first-headline-p (org-glance:before-first-headline-p))
+              (method (cond ((< pre-change-length (- change-end change-beg)) 'INSERT)
+                            ((> pre-change-length (- change-end change-beg)) 'DELETE)
+                            (t 'SKIP))))
+    (cond (before-first-headline-p
+           (setf (org-glance-> mew :first-headline-pos) (org-glance:first-headline-pos))
+           (let ((diff (cl-case method
+                         ('INSERT (- change-end change-beg))
+                         ('DELETE (- pre-change-length))
+                         ('SKIP 0))))
+             (org-glance-material-mode:move-markers mew change-beg diff)))
           (t
-           (let* ((headline (org-glance-headline-at-point))
-                  (marker (org-glance-marker:at-point))
-                  (old-state (org-glance-> marker :state))
-                  (new-state (org-glance-marker:update-state marker headline)))
-             (cond
-               ((org-glance-> old-state :corrupted)
-                ;; (when (yes-or-no-p "New headline detected. Do you want to add it to store or remove from mew?")
-                ;;   )
-                )
-               ((and (org-glance-> old-state :changed) (not (org-glance-> new-state :changed)))
-                (org-glance-headline:with-headline-at-point
-                  (let ((diff (- (point-max) (org-glance-> marker :end))))
-                    (when (/= 0 diff)
-                      (dolist (marker (--filter (> (org-glance-> it :end) (org-glance-> marker :end))
-                                                (hash-table-values (org-glance-> mew :markers))))
-                        (cl-incf (org-glance-> marker :beg) diff)
-                        (cl-incf (org-glance-> marker :end) diff))))
-                  (setf (org-glance-> marker :state :changed) nil
-                        (org-glance-> marker :beg) (point-min)
-                        (org-glance-> marker :end) (point-max)))
-                (cl-remf (org-glance-> mew :changes) marker))
-               ((org-glance-> new-state :changed)
-                (org-glance-headline:with-headline-at-point
-                  (let ((diff (- (point-max) (org-glance-> marker :end))))
-                    ;; TODO beg diff
-                    (when (/= 0 diff)
-                      (dolist (marker (--filter (> (org-glance-> it :end) (org-glance-> marker :end))
-                                                (hash-table-values (org-glance-> mew :markers))))
-                        (cl-incf (org-glance-> marker :beg) diff)
-                        (cl-incf (org-glance-> marker :end) diff))))
-                  (setf (org-glance-> marker :state :changed) t
-                        (org-glance-> marker :beg) (point-min)
-                        (org-glance-> marker :end) (point-max)))
-                (cl-pushnew marker (org-glance-> mew :changes))))
+           (let ((old-state (org-glance-> marker :state))
+                 (new-state (org-glance-marker:actualize-state marker headline)))
+             (cond ((org-glance-> old-state :corrupted) nil)
+                   ((and (org-glance-> old-state :changed) (not (org-glance-> new-state :changed)))
+                    (org-glance-material-mode:normalize-marker mew marker)
+                    (setf (org-glance-> marker :state :changed) nil)
+                    (cl-remf (org-glance-> mew :changes) marker))
+                   ((org-glance-> new-state :changed)
+                    (org-glance-material-mode:normalize-marker mew marker)
+                    (setf (org-glance-> marker :state :changed) t)
+                    (cl-pushnew marker (org-glance-> mew :changes))))
              (org-glance-marker:redisplay marker))))))
-
-;; (cl-defun org-glance-material-mode:update* ()
-;;   "Run `org-glance-material-marker-redisplay' in separate thread."
-;;   (unless (and (threadp org-glance-overlay-manager)
-;;                (thread-alive-p org-glance-overlay-manager))
-;;     (setq org-glance-overlay-manager
-;;           (make-thread #'org-glance-material-mode:update "org-glance-overlay-manager"))))
 
 (cl-defun org-glance-material-mode:commit ()
   "Apply all changes of buffer headlines to its origins.

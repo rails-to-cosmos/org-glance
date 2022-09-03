@@ -118,8 +118,7 @@
 
 (When "^I? ?set title of the headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (org-edit-headline title)
-    (org-glance-material-mode:update)))
+    (org-edit-headline title)))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)

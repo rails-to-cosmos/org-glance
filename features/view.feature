@@ -38,6 +38,7 @@ Feature: Mew
     Given store "Pets" in directory "store/pets" with headlines
       """
       * Yummi :Pomeranian:
+        Black and White Doggy
       * Eric :Pomeranian:
       * Tanik :Human:
       """
@@ -48,6 +49,18 @@ Feature: Mew
 
     Then current buffer should contain 2 headlines
     And markers should be consistent
+
+    # Edit before the first headline
+    When I go to the beginning of buffer
+    And I insert "#+TITLE: The Zoo\n"
+
+    Then markers should be consistent
+
+    # Deletions should be properly handled
+    When I go to the beginning of buffer
+    And I kill current line
+
+    Then markers should be consistent
 
     When I go to headline with title "Yummi"
     And I insert " the cat"
@@ -99,7 +112,6 @@ Feature: Mew
 
     Then marker at point should be corrupted
 
-  @debug
   Scenario: Change Headline Todo State
     Given store "Wishlist" in directory "nerdy" with headlines
       """

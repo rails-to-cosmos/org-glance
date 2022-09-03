@@ -52,17 +52,18 @@
        (org-glance-> marker :buffer)
        (buffer-live-p (org-glance-> marker :buffer))))
 
-(cl-defun org-glance-marker:at-point ()
+(cl-defun org-glance-marker:at-point (&optional (point (point)))
   "Return instance of `org-glance-marker' from text at point."
-  ;; avoid strange behaviour on (point) == (point-max)
-  (or (get-text-property (point) :marker)
-      (save-match-data
-        (save-excursion
-          (goto-char (point-max))
-          (org-back-to-heading-or-point-min)
-          (get-text-property (point) :marker)))))
+  (pcase (get-text-property point :marker)
+    ((pred null) (save-match-data ;; avoid strange behaviour on (point) == (point-max)
+                   (save-excursion
+                     (org-back-to-heading-or-point-min)
+                     (if (= (point) point)
+                         (error "Marker not found at point %d" point)
+                       (org-glance-marker:at-point (point))))))
+    (marker marker)))
 
-(cl-defun org-glance-marker:update-state (marker headline)
+(cl-defun org-glance-marker:actualize-state (marker headline)
   (let ((hash-old (org-glance-> marker :hash))
         (hash-new (org-glance-> headline :hash)))
     (org-glance-marker-state

@@ -208,11 +208,6 @@
 (cl-defun org-glance-headline--ast-linked-p (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
-(pcase 123
-  ((and (pred stringp) foo) foo)
-  ((pred null) 1)
-  (foo foo))
-
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (org-glance-headline:with-headline-at-point

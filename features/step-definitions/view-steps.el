@@ -128,16 +128,10 @@
     (org-glance-mew:fetch (org-glance-buffer:mew))))
 
 (And "^markers should be consistent$"
-  (lambda ()
-    (should (--all-p (eq it t)
-                     (org-glance-headline:map (headline)
-                       (let ((marker (org-glance-marker:at-point)))
-                         (message "Marker %d %d"
-                                  (org-glance-> marker :beg)
-                                  (org-glance-> marker :end))
-                         (message "Headline %d %d"
-                                  (point-min)
-                                  (point-max))
-                         (and marker
-                              (= (org-glance-> marker :beg) (point-min))
-                              (= (org-glance-> marker :end) (point-max)))))))))
+     (lambda ()
+       (let ((hc (org-glance-headline:map (headline)
+                   (let ((marker (org-glance-marker:at-point)))
+                     (message "Marker %d %d" (org-glance-> marker :beg) (org-glance-> marker :end))
+                     (message "Headline %d %d" (point-min) (point-max))
+                     (and marker (= (org-glance-> marker :beg) (point-min)) (= (org-glance-> marker :end) (point-max)))))))
+         (should (--all-p (eq it t) hc)))))
