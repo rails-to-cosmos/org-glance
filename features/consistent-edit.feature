@@ -112,7 +112,7 @@ Feature: Consistent Edit
 
     Then marker at point should be corrupted
 
-  Scenario: Change Headline Todo State
+  Scenario: Change headline todo state
     Given store "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
@@ -137,7 +137,7 @@ Feature: Consistent Edit
 
     Then markers positions and hashes should be consistent
 
-  Scenario: Change Headline Tags
+  Scenario: Change headline tags
     Given store "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
