@@ -174,29 +174,27 @@ Feature: Consistent Edit
     And find file "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 4 headlines
-    And current buffer should be up-to-date
+    And current buffer should be up to date
     And markers should be consistent
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
-    And I commit changes
-    And save buffer
+    And commit changes
 
     Then current buffer should contain 4 headlines
-    And current buffer should be up-to-date
+    And current buffer should be up to date
     And markers should be consistent
 
     When I find file "views/fun.org" as "*fun*"
-
     Then current buffer should contain 2 headlines
-    # # Fetching changes on file visit
-    # And current buffer should be up-to-date
-    # And headline with title "Music Festival" should not be in current buffer
-    # And headline with title "Music Festival 2022" should be in current buffer
+    # Fetching changes on file visit
+    And current buffer should be up to date
+    And headline with title "Music Festival" should not be in current buffer
+    And headline with title "Music Festival 2022" should be in current buffer
 
     # When I go to headline with title "Music Festival 2022"
 
-    # Then marker at point should be up-to-date
+    # Then marker at point should be up to date
 
     # When I set title of the headline at point to "Music Festival 2023"
 

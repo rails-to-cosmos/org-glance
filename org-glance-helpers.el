@@ -82,6 +82,10 @@ Example: (org-glance-> mew :view :store :location)"
   (interactive)
   (let ((dst "/tmp/store"))
     (progn ;; reload glance
+
+      (clrhash org-glance-mews)
+      (clrhash org-glance-stores)
+
       (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
       (clrhash org-glance-stores))
 

@@ -74,7 +74,7 @@
       (lambda ()
         (should (not (eq t (org-glance-> (org-glance-marker:at-point) :state :corrupted))))))
 
-(Then "^marker at point should be up-to-date$"
+(Then "^marker at point should be up to date$"
       (lambda ()
         (And "marker at point should not be changed")
         (And "marker at point should not be corrupted")
@@ -85,31 +85,31 @@
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (org-glance-time:eq (read (org-glance-mew:get-property "OFFSET"))
+          (should (time-equal-p (read (org-glance-mew:get-property "OFFSET"))
                                       (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (org-glance-time:eq (org-glance-> mew :offset)
+          (should (time-equal-p (org-glance-> mew :offset)
                                       (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (org-glance-time:lt (read (org-glance-mew:get-property "OFFSET"))
+          (should (time-less-p (read (org-glance-mew:get-property "OFFSET"))
                                       (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
 (Then "^current mew offset should not be latest$"
       (lambda ()
         (let* ((mew (org-glance-buffer:mew))
                (store (org-glance-> mew :view :store)))
-          (should (org-glance-time:lt (org-glance-> mew :offset)
+          (should (time-less-p (org-glance-> mew :offset)
                                       (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
 
-(And "^current buffer should be up-to-date$"
+(And "^current buffer should be up to date$"
   (lambda ()
     (And "current buffer offset should be latest")
     (And "current mew offset should be latest")
@@ -123,15 +123,16 @@
                               t)
                           (error nil))))))
 
-(When "^I fetch store changes to current buffer$"
+(When "^I? ?fetch store changes to current buffer$"
   (lambda ()
-    (org-glance-mew:fetch (org-glance-buffer:mew))))
+    (org-glance-mew:fetch)
+    (message (buffer-string))))
 
 (And "^markers should be consistent$"
      (lambda ()
        (let ((hc (org-glance-headline:map (headline)
                    (let ((marker (org-glance-marker:at-point)))
-                     (message "Marker %d %d" (org-glance-> marker :beg) (org-glance-> marker :end))
-                     (message "Headline %d %d" (point-min) (point-max))
+                     ;; (message "Marker %d %d" (org-glance-> marker :beg) (org-glance-> marker :end))
+                     ;; (message "Headline %d %d" (point-min) (point-max))
                      (and marker (= (org-glance-> marker :beg) (point-min)) (= (org-glance-> marker :end) (point-max)))))))
          (should (--all-p (eq it t) hc)))))

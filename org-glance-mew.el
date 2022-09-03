@@ -139,8 +139,6 @@
 
 (cl-defun org-glance-mew:update-headline (mew old-hash new-hash)
   (org-glance-mew:with-mew-buffer mew
-    (message "Change %s to %s" old-hash new-hash)
-    (message "Markers: %s" (org-glance-> mew :markers))
     (pcase (gethash old-hash (org-glance-> mew :markers))
       ((and marker (guard (not (null marker)))) ;; marker exists, let's go and update headline
        ;; assume that all marker positions are consistent by material-mode hooks
@@ -167,24 +165,28 @@
              (save-restriction
                ,@forms)))))))
 
-(cl-defun org-glance-time:eq (lhs rhs)
-  (= (time-convert lhs 'integer) (time-convert rhs 'integer)))
-
-(cl-defun org-glance-time:lt (lhs rhs)
-  (< (time-convert lhs 'integer) (time-convert rhs 'integer)))
-
 (cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:get-buffer-mew)))
-  (let ((store (org-glance-> mew :view :store)))
-    (unless (org-glance-time:eq (org-glance-store:offset store) (org-glance-> mew :offset))
-      (dolist (event (--drop-while (org-glance-time:lt (org-glance-> mew :offset)
-                                                       (org-glance-> it :offset))
-                                   (org-glance-store:events store)))
+  (thunk-let* ((store (org-glance-> mew :view :store))
+               (offset (org-glance-mew:get-offset mew))
+               (events (--take-while
+                        (time-less-p offset (org-glance-> it :offset))
+                        (org-glance-store:events store))))
+    (when (time-less-p offset (org-glance-store:offset store))
+      (dolist (event events)
         (cl-typecase event
           (org-glance-event:UPDATE
-           (message "Processing event: UPDATE")
            (org-glance-mew:update-headline mew (org-glance-> event :hash) (org-glance-> event :headline :hash))
            (org-glance-mew:set-offset mew (org-glance-> event :offset)))
-          (otherwise (user-error "Not implemented yet")))))))
+          (otherwise (user-error "events PUT and DEL not implemented yet")))))))
+
+(cl-defun org-glance-mew:get-offset (mew)
+  (declare (indent 1))
+  (let ((buffer-offset (org-glance-mew:with-mew-buffer mew
+                         (time-convert (read (org-glance-mew:get-property "OFFSET")) 'list))))
+    (unless (time-equal-p buffer-offset (org-glance-> mew :offset))
+      ;; (warn "Buffer offset not matches mew offset")
+      )
+    buffer-offset))
 
 (cl-defun org-glance-mew:set-offset (mew offset)
   (declare (indent 1))
@@ -194,10 +196,8 @@
 
 (cl-defun org-glance-mew:commit (&optional (mew (org-glance-buffer:mew)))
   (org-glance-mew:with-mew-buffer mew
-    (message "Mew commit: %s (%d changes to apply)" (current-buffer) (length (org-glance-> mew :changes)))
-    (message "Changes: %s" (org-glance-> mew :changes))
     (let ((store (org-glance-> mew :view :store)))
-      (org-glance-mew:fetch mew)
+      (org-glance-mew:fetch mew)  ;; mew should be up to date
       (org-glance-mew:pop-changes (marker mew)
         (let* ((headline (org-glance-marker:headline marker))
                (old-hash (org-glance-> marker :hash))
@@ -208,11 +208,9 @@
                 (org-glance-> marker :hash) new-hash)
           (org-glance-marker:redisplay marker)))
 
-      (org-glance-mew:set-offset mew
-        (org-glance-store:flush store))
+      (org-glance-mew:set-offset mew (org-glance-store:flush store))
 
       (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
-        (message "Fetching changes in other mew: %s" (get-file-buffer (org-glance-> another-mew :location)))
         (org-glance-mew:fetch another-mew)))))
 
 (cl-defun org-glance-mew:normalize-marker (mew marker)

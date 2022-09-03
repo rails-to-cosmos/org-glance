@@ -92,7 +92,7 @@
    (delete-directory org-glance-test:location t)))
 
 (Fail
- (message "Scenario has failed. Please check out test directory for details: %s" org-glance-test:location)
+ (message "Scenario has failed. Check out test directory for details: %s" org-glance-test:location)
  (f-delete (f-join org-glance-test:location "ecukes.lock")))
 
 (Teardown

@@ -19,7 +19,6 @@ editor."
   (cond (org-glance-material-mode
          (org-glance-mew:mark-current-buffer)
          (org-glance-mew:fetch)
-
          (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
          (add-hook 'before-save-hook #'org-glance-mew:commit nil t))

@@ -58,8 +58,7 @@
     ((pred null) (save-match-data ;; avoid strange behaviour on (point) == (point-max)
                    (save-excursion
                      (org-back-to-heading-or-point-min)
-                     (if (= (point) point)
-                         (error "Marker not found at point %d" point)
+                     (unless (= (point) point)
                        (org-glance-marker:at-point (point))))))
     (marker marker)))
 

@@ -114,7 +114,7 @@ Return last committed offset."
   (dolist (event (reverse (org-glance-> store :changelog* :events)))
     (cl-typecase event
       (org-glance-event:RM
-       (org-glance-changelog:push (org-glance-> store :changelog) event)
+       nil
        ;; TODO think about when to delete headlines
        ;; (f-delete (org-glance-store:locate store headline))
        )
@@ -123,8 +123,7 @@ Return last committed offset."
        (let* ((headline (org-glance-store:get store (org-glance-> event :headline :hash)))
               (location (org-glance-store:locate store headline)))
          (unless (f-exists-p location)
-           (org-glance-headline-save headline location)
-           (org-glance-changelog:push (org-glance-> store :changelog) event))))
+           (org-glance-headline-save headline location))))
 
       (org-glance-event:UPDATE
        (let* ((headline (org-glance-store:get store (org-glance-> event :headline :hash)))
@@ -134,8 +133,9 @@ Return last committed offset."
          ;; (f-delete (org-glance-store:locate store (org-glance-> event :hash))
 
          (unless (f-exists-p location)
-           (org-glance-headline-save headline location)
-           (org-glance-changelog:push (org-glance-> store :changelog) event))))))
+           (org-glance-headline-save headline location)))))
+
+    (org-glance-changelog:push (org-glance-> store :changelog) event))
 
   (org-glance-changelog:write (org-glance-> store :changelog)
                               (org-glance-store:/ store org-glance-store:log-location))
@@ -198,7 +198,6 @@ TODO: Transaction."
                  ((pred (string= (org-glance-> event :headline :hash))) (cl-return (org-glance-> event :headline)))))))
 
       (org-glance:with-temp-buffer
-       (message "Locating %s..." (org-glance-store:locate store hash))
        (insert-file-contents (org-glance-store:locate store hash))
        (goto-char (point-min))
        (unless (org-at-heading-p)
