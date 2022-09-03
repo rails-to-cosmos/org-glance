@@ -152,10 +152,6 @@
            (org-glance-mew:create-marker mew new-hash))))
       (_ (error "Marker %s not found for UPDATE in buffer %s" old-hash (current-buffer))))))
 
-(defun org-glance-fetch ()
-  (interactive)
-  (org-glance-mew:fetch (org-glance-mew:get-buffer-mew)))
-
 (cl-defmacro org-glance-mew:with-mew-buffer (mew &rest forms)
   (declare (indent 1))
   `(save-match-data
@@ -193,7 +189,8 @@
   (declare (indent 1))
   (org-glance-mew:with-mew-buffer mew
     (org-glance-mew:set-property "OFFSET" offset)
-    (setf (org-glance-> mew :offset) offset)))
+    (setf (org-glance-> mew :offset) offset)
+    (org-glance-mew:normalize-markers mew)))
 
 (cl-defun org-glance-mew:commit (&optional (mew (org-glance-buffer:mew)))
   (org-glance-mew:with-mew-buffer mew
@@ -211,8 +208,6 @@
 
       (let ((offset (org-glance-store:flush store)))
         (org-glance-mew:set-offset mew offset))
-
-      (org-glance-mew:normalize-markers mew)
 
       ;; (dolist (another-mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
       ;;   (org-glance-mew:fetch another-mew))

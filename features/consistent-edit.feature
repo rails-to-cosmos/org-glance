@@ -154,6 +154,7 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers should be consistent
 
+  @debug
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -207,8 +208,8 @@ Feature: Consistent Edit
     And marker at point should not be outdated
     And markers should be consistent
 
-    # When I commit changes
-    # And switch to buffer "*hikes*"
+    When I commit changes
+    And switch to buffer "*hikes*"
 
     # Then headline with title "Music Festival 2022" should not be in current buffer
     # And headline with title "Music Festival 2023" should be in current buffer
