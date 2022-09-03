@@ -8,3 +8,4 @@ ogpm-cache.el
 /*.err
 *.~undo-tree~
 /*.el#
+*.feature#
