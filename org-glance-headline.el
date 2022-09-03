@@ -208,28 +208,30 @@
 (cl-defun org-glance-headline--ast-linked-p (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
-(cl-defun org-glance-headline-at-point ()
+(cl-defun org-glance-headline-at-point (&optional (point (point)))
   "Create `org-glance-headline' instance from `org-element' at point."
-  (org-glance-headline:with-headline-at-point
-    (let* ((ast (org-glance-headline--ast-normalized))
-           (contents (org-glance-headline--ast-contents ast))
-           (user-properties (org-glance-headline--user-properties contents)))
-      (org-glance-headline
-       :title (org-glance-headline--ast-title ast)
-       :state (pcase (org-glance-headline--ast-state contents)
-                ((pred null) "")
-                (state state))
-       :hash (org-glance-headline--ast-hash contents)
-       :class (org-glance-headline--ast-class ast)
-       :commented-p (org-glance-headline--ast-commented-p ast)
-       :archived-p (org-glance-headline--ast-archived-p ast)
-       :closed-p (org-glance-headline--ast-closed-p ast)
-       :encrypted-p (org-glance-headline--ast-encrypted-p contents)
-       :linked-p (org-glance-headline--ast-linked-p contents)
-       :propertized-p (not (null user-properties))
-       :contents contents
-       :org-properties (org-entry-properties)
-       :user-properties user-properties))))
+  (save-excursion
+    (goto-char (point))
+    (org-glance-headline:with-headline-at-point
+      (let* ((ast (org-glance-headline--ast-normalized))
+             (contents (org-glance-headline--ast-contents ast))
+             (user-properties (org-glance-headline--user-properties contents)))
+        (org-glance-headline
+         :title (org-glance-headline--ast-title ast)
+         :state (pcase (org-glance-headline--ast-state contents)
+                  ((pred null) "")
+                  (state state))
+         :hash (org-glance-headline--ast-hash contents)
+         :class (org-glance-headline--ast-class ast)
+         :commented-p (org-glance-headline--ast-commented-p ast)
+         :archived-p (org-glance-headline--ast-archived-p ast)
+         :closed-p (org-glance-headline--ast-closed-p ast)
+         :encrypted-p (org-glance-headline--ast-encrypted-p contents)
+         :linked-p (org-glance-headline--ast-linked-p contents)
+         :propertized-p (not (null user-properties))
+         :contents contents
+         :org-properties (org-entry-properties)
+         :user-properties user-properties)))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."

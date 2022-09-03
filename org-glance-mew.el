@@ -227,7 +227,8 @@
     (dolist (marker (--filter (>= (org-glance-> it :beg) beg)
                               (hash-table-values (org-glance-> mew :markers))))
       (cl-incf (org-glance-> marker :beg) diff)
-      (cl-incf (org-glance-> marker :end) diff))))
+      (cl-incf (org-glance-> marker :end) diff)
+      (org-glance-marker:redisplay marker))))
 
 (cl-defun org-glance-mew:mark-current-buffer (&optional (mew (org-glance-mew:get-buffer-mew)))
   (org-glance-headline:map (headline)
