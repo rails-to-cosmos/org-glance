@@ -154,7 +154,8 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers should be consistent
 
-  Scenario: Multiple Views
+  @debug
+  Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
@@ -185,9 +186,9 @@ Feature: Consistent Edit
     And current buffer should be up-to-date
     And markers should be consistent
 
-    # When I find file "views/fun.org" as "*fun*"
+    When I find file "views/fun.org" as "*fun*"
 
-    # Then current buffer should contain 2 headlines
+    Then current buffer should contain 2 headlines
     # # Fetching changes on file visit
     # And current buffer should be up-to-date
     # And headline with title "Music Festival" should not be in current buffer

@@ -17,29 +17,14 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-
-         (let ((store (org-glance-mew:get-buffer-store))
-               (mew (org-glance-mew:get-buffer-mew)))
-
-           (org-glance-headline:map (headline)
-             (org-glance-mew:create-marker mew (org-glance-> headline :hash))
-             ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-             ;; (save-buffer)
-             )
-
-           ;; do we really need this hack?
-           (add-text-properties (1- (point-max)) (point-max)
-                                (list :marker (save-excursion
-                                                (goto-char (point-max))
-                                                (org-back-to-heading-or-point-min)
-                                                (get-text-property (point) :marker)))))
+         (org-glance-mew:mark-current-buffer)
+         (org-glance-mew:fetch)
 
          (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
-         (add-hook 'before-save-hook #'org-glance-material-mode:commit nil t)
-         (org-glance-mew:fetch (org-glance-mew:get-buffer-mew)))
+         (add-hook 'before-save-hook #'org-glance-mew:commit nil t))
         (t
-         (remove-hook 'before-save-hook #'org-glance-material-mode:commit t)
+         (remove-hook 'before-save-hook #'org-glance-mew:commit t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t)
          (remove-hook 'post-command-hook #'org-glance-material-mode:debug t))))
 
@@ -49,16 +34,11 @@ editor."
   (thunk-let ((mew (org-glance-buffer:mew))
               (headline (org-glance-headline-at-point))
               (marker (org-glance-marker:at-point change-end))
-              (before-first-headline-p (org-glance:before-first-headline-p))
-              (method (cond ((< pre-change-length (- change-end change-beg)) 'INSERT)
-                            ((> pre-change-length (- change-end change-beg)) 'DELETE)
-                            (t 'SKIP))))
+              (before-first-headline-p (org-glance:before-first-headline-p)))
     (cond (before-first-headline-p
-           (setf (org-glance-> mew :first-headline-pos) (org-glance:first-headline-pos))
-           (let ((diff (cl-case method
-                         ('INSERT (- change-end change-beg))
-                         ('DELETE (- pre-change-length))
-                         ('SKIP 0))))
+           (let ((diff (cond ((< pre-change-length (- change-end change-beg)) (- change-end change-beg))
+                             ((> pre-change-length (- change-end change-beg)) (- pre-change-length))
+                             (t 0))))
              (org-glance-mew:move-markers mew change-beg diff)))
           (t
            (let ((old-state (org-glance-> marker :state))
@@ -73,14 +53,6 @@ editor."
                     (setf (org-glance-> marker :state :changed) t)
                     (cl-pushnew marker (org-glance-> mew :changes))))
              (org-glance-marker:redisplay marker))))))
-
-(cl-defun org-glance-material-mode:commit ()
-  "Apply all changes of buffer headlines to its origins.
-
-TODO:
-- It should be generalized to other mew types."
-  (interactive)
-  (org-glance-mew:commit (org-glance-buffer:mew)))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (when-let (marker (org-glance-marker:at-point))

@@ -19,10 +19,6 @@
       :type org-glance-file
       :initarg :location
       :documentation "Location where mew persists.")
-     (first-headline-pos
-      :type number
-      :initarg :first-headline-pos
-      :documentation "Point where the first headline starts.")
      (markers
       :type hash-table
       :initarg :markers
@@ -177,7 +173,7 @@
 (cl-defun org-glance-time:lt (lhs rhs)
   (< (time-convert lhs 'integer) (time-convert rhs 'integer)))
 
-(cl-defun org-glance-mew:fetch (mew)
+(cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:get-buffer-mew)))
   (let ((store (org-glance-> mew :view :store)))
     (unless (org-glance-time:eq (org-glance-store:offset store) (org-glance-> mew :offset))
       (dolist (event (--drop-while (org-glance-time:lt (org-glance-> mew :offset)
@@ -196,7 +192,7 @@
     (org-glance-mew:set-property "OFFSET" offset)
     (setf (org-glance-> mew :offset) offset)))
 
-(cl-defun org-glance-mew:commit (mew)
+(cl-defun org-glance-mew:commit (&optional (mew (org-glance-buffer:mew)))
   (org-glance-mew:with-mew-buffer mew
     (message "Mew commit: %s (%d changes to apply)" (current-buffer) (length (org-glance-> mew :changes)))
     (message "Changes: %s" (org-glance-> mew :changes))
@@ -232,5 +228,12 @@
                               (hash-table-values (org-glance-> mew :markers))))
       (cl-incf (org-glance-> marker :beg) diff)
       (cl-incf (org-glance-> marker :end) diff))))
+
+(cl-defun org-glance-mew:mark-current-buffer (&optional (mew (org-glance-mew:get-buffer-mew)))
+  (org-glance-headline:map (headline)
+    (org-glance-mew:create-marker mew (org-glance-> headline :hash))
+    ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
+    ;; (save-buffer)
+    ))
 
 (provide 'org-glance-mew)

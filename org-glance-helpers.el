@@ -78,12 +78,6 @@ Example: (org-glance-> mew :view :store :location)"
   (save-match-data
     (org-before-first-heading-p)))
 
-(cl-defun org-glance:first-headline-pos ()
-  (save-excursion
-    (goto-char (point-min))
-    (outline-next-heading)
-    (point)))
-
 (defun org-glance-sandbox ()
   (interactive)
   (let ((dst "/tmp/store"))
