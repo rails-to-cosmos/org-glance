@@ -48,19 +48,19 @@ Feature: Consistent Edit
     And I find file "views/pomeranians.org"
 
     Then current buffer should contain 2 headlines
-    And markers should be consistent
+    And markers positions and hashes should be consistent
 
     # Edit before the first headline
     When I go to the beginning of buffer
     And I insert "#+TITLE: The Zoo\n"
 
-    Then markers should be consistent
+    Then markers positions should be consistent
 
     # Deletions should be properly handled
     When I go to the beginning of buffer
     And I kill current line
 
-    Then markers should be consistent
+    Then markers positions should be consistent
 
     When I go to headline with title "Yummi"
     And I insert " the cat"
@@ -68,13 +68,13 @@ Feature: Consistent Edit
     Then marker at point should be changed
     And marker at point should not be committed
     And 1 marker should be changed
-    And markers should be consistent
+    And markers positions should be consistent
 
     When I set title of the headline at point to "Yummi"
 
     Then marker at point should not be changed
     And 0 markers should be changed
-    And markers should be consistent
+    And markers positions and hashes should be consistent
 
     When I go to headline with title "Eric"
     And I insert " the dog"
@@ -131,7 +131,11 @@ Feature: Consistent Edit
     When I set headline todo state to "DONE"
     Then marker at point should be changed
     And 1 marker should be changed
-    And markers should be consistent
+    And markers positions should be consistent
+
+    When I commit changes
+
+    Then markers positions and hashes should be consistent
 
   Scenario: Change Headline Tags
     Given store "Wishlist" in directory "nerdy" with headlines
@@ -152,7 +156,7 @@ Feature: Consistent Edit
     When I set headline tags to ":Beacon:"
     Then marker at point should be changed
     And 1 marker should be changed
-    And markers should be consistent
+    And markers positions should be consistent
 
   @debug
   Scenario: Multiple views
@@ -175,7 +179,7 @@ Feature: Consistent Edit
 
     Then current buffer should contain 4 headlines
     And current buffer should be up to date
-    And markers should be consistent
+    And markers positions and hashes should be consistent
 
     When I go to headline with title "Music Festival"
     And insert " 2022"
@@ -183,14 +187,14 @@ Feature: Consistent Edit
 
     Then current buffer should contain 4 headlines
     And current buffer should be up to date
-    And markers should be consistent
+    And markers positions and hashes should be consistent
 
     When I find file "views/fun.org" as "*fun*"
     And I fetch store changes
 
     Then current buffer should contain 2 headlines
     And current buffer should be up to date
-    And markers should be consistent
+    And markers positions and hashes should be consistent
     And headline with title "Music Festival" should not be in current buffer
     And headline with title "Music Festival 2022" should be in current buffer
 
@@ -208,14 +212,14 @@ Feature: Consistent Edit
 
     When I commit changes
 
-    Then markers should be consistent
+    Then markers positions and hashes should be consistent
 
     When I switch to buffer "*hikes*"
 
     Then I should be in buffer "*hikes*"
     And headline with title "Music Festival 2022" should not be in current buffer
     And headline with title "Music Festival 2023" should be in current buffer
-    And markers should be consistent
+    And markers positions and hashes should be consistent
     And current buffer offset should be latest
     And current mew offset should be latest
 

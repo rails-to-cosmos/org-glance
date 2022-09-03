@@ -144,7 +144,7 @@
      (org-glance-mew:with-mew-buffer mew
        (goto-char (org-glance-> marker :beg))
        (org-glance-headline:with-headline-at-point
-         (let ((inhibit-modification-hooks t))
+         (let ((inhibit-modification-hooks t)) ;; will handle markers manually
            (org-glance-mew:delete-marker mew old-hash)
            (delete-region (point-min) (point-max))
            (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
