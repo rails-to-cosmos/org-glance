@@ -1,5 +1,5 @@
-Feature: Mew
-  Scenario: Basic Mew
+Feature: Consistent Edit
+  Scenario: Basic functionality
     Given store "Phones" in directory "store/phones" with headlines
       """
       * iPhone 3 :Apple:
@@ -34,7 +34,7 @@ Feature: Mew
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  Scenario: Consistent Editing
+  Scenario: Simple changes
     Given store "Pets" in directory "store/pets" with headlines
       """
       * Yummi :Pomeranian:
@@ -154,7 +154,7 @@ Feature: Mew
     And 1 marker should be changed
     And markers should be consistent
 
-  Scenario: Consistent Editing of Multiple Views
+  Scenario: Multiple Views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:

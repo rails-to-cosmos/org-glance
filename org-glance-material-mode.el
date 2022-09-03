@@ -43,20 +43,6 @@ editor."
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t)
          (remove-hook 'post-command-hook #'org-glance-material-mode:debug t))))
 
-(cl-defun org-glance-material-mode:move-markers (mew beg diff)
-  (when (/= 0 diff)
-    (dolist (marker (--filter (>= (org-glance-> it :beg) beg)
-                              (hash-table-values (org-glance-> mew :markers))))
-      (cl-incf (org-glance-> marker :beg) diff)
-      (cl-incf (org-glance-> marker :end) diff))))
-
-(cl-defun org-glance-material-mode:normalize-marker (mew marker)
-  (org-glance-headline:with-headline-at-point
-    (let ((diff (- (point-max) (org-glance-> marker :end))))
-      (org-glance-material-mode:move-markers mew (org-glance-> marker :end) diff))
-    (setf (org-glance-> marker :beg) (point-min)
-          (org-glance-> marker :end) (point-max))))
-
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
@@ -73,17 +59,17 @@ editor."
                          ('INSERT (- change-end change-beg))
                          ('DELETE (- pre-change-length))
                          ('SKIP 0))))
-             (org-glance-material-mode:move-markers mew change-beg diff)))
+             (org-glance-mew:move-markers mew change-beg diff)))
           (t
            (let ((old-state (org-glance-> marker :state))
                  (new-state (org-glance-marker:actualize-state marker headline)))
              (cond ((org-glance-> old-state :corrupted) nil)
                    ((and (org-glance-> old-state :changed) (not (org-glance-> new-state :changed)))
-                    (org-glance-material-mode:normalize-marker mew marker)
+                    (org-glance-mew:normalize-marker mew marker)
                     (setf (org-glance-> marker :state :changed) nil)
                     (cl-remf (org-glance-> mew :changes) marker))
                    ((org-glance-> new-state :changed)
-                    (org-glance-material-mode:normalize-marker mew marker)
+                    (org-glance-mew:normalize-marker mew marker)
                     (setf (org-glance-> marker :state :changed) t)
                     (cl-pushnew marker (org-glance-> mew :changes))))
              (org-glance-marker:redisplay marker))))))

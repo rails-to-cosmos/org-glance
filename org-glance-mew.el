@@ -219,4 +219,18 @@
         (message "Fetching changes in other mew: %s" (get-file-buffer (org-glance-> another-mew :location)))
         (org-glance-mew:fetch another-mew)))))
 
+(cl-defun org-glance-mew:normalize-marker (mew marker)
+  (org-glance-headline:with-headline-at-point
+    (let ((diff (- (point-max) (org-glance-> marker :end))))
+      (org-glance-mew:move-markers mew (org-glance-> marker :end) diff))
+    (setf (org-glance-> marker :beg) (point-min)
+          (org-glance-> marker :end) (point-max))))
+
+(cl-defun org-glance-mew:move-markers (mew beg diff)
+  (when (/= 0 diff)
+    (dolist (marker (--filter (>= (org-glance-> it :beg) beg)
+                              (hash-table-values (org-glance-> mew :markers))))
+      (cl-incf (org-glance-> marker :beg) diff)
+      (cl-incf (org-glance-> marker :end) diff))))
+
 (provide 'org-glance-mew)
