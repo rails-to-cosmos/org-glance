@@ -212,14 +212,20 @@ Feature: Consistent Edit
     And switch to buffer "*hikes*"
 
     Then headline with title "Music Festival 2022" should not be in current buffer
-    # And headline with title "Music Festival 2023" should be in current buffer
+    And headline with title "Music Festival 2023" should be in current buffer
 
-    # go to headline with title "Music Festival 2022"
+    When I go to headline with title "Music Festival 2023"
 
-    # Then marker at point should not be changed
-    # And marker at point should not be corrupted
-    # And marker at point should be committed
-    # And marker at point should be outdated
+    Then marker at point should not be changed
+    And marker at point should not be corrupted
+    And marker at point should not be committed
+    And marker at point should not be outdated
+
+    When I save buffer
+    # And I append to file "views/fun.org"
+    #   """
+    #   * Some external corruption
+    #   """
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
