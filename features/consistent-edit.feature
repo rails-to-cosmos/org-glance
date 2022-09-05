@@ -1,5 +1,4 @@
 Feature: Consistent Edit
-  @debug
   Scenario: Basic functionality
     Given store "Phones" in directory "store/phones" with headlines
       """
@@ -37,6 +36,7 @@ Feature: Consistent Edit
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
+  @debug
   Scenario: Simple changes
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -73,17 +73,18 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers positions should be consistent
 
-    When I set title of the headline at point to "Yummi"
+    # Remove *return-to-unchanged-state* feature to optimize after-change-functions
+    # When I set title of the headline at point to "Yummi"
 
-    Then marker at point should not be changed
-    And 0 markers should be changed
-    And markers positions and hashes should be consistent
+    # Then marker at point should not be changed
+    # And 0 markers should be changed
+    # And markers positions and hashes should be consistent
 
     When I go to headline with title "Eric"
     And I insert " the dog"
 
     Then marker at point should be changed
-    And 1 marker should be changed
+    And 2 markers should be changed
     And marker at point should not be committed
 
     When I commit changes

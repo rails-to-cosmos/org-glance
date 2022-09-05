@@ -4,7 +4,6 @@
 (require 'org-macs)
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
-(require 'org-glance-marker)
 
 (defvar org-glance-mews (make-hash-table :test #'equal))
 
@@ -17,11 +16,6 @@
       :type org-glance-file
       :initarg :location
       :documentation "Location where mew persists.")
-     (markers
-      :type hash-table
-      :initarg :markers
-      :initform (make-hash-table :test #'equal)
-      :documentation "Hash to marker.")
      (offset
       :type time
       :initarg :offset)
@@ -228,6 +222,28 @@
              (save-restriction
                ,@forms)))))))
 
+(cl-defun org-glance-mew:mark (&optional (mew (org-glance-mew:current)))
+  (org-glance-mew:with-current-buffer mew
+    (cl-loop
+       with store = (org-glance-> mew :view :store)
+       with headlines = (org-glance-headline:map (headline) (list (point-min) (org-glance-> headline :hash)))
+       with marker-positions = (make-vector (length headlines) 0)
+       with marker-hashes = (make-vector (length headlines) nil)
+       with corrupted-markers = (make-bool-vector (length headlines) nil)
+       for (pos hash) in headlines
+       for midx from 0
+       do
+         (aset marker-hashes midx hash)
+         (aset marker-positions midx pos)
+         (aset corrupted-markers midx (null (org-glance-store:in store hash)))
+       finally do
+         (setf (org-glance-> mew :marker-hashes) marker-hashes
+               (org-glance-> mew :marker-positions) marker-positions
+               (org-glance-> mew :marker-overlays) (make-vector (length headlines) nil)
+               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :corrupted-markers--0.0.2) corrupted-markers))))
+
 (cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
     (thunk-let* ((store (org-glance-> mew :view :store))
@@ -266,35 +282,6 @@
 
       (dolist (mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
         (org-glance-mew:fetch mew)))))
-
-(cl-defun org-glance-mew:mark-buffer (&optional (mew (org-glance-mew:current)))
-  (org-glance-mew:with-current-buffer mew
-    (cl-loop
-       with store = (org-glance-> mew :view :store)
-       with headlines = (org-glance-headline:map (headline)
-                          (message "Mark headline: %s" (list (point-min) (org-glance-> headline :hash)))
-                          (list (point-min) (org-glance-> headline :hash)))
-       with marker-positions = (make-vector (length headlines) 0)
-       with state = (make-vector (length headlines) nil)
-       with marker-hashes = (make-vector (length headlines) nil)
-       for (pos hash) in headlines
-       for midx from 0
-       do
-         (aset marker-hashes midx hash)
-         (aset marker-positions midx pos)
-         (aset state midx (bool-vector nil ;; changed?
-                                       (null (org-glance-store:in store hash))  ;; corrupted?
-                                       nil ;; committed?
-                                       ))
-       finally do
-         (message "Marker hashes: %s" marker-hashes)
-         (message "--- Marker Positions ---\n%s" marker-positions)
-         (setf (org-glance-> mew :marker-hashes) marker-hashes
-               (org-glance-> mew :marker-positions) marker-positions
-               (org-glance-> mew :marker-overlays) (make-vector (length headlines) nil)
-               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length headlines) nil)
-               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length headlines) nil)
-               (org-glance-> mew :corrupted-markers--0.0.2) (make-bool-vector (length headlines) nil)))))
 
 (cl-defun org-glance-mew:get-offset (mew)
   (declare (indent 1))
@@ -338,5 +325,9 @@
 ;;           ;; (t
 ;;           ;;  (org-glance-mew:highlight-marker mew midx "#749AF7"))
 ;;           )))
+
+(cl-defun org-glance-mew:shift-markers (mew midx diff)
+  (cl-loop for i from (1+ midx) below (length (org-glance-> mew :marker-positions))
+     do (org-glance-mew:set-marker-position mew i (+ (org-glance-mew:get-marker-position mew i) diff))))
 
 (provide 'org-glance-mew)

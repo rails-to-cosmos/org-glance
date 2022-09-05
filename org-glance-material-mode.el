@@ -17,7 +17,7 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance-mew:mark-buffer)
+         (org-glance-mew:mark)
          (org-glance-mew:fetch)
          (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
@@ -36,8 +36,8 @@ editor."
                            ((> pre-change-length (- change-end change-beg)) (- pre-change-length))
                            (t 0))))
     (org-glance-mew:set-marker-changed mew midx t)
-    (cl-loop for i from (1+ midx) below (length (org-glance-> mew :marker-positions))
-       do (aset (org-glance-> mew :marker-positions) i (+ (aref (org-glance-> mew :marker-positions) i) diff)))))
+    (org-glance-mew:shift-markers mew midx diff)
+    ))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (let ((mew (org-glance-mew:current))
