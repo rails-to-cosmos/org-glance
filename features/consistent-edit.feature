@@ -1,4 +1,5 @@
 Feature: Consistent Edit
+  @debug
   Scenario: Basic functionality
     Given store "Phones" in directory "store/phones" with headlines
       """
@@ -12,8 +13,10 @@ Feature: Consistent Edit
     And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
     And I set title of the headline at point to "iPhone 4"
-    And I commit changes
-    And I save buffer
+
+    Then 1 marker should be changed
+
+    When I commit changes
 
     Then store "Phones" should contain headline with title "iPhone 4" in committed layer
     And store "Phones" should not contain headline with title "iPhone 4" in staging layer
@@ -158,7 +161,6 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers positions should be consistent
 
-  @debug
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -210,7 +212,6 @@ Feature: Consistent Edit
     And marker at point should not be committed
     And 1 marker should be changed
     And marker at point should not be corrupted
-    And marker at point should not be outdated
 
     When I commit changes
 
@@ -230,7 +231,6 @@ Feature: Consistent Edit
     Then marker at point should not be changed
     And marker at point should not be corrupted
     And marker at point should not be committed
-    And marker at point should not be outdated
 
     When I commit changes
     # And I append to file "views/fun.org"

@@ -6,8 +6,6 @@
 (require 'org-glance-headline)
 (require 'org-glance-marker)
 
-(defalias 'org-glance-buffer:mew 'org-glance-mew:get-buffer-mew)
-
 (defvar org-glance-mews (make-hash-table :test #'equal))
 
 (org-glance-class org-glance-mew nil
@@ -24,14 +22,34 @@
       :initarg :markers
       :initform (make-hash-table :test #'equal)
       :documentation "Hash to marker.")
-     (changes
-      :type list
-      :initarg :changes
-      :initform nil
-      :documentation "List of changed markers.")
      (offset
       :type time
-      :initarg :offset))
+      :initarg :offset)
+
+     ;; v0.0.2
+     (markers-0.0.2
+      :type hash-table
+      :initarg :markers-0.0.2
+      :initform (make-hash-table :test #'equal)
+      :documentation "Hash to idx.")
+     (changed-markers--0.0.2
+      :type bool-vector
+      :initarg :changed-markers--0.0.2)
+     (committed-markers--0.0.2
+      :type bool-vector
+      :initarg :committed-markers--0.0.2)
+     (corrupted-markers--0.0.2
+      :type bool-vector
+      :initarg :corrupted-markers--0.0.2)
+     (marker-positions
+      :type vector
+      :initarg :marker-positions)
+     (marker-overlays
+      :type vector
+      :initarg :marker-overlays)
+     (marker-hashes
+      :type vector
+      :initarg :marker-hashes))
   "Materialized viEW.")
 
 ;; TODO implement material offsets
@@ -39,6 +57,77 @@
 ;;  Latest -- proceed, update offset and header
 ;;  Not latest -- rebase, last write wins or user diff
 ;; On material mode check if our offset is latest, update offset and header
+
+(cl-defmacro org-glance-mew:if-safe-marker (mew midx then &rest else)
+  (declare (indent 3))
+  `(if (< -1 ,midx (length (org-glance-> ,mew :marker-positions)))
+       ,then
+     ,@else))
+
+(cl-defun org-glance-mew:get-marker-position (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :marker-positions) midx)
+    (point-max)))
+
+(cl-defun org-glance-mew:set-marker-position (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :marker-positions) midx val)))
+
+(cl-defun org-glance-mew:set-marker-hash (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :marker-hashes) midx val)))
+
+(cl-defun org-glance-mew:get-marker-hash (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :marker-hashes) midx)))
+
+(cl-defun org-glance-mew:get-marker-overlay (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :marker-overlays) midx)))
+
+(cl-defun org-glance-mew:set-marker-overlay (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :marker-overlays) midx val)))
+
+(cl-defun org-glance-mew:highlight-marker (mew midx color)
+  (org-glance-mew:if-safe-marker mew midx
+      (progn
+        (when (org-glance-mew:get-marker-overlay mew midx)
+          (org-glance-mew:delete-marker-overlay mew midx))
+        (let ((overlay (make-overlay (org-glance-mew:get-marker-position mew midx)
+                                     (1+ (org-glance-mew:get-marker-position mew midx)))))
+          (overlay-put overlay 'face `(:foreground ,color))
+          (org-glance-mew:set-marker-overlay mew midx overlay)))))
+
+(cl-defun org-glance-mew:delete-marker-overlay (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (progn
+        (delete-overlay (org-glance-mew:get-marker-overlay mew midx))
+        (org-glance-mew:set-marker-overlay mew midx nil))))
+
+(cl-defun org-glance-mew:marker-changed-p (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :changed-markers--0.0.2) midx)))
+
+(cl-defun org-glance-mew:set-marker-changed (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :changed-markers--0.0.2) midx val)))
+
+(cl-defun org-glance-mew:marker-corrupted-p (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :corrupted-markers--0.0.2) midx)))
+
+(cl-defun org-glance-mew:set-marker-corrupted (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :corrupted-markers--0.0.2) midx val)))
+
+(cl-defun org-glance-mew:marker-committed-p (mew midx)
+  (org-glance-mew:if-safe-marker mew midx
+      (aref (org-glance-> mew :committed-markers--0.0.2) midx)))
+
+(cl-defun org-glance-mew:set-marker-committed (mew midx val)
+  (org-glance-mew:if-safe-marker mew midx
+      (aset (org-glance-> mew :committed-markers--0.0.2) midx val)))
 
 (cl-defun org-glance-mew:header (mew)
   "Generate header for MEW."
@@ -87,9 +176,7 @@
                  cl-second)))
     (org-glance-store:view store type)))
 
-(defalias 'org-glance-buffer:mew 'org-glance-mew:get-buffer-mew)
-
-(cl-defun org-glance-mew:get-buffer-mew ()
+(cl-defun org-glance-mew:current ()
   "Get `org-glance-mew' instance associated with current buffer."
   (when (buffer-file-name)
     (let ((filename (file-truename (buffer-file-name))))
@@ -105,52 +192,33 @@
   (declare (indent 1) (debug ((symbolp form &optional form) forms)))
   (unless (consp spec) (signal 'wrong-type-argument (list 'consp spec)))
   (unless (= 2 (length spec)) (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
-  `(cl-loop
-      with mew = ,(cadr spec)
-      while (org-glance-> mew :changes)
-      for marker = (pop (org-glance-> mew :changes))
-      when (org-glance-marker:live-p marker)
-      collect (org-glance-marker:with-current-buffer marker
-                (let ((,(car spec) marker))
-                  ,@forms))))
+  (let ((mew (car spec))
+        (midx-var-name (cadr spec)))
+    `(org-glance-mew:with-current-buffer ,mew
+       (cl-loop
+          for change across-ref (org-glance-> ,mew :changed-markers--0.0.2)
+          for midx from 0
+          when change
+          collect (unwind-protect
+                       (save-excursion
+                         (goto-char (org-glance-mew:get-marker-position ,mew midx))
+                         (let ((,midx-var-name midx))
+                           ,@forms))
+                    (org-glance-mew:set-marker-changed ,mew midx nil))))))
 
-(cl-defun org-glance-mew:create-marker (mew hash)
-  ;; assume we in headline buffer
-  (let ((marker (org-glance-marker
-                 :hash hash
-                 :beg (point-min)
-                 :end (point-max) ;; end of headline in narrowed buffer
-                 :buffer (get-file-buffer (org-glance-> mew :location))
-                 :state (org-glance-marker-state
-                         ;; FIXME Getting full headline is unneccessary
-                         :corrupted (null (org-glance-store:in (org-glance-> mew :view :store) hash))))))
-    (puthash hash marker (org-glance-> mew :markers))
-    (add-text-properties (point-min) (point-max) (list :marker marker))
-    (org-glance-marker:redisplay marker)
-    marker))
+(cl-defun org-glance-mew:marker-update (mew old-hash new-hash)
+  (org-glance-mew:with-current-buffer mew
+    (thunk-let* ((midx (gethash old-hash (org-glance-> mew :markers-0.0.2)))
+                 (marker-position (org-glance-mew:get-marker-position mew midx))
+                 (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
+      (when midx
+        (goto-char marker-position)
+        (org-glance-headline:with-headline-at-point
+          (delete-region (point-min) (point-max))
+          (org-glance-headline-insert new-headline)
+          (org-glance-mew:set-marker-hash mew midx new-hash))))))
 
-(cl-defun org-glance-mew:delete-marker (mew hash)
-  (org-glance-mew:with-mew-buffer mew
-    (when-let (marker (gethash hash (org-glance-> mew :markers)))
-      (with-current-buffer (org-glance-> marker :buffer)
-        (remove-text-properties (org-glance-> marker :beg)
-                                (org-glance-> marker :end)
-                                (list :marker marker)))
-      (remhash hash (org-glance-> mew :markers)))))
-
-(cl-defun org-glance-mew:update-headline (mew old-hash new-hash)
-  (pcase (gethash old-hash (org-glance-> mew :markers))
-    ((and marker (guard (not (null marker)))) ;; marker exists, let's go and update headline
-     (org-glance-mew:with-mew-buffer mew
-       (goto-char (org-glance-> marker :beg))
-       (org-glance-headline:with-headline-at-point
-         (let ((inhibit-modification-hooks t)) ;; will handle markers manually
-           (org-glance-mew:delete-marker mew old-hash)
-           (delete-region (point-min) (point-max))
-           (org-glance-headline-insert (org-glance-store:get (org-glance-> mew :view :store) new-hash))
-           (org-glance-mew:create-marker mew new-hash)))))))
-
-(cl-defmacro org-glance-mew:with-mew-buffer (mew &rest forms)
+(cl-defmacro org-glance-mew:with-current-buffer (mew &rest forms)
   (declare (indent 1))
   `(save-match-data
      (let ((buffer (get-file-buffer (org-glance-> ,mew :location))))
@@ -160,8 +228,8 @@
              (save-restriction
                ,@forms)))))))
 
-(cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:get-buffer-mew)))
-  (org-glance-mew:with-mew-buffer mew
+(cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
+  (org-glance-mew:with-current-buffer mew
     (thunk-let* ((store (org-glance-> mew :view :store))
                  (offset (org-glance-mew:get-offset mew))
                  (events (--take-while
@@ -171,15 +239,66 @@
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
-             (org-glance-mew:update-headline mew
-                                             (org-glance-> event :hash)
-                                             (org-glance-> event :headline :hash))
+             (org-glance-mew:marker-update mew
+                                           (org-glance-> event :hash)
+                                           (org-glance-> event :headline :hash))
              (org-glance-mew:set-offset mew (org-glance-> event :offset)))
             (otherwise (user-error "events PUT and DEL not implemented yet"))))))))
 
+(cl-defun org-glance-mew:commit (&optional (mew (org-glance-mew:current)))
+  (org-glance-mew:with-current-buffer mew
+    (let ((store (org-glance-> mew :view :store)))
+      (org-glance-mew:fetch mew)  ;; mew should be up to date
+
+      (org-glance-mew:consume-changes (mew midx)
+        (thunk-let* ((headline (save-excursion
+                                 (goto-char (org-glance-mew:get-marker-position mew midx))
+                                 (org-glance-headline-at-point)))
+                     (old-hash (org-glance-mew:get-marker-hash mew midx))
+                     (new-hash (org-glance-> headline :hash)))
+          (org-glance-store:update store old-hash headline)
+          (org-glance-mew:set-marker-committed mew midx t)
+          (org-glance-mew:set-marker-changed mew midx nil)
+          (org-glance-mew:set-marker-hash mew midx new-hash)))
+
+      (let ((offset (org-glance-store:flush store)))
+        (org-glance-mew:set-offset mew offset))
+
+      (dolist (mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
+        (org-glance-mew:fetch mew)))))
+
+(cl-defun org-glance-mew:mark-buffer (&optional (mew (org-glance-mew:current)))
+  (org-glance-mew:with-current-buffer mew
+    (cl-loop
+       with store = (org-glance-> mew :view :store)
+       with hls = (org-glance-headline:map (headline)
+                    (message "Mark headline: %s" (list (point-min) (org-glance-> headline :hash)))
+                    (list (point-min) (org-glance-> headline :hash)))
+       with marker-positions = (make-vector (length hls) 0)
+       with state = (make-vector (length hls) nil)
+       with marker-hashes = (make-vector (length hls) nil)
+       for (pos hash) in hls
+       for midx from 0
+       do
+         (aset marker-hashes midx hash)
+         (aset marker-positions midx pos)
+         (aset state midx (bool-vector nil ;; changed?
+                                       (null (org-glance-store:in store hash))  ;; corrupted?
+                                       nil ;; committed?
+                                       ))
+       finally do
+         (message "Marker hashes: %s" marker-hashes)
+         (message "--- Marker Positions ---\n%s" marker-positions)
+         (setf (org-glance-> mew :marker-hashes) marker-hashes
+               (org-glance-> mew :marker-positions) marker-positions
+               (org-glance-> mew :marker-overlays) (make-vector (length hls) nil)
+               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length hls) nil)
+               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length hls) nil)
+               (org-glance-> mew :corrupted-markers--0.0.2) (make-bool-vector (length hls) nil)))))
+
 (cl-defun org-glance-mew:get-offset (mew)
   (declare (indent 1))
-  (let ((buffer-offset (org-glance-mew:with-mew-buffer mew
+  (let ((buffer-offset (org-glance-mew:with-current-buffer mew
                          (time-convert (read (org-glance-mew:get-property "OFFSET")) 'list))))
     (unless (time-equal-p buffer-offset (org-glance-> mew :offset))
       ;; (warn "Buffer offset not matches mew offset")
@@ -188,59 +307,67 @@
 
 (cl-defun org-glance-mew:set-offset (mew offset)
   (declare (indent 1))
-  (org-glance-mew:with-mew-buffer mew
+  (org-glance-mew:with-current-buffer mew
     (org-glance-mew:set-property "OFFSET" offset)
-    (setf (org-glance-> mew :offset) offset)
-    (org-glance-mew:normalize-markers mew)))
+    (setf (org-glance-> mew :offset) offset)))
 
-(cl-defun org-glance-mew:commit (&optional (mew (org-glance-buffer:mew)))
-  (org-glance-mew:with-mew-buffer mew
-    (let ((store (org-glance-> mew :view :store)))
-      (org-glance-mew:fetch mew)  ;; mew should be up to date
-      (org-glance-mew:consume-changes (marker mew)
-        (let* ((headline (org-glance-marker:headline marker))
-               (old-hash (org-glance-> marker :hash))
-               (new-hash (org-glance-> headline :hash)))
-          (org-glance-store:update store old-hash headline)
-          (setf (org-glance-> marker :state :committed) t
-                (org-glance-> marker :state :changed) nil
-                (org-glance-> marker :hash) new-hash)
-          (remhash old-hash (org-glance-> mew :markers))
-          (puthash new-hash marker (org-glance-> mew :markers))
-          (org-glance-marker:redisplay marker)))
+(cl-defun org-glance-mew:marker-at-point
+    (&optional
+       (mew (org-glance-mew:current))
+       (point (point)))
+  (org-glance:binary-search (org-glance-> mew :marker-positions) point))
 
-      (let ((offset (org-glance-store:flush store)))
-        (org-glance-mew:set-offset mew offset))
+(cl-defun org-glance:binary-search (vec v &optional (l 0) (r (1- (length vec))))
+  (thunk-let* ((m (/ (+ l r 1) 2))
+               (mv (aref vec m))
+               (lv (aref vec l))
+               (rv (aref vec r)))
+    (cond ((= 0 (length vec)) -1)
+          ((< v lv) -1)
+          ((= v lv) l)
+          ((>= v rv) r)
+          ((>= v mv) (org-glance:binary-search vec v m r))
+          (t (org-glance:binary-search vec v l (1- m))))))
 
-      (dolist (mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
-        (org-glance-mew:fetch mew)))))
+(eval-when-compile
+  (cl-assert (= -1 (org-glance:binary-search [] 10)))
 
-(cl-defun org-glance-mew:normalize-markers (mew)
-  (dolist (marker (hash-table-values (org-glance-> mew :markers)))
-    (org-glance-mew:with-mew-buffer mew
-      (org-glance-headline:map (headline)
-        (when (string= (org-glance-> headline :hash) (org-glance-> marker :hash))
-          (org-glance-mew:normalize-marker mew marker))))))
+  (cl-assert (= -1 (org-glance:binary-search [119] 10)))
+  (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
 
-(cl-defun org-glance-mew:normalize-marker (mew marker)
-  (org-glance-headline:with-headline-at-point
-    (let ((diff (- (point-max) (org-glance-> marker :end))))
-      (org-glance-mew:move-markers mew (org-glance-> marker :end) diff))
-    (setf (org-glance-> marker :beg) (point-min)
-          (org-glance-> marker :end) (point-max))))
+  (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
+  (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
+  (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
+  (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
+  (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
 
-(cl-defun org-glance-mew:move-markers (mew beg diff)
-  (when (/= 0 diff)
-    (dolist (marker (--filter (>= (org-glance-> it :beg) beg)
-                              (hash-table-values (org-glance-> mew :markers))))
-      (cl-incf (org-glance-> marker :beg) diff)
-      (cl-incf (org-glance-> marker :end) diff)
-      (org-glance-marker:redisplay marker))))
+  (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
+  (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
+  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
+  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
+  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
+  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
 
-(cl-defun org-glance-mew:mark-current-buffer (&optional (mew (org-glance-mew:get-buffer-mew)))
-  (org-glance-headline:map (headline)
-    (org-glance-mew:create-marker mew (org-glance-> headline :hash))
-    ;; FIXME https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-    (save-buffer)))
+;; (cl-defun org-glance-mew:update-overlay (mew midx)
+;;   "Refresh MARKER overlay."
+;;   (message "Marker index to change: %d" midx)
+;;   (thunk-let ((marked (not (null (org-glance-mew:get-marker-overlay mew midx))))
+;;               (changed (org-glance-mew:marker-changed-p mew midx))
+;;               (committed (org-glance-mew:marker-committed-p mew midx))
+;;               (corrupted (org-glance-mew:marker-corrupted-p mew midx)))
+;;     (cond ((and changed (not marked))
+;;            (org-glance-mew:highlight-marker mew midx "#ffcc00"))
+;;           ((and changed committed marked)
+;;            (org-glance-mew:set-marker-committed mew midx nil)
+;;            (org-glance-mew:highlight-marker mew midx "#ffcc00"))
+;;           ((and (not changed) (not committed) (not corrupted) marked)
+;;            (org-glance-mew:delete-marker-overlay mew midx))
+;;           ((and (not changed) marked committed)
+;;            (org-glance-mew:highlight-marker mew midx "#27ae60"))
+;;           ((and corrupted (not marked))
+;;            (org-glance-mew:highlight-marker mew midx "#e74c3c"))
+;;           ;; (t
+;;           ;;  (org-glance-mew:highlight-marker mew midx "#749AF7"))
+;;           )))
 
 (provide 'org-glance-mew)

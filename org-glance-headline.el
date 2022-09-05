@@ -211,7 +211,7 @@
 (cl-defun org-glance-headline-at-point (&optional (point (point)))
   "Create `org-glance-headline' instance from `org-element' at point."
   (save-excursion
-    (goto-char (point))
+    (goto-char point)
     (org-glance-headline:with-headline-at-point
       (let* ((ast (org-glance-headline--ast-normalized))
              (contents (org-glance-headline--ast-contents ast))

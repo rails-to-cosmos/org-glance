@@ -7,6 +7,8 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* remove text properties (marker)
+* deduplicate classes in wal
 * consistent markers and all the tests [0/4]
 ** TODO headline indented by user
 ** TODO org-link inserted
