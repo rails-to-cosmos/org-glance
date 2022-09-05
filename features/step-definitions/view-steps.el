@@ -132,14 +132,23 @@
        (let ((hc (org-glance-headline:map (headline)
                    (thunk-let ((mew (org-glance-mew:current))
                                (midx (org-glance-mew:marker-at-point)))
-                     ;; (unless (and (= (org-glance-> marker :beg) (point-min))
-                     ;;              (= (org-glance-> marker :end) (point-max)))
-                     ;;   (message "Marker %d %d" (org-glance-> marker :beg) (org-glance-> marker :end))
-                     ;;   (message "Headline %d %d" (point-min) (point-max))
-                     ;;   (message "Contents: %s" (prin1-to-string (buffer-string)))
-                     ;;   (message "Diff: \"%s\"" (buffer-substring-no-properties
-                     ;;                            (org-glance-> marker :end)
-                     ;;                            (point-max))))
+                     (unless (= (org-glance-mew:get-marker-position mew midx) (point-min))
+                       (message "---")
+                       (message "Marker positions: %s" (org-glance-> mew :marker-positions))
+                       (message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
+                       (message "Headline: %d %d" (point-min) (point-max))
+                       (message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (save-restriction
+                         (widen)
+                         (message "--- Marker contents ---\n%s" (buffer-substring-no-properties (org-glance-mew:get-marker-position mew midx)
+                                                                                                (point-max))))
+
+
+                       ;; (message "Diff: \"%s\"" (buffer-substring-no-properties
+                       ;;                          (org-glance-> marker :end)
+                       ;;                          (point-max)))
+                       )
+
                      (and (> midx -1)
                           (= (aref (org-glance-> mew :marker-positions) midx) (point-min)))))))
          (should (--all-p (eq it t) hc)))))

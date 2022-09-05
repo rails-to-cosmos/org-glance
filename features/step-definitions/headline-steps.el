@@ -116,9 +116,11 @@
      (lambda (a b)
        (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
 
-(When "^I? ?set title of the headline at point to \"\\([^\"]+\\)\"$"
+(When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (org-edit-headline title)))
+    (message "Change title: %s" title)
+    (org-edit-headline title)
+    (message "Changed title: %s" title)))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)

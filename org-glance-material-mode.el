@@ -30,6 +30,7 @@ editor."
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
+  (message "Change: %s" (list change-beg change-end pre-change-length))
   (thunk-let* ((mew (org-glance-mew:current))
                (midx (org-glance-mew:marker-at-point mew change-beg))
                (diff (cond ((< pre-change-length (- change-end change-beg)) (- change-end change-beg))

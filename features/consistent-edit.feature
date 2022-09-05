@@ -11,7 +11,7 @@ Feature: Consistent Edit
     And I materialize view "Apple Phones" to "views/apple.org"
     And I find file "views/apple.org"
     And I go to headline with title "iPhone 3"
-    And I set title of the headline at point to "iPhone 4"
+    And I set title of headline at point to "iPhone 4"
 
     Then 1 marker should be changed
 
@@ -36,7 +36,6 @@ Feature: Consistent Edit
     # And store "New phones" should not contain headline with title "iPhone 3" in committed layer
     # And store "Old phones" should contain headline with title "iPhone 3" in staging layer
 
-  @debug
   Scenario: Simple changes
     Given store "Pets" in directory "store/pets" with headlines
       """
@@ -74,7 +73,7 @@ Feature: Consistent Edit
     And markers positions should be consistent
 
     # Remove *return-to-unchanged-state* feature to optimize after-change-functions
-    # When I set title of the headline at point to "Yummi"
+    # When I set title of headline at point to "Yummi"
 
     # Then marker at point should not be changed
     # And 0 markers should be changed
@@ -162,6 +161,7 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers positions should be consistent
 
+  @debug
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -185,10 +185,16 @@ Feature: Consistent Edit
     And markers positions and hashes should be consistent
 
     When I go to headline with title "Music Festival"
-    And set title of the headline at point to "Music Festival 2022"
-    And go to headline with title "Kamchatka"
-    And set title of the headline at point to "Kamchatka 2019"
-    And commit changes
+    And set title of headline at point to "Music Festival 2022"
+
+    Then markers positions should be consistent
+
+    When I go to headline with title "Kamchatka"
+    And set title of headline at point to "Kamchatka 2019"
+
+    Then markers positions should be consistent
+
+    When I commit changes
 
     Then current buffer should contain 4 headlines
     And current buffer should be up to date
@@ -207,7 +213,7 @@ Feature: Consistent Edit
 
     Then marker at point should be up to date
 
-    When I set title of the headline at point to "Music Festival 2023"
+    When I set title of headline at point to "Music Festival 2023"
 
     Then marker at point should be changed
     And marker at point should not be committed
