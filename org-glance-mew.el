@@ -271,13 +271,13 @@
   (org-glance-mew:with-current-buffer mew
     (cl-loop
        with store = (org-glance-> mew :view :store)
-       with hls = (org-glance-headline:map (headline)
-                    (message "Mark headline: %s" (list (point-min) (org-glance-> headline :hash)))
-                    (list (point-min) (org-glance-> headline :hash)))
-       with marker-positions = (make-vector (length hls) 0)
-       with state = (make-vector (length hls) nil)
-       with marker-hashes = (make-vector (length hls) nil)
-       for (pos hash) in hls
+       with headlines = (org-glance-headline:map (headline)
+                          (message "Mark headline: %s" (list (point-min) (org-glance-> headline :hash)))
+                          (list (point-min) (org-glance-> headline :hash)))
+       with marker-positions = (make-vector (length headlines) 0)
+       with state = (make-vector (length headlines) nil)
+       with marker-hashes = (make-vector (length headlines) nil)
+       for (pos hash) in headlines
        for midx from 0
        do
          (aset marker-hashes midx hash)
@@ -291,10 +291,10 @@
          (message "--- Marker Positions ---\n%s" marker-positions)
          (setf (org-glance-> mew :marker-hashes) marker-hashes
                (org-glance-> mew :marker-positions) marker-positions
-               (org-glance-> mew :marker-overlays) (make-vector (length hls) nil)
-               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length hls) nil)
-               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length hls) nil)
-               (org-glance-> mew :corrupted-markers--0.0.2) (make-bool-vector (length hls) nil)))))
+               (org-glance-> mew :marker-overlays) (make-vector (length headlines) nil)
+               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :corrupted-markers--0.0.2) (make-bool-vector (length headlines) nil)))))
 
 (cl-defun org-glance-mew:get-offset (mew)
   (declare (indent 1))
@@ -316,37 +316,6 @@
        (mew (org-glance-mew:current))
        (point (point)))
   (org-glance:binary-search (org-glance-> mew :marker-positions) point))
-
-(cl-defun org-glance:binary-search (vec v &optional (l 0) (r (1- (length vec))))
-  (thunk-let* ((m (/ (+ l r 1) 2))
-               (mv (aref vec m))
-               (lv (aref vec l))
-               (rv (aref vec r)))
-    (cond ((= 0 (length vec)) -1)
-          ((< v lv) -1)
-          ((= v lv) l)
-          ((>= v rv) r)
-          ((>= v mv) (org-glance:binary-search vec v m r))
-          (t (org-glance:binary-search vec v l (1- m))))))
-
-(eval-when-compile
-  (cl-assert (= -1 (org-glance:binary-search [] 10)))
-
-  (cl-assert (= -1 (org-glance:binary-search [119] 10)))
-  (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
-
-  (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
-
-  (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
-  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
-  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
 
 ;; (cl-defun org-glance-mew:update-overlay (mew midx)
 ;;   "Refresh MARKER overlay."

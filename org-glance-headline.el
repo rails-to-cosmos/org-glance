@@ -41,6 +41,18 @@
 (require 'org-glance-scope)
 (require 'org-glance-event)
 
+(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
+  "Execute FORMS only if point is at heading."
+  (declare (indent 0))
+  `(save-match-data
+     (save-excursion
+       (when (org-glance-headline:back-to-headline)
+         (save-restriction
+           (narrow-to-region
+            (save-excursion (org-back-to-heading t) (point))
+            (save-excursion (org-end-of-subtree t t)))
+           ,@forms)))))
+
 (cl-deftype org-glance-headline.Hash () 'string)
 
 ;; Extend events suitable for headlines
@@ -340,18 +352,6 @@ Return t if it is or raise `user-error' otherwise."
       (progn
         (org-back-to-heading-or-point-min)
         (org-at-heading-p))))
-
-(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
-  "Execute FORMS only if point is at heading."
-  (declare (indent 0))
-  `(save-match-data
-     (save-excursion
-       (when (org-glance-headline:back-to-headline)
-         (save-restriction
-           (narrow-to-region
-            (save-excursion (org-back-to-heading t) (point))
-            (save-excursion (org-end-of-subtree t t)))
-           ,@forms)))))
 
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here
