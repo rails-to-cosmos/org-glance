@@ -141,7 +141,7 @@
     (goto-char (point-min))
     (condition-case nil
         (progn
-          (search-forward (format "#+%s: " property))
+          (re-search-forward (format "^\\#\\+%s: " property))
           (buffer-substring-no-properties (point) (line-end-position)))
       (search-failed nil))))
 
@@ -150,14 +150,14 @@
     (goto-char (point-min))
     (condition-case nil
         (progn
-          (search-forward (format "#+%s: " property))
+          (re-search-forward (format "^\\#\\+%s: " property))
           (delete-region (point) (line-end-position))
           (insert (prin1-to-string value)))
       (search-failed nil))))
 
 (cl-defun org-glance-mew:get-buffer-store ()
   "Get `org-glance-store' associated with current buffer."
-  (thread-last (org-glance-mew:get-property "TYPE")
+  (-some->> (org-glance-mew:get-property "TYPE")
     (s-split " :: ")
     cl-first
     org-glance-store:read))
