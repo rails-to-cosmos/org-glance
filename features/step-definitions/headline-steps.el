@@ -118,9 +118,10 @@
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (message "Change title: %s" title)
+    (message "--- Changing Title ---")
+    (message "* Change title from \"%s\" to \"%s\"" (org-glance-> (org-glance-headline-at-point) :title) title)
     (org-edit-headline title)
-    (message "Changed title: %s" title)))
+    (message "--- Changing Title End ---")))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)

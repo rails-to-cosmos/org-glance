@@ -330,4 +330,14 @@
   (cl-loop for i from (1+ midx) below (length (org-glance-> mew :marker-positions))
      do (org-glance-mew:set-marker-position mew i (+ (org-glance-mew:get-marker-position mew i) diff))))
 
+(cl-defun org-glance-mew:consistent-p ()
+  (save-match-data
+    (--all-p (eq it t)
+             (org-glance-headline:map (headline)
+               (thunk-let* ((mew (org-glance-mew:current))
+                            (midx (org-glance-mew:marker-at-point mew (point-min))))
+                 (and (> midx -1)
+                      (= (org-glance-mew:get-marker-position mew midx) (point-min))))))))
+
+
 (provide 'org-glance-mew)

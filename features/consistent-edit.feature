@@ -162,6 +162,44 @@ Feature: Consistent Edit
     And markers positions should be consistent
 
   @debug
+  Scenario: Change headline title without changing todo state
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      """
+    When I create view "Hikes" from "Hike" "Adventures"
+    And materialize view "Hikes" to "views/hikes.org"
+    And find file "views/hikes.org" as "*hikes*"
+
+    Then current buffer should contain 2 headlines
+    And current buffer should be up to date
+    And markers positions and hashes should be consistent
+
+    When I go to headline with title "Niagara Waterfalls"
+    And set title of headline at point to "Niagara Waterfalls 2020"
+
+    Then markers positions should be consistent
+
+  Scenario: Change headline title with changing todo state (STARTED state is not registered)
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      """
+    When I create view "Hikes" from "Hike" "Adventures"
+    And materialize view "Hikes" to "views/hikes.org"
+    And find file "views/hikes.org" as "*hikes*"
+
+    Then current buffer should contain 2 headlines
+    And current buffer should be up to date
+    And markers positions and hashes should be consistent
+
+    When I go to headline with title "Troodos Mountains"
+    And set title of headline at point to "Troodos Mountains 2019"
+
+    Then markers positions should be consistent
+
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
