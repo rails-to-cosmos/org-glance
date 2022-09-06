@@ -36,7 +36,7 @@ editor."
   (message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
   (condition-case nil
       (message "   Delete region: \"%s\"" (buffer-substring-no-properties change-beg (+ change-beg pre-change-length)))
-    (error nil))
+    (error (message "   Delete region doesn't exist anymore")))
 
   (message "   Consistent: %s" (org-glance-mew:consistent-p))
   (let ((marker-pos-before (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))

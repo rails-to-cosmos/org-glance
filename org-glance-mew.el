@@ -149,7 +149,7 @@
   (save-excursion
     (goto-char (point-min))
     (condition-case nil
-        (let ((inhibit-modification-hooks t))
+        (progn
           (search-forward (format "#+%s: " property))
           (delete-region (point) (line-end-position))
           (insert (prin1-to-string value)))

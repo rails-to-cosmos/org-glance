@@ -167,8 +167,10 @@
                        (message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (message "--- Marker contents ---\n%s" (buffer-substring-no-properties (org-glance-mew:get-marker-position mew midx)
-                                                                                         (point-max))))
+                         (message "--- Marker contents ---\n%s"
+                                  (buffer-substring-no-properties
+                                   (org-glance-mew:get-marker-position mew midx)
+                                   (org-glance-mew:get-marker-position mew (1+ midx)))))
 
 
                        ;; (message "Diff: \"%s\"" (buffer-substring-no-properties

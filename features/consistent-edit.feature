@@ -115,6 +115,7 @@ Feature: Consistent Edit
 
     Then marker at point should be corrupted
 
+  @debug
   Scenario: Change headline todo state
     Given store "Wishlist" in directory "nerdy" with headlines
       """
@@ -161,7 +162,6 @@ Feature: Consistent Edit
     And 1 marker should be changed
     And markers positions should be consistent
 
-  @debug
   Scenario: Change headline title without changing todo state
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
