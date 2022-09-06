@@ -133,18 +133,18 @@
                    (thunk-let ((mew (org-glance-mew:current))
                                (midx (org-glance-mew:marker-at-point)))
                      (unless (= (org-glance-mew:get-marker-position mew midx) (point-min))
-                       (message "---")
-                       (message "Marker positions: %s" (org-glance-> mew :marker-positions))
-                       (message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
-                       (message "Headline: %d %d" (point-min) (point-max))
-                       (message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-message "---")
+                       (org-glance-message "Marker positions: %s" (org-glance-> mew :marker-positions))
+                       (org-glance-message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
+                       (org-glance-message "Headline: %d %d" (point-min) (point-max))
+                       (org-glance-message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (message "--- Marker contents ---\n%s" (buffer-substring-no-properties (org-glance-mew:get-marker-position mew midx)
+                         (org-glance-message "--- Marker contents ---\n%s" (buffer-substring-no-properties (org-glance-mew:get-marker-position mew midx)
                                                                                                 (point-max))))
 
 
-                       ;; (message "Diff: \"%s\"" (buffer-substring-no-properties
+                       ;; (org-glance-message "Diff: \"%s\"" (buffer-substring-no-properties
                        ;;                          (org-glance-> marker :end)
                        ;;                          (point-max)))
                        )
@@ -160,20 +160,20 @@
                                 (midx (org-glance-mew:marker-at-point mew (point-min))))
 
                      (unless (= (org-glance-mew:get-marker-position mew midx) (point-min))
-                       (message "---")
-                       (message "Marker positions: %s" (org-glance-> mew :marker-positions))
-                       (message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
-                       (message "Headline: %d %d" (point-min) (point-max))
-                       (message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-message "---")
+                       (org-glance-message "Marker positions: %s" (org-glance-> mew :marker-positions))
+                       (org-glance-message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
+                       (org-glance-message "Headline: %d %d" (point-min) (point-max))
+                       (org-glance-message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (message "--- Marker contents ---\n%s"
+                         (org-glance-message "--- Marker contents ---\n%s"
                                   (buffer-substring-no-properties
                                    (org-glance-mew:get-marker-position mew midx)
                                    (org-glance-mew:get-marker-position mew (1+ midx)))))
 
 
-                       ;; (message "Diff: \"%s\"" (buffer-substring-no-properties
+                       ;; (org-glance-message "Diff: \"%s\"" (buffer-substring-no-properties
                        ;;                          (org-glance-> marker :end)
                        ;;                          (point-max)))
                        )

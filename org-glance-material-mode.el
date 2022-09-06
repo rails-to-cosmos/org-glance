@@ -30,18 +30,18 @@ editor."
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
-  (message "** Change Event")
-  (message "   Consistent: %s" (org-glance-mew:consistent-p))
-  (message "   Change params: \"%s\"" (list change-beg change-end pre-change-length))
-  (message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
+  (org-glance-message "** Change Event")
+  (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
+  (org-glance-message "   Change params: \"%s\"" (list change-beg change-end pre-change-length))
+  (org-glance-message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
   (condition-case nil
-      (message "   Delete region: \"%s\"" (buffer-substring-no-properties change-beg (+ change-beg pre-change-length)))
-    (error (message "   Delete region doesn't exist anymore")))
+      (org-glance-message "   Delete region: \"%s\"" (buffer-substring-no-properties change-beg (+ change-beg pre-change-length)))
+    (error (org-glance-message "   Delete region doesn't exist anymore")))
 
-  (message "   Consistent: %s" (org-glance-mew:consistent-p))
+  (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
   (let ((marker-pos-before (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))
         marker-pos-after)
-    (message "   Marker positions BEFORE: %s" marker-pos-before)
+    (org-glance-message "   Marker positions BEFORE: %s" marker-pos-before)
 
     (thunk-let* ((mew (org-glance-mew:current))
                  (midx (org-glance-mew:marker-at-point mew change-beg))
@@ -50,10 +50,10 @@ editor."
       (org-glance-mew:shift-markers mew midx diff))
 
     (setq marker-pos-after (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))
-    (message "   Marker positions AFTER: %s" marker-pos-after)
-    (message "   Marker positions DIFF: %s" (cl-loop for i from 0 below (length marker-pos-before)
+    (org-glance-message "   Marker positions AFTER: %s" marker-pos-after)
+    (org-glance-message "   Marker positions DIFF: %s" (cl-loop for i from 0 below (length marker-pos-before)
                                                collect (- (aref marker-pos-after i) (aref marker-pos-before i))))
-    (message "   Consistent: %s" (org-glance-mew:consistent-p))))
+    (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))))
 
 (cl-defun org-glance-material-mode:debug (&rest _)
   (let ((mew (org-glance-mew:current))

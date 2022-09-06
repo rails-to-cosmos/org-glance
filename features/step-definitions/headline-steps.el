@@ -118,10 +118,10 @@
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (message "--- Changing Title ---")
-    (message "* Change title from \"%s\" to \"%s\"" (org-glance-> (org-glance-headline-at-point) :title) title)
+    (org-glance-message "--- Changing Title ---")
+    (org-glance-message "* Change title from \"%s\" to \"%s\"" (org-glance-> (org-glance-headline-at-point) :title) title)
     (org-edit-headline title)
-    (message "--- Changing Title End ---")))
+    (org-glance-message "--- Changing Title End ---")))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)
@@ -144,7 +144,7 @@
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
-                         ;; (message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
+                         ;; (org-glance-message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
                          (string= (org-glance-> headline :title) title))))))
 
 (Then "^headline with title \"\\([^\"]+\\)\" should not be in current buffer$"

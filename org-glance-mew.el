@@ -306,7 +306,7 @@
 
 ;; (cl-defun org-glance-mew:update-overlay (mew midx)
 ;;   "Refresh MARKER overlay."
-;;   (message "Marker index to change: %d" midx)
+;;   (org-glance-message "Marker index to change: %d" midx)
 ;;   (thunk-let ((marked (not (null (org-glance-mew:get-marker-overlay mew midx))))
 ;;               (changed (org-glance-mew:marker-changed-p mew midx))
 ;;               (committed (org-glance-mew:marker-committed-p mew midx))

@@ -67,6 +67,10 @@ Example: (org-glance-> mew :view :store :location)"
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
 
+(cl-defun org-glance-message (&rest args)
+  (when org-glance-debug-mode
+    (apply #'message args)))
+
 (cl-defun org-glance-debug (&rest args)
   (let ((buffer (get-buffer-create "*org-glance-debug*")))
     (with-current-buffer buffer
