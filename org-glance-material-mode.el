@@ -34,9 +34,6 @@ editor."
   (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
   (org-glance-message "   Change params: \"%s\"" (list change-beg change-end pre-change-length))
   (org-glance-message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
-  (condition-case nil
-      (org-glance-message "   Delete region: \"%s\"" (buffer-substring-no-properties change-beg (+ change-beg pre-change-length)))
-    (error (org-glance-message "   Delete region doesn't exist anymore")))
 
   (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
   (let ((marker-pos-before (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))
@@ -46,13 +43,14 @@ editor."
     (thunk-let* ((mew (org-glance-mew:current))
                  (midx (org-glance-mew:marker-at-point mew change-beg))
                  (diff (- (- change-end change-beg) pre-change-length)))
+      (org-glance-message "   Marker affected: %d" midx)
       (org-glance-mew:set-marker-changed mew midx t)
       (org-glance-mew:shift-markers mew midx diff))
 
     (setq marker-pos-after (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))
     (org-glance-message "   Marker positions AFTER: %s" marker-pos-after)
     (org-glance-message "   Marker positions DIFF: %s" (cl-loop for i from 0 below (length marker-pos-before)
-                                               collect (- (aref marker-pos-after i) (aref marker-pos-before i))))
+                                                          collect (- (aref marker-pos-after i) (aref marker-pos-before i))))
     (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))))
 
 (cl-defun org-glance-material-mode:debug (&rest _)

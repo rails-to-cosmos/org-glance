@@ -48,11 +48,11 @@ Feature: Store
       """
 
     Then store "Stories" should contain 4 headlines
-    And store "Stories" should contain headline with title "Travel to Romania" in committed layer
-    And store "Stories" should not contain headline with title "Travel to Romania" in staging layer
+    And store "Stories" should contain headline "Travel to Romania" in committed layer
+    And store "Stories" should not contain headline "Travel to Romania" in staging layer
     # TODO Test title uniqueness
-    # And store "Stories" should contain headline with title "Travel to Romania (2)" in staging layer
-    # And store "Stories" should not contain headline with title "Travel to Romania (2)" in committed layer
+    # And store "Stories" should contain headline "Travel to Romania (2)" in staging layer
+    # And store "Stories" should not contain headline "Travel to Romania (2)" in committed layer
 
   Scenario: Predicates
     Given store "Stories" in directory "store/stories" with headlines
@@ -102,12 +102,12 @@ Feature: Store
     And I create view "Humans" from "Human" "Pets"
     And I materialize view "Humans" to "views/humans.org"
 
-    # Then store "Pets" should contain headline with title "Yummi" in staging layer
-    # And store "Pets" should not contain headline with title "Yummi" in committed layer
-    # And store "Pets" should contain headline with title "Eric" in staging layer
-    # And store "Pets" should not contain headline with title "Eric" in committed layer
-    # And store "Pets" should not contain headline with title "Tanik" in committed layer
-    # And store "Pets" should not contain headline with title "Tanik" in staging layer
+    # Then store "Pets" should contain headline "Yummi" in staging layer
+    # And store "Pets" should not contain headline "Yummi" in committed layer
+    # And store "Pets" should contain headline "Eric" in staging layer
+    # And store "Pets" should not contain headline "Eric" in committed layer
+    # And store "Pets" should not contain headline "Tanik" in committed layer
+    # And store "Pets" should not contain headline "Tanik" in staging layer
     # And store "Pets" should contain 2 headlines of class "Pomeranian"
     # And store "Pets" should contain 0 headlines of class "Human"
 

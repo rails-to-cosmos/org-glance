@@ -17,7 +17,7 @@
     (unless (org-at-heading-p)
       (outline-next-heading))))
 
-(When "^I? ?go to headline with title \"\\([^\"]+\\)\"$"
+(When "^I? ?go to headline \"\\([^\"]+\\)\"$"
   (lambda (title)
     (goto-char (point-min))
     (re-search-forward (format "^*\\([A-Z ]+\\)?%s" title))))
@@ -118,10 +118,9 @@
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (org-glance-message "--- Changing Title ---")
     (org-glance-message "* Change title from \"%s\" to \"%s\"" (org-glance-> (org-glance-headline-at-point) :title) title)
     (org-edit-headline title)
-    (org-glance-message "--- Changing Title End ---")))
+    (org-glance-message "")))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
   (lambda (expected-count)
@@ -140,15 +139,35 @@
        (let ((inhibit-message t))
          (org-set-tags tags))))
 
-(Then "^headline with title \"\\([^\"]+\\)\" should be in current buffer$"
+(Then "^headline \"\\([^\"]+\\)\" should be in current buffer$"
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
                          ;; (org-glance-message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
                          (string= (org-glance-> headline :title) title))))))
 
-(Then "^headline with title \"\\([^\"]+\\)\" should not be in current buffer$"
+(Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"
       (lambda (title)
         (should (not (--any (eq it t)
                             (org-glance-headline:map (headline)
                               (string= (org-glance-> headline :title) title)))))))
+
+(When "^I? ?rename headline \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
+  (lambda (from-title to-title)
+    (When "I go to headline \"%s\"" from-title)
+    (And "set title of headline at point to \"%s\"" to-title)))
+
+(Then "^headline \"\\([^\"]+\\)\" should be changed$"
+  (lambda (headline)
+    (When "I go to headline \"%s\"" headline)
+    (Then "marker at point should be changed")))
+
+(Then "^headline \"\\([^\"]+\\)\" should not be committed$"
+  (lambda (headline)
+    (When "I go to headline \"%s\"" headline)
+    (Then "marker at point should not be committed")))
+
+(Then "^headline \"\\([^\"]+\\)\" should not be corrupted$"
+  (lambda (headline)
+    (When "I go to headline \"%s\"" headline)
+    (Then "marker at point should not be corrupted")))

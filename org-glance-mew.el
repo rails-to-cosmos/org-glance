@@ -19,22 +19,20 @@
      (offset
       :type time
       :initarg :offset)
-
-     ;; v0.0.2
-     (markers-0.0.2
+     (hash->midx
       :type hash-table
-      :initarg :markers-0.0.2
+      :initarg :hash->midx
       :initform (make-hash-table :test #'equal)
       :documentation "Hash to idx.")
-     (changed-markers--0.0.2
+     (changed-markers
       :type bool-vector
-      :initarg :changed-markers--0.0.2)
-     (committed-markers--0.0.2
+      :initarg :changed-markers)
+     (committed-markers
       :type bool-vector
-      :initarg :committed-markers--0.0.2)
-     (corrupted-markers--0.0.2
+      :initarg :committed-markers)
+     (corrupted-markers
       :type bool-vector
-      :initarg :corrupted-markers--0.0.2)
+      :initarg :corrupted-markers)
      (marker-positions
       :type vector
       :initarg :marker-positions)
@@ -69,7 +67,10 @@
 
 (cl-defun org-glance-mew:set-marker-hash (mew midx val)
   (org-glance-mew:if-safe-marker mew midx
-      (aset (org-glance-> mew :marker-hashes) midx val)))
+      (progn
+        (remhash (org-glance-mew:get-marker-hash mew midx) (org-glance-> mew :hash->midx))
+        (puthash val midx  (org-glance-> mew :hash->midx))
+        (aset (org-glance-> mew :marker-hashes) midx val))))
 
 (cl-defun org-glance-mew:get-marker-hash (mew midx)
   (org-glance-mew:if-safe-marker mew midx
@@ -101,27 +102,27 @@
 
 (cl-defun org-glance-mew:marker-changed-p (mew midx)
   (org-glance-mew:if-safe-marker mew midx
-      (aref (org-glance-> mew :changed-markers--0.0.2) midx)))
+      (aref (org-glance-> mew :changed-markers) midx)))
 
 (cl-defun org-glance-mew:set-marker-changed (mew midx val)
   (org-glance-mew:if-safe-marker mew midx
-      (aset (org-glance-> mew :changed-markers--0.0.2) midx val)))
+      (aset (org-glance-> mew :changed-markers) midx val)))
 
 (cl-defun org-glance-mew:marker-corrupted-p (mew midx)
   (org-glance-mew:if-safe-marker mew midx
-      (aref (org-glance-> mew :corrupted-markers--0.0.2) midx)))
+      (aref (org-glance-> mew :corrupted-markers) midx)))
 
 (cl-defun org-glance-mew:set-marker-corrupted (mew midx val)
   (org-glance-mew:if-safe-marker mew midx
-      (aset (org-glance-> mew :corrupted-markers--0.0.2) midx val)))
+      (aset (org-glance-> mew :corrupted-markers) midx val)))
 
 (cl-defun org-glance-mew:marker-committed-p (mew midx)
   (org-glance-mew:if-safe-marker mew midx
-      (aref (org-glance-> mew :committed-markers--0.0.2) midx)))
+      (aref (org-glance-> mew :committed-markers) midx)))
 
 (cl-defun org-glance-mew:set-marker-committed (mew midx val)
   (org-glance-mew:if-safe-marker mew midx
-      (aset (org-glance-> mew :committed-markers--0.0.2) midx val)))
+      (aset (org-glance-> mew :committed-markers) midx val)))
 
 (cl-defun org-glance-mew:header (mew)
   "Generate header for MEW."
@@ -146,14 +147,21 @@
       (search-failed nil))))
 
 (cl-defun org-glance-mew:set-property (property value)
+  (org-glance-message "* Change property %s from %s to %s" property (org-glance-mew:get-property property) value)
   (save-excursion
-    (goto-char (point-min))
-    (condition-case nil
-        (progn
-          (re-search-forward (format "^\\#\\+%s: " property))
-          (delete-region (point) (line-end-position))
-          (insert (prin1-to-string value)))
-      (search-failed nil))))
+    (save-restriction
+      (widen)
+      (goto-char (point-min))
+      (condition-case nil
+          (progn
+            (re-search-forward (format "^\\#\\+%s: " property))
+            (org-glance-message "  Delete region: \"%s\"" (buffer-substring-no-properties (point) (line-end-position)))
+            (org-glance-message "  Delete region from %d to %d" (point) (line-end-position))
+            (org-glance-message "  Insert \"%s\"" (prin1-to-string value))
+            (org-glance-message "")
+            (delete-region (point) (line-end-position))
+            (insert (prin1-to-string value)))
+        (search-failed nil)))))
 
 (cl-defun org-glance-mew:get-buffer-store ()
   "Get `org-glance-store' associated with current buffer."
@@ -190,7 +198,7 @@
         (midx-var-name (cadr spec)))
     `(org-glance-mew:with-current-buffer ,mew
        (cl-loop
-          for change across-ref (org-glance-> ,mew :changed-markers--0.0.2)
+          for change across-ref (org-glance-> ,mew :changed-markers)
           for midx from 0
           when change
           collect (unwind-protect
@@ -200,16 +208,29 @@
                            ,@forms))
                     (org-glance-mew:set-marker-changed ,mew midx nil))))))
 
-(cl-defun org-glance-mew:marker-update (mew old-hash new-hash)
+(cl-defun org-glance-mew:replace-headline (mew old-hash new-hash)
+  (declare (indent 0))
   (org-glance-mew:with-current-buffer mew
-    (thunk-let* ((midx (gethash old-hash (org-glance-> mew :markers-0.0.2)))
+    (thunk-let* ((midx (gethash old-hash (org-glance-> mew :hash->midx)))
                  (marker-position (org-glance-mew:get-marker-position mew midx))
                  (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
       (when midx
         (goto-char marker-position)
         (org-glance-headline:with-headline-at-point
-          (delete-region (point-min) (point-max))
-          (org-glance-headline-insert new-headline)
+          (org-edit-headline (org-glance-> new-headline :title))
+          (org-todo (org-glance-> new-headline :state))
+          (org-set-tags (org-glance-> new-headline :class))
+          (delete-region (save-excursion
+                           (goto-char (point-min))
+                           (forward-line)
+                           (point))
+                         (point-max))
+          (insert (with-temp-buffer
+                    (insert (org-glance-> new-headline :contents))
+                    (goto-char (point-min))
+                    (forward-line)
+                    (buffer-substring-no-properties (point) (point-max))))
+          (goto-char (point-min))
           (org-glance-mew:set-marker-hash mew midx new-hash))))))
 
 (cl-defmacro org-glance-mew:with-current-buffer (mew &rest forms)
@@ -230,9 +251,11 @@
        with marker-positions = (make-vector (length headlines) 0)
        with marker-hashes = (make-vector (length headlines) nil)
        with corrupted-markers = (make-bool-vector (length headlines) nil)
+       with markers = (make-hash-table :test #'equal)
        for (pos hash) in headlines
        for midx from 0
        do
+         (puthash hash midx markers)
          (aset marker-hashes midx hash)
          (aset marker-positions midx pos)
          (aset corrupted-markers midx (null (org-glance-store:in store hash)))
@@ -240,9 +263,10 @@
          (setf (org-glance-> mew :marker-hashes) marker-hashes
                (org-glance-> mew :marker-positions) marker-positions
                (org-glance-> mew :marker-overlays) (make-vector (length headlines) nil)
-               (org-glance-> mew :changed-markers--0.0.2) (make-bool-vector (length headlines) nil)
-               (org-glance-> mew :committed-markers--0.0.2) (make-bool-vector (length headlines) nil)
-               (org-glance-> mew :corrupted-markers--0.0.2) corrupted-markers))))
+               (org-glance-> mew :changed-markers) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :committed-markers) (make-bool-vector (length headlines) nil)
+               (org-glance-> mew :corrupted-markers) corrupted-markers
+               (org-glance-> mew :hash->midx) markers))))
 
 (cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
@@ -255,16 +279,18 @@
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
-             (org-glance-mew:marker-update mew
-                                           (org-glance-> event :hash)
-                                           (org-glance-> event :headline :hash))
-             (org-glance-mew:set-offset mew (org-glance-> event :offset)))
-            (otherwise (user-error "events PUT and DEL not implemented yet"))))))))
+             (org-glance-mew:replace-headline
+               mew
+               (org-glance-> event :hash)
+               (org-glance-> event :headline :hash)))
+            (otherwise (user-error "events PUT and DEL not implemented yet"))))
+        (when events
+          (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))))))
 
 (cl-defun org-glance-mew:commit (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
     (let ((store (org-glance-> mew :view :store)))
-      (org-glance-mew:fetch mew)  ;; mew should be up to date
+      (org-glance-mew:fetch mew)
 
       (org-glance-mew:consume-changes (mew midx)
         (thunk-let* ((headline (save-excursion

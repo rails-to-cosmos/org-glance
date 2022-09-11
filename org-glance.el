@@ -40,8 +40,6 @@
 
 (require 'org-glance-buffer)
 
-(defvar org-glance-debug-mode nil)
-
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"

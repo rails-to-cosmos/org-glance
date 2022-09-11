@@ -278,10 +278,10 @@
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
   (org-glance--with-temp-file dest
-    (org-glance-headline-insert headline))
+    (org-glance-headline:insert headline))
   headline)
 
-(cl-defmethod org-glance-headline-insert ((headline org-glance-headline))
+(cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
   (insert (org-glance-> headline :contents) "\n"))
 
 ;; (defvar org-glance-headline--bindat-spec

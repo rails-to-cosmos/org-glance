@@ -51,22 +51,22 @@
           (should (= (string-to-number expected-count)
                      (length (org-glance-store:headlines store)))))))
 
-(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in staging layer$"
+(Then "^store \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
         (let ((store (org-glance-test:get-store store-name)))
           (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog*))))))
 
-(Then "^store \"\\([^\"]+\\)\" should contain headline with title \"\\([^\"]+\\)\" in committed layer$"
+(Then "^store \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
         (let ((store (org-glance-test:get-store store-name)))
           (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog))))))
 
-(Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in staging layer$"
+(Then "^store \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (store-name title)
         (let ((store (org-glance-test:get-store store-name)))
           (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog*)))))))
 
-(Then "^store \"\\([^\"]+\\)\" should not contain headline with title \"\\([^\"]+\\)\" in committed layer$"
+(Then "^store \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\" in committed layer$"
       (lambda (store-name title)
         (let ((store (org-glance-test:get-store store-name)))
           (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> store :changelog)))))))

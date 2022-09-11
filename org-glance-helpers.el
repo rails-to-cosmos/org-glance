@@ -5,6 +5,8 @@
 (require 'eieio)
 (require 'thunk)
 
+(defvar org-glance-debug-mode t)
+
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."
   (declare (indent 3))

@@ -42,7 +42,7 @@
                    (insert (org-glance-mew:header mew))
                    (cl-dolist (headline (org-glance-store:headlines (org-glance-> view :store)))
                      (when (org-glance-view:filter view headline)
-                       (org-glance-headline-insert
+                       (org-glance-headline:insert
                         (org-glance-store:get
                          (org-glance-> view :store)
                          (org-glance-> headline :hash))))))
