@@ -2,6 +2,7 @@
 
 (require 'eieio)
 (require 'org-macs)
+(require 'org-glance-offset)
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
 
@@ -17,7 +18,7 @@
       :initarg :location
       :documentation "Location where mew persists.")
      (offset
-      :type time
+      :type org-glance-offset
       :initarg :offset)
      (hash->midx
       :type hash-table
@@ -273,9 +274,9 @@
     (thunk-let* ((store (org-glance-> mew :view :store))
                  (offset (org-glance-mew:get-offset mew))
                  (events (--take-while
-                          (time-less-p offset (org-glance-> it :offset))
+                          (org-glance-offset:less-p offset (org-glance-> it :offset))
                           (org-glance-store:events store))))
-      (when (time-less-p offset (org-glance-store:offset store))
+      (when (org-glance-offset:less-p offset (org-glance-store:offset store))
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
@@ -311,12 +312,8 @@
 
 (cl-defun org-glance-mew:get-offset (mew)
   (declare (indent 1))
-  (let ((buffer-offset (org-glance-mew:with-current-buffer mew
-                         (time-convert (read (org-glance-mew:get-property "OFFSET")) 'list))))
-    (unless (time-equal-p buffer-offset (org-glance-> mew :offset))
-      ;; (warn "Buffer offset not matches mew offset")
-      )
-    buffer-offset))
+  (org-glance-mew:with-current-buffer mew
+    (org-glance-offset:read (org-glance-mew:get-property "OFFSET"))))
 
 (cl-defun org-glance-mew:set-offset (mew offset)
   (declare (indent 1))
