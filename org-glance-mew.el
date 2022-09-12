@@ -285,8 +285,9 @@
                (org-glance-> event :hash)
                (org-glance-> event :headline :hash)))
             (otherwise (user-error "events PUT and DEL not implemented yet"))))
-        (when events
-          (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))))))
+        ;; (when events
+        ;;   (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))
+        ))))
 
 (cl-defun org-glance-mew:commit (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
