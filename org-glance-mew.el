@@ -234,7 +234,9 @@
                     (forward-line)
                     (buffer-substring-no-properties (point) (point-max))))
 
-          (goto-char (point-min))
+          (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
+            (insert "\n"))
+
           (org-glance-mew:set-marker-hash mew midx new-hash))))))
 
 (cl-defmacro org-glance-mew:with-current-buffer (mew &rest forms)

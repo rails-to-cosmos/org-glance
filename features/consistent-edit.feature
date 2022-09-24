@@ -268,7 +268,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @skip
+  @debug
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """

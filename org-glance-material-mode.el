@@ -30,7 +30,10 @@ editor."
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
-  (org-glance-message "** Change Event")
+  (org-glance-message "** Change Event in %s" (current-buffer))
+  (org-glance-message "   Buffer string: \"%s\"" (save-restriction
+                                                   (widen)
+                                                   (buffer-string)))
   (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
   (org-glance-message "   Change params: \"%s\"" (list change-beg change-end pre-change-length))
   (org-glance-message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
