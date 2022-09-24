@@ -90,9 +90,10 @@
 (Then "^current mew offset should be latest$"
       (lambda ()
         (let* ((mew (org-glance-mew:current))
-               (store (org-glance-> mew :view :store)))
-          (should (time-equal-p (org-glance-> mew :offset)
-                                (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog)) :offset))))))
+               (store (org-glance-> mew :view :store))
+               (changelog-offset (org-glance-> (org-glance-changelog:last (org-glance-> store :changelog))
+                                   :offset)))
+          (should (org-glance-offset:equal-p (org-glance-mew:offset mew) changelog-offset)))))
 
 (Then "^current buffer offset should not be latest$"
       (lambda ()
@@ -159,15 +160,17 @@
                    (let* ((mew (org-glance-mew:current))
                           (midx (org-glance-mew:marker-at-point mew (point-min))))
 
+                     (org-glance-message "---")
+                     (org-glance-message "Looking for midx: %d" midx)
+
                      (unless (= (org-glance-mew:get-marker-position mew midx) (point-min))
-                       (org-glance-message "---")
                        (org-glance-message "Marker positions: %s" (org-glance-> mew :marker-positions))
-                       (org-glance-message "Marker: %d" (org-glance-mew:get-marker-position mew midx))
+                       (org-glance-message "Marker position: %d" (org-glance-mew:get-marker-position mew midx))
                        (org-glance-message "Headline: %d %d" (point-min) (point-max))
-                       (org-glance-message "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-message "Headline contents:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (org-glance-message "--- Marker contents ---\n%s"
+                         (org-glance-message "Marker contents:\n\"%s\""
                                              (buffer-substring-no-properties
                                               (org-glance-mew:get-marker-position mew midx)
                                               (org-glance-mew:get-marker-position mew (1+ midx)))))
@@ -178,9 +181,15 @@
                        ;;                          (point-max)))
                        )
 
+                     (org-glance-message "Marker hash: %s" (org-glance-mew:get-marker-hash mew midx))
+                     (org-glance-message "Headline hash: %s" (org-glance-> headline :hash))
+                     (org-glance-message "Marker position: %d" (org-glance-mew:get-marker-position mew midx))
+                     (org-glance-message "Headline position: %d" (point-min))
+
                      (and (> midx -1)
                           (string= (org-glance-mew:get-marker-hash mew midx) (org-glance-> headline :hash))
                           (= (org-glance-mew:get-marker-position mew midx) (point-min)))))))
+         (org-glance-message "HC: %s" hc)
          (should (--all-p (eq it t) hc)))))
 
 (When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in file \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"

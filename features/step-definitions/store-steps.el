@@ -23,6 +23,7 @@
                                (->> headlines
                                     (s-split "* ")
                                     (-map #'s-trim)
+                                    reverse
                                     (--filter (not (string-empty-p it)))
                                     (--map (concat "* " it))))))
              (org-glance-test:put-store store-name store)))))

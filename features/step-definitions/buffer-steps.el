@@ -4,6 +4,7 @@
 
 (When "^I? ?save buffer$" #'save-buffer)
 (When "^I? ?switch to buffer \"\\([^\"]+\\)\"$" #'switch-to-buffer)
+
 (When "^I? ?kill buffer$" #'kill-buffer)
 (When "^I? ?kill current buffer$" #'kill-buffer)
 

@@ -19,8 +19,13 @@
 
 (When "^I? ?go to headline \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (goto-char (point-min))
-    (re-search-forward (format "^*\\([A-Z ]+\\)?%s" title))))
+    (let ((title-prefix (format "^*\\([A-Z ]+\\)?%s" title)))
+      (goto-char (point-min))
+      (condition-case nil
+          (while (or (null (org-glance-headline-at-point))
+                     (not (string= (org-glance-> (org-glance-headline-at-point) :title) title)))
+            (re-search-forward title-prefix))
+        (search-failed (error "Headline not found: %s" title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (name expected-class)
@@ -118,16 +123,25 @@
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (org-glance-message "* Change title from \"%s\" to \"%s\"" (org-glance-> (org-glance-headline-at-point) :title) title)
     (org-edit-headline title)
     (org-glance-message "")))
 
+(And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
+  (lambda (title contents)
+    (When "I go to headline \"%s\"" title)
+    (org-glance-headline:with-headline-at-point
+      (goto-char (point-min))
+      (if (= 0 (forward-line))
+          (delete-region (point) (point-max))
+        (goto-char (point-max)))
+      (insert contents "\n"))))
+
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
-  (lambda (expected-count)
-    (let ((actual-count 0))
-      (org-glance-headline:map (headline)
-        (cl-incf actual-count))
-      (should (= actual-count (string-to-number expected-count))))))
+      (lambda (expected-count)
+        (let ((actual-count 0))
+          (org-glance-headline:map (headline)
+            (cl-incf actual-count))
+          (should (= actual-count (string-to-number expected-count))))))
 
 (And "^I? ?set headline todo state to \"\\([^\"]+\\)\"$"
      (lambda (state)

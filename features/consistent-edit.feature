@@ -123,9 +123,8 @@ Feature: Consistent Edit
       * TODO Samovar :Friends:
       """
 
-    When I create view "Pigs" from "Peppa" "Wishlist"
-    And materialize view "Pigs" to "views/pigs.org"
-    And find file "views/pigs.org"
+    When I create view "Pigs" from "Peppa" "Wishlist" in file "views/pigs.org" as "*pigs*"
+    And switch to buffer "*pigs*"
     And go to headline "Peppa Pig"
 
     Then marker at point should not be changed
@@ -133,7 +132,7 @@ Feature: Consistent Edit
 
     When I set headline todo state to "DONE"
     Then marker at point should be changed
-    And 1 marker should be changed
+    # And 1 marker should be changed
     And markers positions should be consistent
 
     When I commit changes
@@ -194,10 +193,27 @@ Feature: Consistent Edit
     And current buffer should be up to date
     And marker positions and hashes should be consistent
 
-    When I go to headline "Troodos Mountains"
-    And set title of headline at point to "Troodos Mountains 2019"
+    When I go to headline "STARTED Troodos Mountains"
+    And set title of headline at point to "STARTED Troodos Mountains 2019"
 
     Then markers positions should be consistent
+
+  Scenario: Change headline contents
+    Given store "Wishlist" in directory "nerdy" with headlines
+      """
+      * TODO Tatinek :Peppa:
+      * TODO Peppa Pig :Peppa:
+      """
+
+    When I create view "Pigs" from "Peppa" "Wishlist" in file "views/pigs.org" as "*pigs*"
+    And switch to buffer "*pigs*"
+    And set headline "Tatinek" contents to
+    """
+    SCHEDULED: <2019-08-23 Fri>
+    """
+    And save buffer
+
+    Then marker positions and hashes should be consistent
 
   Scenario: Real-time sync in live buffers
     Given store "Adventures" in directory "stories/adventures" with headlines
@@ -223,6 +239,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
+  @debug
   Scenario: Sync on read
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -241,21 +258,24 @@ Feature: Consistent Edit
     And rename headline "Music Festival" to "Music Festival 2022"
     And rename headline "Kamchatka" to "Kamchatka 2019"
     And save buffer
-    And find file "views/fun.org" as "*fun*"
-    And switch to buffer "*fun*"
+
+    Then marker positions and hashes should be consistent
+
+    When I find file "views/fun.org" as "*fun*"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @debug
+  @skip
   Scenario: Multiple views
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
       * TODO Music Festival :Hike:Music:
+        SCHEDULED: <2022-09-16 Fri>
       * DONE Tame Impala Concert :Music:
       * DONE Kamchatka :Hike:
       * CANCELLED PHP Course :Cringe:
@@ -267,33 +287,37 @@ Feature: Consistent Edit
 
     When I rename headline "Music Festival" to "Music Festival 2022"
     And rename headline "Kamchatka" to "Kamchatka 2019"
-    And commit changes
+    And set headline "Kamchatka 2019" contents to
+    """
+    SCHEDULED: <2019-08-23 Fri>
+    """
+    And save buffer
     And find file "views/fun.org" as "*fun*"
 
     Then current buffer should contain 2 headlines
-    # And marker positions and hashes should be consistent
+    And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
 
-    Then headline "Music Festival 2022" should be changed
+    # Then headline "Music Festival 2022" should be changed
 
-    When I rename headline "Music Festival 2022" to "Music Festival 2023"
+    # When I rename headline "Music Festival 2022" to "Music Festival 2023"
 
-    Then headline "Music Festival 2023" should be changed
-    And headline "Music Festival 2023" should not be committed
-    And headline "Music Festival 2023" should not be corrupted
-    And 1 marker should be changed
+    # Then headline "Music Festival 2023" should be changed
+    # And headline "Music Festival 2023" should not be committed
+    # And headline "Music Festival 2023" should not be corrupted
+    # And 1 marker should be changed
 
-    When I commit changes
+    # When I commit changes
 
     # Then marker positions and hashes should be consistent
 
-    When I switch to buffer "*hikes*"
+    # When I switch to buffer "*hikes*"
 
-    Then I should be in buffer "*hikes*"
-    And headline "Music Festival 2022" should not be in current buffer
-    And headline "Music Festival 2023" should be in current buffer
-    And marker positions and hashes should be consistent
+    # Then I should be in buffer "*hikes*"
+    # And headline "Music Festival 2022" should not be in current buffer
+    # And headline "Music Festival 2023" should be in current buffer
+    # And marker positions and hashes should be consistent
     # And current buffer offset should be latest
     # And current mew offset should be latest
 
@@ -304,10 +328,12 @@ Feature: Consistent Edit
     # # And marker at point should not be committed
 
     # When I commit changes
-    # And I append to file "views/fun.org"
+    # And kill buffer "*fun*"
+    # And append to file "views/fun.org"
     #   """
     #   * Some external corruption
     #   """
+    # And find file "views/fun.org"
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
@@ -317,7 +343,7 @@ Feature: Consistent Edit
     # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
 
   # Test marker beg ... end boundaries on editing
-
+  # Test external corruptions
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline
   # Scenario: Add new headline

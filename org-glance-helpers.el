@@ -5,7 +5,7 @@
 (require 'eieio)
 (require 'thunk)
 
-(defvar org-glance-debug-mode t)
+(defvar org-glance-debug-mode nil)
 
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."
@@ -71,7 +71,8 @@ Example: (org-glance-> mew :view :store :location)"
 
 (cl-defun org-glance-message (&rest args)
   (when org-glance-debug-mode
-    (apply #'message args)))
+    (let ((inhibit-message nil))
+      (apply #'message args))))
 
 (cl-defun org-glance-debug (&rest args)
   (let ((buffer (get-buffer-create "*org-glance-debug*")))

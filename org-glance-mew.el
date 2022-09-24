@@ -212,25 +212,28 @@
 (cl-defun org-glance-mew:replace-headline (mew old-hash new-hash)
   (declare (indent 0))
   (org-glance-mew:with-current-buffer mew
-    (thunk-let* ((midx (gethash old-hash (org-glance-> mew :hash->midx)))
-                 (marker-position (org-glance-mew:get-marker-position mew midx))
-                 (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
-      (when midx
+    (when-let (midx (gethash old-hash (org-glance-> mew :hash->midx)))
+      (thunk-let ((marker-position (org-glance-mew:get-marker-position mew midx))
+                  (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
         (goto-char marker-position)
         (org-glance-headline:with-headline-at-point
-          (org-edit-headline (org-glance-> new-headline :title))
-          (org-todo (org-glance-> new-headline :state))
-          (org-set-tags (org-glance-> new-headline :class))
-          (delete-region (save-excursion
-                           (goto-char (point-min))
-                           (forward-line)
-                           (point))
-                         (point-max))
+          (let ((inhibit-message t))
+            (org-edit-headline (org-glance-> new-headline :title))
+            (org-todo (org-glance-> new-headline :state))
+            (org-set-tags (org-glance-> new-headline :class)))
+
+          (goto-char (point-min))
+          (when (= 0 (forward-line))
+            (delete-region (point) (point-max)))
+
+          (goto-char (point-max))
+
           (insert (with-temp-buffer
                     (insert (org-glance-> new-headline :contents))
                     (goto-char (point-min))
                     (forward-line)
                     (buffer-substring-no-properties (point) (point-max))))
+
           (goto-char (point-min))
           (org-glance-mew:set-marker-hash mew midx new-hash))))))
 
@@ -269,26 +272,6 @@
                (org-glance-> mew :corrupted-markers) corrupted-markers
                (org-glance-> mew :hash->midx) markers))))
 
-(cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
-  (org-glance-mew:with-current-buffer mew
-    (thunk-let* ((store (org-glance-> mew :view :store))
-                 (offset (org-glance-mew:get-offset mew))
-                 (events (--take-while
-                          (org-glance-offset:less-p offset (org-glance-> it :offset))
-                          (org-glance-store:events store))))
-      (when (org-glance-offset:less-p offset (org-glance-store:offset store))
-        (dolist (event events)
-          (cl-typecase event
-            (org-glance-event:UPDATE
-             (org-glance-mew:replace-headline
-               mew
-               (org-glance-> event :hash)
-               (org-glance-> event :headline :hash)))
-            (otherwise (user-error "events PUT and DEL not implemented yet"))))
-        ;; (when events
-        ;;   (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))
-        ))))
-
 (cl-defun org-glance-mew:commit (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
     (let ((store (org-glance-> mew :view :store)))
@@ -311,10 +294,38 @@
       (dolist (mew (--filter (not (eq mew it)) (hash-table-values org-glance-mews)))
         (org-glance-mew:fetch mew)))))
 
-(cl-defun org-glance-mew:get-offset (mew)
-  (declare (indent 1))
+(cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
-    (org-glance-offset:read (org-glance-mew:get-property "OFFSET"))))
+    (thunk-let* ((store (org-glance-> mew :view :store))
+                 (offset (org-glance-mew:offset mew))
+                 (events (--take-while
+                          (org-glance-offset:less-p offset (org-glance-> it :offset))
+                          (org-glance-store:events store))))
+      (when (org-glance-offset:less-p offset (org-glance-store:offset store))
+        (dolist (event events)
+          (org-glance-message "Handling event: \"%s\"" event)
+          (org-glance-message "Marker positions before event: %s" (org-glance-> (org-glance-mew:current) :marker-positions))
+          (org-glance-message "Headline positions before event: %s" (org-glance-headline:map (headline) (point-min)))
+          (cl-typecase event
+            (org-glance-event:UPDATE
+             (org-glance-mew:replace-headline
+               mew
+               (org-glance-> event :hash)
+               (org-glance-> event :headline :hash)))
+            (otherwise (user-error "events PUT and DEL not implemented yet")))
+          (org-glance-message "Marker positions after event: %s" (org-glance-> (org-glance-mew:current) :marker-positions))
+          (org-glance-message "Headline positions after event: %s" (org-glance-headline:map (headline) (point-min))))
+        ;; (when events
+        ;;   (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))
+        ))))
+
+(cl-defun org-glance-mew:offset (mew)
+  (declare (indent 1))
+  (let ((buffer-offset (org-glance-mew:with-current-buffer mew
+                         (org-glance-offset:read (org-glance-mew:get-property "OFFSET"))))
+        (memory-offset (org-glance-> mew :offset)))
+    (-max-by #'org-glance-offset:less-p
+             (list buffer-offset memory-offset))))
 
 (cl-defun org-glance-mew:set-offset (mew offset)
   (declare (indent 1))
@@ -355,13 +366,12 @@
      do (org-glance-mew:set-marker-position mew i (+ (org-glance-mew:get-marker-position mew i) diff))))
 
 (cl-defun org-glance-mew:consistent-p ()
-  (save-match-data
-    (--all-p (eq it t)
-             (org-glance-headline:map (headline)
-               (thunk-let* ((mew (org-glance-mew:current))
-                            (midx (org-glance-mew:marker-at-point mew (point-min))))
-                 (and (> midx -1)
-                      (= (org-glance-mew:get-marker-position mew midx) (point-min))))))))
-
+  (let ((mew (org-glance-mew:current)))
+    (save-match-data
+      (--all-p (eq it t)
+               (org-glance-headline:map (_)
+                 (let ((midx (org-glance-mew:marker-at-point mew (point-min))))
+                   (and (> midx -1)
+                        (= (org-glance-mew:get-marker-position mew midx) (point-min)))))))))
 
 (provide 'org-glance-mew)
