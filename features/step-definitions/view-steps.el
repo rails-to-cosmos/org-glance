@@ -128,7 +128,7 @@
   (lambda ()
     (org-glance-mew:fetch)))
 
-(And "^markers positions should be consistent$"
+(And "^markers? positions should be consistent$"
      (lambda ()
        (let ((hc (org-glance-headline:map (headline)
                    (thunk-let ((mew (org-glance-mew:current))

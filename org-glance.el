@@ -105,7 +105,7 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
      (f-join dst "comment.org"))
 
     ;; emulate source corruption
-    (append-to-file "* d" nil (f-join dst "task.org"))
+    ;; (append-to-file "* d" nil (f-join dst "task.org"))
 
     (find-file "/tmp/store")
     ))

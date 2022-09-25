@@ -185,3 +185,19 @@
   (lambda (headline)
     (When "I go to headline \"%s\"" headline)
     (Then "marker at point should not be corrupted")))
+
+(Then "^headline \"\\([^\"]+\\)\" should have contents$"
+      (lambda (headline expected-contents)
+        (When "I go to headline \"%s\"" headline)
+        (let ((contents (org-glance-headline:with-headline-at-point
+                          (goto-char (point-min))
+                          (forward-line)
+                          (s-trim (buffer-substring-no-properties (point) (point-max))))))
+          (should (string= (with-temp-buffer
+                             (insert expected-contents)
+                             (org-align-tags 'all)
+                             (buffer-substring-no-properties (point-min) (point-max)))
+                           (with-temp-buffer
+                             (insert contents)
+                             (org-align-tags 'all)
+                             (buffer-substring-no-properties (point-min) (point-max))))))))

@@ -239,7 +239,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @debug
   Scenario: Sync on read
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -268,8 +267,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @debug
-  Scenario: Multiple views
+  Scenario: Multiple views, modifications across buffers
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
@@ -282,50 +280,129 @@ Feature: Consistent Edit
       """
 
     When I create view "Hikes" from "Hike" "Adventures" in file "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "Music" "Adventures" in file "views/fun.org"
+    And create view "Fun" from "Music" "Adventures" in file "views/fun.org" as "*fun*"
     And switch to buffer "*hikes*"
 
     When I rename headline "Music Festival" to "Music Festival 2022"
-    And rename headline "Kamchatka" to "Kamchatka 2019"
-    And set headline "Kamchatka 2019" contents to
+    And set headline "Music Festival 2022" contents to
     """
-    SCHEDULED: <2019-08-23 Fri>
+    SCHEDULED: <2022-01-01 Sat>
     """
     And save buffer
-    And find file "views/fun.org" as "*fun*"
+    And switch to buffer "*fun*"
 
     Then current buffer should contain 2 headlines
+    And marker positions should be consistent
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
+    And headline "Music Festival 2022" should have contents
+    """
+    SCHEDULED: <2022-01-01 Sat>
+    """
 
-    # Then headline "Music Festival 2022" should be changed
+    Then headline "Music Festival 2022" should be changed
 
-    # When I rename headline "Music Festival 2022" to "Music Festival 2023"
+    When I rename headline "Music Festival 2022" to "Music Festival 2023"
+    And set headline "Music Festival 2023" contents to
+    """
+    SCHEDULED: <2023-01-01 Sun>
+    """
 
-    # Then headline "Music Festival 2023" should be changed
-    # And headline "Music Festival 2023" should not be committed
-    # And headline "Music Festival 2023" should not be corrupted
-    # And 1 marker should be changed
+    Then headline "Music Festival 2023" should be changed
+    And headline "Music Festival 2023" should not be committed
+    And headline "Music Festival 2023" should not be corrupted
+    And 1 marker should be changed
 
-    # When I commit changes
+    When I commit changes
 
-    # Then marker positions and hashes should be consistent
+    Then marker positions and hashes should be consistent
 
-    # When I switch to buffer "*hikes*"
+    When I switch to buffer "*hikes*"
 
-    # Then I should be in buffer "*hikes*"
-    # And headline "Music Festival 2022" should not be in current buffer
-    # And headline "Music Festival 2023" should be in current buffer
-    # And marker positions and hashes should be consistent
-    # And current buffer offset should be latest
-    # And current mew offset should be latest
+    Then I should be in buffer "*hikes*"
+    And current buffer should contain 4 headlines
+    And headline "Music Festival 2022" should not be in current buffer
+    And headline "Music Festival 2023" should be in current buffer
+    And headline "Music Festival 2023" should have contents
+    """
+    SCHEDULED: <2023-01-01 Sun>
+    """
+    And marker positions and hashes should be consistent
 
-    # When I go to headline "Music Festival 2023"
+  Scenario: Multiple views, modifications across files
+    Given store "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls :Hike:
+      * STARTED Troodos Mountains :Hike:
+      * TODO Music Festival :Hike:Music:
+        SCHEDULED: <2022-09-16 Fri>
+      * DONE Tame Impala Concert :Music:
+      * DONE Kamchatka :Hike:
+      * CANCELLED PHP Course :Cringe:
+      """
 
-    # # Then marker at point should not be changed
-    # Then marker at point should not be corrupted
-    # # And marker at point should not be committed
+    When I create view "Hikes" from "Hike" "Adventures" in file "views/hikes.org"
+    And create view "Fun" from "Music" "Adventures" in file "views/fun.org"
+    And find file "views/hikes.org"
+
+    When I rename headline "Music Festival" to "Music Festival 2022"
+    And set headline "Music Festival 2022" contents to
+    """
+    SCHEDULED: <2022-01-01 Sat>
+    """
+    And save buffer
+    And kill buffer
+    And find file "views/fun.org"
+
+    Then current buffer should contain 2 headlines
+    And marker positions should be consistent
+    And marker positions and hashes should be consistent
+    And headline "Music Festival" should not be in current buffer
+    And headline "Music Festival 2022" should be in current buffer
+    And headline "Music Festival 2022" should have contents
+    """
+    SCHEDULED: <2022-01-01 Sat>
+    """
+
+    Then headline "Music Festival 2022" should be changed
+
+    When I rename headline "Music Festival 2022" to "Music Festival 2023"
+    And set headline "Music Festival 2023" contents to
+    """
+    SCHEDULED: <2023-01-01 Sun>
+    """
+
+    Then headline "Music Festival 2023" should be changed
+    And headline "Music Festival 2023" should not be committed
+    And headline "Music Festival 2023" should not be corrupted
+    And 1 marker should be changed
+
+    When I commit changes
+
+    Then marker positions and hashes should be consistent
+
+    When I kill buffer
+    And find file "views/hikes.org"
+
+    Then current buffer should contain 4 headlines
+    And headline "Music Festival 2022" should not be in current buffer
+    And headline "Music Festival 2023" should be in current buffer
+    And headline "Music Festival 2023" should have contents
+    """
+    SCHEDULED: <2023-01-01 Sun>
+    """
+    And marker positions and hashes should be consistent
+
+    When I rename headline "Music Festival 2023" to "Music Festival 2024"
+    And save buffer
+    And kill buffer
+    And find file "views/fun.org"
+
+    Then current buffer should contain 2 headlines
+    And marker positions and hashes should be consistent
+    And headline "Music Festival 2023" should not be in current buffer
+    And headline "Music Festival 2024" should be in current buffer
 
     # When I commit changes
     # And kill buffer "*fun*"
@@ -342,7 +419,6 @@ Feature: Consistent Edit
     # And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
 
-  # Test marker beg ... end boundaries on editing
   # Test external corruptions
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline
