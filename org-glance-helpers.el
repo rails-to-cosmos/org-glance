@@ -69,18 +69,11 @@ Example: (org-glance-> mew :view :store :location)"
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
 
-(cl-defun org-glance-message (&rest args)
-  (when org-glance-debug-mode
-    (let ((inhibit-message nil))
-      (apply #'message args))))
-
-(cl-defun org-glance-debug (&rest args)
-  (let ((buffer (get-buffer-create "*org-glance-debug*")))
-    (with-current-buffer buffer
-      (delete-region (point-min) (point-max))
-      (cl-loop for arg in args
-         collect (prin1-to-string arg t) into result
-         finally (insert (s-join "\n" result))))))
+(cl-defmacro org-glance-message (&rest args)
+  (if org-glance-debug-mode
+      `(let ((inhibit-message nil))
+         (apply #'message ,args))
+    nil))
 
 (cl-defun org-glance:before-first-headline-p ()
   (save-match-data

@@ -20,13 +20,11 @@ editor."
   (cond (org-glance-material-mode
          (org-glance-mew:mark)
          (org-glance-mew:fetch)
-         (add-hook 'post-command-hook #'org-glance-material-mode:debug nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:update-benchmark nil t)
          (add-hook 'before-save-hook #'org-glance-mew:commit nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-mew:commit t)
-         (remove-hook 'after-change-functions #'org-glance-material-mode:update-benchmark t)
-         (remove-hook 'post-command-hook #'org-glance-material-mode:debug t))))
+         (remove-hook 'after-change-functions #'org-glance-material-mode:update-benchmark t))))
 
 (cl-defun org-glance-material-mode:update-benchmark (change-beg change-end pre-change-length)
   (benchmark-progn
@@ -35,69 +33,10 @@ editor."
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
-  ;; (org-glance-message "** Change Event in %s" (current-buffer))
-  ;; (org-glance-message "   Buffer string: \"%s\"" (save-restriction
-  ;;                                                  (widen)
-  ;;                                                  (buffer-string)))
-  ;; (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
-  ;; (org-glance-message "   Change params: \"%s\"" (list change-beg change-end pre-change-length))
-  ;; (org-glance-message "   Change region: \"%s\"" (buffer-substring-no-properties change-beg change-end))
-  ;; (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
-
   (let* ((mew (org-glance-mew:current))
          (diff (- (- change-end change-beg) pre-change-length))
          (midx (org-glance-mew:marker-at-point mew (- change-beg 1))))
-    ;; (org-glance-message "   Marker affected: %d" midx)
-    ;; (org-glance-message "   Diff calculated: %d" diff)
     (org-glance-mew:set-marker-changed mew midx t)
-    (org-glance-mew:shift-markers mew midx diff)
-    ;; (org-glance-message "   Changed markers: %s" (cl-loop for m across-ref (org-glance-> mew :changed-markers)
-    ;;                                                 collect m))
-    )
-
-  ;; (let ((marker-pos-before (cl-copy-seq (org-glance-> (org-glance-mew:current) :marker-positions)))
-  ;;       marker-pos-after)
-
-  ;;   ;; (org-glance-message "   Marker positions BEFORE: %s" marker-pos-before)
-
-  ;;   (thunk-let* ((mew (org-glance-mew:current))
-  ;;                (diff (- (- change-end change-beg) pre-change-length))
-  ;;                (midx (org-glance-mew:marker-at-point mew (1- change-beg))))
-  ;;     ;; (org-glance-message "   Marker affected: %d" midx)
-  ;;     ;; (org-glance-message "   Diff calculated: %d" diff)
-  ;;     (org-glance-mew:set-marker-changed mew midx t)
-  ;;     (org-glance-mew:shift-markers mew midx diff)
-  ;;     ;; (org-glance-message "   Changed markers: %s" (cl-loop for m across-ref (org-glance-> mew :changed-markers)
-  ;;     ;;                                                 collect m))
-  ;;     )
-
-  ;;   ;; (setq marker-pos-after (org-glance-> (org-glance-mew:current) :marker-positions))
-  ;;   ;; (org-glance-message "   Marker positions AFTER: %s" marker-pos-after)
-  ;;   ;; (org-glance-message "   Marker positions DIFF: %s" (cl-loop for i from 0 below (length marker-pos-before)
-  ;;   ;;                                                       collect (- (aref marker-pos-after i) (aref marker-pos-before i))))
-  ;;   ;; (org-glance-message "   Consistent: %s" (org-glance-mew:consistent-p))
-  ;;   )
-  )
-
-(cl-defun org-glance-material-mode:debug (&rest _)
-  (let ((mew (org-glance-mew:current))
-        (midx (org-glance-mew:marker-at-point)))
-    (hlt-unhighlight-region)
-
-    (org-glance-debug
-     (point)
-     midx
-     (format "Changed: %s" (org-glance-mew:marker-changed-p mew midx))
-     (format "Corrupted: %s" (org-glance-mew:marker-corrupted-p mew midx))
-     (format "Committed: %s" (org-glance-mew:marker-committed-p mew midx))
-     (org-glance-mew:get-marker-position mew midx)
-     (org-glance-mew:get-marker-position mew (1+ midx))
-     (org-glance-> mew :marker-positions))
-
-    (when (> midx -1)
-      (hlt-highlight-region (org-glance-mew:get-marker-position mew midx)
-                            (org-glance-mew:get-marker-position mew (1+ midx))
-                            'region))
-    ))
+    (org-glance-mew:shift-markers mew midx diff)))
 
 (provide 'org-glance-material-mode)

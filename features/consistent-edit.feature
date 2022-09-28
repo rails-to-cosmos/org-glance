@@ -411,6 +411,8 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+    # TODO check offsets on buffer sync
+
     # When I commit changes
     # And kill buffer "*fun*"
     # And append to file "views/fun.org"

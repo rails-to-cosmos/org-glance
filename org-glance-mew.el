@@ -130,6 +130,7 @@
   (s-join "\n"
           (list "#  -*- mode: org; mode: org-glance-material -*-"
                 ""
+                "#+STARTUP: overview"
                 (format "#+TYPE: %s :: %s"
                         (org-glance-> mew :view :store :location)
                         (org-glance-> mew :view :type))
@@ -308,7 +309,7 @@
         (dolist (event events)
           (org-glance-message "Handling event: \"%s\"" event)
           (org-glance-message "Marker positions before event: %s" (org-glance-> (org-glance-mew:current) :marker-positions))
-          (org-glance-message "Headline positions before event: %s" (org-glance-headline:map (headline) (point-min)))
+          (org-glance-message "Headline positions before event: %s" (org-glance-headline:map (_) (point-min)))
           (cl-typecase event
             (org-glance-event:UPDATE
              (org-glance-mew:replace-headline

@@ -110,5 +110,17 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
     (find-file "/tmp/store")
     ))
 
+;; (setq bookmark-store (org-glance-store :location "~/sync/store"))
+;; (org-glance-store:import bookmark-store "~/sync/views/bookmark")
+;; (org-glance-store:flush bookmark-store)
+
+;; (setq bookmark-view (org-glance-view :store bookmark-store :type "Bookmark"))
+;; (setq archive-view (org-glance-view :store bookmark-store :type "Archive"))
+;; (setq password-view (org-glance-view :store bookmark-store :type "Password"))
+
+;; (org-glance-view:materialize bookmark-view "~/sync/store/bookmarks.org")
+;; (org-glance-view:materialize archive-view "~/sync/store/archive.org")
+;; (org-glance-view:materialize password-view "~/sync/store/password.org")
+
 (provide 'org-glance)
 ;;; org-glance.el ends here
