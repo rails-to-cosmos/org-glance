@@ -211,33 +211,34 @@
 
 (cl-defun org-glance-mew:replace-headline (mew old-hash new-hash)
   (declare (indent 0))
-  (org-glance-mew:with-current-buffer mew
-    (when-let (midx (gethash old-hash (org-glance-> mew :hash->midx)))
-      (thunk-let ((marker-position (org-glance-mew:get-marker-position mew midx))
-                  (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
-        (goto-char marker-position)
-        (org-glance-headline:with-headline-at-point
-          (let ((inhibit-message t))
-            (org-edit-headline (org-glance-> new-headline :title))
-            (org-todo (org-glance-> new-headline :state))
-            (org-set-tags (org-glance-> new-headline :class)))
+  (unless (string= old-hash new-hash)
+    (org-glance-mew:with-current-buffer mew
+      (when-let (midx (gethash old-hash (org-glance-> mew :hash->midx)))
+        (thunk-let ((marker-position (org-glance-mew:get-marker-position mew midx))
+                    (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
+          (goto-char marker-position)
+          (org-glance-headline:with-headline-at-point
+            (let ((inhibit-message t))
+              (org-edit-headline (org-glance-> new-headline :title))
+              (org-todo (org-glance-> new-headline :state))
+              (org-set-tags (org-glance-> new-headline :class)))
 
-          (goto-char (point-min))
-          (when (= 0 (forward-line))
-            (delete-region (point) (point-max)))
+            (goto-char (point-min))
+            (when (= 0 (forward-line))
+              (delete-region (point) (point-max)))
 
-          (goto-char (point-max))
+            (goto-char (point-max))
 
-          (insert (with-temp-buffer
-                    (insert (org-glance-> new-headline :contents))
-                    (goto-char (point-min))
-                    (forward-line)
-                    (buffer-substring-no-properties (point) (point-max))))
+            (insert (with-temp-buffer
+                      (insert (org-glance-> new-headline :contents))
+                      (goto-char (point-min))
+                      (forward-line)
+                      (buffer-substring-no-properties (point) (point-max))))
 
-          (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
-            (insert "\n"))
+            (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
+              (insert "\n"))
 
-          (org-glance-mew:set-marker-hash mew midx new-hash))))))
+            (org-glance-mew:set-marker-hash mew midx new-hash)))))))
 
 (cl-defmacro org-glance-mew:with-current-buffer (mew &rest forms)
   (declare (indent 1))

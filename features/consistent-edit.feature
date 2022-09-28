@@ -330,6 +330,15 @@ Feature: Consistent Edit
     """
     And marker positions and hashes should be consistent
 
+    When I rename headline "Music Festival 2023" to "Music Festival 2024"
+    And save buffer
+    And switch to buffer "*fun*"
+
+    Then current buffer should contain 2 headlines
+    And marker positions and hashes should be consistent
+    And headline "Music Festival 2023" should not be in current buffer
+    And headline "Music Festival 2024" should be in current buffer
+
   Scenario: Multiple views, modifications across files
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -365,8 +374,6 @@ Feature: Consistent Edit
     SCHEDULED: <2022-01-01 Sat>
     """
 
-    Then headline "Music Festival 2022" should be changed
-
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to
     """
@@ -378,7 +385,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be corrupted
     And 1 marker should be changed
 
-    When I commit changes
+    When I save buffer
 
     Then marker positions and hashes should be consistent
 
@@ -419,7 +426,10 @@ Feature: Consistent Edit
     # And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
 
-  # Test external corruptions
+  # TODO Sync COMMENTED property
+  # TODO Sync buffers update offset (maybe not)
+  # TODO Test external corruptions
+  # TODO do not update headline if hashes are equal
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline
   # Scenario: Add new headline
