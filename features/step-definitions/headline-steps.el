@@ -27,13 +27,7 @@
             (re-search-forward title-prefix))
         (search-failed (error "Headline not found: %s" title))))))
 
-(Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
-      (lambda (name expected-class)
-        (let* ((headline (gethash name org-glance-test-headlines))
-               (class (org-glance-> headline :class)))
-          (should (member expected-class class)))))
-
-(Then "^headline \"\\([^\"]+\\)\" contents? should be:$"
+(Then "^headline \"\\([^\"]+\\)\" contents? should be$"
       (lambda (name expected-contents)
         (let* ((headline (gethash name org-glance-test-headlines))
                (contents (org-glance-> headline :contents)))
@@ -60,66 +54,156 @@
         (puthash headline (org-glance-headline:read (f-join org-glance-test:location file))
                  org-glance-test-headlines)))
 
-(When "^headline \"\\([^\"]+\\)\" should contain links?$"
-      (lambda (headline)
-        (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-> headline :linked-p)))))
+(Then "^headline at point should contain links?$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :linked-p))))
+
+(Then "^headline \"\\([^\"]+\\)\" should contain links?$"
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should contain link")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not contain links?$"
       (lambda (headline)
         (should-error (Then "headline \"%s\" should contain links" headline))))
 
+(Then "^headline at point should be encrypted$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :encrypted-p))))
+
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
-      (lambda (name)
-        (let ((headline (gethash name org-glance-test-headlines)))
-          (should (org-glance-> headline :encrypted-p)))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be encrypted")))
+
+(Then "^headline at point should not be encrypted$"
+      (lambda ()
+        (should (not (org-glance-> (org-glance-headline-at-point) :encrypted-p)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
-      (lambda (headline)
-        (should-error (Then "headline \"%s\" should be encrypted" headline))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should not be encrypted")))
+
+(Then "^headline at point should be propertized$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :propertized-p))))
+
+(Then "^headline at point should not be propertized$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :propertized-p))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
-      (lambda (headline)
-        (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-> headline :propertized-p)))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be propertized")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be propertized$"
-      (lambda (headline)
-        (should-error (Then "headline \"%s\" should be propertized" headline))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should not be propertized")))
+
+(Then "^headline at point should be archived$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :archived-p))))
+
+(Then "^headline at point should not be archived$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :archived-p))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
-      (lambda (headline)
-        (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-> headline :archived-p)))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be archived")))
+
+(Then "^headline \"\\([^\"]+\\)\" should not be archived$"
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should not be archived")))
+
+(Then "^headline at point should be commented$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :commented-p))))
+
+(Then "^headline at point should not be commented$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :commented-p))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
-      (lambda (headline)
-        (let ((headline (gethash headline org-glance-test-headlines)))
-          (should (org-glance-> headline :commented-p)))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be commented")))
+
+(Then "^headline \"\\([^\"]+\\)\" should not be commented$"
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should not be commented")))
+
+(Then "^headline at point should be closed$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :closed-p))))
+
+(Then "^headline at point should not be closed$"
+      (lambda ()
+        (should (org-glance-> (org-glance-headline-at-point) :closed-p))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
-      (lambda (name)
-        (let ((headline (gethash name org-glance-test-headlines)))
-          (should (org-glance-> headline :closed-p)))))
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be closed")))
+
+(Then "^headline \"\\([^\"]+\\)\" should not be closed$"
+      (lambda (headline-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should not be closed")))
+
+(Then "^the title of headline at point should be \"\\([^\"]+\\)\"$"
+  (lambda (expected-title)
+    (should
+     (string=
+      (org-glance-> (org-glance-headline-at-point) :title)
+      expected-title))))
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
-      (lambda (name title)
-        (should
-         (string=
-          (org-glance-> (gethash name org-glance-test-headlines) :title)
-          title))))
+      (lambda (headline-title expected-title)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "the title of headline at point should be \"%s\"" expected-title)))
 
-(Then "^the contents of headline \"\\([^\"]+\\)\" should be:$"
-     (lambda (name contents)
-       (let ((actual-headline (gethash name org-glance-test-headlines))
-             (expected-headline (with-temp-buffer
-                                  (insert contents)
-                                  (org-glance-headline-at-point))))
-         (should (org-glance-headline-equal-p actual-headline expected-headline)))))
+(Then "^headline at point contents should be$"
+      (lambda (expected-contents)
+        (let ((contents (org-glance-headline:with-headline-at-point
+                          (goto-char (point-min))
+                          (forward-line)
+                          (s-trim (buffer-substring-no-properties (point) (point-max))))))
+          (should (string= (with-temp-buffer
+                             (insert expected-contents)
+                             (org-align-tags 'all)
+                             (buffer-substring-no-properties (point-min) (point-max)))
+                           (with-temp-buffer
+                             (insert contents)
+                             (org-align-tags 'all)
+                             (buffer-substring-no-properties (point-min) (point-max))))))))
+
+(Then "^headline at point should be an? \\([^\"]+\\)$"
+      (lambda (expected-class)
+        (let* ((headline (org-glance-headline-at-point))
+               (class (org-glance-> headline :class)))
+          (should (member expected-class class)))))
+
+(Then "^the contents of headline \"\\([^\"]+\\)\" should be$"
+      (lambda (headline-title expected-contents)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point contents should be\n\"\"%s\"\"\"" expected-contents)))
+
+(Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
+      (lambda (headline-title expected-class)
+        (When "I go to headline \"%s\"" headline-title)
+        (Then "headline at point should be a %s" expected-class)))
 
 (Then "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
-     (lambda (a b)
-       (should (org-glance-headline-equal-p (org-glance-test:get-headline a) (org-glance-test:get-headline b)))))
+      (lambda (a b)
+        (should (org-glance-headline-equal-p (org-glance-test:get-headline a)
+                                             (org-glance-test:get-headline b)))))
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
@@ -127,14 +211,14 @@
     (org-glance-message "")))
 
 (And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
-  (lambda (title contents)
-    (When "I go to headline \"%s\"" title)
-    (org-glance-headline:with-headline-at-point
-      (goto-char (point-min))
-      (if (= 0 (forward-line))
-          (delete-region (point) (point-max))
-        (goto-char (point-max)))
-      (insert contents "\n"))))
+     (lambda (title contents)
+       (When "I go to headline \"%s\"" title)
+       (org-glance-headline:with-headline-at-point
+         (goto-char (point-min))
+         (if (= 0 (forward-line))
+             (delete-region (point) (point-max))
+           (goto-char (point-max)))
+         (insert contents "\n"))))
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (expected-count)
@@ -185,19 +269,3 @@
   (lambda (headline)
     (When "I go to headline \"%s\"" headline)
     (Then "marker at point should not be corrupted")))
-
-(Then "^headline \"\\([^\"]+\\)\" should have contents$"
-      (lambda (headline expected-contents)
-        (When "I go to headline \"%s\"" headline)
-        (let ((contents (org-glance-headline:with-headline-at-point
-                          (goto-char (point-min))
-                          (forward-line)
-                          (s-trim (buffer-substring-no-properties (point) (point-max))))))
-          (should (string= (with-temp-buffer
-                             (insert expected-contents)
-                             (org-align-tags 'all)
-                             (buffer-substring-no-properties (point-min) (point-max)))
-                           (with-temp-buffer
-                             (insert contents)
-                             (org-align-tags 'all)
-                             (buffer-substring-no-properties (point-min) (point-max))))))))

@@ -215,13 +215,15 @@
   (unless (string= old-hash new-hash)
     (org-glance-mew:with-current-buffer mew
       (when-let (midx (gethash old-hash (org-glance-> mew :hash->midx)))
-        (thunk-let ((marker-position (org-glance-mew:get-marker-position mew midx))
-                    (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
+        (let ((marker-position (org-glance-mew:get-marker-position mew midx))
+              (new-headline (org-glance-store:get (org-glance-> mew :view :store) new-hash)))
           (goto-char marker-position)
           (org-glance-headline:with-headline-at-point
             (let ((inhibit-message t))
               (org-edit-headline (org-glance-> new-headline :title))
               (org-todo (org-glance-> new-headline :state))
+              (when (org-glance-> new-headline :commented-p)
+                (org-toggle-comment))
               (org-set-tags (org-glance-> new-headline :class)))
 
             (goto-char (point-min))

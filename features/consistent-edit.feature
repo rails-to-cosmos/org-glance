@@ -215,6 +215,28 @@ Feature: Consistent Edit
 
     Then marker positions and hashes should be consistent
 
+  # @debug
+  # Scenario: Sync commented headlines
+  #   Given store "Wishlist" in directory "nerdy" with headlines
+  #     """
+  #     * TODO COMMENT Tatinek :Peppa:Gift:
+  #     """
+
+  #   When I create view "Pigs" from "Peppa" "Wishlist" in file "views/pigs.org" as "*pigs*"
+  #   And create view "Gifts" from "Gift" "Wishlist" in file "views/gifts.org" as "*gifts*"
+  #   And switch to buffer "*pigs*"
+  #   And set headline "Tatinek" contents to
+  #   """
+  #   SCHEDULED: <2019-08-23 Fri>
+  #   """
+  #   And save buffer
+
+  #   Then marker positions and hashes should be consistent
+
+  #   When I switch to buffer "*gifts*"
+
+  #   Then headline "Tatinek" should be commented
+
   Scenario: Real-time sync in live buffers
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -296,7 +318,7 @@ Feature: Consistent Edit
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
-    And headline "Music Festival 2022" should have contents
+    And the contents of headline "Music Festival 2022" should be
     """
     SCHEDULED: <2022-01-01 Sat>
     """
@@ -324,7 +346,7 @@ Feature: Consistent Edit
     And current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
     And headline "Music Festival 2023" should be in current buffer
-    And headline "Music Festival 2023" should have contents
+    And the contents of headline "Music Festival 2023" should be
     """
     SCHEDULED: <2023-01-01 Sun>
     """
@@ -369,7 +391,7 @@ Feature: Consistent Edit
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
-    And headline "Music Festival 2022" should have contents
+    And the contents of headline "Music Festival 2022" should be
     """
     SCHEDULED: <2022-01-01 Sat>
     """
@@ -395,7 +417,7 @@ Feature: Consistent Edit
     Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
     And headline "Music Festival 2023" should be in current buffer
-    And headline "Music Festival 2023" should have contents
+    And the contents of headline "Music Festival 2023" should be
     """
     SCHEDULED: <2023-01-01 Sun>
     """

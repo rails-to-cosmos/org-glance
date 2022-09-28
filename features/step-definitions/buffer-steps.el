@@ -1,3 +1,10 @@
+(Given "^buffer \"\\([^\"]+\\)\"$"
+  (lambda (buffer-name buffer-contents)
+    (switch-to-buffer (get-buffer-create buffer-name))
+    (org-mode)
+    (delete-region (point-min) (point-max))
+    (insert buffer-contents)))
+
 (When "^I? ?insert \"\\([^\"]+\\)\"$"
   (lambda (thing)
     (insert thing)))
