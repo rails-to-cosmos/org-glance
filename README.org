@@ -7,7 +7,12 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* TODO refactor headline tests
+* TODO consistent types
+* DONE refactor headline tests
+CLOSED: [2022-09-28 Wed 12:37]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-09-28 Wed 12:37]
+:END:
 * deduplicate classes in wal
 * consistent markers and all the tests [0/4]
 ** TODO headline indented by user
