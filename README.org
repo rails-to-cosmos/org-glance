@@ -8,11 +8,6 @@
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
 * TODO consistent types
-* DONE refactor headline tests
-CLOSED: [2022-09-28 Wed 12:37]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-09-28 Wed 12:37]
-:END:
 * deduplicate classes in wal
 * consistent markers and all the tests [0/4]
 ** TODO headline indented by user
@@ -20,23 +15,6 @@ CLOSED: [2022-09-28 Wed 12:37]
 ** TODO headline removed
 ** TODO headline created
 * TODO consider collisions
-* DONE fix marker→point behaviour
-CLOSED: [2022-08-21 Sun 13:16]
-:LOGBOOK:
-- State "DONE"       from "PENDING"    [2022-08-21 Sun 13:16]
-- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:48]
-- State "STARTED"    from "PENDING"    [2022-08-21 Sun 12:36]
-CLOCK: [2022-08-21 Sun 12:36]--[2022-08-21 Sun 12:48] =>  0:12
-- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:36]
-- State "STARTED"    from              [2022-08-21 Sun 12:33]
-CLOCK: [2022-08-21 Sun 12:33]--[2022-08-21 Sun 12:36] =>  0:03
-:END:
-* DONE Fix mew and prepare to relations
-CLOSED: [2022-09-02 Fri 11:20]
-:LOGBOOK:
-- State "DONE"       from "STARTED"    [2022-09-02 Fri 11:20]
-- State "STARTED"    from              [2022-08-15 Mon 10:20]
-:END:
 * TODO filter store headlines [3/3]
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-08-02 Tue 09:30]
@@ -62,32 +40,12 @@ CLOSED: [2022-08-12 Fri 15:07]
 ** by active timestamps (build agenda views, interval trees?)
 ** in-memory lru cache (hash-table)
 ** by relations (todo)
-* DONE add tests on materialized offsets
-CLOSED: [2022-09-02 Fri 11:21]
-:LOGBOOK:
-- State "DONE"       from              [2022-09-02 Fri 11:21]
-:END:
 * https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-* DONE fix wal reversal
-CLOSED: [2022-09-02 Fri 11:21]
-:LOGBOOK:
-- State "DONE"       from              [2022-09-02 Fri 11:21]
-:END:
 * garbage collector
-* DONE wal with types SET and RM
-CLOSED: [2022-07-31 Sun 12:31]
-:LOGBOOK:
-- State "DONE"       from              [2022-07-31 Sun 12:31]
-:END:
 * TODO [#A] Actualize indexes of lsm-tree
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees
 * TODO Add tests for non-readable store source and dest
-* DONE Optimize `org-glance-material-mode:commit`: sync only changed headlines
-CLOSED: [2022-07-29 Fri 18:31]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-07-29 Fri 18:31]
-:END:
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh

@@ -5,8 +5,6 @@
 (require 'eieio)
 (require 'thunk)
 
-(defvar org-glance-debug-mode nil)
-
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."
   (declare (indent 3))
@@ -68,12 +66,6 @@ Example: (org-glance-> mew :view :store :location)"
        (prog1 ,bodyform
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
-
-(cl-defmacro org-glance-message (&rest args)
-  (if org-glance-debug-mode
-      `(let ((inhibit-message nil))
-         (apply #'message ,args))
-    nil))
 
 (cl-defun org-glance:before-first-headline-p ()
   (save-match-data

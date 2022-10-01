@@ -171,7 +171,7 @@ Feature: Consistent Edit
     And find file "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
-    And current buffer should be up to date
+    And current buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "Niagara Waterfalls"
@@ -190,7 +190,7 @@ Feature: Consistent Edit
     And find file "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
-    And current buffer should be up to date
+    And current buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "STARTED Troodos Mountains"
@@ -215,27 +215,26 @@ Feature: Consistent Edit
 
     Then marker positions and hashes should be consistent
 
-  # @debug
-  # Scenario: Sync commented headlines
-  #   Given store "Wishlist" in directory "nerdy" with headlines
-  #     """
-  #     * TODO COMMENT Tatinek :Peppa:Gift:
-  #     """
+  Scenario: Sync commented headlines
+    Given store "Wishlist" in directory "nerdy" with headlines
+      """
+      * TODO COMMENT Tatinek :Peppa:Gift:
+      """
 
-  #   When I create view "Pigs" from "Peppa" "Wishlist" in file "views/pigs.org" as "*pigs*"
-  #   And create view "Gifts" from "Gift" "Wishlist" in file "views/gifts.org" as "*gifts*"
-  #   And switch to buffer "*pigs*"
-  #   And set headline "Tatinek" contents to
-  #   """
-  #   SCHEDULED: <2019-08-23 Fri>
-  #   """
-  #   And save buffer
+    When I create view "Pigs" from "Peppa" "Wishlist" in file "views/pigs.org" as "*pigs*"
+    And create view "Gifts" from "Gift" "Wishlist" in file "views/gifts.org" as "*gifts*"
+    And switch to buffer "*pigs*"
+    And set headline "Tatinek" contents to
+    """
+    SCHEDULED: <2019-08-23 Fri>
+    """
+    And save buffer
 
-  #   Then marker positions and hashes should be consistent
+    Then marker positions and hashes should be consistent
 
-  #   When I switch to buffer "*gifts*"
+    When I switch to buffer "*gifts*"
 
-  #   Then headline "Tatinek" should be commented
+    Then headline "Tatinek" should be commented
 
   Scenario: Real-time sync in live buffers
     Given store "Adventures" in directory "stories/adventures" with headlines
@@ -361,6 +360,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across files
     Given store "Adventures" in directory "stories/adventures" with headlines
       """
@@ -376,8 +376,7 @@ Feature: Consistent Edit
     When I create view "Hikes" from "Hike" "Adventures" in file "views/hikes.org"
     And create view "Fun" from "Music" "Adventures" in file "views/fun.org"
     And find file "views/hikes.org"
-
-    When I rename headline "Music Festival" to "Music Festival 2022"
+    And I rename headline "Music Festival" to "Music Festival 2022"
     And set headline "Music Festival 2022" contents to
     """
     SCHEDULED: <2022-01-01 Sat>
@@ -395,6 +394,7 @@ Feature: Consistent Edit
     """
     SCHEDULED: <2022-01-01 Sat>
     """
+    And current buffer offset should be latest
 
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to
@@ -410,6 +410,7 @@ Feature: Consistent Edit
     When I save buffer
 
     Then marker positions and hashes should be consistent
+    And current buffer offset should be latest
 
     When I kill buffer
     And find file "views/hikes.org"
@@ -422,6 +423,7 @@ Feature: Consistent Edit
     SCHEDULED: <2023-01-01 Sun>
     """
     And marker positions and hashes should be consistent
+    And current buffer offset should be latest
 
     When I rename headline "Music Festival 2023" to "Music Festival 2024"
     And save buffer
@@ -432,8 +434,7 @@ Feature: Consistent Edit
     And marker positions and hashes should be consistent
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
-
-    # TODO check offsets on buffer sync
+    And current buffer offset should be latest
 
     # When I commit changes
     # And kill buffer "*fun*"

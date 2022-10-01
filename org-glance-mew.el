@@ -2,8 +2,9 @@
 
 (require 'eieio)
 (require 'org-macs)
-(require 'org-glance-offset)
+(require 'org-glance-debug)
 (require 'org-glance-helpers)
+(require 'org-glance-offset)
 (require 'org-glance-headline)
 
 (defvar org-glance-mews (make-hash-table :test #'equal))
@@ -149,7 +150,7 @@
       (search-failed nil))))
 
 (cl-defun org-glance-mew:set-property (property value)
-  (org-glance-message "* Change property %s from %s to %s" property (org-glance-mew:get-property property) value)
+  (org-glance-debug "* Change property %s from %s to %s" property (org-glance-mew:get-property property) value)
   (save-excursion
     (save-restriction
       (widen)
@@ -157,10 +158,10 @@
       (condition-case nil
           (progn
             (re-search-forward (format "^\\#\\+%s: " property))
-            (org-glance-message "  Delete region: \"%s\"" (buffer-substring-no-properties (point) (line-end-position)))
-            (org-glance-message "  Delete region from %d to %d" (point) (line-end-position))
-            (org-glance-message "  Insert \"%s\"" (prin1-to-string value))
-            (org-glance-message "")
+            (org-glance-debug "  Delete region: \"%s\"" (buffer-substring-no-properties (point) (line-end-position)))
+            (org-glance-debug "  Delete region from %d to %d" (point) (line-end-position))
+            (org-glance-debug "  Insert \"%s\"" (prin1-to-string value))
+            (org-glance-debug "")
             (delete-region (point) (line-end-position))
             (insert (prin1-to-string value)))
         (search-failed nil)))))
@@ -284,11 +285,11 @@
       (org-glance-mew:fetch mew)
 
       (org-glance-mew:consume-changes (mew midx)
-        (thunk-let* ((headline (save-excursion
-                                 (goto-char (org-glance-mew:get-marker-position mew midx))
-                                 (org-glance-headline-at-point)))
-                     (old-hash (org-glance-mew:get-marker-hash mew midx))
-                     (new-hash (org-glance-> headline :hash)))
+        (let* ((headline (save-excursion
+                           (goto-char (org-glance-mew:get-marker-position mew midx))
+                           (org-glance-headline-at-point)))
+               (old-hash (org-glance-mew:get-marker-hash mew midx))
+               (new-hash (org-glance-> headline :hash)))
           (org-glance-store:update store old-hash headline)
           (org-glance-mew:set-marker-committed mew midx t)
           (org-glance-mew:set-marker-changed mew midx nil)
@@ -303,35 +304,25 @@
 (cl-defun org-glance-mew:fetch (&optional (mew (org-glance-mew:current)))
   (org-glance-mew:with-current-buffer mew
     (thunk-let* ((store (org-glance-> mew :view :store))
-                 (offset (org-glance-mew:offset mew))
+                 (mew-offset (org-glance-mew:offset mew))
+                 (store-offset (org-glance-store:offset store))
                  (events (--take-while
-                          (org-glance-offset:less-p offset (org-glance-> it :offset))
+                          (org-glance-offset:less-p mew-offset (org-glance-> it :offset))
                           (org-glance-store:events store))))
-      (when (org-glance-offset:less-p offset (org-glance-store:offset store))
+      (when (org-glance-offset:less-p mew-offset store-offset)
         (dolist (event events)
-          (org-glance-message "Handling event: \"%s\"" event)
-          (org-glance-message "Marker positions before event: %s" (org-glance-> (org-glance-mew:current) :marker-positions))
-          (org-glance-message "Headline positions before event: %s" (org-glance-headline:map (_) (point-min)))
           (cl-typecase event
             (org-glance-event:UPDATE
-             (org-glance-mew:replace-headline
-               mew
-               (org-glance-> event :hash)
-               (org-glance-> event :headline :hash)))
-            (otherwise (user-error "events PUT and DEL not implemented yet")))
-          (org-glance-message "Marker positions after event: %s" (org-glance-> (org-glance-mew:current) :marker-positions))
-          (org-glance-message "Headline positions after event: %s" (org-glance-headline:map (headline) (point-min))))
-        ;; (when events
-        ;;   (org-glance-mew:set-offset mew (org-glance-> (car (last events)) :offset)))
-        ))))
+             (org-glance-mew:replace-headline mew (org-glance-> event :hash) (org-glance-> event :headline :hash)))
+            (otherwise (user-error "events PUT and DEL not implemented yet"))))
+        (org-glance-mew:set-offset mew store-offset)))))
 
 (cl-defun org-glance-mew:offset (mew)
   (declare (indent 1))
   (let ((buffer-offset (org-glance-mew:with-current-buffer mew
                          (org-glance-offset:read (org-glance-mew:get-property "OFFSET"))))
         (memory-offset (org-glance-> mew :offset)))
-    (-max-by #'org-glance-offset:less-p
-             (list buffer-offset memory-offset))))
+    (-max-by #'org-glance-offset:less-p (list buffer-offset memory-offset))))
 
 (cl-defun org-glance-mew:set-offset (mew offset)
   (declare (indent 1))
@@ -347,7 +338,7 @@
 
 ;; (cl-defun org-glance-mew:update-overlay (mew midx)
 ;;   "Refresh MARKER overlay."
-;;   (org-glance-message "Marker index to change: %d" midx)
+;;   (org-glance-debug "Marker index to change: %d" midx)
 ;;   (thunk-let ((marked (not (null (org-glance-mew:get-marker-overlay mew midx))))
 ;;               (changed (org-glance-mew:marker-changed-p mew midx))
 ;;               (committed (org-glance-mew:marker-committed-p mew midx))

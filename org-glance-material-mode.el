@@ -2,10 +2,9 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
-(require 'thunk)
 (require 'highlight)
-(require 'benchmark)
 
+(require 'org-glance-debug)
 (require 'org-glance-headline)
 (require 'org-glance-mew)
 (require 'org-glance-store)
@@ -19,16 +18,17 @@ editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
          (org-glance-mew:mark)
+
+         (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
+
          (org-glance-mew:fetch)
-         (add-hook 'after-change-functions #'org-glance-material-mode:update-benchmark nil t)
+         (org-overview)
+         (save-buffer)
+
          (add-hook 'before-save-hook #'org-glance-mew:commit nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-mew:commit t)
-         (remove-hook 'after-change-functions #'org-glance-material-mode:update-benchmark t))))
-
-(cl-defun org-glance-material-mode:update-benchmark (change-beg change-end pre-change-length)
-  (benchmark-progn
-    (org-glance-material-mode:update change-beg change-end pre-change-length)))
+         (remove-hook 'after-change-functions #'org-glance-material-mode:update t))))
 
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
@@ -36,7 +36,9 @@ editor."
   (let* ((mew (org-glance-mew:current))
          (diff (- (- change-end change-beg) pre-change-length))
          (midx (org-glance-mew:marker-at-point mew (- change-beg 1))))
-    (org-glance-mew:set-marker-changed mew midx t)
-    (org-glance-mew:shift-markers mew midx diff)))
+    (org-glance-benchmark
+      (org-glance-mew:set-marker-changed mew midx t))
+    (org-glance-benchmark
+      (org-glance-mew:shift-markers mew midx diff))))
 
 (provide 'org-glance-material-mode)

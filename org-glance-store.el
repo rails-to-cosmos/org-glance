@@ -10,9 +10,7 @@
 (require 'cl-lib)
 (require 'eieio)
 
-;; Experimental
-(require 'thunk)
-
+(require 'org-glance-debug)
 (require 'org-glance-helpers)
 (require 'org-glance-types)
 (require 'org-glance-headline)

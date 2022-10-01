@@ -200,15 +200,10 @@
         (When "I go to headline \"%s\"" headline-title)
         (Then "headline at point should be a %s" expected-class)))
 
-(Then "^headline \"\\([^\"]+\\)\" should be equal to headline \"\\([^\"]+\\)\"$"
-      (lambda (a b)
-        (should (org-glance-headline-equal-p (org-glance-test:get-headline a)
-                                             (org-glance-test:get-headline b)))))
-
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
     (org-edit-headline title)
-    (org-glance-message "")))
+    (org-glance-debug "")))
 
 (And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
      (lambda (title contents)
@@ -241,7 +236,7 @@
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
-                         (org-glance-message "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
+                         (org-glance-debug "Compare \"%s\" vs \"%s\"" title (org-glance-> headline :title))
                          (string= (org-glance-> headline :title) title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"

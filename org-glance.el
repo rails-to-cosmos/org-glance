@@ -32,12 +32,12 @@
 
 (require 'org)
 (require 'org-element)
+(require 'org-glance-debug)
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 (require 'org-glance-headline)
 (require 'org-glance-store)
 (require 'org-glance-material-mode)
-
 (require 'org-glance-buffer)
 
 (defgroup org-glance nil
