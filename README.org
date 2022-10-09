@@ -7,7 +7,10 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* TODO consistent types
+* TODO Capture headline
+* TODO Improve type system
+** TODO consistent types in views (on tag modification)
+** TODO ephemeral types (time-specific / todo-state specific)
 * deduplicate classes in wal
 * consistent markers and all the tests [0/4]
 ** TODO headline indented by user

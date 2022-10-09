@@ -38,7 +38,6 @@
 (require 'org-glance-headline)
 (require 'org-glance-store)
 (require 'org-glance-material-mode)
-(require 'org-glance-buffer)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -52,19 +51,19 @@
   :group 'org-glance
   :type 'directory)
 
-;; (cl-defun org-glance-init ()
-;;   "Update system state from `org-glance-directory'."
-;;   (unless (f-exists? org-glance-directory)
-;;     (mkdir org-glance-directory t))
+(cl-defun org-glance-init ()
+  "Update system state from `org-glance-directory'."
+  (unless (f-exists? org-glance-directory)
+    (mkdir org-glance-directory t))
 
-;;   ;; Read `org-glance-store' from `org-glance-directory'
+  ;; Read `org-glance-store' from `org-glance-directory'
 
-;;   ;; Actualize `org-glance-class-store'
+  ;; Actualize `org-glance-class-store'
 
-;;   ;; Headline -- node
-;;   ;; Relationship -- (headline1, headline2, class)
-;;   ;; Indexes on classes and timestamps
-;;   )
+  ;; Headline -- node
+  ;; Relationship -- (headline1, headline2, class)
+  ;; Indexes on classes and timestamps
+  )
 
 (defun org-glance-sandbox ()
   (interactive)
@@ -73,10 +72,8 @@
 
       (defvar test-store)
       (defvar test-view)
-      (defvar org-glance-mews)
       (defvar org-glance-stores)
 
-      (clrhash org-glance-mews)
       (clrhash org-glance-stores)
 
       (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
@@ -85,7 +82,7 @@
     (f-delete dst t)
 
 
-    (setq test-store (org-glance-store:from-scratch dst
+    (setq test-store (org-glance-store:create dst
                        "* TODO a :Task:
 1"
                        "* DONE b :TAsk:"
@@ -96,13 +93,13 @@ wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
                        "* COMMENT d :Comment:
 2"))
 
-    (org-glance-view:materialize
-     (org-glance-store:view test-store "Task")
-     (f-join dst "task.org"))
+    ;; (org-glance-view:materialize
+    ;;  (org-glance-view:create test-store "Task" )
+    ;;  (f-join dst "task.org"))
 
-    (org-glance-view:materialize
-     (org-glance-store:view test-store "Comment")
-     (f-join dst "comment.org"))
+    ;; (org-glance-view:materialize
+    ;;  (org-glance-view:create test-store "Comment")
+    ;;  (f-join dst "comment.org"))
 
     ;; emulate source corruption
     ;; (append-to-file "* d" nil (f-join dst "task.org"))

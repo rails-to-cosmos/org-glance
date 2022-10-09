@@ -18,7 +18,7 @@
 (Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
        (lambda (store-name relative-location headlines)
          (let ((location (org-glance-test:get-file relative-location)))
-           (let ((store (apply #'org-glance-store:from-scratch
+           (let ((store (apply #'org-glance-store:create
                                location
                                (->> headlines
                                     (s-split "* ")
@@ -162,4 +162,4 @@
 (Then "^store \"\\([^\"]+\\)\" should be equal to buffer store$"
       (lambda (store-name)
         (let ((store (org-glance-test:store-get store-name)))
-          (should (eq store (org-glance-mew:get-buffer-store))))))
+          (should (eq store (org-glance-view:get-buffer-store))))))

@@ -89,18 +89,17 @@ Feature: Store
 
   # TODO conflicting mews: same location but different predicates
 
-  Scenario: Views
-    Given store "Pets" in directory "store/pets" with headlines
-      """
-      * Yummi :Pomeranian:
-      * Eric :Pomeranian:
-      * Tanik :Human:
-      """
+  # @debug
+  # Scenario: Views
+  #   Given store "Pets" in directory "store/pets" with headlines
+  #     """
+  #     * Yummi :Pomeranian:
+  #     * Eric :Pomeranian:
+  #     * Tanik :Human:
+  #     """
 
-    When I create view "Pomeranians" from "Pomeranian" "Pets"
-    And I materialize view "Pomeranians" to "views/pomeranians.org"
-    And I create view "Humans" from "Human" "Pets"
-    And I materialize view "Humans" to "views/humans.org"
+  #   When I create view "Pomeranians" from "Pomeranian" "Pets" stored in "views/pomeranians.org"
+  #   And I create view "Humans" from "Human" "Pets" stored in "views/humans.org"
 
     # Then store "Pets" should contain headline "Yummi" in staging layer
     # And store "Pets" should not contain headline "Yummi" in committed layer

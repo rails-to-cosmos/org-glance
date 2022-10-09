@@ -1,1 +1,0 @@
-(provide 'org-glance-buffer)

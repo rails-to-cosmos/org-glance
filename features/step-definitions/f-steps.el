@@ -21,4 +21,5 @@
 (When "^I? ?append to file \"\\([^\"]+\\)\"$"
   (lambda (filename new-contents)
     (let ((file (org-glance-test:get-file filename)))
-      (append-to-file new-contents nil file))))
+      (append-to-file new-contents nil file)
+      (kill-buffer (get-file-buffer file)))))

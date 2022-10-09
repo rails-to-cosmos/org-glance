@@ -21,7 +21,7 @@
 (defun org-glance-test:get-file (alias)
   "Get file from test storage by ALIAS."
   (or (gethash alias org-glance-test-files)
-      (f-join org-glance-test:location alias)))
+      (puthash alias (f-join org-glance-test:location alias) org-glance-test-files)))
 
 (defun org-glance-test:store-put (key val)
   "Update store KEY with value VAL."

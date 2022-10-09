@@ -6,8 +6,8 @@
 
 (require 'org-glance-debug)
 (require 'org-glance-headline)
-(require 'org-glance-mew)
 (require 'org-glance-store)
+(require 'org-glance-view)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
@@ -17,28 +17,25 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance-mew:mark)
-
+         (org-glance-view:mark)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
-
-         (org-glance-mew:fetch)
+         (org-glance-view:fetch)
          (org-overview)
          (save-buffer)
-
-         (add-hook 'before-save-hook #'org-glance-mew:commit nil t))
+         (add-hook 'before-save-hook #'org-glance-view:commit nil t))
         (t
-         (remove-hook 'before-save-hook #'org-glance-mew:commit t)
+         (remove-hook 'before-save-hook #'org-glance-view:commit t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t))))
 
 (cl-defun org-glance-material-mode:update (change-beg change-end pre-change-length)
   "Actualize marker overlay."
   (interactive)
-  (let* ((mew (org-glance-mew:current))
+  (let* ((view (org-glance-view:get-buffer-view))
          (diff (- (- change-end change-beg) pre-change-length))
-         (midx (org-glance-mew:marker-at-point mew (- change-beg 1))))
+         (midx (org-glance-view:marker-at-point view (- change-beg 1))))
     (org-glance-benchmark
-      (org-glance-mew:set-marker-changed mew midx t))
+      (org-glance-view:set-marker-changed view midx t))
     (org-glance-benchmark
-      (org-glance-mew:shift-markers mew midx diff))))
+      (org-glance-view:shift-markers view midx diff))))
 
 (provide 'org-glance-material-mode)
