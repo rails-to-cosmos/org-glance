@@ -91,6 +91,7 @@ Feature: Consistent Edit
     And 0 markers should be changed
 
     When I create view "Human Beings" from "Human" "Pets" in "views/humans.org"
+    And kill buffer
     And I append to file "views/humans.org"
       """
       * Some external corruption
