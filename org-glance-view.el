@@ -2,12 +2,13 @@
 
 (require 'eieio)
 (require 'f)
+(require 'org-macs)
+
 (require 'org-glance-debug)
+(require 'org-glance-types)
 (require 'org-glance-headline)
 (require 'org-glance-helpers)
 (require 'org-glance-offset)
-(require 'org-glance-types)
-(require 'org-macs)
 
 (declare-function f-mkdir-full-path 'f)
 
@@ -61,10 +62,8 @@
       :type vector
       :initarg :marker-hashes)))
 
+(org-glance:declare-type org-glance-view:create : org-glance-store string string org-glance-view)
 (cl-defun org-glance-view:create (store type location)
-  (cl-check-type store org-glance-store)
-  (cl-check-type location string)
-
   (thunk-let* ((views (org-glance-> store :views))
                (location (file-truename location))
                (key (list type location))
@@ -88,6 +87,7 @@
                     (org-glance-store:get store (org-glance-> headline :hash))))))
              (puthash key view (org-glance-> store :views))))))
 
+(org-glance:declare-type org-glance-store:filter : org-glance-view org-glance-headline boolean)
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
   (member (downcase (org-glance-> view :type)) (org-glance-> headline :class)))
@@ -405,14 +405,5 @@
 (cl-defun org-glance-view:shift-markers (view midx diff)
   (cl-loop for i from (1+ midx) below (length (org-glance-> view :marker-positions))
      do (org-glance-view:set-marker-position view i (+ (org-glance-view:get-marker-position view i) diff))))
-
-(cl-defun org-glance-view:consistent-p ()
-  (let ((view (org-glance-view:get-buffer-view)))
-    (save-match-data
-      (--all-p (eq it t)
-               (org-glance-headline:map (_)
-                 (let ((midx (org-glance-view:marker-at-point view (point-min))))
-                   (and (> midx -1)
-                        (= (org-glance-view:get-marker-position view midx) (point-min)))))))))
 
 (provide 'org-glance-view)

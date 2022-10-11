@@ -10,22 +10,15 @@
 (require 'cl-lib)
 (require 'eieio)
 
-(require 'org-glance-debug)
-(require 'org-glance-helpers)
-(require 'org-glance-types)
-(require 'org-glance-headline)
-(require 'org-glance-scope)
 (require 'org-glance-changelog)
+(require 'org-glance-debug)
 (require 'org-glance-event)
+(require 'org-glance-headline)
+(require 'org-glance-helpers)
+(require 'org-glance-scope)
+(require 'org-glance-types)
 
 (defconst org-glance-store:log-location "WAL")
-
-(cl-deftype org-glance-store-log ()
-  '(satisfies org-glance-store-log-p))
-
-(cl-defun org-glance-store-log-p (object)
-  (and (org-glance-changelog-p object)
-       (cl-every #'org-glance-event-p (org-glance-> object :events))))
 
 (org-glance-class org-glance-store nil
   ((location
