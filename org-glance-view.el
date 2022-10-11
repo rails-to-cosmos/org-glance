@@ -61,24 +61,27 @@
       :type vector
       :initarg :marker-hashes)))
 
-(cl-defun org-glance-view:create (store type loc)
-  (cl-assert store)
-  (cl-assert loc)
+(cl-defun org-glance-view:create (store type location)
+  (cl-check-type store org-glance-store)
+  (cl-check-type location string)
+
   (thunk-let* ((views (org-glance-> store :views))
-               (location (file-truename loc))
+               (location (file-truename location))
                (key (list type location))
+               (view-exists? (and (f-exists? location) (f-file? location) views))
+               (location-exists? (f-exists? (file-name-directory location)))
+               (view-cache (gethash key views))
+               (headlines (org-glance-store:headlines store))
                (view (org-glance-view :store store
                                       :type type
                                       :location location
                                       :offset (org-glance-store:offset store)))
-               (view-exists (and (f-exists? location) (f-file? location) views))
-               (view-cache (gethash key views))
-               (headlines (org-glance-store:headlines store)))
-    (cond (view-exists view-cache)
-          (t (unless (f-exists? (file-name-directory location))
+               (header (org-glance-view:header view)))
+    (cond (view-exists? view-cache)
+          (t (unless location-exists?
                (f-mkdir-full-path (file-name-directory location)))
              (org-glance--with-temp-file location
-               (insert (org-glance-view:header view))
+               (insert header)
                (cl-dolist (headline headlines)
                  (when (org-glance-view:filter view headline)
                    (org-glance-headline:insert

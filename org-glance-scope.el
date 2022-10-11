@@ -8,7 +8,8 @@
   '(satisfies org-glance-scope-p))
 
 (cl-defun org-glance-scope-p (scope)
-  (cl-every #'org-glance-file-p scope))
+  (dolist (file scope)
+    (cl-check-type file org-glance-file)))
 
 (defvar org-glance-scope-extensions
   '("org" "org_archive"))

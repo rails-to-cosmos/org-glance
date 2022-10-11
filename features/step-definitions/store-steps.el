@@ -18,14 +18,13 @@
 (Given "^store \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
        (lambda (store-name relative-location headlines)
          (let ((location (org-glance-test:get-file relative-location)))
-           (let ((store (apply #'org-glance-store:create
-                               location
-                               (->> headlines
-                                    (s-split "* ")
-                                    (-map #'s-trim)
-                                    reverse
-                                    (--filter (not (string-empty-p it)))
-                                    (--map (concat "* " it))))))
+           (let ((store (org-glance-store:create location
+                          (->> headlines
+                               (s-split "* ")
+                               (-map #'s-trim)
+                               reverse
+                               (--filter (not (string-empty-p it)))
+                               (--map (concat "* " it))))))
              (org-glance-test:store-put store-name store)))))
 
 (When "^I? ?import headlines to store \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"

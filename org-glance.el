@@ -34,6 +34,7 @@
 (require 'org-element)
 (require 'org-glance-debug)
 (require 'org-glance-helpers)
+(require 'org-glance-types)
 (require 'org-glance-scope)
 (require 'org-glance-headline)
 (require 'org-glance-store)
@@ -83,15 +84,17 @@
 
 
     (setq test-store (org-glance-store:create dst
-                       "* TODO a :Task:
+                       (list
+                        "* TODO a :Task:
 1"
-                       "* DONE b :TAsk:"
-                       "* COMMENT c :Comment:Task:Crypt:
+                        "* DONE b :TAsk:"
+                        "* COMMENT c :Comment:Task:Crypt:
 aes-encrypted V 1.3-OCB-B-4-4-M
 1/tktn7J+sRqmM2KLefQQZtIYV/FAOcDn+Rs/s5Nm17pNMFtusnXrgrjwzxWFk8F4YSBdCbbRwzl
 wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
-                       "* COMMENT d :Comment:
-2"))
+                        "* COMMENT d :Comment:
+2"
+                        )))
 
     ;; (org-glance-view:materialize
     ;;  (org-glance-view:create test-store "Task" )
