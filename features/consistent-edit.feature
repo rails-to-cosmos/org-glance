@@ -1,6 +1,6 @@
 Feature: Consistent Edit
   Scenario: Basic functionality
-    Given store "Phones" in directory "store/phones" with headlines
+    Given world "Phones" in directory "world/phones" with headlines
       """
       * iPhone 3 :Apple:
       * iPhone 7 :Apple:
@@ -16,28 +16,28 @@ Feature: Consistent Edit
 
     When I commit changes
 
-    Then store "Phones" should contain headline "iPhone 4" in committed layer
-    And store "Phones" should not contain headline "iPhone 4" in staging layer
-    And store "Phones" should not contain headline "iPhone 3" in staging layer
-    # And store "Phones" should not contain headline "iPhone 3" in committed layer
-    And store "Phones" should not contain headline "Йотафон" in staging layer
-    # And store "Phones" should not contain headline "Йотафон" in committed layer
+    Then world "Phones" should contain headline "iPhone 4" in committed layer
+    And world "Phones" should not contain headline "iPhone 4" in staging layer
+    And world "Phones" should not contain headline "iPhone 3" in staging layer
+    # And world "Phones" should not contain headline "iPhone 3" in committed layer
+    And world "Phones" should not contain headline "Йотафон" in staging layer
+    # And world "Phones" should not contain headline "Йотафон" in committed layer
 
-    And store "Phones" should be equal to buffer store
+    And world "Phones" should be equal to buffer world
     And view "Apple Phones" should be equal to buffer view
 
     When I kill current buffer
     And I find file "views/apple.org"
-    Then store "Phones" should be equal to buffer store
+    Then world "Phones" should be equal to buffer world
     And view "Apple Phones" should be equal to buffer view
 
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
-    # And store "New phones" should not contain headline "iPhone 3" in committed layer
-    # And store "Old phones" should contain headline "iPhone 3" in staging layer
+    # And world "New phones" should not contain headline "iPhone 3" in committed layer
+    # And world "Old phones" should contain headline "iPhone 3" in staging layer
 
   @debug
   Scenario: Simple changes
-    Given store "Pets" in directory "store/pets" with headlines
+    Given world "Pets" in directory "world/pets" with headlines
       """
       * Yummi :Pomeranian:
         Black and White Doggy
@@ -114,7 +114,7 @@ Feature: Consistent Edit
     Then marker at point should be corrupted
 
   Scenario: Change headline todo state
-    Given store "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -138,7 +138,7 @@ Feature: Consistent Edit
     Then marker positions and hashes should be consistent
 
   Scenario: Change headline tags
-    Given store "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -157,7 +157,7 @@ Feature: Consistent Edit
     And markers positions should be consistent
 
   Scenario: Change headline title without changing todo state
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -174,7 +174,7 @@ Feature: Consistent Edit
     Then markers positions should be consistent
 
   Scenario: Change headline title with changing todo state (STARTED state is not registered)
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -191,7 +191,7 @@ Feature: Consistent Edit
     Then markers positions should be consistent
 
   Scenario: Change headline contents
-    Given store "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" in directory "nerdy" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -207,7 +207,7 @@ Feature: Consistent Edit
     Then marker positions and hashes should be consistent
 
   Scenario: Sync commented headlines
-    Given store "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" in directory "nerdy" with headlines
       """
       * TODO COMMENT Tatinek :Peppa:Gift:
       """
@@ -228,7 +228,7 @@ Feature: Consistent Edit
     Then headline "Tatinek" should be commented
 
   Scenario: Real-time sync in live buffers
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -252,7 +252,7 @@ Feature: Consistent Edit
     And headline "Music Festival" should not be in current buffer
 
   Scenario: Sync on read
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -280,7 +280,7 @@ Feature: Consistent Edit
     And headline "Music Festival" should not be in current buffer
 
   Scenario: Multiple views, modifications across buffers
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -352,7 +352,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
 
   Scenario: Multiple views, modifications across files
-    Given store "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" in directory "stories/adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -436,10 +436,10 @@ Feature: Consistent Edit
 
     # And I create view "Active" from "STARTED" "Adventures"
     # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
-    # And I create store "Hobby" from "Hike OR Music" "Adventures"
+    # And I create world "Hobby" from "Hike OR Music" "Adventures"
 
-    # And I create store "Fun" from ":Hike: AND :Music:" "Adventures"
-    # And I create store "Memories" from ":Hike: AND DONE" "Adventures"
+    # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
+    # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
   # TODO Sync COMMENTED property
   # TODO Sync buffers update offset (maybe not)
@@ -448,18 +448,18 @@ Feature: Consistent Edit
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline
   # Scenario: Add new headline
-  #   Given store "Pets" in directory "store/pets" with headlines
+  #   Given world "Pets" in directory "world/pets" with headlines
   #     """
   #     * Yummi :Pomeranian:
   #     * Eric :Pomeranian:
   #     * Tanik :Human:
   #     """
-  #   When I materialize store "Old phones" to file "views/material.org"
+  #   When I materialize world "Old phones" to file "views/material.org"
 
 # TODO:
 # Scenario: Delete headline
 # Scenario: Merge conflict: same headline changed in separate buffer and committed
-# Scenario: Edit store from two buffers, fast-forward change should be reflected in other buffer
+# Scenario: Edit world from two buffers, fast-forward change should be reflected in other buffer
 # Scenario: Material fast-forward commit: write outdated mew commit scenarios
 # Scenario: Material offset should be set to actual state after commit
 # Scenario: garbage collector. Maybe we shouldn't remove headlines from persistent storage on commit?

@@ -967,7 +967,7 @@
 </svg></button>
     </header>
 
-    <input-demux data-action="tab-container-change:input-demux#storeInput tab-container-changed:input-demux#updateInput">
+    <input-demux data-action="tab-container-change:input-demux#worldInput tab-container-changed:input-demux#updateInput">
       <tab-container class="d-flex flex-column js-branches-tags-tabs" style="min-height: 0;">
         <div class="SelectMenu-filter">
           <input data-target="input-demux.source"

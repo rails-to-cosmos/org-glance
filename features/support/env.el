@@ -14,7 +14,7 @@
 
 (defvar org-glance-test:location)
 (defvar org-glance-test-files)
-(defvar org-glance-test-stores)
+(defvar org-glance-test-worlds)
 (defvar org-glance-test-views)
 (defvar org-glance-test-headlines)
 
@@ -23,25 +23,25 @@
   (or (gethash alias org-glance-test-files)
       (puthash alias (f-join org-glance-test:location alias) org-glance-test-files)))
 
-(defun org-glance-test:store-put (key val)
-  "Update store KEY with value VAL."
-  (puthash key val org-glance-test-stores))
+(defun org-glance-test:world-put (key val)
+  "Update world KEY with value VAL."
+  (puthash key val org-glance-test-worlds))
 
-(defun org-glance-test:store-get (key)
+(defun org-glance-test:world-get (key)
   "Get storage from test storage by ALIAS."
-  (or (gethash key org-glance-test-stores)
-      (error "Store \"%s\" is not registered in the system. Available stores: \"%s\""
+  (or (gethash key org-glance-test-worlds)
+      (error "World \"%s\" is not registered in the system. Available worlds: \"%s\""
              key
-             (s-join "\", \"" (hash-table-keys org-glance-test-stores)))))
+             (s-join "\", \"" (hash-table-keys org-glance-test-worlds)))))
 
 (defun org-glance-test:view-put (key val)
-  "Update store KEY with value VAL."
+  "Update world KEY with value VAL."
   (puthash key val org-glance-test-views))
 
 (defun org-glance-test:view-get (key)
   "Get storage from test storage by ALIAS."
   (or (gethash key org-glance-test-views)
-      (error "Store \"%s\" is not registered in the system. Available views: \"%s\""
+      (error "View \"%s\" is not registered in the system. Available views: \"%s\""
              key
              (s-join "\", \"" (hash-table-keys org-glance-test-views)))))
 
@@ -68,7 +68,7 @@
  (desktop-clear)
  (setq org-glance-test:location (make-temp-file "org-glance-" 'directory)
        org-glance-test-files (make-hash-table :test #'equal)
-       org-glance-test-stores (make-hash-table :test #'equal)
+       org-glance-test-worlds (make-hash-table :test #'equal)
        org-glance-test-views (make-hash-table :test #'equal)
        org-glance-test-headlines (make-hash-table :test #'equal))
  (f-mkdir-full-path org-glance-test:location)

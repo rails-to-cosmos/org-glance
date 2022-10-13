@@ -13,11 +13,11 @@
 (declare-function f-mkdir-full-path 'f)
 
 (org-glance-class org-glance-view nil
-    ((store
-      :type org-glance-store
-      :initarg :store
-      :reader org-glance-view:store
-      :documentation "Original `org-glance-store' instance.")
+    ((world
+      :type org-glance-world
+      :initarg :world
+      :reader org-glance-view:world
+      :documentation "Original `org-glance-world' instance.")
      ;; available TODO states etc
      (type
       :type string
@@ -62,18 +62,18 @@
       :type vector
       :initarg :marker-hashes)))
 
-(cl-defun org-glance-view:create (store type location)
-  (thunk-let* ((views (org-glance-> store :views))
+(cl-defun org-glance-view:create (world type location)
+  (thunk-let* ((views (org-glance-> world :views))
                (location (file-truename location))
                (key (list type location))
                (view-exists? (and (f-exists? location) (f-file? location) views))
                (location-exists? (f-exists? (file-name-directory location)))
                (view-cache (gethash key views))
-               (headlines (org-glance-store:headlines store))
-               (view (org-glance-view :store store
+               (headlines (org-glance-world:headlines world))
+               (view (org-glance-view :world world
                                       :type type
                                       :location location
-                                      :offset (org-glance-store:offset store)))
+                                      :offset (org-glance-world:offset world)))
                (header (org-glance-view:header view)))
     (cond (view-exists? view-cache)
           (t (unless location-exists?
@@ -83,8 +83,8 @@
                (cl-dolist (headline headlines)
                  (when (org-glance-view:filter view headline)
                    (org-glance-headline:insert
-                    (org-glance-store:get store (org-glance-> headline :hash))))))
-             (puthash key view (org-glance-> store :views))))))
+                    (org-glance-world:get world (org-glance-> headline :hash))))))
+             (puthash key view (org-glance-> world :views))))))
 
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
@@ -171,7 +171,7 @@
                 ""
                 "#+STARTUP: overview"
                 (format "#+TYPE: %s :: %s"
-                        (org-glance-> view :store :location)
+                        (org-glance-> view :world :location)
                         (org-glance-> view :type))
                 (format "#+OFFSET: %s"
                         (org-glance-> view :offset))
@@ -206,15 +206,15 @@
             (insert (prin1-to-string value)))
         (search-failed nil)))))
 
-(cl-defun org-glance-view:get-buffer-store ()
-  "Get `org-glance-store' associated with current buffer."
+(cl-defun org-glance-view:get-buffer-world ()
+  "Get `org-glance-world' associated with current buffer."
   (-some->> (org-glance-view:get-property "TYPE")
     (s-split " :: ")
     cl-first
-    org-glance-store:read))
+    org-glance-world:read))
 
 (cl-defun org-glance-view:get-buffer-type ()
-  "Get `org-glance-store' associated with current buffer."
+  "Get `org-glance-world' associated with current buffer."
   (or (-some->> (org-glance-view:get-property "TYPE")
         (s-split " :: ")
         cl-second)
@@ -222,11 +222,11 @@
 
 (cl-defun org-glance-view:get-buffer-view ()
   "Get `org-glance-view' associated with current buffer."
-  (let ((store (org-glance-view:get-buffer-store))
+  (let ((world (org-glance-view:get-buffer-world))
         (type (org-glance-view:get-buffer-type)))
-    (unless store
-      (user-error "Unable to get store from buffer %s" (current-buffer)))
-    (org-glance-view:create store type (buffer-file-name))))
+    (unless world
+      (user-error "Unable to get world from buffer %s" (current-buffer)))
+    (org-glance-view:create world type (buffer-file-name))))
 
 (cl-defmacro org-glance-view:consume-changes (spec &rest forms)
   "Pop changed markers one by one from current buffer binding each marker to VAR and executing FORMS.
@@ -256,7 +256,7 @@
     (org-glance-view:with-current-buffer view
       (when-let (midx (gethash old-hash (org-glance-> view :hash->midx)))
         (let ((marker-position (org-glance-view:get-marker-position view midx))
-              (new-headline (org-glance-store:get (org-glance-> view :store) new-hash)))
+              (new-headline (org-glance-world:get (org-glance-> view :world) new-hash)))
           (goto-char marker-position)
           (org-glance-headline:with-headline-at-point
             (let ((inhibit-message t))
@@ -296,7 +296,7 @@
 (cl-defun org-glance-view:mark (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
     (cl-loop
-       with store = (org-glance-> view :store)
+       with world = (org-glance-> view :world)
        with headlines = (org-glance-headline:map (headline) (list (point-min) (org-glance-> headline :hash)))
        with marker-positions = (make-vector (length headlines) 0)
        with marker-hashes = (make-vector (length headlines) nil)
@@ -308,7 +308,7 @@
          (puthash hash midx markers)
          (aset marker-hashes midx hash)
          (aset marker-positions midx pos)
-         (aset corrupted-markers midx (null (org-glance-store:in store hash)))
+         (aset corrupted-markers midx (null (org-glance-world:in world hash)))
        finally do
          (setf (org-glance-> view :marker-hashes) marker-hashes
                (org-glance-> view :marker-positions) marker-positions
@@ -320,7 +320,7 @@
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (let ((store (org-glance-> view :store)))
+    (let ((world (org-glance-> view :world)))
       (org-glance-view:fetch view)
 
       (org-glance-view:consume-changes (view midx)
@@ -329,27 +329,27 @@
                            (org-glance-headline-at-point)))
                (old-hash (org-glance-view:get-marker-hash view midx))
                (new-hash (org-glance-> headline :hash)))
-          (org-glance-store:update store old-hash headline)
+          (org-glance-world:update world old-hash headline)
           (org-glance-view:set-marker-committed view midx t)
           (org-glance-view:set-marker-changed view midx nil)
           (org-glance-view:set-marker-hash view midx new-hash)))
 
-      (let ((offset (org-glance-store:flush store)))
+      (let ((offset (org-glance-world:flush world)))
         (org-glance-view:set-offset view offset))
 
-      (dolist (it (hash-table-values (org-glance-> store :views)))
+      (dolist (it (hash-table-values (org-glance-> world :views)))
         (when (not (eq view it))
           (org-glance-view:fetch it))))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (thunk-let* ((store (org-glance-> view :store))
+    (thunk-let* ((world (org-glance-> view :world))
                  (view-offset (org-glance-view:offset view))
-                 (store-offset (org-glance-store:offset store))
+                 (world-offset (org-glance-world:offset world))
                  (events (--take-while
                           (org-glance-offset:less-p view-offset (org-glance-> it :offset))
-                          (org-glance-store:events store))))
-      (when (org-glance-offset:less-p view-offset store-offset)
+                          (org-glance-world:events world))))
+      (when (org-glance-offset:less-p view-offset world-offset)
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
@@ -357,7 +357,7 @@
                                                (org-glance-> event :hash)
                                                (org-glance-> event :headline :hash)))
             (otherwise (user-error "events PUT and DEL not implemented yet"))))
-        (org-glance-view:set-offset view store-offset)))))
+        (org-glance-view:set-offset view world-offset)))))
 
 (cl-defun org-glance-view:offset (view)
   (declare (indent 1))

@@ -18,7 +18,7 @@
 ** TODO headline removed
 ** TODO headline created
 * TODO consider collisions
-* TODO filter store headlines [3/3]
+* TODO filter world headlines [3/3]
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-08-02 Tue 09:30]
 - State "STARTED"    from              [2022-08-02 Tue 08:04]
@@ -48,7 +48,7 @@ CLOSED: [2022-08-12 Fri 15:07]
 * TODO [#A] Actualize indexes of lsm-tree
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees
-* TODO Add tests for non-readable store source and dest
+* TODO Add tests for non-readable world source and dest
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh
@@ -73,7 +73,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 * Anchor Modeling
 - =Article= [[org-glance-visit:Article-20210826-7dc7b39dcaf77d1f25d654967a3a1afd][Anchor Modeling: Peridata between Data and Metadata]]
 - =Article= [[org-glance-visit:Article-20210826-9b1d041ca0c9581606151a2ae496115d][Modeling Conflicting, Unreliable, and Varying Information]]
-- Implement anchormodeling logbook management (store appearance sets in logbook drawer).
+- Implement anchormodeling logbook management (world appearance sets in logbook drawer).
 - Reserve posit, ascertains, thing, and class.
 - Implement transactions.
 - Distinguish data, metadata and peridata (peripheral data, domain classifications).

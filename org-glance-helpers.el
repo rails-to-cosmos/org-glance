@@ -15,7 +15,7 @@
 (defmacro org-glance-> (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
-Example: (org-glance-> view :store :location)"
+Example: (org-glance-> view :world :location)"
   (declare (indent 1))
   (cl-reduce
    (lambda (acc slot)

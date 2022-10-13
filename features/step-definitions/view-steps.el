@@ -8,14 +8,14 @@
 (require 'org-glance-scope)
 
 (require 'org-glance-headline)
-(require 'org-glance-store)
+(require 'org-glance-world)
 (require 'org-glance-view)
 
 (When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\"$"
-  (lambda (view-name type store-name file-name)
+  (lambda (view-name type world-name file-name)
     (let* ((location (org-glance-test:get-file file-name))
-           (store (org-glance-test:store-get store-name))
-           (view (org-glance-view:create store type location)))
+           (world (org-glance-test:world-get world-name))
+           (view (org-glance-view:create world type location)))
       (org-glance-test:view-put view-name view))
     (And "I find file \"%s\"" file-name)))
 
@@ -85,10 +85,10 @@
 (Then "^current buffer offset should be latest$"
       (lambda ()
         (let* ((view (org-glance-view:get-buffer-view))
-               (store (org-glance-> view :store)))
+               (world (org-glance-> view :world)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:offset view)
-                   (org-glance-store:offset store))))))
+                   (org-glance-world:offset world))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()
@@ -98,7 +98,7 @@
                               t)
                           (error nil))))))
 
-(When "^I? ?fetch store changes$"
+(When "^I? ?fetch world changes$"
   (lambda ()
     (org-glance-view:fetch)))
 
@@ -167,6 +167,6 @@
          (should (--all-p (eq it t) hc)))))
 
 (When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
-  (lambda (view class store location buffer)
-    (When "I create view \"%s\" from \"%s\" \"%s\" in \"%s\"" view class store location)
+  (lambda (view class world location buffer)
+    (When "I create view \"%s\" from \"%s\" \"%s\" in \"%s\"" view class world location)
     (And "I find file \"%s\" as \"%s\"" location buffer)))

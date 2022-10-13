@@ -37,7 +37,7 @@
 (require 'org-glance-types)
 (require 'org-glance-scope)
 (require 'org-glance-headline)
-(require 'org-glance-store)
+(require 'org-glance-world)
 (require 'org-glance-material-mode)
 
 (defgroup org-glance nil
@@ -48,19 +48,24 @@
   :group 'org)
 
 (defcustom org-glance-directory org-directory
-  "Directory that contains current `org-glance-store'."
+  "Directory that contains current `org-glance-world'."
   :group 'org-glance
   :type 'directory)
 
-(defvar org-glance-current-store nil
-  "Current `org-glance-store' instance.")
+(defvar org-glance-current-world nil
+  "Current `org-glance-world'.")
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory t))
 
-  (setq org-glance-current-store (org-glance-store:create org-glance-directory))
+  (setq org-glance-current-world (org-glance-world:create org-glance-directory))
+
+  ;; (add-rule org-glance-current-world
+  ;;           (lambda (headline)
+  ;;             (when (org-glance-> headline :state)
+  ;;               (org-glance-))))
 
   ;; (lambda (headline)
   ;;   (let (result)
@@ -69,11 +74,9 @@
   ;;       (push (downcase tag) result))
   ;;     (-non-nil result)))
 
+  ;; Read `org-glance-world' from `org-glance-directory'
 
-  ;; Read `org-glance-store' from `org-glance-directory'
-
-
-  ;; Actualize `org-glance-class-store'
+  ;; Actualize `org-glance-class-world'
 
   ;; Headline -- node
   ;; Relationship -- (headline1, headline2, class)
