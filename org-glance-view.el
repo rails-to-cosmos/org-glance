@@ -62,7 +62,6 @@
       :type vector
       :initarg :marker-hashes)))
 
-(org-glance:declare-type org-glance-view:create : org-glance-store string string org-glance-view)
 (cl-defun org-glance-view:create (store type location)
   (thunk-let* ((views (org-glance-> store :views))
                (location (file-truename location))
@@ -87,7 +86,6 @@
                     (org-glance-store:get store (org-glance-> headline :hash))))))
              (puthash key view (org-glance-> store :views))))))
 
-(org-glance:declare-type org-glance-store:filter : org-glance-view org-glance-headline boolean)
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
   (member (downcase (org-glance-> view :type)) (org-glance-> headline :class)))

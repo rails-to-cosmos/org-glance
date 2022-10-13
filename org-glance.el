@@ -48,16 +48,30 @@
   :group 'org)
 
 (defcustom org-glance-directory org-directory
-  "Directory with Org files."
+  "Directory that contains current `org-glance-store'."
   :group 'org-glance
   :type 'directory)
+
+(defvar org-glance-current-store nil
+  "Current `org-glance-store' instance.")
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory t))
 
+  (setq org-glance-current-store (org-glance-store:create org-glance-directory))
+
+  ;; (lambda (headline)
+  ;;   (let (result)
+  ;;     (push (upcase (org-glance-> headline :state)) result)
+  ;;     (dolist (tag (org-glance-> headline :class))
+  ;;       (push (downcase tag) result))
+  ;;     (-non-nil result)))
+
+
   ;; Read `org-glance-store' from `org-glance-directory'
+
 
   ;; Actualize `org-glance-class-store'
 
@@ -65,62 +79,6 @@
   ;; Relationship -- (headline1, headline2, class)
   ;; Indexes on classes and timestamps
   )
-
-(defun org-glance-sandbox ()
-  (interactive)
-  (let ((dst "/tmp/store"))
-    (progn ;; reload glance
-
-      (defvar test-store)
-      (defvar test-view)
-      (defvar org-glance-stores)
-
-      (clrhash org-glance-stores)
-
-      (mapc #'load-file (--filter (and (s-ends-with-p ".el" it) (s-contains-p "org-glance-" it) (not (s-contains-p "org-glance-pkg.el" it))) (f-files ".")))
-      (clrhash org-glance-stores))
-
-    (f-delete dst t)
-
-
-    (setq test-store (org-glance-store:create dst
-                       (list
-                        "* TODO a :Task:
-1"
-                        "* DONE b :TAsk:"
-                        "* COMMENT c :Comment:Task:Crypt:
-aes-encrypted V 1.3-OCB-B-4-4-M
-1/tktn7J+sRqmM2KLefQQZtIYV/FAOcDn+Rs/s5Nm17pNMFtusnXrgrjwzxWFk8F4YSBdCbbRwzl
-wUVErGnLFnK5LJ17kYnL18iRTAGhEhUQqyxXqB3DQ/41"
-                        "* COMMENT d :Comment:
-2"
-                        )))
-
-    ;; (org-glance-view:materialize
-    ;;  (org-glance-view:create test-store "Task" )
-    ;;  (f-join dst "task.org"))
-
-    ;; (org-glance-view:materialize
-    ;;  (org-glance-view:create test-store "Comment")
-    ;;  (f-join dst "comment.org"))
-
-    ;; emulate source corruption
-    ;; (append-to-file "* d" nil (f-join dst "task.org"))
-
-    (find-file "/tmp/store")
-    ))
-
-;; (setq bookmark-store (org-glance-store :location "~/sync/store"))
-;; (org-glance-store:import bookmark-store "~/sync/views/bookmark")
-;; (org-glance-store:flush bookmark-store)
-
-;; (setq bookmark-view (org-glance-view :store bookmark-store :type "Bookmark"))
-;; (setq archive-view (org-glance-view :store bookmark-store :type "Archive"))
-;; (setq password-view (org-glance-view :store bookmark-store :type "Password"))
-
-;; (org-glance-view:materialize bookmark-view "~/sync/store/bookmarks.org")
-;; (org-glance-view:materialize archive-view "~/sync/store/archive.org")
-;; (org-glance-view:materialize password-view "~/sync/store/password.org")
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

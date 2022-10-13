@@ -21,50 +21,53 @@
 (defconst org-glance-store:log-location "WAL")
 
 (org-glance-class org-glance-store nil
-  ((location
-    :type org-glance-directory
-    :initarg :location
-    :documentation "Directory containing all the data.")
-   (changelog*
-    :type org-glance-changelog
-    :initarg :changelog*
-    :initform (org-glance-changelog)
-    :documentation "In-memory changelog.")
-   (changelog
-    :type org-glance-changelog
-    :initarg :changelog
-    :initform (org-glance-changelog)
-    :documentation "Persistent changelog.")
-   (cache
-    :type hash-table
-    :initarg :cache
-    :initform (make-hash-table :test #'equal)
-    :documentation "LRU cache with headlines.")
-   (views
-    :type hash-table
-    :initarg :views
-    :initform (make-hash-table :test #'equal)
-    :documentation "Views associated with store by type.")))
+    ((location
+      :type org-glance-directory
+      :initarg :location
+      :documentation "Directory containing all the data.")
+     (changelog*
+      :type org-glance-changelog
+      :initarg :changelog*
+      :initform (org-glance-changelog)
+      :documentation "In-memory changelog.")
+     (changelog
+      :type org-glance-changelog
+      :initarg :changelog
+      :initform (org-glance-changelog)
+      :documentation "Persistent changelog.")
+     (cache
+      :type hash-table
+      :initarg :cache
+      :initform (make-hash-table :test #'equal)
+      :documentation "LRU cache with headlines.")
+     (views
+      :type hash-table
+      :initarg :views
+      :initform (make-hash-table :test #'equal)
+      :documentation "Views associated with store by type.")))
 
 (defvar org-glance-stores (make-hash-table :test #'equal)
   "List of stores registered in system.")
 
-(org-glance:declare-type org-glance-store:create : string list org-glance-store)
-(cl-defun org-glance-store:create (location strings)
-  "Creates store from LOCATION, puts headlines from STRINGS in it and flushes it on disk."
-  (let ((store (cond ((and (f-exists? location) (f-directory? location) (gethash location org-glance-stores))
-                      (gethash location org-glance-stores))
-                     (t
-                      (f-mkdir-full-path location)
-                      (org-glance-store :location location)))))
-    (let ((headlines (mapcar #'org-glance-headline-from-string strings)))
-      (dolist (headline headlines)
-        (org-glance-store:put store headline))
-      (org-glance-store:flush store)
-      (puthash location store org-glance-stores)
-      store)))
+(cl-defun org-glance-store:create (location)
+  "Create store located in directory LOCATION."
+  (thunk-let ((cached-store (gethash location org-glance-stores))
+              (persist-store (org-glance-store:read location))
+              (location-exists (and (f-exists? location)
+                                    (f-directory? location)
+                                    (f-readable? location))))
+    (cond ((and location-exists cached-store) cached-store)
+          (location-exists (puthash location persist-store org-glance-stores))
+          (t (f-mkdir-full-path location)
+             (puthash location (org-glance-store :location location) org-glance-stores)))))
 
-(org-glance:declare-type org-glance-store:read : string org-glance-store)
+(cl-defun org-glance-store:put-strings (store strings)
+  (cl-loop for string in strings
+     for headline = (org-glance-headline-from-string string)
+     do (org-glance-store:put store headline)
+     finally do (org-glance-store:flush store)
+     finally return store))
+
 (cl-defun org-glance-store:read (location)
   "Read `org-glance-store' from LOCATION."
   (or (gethash location org-glance-stores)
@@ -73,13 +76,11 @@
         (puthash location store org-glance-stores)
         store)))
 
-(org-glance:declare-type org-glance-store:offset : org-glance-store org-glance-offset)
 (cl-defun org-glance-store:offset (store)
   (if-let (event (org-glance-changelog:last (org-glance-> store :changelog)))
       (org-glance-> event :offset)
     (org-glance-offset:current)))
 
-(org-glance:declare-type org-glance-store:flush : org-glance-store org-glance-offset)
 (cl-defun org-glance-store:flush (store)
   "Persist STORE changes.
 
@@ -130,7 +131,6 @@ Return last committed offset."
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 
-(org-glance:declare-type org-glance-store:put : org-glance-store org-glance-headline org-glance-offset)
 (cl-defun org-glance-store:put (store headline)
   "Put HEADLINE to STORE.
 TODO: Transaction."
@@ -139,7 +139,6 @@ TODO: Transaction."
     (puthash (org-glance-> headline :hash) headline (org-glance-> store :cache))
     (org-glance-> event :offset)))
 
-(org-glance:declare-type org-glance-store:remove : org-glance-store string nil)
 (cl-defun org-glance-store:remove (store hash)
   "Return `org-glance-store' with HEADLINES removed from STORE.
 
@@ -152,7 +151,6 @@ achieved by calling `org-glance-store:flush' method."
     (org-glance-changelog:push (org-glance-> store :changelog*) event)
     (remhash hash (org-glance-> store :cache))))
 
-(org-glance:declare-type org-glance-store:update : org-glance-store string org-glance-headline org-glance-offset)
 (cl-defun org-glance-store:update (store hash headline)
   "Update HEADLINE with HASH to STORE.
 TODO: Transaction."
@@ -164,7 +162,6 @@ TODO: Transaction."
     (remhash hash (org-glance-> store :cache))
     (org-glance-> event :offset)))
 
-(org-glance:declare-type org-glance-store:get : org-glance-store string org-glance-headline)
 (cl-defun org-glance-store:get (store hash)
   "Return fully qualified `org-glance-headline' by hash.
 
@@ -196,7 +193,6 @@ TODO: Transaction."
                   headline
                   (org-glance-> store :cache))))))
 
-(org-glance:declare-type org-glance-store:in : org-glance-store string boolean)
 (cl-defun org-glance-store:in (store hash)
   "Return t if HASH is in STORE, nil otherwise."
   (or (not (null (gethash hash (org-glance-> store :cache) nil)))
@@ -215,7 +211,6 @@ TODO: Transaction."
       (and (f-exists-p (org-glance-store:locate store hash))
            (f-readable-p (org-glance-store:locate store hash)))))
 
-(org-glance:declare-type org-glance-store:headlines : org-glance-store (org-glance:list-of org-glance-headline-header))
 (cl-defun org-glance-store:headlines (store)
   "Return actual headline hashes from STORE."
   (cl-loop
@@ -237,14 +232,12 @@ TODO: Transaction."
 ;;          (hash (alist-get (completing-read "Headline: " title->hash nil t) title->hash nil nil #'string=)))
 ;;     (org-glance-store:retrieve store hash)))
 
-(org-glance:declare-type org-glance-store:events : org-glance-store (org-glance:list-of org-glance-event))
 (cl-defun org-glance-store:events (store)
   (org-glance-changelog:flatten
    (org-glance-changelog:merge
     (org-glance-> store :changelog*)
     (org-glance-> store :changelog))))
 
-(org-glance:declare-type org-glance-store:import : org-glance-store string t)
 (cl-defun org-glance-store:import (store location)
   "Add headlines from LOCATION to STORE."
   (dolist (file (org-glance-scope location))

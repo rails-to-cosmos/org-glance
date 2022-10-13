@@ -19,7 +19,7 @@
   (org-glance-> changelog :events))
 
 (cl-defun org-glance-changelog:contents (changelog)
-  "Return LOG contents as a string."
+  "Return CHANGELOG contents as a string."
   (thread-last changelog
     org-glance-changelog:flatten
     reverse
@@ -71,8 +71,5 @@
 
 (cl-defun org-glance-changelog:length (changelog)
   (length (org-glance-> changelog :events)))
-
-(cl-defun org-glance-changelog:empty-p (changelog)
-  (null (org-glance-> changelog :events)))
 
 (provide 'org-glance-changelog)
