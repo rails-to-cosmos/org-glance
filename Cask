@@ -12,6 +12,7 @@
 (depends-on "s")
 (depends-on "transient")
 (depends-on "ts")
+(depends-on "elsa")
 
 ;; plugin deps
 (depends-on "aes")

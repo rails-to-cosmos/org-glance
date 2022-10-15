@@ -12,10 +12,10 @@
      (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
      (defclass ,name ,superclasses ,slots ,@options-and-doc)))
 
-(defmacro org-glance-> (object &rest slots)
+(defmacro org-glance- (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
-Example: (org-glance-> view :world :location)"
+Example: (org-glance- view :world :location)"
   (declare (indent 1))
   (cl-reduce
    (lambda (acc slot)
@@ -87,23 +87,23 @@ Example: (org-glance-> view :world :location)"
           ((>= v mv) (org-glance:binary-search vec v m r))
           (t (org-glance:binary-search vec v l (1- m))))))
 
-(eval-when-compile
-  (cl-assert (= -1 (org-glance:binary-search [] 10)))
+;; (eval-when-compile
+;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))
 
-  (cl-assert (= -1 (org-glance:binary-search [119] 10)))
-  (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
+;;   (cl-assert (= -1 (org-glance:binary-search [119] 10)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
 
-  (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
+;;   (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
 
-  (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
-  (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
-  (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
-  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
-  (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
+;;   (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
+;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
+;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
 
 (provide 'org-glance-helpers)

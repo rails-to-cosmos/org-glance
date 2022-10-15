@@ -1,4 +1,6 @@
-;; -*- lexical-binding: t; -*-
+;;; org-glance-view.el --- View of the world  -*- lexical-binding: t; -*-
+;;; Commentary:
+;;
 
 (require 'eieio)
 (require 'f)
@@ -6,9 +8,12 @@
 
 (require 'org-glance-debug)
 (require 'org-glance-types)
-(require 'org-glance-headline)
-(require 'org-glance-helpers)
 (require 'org-glance-offset)
+(require 'org-glance-helpers)
+
+(require 'org-glance-headline)
+
+;;; Code:
 
 (declare-function f-mkdir-full-path 'f)
 
@@ -63,7 +68,8 @@
       :initarg :marker-hashes)))
 
 (cl-defun org-glance-view:create (world type location)
-  (thunk-let* ((views (org-glance-> world :views))
+  "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
+  (thunk-let* ((views (org-glance- world :views))
                (location (file-truename location))
                (key (list type location))
                (view-exists? (and (f-exists? location) (f-file? location) views))
@@ -83,46 +89,46 @@
                (cl-dolist (headline headlines)
                  (when (org-glance-view:filter view headline)
                    (org-glance-headline:insert
-                    (org-glance-world:get world (org-glance-> headline :hash))))))
-             (puthash key view (org-glance-> world :views))))))
+                    (org-glance-world:get world (org-glance- headline :hash))))))
+             (puthash key view (org-glance- world :views))))))
 
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (member (downcase (org-glance-> view :type)) (org-glance-> headline :class)))
+  (member (downcase (org-glance- view :type)) (org-glance- headline :class)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
-  `(if (< -1 ,midx (length (org-glance-> ,view :marker-positions)))
+  `(if (< -1 ,midx (length (org-glance- ,view :marker-positions)))
        ,then
      ,@else))
 
 (cl-defun org-glance-view:get-marker-position (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :marker-positions) midx)
+      (aref (org-glance- view :marker-positions) midx)
     (point-max)))
 
 (cl-defun org-glance-view:set-marker-position (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (aset (org-glance-> view :marker-positions) midx val)))
+      (aset (org-glance- view :marker-positions) midx val)))
 
 (cl-defun org-glance-view:set-marker-hash (view midx val)
   (org-glance-view:if-safe-marker view midx
       (progn
-        (remhash (org-glance-view:get-marker-hash view midx) (org-glance-> view :hash->midx))
-        (puthash val midx  (org-glance-> view :hash->midx))
-        (aset (org-glance-> view :marker-hashes) midx val))))
+        (remhash (org-glance-view:get-marker-hash view midx) (org-glance- view :hash->midx))
+        (puthash val midx  (org-glance- view :hash->midx))
+        (aset (org-glance- view :marker-hashes) midx val))))
 
 (cl-defun org-glance-view:get-marker-hash (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :marker-hashes) midx)))
+      (aref (org-glance- view :marker-hashes) midx)))
 
 (cl-defun org-glance-view:get-marker-overlay (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :marker-overlays) midx)))
+      (aref (org-glance- view :marker-overlays) midx)))
 
 (cl-defun org-glance-view:set-marker-overlay (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (aset (org-glance-> view :marker-overlays) midx val)))
+      (aset (org-glance- view :marker-overlays) midx val)))
 
 (cl-defun org-glance-view:highlight-marker (view midx color)
   (org-glance-view:if-safe-marker view midx
@@ -142,27 +148,27 @@
 
 (cl-defun org-glance-view:marker-changed-p (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :changed-markers) midx)))
+      (aref (org-glance- view :changed-markers) midx)))
 
 (cl-defun org-glance-view:set-marker-changed (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (aset (org-glance-> view :changed-markers) midx val)))
+      (aset (org-glance- view :changed-markers) midx val)))
 
 (cl-defun org-glance-view:marker-corrupted-p (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :corrupted-markers) midx)))
+      (aref (org-glance- view :corrupted-markers) midx)))
 
 (cl-defun org-glance-view:set-marker-corrupted (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (aset (org-glance-> view :corrupted-markers) midx val)))
+      (aset (org-glance- view :corrupted-markers) midx val)))
 
 (cl-defun org-glance-view:marker-committed-p (view midx)
   (org-glance-view:if-safe-marker view midx
-      (aref (org-glance-> view :committed-markers) midx)))
+      (aref (org-glance- view :committed-markers) midx)))
 
 (cl-defun org-glance-view:set-marker-committed (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (aset (org-glance-> view :committed-markers) midx val)))
+      (aset (org-glance- view :committed-markers) midx val)))
 
 (cl-defun org-glance-view:header (view)
   "Generate header for VIEW."
@@ -171,10 +177,10 @@
                 ""
                 "#+STARTUP: overview"
                 (format "#+TYPE: %s :: %s"
-                        (org-glance-> view :world :location)
-                        (org-glance-> view :type))
+                        (org-glance- view :world :location)
+                        (org-glance- view :type))
                 (format "#+OFFSET: %s"
-                        (org-glance-> view :offset))
+                        (org-glance- view :offset))
                 ""
                 "")))
 
@@ -228,6 +234,16 @@
       (user-error "Unable to get world from buffer %s" (current-buffer)))
     (org-glance-view:create world type (buffer-file-name))))
 
+(cl-defmacro org-glance-view:with-current-buffer (view &rest forms)
+  (declare (indent 1))
+  `(save-match-data
+     (let ((buffer (get-file-buffer (org-glance- ,view :location))))
+       (when (and buffer (buffer-live-p buffer))
+         (with-current-buffer buffer
+           (save-excursion
+             (save-restriction
+               ,@forms)))))))
+
 (cl-defmacro org-glance-view:consume-changes (spec &rest forms)
   "Pop changed markers one by one from current buffer binding each marker to VAR and executing FORMS.
 
@@ -240,7 +256,7 @@
         (midx-var-name (cadr spec)))
     `(org-glance-view:with-current-buffer ,view
        (cl-loop
-          for change across-ref (org-glance-> ,view :changed-markers)
+          for change across-ref (org-glance- ,view :changed-markers)
           for midx from 0
           when change
           collect (unwind-protect
@@ -254,17 +270,17 @@
   (declare (indent 0))
   (unless (string= old-hash new-hash)
     (org-glance-view:with-current-buffer view
-      (when-let (midx (gethash old-hash (org-glance-> view :hash->midx)))
+      (when-let (midx (gethash old-hash (org-glance- view :hash->midx)))
         (let ((marker-position (org-glance-view:get-marker-position view midx))
-              (new-headline (org-glance-world:get (org-glance-> view :world) new-hash)))
+              (new-headline (org-glance-world:get (org-glance- view :world) new-hash)))
           (goto-char marker-position)
           (org-glance-headline:with-headline-at-point
             (let ((inhibit-message t))
-              (org-edit-headline (org-glance-> new-headline :title))
-              (org-todo (org-glance-> new-headline :state))
-              (when (org-glance-> new-headline :commented-p)
+              (org-edit-headline (org-glance- new-headline :title))
+              (org-todo (org-glance- new-headline :state))
+              (when (org-glance- new-headline :commented-p)
                 (org-toggle-comment))
-              (org-set-tags (org-glance-> new-headline :class)))
+              (org-set-tags (org-glance- new-headline :class)))
 
             (goto-char (point-min))
             (when (= 0 (forward-line))
@@ -273,7 +289,7 @@
             (goto-char (point-max))
 
             (insert (with-temp-buffer
-                      (insert (org-glance-> new-headline :contents))
+                      (insert (org-glance- new-headline :contents))
                       (goto-char (point-min))
                       (forward-line)
                       (buffer-substring-no-properties (point) (point-max))))
@@ -283,21 +299,11 @@
 
             (org-glance-view:set-marker-hash view midx new-hash)))))))
 
-(cl-defmacro org-glance-view:with-current-buffer (view &rest forms)
-  (declare (indent 1))
-  `(save-match-data
-     (let ((buffer (get-file-buffer (org-glance-> ,view :location))))
-       (when (and buffer (buffer-live-p buffer))
-         (with-current-buffer buffer
-           (save-excursion
-             (save-restriction
-               ,@forms)))))))
-
 (cl-defun org-glance-view:mark (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
     (cl-loop
-       with world = (org-glance-> view :world)
-       with headlines = (org-glance-headline:map (headline) (list (point-min) (org-glance-> headline :hash)))
+       with world = (org-glance- view :world)
+       with headlines = (org-glance-headline:map (headline) (list (point-min) (org-glance- headline :hash)))
        with marker-positions = (make-vector (length headlines) 0)
        with marker-hashes = (make-vector (length headlines) nil)
        with corrupted-markers = (make-bool-vector (length headlines) nil)
@@ -310,17 +316,17 @@
          (aset marker-positions midx pos)
          (aset corrupted-markers midx (null (org-glance-world:in world hash)))
        finally do
-         (setf (org-glance-> view :marker-hashes) marker-hashes
-               (org-glance-> view :marker-positions) marker-positions
-               (org-glance-> view :marker-overlays) (make-vector (length headlines) nil)
-               (org-glance-> view :changed-markers) (make-bool-vector (length headlines) nil)
-               (org-glance-> view :committed-markers) (make-bool-vector (length headlines) nil)
-               (org-glance-> view :corrupted-markers) corrupted-markers
-               (org-glance-> view :hash->midx) markers))))
+         (setf (org-glance- view :marker-hashes) marker-hashes
+               (org-glance- view :marker-positions) marker-positions
+               (org-glance- view :marker-overlays) (make-vector (length headlines) nil)
+               (org-glance- view :changed-markers) (make-bool-vector (length headlines) nil)
+               (org-glance- view :committed-markers) (make-bool-vector (length headlines) nil)
+               (org-glance- view :corrupted-markers) corrupted-markers
+               (org-glance- view :hash->midx) markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (let ((world (org-glance-> view :world)))
+    (let ((world (org-glance- view :world)))
       (org-glance-view:fetch view)
 
       (org-glance-view:consume-changes (view midx)
@@ -328,7 +334,7 @@
                            (goto-char (org-glance-view:get-marker-position view midx))
                            (org-glance-headline-at-point)))
                (old-hash (org-glance-view:get-marker-hash view midx))
-               (new-hash (org-glance-> headline :hash)))
+               (new-hash (org-glance- headline :hash)))
           (org-glance-world:update world old-hash headline)
           (org-glance-view:set-marker-committed view midx t)
           (org-glance-view:set-marker-changed view midx nil)
@@ -337,46 +343,46 @@
       (let ((offset (org-glance-world:flush world)))
         (org-glance-view:set-offset view offset))
 
-      (dolist (it (hash-table-values (org-glance-> world :views)))
+      (dolist (it (hash-table-values (org-glance- world :views)))
         (when (not (eq view it))
           (org-glance-view:fetch it))))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (thunk-let* ((world (org-glance-> view :world))
+    (thunk-let* ((world (org-glance- view :world))
                  (view-offset (org-glance-view:offset view))
                  (world-offset (org-glance-world:offset world))
                  (events (--take-while
-                          (org-glance-offset:less-p view-offset (org-glance-> it :offset))
+                          (org-glance-offset:less-p view-offset (org-glance- it :offset))
                           (org-glance-world:events world))))
       (when (org-glance-offset:less-p view-offset world-offset)
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
              (org-glance-view:replace-headline view
-                                               (org-glance-> event :hash)
-                                               (org-glance-> event :headline :hash)))
-            (otherwise (user-error "events PUT and DEL not implemented yet"))))
+                                               (org-glance- event :hash)
+                                               (org-glance- event :headline :hash)))
+            (otherwise (user-error "Events PUT and DEL not implemented yet"))))
         (org-glance-view:set-offset view world-offset)))))
 
 (cl-defun org-glance-view:offset (view)
   (declare (indent 1))
   (let ((buffer-offset (org-glance-view:with-current-buffer view
                          (org-glance-offset:read (org-glance-view:get-property "OFFSET"))))
-        (memory-offset (org-glance-> view :offset)))
+        (memory-offset (org-glance- view :offset)))
     (-max-by #'org-glance-offset:less-p (list buffer-offset memory-offset))))
 
 (cl-defun org-glance-view:set-offset (view offset)
   (declare (indent 1))
   (org-glance-view:with-current-buffer view
     (org-glance-view:set-property "OFFSET" offset)
-    (setf (org-glance-> view :offset) offset)))
+    (setf (org-glance- view :offset) offset)))
 
 (cl-defun org-glance-view:marker-at-point
     (&optional
        (view (org-glance-view:get-buffer-view))
        (point (point)))
-  (org-glance:binary-search (org-glance-> view :marker-positions) point))
+  (org-glance:binary-search (org-glance- view :marker-positions) point))
 
 ;; (cl-defun org-glance-view:update-overlay (view midx)
 ;;   "Refresh MARKER overlay."
@@ -401,7 +407,11 @@
 ;;           )))
 
 (cl-defun org-glance-view:shift-markers (view midx diff)
-  (cl-loop for i from (1+ midx) below (length (org-glance-> view :marker-positions))
+  (cl-loop for i from (1+ midx) below (length (org-glance- view :marker-positions))
      do (org-glance-view:set-marker-position view i (+ (org-glance-view:get-marker-position view i) diff))))
 
 (provide 'org-glance-view)
+
+(provide 'org-glance-view)
+
+;;; org-glance-view.el ends here

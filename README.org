@@ -8,6 +8,7 @@
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
 * TODO Capture headline
+* TODO Headline ID
 * TODO Improve type system
 ** TODO consistent types in views (on tag modification)
 ** TODO ephemeral types (time-specific / todo-state specific)

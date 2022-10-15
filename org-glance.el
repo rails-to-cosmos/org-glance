@@ -57,20 +57,37 @@
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
+  (interactive)
+
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory t))
 
   (setq org-glance-current-world (org-glance-world:create org-glance-directory))
 
+  ;; /tmp/world
+  ;; /tmp/world/log/000.log
+  ;; /tmp/world/log/001.log
+  ;; /tmp/world/log/002.log
+  ;; /tmp/world/log/003.log
+  ;; /tmp/world/view/by-state/todo
+  ;; /tmp/world/view/by-tag/bookmark.org
+  ;; /tmp/world/view/by-tag/task.org
+  ;; /tmp/world/view/by-tag/author.org
+  ;; /tmp/world/view/by-feature/archived
+  ;; /tmp/world/view/by-feature/commented
+  ;; /tmp/world/view/by-feature/linked
+  ;; /tmp/world/view/by-property/author=HELLO.org
+  ;; /tmp/world/view/by-date/2022-01-01.org
+
   ;; (add-rule org-glance-current-world
   ;;           (lambda (headline)
-  ;;             (when (org-glance-> headline :state)
+  ;;             (when (org-glance- headline :state)
   ;;               (org-glance-))))
 
   ;; (lambda (headline)
   ;;   (let (result)
-  ;;     (push (upcase (org-glance-> headline :state)) result)
-  ;;     (dolist (tag (org-glance-> headline :class))
+  ;;     (push (upcase (org-glance- headline :state)) result)
+  ;;     (dolist (tag (org-glance- headline :class))
   ;;       (push (downcase tag) result))
   ;;     (-non-nil result)))
 

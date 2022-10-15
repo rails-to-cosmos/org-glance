@@ -133,16 +133,16 @@
 (cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline))
   "Make instance of `org-glance-headline-header' from HEADLINE."
   (org-glance-headline-header
-   :hash (org-glance-> headline :hash)
-   :title (org-glance-> headline :title)
-   :state (org-glance-> headline :state)
-   :class (org-glance-> headline :class)
-   :commented-p (org-glance-> headline :commented-p)
-   :archived-p (org-glance-> headline :archived-p)
-   :closed-p (org-glance-> headline :closed-p)
-   :encrypted-p (org-glance-> headline :encrypted-p)
-   :linked-p (org-glance-> headline :linked-p)
-   :propertized-p (org-glance-> headline :propertized-p)))
+   :hash (org-glance- headline :hash)
+   :title (org-glance- headline :title)
+   :state (org-glance- headline :state)
+   :class (org-glance- headline :class)
+   :commented-p (org-glance- headline :commented-p)
+   :archived-p (org-glance- headline :archived-p)
+   :closed-p (org-glance- headline :closed-p)
+   :encrypted-p (org-glance- headline :encrypted-p)
+   :linked-p (org-glance- headline :linked-p)
+   :propertized-p (org-glance- headline :propertized-p)))
 
 (cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline-header))
   "Make instance of `org-glance-headline-header' from HEADLINE."
@@ -269,11 +269,11 @@
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
   "Return t if A equals B."
-  (string= (org-glance-> a :hash) (org-glance-> b :hash)))
+  (string= (org-glance- a :hash) (org-glance- b :hash)))
 
 (cl-defmethod org-glance-headline-equal-p ((a org-glance-headline-header) (b org-glance-headline-header))
   "Return t if A equals B."
-  (string= (org-glance-> a :hash) (org-glance-> b :hash)))
+  (string= (org-glance- a :hash) (org-glance- b :hash)))
 
 (cl-defun org-glance-headline-save (headline dest)
   "Write HEADLINE to DEST."
@@ -284,7 +284,7 @@
   headline)
 
 (cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
-  (insert (org-glance-> headline :contents) "\n"))
+  (insert (org-glance- headline :contents) "\n"))
 
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
@@ -300,13 +300,13 @@
 ;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
-;;      (a-list 'title (string-as-unibyte (org-glance-> headline :title))
-;;              'archived (bool->int (org-glance-> headline :archived-p))
-;;              'commented (bool->int (org-glance-> headline :commented-p))
-;;              'closed (bool->int (org-glance-> headline :closed-p))
-;;              'encrypted (bool->int (org-glance-> headline :encrypted-p))
-;;              'linked (bool->int (org-glance-> headline :linked-p))
-;;              'propertized (bool->int (org-glance-> headline :propertized-p))))))
+;;      (a-list 'title (string-as-unibyte (org-glance- headline :title))
+;;              'archived (bool->int (org-glance- headline :archived-p))
+;;              'commented (bool->int (org-glance- headline :commented-p))
+;;              'closed (bool->int (org-glance- headline :closed-p))
+;;              'encrypted (bool->int (org-glance- headline :encrypted-p))
+;;              'linked (bool->int (org-glance- headline :linked-p))
+;;              'propertized (bool->int (org-glance- headline :propertized-p))))))
 
 ;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
 ;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))

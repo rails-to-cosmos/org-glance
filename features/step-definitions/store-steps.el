@@ -38,13 +38,13 @@
       (lambda (expected-change-count world-name)
         (let ((world (org-glance-test:world-get world-name)))
           (should (= (string-to-number expected-change-count)
-                     (org-glance-changelog:length (org-glance-> world :changelog*)))))))
+                     (org-glance-changelog:length (org-glance- world :changelog*)))))))
 
 (Then "^\\([[:digit:]]+\\) committed changes should be in world \"\\([^\"]+\\)\"$"
   (lambda (expected-change-count world-name)
     (let ((world (org-glance-test:world-get world-name)))
       (should (= (string-to-number expected-change-count)
-                 (org-glance-changelog:length (org-glance-> world :changelog)))))))
+                 (org-glance-changelog:length (org-glance- world :changelog)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (world-name expected-count)
@@ -55,22 +55,22 @@
 (Then "^world \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (world-name title)
         (let ((world (org-glance-test:world-get world-name)))
-          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> world :changelog*))))))
+          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance- world :changelog*))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in committed layer$"
       (lambda (world-name title)
         (let ((world (org-glance-test:world-get world-name)))
-          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance-> world :changelog))))))
+          (should (org-glance-test:changelog-contains-headline-with-title title (org-glance- world :changelog))))))
 
 (Then "^world \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (world-name title)
         (let ((world (org-glance-test:world-get world-name)))
-          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> world :changelog*)))))))
+          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance- world :changelog*)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should not contain headline \"\\([^\"]+\\)\" in committed layer$"
       (lambda (world-name title)
         (let ((world (org-glance-test:world-get world-name)))
-          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance-> world :changelog)))))))
+          (should (not (org-glance-test:changelog-contains-headline-with-title title (org-glance- world :changelog)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) \"\\([^\"]+\\)\" headlines?$"
       (lambda (world-name expected-count expected-state)
@@ -79,7 +79,7 @@
            with events = (org-glance-world:events world)
            for event in events
            when (cl-typecase event
-                  ((or org-glance-event:PUT org-glance-event:UPDATE) (string= (org-glance-> event :headline :state) expected-state))
+                  ((or org-glance-event:PUT org-glance-event:UPDATE) (string= (org-glance- event :headline :state) expected-state))
                   (org-glance-event:RM nil))
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -89,7 +89,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for commented-p = (org-glance-> headline :commented-p)
+           for commented-p = (org-glance- headline :commented-p)
            unless (null commented-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -99,7 +99,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for archived-p = (org-glance-> headline :archived-p)
+           for archived-p = (org-glance- headline :archived-p)
            unless (null archived-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -109,7 +109,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for closed-p = (org-glance-> headline :closed-p)
+           for closed-p = (org-glance- headline :closed-p)
            unless (null closed-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -119,7 +119,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for linked-p = (org-glance-> headline :linked-p)
+           for linked-p = (org-glance- headline :linked-p)
            unless (null linked-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -129,7 +129,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for propertized-p = (org-glance-> headline :propertized-p)
+           for propertized-p = (org-glance- headline :propertized-p)
            unless (null propertized-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -139,7 +139,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for encrypted-p = (org-glance-> headline :encrypted-p)
+           for encrypted-p = (org-glance- headline :encrypted-p)
            unless (null encrypted-p)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
@@ -149,7 +149,7 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for class = (org-glance-> headline :class)
+           for class = (org-glance- headline :class)
            when (member (downcase expected-class) class)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
