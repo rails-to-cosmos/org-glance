@@ -47,7 +47,7 @@
 (When "^I? ?save headline \"\\([^\"]+\\)\" to file \"\\([^\"]+\\)\"$"
   (lambda (headline file)
     (let ((headline (gethash headline org-glance-test-headlines)))
-      (org-glance-headline-save headline (f-join org-glance-test:location file)))))
+      (org-glance-headline:save headline (f-join org-glance-test:location file)))))
 
 (When "^I? ?load headline \"\\([^\"]+\\)\" from file \"\\([^\"]+\\)\"$"
       (lambda (headline file)
@@ -56,7 +56,7 @@
 
 (Then "^headline at point should contain links?$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :linked-p))))
+        (should (org-glance- (org-glance-headline-at-point) :linked?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline-title)
@@ -69,7 +69,7 @@
 
 (Then "^headline at point should be encrypted$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :encrypted-p))))
+        (should (org-glance- (org-glance-headline-at-point) :encrypted?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (headline-title)
@@ -78,7 +78,7 @@
 
 (Then "^headline at point should not be encrypted$"
       (lambda ()
-        (should (not (org-glance- (org-glance-headline-at-point) :encrypted-p)))))
+        (should (not (org-glance- (org-glance-headline-at-point) :encrypted?)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
       (lambda (headline-title)
@@ -87,11 +87,11 @@
 
 (Then "^headline at point should be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :propertized-p))))
+        (should (org-glance- (org-glance-headline-at-point) :propertized?))))
 
 (Then "^headline at point should not be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :propertized-p))))
+        (should (org-glance- (org-glance-headline-at-point) :propertized?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline-title)
@@ -105,11 +105,11 @@
 
 (Then "^headline at point should be archived$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :archived-p))))
+        (should (org-glance- (org-glance-headline-at-point) :archived?))))
 
 (Then "^headline at point should not be archived$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :archived-p))))
+        (should (org-glance- (org-glance-headline-at-point) :archived?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
       (lambda (headline-title)
@@ -123,11 +123,11 @@
 
 (Then "^headline at point should be commented$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :commented-p))))
+        (should (org-glance- (org-glance-headline-at-point) :commented?))))
 
 (Then "^headline at point should not be commented$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :commented-p))))
+        (should (org-glance- (org-glance-headline-at-point) :commented?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
       (lambda (headline-title)
@@ -141,11 +141,11 @@
 
 (Then "^headline at point should be closed$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :closed-p))))
+        (should (org-glance- (org-glance-headline-at-point) :closed?))))
 
 (Then "^headline at point should not be closed$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :closed-p))))
+        (should (org-glance- (org-glance-headline-at-point) :closed?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
       (lambda (headline-title)
@@ -187,7 +187,7 @@
 (Then "^headline at point should be an? \\([^\"]+\\)$"
       (lambda (expected-class)
         (let* ((headline (org-glance-headline-at-point))
-               (class (org-glance- headline :class)))
+               (class (org-glance- headline :tags)))
           (should (member expected-class class)))))
 
 (Then "^the contents of headline \"\\([^\"]+\\)\" should be$"

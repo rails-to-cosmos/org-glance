@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
-(require 'dash)
 (require 'cl-macs)
+(require 'dash)
 (require 'eieio)
 (require 'thunk)
 
@@ -41,7 +41,7 @@ Example: (org-glance- view :world :location)"
      (org-mode)
      ,@forms))
 
-(cl-defun org-glance--links-to-titles (ast)
+(cl-defun org-glance:convert-links-to-titles (ast)
   "Replace links with its titles in AST."
   (cl-loop for link in (org-element-map ast 'link #'identity)
      do (org-element-set-element link (or (-some->> link
@@ -66,10 +66,6 @@ Example: (org-glance- view :world :location)"
        (prog1 ,bodyform
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
-
-(cl-defun org-glance:before-first-headline-p ()
-  (save-match-data
-    (org-before-first-heading-p)))
 
 (cl-defmacro org-glance-comment (&rest _)
   (declare (indent 0))

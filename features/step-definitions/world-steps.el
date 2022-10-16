@@ -17,21 +17,44 @@
 
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
        (lambda (world-name relative-location headlines)
-         (let ((location (org-glance-test:get-file relative-location)))
-           (let ((world (org-glance-world:create location)))
-             (org-glance-world:extend world
-                                           (->> headlines
-                                                (s-split "* ")
-                                                (-map #'s-trim)
-                                                reverse
-                                                (--filter (not (string-empty-p it)))
-                                                (--map (concat "* " it))))
-             (org-glance-test:world-put world-name world)))))
+         (cl-loop
+            with location = (org-glance-test:get-file relative-location)
+            with world = (org-glance-world:create location
+                           '(("by-state/%s.org"   -> (lambda (headline)
+                                                       (list (org-glance- headline :state))))
+                             ("by-tag/%s.org"     -> (lambda (headline)
+                                                       (org-glance- headline :tags)))
+                             ("by-feature/%s.org" -> (lambda (headline)
+                                                       (list
+                                                        (when (org-glance- headline :commented?)
+                                                          "commented")
+                                                        (when (org-glance- headline :archived?)
+                                                          "archived")
+                                                        (when (org-glance- headline :closed?)
+                                                          "closed")
+                                                        (when (org-glance- headline :encrypted?)
+                                                          "encrypted")
+                                                        (when (org-glance- headline :linked?)
+                                                          "linked")
+                                                        (when (org-glance- headline :propertized?)
+                                                          "propertized"))))))
+            with strings = (->> headlines
+                                (s-split "* ")
+                                (-map #'s-trim)
+                                reverse
+                                (--filter (not (string-empty-p it)))
+                                (--map (concat "* " it)))
+            for string in strings
+            for headline = (org-glance-headline-from-string string)
+            do (org-glance-world:add world headline)
+            finally do
+              (org-glance-world:persist world)
+              (org-glance-test:world-put world-name world))))
 
 (When "^I? ?import headlines to world \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (world-name location)
     (let ((world (org-glance-test:world-get world-name)))
-      (org-glance-world:import world (org-glance-test:get-file location))
+      (org-glance-world:import-headlines world (org-glance-test:get-file location))
       world)))
 
 (Then "^\\([[:digit:]]+\\) staged changes should be in world \"\\([^\"]+\\)\"$"
@@ -41,10 +64,10 @@
                      (org-glance-changelog:length (org-glance- world :changelog*)))))))
 
 (Then "^\\([[:digit:]]+\\) committed changes should be in world \"\\([^\"]+\\)\"$"
-  (lambda (expected-change-count world-name)
-    (let ((world (org-glance-test:world-get world-name)))
-      (should (= (string-to-number expected-change-count)
-                 (org-glance-changelog:length (org-glance- world :changelog)))))))
+      (lambda (expected-change-count world-name)
+        (let ((world (org-glance-test:world-get world-name)))
+          (should (= (string-to-number expected-change-count)
+                     (org-glance-changelog:length (org-glance- world :changelog)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (world-name expected-count)
@@ -89,8 +112,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for commented-p = (org-glance- headline :commented-p)
-           unless (null commented-p)
+           for commented? = (org-glance- headline :commented?)
+           unless (null commented?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -99,8 +122,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for archived-p = (org-glance- headline :archived-p)
-           unless (null archived-p)
+           for archived? = (org-glance- headline :archived?)
+           unless (null archived?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -109,8 +132,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for closed-p = (org-glance- headline :closed-p)
-           unless (null closed-p)
+           for closed? = (org-glance- headline :closed?)
+           unless (null closed?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -119,8 +142,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for linked-p = (org-glance- headline :linked-p)
-           unless (null linked-p)
+           for linked? = (org-glance- headline :linked?)
+           unless (null linked?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -129,8 +152,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for propertized-p = (org-glance- headline :propertized-p)
-           unless (null propertized-p)
+           for propertized? = (org-glance- headline :propertized?)
+           unless (null propertized?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -139,8 +162,8 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for encrypted-p = (org-glance- headline :encrypted-p)
-           unless (null encrypted-p)
+           for encrypted? = (org-glance- headline :encrypted?)
+           unless (null encrypted?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
@@ -149,15 +172,15 @@
         (cl-loop
            with world = (org-glance-test:world-get world-name)
            for headline in (org-glance-world:headlines world)
-           for class = (org-glance- headline :class)
-           when (member (downcase expected-class) class)
+           for tags = (org-glance- headline :tags)
+           when (member (downcase expected-class) tags)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 
 (When "^I? ?flush world \"\\([^\"]+\\)\"$"
   (lambda (world-name)
     (let ((world (org-glance-test:world-get world-name)))
-      (org-glance-world:flush world))))
+      (org-glance-world:persist world))))
 
 (Then "^world \"\\([^\"]+\\)\" should be equal to buffer world$"
       (lambda (world-name)

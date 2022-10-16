@@ -45,32 +45,32 @@
       :type hash-table
       :initarg :views
       :initform (make-hash-table :test #'equal)
-      :documentation "Views associated with world by type.")))
+      :documentation "Views associated with world by type.")
+     (partition-rules
+      :type list
+      :initarg :partition-rules
+      :initform nil)))
 
-(cl-defun org-glance-world:create (location)
+(cl-defun org-glance-world:create (location partition-rules)
   "Create world located in directory LOCATION."
+  (declare (indent 1))
   (thunk-let ((cached-world (gethash location org-glance-worlds))
-              (persist-world (org-glance-world:read location))
-              (location-exists (and (f-exists? location)
-                                    (f-directory? location)
-                                    (f-readable? location))))
-    (cond ((and location-exists cached-world) cached-world)
-          (location-exists (puthash location persist-world org-glance-worlds))
+              (persisted-world (org-glance-world:read location))
+              (new-world (org-glance-world :location location :partition-rules partition-rules))
+              (location-exists? (and (f-exists? location)
+                                     (f-directory? location)
+                                     (f-readable? location))))
+    (cond ((and location-exists? cached-world) cached-world)
+          (location-exists? (puthash location persisted-world org-glance-worlds))
           (t (f-mkdir-full-path location)
-             (puthash location (org-glance-world :location location) org-glance-worlds)))))
-
-(cl-defun org-glance-world:extend (world strings)
-  (cl-loop for string in strings
-     for headline = (org-glance-headline-from-string string)
-     do (org-glance-world:put world headline)
-     finally do (org-glance-world:flush world)
-     finally return world))
+             (puthash location new-world org-glance-worlds)))))
 
 (cl-defun org-glance-world:read (location)
   "Read `org-glance-world' from LOCATION."
   (or (gethash location org-glance-worlds)
       (let* ((changelog (org-glance-changelog:read (f-join location org-glance-world:log-location)))
-             (world (org-glance-world :location location :changelog changelog)))
+             (world (org-glance-world :location location
+                                      :changelog changelog)))
         (puthash location world org-glance-worlds)
         world)))
 
@@ -79,7 +79,7 @@
       (org-glance- event :offset)
     (org-glance-offset:current)))
 
-(cl-defun org-glance-world:flush (world)
+(cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.
 
 - Persist event log.
@@ -94,34 +94,32 @@ In all other places `org-glance-world' should act like pure
 functional data structure.
 
 Return last committed offset."
-  (let ((changelog (org-glance- world :changelog))
-        (changelog* (org-glance- world :changelog*))
-        (world-changelog-location (f-join (org-glance- world :location) org-glance-world:log-location)))
+  (let* ((changelog (org-glance- world :changelog))
+         (changelog* (org-glance- world :changelog*))
+         (world-location (org-glance- world :location))
+         (changelog-location (f-join world-location org-glance-world:log-location)))
 
     (dolist (event (reverse (org-glance- changelog* :events)))
-      (thunk-let* ((headline (org-glance-world:get world (org-glance- event :headline :hash)))
-                   (location (org-glance-world:locate world headline)))
+      (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (cl-typecase event
           (org-glance-event:RM
-           (user-error "RM operation not implemented")
+           (user-error "RM operation has not been implemented yet")
            ;; TODO think about when to delete headlines
-           ;; (f-delete (org-glance-world:locate world headline))
+           ;; (f-delete (org-glance-world:locate-headline world headline))
            )
 
           (org-glance-event:PUT
-           (unless (f-exists-p location)
-             (org-glance-headline-save headline location)))
+           (org-glance-world:save-headline world headline))
 
           (org-glance-event:UPDATE
-           (unless (f-exists-p location)
-             (org-glance-headline-save headline location))
+           (org-glance-world:save-headline world headline)
            ;; TODO think about when to delete headlines
-           ;; (f-delete (org-glance-world:locate world (org-glance- event :hash))
+           ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
            )))
 
       (org-glance-changelog:push changelog event))
 
-    (org-glance-changelog:write changelog world-changelog-location)
+    (org-glance-changelog:write changelog changelog-location)
     (setf (org-glance- world :changelog*) (org-glance-changelog))
     (if (org-glance-changelog:last changelog)
         (org-glance- (org-glance-changelog:last changelog) :offset)
@@ -129,9 +127,8 @@ Return last committed offset."
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 
-(cl-defun org-glance-world:put (world headline)
-  "Put HEADLINE to WORLD.
-TODO: Transaction."
+(cl-defun org-glance-world:add (world headline)
+  "Put HEADLINE to WORLD."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
     (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
@@ -144,23 +141,27 @@ Append RM event to WAL, but do not remove HEADLINES from the
 persistent storage.
 
 Actual deletion should be handled in a separate thread and
-achieved by calling `org-glance-world:flush' method."
+achieved by calling `org-glance-world:persist' method."
   (let ((event (org-glance-event:RM :hash hash)))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
     (remhash hash (org-glance- world :cache))))
 
-(cl-defun org-glance-world:update (world hash headline)
-  "Update HEADLINE with HASH to WORLD.
-TODO: Transaction."
-  (let ((event (org-glance-event:UPDATE
-                :hash hash
-                :headline (org-glance-headline-header:from-headline headline))))
-    (org-glance-changelog:push (org-glance- world :changelog*) event)
-    (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
-    (remhash hash (org-glance- world :cache))
-    (org-glance- event :offset)))
+(cl-defun org-glance-world:update (world old-hash headline)
+  "Update HEADLINE with HASH in WORLD."
+  (thunk-let* ((new-hash (org-glance- headline :hash))
+               (header (org-glance-headline-header:from-headline headline))
+               (changelog (org-glance- world :changelog*))
+               (cache (org-glance- world :cache))
+               (event (org-glance-event:UPDATE
+                       :hash old-hash
+                       :headline header))
+               (offset (org-glance- event :offset)))
+    (org-glance-changelog:push changelog event)
+    (puthash new-hash headline cache)
+    (remhash old-hash cache)
+    offset))
 
-(cl-defun org-glance-world:get (world hash)
+(cl-defun org-glance-world:get-headline (world hash)
   "Return fully qualified `org-glance-headline' by hash.
 
 1. (TODO) Search in LRU cache.
@@ -182,7 +183,7 @@ TODO: Transaction."
                  ((pred (string= (org-glance- event :headline :hash))) (cl-return (org-glance- event :headline)))))))
 
       (org-glance:with-temp-buffer
-       (insert-file-contents (org-glance-world:locate world hash))
+       (insert-file-contents (org-glance-world:locate-headline world hash))
        (goto-char (point-min))
        (unless (org-at-heading-p)
          (outline-next-heading))
@@ -205,21 +206,8 @@ TODO: Transaction."
               (org-glance-event:PUT
                (pcase hash
                  ((pred (string= (org-glance- event :headline :hash))) (cl-return t))))))
-      (and (f-exists-p (org-glance-world:locate world hash))
-           (f-readable-p (org-glance-world:locate world hash)))))
-
-(cl-defun org-glance-world:headlines (world)
-  "Return actual headline hashes from WORLD."
-  (cl-loop
-     with removed = (make-hash-table :test #'equal)
-     for event in (org-glance-world:events world)
-     when (cl-typecase event
-            ((or org-glance-event:PUT org-glance-event:UPDATE)
-             (not (gethash (org-glance- event :headline :hash) removed))))
-     collect (org-glance- event :headline)
-     when (cl-typecase event
-            ((or org-glance-event:RM org-glance-event:UPDATE) t))
-     do (puthash (org-glance- event :hash) t removed)))
+      (and (f-exists? (org-glance-world:locate-headline world hash))
+           (f-readable? (org-glance-world:locate-headline world hash)))))
 
 ;; (cl-defun org-glance-world-completing-read (world)
 ;;   "Read headlines from WORLD with completion."
@@ -235,29 +223,55 @@ TODO: Transaction."
     (org-glance- world :changelog*)
     (org-glance- world :changelog))))
 
-(cl-defun org-glance-world:import (world location)
+;; World headlines manipulation methods
+
+(cl-defun org-glance-world:headlines (world)
+  "Return actual headline hashes from WORLD."
+  (cl-loop
+     with removed = (make-hash-table :test #'equal)
+     for event in (org-glance-world:events world)
+     when (cl-typecase event
+            ((or org-glance-event:PUT org-glance-event:UPDATE)
+             (not (gethash (org-glance- event :headline :hash) removed))))
+     collect (org-glance- event :headline)
+     when (cl-typecase event
+            ((or org-glance-event:RM org-glance-event:UPDATE) t))
+     do (puthash (org-glance- event :hash) t removed)))
+
+(cl-defun org-glance-world:import-headlines (world location)
   "Add headlines from LOCATION to WORLD."
-  (dolist (file (org-glance-scope location))
+  (cl-dolist (file (org-glance-scope location))
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
-       (org-glance-world:put world headline)))))
+       (org-glance-world:add world headline)))))
 
-(cl-defgeneric org-glance-world:locate (world headline-or-hash)
-  "Return location of HEADLINE in WORLD.")
+(cl-defun org-glance-world:save-headline (world headline)
+  (let ((location (org-glance-world:locate-headline world headline)))
+    (unless (f-exists-p location)
+      (org-glance-world:apply-partition-rules world headline)
+      (org-glance-headline:save headline location))))
 
-(cl-defmethod org-glance-world:locate ((world org-glance-world) (hash string))
-  "Return HASH location from WORLD."
-  (let ((prefix (substring hash 0 2))
-        (postfix (substring hash 2 (length hash))))
-    (f-join (org-glance- world :location) "data" prefix postfix)))
+(cl-defun org-glance-world:insert-headline (world headline)
+  "Return location of THING in WORLD."
+  (org-glance-headline:insert (org-glance-world:get-headline world (org-glance- headline :hash))))
 
-(cl-defmethod org-glance-world:locate ((world org-glance-world) (headline org-glance-headline))
-  "Return HEADLINE location from WORLD."
-  (org-glance-world:locate world (org-glance- headline :hash)))
+(cl-defun org-glance-world:locate-headline (world thing)
+  "Return location of THING in WORLD."
+  (cl-typecase thing
+    (string
+     (let ((prefix (substring thing 0 2))
+           (postfix (substring thing 2 (length thing))))
+       (f-join (org-glance- world :location) "data" prefix postfix)))
+    ((or org-glance-headline org-glance-headline-header)
+     (org-glance-world:locate-headline world (org-glance- thing :hash)))))
 
-(cl-defmethod org-glance-world:locate ((world org-glance-world) (headline org-glance-headline-header))
-  "Return HEADLINE location from WORLD."
-  (org-glance-world:locate world (org-glance- headline :hash)))
+(cl-defun org-glance-world:apply-partition-rules (world headline)
+  (cl-loop for (path _ features) in (org-glance- world :partition-rules)
+     do (cl-loop for file in (funcall (eval features) headline)
+           do (when file
+                (let ((location (f-join (org-glance- world :location) "views" (format path file))))
+                  ;; (org-glance-view:create world features location)
+                  )))))
 
 (provide 'org-glance-world)

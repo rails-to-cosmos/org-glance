@@ -62,38 +62,30 @@
   (unless (f-exists? org-glance-directory)
     (mkdir org-glance-directory t))
 
-  (setq org-glance-current-world (org-glance-world:create org-glance-directory))
-
-  ;; /tmp/world
-  ;; /tmp/world/log/000.log
-  ;; /tmp/world/log/001.log
-  ;; /tmp/world/log/002.log
-  ;; /tmp/world/log/003.log
-  ;; /tmp/world/view/by-state/todo
-  ;; /tmp/world/view/by-tag/bookmark.org
-  ;; /tmp/world/view/by-tag/task.org
-  ;; /tmp/world/view/by-tag/author.org
-  ;; /tmp/world/view/by-feature/archived
-  ;; /tmp/world/view/by-feature/commented
-  ;; /tmp/world/view/by-feature/linked
-  ;; /tmp/world/view/by-property/author=HELLO.org
-  ;; /tmp/world/view/by-date/2022-01-01.org
-
-  ;; (add-rule org-glance-current-world
-  ;;           (lambda (headline)
-  ;;             (when (org-glance- headline :state)
-  ;;               (org-glance-))))
-
-  ;; (lambda (headline)
-  ;;   (let (result)
-  ;;     (push (upcase (org-glance- headline :state)) result)
-  ;;     (dolist (tag (org-glance- headline :class))
-  ;;       (push (downcase tag) result))
-  ;;     (-non-nil result)))
-
-  ;; Read `org-glance-world' from `org-glance-directory'
-
-  ;; Actualize `org-glance-class-world'
+  (setq org-glance-current-world
+        (org-glance-world:create org-glance-directory
+          '(("by-state/%s.org"   -> (lambda (headline)
+                                      (list (org-glance- headline :state))))
+            ("by-tag/%s.org"     -> (lambda (headline)
+                                      (org-glance- headline :tags)))
+            ("by-feature/%s.org" -> (lambda (headline)
+                                      (list
+                                       (when (org-glance- headline :commented?)
+                                         "commented")
+                                       (when (org-glance- headline :archived?)
+                                         "archived")
+                                       (when (org-glance- headline :closed?)
+                                         "closed")
+                                       (when (org-glance- headline :encrypted?)
+                                         "encrypted")
+                                       (when (org-glance- headline :linked?)
+                                         "linked")
+                                       (when (org-glance- headline :propertized?)
+                                         "propertized"))))
+            ;; ("by-timestamp/%s.org" -> (lambda (headline)
+            ;;                             (list
+            ;;                              (org-glance-headline-timestamps headline))))
+            )))
 
   ;; Headline -- node
   ;; Relationship -- (headline1, headline2, class)

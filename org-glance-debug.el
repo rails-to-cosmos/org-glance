@@ -1,4 +1,4 @@
-(defvar org-glance-debug-mode nil)
+(defvar org-glance-debug-mode t)
 
 (defmacro org-glance-benchmark (fn)
   "Evaluate BODY and message the time taken.

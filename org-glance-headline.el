@@ -54,7 +54,7 @@
             (save-excursion (org-end-of-subtree t t)))
            ,@forms)))))
 
-(cl-deftype org-glance-headline.Hash () 'string)
+(cl-deftype org-glance-hash () 'string)
 
 ;; Extend events suitable for headlines
 (org-glance-class org-glance-event:PUT (org-glance-event)
@@ -62,17 +62,17 @@
                :initarg :headline)))
 
 (org-glance-class org-glance-event:RM (org-glance-event)
-    ((hash :type org-glance-headline.Hash
+    ((hash :type org-glance-hash
            :initarg :hash)))
 
 (org-glance-class org-glance-event:UPDATE (org-glance-event)
-    ((hash :type org-glance-headline.Hash
+    ((hash :type org-glance-hash
            :initarg :hash)
      (headline :type org-glance-headline-header
                :initarg :headline)))
 
 (org-glance-class org-glance-headline-header ()
-    ((hash :type org-glance-headline.Hash
+    ((hash :type org-glance-hash
            :initarg :hash
            :documentation "Hash of original headline contents.")
      (title :type string
@@ -81,27 +81,27 @@
      (state :type string
             :initarg :state
             :documentation "TODO state of headline.")
-     (class :type list
-            :initarg :class
-            :documentation "List of downcased tags.")
-     (commented-p :type boolean
-                  :initarg :commented-p
-                  :documentation "Is the headline commented?")
-     (archived-p :type boolean
-                 :initarg :archived-p
-                 :documentation "Is the headline archived?")
-     (closed-p :type boolean
-               :initarg :closed-p
-               :documentation "Is the headline closed?")
-     (encrypted-p :type boolean
-                  :initarg :encrypted-p
-                  :documentation "Is the headline encrypted?")
-     (linked-p :type boolean
-               :initarg :linked-p
-               :documentation "Does the headline contain org links?")
-     (propertized-p :type boolean
-                    :initarg :propertized-p
-                    :documentation "Does the headline contain user properties?"))
+     (tags :type list
+           :initarg :tags
+           :documentation "List of downcased tags.")
+     (commented? :type boolean
+                 :initarg :commented?
+                 :documentation "Is the headline commented?")
+     (archived? :type boolean
+                :initarg :archived?
+                :documentation "Is the headline archived?")
+     (closed? :type boolean
+              :initarg :closed?
+              :documentation "Is the headline closed?")
+     (encrypted? :type boolean
+                 :initarg :encrypted?
+                 :documentation "Is the headline encrypted?")
+     (linked? :type boolean
+              :initarg :linked?
+              :documentation "Does the headline contain org links?")
+     (propertized? :type boolean
+                   :initarg :propertized?
+                   :documentation "Does the headline contain user properties?"))
   "Limited edition of `org-glance-headline'.")
 
 (org-glance-class org-glance-headline (org-glance-headline-header)
@@ -136,13 +136,13 @@
    :hash (org-glance- headline :hash)
    :title (org-glance- headline :title)
    :state (org-glance- headline :state)
-   :class (org-glance- headline :class)
-   :commented-p (org-glance- headline :commented-p)
-   :archived-p (org-glance- headline :archived-p)
-   :closed-p (org-glance- headline :closed-p)
-   :encrypted-p (org-glance- headline :encrypted-p)
-   :linked-p (org-glance- headline :linked-p)
-   :propertized-p (org-glance- headline :propertized-p)))
+   :tags (org-glance- headline :tags)
+   :commented? (org-glance- headline :commented?)
+   :archived? (org-glance- headline :archived?)
+   :closed? (org-glance- headline :closed?)
+   :encrypted? (org-glance- headline :encrypted?)
+   :linked? (org-glance- headline :linked?)
+   :propertized? (org-glance- headline :propertized?)))
 
 (cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline-header))
   "Make instance of `org-glance-headline-header' from HEADLINE."
@@ -181,7 +181,7 @@
                 (org-element-property :raw-value (car ast))
                 ""))
     (->> (org-element-parse-buffer)
-         org-glance--links-to-titles
+         org-glance:convert-links-to-titles
          org-element-interpret-data
          substring-no-properties
          s-trim)))
@@ -206,19 +206,19 @@
 (cl-defun org-glance-headline--ast-class (ast)
   (-map #'downcase (org-element-property :tags (car ast))))
 
-(cl-defun org-glance-headline--ast-commented-p (ast)
+(cl-defun org-glance-headline--ast-commented? (ast)
   (not (null (org-element-property :commentedp (car ast)))))
 
-(cl-defun org-glance-headline--ast-closed-p (ast)
+(cl-defun org-glance-headline--ast-closed? (ast)
   (not (null (org-element-property :closed (car ast)))))
 
-(cl-defun org-glance-headline--ast-archived-p (ast)
+(cl-defun org-glance-headline--ast-archived? (ast)
   (not (null (org-element-property :archivedp (car ast)))))
 
-(cl-defun org-glance-headline--ast-encrypted-p (contents)
+(cl-defun org-glance-headline--ast-encrypted? (contents)
   (not (null (s-match-strings-all org-glance-encrypted-re contents))))
 
-(cl-defun org-glance-headline--ast-linked-p (contents)
+(cl-defun org-glance-headline--ast-linked? (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
 (cl-defun org-glance-headline-at-point (&optional (point (point)))
@@ -236,13 +236,13 @@
                            ((pred null) "")
                            (state state))
                   :hash (org-glance-headline--ast-hash contents)
-                  :class (org-glance-headline--ast-class ast)
-                  :commented-p (org-glance-headline--ast-commented-p ast)
-                  :archived-p (org-glance-headline--ast-archived-p ast)
-                  :closed-p (org-glance-headline--ast-closed-p ast)
-                  :encrypted-p (org-glance-headline--ast-encrypted-p contents)
-                  :linked-p (org-glance-headline--ast-linked-p contents)
-                  :propertized-p (not (null user-properties))
+                  :tags (org-glance-headline--ast-class ast)
+                  :commented? (org-glance-headline--ast-commented? ast)
+                  :archived? (org-glance-headline--ast-archived? ast)
+                  :closed? (org-glance-headline--ast-closed? ast)
+                  :encrypted? (org-glance-headline--ast-encrypted? contents)
+                  :linked? (org-glance-headline--ast-linked? contents)
+                  :propertized? (not (null user-properties))
                   :contents contents
                   :org-properties (org-entry-properties)
                   :user-properties user-properties)))))))
@@ -275,7 +275,7 @@
   "Return t if A equals B."
   (string= (org-glance- a :hash) (org-glance- b :hash)))
 
-(cl-defun org-glance-headline-save (headline dest)
+(cl-defun org-glance-headline:save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
@@ -288,12 +288,12 @@
 
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
-;;     (archived-p byte)
-;;     (commented-p byte)
-;;     (closed-p byte)
-;;     (encrypted-p byte)
-;;     (linked-p byte)
-;;     (propertized-p byte)))
+;;     (archived? byte)
+;;     (commented? byte)
+;;     (closed? byte)
+;;     (encrypted? byte)
+;;     (linked? byte)
+;;     (propertized? byte)))
 
 ;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
 ;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."
@@ -301,12 +301,12 @@
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
 ;;      (a-list 'title (string-as-unibyte (org-glance- headline :title))
-;;              'archived (bool->int (org-glance- headline :archived-p))
-;;              'commented (bool->int (org-glance- headline :commented-p))
-;;              'closed (bool->int (org-glance- headline :closed-p))
-;;              'encrypted (bool->int (org-glance- headline :encrypted-p))
-;;              'linked (bool->int (org-glance- headline :linked-p))
-;;              'propertized (bool->int (org-glance- headline :propertized-p))))))
+;;              'archived (bool->int (org-glance- headline :archived?))
+;;              'commented (bool->int (org-glance- headline :commented?))
+;;              'closed (bool->int (org-glance- headline :closed?))
+;;              'encrypted (bool->int (org-glance- headline :encrypted?))
+;;              'linked (bool->int (org-glance- headline :linked?))
+;;              'propertized (bool->int (org-glance- headline :propertized?))))))
 
 ;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
 ;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))

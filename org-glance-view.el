@@ -27,7 +27,7 @@
      (type
       :type string
       :initarg :type
-      :documentation "String declaration that transforms into predicate of
+      :documentation "List declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
@@ -71,30 +71,29 @@
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (thunk-let* ((views (org-glance- world :views))
                (location (file-truename location))
+               (location-exists? (f-exists? (file-name-directory location)))
                (key (list type location))
                (view-exists? (and (f-exists? location) (f-file? location) views))
-               (location-exists? (f-exists? (file-name-directory location)))
-               (view-cache (gethash key views))
+               (cached-view (gethash key views))
                (headlines (org-glance-world:headlines world))
                (view (org-glance-view :world world
                                       :type type
                                       :location location
                                       :offset (org-glance-world:offset world)))
                (header (org-glance-view:header view)))
-    (cond (view-exists? view-cache)
+    (cond (view-exists? cached-view)
           (t (unless location-exists?
                (f-mkdir-full-path (file-name-directory location)))
              (org-glance--with-temp-file location
                (insert header)
                (cl-dolist (headline headlines)
                  (when (org-glance-view:filter view headline)
-                   (org-glance-headline:insert
-                    (org-glance-world:get world (org-glance- headline :hash))))))
+                   (org-glance-world:insert-headline world headline))))
              (puthash key view (org-glance- world :views))))))
 
 (cl-defun org-glance-view:filter (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (member (downcase (org-glance- view :type)) (org-glance- headline :class)))
+  (member (downcase (org-glance- view :type)) (org-glance- headline :tags)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -272,15 +271,15 @@
     (org-glance-view:with-current-buffer view
       (when-let (midx (gethash old-hash (org-glance- view :hash->midx)))
         (let ((marker-position (org-glance-view:get-marker-position view midx))
-              (new-headline (org-glance-world:get (org-glance- view :world) new-hash)))
+              (new-headline (org-glance-world:get-headline (org-glance- view :world) new-hash)))
           (goto-char marker-position)
           (org-glance-headline:with-headline-at-point
             (let ((inhibit-message t))
               (org-edit-headline (org-glance- new-headline :title))
               (org-todo (org-glance- new-headline :state))
-              (when (org-glance- new-headline :commented-p)
+              (when (org-glance- new-headline :commented?)
                 (org-toggle-comment))
-              (org-set-tags (org-glance- new-headline :class)))
+              (org-set-tags (org-glance- new-headline :tags)))
 
             (goto-char (point-min))
             (when (= 0 (forward-line))
@@ -340,7 +339,7 @@
           (org-glance-view:set-marker-changed view midx nil)
           (org-glance-view:set-marker-hash view midx new-hash)))
 
-      (let ((offset (org-glance-world:flush world)))
+      (let ((offset (org-glance-world:persist world)))
         (org-glance-view:set-offset view offset))
 
       (dolist (it (hash-table-values (org-glance- world :views)))
@@ -348,14 +347,14 @@
           (org-glance-view:fetch it))))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
-  (org-glance-view:with-current-buffer view
-    (thunk-let* ((world (org-glance- view :world))
-                 (view-offset (org-glance-view:offset view))
-                 (world-offset (org-glance-world:offset world))
-                 (events (--take-while
-                          (org-glance-offset:less-p view-offset (org-glance- it :offset))
-                          (org-glance-world:events world))))
-      (when (org-glance-offset:less-p view-offset world-offset)
+  (thunk-let* ((world (org-glance- view :world))
+               (view-offset (org-glance-view:offset view))
+               (world-offset (org-glance-world:offset world))
+               (events (--take-while
+                        (org-glance-offset:less? view-offset (org-glance- it :offset))
+                        (org-glance-world:events world))))
+    (org-glance-view:with-current-buffer view
+      (when (org-glance-offset:less? view-offset world-offset)
         (dolist (event events)
           (cl-typecase event
             (org-glance-event:UPDATE
@@ -370,7 +369,7 @@
   (let ((buffer-offset (org-glance-view:with-current-buffer view
                          (org-glance-offset:read (org-glance-view:get-property "OFFSET"))))
         (memory-offset (org-glance- view :offset)))
-    (-max-by #'org-glance-offset:less-p (list buffer-offset memory-offset))))
+    (-max-by #'org-glance-offset:less? (list buffer-offset memory-offset))))
 
 (cl-defun org-glance-view:set-offset (view offset)
   (declare (indent 1))
@@ -409,8 +408,6 @@
 (cl-defun org-glance-view:shift-markers (view midx diff)
   (cl-loop for i from (1+ midx) below (length (org-glance- view :marker-positions))
      do (org-glance-view:set-marker-position view i (+ (org-glance-view:get-marker-position view i) diff))))
-
-(provide 'org-glance-view)
 
 (provide 'org-glance-view)
 
