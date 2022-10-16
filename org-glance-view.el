@@ -27,7 +27,7 @@
      (type
       :type string
       :initarg :type
-      :documentation "List declaration that transforms into predicate of
+      :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
@@ -87,13 +87,16 @@
              (org-glance--with-temp-file location
                (insert header)
                (cl-dolist (headline headlines)
-                 (when (org-glance-view:filter view headline)
+                 (when (org-glance-view:member? view headline)
                    (org-glance-world:insert-headline world headline))))
              (puthash key view (org-glance- world :views))))))
 
-(cl-defun org-glance-view:filter (view headline)
+(cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (member (downcase (org-glance- view :type)) (org-glance- headline :tags)))
+  (let ((type (read (org-glance- view :type))))
+    (eval type (a-list
+                'tags (mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags))
+                'state (intern (downcase (org-glance- headline :state)))))))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
