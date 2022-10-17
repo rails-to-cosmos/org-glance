@@ -20,24 +20,34 @@
          (cl-loop
             with location = (org-glance-test:get-file relative-location)
             with world = (org-glance-world:create location
-                           '(("by-state/%s.org"   -> (lambda (headline)
-                                                       (list (org-glance- headline :state))))
-                             ("by-tag/%s.org"     -> (lambda (headline)
-                                                       (org-glance- headline :tags)))
-                             ("by-feature/%s.org" -> (lambda (headline)
-                                                       (list
-                                                        (when (org-glance- headline :commented?)
-                                                          "commented")
-                                                        (when (org-glance- headline :archived?)
-                                                          "archived")
-                                                        (when (org-glance- headline :closed?)
-                                                          "closed")
-                                                        (when (org-glance- headline :encrypted?)
-                                                          "encrypted")
-                                                        (when (org-glance- headline :linked?)
-                                                          "linked")
-                                                        (when (org-glance- headline :propertized?)
-                                                          "propertized"))))))
+                           (list (a-list :name "State"
+                                         :partitions '(list state)
+                                         :location '(format "%s.org" partition)
+                                         :predicate `(eq state partition)
+                                         :capture '(concat "* " partition " %?")))
+                           ;; (list (a-list :location "by-state/%s.org"
+                           ;;               :type "(eq state '%s)"
+                           ;;               :filter '(lambda (headline)
+                           ;;                         (list (downcase (org-glance- headline :state)))))
+                           ;;       ("by-tag/%s.org"     -> (lambda (headline)
+                           ;;                                 (org-glance- headline :tags)))
+
+                           ;;       ("by-feature/%s.org" -> (lambda (headline)
+                           ;;                                 (list
+                           ;;                                  (when (org-glance- headline :commented?)
+                           ;;                                    "commented")
+                           ;;                                  (when (org-glance- headline :archived?)
+                           ;;                                    "archived")
+                           ;;                                  (when (org-glance- headline :closed?)
+                           ;;                                    "closed")
+                           ;;                                  (when (org-glance- headline :encrypted?)
+                           ;;                                    "encrypted")
+                           ;;                                  (when (org-glance- headline :linked?)
+                           ;;                                    "linked")
+                           ;;                                  (when (org-glance- headline :propertized?)
+                           ;;                                    "propertized"))))
+                           ;;       )
+                           )
             with strings = (->> headlines
                                 (s-split "* ")
                                 (-map #'s-trim)

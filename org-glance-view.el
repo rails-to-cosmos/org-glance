@@ -25,7 +25,7 @@
       :documentation "Original `org-glance-world' instance.")
      ;; available TODO states etc
      (type
-      :type string
+      :type (or string list)
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
@@ -35,11 +35,6 @@
       :type org-glance-file
       :initarg :location
       :documentation "Location where view persists.")
-     (template
-      :type string
-      :initarg :template
-      :initform "* %?"
-      :documentation "Capture template for current view.")
      (offset
       :type org-glance-offset
       :initarg :offset)
@@ -67,36 +62,36 @@
       :type vector
       :initarg :marker-hashes)))
 
-(cl-defun org-glance-view:create (world type location)
+(cl-defun org-glance-view:create (world type location &optional (backfill? t))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (thunk-let* ((views (org-glance- world :views))
-               (location (file-truename location))
-               (location-exists? (f-exists? (file-name-directory location)))
-               (key (list type location))
-               (view-exists? (and (f-exists? location) (f-file? location) views))
+               (view-location (file-truename (f-join (org-glance- world :location) location)))
+               (key (list type view-location))
+               (view-exists? (and (f-exists? view-location) (f-file? view-location) views))
                (cached-view (gethash key views))
                (headlines (org-glance-world:headlines world))
                (view (org-glance-view :world world
                                       :type type
-                                      :location location
+                                      :location view-location
                                       :offset (org-glance-world:offset world)))
                (header (org-glance-view:header view)))
     (cond (view-exists? cached-view)
-          (t (unless location-exists?
-               (f-mkdir-full-path (file-name-directory location)))
-             (org-glance--with-temp-file location
+          (t (unless (f-exists? view-location)
+               (f-mkdir-full-path (f-parent view-location)))
+             (org-glance--with-temp-file view-location
                (insert header)
-               (cl-dolist (headline headlines)
-                 (when (org-glance-view:member? view headline)
-                   (org-glance-world:insert-headline world headline))))
-             (puthash key view (org-glance- world :views))))))
+               (when backfill?
+                 (cl-dolist (headline headlines)
+                   (when (org-glance-view:member? view headline)
+                     (org-glance-world:insert-headline world headline)))))
+             (puthash key view views)))))
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (let ((type (read (org-glance- view :type))))
-    (eval type (a-list
-                'tags (mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags))
-                'state (intern (downcase (org-glance- headline :state)))))))
+  (let ((type (cl-typecase (org-glance- view :type)
+                (string (read (org-glance- view :type)))
+                (list (org-glance- view :type)))))
+    (eval type (org-glance-headline:eval-ctx headline))))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -223,10 +218,9 @@
 
 (cl-defun org-glance-view:get-buffer-type ()
   "Get `org-glance-world' associated with current buffer."
-  (or (-some->> (org-glance-view:get-property "TYPE")
-        (s-split " :: ")
-        cl-second)
-      "_"))
+  (-some->> (org-glance-view:get-property "TYPE")
+    (s-split " :: ")
+    cl-second))
 
 (cl-defun org-glance-view:get-buffer-view ()
   "Get `org-glance-view' associated with current buffer."

@@ -355,5 +355,9 @@ Return t if it is or raise `user-error' otherwise."
         (org-back-to-heading-or-point-min)
         (org-at-heading-p))))
 
+(cl-defun org-glance-headline:eval-ctx (headline)
+  (a-list 'tags (mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags))
+          'state (intern (downcase (org-glance- headline :state)))))
+
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

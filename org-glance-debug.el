@@ -1,8 +1,8 @@
 (defvar org-glance-debug-mode t)
 
 (defmacro org-glance-benchmark (fn)
-  "Evaluate BODY and message the time taken.
-The return value is the value of the final form in BODY."
+  "Evaluate FN and message the time taken.
+The return value is the value of the final form in FN."
   (declare (indent 0))
   (let ((value (make-symbol "value"))
         (start (make-symbol "start"))
@@ -22,7 +22,7 @@ The return value is the value of the final form in BODY."
                               (- gcs-done ,gcs))
                     "")))
 
-       ;; Return the value of the body.
+       ;; Return the value of the fn.
        ,value)))
 
 (cl-defmacro org-glance-debug (&rest args)
