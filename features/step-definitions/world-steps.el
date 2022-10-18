@@ -19,7 +19,7 @@
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
        (lambda (world-name relative-location headlines)
          (Given "world \"%s\" in directory \"%s\"" world-name relative-location)
-         (When "I add headlines to world \"%s\"" world) headlines))
+         (When "I add headlines to world \"%s\"" world-name headlines)))
 
 (When "^I? ?add headlines to world \"\\([^\"]+\\)\"$"
   (lambda (world-name headlines)
@@ -33,7 +33,7 @@
                              (--map (concat "* " it)))
          for string in strings
          for headline = (org-glance-headline-from-string string)
-         do (org-glance-world:add world headline)
+         do (org-glance-world:add-headline world headline)
          finally do
            (org-glance-world:persist world)
            (org-glance-test:world-put world-name world)))))
@@ -193,13 +193,3 @@
       (should (cl-loop for dimension in (org-glance- world :dimensions)
                  when (string= dimension-name (org-glance- dimension :name))
                  return t)))))
-
-(And "^dimension \"\\([^\"]+\\)\" of the world \"\\([^\"]+\\)\" should contain 2 views$"
-  (lambda (arg-1 arg-2)
-
-    ))
-
-(And "^dimension \"\\([^\"]+\\)\" of the world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\"$"
-  (lambda (arg-1 arg-2 arg-3)
-
-    ))

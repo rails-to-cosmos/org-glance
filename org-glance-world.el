@@ -153,12 +153,12 @@ Return last committed offset."
 
 ;; TODO `org-glance-changelog' filter now filter events instead of headlines
 
-(cl-defun org-glance-world:add (world headline)
+(cl-defun org-glance-world:add-headline (world headline)
   "Put HEADLINE to WORLD."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
     (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
-    (org-glance- event :offset)))
+    world))
 
 (cl-defun org-glance-world:remove (world hash)
   "Return `org-glance-world' with HEADLINES removed from WORLD.
@@ -270,7 +270,7 @@ achieved by calling `org-glance-world:persist' method."
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
-       (org-glance-world:add world headline)))))
+       (org-glance-world:add-headline world headline)))))
 
 (cl-defun org-glance-world:save-headline (world headline)
   (let ((location (org-glance-world:locate-headline world headline)))
@@ -306,7 +306,8 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:add-dimension (world dimension)
   (declare (indent 1))
-  (cl-pushnew dimension (org-glance- world :dimensions)))
+  (cl-pushnew dimension (org-glance- world :dimensions))
+  world)
 
 (cl-defun org-glance-world:apply-dimensions (world headline)
   (cl-labels ((replace-recursive (from to obj)
@@ -322,7 +323,7 @@ achieved by calling `org-glance-world:persist' method."
         (dolist (partition (eval (org-glance- dimension :partition) context))
           (when (and partition (not (string-empty-p (format "%s" partition))))
             (let* ((name (org-glance- dimension :name))
-                   (predicate `(member ,partition ,(org-glance- dimension :partition)))
+                   (predicate `(member (quote ,partition) ,(org-glance- dimension :partition)))
                    (location (f-join (org-glance- world :location)
                                      "dimensions"
                                      (downcase name)

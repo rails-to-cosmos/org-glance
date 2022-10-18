@@ -23,9 +23,10 @@
       :initarg :world
       :reader org-glance-view:world
       :documentation "Original `org-glance-world' instance.")
-     ;; available TODO states etc
+     ;; available TODO states
+     ;; capture template
      (type
-      :type (or string list)
+      :type (or symbol list)
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
@@ -67,15 +68,17 @@
   (thunk-let* ((views (org-glance- world :views))
                (view-location (file-truename (f-join (org-glance- world :location) location)))
                (key (list type view-location))
-               (view-exists? (and (f-exists? view-location) (f-file? view-location) views))
                (cached-view (gethash key views))
+               (view-exists? (and (f-exists? view-location) (f-file? view-location) cached-view))
                (headlines (org-glance-world:headlines world))
                (view (org-glance-view :world world
                                       :type type
                                       :location view-location
                                       :offset (org-glance-world:offset world)))
                (header (org-glance-view:header view)))
-    (cond (view-exists? cached-view)
+    (cond (view-exists?
+           (org-glance-debug "Using cached view")
+           cached-view)
           (t (unless (f-exists? view-location)
                (f-mkdir-full-path (f-parent view-location)))
              (org-glance--with-temp-file view-location
@@ -84,14 +87,11 @@
                  (cl-dolist (headline headlines)
                    (when (org-glance-view:member? view headline)
                      (org-glance-world:insert-headline world headline)))))
-             (puthash key view views)))))
+             (puthash key view (org-glance- world :views))))))
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (let ((type (cl-typecase (org-glance- view :type)
-                (string (read (org-glance- view :type)))
-                (list (org-glance- view :type)))))
-    (eval type (org-glance-headline:eval-ctx headline))))
+  (eval (org-glance- view :type) (org-glance-headline:eval-ctx headline)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -220,7 +220,8 @@
   "Get `org-glance-world' associated with current buffer."
   (-some->> (org-glance-view:get-property "TYPE")
     (s-split " :: ")
-    cl-second))
+    cl-second
+    read))
 
 (cl-defun org-glance-view:get-buffer-view ()
   "Get `org-glance-view' associated with current buffer."

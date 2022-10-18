@@ -59,23 +59,29 @@
   "Update system state from `org-glance-directory'."
   (interactive)
 
-  (unless (f-exists? org-glance-directory)
-    (mkdir org-glance-directory t))
+  (setq org-glance-current-world
+        (org-glance-benchmark
+          (org-glance-world:create org-glance-directory)))
 
-  ;; (setq org-glance-current-world
-  ;;       (org-glance-benchmark
-  ;;         (org-glance-world:create org-glance-directory
-  ;;           (list (a-list :name "State"
-  ;;                         :partitions '(list state)
-  ;;                         :location '(format "%s.org" partition)
-  ;;                         :predicate `(eq state partition)
-  ;;                         :capture '(concat "* " partition " %?"))
-  ;;                 ;; (a-list :name "Tag"
-  ;;                 ;;         :partitions "tags"
-  ;;                 ;;         :location "{{ PARTITION }}.org"
-  ;;                 ;;         :predicate "(member '{{ PARTITION }} tags)"
-  ;;                 ;;         :capture "* %? :{{ PARTITION }}:")
-  ;;                 ))))
+  (thread-first org-glance-current-world
+    (org-glance-world:add-dimension (org-glance-dimension :name "State" :partition 'state))
+    (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag))
+    (org-glance-world:add-headline (org-glance-headline-from-string "* TODO task1 :task:"))
+    (org-glance-world:add-headline (org-glance-headline-from-string "* DONE task2 :task:"))
+    (org-glance-world:persist))
+
+  ;; (list (a-list :name "State"
+  ;;               :partitions '(list state)
+  ;;               :location '(format "%s.org" partition)
+  ;;               :predicate `(eq state partition)
+  ;;               :capture '(concat "* " partition " %?"))
+  ;;       ;; (a-list :name "Tag"
+  ;;       ;;         :partitions "tags"
+  ;;       ;;         :location "{{ PARTITION }}.org"
+  ;;       ;;         :predicate "(member '{{ PARTITION }} tag)"
+  ;;       ;;         :capture "* %? :{{ PARTITION }}:")
+  ;;       )
+
 
   ;; (list (a-list :location "by-state/%s.org"
   ;;               :type "(eq state '%s)"
@@ -99,11 +105,6 @@
   ;;                                  (when (org-glance- headline :propertized?)
   ;;                                    "propertized"))))
   ;;       )
-
-
-  (org-glance-world:add org-glance-current-world (org-glance-headline-from-string "* TODO task1 :task:"))
-  (org-glance-world:add org-glance-current-world (org-glance-headline-from-string "* DONE task2 :task:"))
-  (org-glance-world:persist org-glance-current-world)
 
   ;; Headline -- node
   ;; Relationship -- (headline1, headline2, type)

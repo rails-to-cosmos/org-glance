@@ -1,5 +1,4 @@
 Feature: World
-  @debug
   Scenario: World structure
     Given world "Fantasy" in directory "fantasy"
     When I alter world "Fantasy" add dimension "State" partition by "state"

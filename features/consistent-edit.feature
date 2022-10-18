@@ -7,7 +7,7 @@ Feature: Consistent Edit
       * Йотафон :Trash:
       """
 
-    When I create view "Apple Phones" from "(member 'apple tags)" "Phones" in "views/apple.org"
+    When I create view "Apple Phones" from "(member 'apple tag)" "Phones" in "views/apple.org"
     And I find file "views/apple.org"
     And I go to headline "iPhone 3"
     And I set title of headline at point to "iPhone 4"
@@ -44,7 +44,7 @@ Feature: Consistent Edit
       * Tanik :Human:
       """
 
-    When I create view "Pomeranians" from "(member 'pomeranian tags)" "Pets" in "views/pomeranians.org"
+    When I create view "Pomeranians" from "(member 'pomeranian tag)" "Pets" in "views/pomeranians.org"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -89,7 +89,7 @@ Feature: Consistent Edit
     And marker at point should not be changed
     And 0 markers should be changed
 
-    When I create view "Human Beings" from "(member 'human tags)" "Pets" in "views/humans.org"
+    When I create view "Human Beings" from "(member 'human tag)" "Pets" in "views/humans.org"
     And kill buffer
     And I append to file "views/humans.org"
       """
@@ -120,7 +120,7 @@ Feature: Consistent Edit
       * TODO Samovar :Friends:
       """
 
-    When I create view "Pigs" from "(member 'peppa tags)" "Wishlist" in "views/pigs.org" as "*pigs*"
+    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
     And switch to buffer "*pigs*"
     And go to headline "Peppa Pig"
 
@@ -144,7 +144,7 @@ Feature: Consistent Edit
       * TODO Samovar :Friends:
       """
 
-    When I create view "Pigs" from "(member 'peppa tags)" "Wishlist" in "views/pigs.org"
+    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org"
     And go to headline "Peppa Pig"
 
     Then marker at point should not be changed
@@ -161,7 +161,7 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
       """
-    When I create view "Hikes" from "(member 'hike tags)" "Adventures" in "views/hikes.org" as "*hikes*"
+    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
     And current buffer offset should be latest
@@ -178,7 +178,7 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
       """
-    When I create view "Hikes" from "(member 'hike tags)" "Adventures" in "views/hikes.org" as "*hikes*"
+    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
     And current buffer offset should be latest
@@ -196,7 +196,7 @@ Feature: Consistent Edit
       * TODO Peppa Pig :Peppa:
       """
 
-    When I create view "Pigs" from "(member 'peppa tags)" "Wishlist" in "views/pigs.org" as "*pigs*"
+    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
     And set headline "Tatinek" contents to
     """
     SCHEDULED: <2019-08-23 Fri>
@@ -211,8 +211,8 @@ Feature: Consistent Edit
       * TODO COMMENT Tatinek :Peppa:Gift:
       """
 
-    When I create view "Pigs" from "(member 'peppa tags)" "Wishlist" in "views/pigs.org" as "*pigs*"
-    And create view "Gifts" from "(member 'gift tags)" "Wishlist" in "views/gifts.org" as "*gifts*"
+    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
+    And create view "Gifts" from "(member 'gift tag)" "Wishlist" in "views/gifts.org" as "*gifts*"
     And switch to buffer "*pigs*"
     And set headline "Tatinek" contents to
     """
@@ -237,8 +237,8 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tags)" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tags)" "Adventures" in "views/fun.org" as "*fun*"
+    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
+    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org" as "*fun*"
     And I switch to buffer "*hikes*"
     And rename headline "Music Festival" to "Music Festival 2022"
     And rename headline "Kamchatka" to "Kamchatka 2019"
@@ -261,8 +261,8 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tags)" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tags)" "Adventures" in "views/fun.org"
+    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
+    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org"
     And kill buffer
     And switch to buffer "*hikes*"
     And rename headline "Music Festival" to "Music Festival 2022"
@@ -362,8 +362,8 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tags)" "Adventures" in "views/hikes.org"
-    And create view "Fun" from "(member 'music tags)" "Adventures" in "views/fun.org"
+    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org"
+    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org"
     And find file "views/hikes.org"
     And I rename headline "Music Festival" to "Music Festival 2022"
     And set headline "Music Festival 2022" contents to
