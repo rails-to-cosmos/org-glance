@@ -151,8 +151,6 @@ Return last committed offset."
         (org-glance- (org-glance-changelog:last changelog) :offset)
       (org-glance-offset:current))))
 
-;; TODO `org-glance-changelog' filter now filter events instead of headlines
-
 (cl-defun org-glance-world:add-headline (world headline)
   "Put HEADLINE to WORLD."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))

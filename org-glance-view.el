@@ -263,38 +263,46 @@
                            ,@forms))
                     (org-glance-view:set-marker-changed ,view midx nil))))))
 
-(cl-defun org-glance-view:replace-headline (view old-hash new-hash)
+(cl-defun org-glance-view:add-headline (view headline)
   (declare (indent 0))
-  (unless (string= old-hash new-hash)
+  (when (org-glance-view:member? view headline)
     (org-glance-view:with-current-buffer view
-      (when-let (midx (gethash old-hash (org-glance- view :hash->midx)))
-        (let ((marker-position (org-glance-view:get-marker-position view midx))
-              (new-headline (org-glance-world:get-headline (org-glance- view :world) new-hash)))
-          (goto-char marker-position)
-          (org-glance-headline:with-headline-at-point
-            (let ((inhibit-message t))
-              (org-edit-headline (org-glance- new-headline :title))
-              (org-todo (org-glance- new-headline :state))
-              (when (org-glance- new-headline :commented?)
-                (org-toggle-comment))
-              (org-set-tags (org-glance- new-headline :tags)))
+      (goto-char (point-max))
+      (org-glance-world:insert-headline (org-glance- view :world) headline)
+      (org-glance-view:mark view))))
 
-            (goto-char (point-min))
-            (when (= 0 (forward-line))
-              (delete-region (point) (point-max)))
+(cl-defun org-glance-view:replace-headline (view old-hash headline)
+  (declare (indent 0))
+  (let ((new-hash (org-glance- headline :hash)))
+    (unless (string= old-hash new-hash)
+      (org-glance-view:with-current-buffer view
+        (when-let (midx (gethash old-hash (org-glance- view :hash->midx)))
+          (let ((marker-position (org-glance-view:get-marker-position view midx)))
+            (goto-char marker-position)
+            (org-glance-headline:with-headline-at-point
+              (let ((inhibit-message t))
+                (org-edit-headline (org-glance- headline :title))
+                (org-todo (org-glance- headline :state))
+                (when (org-glance- headline :commented?)
+                  (org-toggle-comment))
+                (org-set-tags (org-glance- headline :tags)))
 
-            (goto-char (point-max))
+              (goto-char (point-min))
+              (when (= 0 (forward-line))
+                (delete-region (point) (point-max)))
 
-            (insert (with-temp-buffer
-                      (insert (org-glance- new-headline :contents))
-                      (goto-char (point-min))
-                      (forward-line)
-                      (buffer-substring-no-properties (point) (point-max))))
+              (goto-char (point-max))
 
-            (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
-              (insert "\n"))
+              (insert (with-temp-buffer
+                        (insert (org-glance- headline :contents))
+                        (goto-char (point-min))
+                        (forward-line)
+                        (buffer-substring-no-properties (point) (point-max))))
 
-            (org-glance-view:set-marker-hash view midx new-hash)))))))
+              (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
+                (insert "\n"))
+
+              (org-glance-view:set-marker-hash view midx new-hash))))))))
 
 (cl-defun org-glance-view:mark (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
@@ -354,12 +362,12 @@
     (org-glance-view:with-current-buffer view
       (when (org-glance-offset:less? view-offset world-offset)
         (dolist (event events)
-          (cl-typecase event
-            (org-glance-event:UPDATE
-             (org-glance-view:replace-headline view
-                                               (org-glance- event :hash)
-                                               (org-glance- event :headline :hash)))
-            (otherwise (user-error "Events PUT and DEL not implemented yet"))))
+          (thunk-let ((headline (org-glance- event :headline))
+                      (old-hash (org-glance- event :hash)))
+            (cl-typecase event
+              (org-glance-event:UPDATE (org-glance-view:replace-headline view old-hash headline))
+              (org-glance-event:PUT (org-glance-view:add-headline view headline))
+              (otherwise (user-error "Event %s processing not implemented yet" event)))))
         (org-glance-view:set-offset view world-offset)))))
 
 (cl-defun org-glance-view:offset (view)
