@@ -1,4 +1,22 @@
 Feature: World
+  @debug
+  Scenario: World structure
+    Given world "Fantasy" in directory "fantasy"
+    When I alter world "Fantasy" add dimension "State" partition by "state"
+    And I alter world "Fantasy" add dimension "Tags" partition by "tag"
+    And I add headlines to world "Fantasy"
+      """
+      * TODO Fish :fairytale:
+      * DONE Ivan :fairytale:
+      """
+
+    Then world "Fantasy" should contain 2 dimensions
+    And world "Fantasy" should contain dimension "State"
+    And world "Fantasy" should contain dimension "Tags"
+    # And dimension "State" of the world "Fantasy" should contain 2 views
+    # And dimension "State" of the world "Fantasy" should contain view "TODO"
+    # And dimension "State" of the world "Fantasy" should contain view "DONE"
+
   Scenario: Import from org-mode files
     Given world "Tasks" in directory "world/tasks"
     And file "tasks/home/household.org"
@@ -24,7 +42,7 @@ Feature: World
     When I import headlines to world "Tasks" from directory "tasks"
     Then world "Tasks" should contain 4 headlines
 
-  Scenario: Create from scratch
+  Scenario: Create world from scratch
     Given world "Songs" in directory "songs" with headlines
       """
       * Tae Zori
@@ -32,7 +50,7 @@ Feature: World
       """
     Then 0 staged changes should be in world "Songs"
     And 2 committed changes should be in world "Songs"
-    When I flush world "Songs"
+    When I persist world "Songs"
     Then 0 staged changes should be in world "Songs"
     And 2 committed changes should be in world "Songs"
 

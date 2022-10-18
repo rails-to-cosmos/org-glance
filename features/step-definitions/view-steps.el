@@ -14,7 +14,7 @@
 (When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\"$"
   (lambda (view-name view-type world-name file-name)
     (let* ((location (org-glance-test:get-file file-name))
-           (world (org-glance-test:world-get world-name))
+           (world (org-glance-test:get-world world-name))
            (view (org-glance-view:create world view-type location)))
       (org-glance-test:view-put view-name view))
     (And "I find file \"%s\"" file-name)))

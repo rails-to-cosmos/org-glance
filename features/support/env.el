@@ -27,7 +27,7 @@
   "Update world KEY with value VAL."
   (puthash key val org-glance-test-worlds))
 
-(defun org-glance-test:world-get (key)
+(defun org-glance-test:get-world (key)
   "Get storage from test storage by ALIAS."
   (or (gethash key org-glance-test-worlds)
       (error "World \"%s\" is not registered in the system. Available worlds: \"%s\""

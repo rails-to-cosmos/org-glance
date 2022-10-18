@@ -278,7 +278,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @debug
   Scenario: Multiple views, modifications across buffers
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -291,8 +290,8 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(and (member 'hike tags) (eq 'todo state))" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tags)" "Adventures" in "views/fun.org" as "*fun*"
+    When I create view "Hikes" from "(and (member 'hike tag) (member 'todo state))" "Adventures" in "views/hikes.org" as "*hikes*"
+    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org" as "*fun*"
     And switch to buffer "*hikes*"
 
     When I rename headline "Music Festival" to "Music Festival 2022"

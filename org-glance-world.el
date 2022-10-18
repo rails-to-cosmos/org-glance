@@ -23,6 +23,25 @@
 (defvar org-glance-worlds (make-hash-table :test #'equal) "List of worlds registered in system.")
 (defconst org-glance-world:log-location "WAL")
 
+(org-glance-class org-glance-dimension nil
+    ((name
+      :type string
+      :initarg :name
+      :documentation "Dimension name.")
+     (partition
+      :type (or list symbol)
+      :initarg :partition
+      :documentation "Partition method.")
+     ;; (predicate
+     ;;  :type list
+     ;;  :initarg :predicate
+     ;;  :documentation "Predicate method.")
+     ;; (ctemplate
+     ;;  :type list
+     ;;  :initarg :ctemplate
+     ;;  :documentation "Capture template for derived views.")
+     ))
+
 (org-glance-class org-glance-world nil
     ((location
       :type org-glance-directory
@@ -49,27 +68,23 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Views associated with world by type.")
      (dimensions
-      :type list
+      :type (org-glance:list-of org-glance-dimension)
       :initarg :dimensions
       :initform nil)))
 
-(cl-defun org-glance-world:create (location dimensions)
+(cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
   (declare (indent 1))
   (thunk-let ((cached-world (gethash location org-glance-worlds))
               (persisted-world (org-glance-world:read location))
-              (new-world (org-glance-world :location location
-                                           :dimensions dimensions))
+              (new-world (org-glance-world :location location))
               (location-exists? (and (f-exists? location)
                                      (f-directory? location)
                                      (f-readable? location))))
     (cond
-      ((and location-exists? cached-world (eql (org-glance- cached-world :dimensions) dimensions))
+      ((and location-exists? cached-world)
        cached-world)
-      ((and location-exists? (eql dimensions (org-glance-world:read-dimensions location)))
-       (puthash location persisted-world org-glance-worlds))
       (location-exists?
-       (org-glance-world:write-dimensions location dimensions)
        (puthash location persisted-world org-glance-worlds))
       (t
        (f-mkdir-full-path location)
@@ -81,7 +96,7 @@
       (puthash location
                (org-glance-world :location location
                                  :changelog (org-glance-changelog:read (f-join location org-glance-world:log-location))
-                                 :dimensions (org-glance-world:read-dimensions location))
+                                 :dimensions (org-glance-world:load-dimensions location))
                org-glance-worlds)))
 
 (cl-defun org-glance-world:offset (world)
@@ -104,6 +119,7 @@ In all other places `org-glance-world' should act like pure
 functional data structure.
 
 Return last committed offset."
+  (org-glance-world:save-dimensions world)
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (world-location (org-glance- world :location))
@@ -158,7 +174,7 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:update (world old-hash headline)
   "Update HEADLINE with HASH in WORLD."
-  (thunk-let* ((new-hash (org-glance- headline :hash))
+  (let* ((new-hash (org-glance- headline :hash))
                (header (org-glance-headline-header:from-headline headline))
                (changelog (org-glance- world :changelog*))
                (cache (org-glance- world :cache))
@@ -276,17 +292,21 @@ achieved by calling `org-glance-world:persist' method."
     ((or org-glance-headline org-glance-headline-header)
      (org-glance-world:locate-headline world (org-glance- thing :hash)))))
 
-(cl-defun org-glance-world:write-dimensions (location dimensions)
-  (with-temp-file (f-join location "dimensions.el")
-    (insert (prin1-to-string dimensions))))
+(cl-defun org-glance-world:save-dimensions (world)
+  (with-temp-file (f-join (org-glance- world :location) "dimensions.el")
+    (insert (prin1-to-string (org-glance- world :dimensions)))))
 
-(cl-defun org-glance-world:read-dimensions (location)
+(cl-defun org-glance-world:load-dimensions (location)
   (let ((source-file (f-join location "dimensions.el")))
     (if (and (f-exists? source-file) (f-readable? source-file))
         (with-temp-buffer
           (insert-file-contents-literally source-file)
           (read (buffer-string)))
       nil)))
+
+(cl-defun org-glance-world:add-dimension (world dimension)
+  (declare (indent 1))
+  (cl-pushnew dimension (org-glance- world :dimensions)))
 
 (cl-defun org-glance-world:apply-dimensions (world headline)
   (cl-labels ((replace-recursive (from to obj)
@@ -297,20 +317,16 @@ achieved by calling `org-glance-world:persist' method."
                    collect to
                    else
                    collect elem)))
-    (dolist (dimension (org-glance- world :dimensions))
-      (let ((headline-context (org-glance-headline:eval-ctx headline)))
-        (dolist (partition (eval (a-get dimension :partitions) headline-context))
+    (thunk-let ((context (org-glance-headline:eval-ctx headline)))
+      (dolist (dimension (org-glance- world :dimensions))
+        (dolist (partition (eval (org-glance- dimension :partition) context))
           (when (and partition (not (string-empty-p (format "%s" partition))))
-            (let* ((context (a-merge headline-context (a-list 'partition partition)))
-                   (name (a-get dimension :name))
-                   (predicate (replace-recursive 'partition partition (a-get dimension :predicate)))
+            (let* ((name (org-glance- dimension :name))
+                   (predicate `(member ,partition ,(org-glance- dimension :partition)))
                    (location (f-join (org-glance- world :location)
                                      "dimensions"
                                      (downcase name)
-                                     (eval (a-get dimension :location) context))))
-              (org-glance-view:create world
-                                      predicate
-                                      location
-                                      nil))))))))
+                                     (format "%s.org" partition))))
+              (org-glance-view:create world predicate location nil))))))))
 
 (provide 'org-glance-world)

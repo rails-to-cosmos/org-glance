@@ -1,6 +1,6 @@
-(defvar org-glance-debug-mode t)
+(defvar org-glance-debug-mode nil)
 
-(defmacro org-glance-benchmark (fn)
+(defmacro org-glance-benchmark (&rest body)
   "Evaluate FN and message the time taken.
 The return value is the value of the final form in FN."
   (declare (indent 0))
@@ -11,10 +11,10 @@ The return value is the value of the final form in FN."
     `(let ((,gc gc-elapsed)
            (,gcs gcs-done)
            (,start (current-time))
-           (,value (progn ,fn)))
+           (,value ,@body))
        (when org-glance-debug-mode
          (message "[%s] Elapsed time: %fs%s"
-                  (car (quote ,fn))
+                  (caar (quote ,body))
                   (float-time (time-since ,start))
                   (if (> (- gcs-done ,gcs) 0)
                       (format " (%fs in %d GCs)"
@@ -22,7 +22,6 @@ The return value is the value of the final form in FN."
                               (- gcs-done ,gcs))
                     "")))
 
-       ;; Return the value of the fn.
        ,value)))
 
 (cl-defmacro org-glance-debug (&rest args)
