@@ -185,11 +185,9 @@
 (Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) dimensions$"
   (lambda (world-name num-dimensions)
     (let ((world (org-glance-test:get-world world-name)))
-      (should (= (string-to-number num-dimensions) (length (org-glance- world :dimensions)))))))
+      (should (= (string-to-number num-dimensions) (hash-table-count (org-glance- world :dimensions)))))))
 
 (And "^world \"\\([^\"]+\\)\" should contain dimension \"\\([^\"]+\\)\"$"
   (lambda (world-name dimension-name)
     (let ((world (org-glance-test:get-world world-name)))
-      (should (cl-loop for dimension in (org-glance- world :dimensions)
-                 when (string= dimension-name (org-glance- dimension :name))
-                 return t)))))
+      (should (gethash (downcase dimension-name) (org-glance- world :dimensions))))))

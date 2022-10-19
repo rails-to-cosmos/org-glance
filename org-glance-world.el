@@ -68,9 +68,9 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Views associated with world by type.")
      (dimensions
-      :type (org-glance:list-of org-glance-dimension)
+      :type hash-table
       :initarg :dimensions
-      :initform nil)))
+      :initform (make-hash-table :test #'equal))))
 
 (cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
@@ -304,7 +304,9 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:add-dimension (world dimension)
   (declare (indent 1))
-  (cl-pushnew dimension (org-glance- world :dimensions))
+  (puthash (downcase (org-glance- dimension :name))
+           dimension
+           (org-glance- world :dimensions))
   world)
 
 (cl-defun org-glance-world:apply-dimensions (world headline)
@@ -317,7 +319,7 @@ achieved by calling `org-glance-world:persist' method."
                    else
                    collect elem)))
     (thunk-let ((context (org-glance-headline:eval-ctx headline)))
-      (dolist (dimension (org-glance- world :dimensions))
+      (dolist (dimension (hash-table-values (org-glance- world :dimensions)))
         (dolist (partition (eval (org-glance- dimension :partition) context))
           (when (and partition (not (string-empty-p (format "%s" partition))))
             (let* ((name (org-glance- dimension :name))

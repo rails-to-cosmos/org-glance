@@ -3,6 +3,7 @@ Feature: World
     Given world "Fantasy" in directory "fantasy"
     When I alter world "Fantasy" add dimension "State" partition by "state"
     And I alter world "Fantasy" add dimension "Tags" partition by "tag"
+    And I alter world "Fantasy" add dimension "Tags" partition by "tag"
     And I add headlines to world "Fantasy"
       """
       * TODO Fish :fairytale:

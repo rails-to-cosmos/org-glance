@@ -362,7 +362,7 @@
     (org-glance-view:with-current-buffer view
       (when (org-glance-offset:less? view-offset world-offset)
         (dolist (event events)
-          (thunk-let ((headline (org-glance- event :headline))
+          (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash)))
                       (old-hash (org-glance- event :hash)))
             (cl-typecase event
               (org-glance-event:UPDATE (org-glance-view:replace-headline view old-hash headline))
