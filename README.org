@@ -7,15 +7,14 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* TODO Fix add event
-* TODO Capture headline
-* TODO View: support remove event
+* TODO Optimize add event
+* TODO Support RM event
 * TODO Headline ID
 * TODO Improve type system
 ** TODO consistent types in views (on tag modification)
 ** TODO ephemeral types (time-specific / todo-state specific)
-* deduplicate classes in wal
-* consistent markers and all the tests [0/4]
+* TODO deduplicate classes in wal
+* TODO consistent markers and all the tests [0/4]
 ** TODO headline indented by user
 ** TODO org-link inserted
 ** TODO headline removed
