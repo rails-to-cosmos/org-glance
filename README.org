@@ -7,6 +7,7 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* TODO Fix add event
 * TODO Capture headline
 * TODO View: support remove event
 * TODO Headline ID

@@ -53,35 +53,6 @@
               (midx (org-glance-view:marker-at-point)))
           (should (not (org-glance-view:marker-changed-p view midx))))))
 
-(Then "^marker at point should be committed$"
-      (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
-              (midx (org-glance-view:marker-at-point)))
-          (should (org-glance-view:marker-committed-p view midx)))))
-
-(Then "^marker at point should not be committed$"
-      (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
-              (midx (org-glance-view:marker-at-point)))
-          (should (not (org-glance-view:marker-committed-p view midx))))))
-
-(Then "^marker at point should be corrupted$"
-      (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
-              (midx (org-glance-view:marker-at-point)))
-          (should (org-glance-view:marker-corrupted-p view midx)))))
-
-(Then "^marker at point should not be corrupted$"
-      (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
-              (midx (org-glance-view:marker-at-point)))
-          (should (not (org-glance-view:marker-corrupted-p view midx))))))
-
-(Then "^marker at point should be up to date$"
-      (lambda ()
-        (And "marker at point should not be corrupted")
-        (And "marker at point should not be committed")))
-
 (Then "^current buffer offset should be latest$"
       (lambda ()
         (let* ((view (org-glance-view:get-buffer-view))

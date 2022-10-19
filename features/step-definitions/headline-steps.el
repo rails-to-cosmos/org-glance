@@ -254,13 +254,3 @@
   (lambda (headline)
     (When "I go to headline \"%s\"" headline)
     (Then "marker at point should be changed")))
-
-(Then "^headline \"\\([^\"]+\\)\" should not be committed$"
-  (lambda (headline)
-    (When "I go to headline \"%s\"" headline)
-    (Then "marker at point should not be committed")))
-
-(Then "^headline \"\\([^\"]+\\)\" should not be corrupted$"
-  (lambda (headline)
-    (When "I go to headline \"%s\"" headline)
-    (Then "marker at point should not be corrupted")))

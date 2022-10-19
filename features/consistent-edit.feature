@@ -65,7 +65,6 @@ Feature: Consistent Edit
     And I insert " the cat"
 
     Then marker at point should be changed
-    And marker at point should not be committed
     And 1 marker should be changed
     And markers positions should be consistent
 
@@ -81,11 +80,9 @@ Feature: Consistent Edit
 
     Then marker at point should be changed
     And 2 markers should be changed
-    And marker at point should not be committed
 
     When I commit changes
 
-    Then marker at point should be committed
     And marker at point should not be changed
     And 0 markers should be changed
 
@@ -97,20 +94,6 @@ Feature: Consistent Edit
       """
     And I find file "views/humans.org"
     And I go to headline "Tanik"
-
-    Then marker at point should not be corrupted
-
-    When I go to headline "Some external corruption"
-
-    Then marker at point should be corrupted
-
-    When I insert ": let's change this"
-
-    Then marker at point should be corrupted
-
-    When I insert " :thing:"
-
-    Then marker at point should be corrupted
 
   Scenario: Change headline todo state
     Given world "Wishlist" in directory "nerdy" with headlines
@@ -321,8 +304,6 @@ Feature: Consistent Edit
     """
 
     Then headline "Music Festival 2023" should be changed
-    And headline "Music Festival 2023" should not be committed
-    And headline "Music Festival 2023" should not be corrupted
     And 1 marker should be changed
 
     When I commit changes
@@ -392,8 +373,6 @@ Feature: Consistent Edit
     """
 
     Then headline "Music Festival 2023" should be changed
-    And headline "Music Festival 2023" should not be committed
-    And headline "Music Festival 2023" should not be corrupted
     And 1 marker should be changed
 
     When I save buffer

@@ -25,6 +25,7 @@ The return value is the value of the final form in FN."
        ,value)))
 
 (cl-defmacro org-glance-debug (&rest args)
+  (declare (indent 1))
   (when org-glance-debug-mode
     `(let ((inhibit-message nil))
        (message ,@args))))
