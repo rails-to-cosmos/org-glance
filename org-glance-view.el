@@ -133,6 +133,15 @@
                         (org-glance- view :type))
                 (format "#+OFFSET: %s"
                         (org-glance- view :offset))
+                (format "#+PROPERTY: ATTACH_DIR ./../../resources/%s/%s/"
+                        (thread-first (org-glance- view :location)
+                          f-parent
+                          file-name-nondirectory
+                          downcase)
+                        (thread-first (org-glance- view :location)
+                          file-name-nondirectory
+                          file-name-sans-extension
+                          downcase))
                 ""
                 "")))
 
@@ -246,37 +255,40 @@
          (org-glance- view :type)
          old-hash))
 
-      (t
+      (midx
        (org-glance-debug "Process UPDATE event for \"%s\": validation succeeded (%s)"
          (org-glance- headline :title)
          (org-glance- view :type))
        (org-glance-view:with-current-buffer view
-         (when midx
-           (goto-char marker-position)
-           (org-glance-headline:with-headline-at-point
-             (let ((inhibit-message t))
-               (org-edit-headline (org-glance- headline :title))
-               (org-todo (org-glance- headline :state))
-               (when (org-glance- headline :commented?)
-                 (org-toggle-comment))
-               (org-set-tags (org-glance- headline :tags)))
+         (goto-char marker-position)
+         (org-glance-headline:with-headline-at-point
+           (let ((inhibit-message t))
+             (org-edit-headline (org-glance- headline :title))
+             (org-todo (org-glance- headline :state))
+             (when (org-glance- headline :commented?)
+               (org-toggle-comment))
+             (org-set-tags (org-glance- headline :tags)))
 
-             (goto-char (point-min))
-             (when (= 0 (forward-line))
-               (delete-region (point) (point-max)))
+           (goto-char (point-min))
+           (when (= 0 (forward-line))
+             (delete-region (point) (point-max)))
 
-             (goto-char (point-max))
+           (goto-char (point-max))
 
-             (insert (with-temp-buffer
-                       (insert (org-glance- headline :contents))
-                       (goto-char (point-min))
-                       (forward-line)
-                       (buffer-substring-no-properties (point) (point-max))))
+           (insert (with-temp-buffer
+                     (insert (org-glance- headline :contents))
+                     (goto-char (point-min))
+                     (forward-line)
+                     (buffer-substring-no-properties (point) (point-max))))
 
-             (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
-               (insert "\n"))
+           (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
+             (insert "\n"))
 
-             (org-glance-view:set-marker-hash view midx new-hash))))))))
+           (org-glance-view:set-marker-hash view midx new-hash))))
+
+      (t
+       (org-glance-debug "Handling UPDATE event as ADD event for \"%s\": source not found in this view" (org-glance- headline :title))
+       (org-glance-view:add-headline view headline)))))
 
 (cl-defun org-glance-view:mark (&optional (view (org-glance-view:get-buffer-view)))
   "Create effective in-memory representation of VIEW org-mode buffer."

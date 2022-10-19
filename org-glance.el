@@ -71,8 +71,8 @@
   (thread-first org-glance-current-world
     (org-glance-world:add-dimension (org-glance-dimension :name "State" :partition 'state))
     (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag))
-    (org-glance-world:add-headline (org-glance-headline-from-string "* TODO task1 :task:"))
-    (org-glance-world:add-headline (org-glance-headline-from-string "* DONE task2 :task:"))
+    ;; (org-glance-world:add-headline (org-glance-headline-from-string "* TODO task1 :task:"))
+    ;; (org-glance-world:add-headline (org-glance-headline-from-string "* DONE task2 :task:"))
     (org-glance-world:persist))
 
   ;; (list (a-list :name "State"
