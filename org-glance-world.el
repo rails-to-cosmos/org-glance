@@ -310,24 +310,16 @@ achieved by calling `org-glance-world:persist' method."
   world)
 
 (cl-defun org-glance-world:apply-dimensions (world headline)
-  (cl-labels ((replace-recursive (from to obj)
-                (cl-loop for elem in obj
-                   if (listp elem)
-                   collect (replace-recursive from to elem)
-                   else if (eql elem from)
-                   collect to
-                   else
-                   collect elem)))
-    (thunk-let ((context (org-glance-headline:eval-ctx headline)))
-      (dolist (dimension (hash-table-values (org-glance- world :dimensions)))
-        (dolist (partition (eval (org-glance- dimension :partition) context))
-          (when (and partition (not (string-empty-p (format "%s" partition))))
-            (let* ((name (org-glance- dimension :name))
-                   (predicate `(member (quote ,partition) ,(org-glance- dimension :partition)))
-                   (location (f-join (org-glance- world :location)
-                                     "dimensions"
-                                     (downcase name)
-                                     (format "%s.org" partition))))
-              (org-glance-view:create world predicate location nil))))))))
+  (thunk-let ((context (org-glance-headline:eval-ctx headline)))
+    (dolist (dimension (hash-table-values (org-glance- world :dimensions)))
+      (dolist (partition (eval (org-glance- dimension :partition) context))
+        (when (and partition (not (string-empty-p (format "%s" partition))))
+          (let* ((name (org-glance- dimension :name))
+                 (predicate `(member (quote ,partition) ,(org-glance- dimension :partition)))
+                 (location (f-join (org-glance- world :location)
+                                   "dimensions"
+                                   (downcase name)
+                                   (format "%s.org" partition))))
+            (org-glance-view:create world predicate location nil (org-glance-offset:zero))))))))
 
 (provide 'org-glance-world)

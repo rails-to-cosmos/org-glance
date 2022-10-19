@@ -63,7 +63,9 @@
       :type vector
       :initarg :marker-hashes)))
 
-(cl-defun org-glance-view:create (world type location &optional (backfill? t))
+(cl-defun org-glance-view:create (world type location &optional
+                                                        (backfill? t)
+                                                        (offset (org-glance-world:offset world)))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (thunk-let* ((views (org-glance- world :views))
                (view-location (file-truename (f-join (org-glance- world :location) location)))
@@ -74,7 +76,7 @@
                (view (org-glance-view :world world
                                       :type type
                                       :location view-location
-                                      :offset (org-glance-world:offset world)))
+                                      :offset offset))
                (header (org-glance-view:header view)))
     (cond (view-exists?
            (org-glance-debug "Using cached view")

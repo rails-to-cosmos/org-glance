@@ -14,16 +14,16 @@
 (defvar org-glance-scope-extensions
   '("org" "org_archive"))
 
-(defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . org-glance-scope--file-with-archives)
+(defvar org-glance-scope:default-scope-alist
+  '((file-with-archives . org-glance-scope:file-with-archives)
     (agenda . org-agenda-files)
     (agenda-with-archives . -org-glance:agenda-with-archives)))
 
-(defun org-glance-scope--file-with-archives ()
+(defun org-glance-scope:file-with-archives ()
   (append (list (buffer-file-name))
-          (org-glance-scope--list-file-archives (buffer-file-name))))
+          (org-glance-scope:list-file-archives (buffer-file-name))))
 
-(defun org-glance-scope--list-file-archives (filename)
+(defun org-glance-scope:list-file-archives (filename)
   "Return list of org-mode files for FILENAME."
   (let* ((dir (file-name-directory filename))
          (base-filename (-some->> filename
@@ -31,10 +31,10 @@
                           file-name-sans-extension)))
     (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
 
-(defun org-glance-scope--agenda-with-archives ()
+(defun org-glance-scope:agenda-with-archives ()
   (cl-loop for filename in (org-agenda-files)
      append (list filename)
-     append (org-glance-scope--list-file-archives filename)))
+     append (org-glance-scope:list-file-archives filename)))
 
 (cl-defgeneric org-glance-scope (origin)
   "Convert ORIGIN to list of files.")
@@ -64,8 +64,8 @@
     seq-uniq))
 
 (cl-defmethod org-glance-scope ((s symbol))
-  "Return extracted S from `org-glance-scope--default-scope-alist'."
-  (if-let (reserved-scope (assoc s org-glance-scope--default-scope-alist))
+  "Return extracted S from `org-glance-scope:default-scope-alist'."
+  (if-let (reserved-scope (assoc s org-glance-scope:default-scope-alist))
       (funcall (cdr reserved-scope))
     (org-glance-scope (symbol-name s))))
 
