@@ -1,0 +1,146 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /home/akatovda/.emacs.d/stuff/org-glance/README.org
+
+
+* DONE Indexes → alist
+CLOSED: [2022-07-27 Wed 09:41]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-07-27 Wed 09:42
+:ARCHIVE_FILE: ~/.emacs.d/stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-07-27 Wed 09:41]
+:END:
+
+* DONE remove text properties (marker)
+CLOSED: [2022-09-28 Wed 11:48]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-09-28 Wed 11:48
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-09-28 Wed 11:48]
+:END:
+
+* DONE refactor headline tests
+CLOSED: [2022-09-28 Wed 12:37]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-09-28 Wed 12:37]
+:END:
+
+* DONE fix marker→point behaviour
+CLOSED: [2022-08-21 Sun 13:16]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-08-21 Sun 13:16]
+- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:48]
+- State "STARTED"    from "PENDING"    [2022-08-21 Sun 12:36]
+CLOCK: [2022-08-21 Sun 12:36]--[2022-08-21 Sun 12:48] =>  0:12
+- State "PENDING"    from "STARTED"    [2022-08-21 Sun 12:36]
+- State "STARTED"    from              [2022-08-21 Sun 12:33]
+CLOCK: [2022-08-21 Sun 12:33]--[2022-08-21 Sun 12:36] =>  0:03
+:END:
+
+* DONE Fix mew and prepare to relations
+CLOSED: [2022-09-02 Fri 11:20]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-09-02 Fri 11:20]
+- State "STARTED"    from              [2022-08-15 Mon 10:20]
+:END:
+
+* DONE add tests on materialized offsets
+CLOSED: [2022-09-02 Fri 11:21]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-09-02 Fri 11:21]
+:END:
+
+* DONE fix wal reversal
+CLOSED: [2022-09-02 Fri 11:21]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-09-02 Fri 11:21]
+:END:
+
+* DONE wal with types SET and RM
+CLOSED: [2022-07-31 Sun 12:31]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from              [2022-07-31 Sun 12:31]
+:END:
+
+* DONE Optimize `org-glance-material-mode:commit`: sync only changed headlines
+CLOSED: [2022-07-29 Fri 18:31]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-01 Sat 11:58
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-07-29 Fri 18:31]
+:END:
+
+* DONE Capture headline
+CLOSED: [2022-10-19 Wed 16:19]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-19 Wed 16:19
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-10-19 Wed 16:19]
+:END:
+
+* DONE Browse world
+CLOSED: [2022-10-19 Wed 16:44]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-19 Wed 16:44
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-10-19 Wed 16:44]
+- State "STARTED"    from "TODO"       [2022-10-19 Wed 16:26]
+CLOCK: [2022-10-19 Wed 16:26]--[2022-10-19 Wed 16:44] =>  0:18
+:END:
