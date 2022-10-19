@@ -52,8 +52,9 @@
   :group 'org-glance
   :type 'directory)
 
-(defvar org-glance-current-world nil
-  "Current `org-glance-world'.")
+(cl-defun org-glance-capture ()
+  (interactive)
+  (org-glance-world:capture org-glance-current-world))
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."

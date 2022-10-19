@@ -21,6 +21,8 @@
 (require 'org-glance-types)
 
 (defvar org-glance-worlds (make-hash-table :test #'equal) "List of worlds registered in system.")
+(defvar org-glance-current-world nil "Current `org-glance-world'.")
+(defvar-local org-glance-buffer-world nil "World used in temporary buffers.")
 
 (org-glance-class org-glance-dimension nil
     ((name
@@ -288,12 +290,14 @@ achieved by calling `org-glance-world:persist' method."
       (insert (prin1-to-string (org-glance- world :dimensions))))))
 
 (cl-defun org-glance-world:load-dimensions (location)
+  (org-glance-debug "Load dimensions from \"%s\"" location)
   (let ((source-file (f-join location "dimensions" "dimensions.el")))
     (if (and (f-exists? source-file) (f-readable? source-file))
         (with-temp-buffer
           (insert-file-contents-literally source-file)
           (read (buffer-string)))
-      nil)))
+      (org-glance-debug "Dimensions not found in \"%s\"" location)
+      (make-hash-table :test #'equal))))
 
 (cl-defun org-glance-world:add-dimension (world dimension)
   (declare (indent 1))
@@ -314,5 +318,41 @@ achieved by calling `org-glance-world:persist' method."
                                    (downcase name)
                                    (format "%s.org" partition))))
             (org-glance-view:create world predicate location nil (org-glance-offset:zero))))))))
+
+(cl-defun org-glance-world:capture (world
+                                    &key
+                                      (template "* %?")
+                                      ;; (_ (cond ((use-region-p) (buffer-substring-no-properties
+                                      ;;                           (region-beginning)
+                                      ;;                           (region-end)))
+                                      ;;          (t "")))
+                                      ;; finalize
+                                      )
+  (declare (indent 1))
+  (let* ((file (make-temp-file "org-glance-" nil ".org"))
+         (org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
+    (find-file file)
+    (setq-local org-glance-buffer-world world)
+    (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+    (org-capture nil "_")
+    ;; (when finalize
+    ;;   (org-capture-finalize))
+    ))
+
+(cl-defun org-glance-capture:after-finalize-hook ()
+  "Register captured headline in metastore.
+Buffer local variables: `org-glance-capture:default'."
+  (org-glance-headline:map (headline)
+    (org-glance-debug "Register headline \"%s\" in world \"%s\" "
+      (org-glance- headline :title)
+      org-glance-buffer-world)
+    (org-glance-world:add-headline org-glance-buffer-world headline))
+
+  (org-glance-world:persist org-glance-buffer-world)
+
+  (let ((file (buffer-file-name)))
+    (org-glance-debug "Remove temp file \"%s\"" file)
+    (kill-buffer (get-file-buffer file))
+    (delete-file file)))
 
 (provide 'org-glance-world)
