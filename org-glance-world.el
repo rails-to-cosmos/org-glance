@@ -319,6 +319,26 @@ achieved by calling `org-glance-world:persist' method."
                                    (format "%s.org" partition))))
             (org-glance-view:create world predicate location nil (org-glance-offset:zero))))))))
 
+(cl-defun org-glance-world:list-dimensions (world)
+  (cl-loop for dimension being the hash-keys of (org-glance- world :dimensions)
+     for location = (f-join (org-glance- world :location) "dimensions" (downcase dimension))
+     when (and (f-exists? location) (f-readable? location))
+     append (--map (format "%s=%s"
+                           (downcase dimension)
+                           (file-name-sans-extension it))
+                   (--filter (member (file-name-extension it) org-glance-scope-extensions)
+                             (directory-files location)))))
+
+(cl-defun org-glance-world:browse (world)
+  (let ((dim (completing-read "Browse dimension: "
+                              (org-glance-world:list-dimensions org-glance-current-world)
+                              nil
+                              t)))
+    (find-file (f-join (org-glance- world :location)
+                       "dimensions"
+                       (car (s-split "=" dim))
+                       (format "%s.org" (cadr (s-split "=" dim)))))))
+
 (cl-defun org-glance-world:capture (world
                                     &key
                                       (template "* %?")

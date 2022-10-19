@@ -7,20 +7,26 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* STARTED Browse world
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2022-10-19 Wed 16:26]
+CLOCK: [2022-10-19 Wed 16:26]
+:END:
+* TODO Optimize type of views
 * TODO Optimize add event
 * TODO Support RM event
 * TODO Headline ID
 * TODO Improve type system
 ** TODO consistent types in views (on tag modification)
 ** TODO ephemeral types (time-specific / todo-state specific)
-* TODO deduplicate classes in wal
-* TODO consistent markers and all the tests [0/4]
+* TODO Deduplicate classes in wal
+* TODO Consistent markers and all the tests [0/4]
 ** TODO headline indented by user
 ** TODO org-link inserted
 ** TODO headline removed
 ** TODO headline created
-* TODO consider collisions
-* TODO filter world headlines [3/3]
+* TODO Consider collisions
+* TODO Filter world headlines [3/3]
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-08-02 Tue 09:30]
 - State "STARTED"    from              [2022-08-02 Tue 08:04]
@@ -46,7 +52,7 @@ CLOSED: [2022-08-12 Fri 15:07]
 ** in-memory lru cache (hash-table)
 ** by relations (todo)
 * https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-* garbage collector
+* Garbage collector
 * TODO [#A] Actualize indexes of lsm-tree
 * TODO Fix highlighting
 * TODO make indexes proper lsm trees

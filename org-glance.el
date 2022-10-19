@@ -56,6 +56,10 @@
   (interactive)
   (org-glance-world:capture org-glance-current-world))
 
+(cl-defun org-glance-browse ()
+  (interactive)
+  (org-glance-world:browse org-glance-current-world))
+
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
