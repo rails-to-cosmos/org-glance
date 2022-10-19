@@ -21,7 +21,6 @@
 (require 'org-glance-types)
 
 (defvar org-glance-worlds (make-hash-table :test #'equal) "List of worlds registered in system.")
-(defconst org-glance-world:log-location "WAL")
 
 (org-glance-class org-glance-dimension nil
     ((name
@@ -31,16 +30,7 @@
      (partition
       :type (or list symbol)
       :initarg :partition
-      :documentation "Partition method.")
-     ;; (predicate
-     ;;  :type list
-     ;;  :initarg :predicate
-     ;;  :documentation "Predicate method.")
-     ;; (ctemplate
-     ;;  :type list
-     ;;  :initarg :ctemplate
-     ;;  :documentation "Capture template for derived views.")
-     ))
+      :documentation "Partition method.")))
 
 (org-glance-class org-glance-world nil
     ((location
@@ -62,15 +52,15 @@
       :initarg :cache
       :initform (make-hash-table :test #'equal)
       :documentation "LRU cache with headlines.")
+     (dimensions
+      :type hash-table
+      :initarg :dimensions
+      :initform (make-hash-table :test #'equal))
      (views
       :type hash-table
       :initarg :views
       :initform (make-hash-table :test #'equal)
-      :documentation "Views associated with world by type.")
-     (dimensions
-      :type hash-table
-      :initarg :dimensions
-      :initform (make-hash-table :test #'equal))))
+      :documentation "Views associated with world by type.")))
 
 (cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
@@ -95,7 +85,7 @@
   (or (gethash location org-glance-worlds)
       (puthash location
                (org-glance-world :location location
-                                 :changelog (org-glance-changelog:read (f-join location org-glance-world:log-location))
+                                 :changelog (org-glance-changelog:read (f-join location "log" "event.log"))
                                  :dimensions (org-glance-world:load-dimensions location))
                org-glance-worlds)))
 
@@ -123,7 +113,7 @@ Return last committed offset."
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (world-location (org-glance- world :location))
-         (changelog-location (f-join world-location org-glance-world:log-location)))
+         (changelog-location (f-join world-location "log" "event.log")))
 
     (dolist (event (reverse (org-glance- changelog* :events)))
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
@@ -291,11 +281,14 @@ achieved by calling `org-glance-world:persist' method."
      (org-glance-world:locate-headline world (org-glance- thing :hash)))))
 
 (cl-defun org-glance-world:save-dimensions (world)
-  (with-temp-file (f-join (org-glance- world :location) "dimensions.el")
-    (insert (prin1-to-string (org-glance- world :dimensions)))))
+  (let ((location (f-join (org-glance- world :location) "dimensions"))
+        (filename "dimensions.el"))
+    (f-mkdir-full-path location)
+    (with-temp-file (f-join location filename)
+      (insert (prin1-to-string (org-glance- world :dimensions))))))
 
 (cl-defun org-glance-world:load-dimensions (location)
-  (let ((source-file (f-join location "dimensions.el")))
+  (let ((source-file (f-join location "dimensions" "dimensions.el")))
     (if (and (f-exists? source-file) (f-readable? source-file))
         (with-temp-buffer
           (insert-file-contents-literally source-file)
