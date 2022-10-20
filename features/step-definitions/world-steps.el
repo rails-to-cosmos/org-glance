@@ -10,6 +10,10 @@
 (require 'org-glance-world)
 (require 'org-glance-scope)
 
+(Given "^world \"\\([^\"]+\\)\"$"
+       (lambda (world-name)
+         (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))))
+
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
        (lambda (world-name relative-location)
          (let* ((location (org-glance-test:get-file relative-location))
@@ -174,7 +178,7 @@
         (let ((world (org-glance-test:get-world world-name)))
           (should (eq world (org-glance-view:get-buffer-world))))))
 
-(When "^I alter world \"\\([^\"]+\\)\" add dimension \"\\([^\"]+\\)\" partition by \"\\([^\"]+\\)\"$"
+(When "^I? ?alter world \"\\([^\"]+\\)\" add dimension \"\\([^\"]+\\)\" partition by \"\\([^\"]+\\)\"$"
   (lambda (world-name dimension-name partition-by)
     (let ((world (org-glance-test:get-world world-name)))
       (org-glance-world:add-dimension world
@@ -182,12 +186,28 @@
                               :partition (intern partition-by)))
       (org-glance-world:persist world))))
 
-(Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) dimensions$"
+(Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) dimensions?$"
   (lambda (world-name num-dimensions)
     (let ((world (org-glance-test:get-world world-name)))
       (should (= (string-to-number num-dimensions) (hash-table-count (org-glance- world :dimensions)))))))
 
-(And "^world \"\\([^\"]+\\)\" should contain dimension \"\\([^\"]+\\)\"$"
+(Then "^world \"\\([^\"]+\\)\" should contain dimension \"\\([^\"]+\\)\"$"
   (lambda (world-name dimension-name)
     (let ((world (org-glance-test:get-world world-name)))
       (should (gethash (downcase dimension-name) (org-glance- world :dimensions))))))
+
+(Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
+      (lambda (world-name view-name dimension-name)
+        (let ((world (org-glance-test:get-world world-name)))
+          (should (f-exists? (f-join (org-glance- world :location)
+                                     "dimensions"
+                                     (downcase dimension-name)
+                                     (format "%s.org" (downcase view-name))))))))
+
+(When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
+  (lambda (view-name dimension-name world-name)
+    (let ((world (org-glance-test:get-world world-name)))
+      (find-file (f-join (org-glance- world :location)
+                         "dimensions"
+                         (downcase dimension-name)
+                         (format "%s.org" (downcase view-name)))))))

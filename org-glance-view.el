@@ -294,8 +294,7 @@
   "Create effective in-memory representation of VIEW org-mode buffer."
   ;; TODO make dynamic arrays to optimize add operation
   (org-glance-view:with-current-buffer view
-    (let* ((world (org-glance- view :world))
-           (headlines (org-glance-headline:map (headline) (list (point-min) (org-glance- headline :hash))))
+    (let* ((headlines (org-glance-headline:map (headline) (list (point-min) (org-glance- headline :hash))))
            (marker-positions (make-vector (length headlines) 0))
            (marker-hashes (make-vector (length headlines) nil))
            (markers (make-hash-table :test #'equal)))

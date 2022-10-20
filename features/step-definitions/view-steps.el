@@ -23,12 +23,12 @@
   (lambda (view-name file-name)
     (Given "empty file \"%s\"" file-name)
     (let* ((file (org-glance-test:get-file file-name))
-           (view (org-glance-test:view-get view-name)))
+           (view (org-glance-test:get-view view-name)))
       (org-glance-view:materialize view file))))
 
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)
-        (let ((view (org-glance-test:view-get view-name)))
+        (let ((view (org-glance-test:get-view view-name)))
           (should (eq view (org-glance-view:get-buffer-view))))))
 
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"

@@ -1,22 +1,24 @@
 ;; -*- lexical-binding: t; -*-
 
+(defvar org-glance-debug-mode t)
+
+(require 'org-glance-debug)
+
 (require 'f)
 (require 'dash)
 (require 'org-glance)
-(require 'org-glance-debug)
 (require 'org-glance-helpers)
 
 (defvar org-glance-support-path (f-dirname load-file-name))
 (defvar org-glance-features-path (f-parent org-glance-support-path))
 (defvar org-glance-root-path (f-parent org-glance-features-path))
-
-(add-to-list 'load-path org-glance-root-path)
-
 (defvar org-glance-test:location)
 (defvar org-glance-test-files)
 (defvar org-glance-test-worlds)
 (defvar org-glance-test-views)
 (defvar org-glance-test-headlines)
+
+(add-to-list 'load-path org-glance-root-path)
 
 (defun org-glance-test:get-file (alias)
   "Get file from test storage by ALIAS."
@@ -38,7 +40,7 @@
   "Update world KEY with value VAL."
   (puthash key val org-glance-test-views))
 
-(defun org-glance-test:view-get (key)
+(defun org-glance-test:get-view (key)
   "Get storage from test storage by ALIAS."
   (or (gethash key org-glance-test-views)
       (error "View \"%s\" is not registered in the system. Available views: \"%s\""
@@ -61,8 +63,8 @@
   (require 'espuds)
   (require 'ert))
 
-(Setup  ;; Before anything has run
- )
+(Setup
+)
 
 (Before
  (desktop-clear)

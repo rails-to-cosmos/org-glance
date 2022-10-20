@@ -419,6 +419,55 @@ Feature: Consistent Edit
     # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
+  @debug
+  Scenario: Headline updates without accessing previous state
+    Given world "Adventures"
+
+    When I alter world "Adventures" add dimension "State" partition by "state"
+    And add headlines to world "Adventures"
+      """
+      * TODO Niagara Waterfalls
+      """
+
+    Then world "Adventures" should contain 1 dimension
+    And world "Adventures" should contain dimension "State"
+    And world "Adventures" should contain view "TODO" derived from dimension "State"
+
+    When I visit view "TODO" derived from dimension "State" in world "Adventures"
+
+    Then current buffer should contain 1 headline
+    And current buffer offset should be latest
+    And marker positions and hashes should be consistent
+
+    When I go to headline "Niagara Waterfalls"
+    And set headline todo state to "DONE"
+
+    Then marker at point should be changed
+    And markers positions should be consistent
+
+    When I commit changes
+    And kill buffer
+
+    Then world "Adventures" should contain view "DONE" derived from dimension "State"
+
+    When I visit view "DONE" derived from dimension "State" in world "Adventures"
+
+    Then current buffer should contain 1 headline
+    And current buffer offset should be latest
+    And marker positions and hashes should be consistent
+
+    When I go to headline "Niagara Waterfalls"
+    And set headline todo state to "TODO"
+
+    Then marker at point should be changed
+    And markers positions should be consistent
+
+    When I commit changes
+    And kill buffer
+    And visit view "TODO" derived from dimension "State" in world "Adventures"
+
+    Then current buffer should contain 1 headline
+
   # TODO Sync COMMENTED property
   # TODO Sync buffers update offset (maybe not)
   # TODO Test external corruptions
