@@ -1,13 +1,10 @@
 ;; -*- lexical-binding: t; -*-
 
-(defvar org-glance-debug-mode t)
-
-(require 'org-glance-debug)
-
 (require 'f)
 (require 'dash)
 (require 'org-glance)
 (require 'org-glance-helpers)
+(require 'org-glance-debug)
 
 (defvar org-glance-support-path (f-dirname load-file-name))
 (defvar org-glance-features-path (f-parent org-glance-support-path))

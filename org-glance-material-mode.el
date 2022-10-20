@@ -33,9 +33,9 @@ editor."
   (let* ((view (org-glance-view:get-buffer-view))
          (diff (- (- change-end change-beg) pre-change-length))
          (midx (org-glance-view:marker-at-point view (- change-beg 1))))
-    (org-glance-benchmark
+    (org-glance-log:benchmark
       (org-glance-view:set-marker-changed view midx t))
-    (org-glance-benchmark
+    (org-glance-log:benchmark
       (org-glance-view:shift-markers view midx diff))))
 
 (provide 'org-glance-material-mode)

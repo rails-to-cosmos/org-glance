@@ -322,6 +322,9 @@ achieved by calling `org-glance-world:persist' method."
                                    "dimensions"
                                    (downcase name)
                                    (format "%s.org" partition))))
+            (org-glance-log:scenario "Create derived view \"%s -> %s\""
+              (org-glance- dimension :name)
+              partition)
             (org-glance-view:create world predicate location nil (org-glance-offset:zero))))))))
 
 (cl-defun org-glance-world:list-dimensions (world)

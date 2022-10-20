@@ -65,7 +65,7 @@
   (interactive)
 
   (setq org-glance-current-world
-        (org-glance-benchmark
+        (org-glance-log:benchmark
           (org-glance-world:create org-glance-directory)))
 
   (thread-first org-glance-current-world

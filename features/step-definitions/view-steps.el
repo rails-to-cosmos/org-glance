@@ -79,21 +79,18 @@
                    (thunk-let ((view (org-glance-view:get-buffer-view))
                                (midx (org-glance-view:marker-at-point)))
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                       (org-glance-debug "---")
                        (org-glance-debug "Marker positions: %s" (org-glance- view :marker-positions))
                        (org-glance-debug "Marker: %d" (org-glance-view:get-marker-position view midx))
                        (org-glance-debug "Headline: %d %d" (point-min) (point-max))
-                       (org-glance-debug "--- Headline contents ---\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-debug "Headline contents:\n%s" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (org-glance-debug "--- Marker contents ---\n%s" (buffer-substring-no-properties (org-glance-view:get-marker-position view midx)
-                                                                                                           (point-max))))
+                         (org-glance-debug "Marker contents:\n%s" (buffer-substring-no-properties (org-glance-view:get-marker-position view midx)
+                                                                                                  (point-max))))
 
-
-                       ;; (org-glance-debug "Diff: \"%s\"" (buffer-substring-no-properties
-                       ;;                          (org-glance- marker :end)
-                       ;;                          (point-max)))
-                       )
+                       (org-glance-debug "Diff: \"%s\"" (buffer-substring-no-properties
+                                                (org-glance- marker :end)
+                                                (point-max))))
 
                      (and (> midx -1)
                           (= (aref (org-glance- view :marker-positions) midx) (point-min)))))))
@@ -105,7 +102,6 @@
                    (let* ((view (org-glance-view:get-buffer-view))
                           (midx (org-glance-view:marker-at-point view (point-min))))
 
-                     (org-glance-debug "---")
                      (org-glance-debug "Looking for midx: %d" midx)
 
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
@@ -121,9 +117,9 @@
                                               (org-glance-view:get-marker-position view (1+ midx)))))
 
 
-                       ;; (org-glance-debug "Diff: \"%s\"" (buffer-substring-no-properties
-                       ;;                          (org-glance- marker :end)
-                       ;;                          (point-max)))
+                       (org-glance-debug "Diff: \"%s\"" (buffer-substring-no-properties
+                                                (org-glance- marker :end)
+                                                (point-max)))
                        )
 
                      (org-glance-debug "Marker hash: %s" (org-glance-view:get-marker-hash view midx))

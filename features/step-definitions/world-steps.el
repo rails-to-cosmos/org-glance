@@ -12,6 +12,7 @@
 
 (Given "^world \"\\([^\"]+\\)\"$"
        (lambda (world-name)
+         (org-glance-log:scenario "Create world \"%s\"" world-name)
          (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))))
 
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
@@ -27,20 +28,26 @@
 
 (When "^I? ?add headlines to world \"\\([^\"]+\\)\"$"
   (lambda (world-name headlines)
-    (let ((world (org-glance-test:get-world world-name)))
+    (let ((world (org-glance-test:get-world world-name))
+          (strings (->> headlines
+                        (s-split "* ")
+                        (-map #'s-trim)
+                        reverse
+                        (--filter (not (string-empty-p it)))
+                        (--map (concat "* " it)))))
+
+      (org-glance-log:scenario "INSERT %d HEADLINE%s TO WORLD \"%s\""
+        (length strings)
+        (if (> (length strings) 1) "s" "")
+        (upcase world-name))
+
       (cl-loop
-         with strings = (->> headlines
-                             (s-split "* ")
-                             (-map #'s-trim)
-                             reverse
-                             (--filter (not (string-empty-p it)))
-                             (--map (concat "* " it)))
          for string in strings
          for headline = (org-glance-headline-from-string string)
-         do (org-glance-world:add-headline world headline)
-         finally do
-           (org-glance-world:persist world)
-           (org-glance-test:world-put world-name world)))))
+         do (org-glance-world:add-headline world headline))
+
+      (org-glance-world:persist world)
+      (org-glance-test:world-put world-name world))))
 
 (When "^I? ?import headlines to world \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (world-name location)
@@ -180,10 +187,11 @@
 
 (When "^I? ?alter world \"\\([^\"]+\\)\" add dimension \"\\([^\"]+\\)\" partition by \"\\([^\"]+\\)\"$"
   (lambda (world-name dimension-name partition-by)
+    (org-glance-log:scenario "Alter world \"%s\" add dimension \"%s\" partition by \"%s\""
+      world-name dimension-name partition-by)
     (let ((world (org-glance-test:get-world world-name)))
       (org-glance-world:add-dimension world
-        (org-glance-dimension :name dimension-name
-                              :partition (intern partition-by)))
+        (org-glance-dimension :name dimension-name :partition (intern partition-by)))
       (org-glance-world:persist world))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) dimensions?$"
@@ -206,6 +214,8 @@
 
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
+    (org-glance-log:scenario "Select derived view \"%s -> %s\" from world \"%s\""
+      dimension-name view-name world-name)
     (let ((world (org-glance-test:get-world world-name)))
       (find-file (f-join (org-glance- world :location)
                          "dimensions"

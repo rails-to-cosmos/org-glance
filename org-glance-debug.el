@@ -1,6 +1,11 @@
-(defvar org-glance-debug-mode nil)
+(defconst org-glance-log:enable-benchmark-report nil)
+(defconst org-glance-log:enable-cash-report nil)
+(defconst org-glance-log:enable-debug-report t)
+(defconst org-glance-log:enable-reason-report t)
+(defconst org-glance-log:enable-context-report t)
+(defconst org-glance-log:enable-scenario-report t)
 
-(defmacro org-glance-benchmark (&rest body)
+(defmacro org-glance-log:benchmark (&rest body)
   "Evaluate FN and message the time taken.
 The return value is the value of the final form in FN."
   (declare (indent 0))
@@ -12,8 +17,8 @@ The return value is the value of the final form in FN."
            (,gcs gcs-done)
            (,start (current-time))
            (,value ,@body))
-       (when org-glance-debug-mode
-         (message "[%s] Elapsed time: %fs%s"
+       (when org-glance-log:enable-benchmark-report
+         (message "> [benchmark] [%s] Elapsed time: %fs%s"
                   (caar (quote ,body))
                   (float-time (time-since ,start))
                   (if (> (- gcs-done ,gcs) 0)
@@ -21,13 +26,36 @@ The return value is the value of the final form in FN."
                               (- gc-elapsed ,gc)
                               (- gcs-done ,gcs))
                     "")))
-
        ,value)))
+
+(cl-defmacro org-glance-log:scenario (&rest args)
+  (declare (indent 1))
+  (when org-glance-log:enable-scenario-report
+    `(let ((inhibit-message nil))
+       (message (concat "> [scenario] " (upcase (format ,@args)))))))
 
 (cl-defmacro org-glance-debug (&rest args)
   (declare (indent 1))
-  (when org-glance-debug-mode
+  (when org-glance-log:enable-debug-report
     `(let ((inhibit-message nil))
-       (message ,@args))))
+       (message (concat "> [debug] " (format ,@args))))))
+
+(cl-defmacro org-glance-log:cache (&rest args)
+  (declare (indent 1))
+  (when org-glance-log:enable-cash-report
+    `(let ((inhibit-message nil))
+       (message (concat "> [cache] " (format ,@args))))))
+
+(cl-defmacro org-glance-log:reason (&rest args)
+  (declare (indent 1))
+  (when org-glance-log:enable-reason-report
+    `(let ((inhibit-message nil))
+       (message (concat "> [reason] " (format ,@args))))))
+
+(cl-defmacro org-glance-log:context (&rest args)
+  (declare (indent 1))
+  (when org-glance-log:enable-context-report
+    `(let ((inhibit-message nil))
+       (message (concat "> [context] " (format ,@args))))))
 
 (provide 'org-glance-debug)
