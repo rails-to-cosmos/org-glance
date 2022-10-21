@@ -318,7 +318,8 @@
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (let ((world (org-glance- view :world)))
+    (let ((world (org-glance- view :world))
+          (to-remove '()))
       (org-glance-view:fetch view)
 
       (org-glance-view:consume-changes (view midx)
@@ -329,7 +330,12 @@
                (new-hash (org-glance- headline :hash)))
           (org-glance-world:update world old-hash headline)
           (org-glance-view:set-marker-changed view midx nil)
-          (org-glance-view:set-marker-hash view midx new-hash)))
+          (org-glance-view:set-marker-hash view midx new-hash)
+          (unless (org-glance-view:member? view headline)
+            (push new-hash to-remove))))
+
+      (dolist (hash to-remove)
+        (org-glance-view:remove-headline view hash))
 
       (let ((offset (org-glance-world:persist world)))
         (org-glance-view:set-offset view offset))
