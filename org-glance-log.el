@@ -7,10 +7,10 @@
 
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
-(defconst org-glance-log:enable-debug-report nil)
+(defconst org-glance-log:enable-debug-report t)
 (defconst org-glance-log:enable-reason-report nil)
 (defconst org-glance-log:enable-context-report nil)
-(defconst org-glance-log:enable-scenario-report nil)
+(defconst org-glance-log:enable-scenario-report t)
 
 (defmacro org-glance-log:benchmark (&rest body)
   "Evaluate FN and message the time taken.

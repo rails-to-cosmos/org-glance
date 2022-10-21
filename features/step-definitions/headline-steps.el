@@ -202,8 +202,7 @@
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
-    (org-edit-headline title)
-    (org-glance-log:debug "")))
+    (org-edit-headline title)))
 
 (And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
      (lambda (title contents)

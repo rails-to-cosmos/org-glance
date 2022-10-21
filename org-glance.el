@@ -69,53 +69,11 @@
           (org-glance-world:create org-glance-directory)))
 
   (thread-first org-glance-current-world
-    (org-glance-world:add-dimension (org-glance-dimension :name "Link" :partition 'link))
+    (org-glance-world:add-dimension (org-glance-dimension :name "Linked" :partition 'linked))
+    (org-glance-world:add-dimension (org-glance-dimension :name "Pure" :partition 'pure))
     (org-glance-world:add-dimension (org-glance-dimension :name "State" :partition 'state))
     (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag :read-only t))
-    ;; (org-glance-world:add-headline (org-glance-headline-from-string "* TODO task1 :task:"))
-    ;; (org-glance-world:add-headline (org-glance-headline-from-string "* DONE task2 :task:"))
-    (org-glance-world:persist))
-
-  ;; (list (a-list :name "State"
-  ;;               :partitions '(list state)
-  ;;               :location '(format "%s.org" partition)
-  ;;               :predicate `(eq state partition)
-  ;;               :capture '(concat "* " partition " %?"))
-  ;;       ;; (a-list :name "Tag"
-  ;;       ;;         :partitions "tags"
-  ;;       ;;         :location "{{ PARTITION }}.org"
-  ;;       ;;         :predicate "(member '{{ PARTITION }} tag)"
-  ;;       ;;         :capture "* %? :{{ PARTITION }}:")
-  ;;       )
-
-
-  ;; (list (a-list :location "by-state/%s.org"
-  ;;               :type "(eq state '%s)"
-  ;;               :filter '(lambda (headline)
-  ;;                         (list (downcase (org-glance- headline :state)))))
-  ;;       ("by-tag/%s.org"     -> (lambda (headline)
-  ;;                                 (org-glance- headline :tags)))
-
-  ;;       ("by-feature/%s.org" -> (lambda (headline)
-  ;;                                 (list
-  ;;                                  (when (org-glance- headline :commented?)
-  ;;                                    "commented")
-  ;;                                  (when (org-glance- headline :archived?)
-  ;;                                    "archived")
-  ;;                                  (when (org-glance- headline :closed?)
-  ;;                                    "closed")
-  ;;                                  (when (org-glance- headline :encrypted?)
-  ;;                                    "encrypted")
-  ;;                                  (when (org-glance- headline :linked?)
-  ;;                                    "linked")
-  ;;                                  (when (org-glance- headline :propertized?)
-  ;;                                    "propertized"))))
-  ;;       )
-
-  ;; Headline -- node
-  ;; Relationship -- (headline1, headline2, type)
-  ;; Indexes on classes and timestamps
-  )
+    (org-glance-world:persist)))
 
 
 (provide 'org-glance)

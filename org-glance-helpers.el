@@ -71,17 +71,23 @@ Example: (org-glance- view :world :location)"
   (declare (indent 0))
   t)
 
-(cl-defun org-glance:binary-search (vec v &optional (l 0) (r (1- (length vec))))
+(cl-defun org-glance:binary-search (vec
+                                    v
+                                    &key
+                                      (l 0)
+                                      (r (1- (length vec)))
+                                      (key #'(lambda (vec idx) (aref vec idx))))
+  (declare (indent 2))
   (thunk-let* ((m (/ (+ l r 1) 2))
-               (mv (aref vec m))
-               (lv (aref vec l))
-               (rv (aref vec r)))
+               (mv (funcall key vec m))
+               (lv (funcall key vec l))
+               (rv (funcall key vec r)))
     (cond ((= 0 (length vec)) -1)
           ((< v lv) -1)
           ((= v lv) l)
           ((>= v rv) r)
-          ((>= v mv) (org-glance:binary-search vec v m r))
-          (t (org-glance:binary-search vec v l (1- m))))))
+          ((>= v mv) (org-glance:binary-search vec v :l m :r r :key key))
+          (t (org-glance:binary-search vec v :l l :r (1- m) :key key)))))
 
 ;; (eval-when-compile
 ;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))

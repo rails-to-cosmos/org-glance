@@ -34,8 +34,9 @@
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
         (should (= (string-to-number changed-markers-count)
-                   (bool-vector-count-population
-                    (org-glance- (org-glance-view:get-buffer-view) :changed-markers))))))
+                   (cl-loop for marker across-ref (org-glance- (org-glance-view:get-buffer-view) :markers)
+                      when (org-glance- marker :changed?)
+                      sum 1)))))
 
 (When "^I? ?commit changes$"
   (lambda ()
@@ -45,13 +46,13 @@
       (lambda ()
         (let ((view (org-glance-view:get-buffer-view))
               (midx (org-glance-view:marker-at-point)))
-          (should (org-glance-view:marker-changed-p view midx)))))
+          (should (org-glance-view:marker-changed? view midx)))))
 
 (Then "^marker at point should not be changed$"
       (lambda ()
         (let ((view (org-glance-view:get-buffer-view))
               (midx (org-glance-view:marker-at-point)))
-          (should (not (org-glance-view:marker-changed-p view midx))))))
+          (should (not (org-glance-view:marker-changed? view midx))))))
 
 (Then "^current buffer offset should be latest$"
       (lambda ()
@@ -79,7 +80,7 @@
                    (thunk-let ((view (org-glance-view:get-buffer-view))
                                (midx (org-glance-view:marker-at-point)))
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                       (org-glance-log:debug "Marker positions: %s" (org-glance- view :marker-positions))
+                       (org-glance-log:debug "Markers: %s" (org-glance- view :markers))
                        (org-glance-log:debug "Marker: %d" (org-glance-view:get-marker-position view midx))
                        (org-glance-log:debug "Headline: %d %d" (point-min) (point-max))
                        (org-glance-log:debug "Headline contents:\n%s" (buffer-substring-no-properties (point-min) (point-max)))
@@ -93,7 +94,7 @@
                                                 (point-max))))
 
                      (and (> midx -1)
-                          (= (aref (org-glance- view :marker-positions) midx) (point-min)))))))
+                          (= (org-glance- (aref (org-glance- view :markers) midx) :position) (point-min)))))))
          (should (--all-p (eq it t) hc)))))
 
 (And "^marker positions and hashes should be consistent$"
@@ -105,7 +106,7 @@
                      (org-glance-log:debug "Looking for midx: %d" midx)
 
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                       (org-glance-log:debug "Marker positions: %s" (org-glance- view :marker-positions))
+                       (org-glance-log:debug "Markers: %s" (org-glance- view :markers))
                        (org-glance-log:debug "Marker position: %d" (org-glance-view:get-marker-position view midx))
                        (org-glance-log:debug "Headline: %d %d" (point-min) (point-max))
                        (org-glance-log:debug "Headline contents:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
@@ -119,8 +120,7 @@
 
                        (org-glance-log:debug "Diff: \"%s\"" (buffer-substring-no-properties
                                                 (org-glance- marker :end)
-                                                (point-max)))
-                       )
+                                                (point-max))))
 
                      (org-glance-log:debug "Marker hash: %s" (org-glance-view:get-marker-hash view midx))
                      (org-glance-log:debug "Headline hash: %s" (org-glance- headline :hash))

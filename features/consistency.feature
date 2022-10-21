@@ -1,4 +1,5 @@
 Feature: Consistent Edit
+  @debug
   Scenario: Basic functionality
     Given world "Phones" in directory "world/phones" with headlines
       """
@@ -419,7 +420,6 @@ Feature: Consistent Edit
     # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
-  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 
