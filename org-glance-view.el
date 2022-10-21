@@ -95,7 +95,7 @@
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (eval (org-glance- view :type) (org-glance-headline:eval-ctx headline)))
+  (eval (org-glance- view :type) (org-glance-headline:partitions headline)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))

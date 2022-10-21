@@ -312,7 +312,7 @@ achieved by calling `org-glance-world:persist' method."
   world)
 
 (cl-defun org-glance-world:apply-dimensions (world headline)
-  (thunk-let ((context (org-glance-headline:eval-ctx headline)))
+  (thunk-let ((context (org-glance-headline:partitions headline)))
     (dolist (dimension (hash-table-values (org-glance- world :dimensions)))
       (dolist (partition (eval (org-glance- dimension :partition) context))
         (when (and partition (not (string-empty-p (format "%s" partition))))

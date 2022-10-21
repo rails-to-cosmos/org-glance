@@ -79,6 +79,5 @@
     (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag :read-only t))
     (org-glance-world:persist)))
 
-
 (provide 'org-glance)
 ;;; org-glance.el ends here
