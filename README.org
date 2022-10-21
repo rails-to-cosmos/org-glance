@@ -7,10 +7,17 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* TODO Optimize type of views
-* TODO Optimize add event
-* TODO Support RM event
+* DONE Support RM event
+CLOSED: [2022-10-21 Fri 09:51]
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-10-21 Fri 09:51]
+- State "STARTED"    from "TODO"       [2022-10-21 Fri 09:29]
+CLOCK: [2022-10-21 Fri 09:29]--[2022-10-21 Fri 09:51] =>  0:22
+:END:
 * TODO Headline ID
+* TODO Support overview dimensions
+* TODO Support read-only dimensions
+* TODO Optimize add event
 * TODO Improve type system
 ** TODO consistent types in views (on tag modification)
 ** TODO ephemeral types (time-specific / todo-state specific)

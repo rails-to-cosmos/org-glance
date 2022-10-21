@@ -468,6 +468,10 @@ Feature: Consistent Edit
 
     Then current buffer should contain 1 headline
 
+    When I visit view "DONE" derived from dimension "State" in world "Adventures"
+
+    Then current buffer should contain 0 headlines
+
   # TODO Sync COMMENTED property
   # TODO Sync buffers update offset (maybe not)
   # TODO Test external corruptions

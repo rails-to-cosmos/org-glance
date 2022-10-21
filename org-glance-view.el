@@ -239,19 +239,47 @@
     (org-glance-world:insert-headline (org-glance- view :world) headline)
     (org-glance-view:mark view)))
 
+(cl-defun org-glance-view:remove-headline (view hash)
+  (org-glance-view:with-current-buffer view
+    (let* ((midx (gethash hash (org-glance- view :hash->midx)))
+           (marker-position (org-glance-view:get-marker-position view midx))
+           (size (1- (hash-table-count (org-glance- view :hash->midx))))
+           (changed-markers* (make-bool-vector size nil))
+           (marker-positions* (make-vector size 0))
+           (marker-hashes* (make-vector size 0)))
+      (cl-loop for idx from 0 to size
+         when (< idx midx)
+         do
+           (aset changed-markers* idx (aref (org-glance- view :changed-markers) idx))
+           (aset marker-positions* idx (aref (org-glance- view :marker-positions) idx))
+           (aset marker-hashes* idx (aref (org-glance- view :marker-hashes) idx))
+         when (> idx midx)
+         do
+           (aset changed-markers* (1- idx) (aref (org-glance- view :changed-markers) (1- idx)))
+           (aset marker-positions* (1- idx) (aref (org-glance- view :marker-positions) (1- idx)))
+           (aset marker-hashes* (1- idx) (aref (org-glance- view :marker-hashes) (1- idx)))
+         finally
+           (setf (org-glance- view :changed-markers) changed-markers*
+                 (org-glance- view :marker-positions) marker-positions*
+                 (org-glance- view :marker-hashes) marker-hashes*)
+           (remhash hash (org-glance- view :hash->midx))
+
+           (goto-char marker-position)
+           (org-glance-headline:with-headline-at-point
+             (delete-region (point-min) (point-max)))))))
+
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
   (declare (indent 0))
   (thunk-let* ((new-hash (org-glance- headline :hash))
                (midx (gethash old-hash (org-glance- view :hash->midx)))
                (marker-position (org-glance-view:get-marker-position view midx)))
-    (org-glance-debug "Validation succeeded: %s" (org-glance- view :type))
-    (org-glance-log:scenario "Update \"%s\" set hash = \"%s\""
-      (org-glance- headline :title)
-      new-hash)
+    (org-glance-log:scenario "Update \"%s\" set hash = \"%s\"" (org-glance- headline :title) new-hash)
     (org-glance-view:with-current-buffer view
       (goto-char marker-position)
       (org-glance-headline:with-headline-at-point
-        (let ((inhibit-message t))
+        (let ((inhibit-message t)
+              (org-log-state-notes-into-drawer nil)
+              (org-log-done nil))
           (org-edit-headline (org-glance- headline :title))
           (org-todo (org-glance- headline :state))
           (when (org-glance- headline :commented?)
@@ -350,12 +378,15 @@
                                                   (org-glance-debug "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
                                                   (org-glance-log:reason "Hashes are equal"))
                                                  ((not (org-glance-view:member? view headline))
+                                                  (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
+
+                                                  (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
+                                                    (org-glance-view:remove-headline view (org-glance- event :hash)))
+
                                                   (org-glance-debug "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
-                                                  (org-glance-debug "Hash relation will be stored for further decisions")
                                                   (org-glance-log:reason "Validation failed")
                                                   (org-glance-log:context "State: %s" (org-glance- headline :state))
                                                   (org-glance-log:context "View: %s" (org-glance- view :type))
-                                                  (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
                                                   (org-glance-log:context "Relations: %s" relations))
                                                  ((gethash (org-glance- event :hash) (org-glance- view :hash->midx))
                                                   (org-glance-view:replace-headline view (org-glance- event :hash) headline))
@@ -378,7 +409,7 @@
                                                (org-glance-log:context "View: %s" (org-glance- view :type)))
                                               (t
                                                (org-glance-view:add-headline view headline))))
-                  ;; (org-glance-event:RM (org-glance-view:remove-headline view hash))
+                  (org-glance-event:RM (org-glance-view:remove-headline view hash))
                   (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
           (org-glance-view:set-offset view world-offset))))))
 
