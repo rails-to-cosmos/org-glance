@@ -67,17 +67,8 @@
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
-
-  (setq org-glance-current-world
-        (org-glance-log:benchmark
-          (org-glance-world:create org-glance-directory)))
-
-  (thread-first org-glance-current-world
-    (org-glance-world:add-dimension (org-glance-dimension :name "Linked" :partition 'linked))
-    (org-glance-world:add-dimension (org-glance-dimension :name "Pure" :partition 'pure))
-    (org-glance-world:add-dimension (org-glance-dimension :name "State" :partition 'state))
-    (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag :read-only t))
-    (org-glance-world:persist)))
+  (setq org-glance-current-world (org-glance-log:benchmark
+                                   (org-glance-world:create org-glance-directory))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

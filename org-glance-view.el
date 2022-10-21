@@ -70,7 +70,7 @@
                (view-exists? (and (f-exists? view-location)
                                   (f-file? view-location)
                                   cached-view))
-               (headlines (org-glance-world:headlines world))
+               (headlines (org-glance-world:get-headlines world))
                (view (org-glance-view :world world
                                       :type type
                                       :location view-location
@@ -95,7 +95,11 @@
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (eval (org-glance- view :type) (org-glance-headline:partitions headline)))
+  (eval (org-glance- view :type) (org-glance-world:dim-eval (org-glance- view :world) headline)))
+
+;; (org-glance-world:dim-eval
+;;  org-glance-world:dimensions
+;;  (org-glance-world:get-headline org-glance-current-world "0167ff8f9ea88e54b5d8df7ea2ebe23a"))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -139,7 +143,7 @@
                 "#+STARTUP: overview"
                 (format "#+TYPE: %s :: %s"
                         (org-glance- view :world :location)
-                        (org-glance- view :type))
+                        (cl-prin1-to-string (org-glance- view :type)))
                 (format "#+OFFSET: %s"
                         (org-glance- view :offset))
                 (format "#+PROPERTY: ATTACH_DIR ./../../resources/%s/%s/"
@@ -328,7 +332,7 @@
                            (org-glance-headline-at-point)))
                (old-hash (org-glance-view:get-marker-hash view midx))
                (new-hash (org-glance- headline :hash)))
-          (org-glance-world:update world old-hash headline)
+          (org-glance-world:update-headline world old-hash headline)
           (org-glance-view:set-marker-changed view midx nil)
           (org-glance-view:set-marker-hash view midx new-hash)
           (unless (org-glance-view:member? view headline)

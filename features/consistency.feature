@@ -420,17 +420,18 @@ Feature: Consistent Edit
     # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
+  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 
-    When I alter world "Adventures" add dimension "State" partition by "state"
+    # When I alter world "Adventures" add dimension "State" partition by "state"
     And add headlines to world "Adventures"
       """
       * TODO Niagara Waterfalls
       """
 
-    Then world "Adventures" should contain 1 dimension
-    And world "Adventures" should contain dimension "State"
+    # Then world "Adventures" should contain 1 dimension
+    # And world "Adventures" should contain dimension "State"
     And world "Adventures" should contain view "TODO" derived from dimension "State"
 
     When I visit view "TODO" derived from dimension "State" in world "Adventures"

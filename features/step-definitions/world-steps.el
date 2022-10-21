@@ -71,7 +71,7 @@
       (lambda (world-name expected-count)
         (let ((world (org-glance-test:get-world world-name)))
           (should (= (string-to-number expected-count)
-                     (length (org-glance-world:headlines world)))))))
+                     (length (org-glance-world:get-headlines world)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (world-name title)
@@ -109,7 +109,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for commented? = (org-glance- headline :commented?)
            unless (null commented?)
            count 1 into count
@@ -119,7 +119,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for archived? = (org-glance- headline :archived?)
            unless (null archived?)
            count 1 into count
@@ -129,7 +129,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for closed? = (org-glance- headline :closed?)
            unless (null closed?)
            count 1 into count
@@ -139,7 +139,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for linked? = (org-glance- headline :linked?)
            unless (null linked?)
            count 1 into count
@@ -149,7 +149,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for propertized? = (org-glance- headline :propertized?)
            unless (null propertized?)
            count 1 into count
@@ -159,7 +159,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for encrypted? = (org-glance- headline :encrypted?)
            unless (null encrypted?)
            count 1 into count
@@ -169,7 +169,7 @@
       (lambda (world-name expected-count expected-class)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world:headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for tags = (org-glance- headline :tags)
            when (member (downcase expected-class) tags)
            count 1 into count
@@ -184,25 +184,6 @@
       (lambda (world-name)
         (let ((world (org-glance-test:get-world world-name)))
           (should (eq world (org-glance-view:get-buffer-world))))))
-
-(When "^I? ?alter world \"\\([^\"]+\\)\" add dimension \"\\([^\"]+\\)\" partition by \"\\([^\"]+\\)\"$"
-  (lambda (world-name dimension-name partition-by)
-    (org-glance-log:scenario "Alter world \"%s\" add dimension \"%s\" partition by \"%s\""
-      world-name dimension-name partition-by)
-    (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world:add-dimension world
-        (org-glance-dimension :name dimension-name :partition (intern partition-by)))
-      (org-glance-world:persist world))))
-
-(Then "^world \"\\([^\"]+\\)\" should contain \\([[:digit:]]+\\) dimensions?$"
-  (lambda (world-name num-dimensions)
-    (let ((world (org-glance-test:get-world world-name)))
-      (should (= (string-to-number num-dimensions) (hash-table-count (org-glance- world :dimensions)))))))
-
-(Then "^world \"\\([^\"]+\\)\" should contain dimension \"\\([^\"]+\\)\"$"
-  (lambda (world-name dimension-name)
-    (let ((world (org-glance-test:get-world world-name)))
-      (should (gethash (downcase dimension-name) (org-glance- world :dimensions))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)

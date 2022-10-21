@@ -355,11 +355,5 @@ Return t if it is or raise `user-error' otherwise."
         (org-back-to-heading-or-point-min)
         (org-at-heading-p))))
 
-(cl-defun org-glance-headline:partitions (headline)
-  (a-list 'tag (mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags))
-          'state (list (intern (downcase (org-glance- headline :state))))
-          'linked (list (org-glance- headline :linked?))
-          'pure (list (null (org-glance- headline :linked?)))))
-
 (provide 'org-glance-headline)
 ;;; org-glance-headline.el ends here

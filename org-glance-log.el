@@ -1,9 +1,10 @@
-;; (defvar org-glance-log:enabled-loggers
-;;   '(benchmark
-;;     cash
-;;     scenario
-;;     context
-;;     ))
+(require 'a)
+
+(defvar org-glance-log:loggers
+  (a-list :event nil
+          :headline nil
+          :cache nil
+          :dimension nil))
 
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
@@ -11,6 +12,12 @@
 (defconst org-glance-log:enable-reason-report nil)
 (defconst org-glance-log:enable-context-report nil)
 (defconst org-glance-log:enable-scenario-report nil)
+
+(cl-defmacro org-glance-log (logger &rest args)
+  (declare (indent 2))
+  (when (a-get org-glance-log:loggers logger)
+    `(let ((inhibit-message nil))
+       (message (format "[%s] %s" ,logger (format ,@args))))))
 
 (defmacro org-glance-log:benchmark (&rest body)
   "Evaluate FN and message the time taken.
