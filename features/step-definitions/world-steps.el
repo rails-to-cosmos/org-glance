@@ -197,8 +197,11 @@
   (lambda (view-name dimension-name world-name)
     (org-glance-log:scenario "Select derived view \"%s -> %s\" from world \"%s\""
       dimension-name view-name world-name)
-    (let ((world (org-glance-test:get-world world-name)))
-      (find-file (f-join (org-glance- world :location)
+    (let* ((world (org-glance-test:get-world world-name))
+           (file (f-join (org-glance- world :location)
                          "dimensions"
                          (downcase dimension-name)
-                         (format "%s.org" (downcase view-name)))))))
+                         (format "%s.org" (downcase view-name)))))
+      (find-file file)
+      (org-glance-log :contents "Buffer %s contents: %s" file (buffer-substring-no-properties (point-min) (point-max)))
+      )))

@@ -286,7 +286,9 @@ achieved by calling `org-glance-world:persist' method."
      for (dimension . partitions) in (org-glance-world:dim-eval world headline)
      do (dolist (partition partitions)
           (when (and partition (not (string-empty-p (format "%s" partition))))
-            (let ((predicate `(member ,partition ,dimension))
+            (let ((predicate (cl-typecase partition
+                               (symbol `(member (quote ,partition) ,dimension))
+                               (t `(member ,partition ,dimension))))
                   (location (f-join (org-glance- world :location)
                                     "dimensions"
                                     (downcase (format "%s" dimension))

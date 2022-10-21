@@ -4,7 +4,8 @@
   (a-list :event nil
           :headline nil
           :cache nil
-          :dimension nil))
+          :dimension nil
+          :contents t))
 
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
