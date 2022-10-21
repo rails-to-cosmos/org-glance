@@ -105,31 +105,31 @@
 
 (cl-defun org-glance-view:get-marker-position (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- (aref (org-glance- view :markers) midx) :position)
+      (org-glance- view :markers [midx] :position)
     (point-max)))
 
 (cl-defun org-glance-view:set-marker-position (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (setf (org-glance- (aref (org-glance- view :markers) midx) :position) val)))
+      (setf (org-glance- view :markers [midx] :position) val)))
 
 (cl-defun org-glance-view:set-marker-hash (view midx val)
   (org-glance-view:if-safe-marker view midx
       (progn
         (remhash (org-glance-view:get-marker-hash view midx) (org-glance- view :hash->midx))
         (puthash val midx (org-glance- view :hash->midx))
-        (setf (org-glance- (aref (org-glance- view :markers) midx) :hash) val))))
+        (setf (org-glance- view :markers [midx] :hash) val))))
 
 (cl-defun org-glance-view:get-marker-hash (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- (aref (org-glance- view :markers) midx) :hash)))
+      (org-glance- view :markers [midx] :hash)))
 
 (cl-defun org-glance-view:marker-changed? (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- (aref (org-glance- view :markers) midx) :changed?)))
+      (org-glance- view :markers [midx] :changed?)))
 
 (cl-defun org-glance-view:set-marker-changed (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (setf (org-glance- (aref (org-glance- view :markers) midx) :changed?) val)))
+      (setf (org-glance- view :markers [midx] :changed?) val)))
 
 (cl-defun org-glance-view:header (view)
   "Generate header for VIEW."
@@ -404,7 +404,8 @@
                                                (org-glance-view:add-headline view headline))))
                   (org-glance-event:RM (org-glance-view:remove-headline view (org-glance- event :hash)))
                   (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
-          (org-glance-view:set-offset view world-offset))))))
+          (org-glance-view:set-offset view world-offset)
+          (save-buffer))))))
 
 (cl-defun org-glance-view:offset (view)
   (declare (indent 1))

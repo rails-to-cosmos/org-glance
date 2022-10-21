@@ -296,7 +296,7 @@ Feature: Consistent Edit
     SCHEDULED: <2022-01-01 Sat>
     """
 
-    Then headline "Music Festival 2022" should be changed
+    # Then headline "Music Festival 2022" should be changed
 
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to

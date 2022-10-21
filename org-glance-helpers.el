@@ -5,13 +5,6 @@
 (require 'eieio)
 (require 'thunk)
 
-(defmacro org-glance-class (name superclasses slots &rest options-and-doc)
-  "`defclass' wrapper that avoids compile-time slot declaration warnings."
-  (declare (indent 3))
-  `(progn
-     (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
-     (defclass ,name ,superclasses ,slots ,@options-and-doc)))
-
 (defmacro org-glance- (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
@@ -19,9 +12,24 @@ Example: (org-glance- view :world :location)"
   (declare (indent 1))
   (cl-reduce
    (lambda (acc slot)
-     `(slot-value ,acc ,slot))
+     (let ((s-slot (format "%s" slot)))
+       (cond
+         ;; convert :-prefixed symbols to slot names
+         ((s-starts-with? ":" s-slot) `(slot-value ,acc ,slot))
+         ;; convert other symbols to array indices
+         ((and (s-starts-with? "[" s-slot)
+               (s-ends-with? "]" s-slot))
+          `(aref ,acc ,(intern (substring s-slot 1 (- (length s-slot) 1)))))
+         (t (user-error "Unknown slot reference: %s" slot)))))
    slots
    :initial-value object))
+
+(defmacro org-glance-class (name superclasses slots &rest options-and-doc)
+  "`defclass' wrapper that avoids compile-time slot declaration warnings."
+  (declare (indent 3))
+  `(progn
+     (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
+     (defclass ,name ,superclasses ,slots ,@options-and-doc)))
 
 (cl-defmacro org-glance--with-temp-file (file &rest forms)
   (declare (indent 1))

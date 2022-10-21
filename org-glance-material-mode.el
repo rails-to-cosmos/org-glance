@@ -21,7 +21,6 @@ editor."
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
          (org-glance-view:fetch)
          (org-overview)
-         (save-buffer)
          (add-hook 'before-save-hook #'org-glance-view:commit nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-view:commit t)

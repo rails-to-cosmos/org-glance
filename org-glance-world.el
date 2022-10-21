@@ -337,15 +337,32 @@ achieved by calling `org-glance-world:persist' method."
                    (--filter (member (file-name-extension it) org-glance-scope-extensions)
                              (directory-files location)))))
 
+(cl-defun org-glance-world:choose-dimension (world)
+  (completing-read "Choose dimension: "
+                   (org-glance-world:list-dimensions world)
+                   nil
+                   t))
+
+(cl-defun org-glance-world:locate-dimension (world dimension)
+  (f-join (org-glance- world :location)
+          "dimensions"
+          (car (s-split "=" dimension))
+          (format "%s.org" (cadr (s-split "=" dimension)))))
+
 (cl-defun org-glance-world:browse (world)
-  (let ((dim (completing-read "Browse dimension: "
-                              (org-glance-world:list-dimensions org-glance-current-world)
-                              nil
-                              t)))
-    (find-file (f-join (org-glance- world :location)
-                       "dimensions"
-                       (car (s-split "=" dim))
-                       (format "%s.org" (cadr (s-split "=" dim)))))))
+  (let* ((dimension (org-glance-world:choose-dimension world))
+         (location (org-glance-world:locate-dimension world dimension)))
+    (find-file location)))
+
+(cl-defun org-glance-world:agenda (world)
+  (let* ((dimension (org-glance-world:choose-dimension world))
+         (location (org-glance-world:locate-dimension world dimension))
+         (org-agenda-files (list location))
+         (org-agenda-overriding-header "org-glance agenda")
+         (org-agenda-start-on-weekday nil)
+         (org-agenda-span 21)
+         (org-agenda-start-day "-7d"))
+    (org-agenda-list)))
 
 (cl-defun org-glance-world:capture (world
                                     &key
