@@ -7,6 +7,12 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
+* PENDING Add link dimension
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-10-21 Fri 10:02]
+- State "STARTED"    from "TODO"       [2022-10-21 Fri 10:00]
+CLOCK: [2022-10-21 Fri 10:00]--[2022-10-21 Fri 10:02] =>  0:02
+:END:
 * DONE Support RM event
 CLOSED: [2022-10-21 Fri 09:51]
 :LOGBOOK:

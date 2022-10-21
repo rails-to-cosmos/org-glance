@@ -69,6 +69,7 @@
           (org-glance-world:create org-glance-directory)))
 
   (thread-first org-glance-current-world
+    (org-glance-world:add-dimension (org-glance-dimension :name "Link" :partition 'link))
     (org-glance-world:add-dimension (org-glance-dimension :name "State" :partition 'state))
     (org-glance-world:add-dimension (org-glance-dimension :name "Tag" :partition 'tag :read-only t))
     ;; (org-glance-world:add-headline (org-glance-headline-from-string "* TODO task1 :task:"))

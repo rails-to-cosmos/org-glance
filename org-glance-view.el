@@ -279,6 +279,9 @@
       (org-glance-headline:with-headline-at-point
         (let ((inhibit-message t)
               (org-log-state-notes-into-drawer nil)
+              (org-log-into-drawer nil)
+              (org-log-note-state nil)
+              (org-todo-log-states nil)
               (org-log-done nil))
           (org-edit-headline (org-glance- headline :title))
           (org-todo (org-glance- headline :state))
