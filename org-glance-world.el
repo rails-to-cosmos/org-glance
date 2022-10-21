@@ -13,7 +13,7 @@
 (require 'eieio)
 
 (require 'org-glance-changelog)
-(require 'org-glance-debug)
+(require 'org-glance-log)
 (require 'org-glance-event)
 (require 'org-glance-headline)
 (require 'org-glance-helpers)
@@ -295,13 +295,13 @@ achieved by calling `org-glance-world:persist' method."
       (insert (prin1-to-string (org-glance- world :dimensions))))))
 
 (cl-defun org-glance-world:load-dimensions (location)
-  (org-glance-debug "Load dimensions from \"%s\"" location)
+  (org-glance-log:debug "Load dimensions from \"%s\"" location)
   (let ((source-file (f-join location "dimensions" "dimensions.el")))
     (if (and (f-exists? source-file) (f-readable? source-file))
         (with-temp-buffer
           (insert-file-contents-literally source-file)
           (read (buffer-string)))
-      (org-glance-debug "Dimensions not found in \"%s\"" location)
+      (org-glance-log:debug "Dimensions not found in \"%s\"" location)
       (make-hash-table :test #'equal))))
 
 (cl-defun org-glance-world:add-dimension (world dimension)
@@ -372,7 +372,7 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-capture:after-finalize-hook ()
   "Register captured headline in metastore."
   (org-glance-headline:map (headline)
-    (org-glance-debug "Register headline \"%s\" in world \"%s\" "
+    (org-glance-log:debug "Register headline \"%s\" in world \"%s\" "
       (org-glance- headline :title)
       org-glance-local-world)
     (org-glance-world:add-headline org-glance-local-world headline))
@@ -380,7 +380,7 @@ achieved by calling `org-glance-world:persist' method."
   (org-glance-world:persist org-glance-local-world)
 
   (let ((file (buffer-file-name)))
-    (org-glance-debug "Remove temp file \"%s\"" file)
+    (org-glance-log:debug "Remove temp file \"%s\"" file)
     (kill-buffer (get-file-buffer file))
     (delete-file file)))
 

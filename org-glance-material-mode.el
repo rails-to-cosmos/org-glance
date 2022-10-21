@@ -4,7 +4,7 @@
 (require 'cl-macs)
 (require 'highlight)
 
-(require 'org-glance-debug)
+(require 'org-glance-log)
 (require 'org-glance-headline)
 (require 'org-glance-world)
 (require 'org-glance-view)

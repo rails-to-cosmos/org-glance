@@ -4,7 +4,7 @@
 (require 'dash)
 (require 'org-glance)
 (require 'org-glance-helpers)
-(require 'org-glance-debug)
+(require 'org-glance-log)
 
 (defvar org-glance-support-path (f-dirname load-file-name))
 (defvar org-glance-features-path (f-parent org-glance-support-path))
@@ -78,7 +78,7 @@
    (delete-directory org-glance-test:location t)))
 
 (Fail
- (org-glance-debug "Scenario has failed. Check out test directory for details: %s" org-glance-test:location)
+ (org-glance-log:debug "Scenario has failed. Check out test directory for details: %s" org-glance-test:location)
  (f-delete (f-join org-glance-test:location "ecukes.lock")))
 
 (Teardown

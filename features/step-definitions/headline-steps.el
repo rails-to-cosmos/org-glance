@@ -203,7 +203,7 @@
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
   (lambda (title)
     (org-edit-headline title)
-    (org-glance-debug "")))
+    (org-glance-log:debug "")))
 
 (And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
      (lambda (title contents)
@@ -239,7 +239,7 @@
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
-                         (org-glance-debug "Compare \"%s\" vs \"%s\"" title (org-glance- headline :title))
+                         (org-glance-log:debug "Compare \"%s\" vs \"%s\"" title (org-glance- headline :title))
                          (string= (org-glance- headline :title) title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"

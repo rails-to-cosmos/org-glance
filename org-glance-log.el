@@ -1,9 +1,16 @@
+;; (defvar org-glance-log:enabled-loggers
+;;   '(benchmark
+;;     cash
+;;     scenario
+;;     context
+;;     ))
+
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
-(defconst org-glance-log:enable-debug-report t)
-(defconst org-glance-log:enable-reason-report t)
-(defconst org-glance-log:enable-context-report t)
-(defconst org-glance-log:enable-scenario-report t)
+(defconst org-glance-log:enable-debug-report nil)
+(defconst org-glance-log:enable-reason-report nil)
+(defconst org-glance-log:enable-context-report nil)
+(defconst org-glance-log:enable-scenario-report nil)
 
 (defmacro org-glance-log:benchmark (&rest body)
   "Evaluate FN and message the time taken.
@@ -34,7 +41,7 @@ The return value is the value of the final form in FN."
     `(let ((inhibit-message nil))
        (message (concat "> [scenario] " (upcase (format ,@args)))))))
 
-(cl-defmacro org-glance-debug (&rest args)
+(cl-defmacro org-glance-log:debug (&rest args)
   (declare (indent 1))
   (when org-glance-log:enable-debug-report
     `(let ((inhibit-message nil))
@@ -58,4 +65,4 @@ The return value is the value of the final form in FN."
     `(let ((inhibit-message nil))
        (message (concat "> [context] " (format ,@args))))))
 
-(provide 'org-glance-debug)
+(provide 'org-glance-log)

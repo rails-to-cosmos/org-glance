@@ -32,7 +32,7 @@
 
 (require 'org)
 (require 'org-element)
-(require 'org-glance-debug)
+(require 'org-glance-log)
 (require 'org-glance-helpers)
 (require 'org-glance-types)
 (require 'org-glance-scope)
