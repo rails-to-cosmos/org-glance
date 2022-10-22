@@ -71,6 +71,14 @@
      (headline :type org-glance-headline-header
                :initarg :headline)))
 
+(org-glance-class org-glance-link nil
+    ((title :type string
+            :initarg :title)
+     (org-link :type string
+               :initarg :org-link)
+     (position :type number
+               :initarg :position)))
+
 (org-glance-class org-glance-headline-header ()
     ((hash :type org-glance-hash
            :initarg :hash
@@ -100,20 +108,23 @@
               :initarg :linked?
               :documentation "Does the headline contain org links?")
      (store? :type boolean
-                   :initarg :store?
-                   :documentation "Does the headline contain user properties?"))
+             :initarg :store?
+             :documentation "Does the headline contain user properties?"))
   "Limited edition of `org-glance-headline'.")
 
 (org-glance-class org-glance-headline (org-glance-headline-header)
-    ((contents :type string
+    ((links :type list
+            :initarg :links
+            :documentation "Links.")
+     (contents :type string
                :initarg :contents
                :documentation "Raw contents of headline.")
-     (org-properties :type list
-                     :initarg :org-properties
+     (properties :type list
+                     :initarg :properties
                      :documentation "Org-mode properties.")
      (store :type list
-                      :initarg :store
-                      :documentation "Properties specified by user in headline contents."))
+            :initarg :store
+            :documentation "Properties specified by user in headline contents."))
   "Serializable headline with additional features on top of `org-element'.")
 
 (defconst org-glance-encrypted-re "aes-encrypted V [0-9]+.[0-9]+-.+\n"
@@ -143,7 +154,7 @@
                           :store? (org-glance- headline :store?)))
     (org-glance-headline-header headline)))
 
-(cl-defun org-glance-headline--ast-normalized ()
+(cl-defun org-glance-ast:get-buffer-ast ()
   (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))
                (element (car subtree))
                ;; get offset of the topmost element:
@@ -155,7 +166,7 @@
          do (org-element-put-property headline :level (- level indent-offset))))
     subtree))
 
-(cl-defun org-glance-headline--store (contents)
+(cl-defun org-glance-headline:extract-store (contents)
   (cl-loop for (_ key value)
      in (append (s-match-strings-all org-glance-user-property-1-re contents)
                 (s-match-strings-all org-glance-user-property-2-re contents))
@@ -164,13 +175,13 @@
      finally return (seq-uniq result #'(lambda (a b) (and (string= (car a) (car b))
                                                      (string= (cdr a) (cdr b)))))))
 
-(cl-defun org-glance-headline--ast-contents (ast)
+(cl-defun org-glance-ast:contents (ast)
   (->> ast
        org-element-interpret-data
        substring-no-properties
        s-trim))
 
-(cl-defun org-glance-headline--ast-title (ast)
+(cl-defun org-glance-ast:title (ast)
   (with-temp-buffer
     (insert (or (org-element-property :TITLE (car ast))
                 (org-element-property :raw-value (car ast))
@@ -181,7 +192,7 @@
          substring-no-properties
          s-trim)))
 
-(cl-defun org-glance-headline--ast-state (contents)
+(cl-defun org-glance-ast:state (contents)
   (org-glance:with-temp-buffer
    (insert contents)
    (goto-char (point-min))
@@ -191,29 +202,29 @@
      substring-no-properties
      upcase)))
 
-(cl-defun org-glance-headline--ast-hash (contents)
+(cl-defun org-glance-ast:hash (contents)
   (->> contents
        s-trim
        downcase
        (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
        (secure-hash 'md5)))
 
-(cl-defun org-glance-headline--ast-class (ast)
+(cl-defun org-glance-ast:class (ast)
   (-map #'downcase (org-element-property :tags (car ast))))
 
-(cl-defun org-glance-headline--ast-commented? (ast)
+(cl-defun org-glance-ast:commented? (ast)
   (not (null (org-element-property :commentedp (car ast)))))
 
-(cl-defun org-glance-headline--ast-closed? (ast)
+(cl-defun org-glance-ast:closed? (ast)
   (not (null (org-element-property :closed (car ast)))))
 
-(cl-defun org-glance-headline--ast-archived? (ast)
+(cl-defun org-glance-ast:archived? (ast)
   (not (null (org-element-property :archivedp (car ast)))))
 
-(cl-defun org-glance-headline--ast-encrypted? (contents)
+(cl-defun org-glance-ast:encrypted? (contents)
   (not (null (s-match-strings-all org-glance-encrypted-re contents))))
 
-(cl-defun org-glance-headline--ast-linked? (contents)
+(cl-defun org-glance-ast:linked? (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
 (cl-defun org-glance-headline-at-point (&optional (point (point)))
@@ -222,25 +233,38 @@
     (goto-char point)
     (cond ((org-before-first-heading-p) nil)
           (t (org-glance-headline:with-headline-at-point
-               (let* ((ast (org-glance-headline--ast-normalized))
-                      (contents (org-glance-headline--ast-contents ast))
-                      (store (org-glance-headline--store contents)))
+               (let* ((ast (org-glance-ast:get-buffer-ast))
+                      (contents (org-glance-ast:contents ast))
+                      (store (org-glance-headline:extract-store contents))
+                      (links (cl-loop
+                                for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
+                                collect (org-glance-link
+                                         :title (substring-no-properties
+                                                 (or (-some->> element
+                                                       org-element-contents
+                                                       org-element-interpret-data)
+                                                     (org-element-property :raw-link element)))
+                                         :org-link (s-trim (buffer-substring-no-properties
+                                                            (org-element-property :begin element)
+                                                            (org-element-property :end element)))
+                                         :position (org-element-property :begin element)))))
                  (org-glance-headline
-                  :title (org-glance-headline--ast-title ast)
-                  :state (pcase (org-glance-headline--ast-state contents)
+                  :title (org-glance-ast:title ast)
+                  :state (pcase (org-glance-ast:state contents)
                            ((pred null) "")
                            (state state))
-                  :hash (org-glance-headline--ast-hash contents)
-                  :tags (org-glance-headline--ast-class ast)
-                  :commented? (org-glance-headline--ast-commented? ast)
-                  :archived? (org-glance-headline--ast-archived? ast)
-                  :closed? (org-glance-headline--ast-closed? ast)
-                  :encrypted? (org-glance-headline--ast-encrypted? contents)
-                  :linked? (org-glance-headline--ast-linked? contents)
+                  :hash (org-glance-ast:hash contents)
+                  :tags (org-glance-ast:class ast)
+                  :commented? (org-glance-ast:commented? ast)
+                  :archived? (org-glance-ast:archived? ast)
+                  :closed? (org-glance-ast:closed? ast)
+                  :encrypted? (org-glance-ast:encrypted? contents)
+                  :linked? (not (null links))
+                  :links links
                   :store? (not (null store))
+                  :store store
                   :contents contents
-                  :org-properties (org-entry-properties)
-                  :store store)))))))
+                  :properties (org-entry-properties))))))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
@@ -254,10 +278,6 @@
 (cl-defun org-glance-headline-from-region (beg end)
   "Create `org-glance-headline' from region."
   (org-glance-headline-from-string (buffer-substring-no-properties beg end)))
-
-(cl-defun org-glance-headline-serialize (headline)
-  "Serialize HEADLINE."
-  (prin1-to-string headline))
 
 (cl-defgeneric org-glance-headline-equal-p (a b)
   "Return t if A equals B.")

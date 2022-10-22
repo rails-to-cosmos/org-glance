@@ -51,7 +51,7 @@
                   (state     . (intern (downcase (org-glance- headline :state))))
                   (title     . (org-glance- headline :title))
                   (linked    . (org-glance- headline :linked?))
-                  (store    . (org-glance- headline :store?))
+                  (store     . (org-glance- headline :store?))
                   (encrypted . (org-glance- headline :encrypted?))))
      (views
       :type hash-table
@@ -319,9 +319,8 @@ achieved by calling `org-glance-world:persist' method."
           (car (s-split "=" dimension))
           (format "%s.org" (cadr (s-split "=" dimension)))))
 
-(cl-defun org-glance-world:browse (world)
-  (let* ((dimension (org-glance-world:choose-dimension world))
-         (location (org-glance-world:locate-dimension world dimension)))
+(cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
+  (let ((location (org-glance-world:locate-dimension world dimension)))
     (find-file location)))
 
 (cl-defun org-glance-world:agenda (world)
@@ -370,5 +369,24 @@ achieved by calling `org-glance-world:persist' method."
     (org-glance-log:debug "Remove temp file \"%s\"" file)
     (kill-buffer (get-file-buffer file))
     (delete-file file)))
+
+(cl-defun org-glance-world:jump (world)
+  (let ((linked-dimension (a-get (org-glance- org-glance-current-world :dimensions) 'linked)))
+    (cl-assert linked-dimension)
+    (progn ;;save-window-excursion
+      (org-glance-world:browse world "linked=t")
+      (when-let (headlines (org-glance-log :performance
+                               (org-glance-headline:map (headline)
+                                 (cons (org-glance- headline :title)
+                                       (point-min)))))
+        (let* ((title (completing-read "Jump to headline: " headlines))
+               (headline (org-glance-headline-at-point (a-get headlines title)))
+               (links (org-glance- headline :links))
+               (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
+                                                   (--drop-while (not (string= link-title (org-glance- it :title))) links)))
+                           ((= (length links) 1) (car links))
+                           (t (user-error "Unable to find links in this headline")))))
+          (goto-char (org-glance- link :position))
+          (org-open-at-point))))))
 
 (provide 'org-glance-world)

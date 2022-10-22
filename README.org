@@ -7,8 +7,12 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-* PENDING Add link dimension
+* TODO Implement backfill operation
+* TODO Fetch and backfill operations should work in background
+* DONE Add link dimension
+CLOSED: [2022-10-22 Sat 13:03]
 :LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-10-22 Sat 13:03]
 - State "PENDING"    from "STARTED"    [2022-10-21 Fri 10:02]
 - State "STARTED"    from "TODO"       [2022-10-21 Fri 10:00]
 CLOCK: [2022-10-21 Fri 10:00]--[2022-10-21 Fri 10:02] =>  0:02

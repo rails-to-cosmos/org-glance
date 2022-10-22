@@ -5,7 +5,8 @@
           :headline nil
           :cache nil
           :dimension nil
-          :contents nil))
+          :contents nil
+          :performance nil))
 
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
@@ -16,9 +17,32 @@
 
 (cl-defmacro org-glance-log (logger &rest args)
   (declare (indent 2))
-  (when (a-get org-glance-log:loggers logger)
-    `(let ((inhibit-message nil))
-       (message (format "[%s] %s" ,logger (format ,@args))))))
+  (if (a-get org-glance-log:loggers logger)
+      (pcase logger
+        (:performance (let ((value (make-symbol "value"))
+                            (start (make-symbol "start"))
+                            (gcs (make-symbol "gcs"))
+                            (gc (make-symbol "gc"))
+                            (inhibit-message nil))
+                        `(let ((,gc gc-elapsed)
+                               (,gcs gcs-done)
+                               (,start (current-time))
+                               (,value ,@args))
+                           (message "[%s of %s] Elapsed time: %fs%s"
+                                    ,logger
+                                    (caar (quote ,args))
+                                    (float-time (time-since ,start))
+                                    (if (> (- gcs-done ,gcs) 0)
+                                        (format " (%fs in %d GCs)"
+                                                (- gc-elapsed ,gc)
+                                                (- gcs-done ,gcs))
+                                      ""))
+                           ,value)))
+        (_ `(let ((inhibit-message nil))
+              (message (format "[%s] %s" ,logger (format ,@args))))))
+    (pcase logger
+      (:performance `(progn ,@args))
+      (_ nil))))
 
 (defmacro org-glance-log:benchmark (&rest body)
   "Evaluate FN and message the time taken.

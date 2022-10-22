@@ -64,6 +64,10 @@
   (interactive)
   (org-glance-world:agenda org-glance-current-world))
 
+(cl-defun org-glance-jump ()
+  (interactive)
+  (org-glance-world:jump org-glance-current-world))
+
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
