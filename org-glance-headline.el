@@ -275,21 +275,6 @@
      (outline-next-heading))
    (org-glance-headline-at-point)))
 
-(cl-defun org-glance-headline-from-region (beg end)
-  "Create `org-glance-headline' from region."
-  (org-glance-headline-from-string (buffer-substring-no-properties beg end)))
-
-(cl-defgeneric org-glance-headline-equal-p (a b)
-  "Return t if A equals B.")
-
-(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline) (b org-glance-headline))
-  "Return t if A equals B."
-  (string= (org-glance- a :hash) (org-glance- b :hash)))
-
-(cl-defmethod org-glance-headline-equal-p ((a org-glance-headline-header) (b org-glance-headline-header))
-  "Return t if A equals B."
-  (string= (org-glance- a :hash) (org-glance- b :hash)))
-
 (cl-defun org-glance-headline:save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
