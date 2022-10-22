@@ -150,8 +150,8 @@
         (cl-loop
            with world = (org-glance-test:get-world world-name)
            for headline in (org-glance-world:get-headlines world)
-           for propertized? = (org-glance- headline :propertized?)
-           unless (null propertized?)
+           for store? = (org-glance- headline :store?)
+           unless (null store?)
            count 1 into count
            finally (should (= count (string-to-number expected-count))))))
 

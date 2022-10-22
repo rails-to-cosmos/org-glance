@@ -99,8 +99,8 @@
      (linked? :type boolean
               :initarg :linked?
               :documentation "Does the headline contain org links?")
-     (propertized? :type boolean
-                   :initarg :propertized?
+     (store? :type boolean
+                   :initarg :store?
                    :documentation "Does the headline contain user properties?"))
   "Limited edition of `org-glance-headline'.")
 
@@ -111,8 +111,8 @@
      (org-properties :type list
                      :initarg :org-properties
                      :documentation "Org-mode properties.")
-     (user-properties :type list
-                      :initarg :user-properties
+     (store :type list
+                      :initarg :store
                       :documentation "Properties specified by user in headline contents."))
   "Serializable headline with additional features on top of `org-element'.")
 
@@ -127,26 +127,21 @@
   "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
   "How to parse user specified properties.")
 
-(cl-defgeneric org-glance-headline-header:from-headline (headline)
-  "Make instance of `org-glance-headline-header' from HEADLINE.")
-
-(cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline))
-  "Make instance of `org-glance-headline-header' from HEADLINE."
-  (org-glance-headline-header
-   :hash (org-glance- headline :hash)
-   :title (org-glance- headline :title)
-   :state (org-glance- headline :state)
-   :tags (org-glance- headline :tags)
-   :commented? (org-glance- headline :commented?)
-   :archived? (org-glance- headline :archived?)
-   :closed? (org-glance- headline :closed?)
-   :encrypted? (org-glance- headline :encrypted?)
-   :linked? (org-glance- headline :linked?)
-   :propertized? (org-glance- headline :propertized?)))
-
-(cl-defmethod org-glance-headline-header:from-headline ((headline org-glance-headline-header))
-  "Make instance of `org-glance-headline-header' from HEADLINE."
-  headline)
+(cl-defun org-glance-headline-header:from-headline (headline)
+  "Infer instance of `org-glance-headline-header' from HEADLINE."
+  (cl-typecase headline
+    (org-glance-headline (org-glance-headline-header
+                          :hash (org-glance- headline :hash)
+                          :title (org-glance- headline :title)
+                          :state (org-glance- headline :state)
+                          :tags (org-glance- headline :tags)
+                          :commented? (org-glance- headline :commented?)
+                          :archived? (org-glance- headline :archived?)
+                          :closed? (org-glance- headline :closed?)
+                          :encrypted? (org-glance- headline :encrypted?)
+                          :linked? (org-glance- headline :linked?)
+                          :store? (org-glance- headline :store?)))
+    (org-glance-headline-header headline)))
 
 (cl-defun org-glance-headline--ast-normalized ()
   (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))
@@ -160,7 +155,7 @@
          do (org-element-put-property headline :level (- level indent-offset))))
     subtree))
 
-(cl-defun org-glance-headline--user-properties (contents)
+(cl-defun org-glance-headline--store (contents)
   (cl-loop for (_ key value)
      in (append (s-match-strings-all org-glance-user-property-1-re contents)
                 (s-match-strings-all org-glance-user-property-2-re contents))
@@ -229,7 +224,7 @@
           (t (org-glance-headline:with-headline-at-point
                (let* ((ast (org-glance-headline--ast-normalized))
                       (contents (org-glance-headline--ast-contents ast))
-                      (user-properties (org-glance-headline--user-properties contents)))
+                      (store (org-glance-headline--store contents)))
                  (org-glance-headline
                   :title (org-glance-headline--ast-title ast)
                   :state (pcase (org-glance-headline--ast-state contents)
@@ -242,10 +237,10 @@
                   :closed? (org-glance-headline--ast-closed? ast)
                   :encrypted? (org-glance-headline--ast-encrypted? contents)
                   :linked? (org-glance-headline--ast-linked? contents)
-                  :propertized? (not (null user-properties))
+                  :store? (not (null store))
                   :contents contents
                   :org-properties (org-entry-properties)
-                  :user-properties user-properties)))))))
+                  :store store)))))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
@@ -293,7 +288,7 @@
 ;;     (closed? byte)
 ;;     (encrypted? byte)
 ;;     (linked? byte)
-;;     (propertized? byte)))
+;;     (store? byte)))
 
 ;; (cl-defmethod org-glance-headline:pack ((headline org-glance-headline))
 ;;   "Pack HEADLINE according to `org-glance-headline--bindat-spec'."
@@ -306,7 +301,7 @@
 ;;              'closed (bool->int (org-glance- headline :closed?))
 ;;              'encrypted (bool->int (org-glance- headline :encrypted?))
 ;;              'linked (bool->int (org-glance- headline :linked?))
-;;              'propertized (bool->int (org-glance- headline :propertized?))))))
+;;              'store (bool->int (org-glance- headline :store?))))))
 
 ;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
 ;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))

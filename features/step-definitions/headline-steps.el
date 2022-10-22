@@ -87,11 +87,11 @@
 
 (Then "^headline at point should be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :propertized?))))
+        (should (org-glance- (org-glance-headline-at-point) :store?))))
 
 (Then "^headline at point should not be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :propertized?))))
+        (should (org-glance- (org-glance-headline-at-point) :store?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline-title)

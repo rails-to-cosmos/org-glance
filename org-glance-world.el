@@ -51,6 +51,7 @@
                   (state     . (intern (downcase (org-glance- headline :state))))
                   (title     . (org-glance- headline :title))
                   (linked    . (org-glance- headline :linked?))
+                  (store    . (org-glance- headline :store?))
                   (encrypted . (org-glance- headline :encrypted?))))
      (views
       :type hash-table
