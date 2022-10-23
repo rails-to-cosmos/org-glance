@@ -131,8 +131,7 @@ Return last committed offset."
           (org-glance-event:PUT
            (org-glance-log :events "Handle PUT event: %s" event)
            (org-glance-log :headlines "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
-           (org-glance-world:save-headline world headline)
-           )
+           (org-glance-world:save-headline world headline))
 
           (org-glance-event:UPDATE
            (org-glance-log :events "Handle UPDATE event: %s" event)
@@ -386,7 +385,8 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:filter-headlines (world &optional predicate)
   "TODO cache headlines by predicate."
   (declare (indent 1))
-  (cl-loop for headline in (org-glance-log :performance (org-glance-world:get-headlines world))
+  (cl-loop for headline in (org-glance-log :performance
+                               (org-glance-world:get-headlines world))
      when (or (null predicate) (funcall predicate headline))
      collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
 
@@ -412,7 +412,7 @@ achieved by calling `org-glance-world:persist' method."
          (store (org-glance- headline :store)))
     (condition-case nil
         (while t
-          (kill-new (alist-get (org-completing-read "Extract property: " store) store nil nil #'string=)))
+          (kill-new (alist-get (org-completing-read "Extract property (press C-g to exit): " store) store nil nil #'string=)))
       (quit
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
