@@ -3,6 +3,7 @@
 (require 'a)
 (require 'f)
 (require 's)
+(require 'ol)
 
 (declare-function s-replace-regexp 's)
 (declare-function f-mkdir-full-path 'f)
@@ -70,20 +71,28 @@
                                      (f-readable? location))))
     (cond
       ((and location-exists? cached-world)
+       (org-glance-log :cache "World has been retrieved from cache (org-glance-worlds)")
        cached-world)
       (location-exists?
+       (org-glance-log :cache "Read world from \"%s\"" location)
        (puthash location persisted-world org-glance-worlds))
       (t
        (f-mkdir-full-path location)
+       (org-glance-log :cache "World has been created from scratch (org-glance-worlds)")
        (puthash location new-world org-glance-worlds)))))
 
 (cl-defun org-glance-world:read (location)
   "Read `org-glance-world' from LOCATION."
-  (or (gethash location org-glance-worlds)
-      (puthash location
-               (org-glance-world :location location
-                                 :changelog (org-glance-changelog:read (f-join location "log" "event.log")))
-               org-glance-worlds)))
+  (or (when-let (world (gethash location org-glance-worlds))
+        (org-glance-log :cache "World has been retrieved from cache (org-glance-worlds)")
+        world)
+      (progn
+        (org-glance-log :cache "Read world from hard drive")
+        (puthash location
+                 (org-glance-world :location location
+                                   :changelog (org-glance-log :performance
+                                                  (org-glance-changelog:read (f-join location "log" "event.log"))))
+                 org-glance-worlds))))
 
 (cl-defun org-glance-world:offset (world)
   (if-let (event (org-glance-changelog:last (org-glance- world :changelog)))
@@ -144,9 +153,8 @@ Return last committed offset."
   "Put HEADLINE to WORLD."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
-    (puthash (org-glance- headline :hash)
-             headline
-             (org-glance- world :cache))
+    (org-glance-log :cache "Put headline \"%s\" to the world cache" (org-glance- headline :title))
+    (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
     world))
 
 (cl-defun org-glance-world:remove-headline (world hash)
@@ -159,7 +167,9 @@ Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-world:persist' method."
   (let ((event (org-glance-event:RM :hash hash)))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
-    (remhash hash (org-glance- world :cache))))
+    (when-let (headline (gethash hash (org-glance- world :cache)))
+      (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance- headline :title))
+      (remhash hash (org-glance- world :cache)))))
 
 (cl-defun org-glance-world:update-headline (world old-hash headline)
   "Update HEADLINE with HASH in WORLD."
@@ -171,6 +181,7 @@ achieved by calling `org-glance-world:persist' method."
                                          :headline header))
          (offset (org-glance- event :offset)))
     (org-glance-changelog:push changelog event)
+    (org-glance-log :cache "Update headline \"%s\" in the world cache" (org-glance- header :title))
     (puthash new-hash headline cache)
     (remhash old-hash cache)
     offset))
@@ -181,7 +192,7 @@ achieved by calling `org-glance-world:persist' method."
 
    ;; Search LRU cache
    (when-let (result (gethash hash (org-glance- world :cache)))
-     (org-glance-log :cache "Retrieve headline from cache (hashmap): %s" hash)
+     (org-glance-log :cache "Retrieve headline from cache (hashmap): \"%s\"" (org-glance- result :title))
      result)
 
    ;; Search staged changes
@@ -197,7 +208,7 @@ achieved by calling `org-glance-world:persist' method."
                              (org-glance-event:PUT
                               (pcase hash
                                 ((pred (string= (org-glance- event :headline :hash))) (cl-return (org-glance- event :headline))))))))
-     (org-glance-log :cache "Retrieve headline from cache (changelog*): %s" hash)
+     (org-glance-log :cache "Retrieve headline from cache (changelog*): \"%s\"" result)
      result)
 
    ;; Search persistent storage
@@ -207,10 +218,9 @@ achieved by calling `org-glance-world:persist' method."
     (goto-char (point-min))
     (unless (org-at-heading-p)
       (outline-next-heading))
-    (let ((headline (org-glance-headline-at-point)))
-      (puthash (org-glance- headline :hash)
-               headline
-               (org-glance- world :cache))))))
+    (when-let (headline (org-glance-headline-at-point))
+      (org-glance-log :cache "Put headline \"%s\" to the world cache" (org-glance- headline :title))
+      (puthash (org-glance- headline :hash) headline (org-glance- world :cache))))))
 
 (cl-defun org-glance-world:events (world)
   (org-glance-changelog:flatten
@@ -222,7 +232,7 @@ achieved by calling `org-glance-world:persist' method."
   "Return actual headline hashes from WORLD."
   (cl-loop
      with removed = (make-hash-table :test #'equal)
-     for event in (org-glance-world:events world)
+     for event in (org-glance-log :performance (org-glance-world:events world))
      when (cl-typecase event
             ((or org-glance-event:PUT org-glance-event:UPDATE)
              (not (gethash (org-glance- event :headline :hash) removed))))
@@ -371,22 +381,17 @@ achieved by calling `org-glance-world:persist' method."
     (delete-file file)))
 
 (cl-defun org-glance-world:jump (world)
-  (let ((linked-dimension (a-get (org-glance- org-glance-current-world :dimensions) 'linked)))
-    (cl-assert linked-dimension)
-    (progn ;;save-window-excursion
-      (org-glance-world:browse world "linked=t")
-      (when-let (headlines (org-glance-log :performance
-                               (org-glance-headline:map (headline)
-                                 (cons (org-glance- headline :title)
-                                       (point-min)))))
-        (let* ((title (completing-read "Jump to headline: " headlines))
-               (headline (org-glance-headline-at-point (a-get headlines title)))
-               (links (org-glance- headline :links))
-               (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
-                                                   (--drop-while (not (string= link-title (org-glance- it :title))) links)))
-                           ((= (length links) 1) (car links))
-                           (t (user-error "Unable to find links in this headline")))))
-          (goto-char (org-glance- link :position))
-          (org-open-at-point))))))
+  (let* ((headlines (cl-loop for headline in (org-glance-log :performance (org-glance-world:get-headlines world))
+                       when (org-glance- headline :linked?)
+                       collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
+         (title (completing-read "Jump to headline: " headlines))
+         (hash (a-get headlines title))
+         (headline (org-glance-world:get-headline world hash))
+         (links (org-glance- headline :links))
+         (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
+                                             (--drop-while (not (string= link-title (org-glance- it :title))) links)))
+                     ((= (length links) 1) (car links))
+                     (t (user-error "Unable to find links in this headline")))))
+    (org-link-open-from-string (org-glance- link :org-link))))
 
 (provide 'org-glance-world)

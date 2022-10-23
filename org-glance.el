@@ -71,8 +71,8 @@
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
-  (setq org-glance-current-world (org-glance-log:benchmark
-                                   (org-glance-world:create org-glance-directory))))
+  (setq org-glance-current-world (org-glance-log :performance
+                                     (org-glance-world:create org-glance-directory))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

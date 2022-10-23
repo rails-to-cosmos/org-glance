@@ -378,8 +378,8 @@
              for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
              for progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
              do
+               (redisplay)
                (org-glance-log:context "Event: %s" event)
-               (sit-for 0.01)
                (cl-typecase event
                  (org-glance-event:UPDATE (org-glance-log:scenario "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
                                           (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))

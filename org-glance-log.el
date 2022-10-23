@@ -3,10 +3,10 @@
 (defvar org-glance-log:loggers
   (a-list :event nil
           :headline nil
-          :cache nil
+          :cache t
           :dimension nil
           :contents nil
-          :performance nil))
+          :performance t))
 
 (defconst org-glance-log:enable-benchmark-report nil)
 (defconst org-glance-log:enable-cash-report nil)
