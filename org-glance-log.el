@@ -1,13 +1,13 @@
 (require 'a)
 
 (defvar org-glance-log:loggers
-  (a-list :events nil
-          :headlines nil
+  (a-list :events t
+          :headlines t
           :cache t
-          :dimensions nil
-          :sql nil
-          :contents nil
-          :markers nil
+          :dimensions t
+          :sql t
+          :contents t
+          :markers t
           :performance t
           :test t))
 
