@@ -313,27 +313,13 @@
   ;; TODO save markers for further optimizations
   (org-glance-view:with-current-buffer view
     (cl-loop
-       with markers = (let ((mark-cache-file (format "%s_markers" (org-glance- view :location))))
-                        (cond ((f-exists? mark-cache-file)
-                               (let ((view-hash (buffer-hash)))
-                                 (with-temp-buffer
-                                   (insert-file-contents mark-cache-file)
-                                   (goto-char (point-min))
-                                   (unless (string= (buffer-substring-no-properties (point-min)
-                                                                                    (line-end-position))
-                                                    view-hash)
-                                     (user-error "Mark cache validation failed: \"%s\" vs \"%s\""
-                                                 (buffer-substring-no-properties (point-min) (line-end-position))
-                                                 view-hash))
-
-                                   (cl-loop while (= 0 (forward-line 1))
-                                      collect (cl-destructuring-bind (hash position)
-                                                  (s-split " " (buffer-substring-no-properties (point-min) (line-end-position)))
-                                                (org-glance-marker :hash hash :position (string-to-number position)))))))
-                              (t (org-glance-log :performance
-                                     (org-glance-headline:map (headline)
-                                       (org-glance-marker :hash (org-glance- headline :hash)
-                                                          :position (point-min)))))))
+       with mark-cache-file = (format "%s_markers" (org-glance- view :location))
+       with markers = (cond ((f-exists? mark-cache-file)
+                             (org-glance-view:load-markers view mark-cache-file))
+                            (t (org-glance-log :performance
+                                   (org-glance-headline:map (headline)
+                                     (org-glance-marker :hash (org-glance- headline :hash)
+                                                        :position (point-min))))))
        with result = (make-vector (length markers) nil)
        with hash->midx = (make-hash-table :test #'equal)
        for marker in markers
@@ -343,7 +329,9 @@
          (aset result midx marker)
        finally do
          (setf (org-glance- view :markers) result
-               (org-glance- view :hash->midx) hash->midx))))
+               (org-glance- view :hash->midx) hash->midx)
+         (unless (f-exists? mark-cache-file)
+           (org-glance-view:save-markers view mark-cache-file)))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
@@ -371,17 +359,36 @@
         (when (not (eq view it))
           (org-glance-view:fetch it)))
 
-      ;; store markers to optimize further :mark method call
-      (let ((view-hash (buffer-hash)))
-        (with-temp-file (format "%s_markers" (org-glance- view :location))
-          (insert (format "%s\n" view-hash))
-          (cl-loop for marker across-ref (org-glance- view :markers)
-             do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position)))))))))
+      (org-glance-view:save-markers view (format "%s_markers" (org-glance- view :location))))))
+
+(cl-defun org-glance-view:save-markers (view location)
+  (org-glance-view:with-current-buffer view
+    (let ((view-hash (buffer-hash)))
+      (with-temp-file location
+        (insert (format "%s\n" view-hash))
+        (cl-loop for marker across-ref (org-glance- view :markers)
+           do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position))))))))
+
+(cl-defun org-glance-view:load-markers (view location)
+  (org-glance-view:with-current-buffer view
+    (let ((view-hash (buffer-hash)))
+      (with-temp-buffer
+        (insert-file-contents location)
+        (goto-char (point-min))
+        (unless (string= (buffer-substring-no-properties (point-min) (line-end-position)) view-hash)
+          (user-error "Mark cache validation failed: \"%s\" vs \"%s\""
+                      (buffer-substring-no-properties (point-min) (line-end-position))
+                      view-hash))
+        (cl-loop while (and (= 0 (forward-line 1)) (not (eobp)))
+           collect (cl-destructuring-bind (hash position)
+                       (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
+
+                     (org-glance-marker :hash hash :position (string-to-number position))))))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
-  (cl-labels ((derive (h ;; hash
+  (cl-labels ((derive (h  ;; hash
                        rs ;; relations
-                       i ;; relation index
+                       i  ;; relation index
                        )
                 (cond ((gethash h (org-glance- view :hash->midx)) h)
                       ((> i 0) (cl-loop for j from i downto 0
@@ -400,7 +407,7 @@
           (cl-loop
              with events = (reverse (--take-while (org-glance-offset:less? view-offset (org-glance- it :offset)) (org-glance-world:events world)))
              with relations = (make-vector (length events) nil)
-             for event in events  ;; TODO optimize
+             for event in events ;; TODO optimize
              for idx from 0
              for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
              for progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
