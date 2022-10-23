@@ -9,6 +9,7 @@
 
 * TODO Implement backfill operation
 * TODO Fetch and backfill operations should work in background
+* TODO Decrypt encrypted headlines
 * DONE Add link dimension
 CLOSED: [2022-10-22 Sat 13:03]
 :LOGBOOK:

@@ -330,6 +330,10 @@ achieved by calling `org-glance-world:persist' method."
           (format "%s.org" (cadr (s-split "=" dimension)))))
 
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
+  "TODO optimize me. Instead of simply finding file:
+1. Check if buffer is already opened.
+2. Get dimension offset efficiently.
+3. Apply all changes to it in a separate thread."
   (let ((location (org-glance-world:locate-dimension world dimension)))
     (find-file location)))
 
@@ -379,18 +383,38 @@ achieved by calling `org-glance-world:persist' method."
     (kill-buffer (get-file-buffer file))
     (delete-file file)))
 
+(cl-defun org-glance-world:filter-headlines (world &optional predicate)
+  "TODO cache headlines by predicate."
+  (declare (indent 1))
+  (cl-loop for headline in (org-glance-log :performance (org-glance-world:get-headlines world))
+     when (or (null predicate) (funcall predicate headline))
+     collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
+
+(cl-defun org-glance-world:choose-headline (world &optional predicate)
+  (declare (indent 1))
+  (let ((headlines (org-glance-log :performance
+                       (org-glance-world:filter-headlines world predicate))))
+    (thread-last (completing-read "Choose headline: " headlines)
+      (a-get headlines)
+      (org-glance-world:get-headline world))))
+
 (cl-defun org-glance-world:jump (world)
-  (let* ((headlines (cl-loop for headline in (org-glance-log :performance (org-glance-world:get-headlines world))
-                       when (org-glance- headline :linked?)
-                       collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
-         (title (completing-read "Jump to headline: " headlines))
-         (hash (a-get headlines title))
-         (headline (org-glance-world:get-headline world hash))
+  (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :linked?))))
          (links (org-glance- headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
                                              (--drop-while (not (string= link-title (org-glance- it :title))) links)))
                      ((= (length links) 1) (car links))
                      (t (user-error "Unable to find links in this headline")))))
     (org-link-open-from-string (org-glance- link :org-link))))
+
+(cl-defun org-glance-world:extract (world)
+  (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :store?))))
+         (store (org-glance- headline :store)))
+    (condition-case nil
+        (while t
+          (kill-new (alist-get (org-completing-read "Extract property: " store) store nil nil #'string=)))
+      (quit
+       (setq kill-ring nil)
+       (org-glance-log :info "Kill ring has been cleared")))))
 
 (provide 'org-glance-world)

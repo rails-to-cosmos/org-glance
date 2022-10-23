@@ -68,6 +68,10 @@
   (interactive)
   (org-glance-world:jump org-glance-current-world))
 
+(cl-defun org-glance-extract ()
+  (interactive)
+  (org-glance-world:extract org-glance-current-world))
+
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
