@@ -17,9 +17,11 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance-view:mark)
+         (org-glance-log :performance
+             (org-glance-view:mark))
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
-         (org-glance-view:fetch)
+         (org-glance-log :performance
+             (org-glance-view:fetch))
          (org-overview)
          (add-hook 'before-save-hook #'org-glance-view:commit nil t))
         (t
