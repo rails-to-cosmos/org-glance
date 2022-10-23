@@ -122,20 +122,20 @@ Return last committed offset."
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (cl-typecase event
           (org-glance-event:RM
-           (org-glance-log :event "Handle RM event: %s" event)
+           (org-glance-log :events "Handle RM event: %s" event)
            (user-error "RM operation has not been implemented yet")
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world headline))
            )
 
           (org-glance-event:PUT
-           (org-glance-log :event "Handle PUT event: %s" event)
-           (org-glance-log :headline "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
+           (org-glance-log :events "Handle PUT event: %s" event)
+           (org-glance-log :headlines "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
            (org-glance-world:save-headline world headline)
            )
 
           (org-glance-event:UPDATE
-           (org-glance-log :event "Handle UPDATE event: %s" event)
+           (org-glance-log :events "Handle UPDATE event: %s" event)
            (org-glance-world:save-headline world headline)
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
@@ -304,7 +304,7 @@ achieved by calling `org-glance-world:persist' method."
                                     "dimensions"
                                     (downcase (format "%s" dimension))
                                     (format "%s.org" partition))))
-              (org-glance-log :dimension "Create derived view \"%s -> %s\"" dimension partition)
+              (org-glance-log :dimensions "Create derived view \"%s -> %s\"" dimension partition)
               (org-glance-view:create world predicate location nil (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:list-dimensions (world)
@@ -368,7 +368,7 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-capture:after-finalize-hook ()
   "Register captured headline in metastore."
   (org-glance-headline:map (headline)
-    (org-glance-log:debug "Register headline \"%s\" in world \"%s\" "
+    (org-glance-log :headlines "Register headline \"%s\" in world \"%s\" "
       (org-glance- headline :title)
       org-glance-local-world)
     (org-glance-world:add-headline org-glance-local-world headline))
@@ -376,7 +376,6 @@ achieved by calling `org-glance-world:persist' method."
   (org-glance-world:persist org-glance-local-world)
 
   (let ((file (buffer-file-name)))
-    (org-glance-log:debug "Remove temp file \"%s\"" file)
     (kill-buffer (get-file-buffer file))
     (delete-file file)))
 

@@ -238,7 +238,6 @@
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
-                         (org-glance-log:debug "Compare \"%s\" vs \"%s\"" title (org-glance- headline :title))
                          (string= (org-glance- headline :title) title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"

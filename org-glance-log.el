@@ -1,20 +1,15 @@
 (require 'a)
 
 (defvar org-glance-log:loggers
-  (a-list :event nil
-          :headline nil
+  (a-list :events nil
+          :headlines nil
           :cache t
-          :dimension nil
+          :dimensions nil
           :sql nil
           :contents nil
-          :performance t))
-
-(defconst org-glance-log:enable-benchmark-report nil)
-(defconst org-glance-log:enable-cash-report nil)
-(defconst org-glance-log:enable-debug-report nil)
-(defconst org-glance-log:enable-reason-report nil)
-(defconst org-glance-log:enable-context-report nil)
-(defconst org-glance-log:enable-scenario-report nil)
+          :markers nil
+          :performance t
+          :test t))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))
@@ -51,29 +46,5 @@
     (pcase logger
       (:performance `(progn ,@args))
       (_ nil))))
-
-(cl-defmacro org-glance-log:debug (&rest args)
-  (declare (indent 1))
-  (when org-glance-log:enable-debug-report
-    `(let ((inhibit-message nil))
-       (message (concat "> [debug] " (format ,@args))))))
-
-(cl-defmacro org-glance-log:cache (&rest args)
-  (declare (indent 1))
-  (when org-glance-log:enable-cash-report
-    `(let ((inhibit-message nil))
-       (message (concat "> [cache] " (format ,@args))))))
-
-(cl-defmacro org-glance-log:reason (&rest args)
-  (declare (indent 1))
-  (when org-glance-log:enable-reason-report
-    `(let ((inhibit-message nil))
-       (message (concat "> [reason] " (format ,@args))))))
-
-(cl-defmacro org-glance-log:context (&rest args)
-  (declare (indent 1))
-  (when org-glance-log:enable-context-report
-    `(let ((inhibit-message nil))
-       (message (concat "> [context] " (format ,@args))))))
 
 (provide 'org-glance-log)

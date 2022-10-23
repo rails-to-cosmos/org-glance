@@ -80,18 +80,18 @@
                    (thunk-let ((view (org-glance-view:get-buffer-view))
                                (midx (org-glance-view:marker-at-point)))
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                       (org-glance-log:debug "Markers: %s" (org-glance- view :markers))
-                       (org-glance-log:debug "Marker: %d" (org-glance-view:get-marker-position view midx))
-                       (org-glance-log:debug "Headline: %d %d" (point-min) (point-max))
-                       (org-glance-log:debug "Headline contents:\n%s" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-log :markers "Markers: %s" (org-glance- view :markers))
+                       (org-glance-log :markers "Marker: %d" (org-glance-view:get-marker-position view midx))
+                       (org-glance-log :markers "Headline: %d %d" (point-min) (point-max))
+                       (org-glance-log :markers "Headline contents:\n%s" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (org-glance-log:debug "Marker contents:\n%s" (buffer-substring-no-properties (org-glance-view:get-marker-position view midx)
-                                                                                                  (point-max))))
+                         (org-glance-log :markers "Marker contents:\n%s" (buffer-substring-no-properties (org-glance-view:get-marker-position view midx)
+                                                                                                         (point-max))))
 
-                       (org-glance-log:debug "Diff: \"%s\"" (buffer-substring-no-properties
-                                                (org-glance- marker :end)
-                                                (point-max))))
+                       (org-glance-log :markers "Diff: \"%s\"" (buffer-substring-no-properties
+                                                                (org-glance- marker :end)
+                                                                (point-max))))
 
                      (and (> midx -1)
                           (= (org-glance- (aref (org-glance- view :markers) midx) :position) (point-min)))))))
@@ -103,34 +103,34 @@
                    (let* ((view (org-glance-view:get-buffer-view))
                           (midx (org-glance-view:marker-at-point view (point-min))))
 
-                     (org-glance-log:debug "Looking for midx: %d" midx)
+                     (org-glance-log :markers "Looking for midx: %d" midx)
 
                      (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                       (org-glance-log:debug "Markers: %s" (org-glance- view :markers))
-                       (org-glance-log:debug "Marker position: %d" (org-glance-view:get-marker-position view midx))
-                       (org-glance-log:debug "Headline: %d %d" (point-min) (point-max))
-                       (org-glance-log:debug "Headline contents:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
+                       (org-glance-log :markers "Markers: %s" (org-glance- view :markers))
+                       (org-glance-log :markers "Marker position: %d" (org-glance-view:get-marker-position view midx))
+                       (org-glance-log :markers "Headline: %d %d" (point-min) (point-max))
+                       (org-glance-log :markers "Headline contents:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
                        (save-restriction
                          (widen)
-                         (org-glance-log:debug "Marker contents:\n\"%s\""
-                                             (buffer-substring-no-properties
-                                              (org-glance-view:get-marker-position view midx)
-                                              (org-glance-view:get-marker-position view (1+ midx)))))
+                         (org-glance-log :markers "Marker contents:\n\"%s\""
+                           (buffer-substring-no-properties
+                            (org-glance-view:get-marker-position view midx)
+                            (org-glance-view:get-marker-position view (1+ midx)))))
 
 
-                       (org-glance-log:debug "Diff: \"%s\"" (buffer-substring-no-properties
-                                                (org-glance- marker :end)
-                                                (point-max))))
+                       (org-glance-log :markers "Diff: \"%s\"" (buffer-substring-no-properties
+                                                             (org-glance- marker :end)
+                                                             (point-max))))
 
-                     (org-glance-log:debug "Marker hash: %s" (org-glance-view:get-marker-hash view midx))
-                     (org-glance-log:debug "Headline hash: %s" (org-glance- headline :hash))
-                     (org-glance-log:debug "Marker position: %d" (org-glance-view:get-marker-position view midx))
-                     (org-glance-log:debug "Headline position: %d" (point-min))
+                     (org-glance-log :markers "Marker hash: %s" (org-glance-view:get-marker-hash view midx))
+                     (org-glance-log :markers "Headline hash: %s" (org-glance- headline :hash))
+                     (org-glance-log :markers "Marker position: %d" (org-glance-view:get-marker-position view midx))
+                     (org-glance-log :markers "Headline position: %d" (point-min))
 
                      (and (> midx -1)
                           (string= (org-glance-view:get-marker-hash view midx) (org-glance- headline :hash))
                           (= (org-glance-view:get-marker-position view midx) (point-min)))))))
-         (org-glance-log:debug "HC: %s" hc)
+         (org-glance-log :markers "HC: %s" hc)
          (should (--all-p (eq it t) hc)))))
 
 (When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
