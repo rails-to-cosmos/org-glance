@@ -172,7 +172,7 @@
         (search-failed nil)))))
 
 (cl-defun org-glance-view:set-property (property value)
-  (org-glance-log:scenario "SET VIEW PROPERTY %s = \"%s\" WHERE %s = \"%s\""
+  (org-glance-log :sql "SET VIEW PROPERTY %s = \"%s\" WHERE %s = \"%s\""
     property value
     property (org-glance-view:get-property property))
   (save-excursion
@@ -273,7 +273,7 @@
   (thunk-let* ((new-hash (org-glance- headline :hash))
                (midx (gethash old-hash (org-glance- view :hash->midx)))
                (marker-position (org-glance-view:get-marker-position view midx)))
-    (org-glance-log:scenario "Update \"%s\" set hash = \"%s\"" (org-glance- headline :title) new-hash)
+    (org-glance-log :sql "Update \"%s\" set hash = \"%s\"" (org-glance- headline :title) new-hash)
     (org-glance-view:with-current-buffer view
       (goto-char marker-position)
       (org-glance-headline:with-headline-at-point
@@ -381,7 +381,7 @@
                (redisplay)
                (org-glance-log:context "Event: %s" event)
                (cl-typecase event
-                 (org-glance-event:UPDATE (org-glance-log:scenario "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
+                 (org-glance-event:UPDATE (org-glance-log :sql "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
                                           (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
                                                  (org-glance-log:debug "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
                                                  (org-glance-log:reason "Hashes are equal"))

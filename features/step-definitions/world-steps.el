@@ -12,7 +12,7 @@
 
 (Given "^world \"\\([^\"]+\\)\"$"
        (lambda (world-name)
-         (org-glance-log:scenario "Create world \"%s\"" world-name)
+         (org-glance-log :sql "Create world \"%s\"" world-name)
          (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))))
 
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
@@ -36,7 +36,7 @@
                         (--filter (not (string-empty-p it)))
                         (--map (concat "* " it)))))
 
-      (org-glance-log:scenario "INSERT %d HEADLINE%s TO WORLD \"%s\""
+      (org-glance-log :sql "INSERT %d HEADLINE%s TO WORLD \"%s\""
         (length strings)
         (if (> (length strings) 1) "s" "")
         (upcase world-name))
@@ -195,7 +195,7 @@
 
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
-    (org-glance-log:scenario "Select derived view \"%s -> %s\" from world \"%s\""
+    (org-glance-log :sql "Select derived view \"%s -> %s\" from world \"%s\""
       dimension-name view-name world-name)
     (let* ((world (org-glance-test:get-world world-name))
            (file (f-join (org-glance- world :location)
