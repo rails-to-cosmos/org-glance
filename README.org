@@ -9,24 +9,8 @@
 
 https://untools.co
 
-* TODO Implement backfill operation
 * TODO Fetch and backfill operations should work in background
 * TODO Decrypt encrypted headlines
-* DONE Add link dimension
-CLOSED: [2022-10-22 Sat 13:03]
-:LOGBOOK:
-- State "DONE"       from "PENDING"    [2022-10-22 Sat 13:03]
-- State "PENDING"    from "STARTED"    [2022-10-21 Fri 10:02]
-- State "STARTED"    from "TODO"       [2022-10-21 Fri 10:00]
-CLOCK: [2022-10-21 Fri 10:00]--[2022-10-21 Fri 10:02] =>  0:02
-:END:
-* DONE Support RM event
-CLOSED: [2022-10-21 Fri 09:51]
-:LOGBOOK:
-- State "DONE"       from "STARTED"    [2022-10-21 Fri 09:51]
-- State "STARTED"    from "TODO"       [2022-10-21 Fri 09:29]
-CLOCK: [2022-10-21 Fri 09:29]--[2022-10-21 Fri 09:51] =>  0:22
-:END:
 * TODO Headline ID
 * TODO Support overview dimensions
 * TODO Support read-only dimensions
