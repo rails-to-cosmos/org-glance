@@ -78,40 +78,28 @@
 
 (cl-defun org-glance-view:get-or-create (world type location
                                          &optional
-                                           (backfill? t)
                                            (offset (org-glance-world:offset world)))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (let* ((location (file-truename (f-join (org-glance- world :location) location)))
          (key (org-glance-view--key :type type :location location)))
     (or (org-glance-world:cashew-get world key)
-        (let ((view (org-glance-view--create world type location backfill? offset)))
+        (let ((view (org-glance-view--create world type location offset)))
           (org-glance-world:cashew-set key view world)
           view))))
 
-(cl-defun org-glance-view--create (world type location backfill? offset)
+(cl-defun org-glance-view--create (world type location offset)
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
   (let ((view (org-glance-view :world world
                                :type type
                                :location location
                                :offset offset)))
-    (org-glance-view--create-location view)
-    (org-glance-view:write-header view)
-    (org-glance--with-temp-file location
-      (insert (org-glance-view:header))
-      (when backfill?
-        (org-glance-view--backfill view)))
+    (unless (f-exists? (org-glance- view :location))
+      (f-mkdir-full-path (f-parent (org-glance- view :location)))
+      (org-glance-view:write-header view)
+      (org-glance--with-temp-file location
+        (insert (org-glance-view:header))))
     view))
-
-(cl-defun org-glance-view--create-location (view)
-  (unless (f-exists? (org-glance- view :location))
-    (f-mkdir-full-path (f-parent (org-glance- view :location)))))
-
-(cl-defun org-glance-view--backfill (view)
-  (let ((w (org-glance- view :world)))
-    (cl-dolist (hl (org-glance-world:get-headlines w))
-      (when (org-glance-view:member? view hl)
-        (org-glance-world:insert-headline w hl)))))
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
@@ -303,7 +291,7 @@
   (let ((world (org-glance- view :world))
         (to-remove '()))
 
-    (org-glance-log :events "[%s] Buffer before commit:\n%s" (org-glance- view :type) (buffer-string))
+    (org-glance-log :buffers "[%s] Buffer before commit:\n%s" (org-glance- view :type) (buffer-string))
 
     (org-glance-view:fetch view)
 
@@ -331,7 +319,7 @@
 
     (org-glance-view:save-markers view (format "%s_markers" (org-glance- view :location)))
 
-    (org-glance-log :events "[%s] Buffer after commit:\n%s" (org-glance- view :type) (buffer-string))))
+    (org-glance-log :buffers "[%s] Buffer after commit:\n%s" (org-glance- view :type) (buffer-string))))
 
 (cl-defun org-glance-view:save-markers (view location)
   (org-glance-view:with-current-buffer view
@@ -490,7 +478,7 @@
         (world (thread-first (buffer-file-name)
                  (org-glance-world:get-root-directory)
                  (org-glance-world:get-or-create))))
-    (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) nil (a-get header :offset))))
+    (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) (a-get header :offset))))
 
 (provide 'org-glance-view)
 ;;; org-glance-view.el ends here

@@ -72,9 +72,13 @@
   (interactive)
   (org-glance-world:extract org-glance-current-world))
 
+(cl-defun org-glance-import (location)
+  (interactive "DDirectory: ")
+  (org-glance-world:import-headlines org-glance-current-world location)
+  (org-glance-world:persist org-glance-current-world))
+
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (interactive)
   (setq org-glance-current-world (org-glance-log :performance
                                      (org-glance-world:get-or-create org-glance-directory))))
 

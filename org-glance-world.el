@@ -312,7 +312,7 @@ achieved by calling `org-glance-world:persist' method."
                                     "dimensions"
                                     (downcase (format "%s=%s.org" dimension partition)))))
               (org-glance-log :dimensions "Create derived view \"%s -> %s\"" dimension partition)
-              (org-glance-view:get-or-create world predicate location nil (org-glance-offset:zero)))))))
+              (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:list-dimensions (world)
   (--map (file-name-sans-extension it)
@@ -337,10 +337,10 @@ achieved by calling `org-glance-world:persist' method."
          (world-offset (org-glance-world:offset world)))
 
     (org-glance-log :events "[world] Fetch view %s" dim)
-    (org-glance-log :events "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
-    (org-glance-log :events "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
-    (org-glance-log :events "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
-    (org-glance-log :events "[%s] Buffer before update: \n%s" (org-glance- view :type) (buffer-string))
+    (org-glance-log :offsets "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
+    (org-glance-log :offsets "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
+    (org-glance-log :world "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
+    (org-glance-log :buffers "[%s] Buffer before update: \n%s" (org-glance- view :type) (buffer-string))
 
     (when (org-glance-offset:less? (org-glance- view :offset) world-offset)
       (with-temp-file view-location
@@ -349,7 +349,8 @@ achieved by calling `org-glance-world:persist' method."
         (org-glance-view:mark-buffer view)
         (org-glance-view:fetch view)
         (org-glance-view:write-header view)
-        (org-glance-log :events "[%s] Buffer after update:\n%s" (org-glance- view :type) (buffer-string))))
+        (org-glance-log :buffers "[%s] Buffer after update:\n%s" (org-glance- view :type) (buffer-string))))
+
     view-location))
 
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
