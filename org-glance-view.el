@@ -377,7 +377,7 @@
          do
            (org-glance-log :events "[%s] %s" (org-glance- view :type) event)
            (cl-typecase event
-             (org-glance-event:UPDATE (org-glance-log :sql "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
+             (org-glance-event:UPDATE (org-glance-log :events "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
                                       (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
                                              (org-glance-log :events "[%s] Skip UPDATE event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                              (org-glance-log :events "[%s] Hashes are equal" (org-glance- view :type)))
