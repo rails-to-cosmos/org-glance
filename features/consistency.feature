@@ -7,8 +7,7 @@ Feature: Consistent Edit
       * Йотафон :Trash:
       """
 
-    When I create view "Apple Phones" from "(member 'apple tag)" "Phones" in "views/apple.org"
-    And I find file "views/apple.org"
+    When I visit view "Apple" derived from dimension "Tag" in world "Phones"
     And I go to headline "iPhone 3"
     And I set title of headline at point to "iPhone 4"
 
@@ -23,14 +22,6 @@ Feature: Consistent Edit
     And world "Phones" should not contain headline "Йотафон" in staging layer
     # And world "Phones" should not contain headline "Йотафон" in committed layer
 
-    And world "Phones" should be equal to buffer world
-    And view "Apple Phones" should be equal to buffer view
-
-    When I kill current buffer
-    And I find file "views/apple.org"
-    Then world "Phones" should be equal to buffer world
-    And view "Apple Phones" should be equal to buffer view
-
     # TODO: Think about when to delete headlines. For now we will preserve all headlines in committed layer
     # And world "New phones" should not contain headline "iPhone 3" in committed layer
     # And world "Old phones" should contain headline "iPhone 3" in staging layer
@@ -44,7 +35,7 @@ Feature: Consistent Edit
       * Tanik :Human:
       """
 
-    When I create view "Pomeranians" from "(member 'pomeranian tag)" "Pets" in "views/pomeranians.org"
+    When I visit view "Pomeranian" derived from dimension "Tag" in world "Pets"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -86,15 +77,6 @@ Feature: Consistent Edit
     And marker at point should not be changed
     And 0 markers should be changed
 
-    When I create view "Human Beings" from "(member 'human tag)" "Pets" in "views/humans.org"
-    And kill buffer
-    And I append to file "views/humans.org"
-      """
-      * Some external corruption
-      """
-    And I find file "views/humans.org"
-    And I go to headline "Tanik"
-
   Scenario: Change headline todo state
     Given world "Wishlist" in directory "nerdy" with headlines
       """
@@ -103,9 +85,8 @@ Feature: Consistent Edit
       * TODO Samovar :Friends:
       """
 
-    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
-    And switch to buffer "*pigs*"
-    And go to headline "Peppa Pig"
+    When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
+    And go to headline "Tatinek"
 
     Then marker at point should not be changed
     And 0 markers should be changed
@@ -127,7 +108,7 @@ Feature: Consistent Edit
       * TODO Samovar :Friends:
       """
 
-    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org"
+    When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
     And go to headline "Peppa Pig"
 
     Then marker at point should not be changed
@@ -144,7 +125,7 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
       """
-    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And buffer offset should be latest
@@ -161,7 +142,7 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
       """
-    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And buffer offset should be latest
@@ -179,7 +160,7 @@ Feature: Consistent Edit
       * TODO Peppa Pig :Peppa:
       """
 
-    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
+    When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
     And set headline "Tatinek" contents to
     """
     SCHEDULED: <2019-08-23 Fri>
@@ -194,9 +175,7 @@ Feature: Consistent Edit
       * TODO COMMENT Tatinek :Peppa:Gift:
       """
 
-    When I create view "Pigs" from "(member 'peppa tag)" "Wishlist" in "views/pigs.org" as "*pigs*"
-    And create view "Gifts" from "(member 'gift tag)" "Wishlist" in "views/gifts.org" as "*gifts*"
-    And switch to buffer "*pigs*"
+    When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
     And set headline "Tatinek" contents to
     """
     SCHEDULED: <2019-08-23 Fri>
@@ -205,7 +184,7 @@ Feature: Consistent Edit
 
     Then marker positions and hashes should be consistent
 
-    When I switch to buffer "*gifts*"
+    When I visit view "Gift" derived from dimension "Tag" in world "Wishlist"
 
     Then headline "Tatinek" should be commented
 
@@ -220,13 +199,11 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org" as "*fun*"
-    And I switch to buffer "*hikes*"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
     And rename headline "Music Festival" to "Music Festival 2022"
     And rename headline "Kamchatka" to "Kamchatka 2019"
     And commit changes
-    And switch to buffer "*fun*"
+    And I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -244,17 +221,14 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org"
-    And kill buffer
-    And switch to buffer "*hikes*"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
     And rename headline "Music Festival" to "Music Festival 2022"
     And rename headline "Kamchatka" to "Kamchatka 2019"
     And save buffer
 
     Then marker positions and hashes should be consistent
 
-    When I find file "views/fun.org" as "*fun*"
+    When I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -273,17 +247,14 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(and (member 'hike tag) (member 'todo state))" "Adventures" in "views/hikes.org" as "*hikes*"
-    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org" as "*fun*"
-    And switch to buffer "*hikes*"
-
-    When I rename headline "Music Festival" to "Music Festival 2022"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
+    And rename headline "Music Festival" to "Music Festival 2022"
     And set headline "Music Festival 2022" contents to
     """
     SCHEDULED: <2022-01-01 Sat>
     """
     And save buffer
-    And switch to buffer "*fun*"
+    And visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions should be consistent
@@ -295,8 +266,6 @@ Feature: Consistent Edit
     SCHEDULED: <2022-01-01 Sat>
     """
 
-    # Then headline "Music Festival 2022" should be changed
-
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to
     """
@@ -306,14 +275,13 @@ Feature: Consistent Edit
     Then headline "Music Festival 2023" should be changed
     And 1 marker should be changed
 
-    When I commit changes
+    When I save buffer
 
     Then marker positions and hashes should be consistent
 
-    When I switch to buffer "*hikes*"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
-    Then I should be in buffer "*hikes*"
-    And current buffer should contain 2 headlines
+    Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
     And headline "Music Festival 2023" should be in current buffer
     And the contents of headline "Music Festival 2023" should be
@@ -324,7 +292,8 @@ Feature: Consistent Edit
 
     When I rename headline "Music Festival 2023" to "Music Festival 2024"
     And save buffer
-    And switch to buffer "*fun*"
+
+    When I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -343,7 +312,7 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I select view from "Adventures" where tag = "Hike"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
     And rename headline "Music Festival" to "Music Festival 2022"
     And set headline "Music Festival 2022" contents to
     """
@@ -359,7 +328,7 @@ Feature: Consistent Edit
     Then headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
 
-    When I select view from "Adventures" where tag = "Music"
+    When I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions should be consistent
@@ -388,7 +357,7 @@ Feature: Consistent Edit
     And buffer offset should be latest
 
     When I kill buffer
-    And I select view from "Adventures" where tag = "Hike"
+    And I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
@@ -403,7 +372,7 @@ Feature: Consistent Edit
     When I rename headline "Music Festival 2023" to "Music Festival 2024"
     And save buffer
     And kill buffer
-    And I select view from "Adventures" where tag = "Music"
+    And I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
@@ -411,22 +380,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
     And buffer offset should be latest
 
-    # When I commit changes
-    # And kill buffer "*fun*"
-    # And append to file "views/fun.org"
-    #   """
-    #   * Some external corruption
-    #   """
-    # And find file "views/fun.org"
-
-    # And I create view "Active" from "STARTED" "Adventures"
-    # And I create view "Archive" from "DONE OR CANCELLED" "Adventures"
-    # And I create world "Hobby" from "Hike OR Music" "Adventures"
-
-    # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
-    # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
-
-  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 

@@ -382,7 +382,7 @@
          for idx from 0
          for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
 
-         when (cl-typep event org-glance-event:UPDATE)
+         when (cl-typep event 'org-glance-event:UPDATE)
          do (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
 
          when (org-glance-offset:less? view-offset (org-glance- event :offset))

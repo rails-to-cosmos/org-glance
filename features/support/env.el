@@ -82,7 +82,7 @@
  (f-delete (f-join org-glance-test:location "ecukes.lock")))
 
 (Teardown
- (with-current-buffer "*org-glance-log:events*"
-   (message "Event log:")
-   (message (buffer-string)))
+ ;; (with-current-buffer "*org-glance-log:events*"
+ ;;   (message "Event log:")
+ ;;   (message (buffer-string)))
  (setq default-directory org-glance-root-path))

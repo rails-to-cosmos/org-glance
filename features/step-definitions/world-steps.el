@@ -172,8 +172,3 @@
   (lambda (world-name)
     (let ((world (org-glance-test:get-world world-name)))
       (org-glance-world:persist world))))
-
-(Then "^world \"\\([^\"]+\\)\" should be equal to buffer world$"
-      (lambda (world-name)
-        (let ((world (org-glance-test:get-world world-name)))
-          (should (eq world (org-glance-view:get-buffer-world))))))

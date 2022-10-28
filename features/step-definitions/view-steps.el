@@ -11,14 +11,6 @@
 (require 'org-glance-world)
 (require 'org-glance-view)
 
-(When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\"$"
-  (lambda (view-name view-type world-name file-name)
-    (let* ((location (org-glance-test:get-file file-name))
-           (world (org-glance-test:get-world world-name))
-           (view (org-glance-view:get-or-create world (read view-type) location)))
-      (org-glance-test:view-put view-name view))
-    (And "I find file \"%s\"" file-name)))
-
 (When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (view-name file-name)
     (Given "empty file \"%s\"" file-name)
@@ -134,16 +126,6 @@
                           (= (org-glance-view:get-marker-position view midx) (point-min)))))))
          (org-glance-log :markers "HC: %s" hc)
          (should (--all-p (eq it t) hc)))))
-
-(When "^I? ?create view \"\\([^\"]+\\)\" from \"\\([^\"]+\\)\" \"\\([^\"]+\\)\" in \"\\([^\"]+\\)\" as \"\\([^\"]+\\)\"$"
-  (lambda (view class world location buffer)
-    (When "I create view \"%s\" from \"%s\" \"%s\" in \"%s\"" view class world location)
-    (And "I find file \"%s\" as \"%s\"" location buffer)))
-
-(When "^I select view from \"\\([^\"]+\\)\" where tag = \"\\([^\"]+\\)\"$"
-  (lambda (world-name tag-name)
-    (let ((world (org-glance-test:get-world world-name)))
-      (find-file (org-glance-world:update-dimension world (format "tag=%s" tag-name))))))
 
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
