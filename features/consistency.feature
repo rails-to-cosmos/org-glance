@@ -331,7 +331,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
-  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -427,18 +426,16 @@ Feature: Consistent Edit
     # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
+  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 
-    # When I alter world "Adventures" add dimension "State" partition by "state"
-    And add headlines to world "Adventures"
+    When I add headlines to world "Adventures"
       """
       * TODO Niagara Waterfalls
       """
 
-    # Then world "Adventures" should contain 1 dimension
-    # And world "Adventures" should contain dimension "State"
-    And world "Adventures" should contain view "TODO" derived from dimension "State"
+    Then world "Adventures" should contain view "TODO" derived from dimension "State"
 
     When I visit view "TODO" derived from dimension "State" in world "Adventures"
 
@@ -452,8 +449,7 @@ Feature: Consistent Edit
     Then marker at point should be changed
     And markers positions should be consistent
 
-    When I commit changes
-    And kill buffer
+    When I apply changes
 
     Then world "Adventures" should contain view "DONE" derived from dimension "State"
 
@@ -469,8 +465,7 @@ Feature: Consistent Edit
     Then marker at point should be changed
     And markers positions should be consistent
 
-    When I commit changes
-    And kill buffer
+    When I apply changes
     And visit view "TODO" derived from dimension "State" in world "Adventures"
 
     Then current buffer should contain 1 headline

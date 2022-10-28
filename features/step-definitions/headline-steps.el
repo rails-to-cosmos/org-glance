@@ -223,9 +223,6 @@
 
 (And "^I? ?set headline todo state to \"\\([^\"]+\\)\"$"
      (lambda (state)
-       (org-glance-log :sql "Update headline set state = \"%s\" where state = \"%s\""
-         state
-         (org-get-todo-state))
        (let ((inhibit-message t))
          (org-todo state))))
 

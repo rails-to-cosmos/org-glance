@@ -13,9 +13,10 @@
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))
-  `(with-current-buffer (get-buffer-create (format "*org-glance-log%s*" ,logger))
-     (goto-char (point-max))
-     (insert (format-time-string "%H:%M:%S") " " (format ,@forms) "\n")))
+  `(let ((result (format ,@forms)))
+     (with-current-buffer (get-buffer-create (format "*org-glance-log%s*" ,logger))
+       (goto-char (point-max))
+       (insert (format-time-string "%H:%M:%S") " " result "\n"))))
 
 (cl-defmacro org-glance-log (logger &rest args)
   (declare (indent 2))

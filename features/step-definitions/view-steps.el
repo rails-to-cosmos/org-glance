@@ -40,7 +40,13 @@
 
 (When "^I? ?commit changes$"
   (lambda ()
-    (org-glance-view:commit)))
+    (org-glance-view:commit)
+    (save-buffer)))
+
+(When "^I? ?apply changes$"
+  (lambda ()
+    (When "I commit changes")
+    (And "I kill buffer")))
 
 (Then "^marker at point should be changed$"
       (lambda ()
@@ -69,10 +75,6 @@
                               (org-glance-view:commit (org-glance-view:get-buffer-view))
                               t)
                           (error nil))))))
-
-(When "^I? ?fetch world changes$"
-  (lambda ()
-    (org-glance-view:fetch)))
 
 (And "^markers? positions should be consistent$"
      (lambda ()
@@ -142,3 +144,13 @@
   (lambda (world-name tag-name)
     (let ((world (org-glance-test:get-world world-name)))
       (find-file (org-glance-world:update-dimension world (format "tag=%s" tag-name))))))
+
+(When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
+  (lambda (view-name dimension-name world-name)
+    (let ((world (org-glance-test:get-world world-name)))
+      (find-file (org-glance-world:update-dimension world (format "%s=%s" dimension-name view-name))))))
+
+(Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
+      (lambda (world-name view-name dimension-name)
+        (let ((world (org-glance-test:get-world world-name)))
+          (should (f-exists? (org-glance-world:locate-dimension world (format "%s=%s" dimension-name view-name)))))))

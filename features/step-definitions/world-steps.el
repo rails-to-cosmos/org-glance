@@ -12,7 +12,6 @@
 
 (Given "^world \"\\([^\"]+\\)\"$"
        (lambda (world-name)
-         (org-glance-log :sql "Create world \"%s\"" world-name)
          (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))))
 
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
@@ -35,12 +34,6 @@
                         reverse
                         (--filter (not (string-empty-p it)))
                         (--map (concat "* " it)))))
-
-      (org-glance-log :sql "INSERT %d HEADLINE%s TO WORLD \"%s\""
-        (length strings)
-        (if (> (length strings) 1) "s" "")
-        (upcase world-name))
-
       (cl-loop
          for string in strings
          for headline = (org-glance-headline-from-string string)
@@ -184,24 +177,3 @@
       (lambda (world-name)
         (let ((world (org-glance-test:get-world world-name)))
           (should (eq world (org-glance-view:get-buffer-world))))))
-
-(Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
-      (lambda (world-name view-name dimension-name)
-        (let ((world (org-glance-test:get-world world-name)))
-          (should (f-exists? (f-join (org-glance- world :location)
-                                     "dimensions"
-                                     (downcase dimension-name)
-                                     (format "%s.org" (downcase view-name))))))))
-
-(When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
-  (lambda (view-name dimension-name world-name)
-    (org-glance-log :sql "Select derived view \"%s -> %s\" from world \"%s\""
-      dimension-name view-name world-name)
-    (let* ((world (org-glance-test:get-world world-name))
-           (file (f-join (org-glance- world :location)
-                         "dimensions"
-                         (downcase dimension-name)
-                         (format "%s.org" (downcase view-name)))))
-      (find-file file)
-      (org-glance-log :contents "Buffer %s contents: %s" file (buffer-substring-no-properties (point-min) (point-max)))
-      )))

@@ -125,21 +125,20 @@ Return last committed offset."
 
     (dolist (event (reverse (org-glance- changelog* :events)))
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
+        (org-glance-log :world-events "Handle %s" event)
         (cl-typecase event
           (org-glance-event:RM
-           (org-glance-log :events "Handle RM event: %s" event)
+
            (user-error "RM operation has not been implemented yet")
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world headline))
            )
 
           (org-glance-event:PUT
-           (org-glance-log :events "Handle PUT event: %s" event)
            (org-glance-log :headlines "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
            (org-glance-world:save-headline world headline))
 
           (org-glance-event:UPDATE
-           (org-glance-log :events "Handle UPDATE event: %s" event)
            (org-glance-world:save-headline world headline)
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
@@ -336,13 +335,21 @@ achieved by calling `org-glance-world:persist' method."
                                 :location view-location
                                 :offset (a-get view-header :offset)))
          (world-offset (org-glance-world:offset world)))
+
+    (org-glance-log :events "[world] Fetch view %s" dim)
+    (org-glance-log :events "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
+    (org-glance-log :events "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
+    (org-glance-log :events "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
+    (org-glance-log :events "[%s] Buffer before update: \n%s" (org-glance- view :type) (buffer-string))
+
     (when (org-glance-offset:less? (org-glance- view :offset) world-offset)
       (with-temp-file view-location
-        (insert-file-contents view-location)
         (org-mode)
-        (org-glance-view:mark view)
+        (insert-file-contents view-location)
+        (org-glance-view:mark-buffer view)
         (org-glance-view:fetch view)
-        (org-glance-view:write-header view)))
+        (org-glance-view:write-header view)
+        (org-glance-log :events "[%s] Buffer after update:\n%s" (org-glance- view :type) (buffer-string))))
     view-location))
 
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
@@ -445,8 +452,5 @@ achieved by calling `org-glance-world:persist' method."
   (cond ((null location) (user-error "World root directory not found"))
         ((org-glance-world:location? location) location)
         (t (org-glance-world:get-root-directory (f-parent location)))))
-
-(cl-defun org-glance-world:get-events-after (world offset)
-  (reverse (--take-while (org-glance-offset:less? offset (org-glance- it :offset)) (org-glance-world:events world))))
 
 (provide 'org-glance-world)
