@@ -20,10 +20,8 @@ editor."
          (org-glance-log :performance
              (org-glance-view:mark))
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
-         (org-glance-log :performance
-             (org-glance-view:fetch))
-         (org-overview)
-         (add-hook 'before-save-hook #'org-glance-view:commit nil t))
+         (add-hook 'before-save-hook #'org-glance-view:commit nil t)
+         (org-overview))
         (t
          (remove-hook 'before-save-hook #'org-glance-view:commit t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t))))

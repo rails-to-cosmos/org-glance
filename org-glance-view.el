@@ -15,9 +15,12 @@
 
 ;;; Code:
 
+(defconst org-glance-view--header-extension ".h.el")
+(defconst org-glance-view--marker-extension ".m.el")
+
 (declare-function f-mkdir-full-path 'f)
 
-(org-glance-class org-glance-marker nil
+(org-glance-class org-glance-view--marker nil
     ((hash
       :type string
       :initarg :hash)
@@ -28,6 +31,20 @@
       :type boolean
       :initarg :changed?
       :initform nil)))
+
+(org-glance-class org-glance-view--key nil
+    ((type
+      :type (or symbol list)
+      :initarg :type
+      :documentation "Type declaration that transforms into predicate of
+      one argument: `org-glance-headline'. View is guaranteed to
+      contain only headlines for which predicate returns non-nil
+      value.")
+     (location
+      :type org-glance-file
+      :initarg :location
+      :documentation "Location where view persists."))
+  "Unique key for `org-glance-view'.")
 
 (org-glance-class org-glance-view nil
     ((world
@@ -59,43 +76,46 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Hash to idx.")))
 
-(cl-defun org-glance-view:create (world type location &optional
-                                                        (backfill? t)
-                                                        (initial-offset (org-glance-world:offset world)))
+(cl-defun org-glance-view:get-or-create (world type location
+                                         &optional
+                                           (backfill? t)
+                                           (offset (org-glance-world:offset world)))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
-  (thunk-let* ((views (org-glance- world :views))
-               (view-location (file-truename (f-join (org-glance- world :location) location)))
-               (key (list type view-location))
-               (cached-view (gethash key views))
-               (view-exists? (and (f-exists? view-location)
-                                  (f-file? view-location)
-                                  cached-view))
-               (headlines (org-glance-world:get-headlines world))
-               (view (org-glance-view :world world
-                                      :type type
-                                      :location view-location
-                                      :offset initial-offset))
-               (header (org-glance-view:header view)))
-    (cond (view-exists?
-           (org-glance-log :cache "org-glance-view: cache hit %s" type)
-           cached-view)
-          (t
-           (org-glance-log :cache "org-glance-view: create from scratch %s" type)
-           (unless (f-exists? view-location)
-             (f-mkdir-full-path (f-parent view-location)))
+  (let* ((location (file-truename (f-join (org-glance- world :location) location)))
+         (key (org-glance-view--key :type type :location location)))
+    (or (org-glance-world:cashew-get world key)
+        (let ((view (org-glance-view--create world type location backfill? offset)))
+          (org-glance-world:cashew-set key view world)
+          view))))
 
-           (org-glance--with-temp-file view-location
-             (insert header)
-             (when backfill?
-               (cl-dolist (headline headlines)
-                 (when (org-glance-view:member? view headline)
-                   (org-glance-world:insert-headline world headline)))))
+(cl-defun org-glance-view--create (world type location backfill? offset)
+  "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
+  (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
+  (let ((view (org-glance-view :world world
+                               :type type
+                               :location location
+                               :offset offset)))
+    (org-glance-view--create-location view)
+    (org-glance-view:write-header view)
+    (org-glance--with-temp-file location
+      (insert (org-glance-view:header))
+      (when backfill?
+        (org-glance-view--backfill view)))
+    view))
 
-           (puthash key view (org-glance- world :views))))))
+(cl-defun org-glance-view--create-location (view)
+  (unless (f-exists? (org-glance- view :location))
+    (f-mkdir-full-path (f-parent (org-glance- view :location)))))
+
+(cl-defun org-glance-view--backfill (view)
+  (let ((w (org-glance- view :world)))
+    (cl-dolist (hl (org-glance-world:get-headlines w))
+      (when (org-glance-view:member? view hl)
+        (org-glance-world:insert-headline w hl)))))
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (eval (org-glance- view :type) (org-glance-world:dim-eval (org-glance- view :world) headline)))
+  (eval (org-glance- view :type) (org-glance-world:evaluate-dimensions (org-glance- view :world) headline)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -137,79 +157,28 @@
   (org-glance-view:if-safe-marker view midx
       (setf (org-glance- view :markers [midx] :changed?) val)))
 
-(cl-defun org-glance-view:header (view)
+(cl-defun org-glance-view:header ()
   "Generate header for VIEW."
   (s-join "\n"
           (list "#  -*- mode: org; mode: org-glance-material -*-"
                 ""
                 "#+STARTUP: overview"
-                (format "#+TYPE: %s :: %s"
-                        (org-glance- view :world :location)
-                        (cl-prin1-to-string (org-glance- view :type)))
-                (format "#+OFFSET: %s"
-                        (org-glance- view :offset))
-                (format "#+PROPERTY: ATTACH_DIR ./../../resources/%s/%s/"
-                        (thread-first (org-glance- view :location)
-                          f-parent
-                          file-name-nondirectory
-                          downcase)
-                        (thread-first (org-glance- view :location)
-                          file-name-nondirectory
-                          file-name-sans-extension
-                          downcase))
+                ;; (format "#+TYPE: %s :: %s"
+                ;;         (org-glance- view :world :location)
+                ;;         (cl-prin1-to-string (org-glance- view :type)))
+                ;; (format "#+OFFSET: %s"
+                ;;         (org-glance- view :offset))
+                ;; (format "#+PROPERTY: ATTACH_DIR ./../../resources/%s/%s/"
+                ;;         (thread-first (org-glance- view :location)
+                ;;           f-parent
+                ;;           file-name-nondirectory
+                ;;           downcase)
+                ;;         (thread-first (org-glance- view :location)
+                ;;           file-name-nondirectory
+                ;;           file-name-sans-extension
+                ;;           downcase))
                 ""
                 "")))
-
-(cl-defun org-glance-view:get-property (property)
-  (save-restriction
-    (widen)
-    (save-excursion
-      (goto-char (point-min))
-      (condition-case nil
-          (save-match-data
-            (re-search-forward (format "^\\#\\+%s: " property))
-            (buffer-substring-no-properties (point) (line-end-position)))
-        (search-failed nil)))))
-
-(cl-defun org-glance-view:set-property (property value)
-  (org-glance-log :sql "SET VIEW PROPERTY %s = \"%s\" WHERE %s = \"%s\""
-    property value
-    property (org-glance-view:get-property property))
-  (save-excursion
-    (save-restriction
-      (widen)
-      (goto-char (point-min))
-      (condition-case nil
-          (progn
-            (re-search-forward (format "^\\#\\+%s: " property))
-            (org-glance-log :markers "Delete region: \"%s\"" (buffer-substring-no-properties (point) (line-end-position)))
-            (org-glance-log :markers "Delete region from %d to %d" (point) (line-end-position))
-            (org-glance-log :markers "Insert \"%s\"" (prin1-to-string value))
-            (delete-region (point) (line-end-position))
-            (insert (prin1-to-string value)))
-        (search-failed nil)))))
-
-(cl-defun org-glance-view:get-buffer-world ()
-  "Get `org-glance-world' associated with current buffer."
-  (-some->> (org-glance-view:get-property "TYPE")
-    (s-split " :: ")
-    cl-first
-    org-glance-world:read))
-
-(cl-defun org-glance-view:get-buffer-type ()
-  "Get `org-glance-world' associated with current buffer."
-  (-some->> (org-glance-view:get-property "TYPE")
-    (s-split " :: ")
-    cl-second
-    read))
-
-(cl-defun org-glance-view:get-buffer-view ()
-  "Get `org-glance-view' associated with current buffer."
-  (let ((world (org-glance-view:get-buffer-world))
-        (type (org-glance-view:get-buffer-type)))
-    (unless world
-      (user-error "Unable to get world from buffer %s" (current-buffer)))
-    (org-glance-view:create world type (buffer-file-name))))
 
 (cl-defmacro org-glance-view:with-current-buffer (view &rest forms)
   (declare (indent 1))
@@ -245,29 +214,27 @@
 
 (cl-defun org-glance-view:add-headline (view headline)
   (declare (indent 0))
-  (org-glance-view:with-current-buffer view
-    (goto-char (point-max))
-    (org-glance-world:insert-headline (org-glance- view :world) headline)
-    ;; TODO optimize this, no need to remark all headlines
-    (org-glance-view:mark view)))
+  (goto-char (point-max))
+  (org-glance-world:insert-headline (org-glance- view :world) headline)
+  ;; TODO optimize this, no need to remark all headlines
+  (org-glance-view:mark view))
 
 (cl-defun org-glance-view:remove-headline (view hash)
-  (org-glance-view:with-current-buffer view
-    (let* ((midx (gethash hash (org-glance- view :hash->midx)))
-           (marker-position (org-glance-view:get-marker-position view midx))
-           (size (1- (hash-table-count (org-glance- view :hash->midx))))
-           (markers* (make-vector size nil)))
-      (cl-loop for idx from 0 to size
-         when (< idx midx)
-         do (aset markers* idx (aref (org-glance- view :markers) idx))
-         when (> idx midx)
-         do (aset markers* (1- idx) (aref (org-glance- view :markers) (1- idx)))
-         finally
-           (setf (org-glance- view :markers) markers*)
-           (remhash hash (org-glance- view :hash->midx))
-           (goto-char marker-position)
-           (org-glance-headline:with-headline-at-point
-             (delete-region (point-min) (point-max)))))))
+  (let* ((midx (gethash hash (org-glance- view :hash->midx)))
+         (marker-position (org-glance-view:get-marker-position view midx))
+         (size (1- (hash-table-count (org-glance- view :hash->midx))))
+         (markers* (make-vector size nil)))
+    (cl-loop for idx from 0 to size
+       when (< idx midx)
+       do (aset markers* idx (aref (org-glance- view :markers) idx))
+       when (> idx midx)
+       do (aset markers* (1- idx) (aref (org-glance- view :markers) (1- idx)))
+       finally do
+         (setf (org-glance- view :markers) markers*)
+         (remhash hash (org-glance- view :hash->midx))
+         (goto-char marker-position)
+         (org-glance-headline:with-headline-at-point
+           (delete-region (point-min) (point-max))))))
 
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
   (declare (indent 0))
@@ -275,63 +242,64 @@
                (midx (gethash old-hash (org-glance- view :hash->midx)))
                (marker-position (org-glance-view:get-marker-position view midx)))
     (org-glance-log :sql "Update \"%s\" set hash = \"%s\"" (org-glance- headline :title) new-hash)
-    (org-glance-view:with-current-buffer view
-      (goto-char marker-position)
-      (org-glance-headline:with-headline-at-point
-        (let ((inhibit-message t)
-              (org-log-state-notes-into-drawer nil)
-              (org-log-into-drawer nil)
-              (org-log-note-state nil)
-              (org-todo-log-states nil)
-              (org-log-done nil))
-          (org-edit-headline (org-glance- headline :title))
-          (org-todo (org-glance- headline :state))
-          (when (org-glance- headline :commented?)
-            (org-toggle-comment))
-          (org-set-tags (org-glance- headline :tags)))
 
-        (goto-char (point-min))
-        (when (= 0 (forward-line))
-          (delete-region (point) (point-max)))
+    (goto-char marker-position)
+    (org-glance-headline:with-headline-at-point
+      (let ((inhibit-message t)
+            (org-log-state-notes-into-drawer nil)
+            (org-log-into-drawer nil)
+            (org-log-note-state nil)
+            (org-todo-log-states nil)
+            (org-log-done nil))
+        (org-edit-headline (org-glance- headline :title))
+        (org-todo (org-glance- headline :state))
+        (when (org-glance- headline :commented?)
+          (org-toggle-comment))
+        (org-set-tags (org-glance- headline :tags)))
 
-        (goto-char (point-max))
+      (goto-char (point-min))
+      (when (= 0 (forward-line))
+        (delete-region (point) (point-max)))
+      (goto-char (point-max))
 
-        (insert (with-temp-buffer
-                  (insert (org-glance- headline :contents))
-                  (goto-char (point-min))
-                  (forward-line)
-                  (buffer-substring-no-properties (point) (point-max))))
+      (insert (with-temp-buffer
+                (insert (org-glance- headline :contents))
+                (goto-char (point-min))
+                (forward-line)
+                (buffer-substring-no-properties (point) (point-max))))
 
-        (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
-          (insert "\n"))
+      (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
+        (insert "\n"))
 
-        (org-glance-view:set-marker-hash view midx new-hash)))))
+      (org-glance-view:set-marker-hash view midx new-hash))))
 
 (cl-defun org-glance-view:mark (&optional (view (org-glance-view:get-buffer-view)))
   "Create effective in-memory representation of VIEW org-mode buffer."
   ;; TODO make dynamic arrays to optimize add operation
   ;; TODO save markers for further optimizations
-  (org-glance-view:with-current-buffer view
-    (cl-loop
-       with mark-cache-file = (format "%s_markers" (org-glance- view :location))
-       with markers = (cond ((f-exists? mark-cache-file)
-                             (org-glance-view:load-markers view mark-cache-file))
-                            (t (org-glance-log :performance
-                                   (org-glance-headline:map (headline)
-                                     (org-glance-marker :hash (org-glance- headline :hash)
-                                                        :position (point-min))))))
-       with result = (make-vector (length markers) nil)
-       with hash->midx = (make-hash-table :test #'equal)
-       for marker in markers
-       for midx from 0
-       do
-         (puthash (org-glance- marker :hash) midx hash->midx)
-         (aset result midx marker)
-       finally do
-         (setf (org-glance- view :markers) result
-               (org-glance- view :hash->midx) hash->midx)
-         (unless (f-exists? mark-cache-file)
-           (org-glance-view:save-markers view mark-cache-file)))))
+  (cl-loop
+     with mark-cache-file = (format "%s_markers" (org-glance- view :location))
+     with markers = (or (and (f-exists? mark-cache-file)
+                             (condition-case nil
+                                 (prog1 (org-glance-view:load-markers view mark-cache-file)
+                                   (org-glance-log :cache "cache hit: read markers"))
+                               (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
+                        (org-glance-log :performance
+                            (prog1 (org-glance-headline:map (headline)
+                                     (org-glance-view--marker :hash (org-glance- headline :hash)
+                                                              :position (point-min)))
+                              (org-glance-log :cache "cache miss: recalculate markers"))))
+     with result = (make-vector (length markers) nil)
+     with hash->midx = (make-hash-table :test #'equal)
+     for marker in markers
+     for midx from 0
+     do
+       (puthash (org-glance- marker :hash) midx hash->midx)
+       (aset result midx marker)
+     finally do
+       (setf (org-glance- view :markers) result
+             (org-glance- view :hash->midx) hash->midx)
+       (org-glance-view:save-markers view mark-cache-file)))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
@@ -355,17 +323,19 @@
       (let ((offset (org-glance-world:persist world)))
         (org-glance-view:set-offset view offset))
 
-      (dolist (it (hash-table-values (org-glance- world :views)))
+      (dolist-with-progress-reporter (it (hash-table-values (org-glance- world :views)))
+          "Fetch related views"
         (when (not (eq view it))
-          (org-glance-view:fetch it)))
+          (org-glance-view:with-current-buffer it
+            (org-glance-view:fetch it))))
 
       (org-glance-view:save-markers view (format "%s_markers" (org-glance- view :location))))))
 
 (cl-defun org-glance-view:save-markers (view location)
   (org-glance-view:with-current-buffer view
-    (let ((view-hash (buffer-hash)))
+    (let ((hash (buffer-hash)))
       (with-temp-file location
-        (insert (format "%s\n" view-hash))
+        (insert (format "%s\n" hash))
         (cl-loop for marker across-ref (org-glance- view :markers)
            do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position))))))))
 
@@ -375,7 +345,7 @@
       (with-temp-buffer
         (insert-file-contents location)
         (goto-char (point-min))
-        (unless (string= (buffer-substring-no-properties (point-min) (line-end-position)) view-hash)
+        (unless (string= (buffer-substring-no-properties (point) (line-end-position)) view-hash)
           (user-error "Mark cache validation failed: \"%s\" vs \"%s\""
                       (buffer-substring-no-properties (point-min) (line-end-position))
                       view-hash))
@@ -383,7 +353,7 @@
            collect (cl-destructuring-bind (hash position)
                        (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
 
-                     (org-glance-marker :hash hash :position (string-to-number position))))))))
+                     (org-glance-view--marker :hash hash :position (string-to-number position))))))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
   (cl-labels ((derive (h  ;; hash
@@ -397,79 +367,81 @@
                                   for d = (cdr r)     ;; derivation
                                   when (string= h d)
                                   return (derive s rs j)))
-                      (t nil) ;; not found
-                      )))
+                      ;; not found
+                      (t nil))))
     (let* ((world (org-glance- view :world))
-           (view-offset (org-glance-view:offset view))
+           (view-offset (org-glance-view:get-offset view))
            (world-offset (org-glance-world:offset world)))
-      (org-glance-view:with-current-buffer view
-        (when (org-glance-offset:less? view-offset world-offset)
-          (cl-loop
-             with events = (reverse (--take-while (org-glance-offset:less? view-offset (org-glance- it :offset)) (org-glance-world:events world)))
-             with relations = (make-vector (length events) nil)
-             for event in events ;; TODO optimize
-             for idx from 0
-             for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
-             for progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
-             do
-               (org-glance-log :events "Event: %s" event)
-               (cl-typecase event
-                 (org-glance-event:UPDATE (org-glance-log :sql "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
-                                          (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
-                                                 (org-glance-log :events "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
-                                                 (org-glance-log :events "Hashes are equal"))
-                                                ((not (org-glance-view:member? view headline))
-                                                 (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
+      (when (org-glance-offset:less? view-offset world-offset)
+        (cl-loop
+           with events = (reverse (--take-while (org-glance-offset:less? view-offset (org-glance- it :offset)) (org-glance-world:events world)))
+           with relations = (make-vector (length events) nil)
+           with progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
+           for event in events ;; TODO optimize
+           for idx from 0
+           for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
+           do (cl-typecase event
+                (org-glance-event:UPDATE (org-glance-log :sql "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
+                                         (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
+                                                (org-glance-log :events "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
+                                                (org-glance-log :events "Hashes are equal"))
+                                               ((not (org-glance-view:member? view headline))
+                                                (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
 
-                                                 (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
-                                                   (org-glance-view:remove-headline view (org-glance- event :hash)))
+                                                (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
+                                                  (org-glance-view:remove-headline view (org-glance- event :hash)))
 
-                                                 (org-glance-log :events "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
-                                                 (org-glance-log :events "Validation failed")
-                                                 (org-glance-log :events "State: %s" (org-glance- headline :state))
-                                                 (org-glance-log :events "View: %s" (org-glance- view :type))
-                                                 (org-glance-log :events "Relations: %s" relations))
-                                                ((gethash (org-glance- event :hash) (org-glance- view :hash->midx))
-                                                 (org-glance-view:replace-headline view (org-glance- event :hash) headline))
-                                                (t
-                                                 (org-glance-log :events "Track UPDATE event as ADD event for \"%s\"" (org-glance- headline :title))
-                                                 (org-glance-log :events "Event hash not found")
-                                                 (org-glance-log :events "Event hash: %s" (org-glance- event :hash))
-                                                 (org-glance-log :events "Relations: %s" relations)
-                                                 (org-glance-log :events "Available hashes: %s" (hash-table-keys (org-glance- view :hash->midx)))
-                                                 (org-glance-log :events "Derive hash from relations")
-                                                 (if-let (hash (derive (org-glance- event :hash) relations idx))
-                                                     (unless (string= hash (org-glance- headline :hash))
-                                                       (org-glance-view:replace-headline view hash headline))
-                                                   (org-glance-log :events "Derived hash not found. Add headline")
-                                                   (org-glance-view:add-headline view headline)))))
-                 (org-glance-event:PUT (cond ((not (org-glance-view:member? view headline))
-                                              (org-glance-log :events "Skip ADD event for \"%s\"" (org-glance- headline :title))
-                                              (org-glance-log :events "Validation failed")
-                                              (org-glance-log :events "State: %s" (org-glance- headline :state))
-                                              (org-glance-log :events "View: %s" (org-glance- view :type)))
-                                             (t
-                                              (org-glance-view:add-headline view headline))))
-                 (org-glance-event:RM (org-glance-view:remove-headline view (org-glance- event :hash)))
-                 (otherwise (user-error "Don't know how to handle event of type %s" (type-of event))))
-               (progress-reporter-update progress-reporter idx)
-               (redisplay)
-             finally do (progress-reporter-done progress-reporter))
-          (org-glance-view:set-offset view world-offset)
-          (save-buffer))))))
+                                                (org-glance-log :events "Skip UPDATE event for \"%s\"" (org-glance- headline :title))
+                                                (org-glance-log :events "Validation failed")
+                                                (org-glance-log :events "State: %s" (org-glance- headline :state))
+                                                (org-glance-log :events "View: %s" (org-glance- view :type))
+                                                (org-glance-log :events "Relations: %s" relations))
+                                               ((gethash (org-glance- event :hash) (org-glance- view :hash->midx))
+                                                (org-glance-view:replace-headline view (org-glance- event :hash) headline))
+                                               (t
+                                                (org-glance-log :events "Track UPDATE event as ADD event for \"%s\"" (org-glance- headline :title))
+                                                (org-glance-log :events "Event hash not found")
+                                                (org-glance-log :events "Event hash: %s" (org-glance- event :hash))
+                                                (org-glance-log :events "Relations: %s" relations)
+                                                (org-glance-log :events "Available hashes: %s" (hash-table-keys (org-glance- view :hash->midx)))
+                                                (org-glance-log :events "Derive hash from relations")
+                                                (if-let (hash (derive (org-glance- event :hash) relations idx))
+                                                    (unless (string= hash (org-glance- headline :hash))
+                                                      (org-glance-view:replace-headline view hash headline))
+                                                  (org-glance-log :events "Derived hash not found. Add headline \"%s\"" (org-glance- headline :title))
+                                                  (org-glance-view:add-headline view headline)))))
+                (org-glance-event:PUT (cond ((not (org-glance-view:member? view headline))
+                                             (org-glance-log :events "Skip ADD event for \"%s\"" (org-glance- headline :title))
+                                             (org-glance-log :events "Validation failed")
+                                             (org-glance-log :events "State: %s" (org-glance- headline :state))
+                                             (org-glance-log :events "View: %s" (org-glance- view :type)))
+                                            (t
+                                             (org-glance-view:add-headline view headline))))
+                (org-glance-event:RM (org-glance-view:remove-headline view (org-glance- event :hash)))
+                (otherwise (user-error "Don't know how to handle event of type %s" (type-of event))))
+             (progress-reporter-update progress-reporter idx (format "Processed %d events of %d" idx (length events)))
+           finally do
+             (org-glance-view:set-offset view world-offset)
+             (progress-reporter-done progress-reporter))))))
 
-(cl-defun org-glance-view:offset (view)
-  (declare (indent 1))
-  (let ((buffer-offset (org-glance-view:with-current-buffer view
-                         (org-glance-offset:read (org-glance-view:get-property "OFFSET"))))
+(cl-defun org-glance-view:get-offset (view)
+  (let ((buffer-offset (condition-case nil
+                           (thread-first (org-glance- view :location)
+                             (org-glance-view:get-header-location-by-view-location)
+                             (org-glance-view:read-header)
+                             (a-get :offset))
+                         (file-missing (org-glance-offset:zero))))
         (memory-offset (org-glance- view :offset)))
-    (-max-by #'org-glance-offset:less? (list buffer-offset memory-offset))))
+    (-min-by #'org-glance-offset:less? (list buffer-offset memory-offset))))
 
 (cl-defun org-glance-view:set-offset (view offset)
+  (setf (org-glance- view :offset) offset)
+  (org-glance-view:write-header view))
+
+(cl-defun org-glance-view:set-type (view type)
   (declare (indent 1))
-  (org-glance-view:with-current-buffer view
-    (org-glance-view:set-property "OFFSET" offset)
-    (setf (org-glance- view :offset) offset)))
+  (with-temp-file (format "%s_type" (org-glance- view :location))
+    (insert (prin1-to-string type))))
 
 (cl-defun org-glance-view:marker-at-point
     (&optional
@@ -481,6 +453,40 @@
 (cl-defun org-glance-view:shift-markers (view midx diff)
   (cl-loop for idx from (1+ midx) below (length (org-glance- view :markers))
      do (org-glance-view:set-marker-position view idx (+ (org-glance-view:get-marker-position view idx) diff))))
+
+(cl-defun org-glance-view:write-header (view)
+  (with-temp-file (org-glance-view:get-header-location-by-view-location (org-glance- view :location))
+    (insert (pp-to-string (a-list
+                           :type (org-glance- view :type)
+                           :offset (org-glance- view :offset))))))
+
+(cl-defun org-glance-view:read-header (filename)
+  (cl-assert (s-ends-with? org-glance-view--header-extension filename))
+  (with-temp-buffer
+    (insert-file-contents filename)
+    (read (buffer-substring-no-properties (point-min) (point-max)))))
+
+(cl-defun org-glance-view:get-buffer-header ()
+  (thread-first (buffer-file-name)
+    (org-glance-view:get-header-location-by-view-location)
+    (org-glance-view:read-header)))
+
+(cl-defun org-glance-view:get-header-location-by-view-location (view-location)
+  (thread-first view-location
+    (file-name-sans-extension)
+    (concat org-glance-view--header-extension)))
+
+(cl-defun org-glance-view:get-markers-location-by-view-location (view-location)
+  (thread-first view-location
+    (file-name-sans-extension)
+    (concat org-glance-view--marker-extension)))
+
+(cl-defun org-glance-view:get-buffer-view ()
+  (let ((header (org-glance-view:get-buffer-header))
+        (world (thread-first (buffer-file-name)
+                 (org-glance-world:get-root-directory)
+                 (org-glance-world:get-or-create))))
+    (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) nil (a-get header :offset))))
 
 (provide 'org-glance-view)
 

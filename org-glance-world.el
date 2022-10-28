@@ -60,39 +60,44 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Views associated with world by type.")))
 
-(cl-defun org-glance-world:create (location)
-  "Create world located in directory LOCATION."
-  (declare (indent 1))
-  (thunk-let ((cached-world (gethash location org-glance-worlds))
-              (persisted-world (org-glance-world:read location))
-              (new-world (org-glance-world :location location))
-              (location-exists? (and (f-exists? location)
-                                     (f-directory? location)
-                                     (f-readable? location))))
-    (cond
-      ((and location-exists? cached-world)
-       (org-glance-log :cache "World has been retrieved from cache (org-glance-worlds)")
-       cached-world)
-      (location-exists?
-       (org-glance-log :cache "Read world from \"%s\"" location)
-       (puthash location persisted-world org-glance-worlds))
-      (t
-       (f-mkdir-full-path location)
-       (org-glance-log :cache "World has been created from scratch (org-glance-worlds)")
-       (puthash location new-world org-glance-worlds)))))
+(cl-defun org-glance-world:location? (location)
+  (and (f-exists? location)
+       (f-directory? location)
+       (f-readable? location)
+       (f-exists? (f-join location "org-glance-world.md"))))
+
+(cl-defun org-glance-world:get-or-create (location)
+  "Read `org-glance-world' from LOCATION."
+  (or (org-glance-world:get-from-cache location)
+      (org-glance-world:read location)
+      (org-glance-world--create location)))
+
+(cl-defun org-glance-world:get-from-cache (location)
+  (when-let (world (gethash location org-glance-worlds))
+    (org-glance-log :cache "[org-glance-world] cache hit: org-glance-worlds")
+    world))
+
+(cl-defun org-glance-world:put-to-cache (world location)
+  (org-glance-log :cache "[org-glance-world] cache put: org-glance-worlds")
+  (puthash location world org-glance-worlds))
 
 (cl-defun org-glance-world:read (location)
-  "Read `org-glance-world' from LOCATION."
-  (or (when-let (world (gethash location org-glance-worlds))
-        (org-glance-log :cache "World has been retrieved from cache (org-glance-worlds)")
-        world)
-      (progn
-        (org-glance-log :cache "Read world from hard drive")
-        (puthash location
-                 (org-glance-world :location location
-                                   :changelog (org-glance-log :performance
-                                                  (org-glance-changelog:read (f-join location "log" "event.log"))))
-                 org-glance-worlds))))
+  (org-glance-log :cache "[org-glance-world] cache miss: %s" location)
+  (when (org-glance-world:location? location)
+    (let* ((changelog (org-glance-log :performance
+                          (org-glance-changelog:read (f-join location "log" "event.log"))))
+           (world (org-glance-world :location location
+                                    :changelog changelog)))
+      (org-glance-world:put-to-cache world location)
+      world)))
+
+(cl-defun org-glance-world--create (location)
+  "Create world located in directory LOCATION."
+  (declare (indent 1))
+  (f-mkdir-full-path location)
+  (f-touch (f-join location "org-glance-world.md"))
+  (org-glance-log :cache "[org-glance-world] cache miss: create from scratch")
+  (puthash location (org-glance-world :location location) org-glance-worlds))
 
 (cl-defun org-glance-world:offset (world)
   (if-let (event (org-glance-changelog:last (org-glance- world :changelog)))
@@ -152,7 +157,7 @@ Return last committed offset."
   "Put HEADLINE to WORLD."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
-    (org-glance-log :cache "Put headline \"%s\" to the world cache" (org-glance- headline :title))
+    (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance- headline :title))
     (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
     world))
 
@@ -191,7 +196,7 @@ achieved by calling `org-glance-world:persist' method."
 
    ;; Search LRU cache
    (when-let (result (gethash hash (org-glance- world :cache)))
-     (org-glance-log :cache "Retrieve headline from cache (hashmap): \"%s\"" (org-glance- result :title))
+     (org-glance-log :cache "[org-glance-headline] cache hit (hashmap): \"%s\"" (org-glance- result :title))
      result)
 
    ;; Search staged changes
@@ -207,18 +212,18 @@ achieved by calling `org-glance-world:persist' method."
                              (org-glance-event:PUT
                               (pcase hash
                                 ((pred (string= (org-glance- event :headline :hash))) (cl-return (org-glance- event :headline))))))))
-     (org-glance-log :cache "Retrieve headline from cache (changelog*): \"%s\"" result)
+     (org-glance-log :cache "[org-glance-headline] cache hit (changelog*): \"%s\"" result)
      result)
 
    ;; Search persistent storage
    (org-glance:with-temp-buffer
-    (org-glance-log :cache "Retrieve headline from drive: %s" hash)
+    (org-glance-log :cache "[org-glance-headline] cache miss: \"%s\"" hash)
     (insert-file-contents (org-glance-world:locate-headline world hash))
     (goto-char (point-min))
     (unless (org-at-heading-p)
       (outline-next-heading))
     (when-let (headline (org-glance-headline-at-point))
-      (org-glance-log :cache "Put headline \"%s\" to the world cache" (org-glance- headline :title))
+      (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance- headline :title))
       (puthash (org-glance- headline :hash) headline (org-glance- world :cache))))))
 
 (cl-defun org-glance-world:events (world)
@@ -251,7 +256,7 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:save-headline (world headline)
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
-      (org-glance-world:dim-split world headline)
+      (org-glance-world:apply-dimensions world headline)
       (org-glance-headline:save headline location))
     location))
 
@@ -285,15 +290,20 @@ achieved by calling `org-glance-world:persist' method."
     ((or org-glance-headline org-glance-headline-header)
      (org-glance-world:locate-headline world (org-glance- thing :hash)))))
 
-(cl-defun org-glance-world:dim-eval (world headline)
+(cl-defun org-glance-world:locate-dimension (world dimension)
+  (f-join (org-glance- world :location)
+          "dimensions"
+          (format "%s.org" (downcase dimension))))
+
+(cl-defun org-glance-world:evaluate-dimensions (world headline)
   (cl-loop for (dimension . partition-by) in (org-glance- world :dimensions)
      collect (cons dimension (let ((result (eval partition-by (a-list 'headline headline))))
                                (cond ((atom result) (list result))
                                      (t result))))))
 
-(cl-defun org-glance-world:dim-split (world headline)
+(cl-defun org-glance-world:apply-dimensions (world headline)
   (cl-loop
-     for (dimension . partitions) in (org-glance-world:dim-eval world headline)
+     for (dimension . partitions) in (org-glance-world:evaluate-dimensions world headline)
      do (dolist (partition partitions)
           (when (and partition (not (string-empty-p (format "%s" partition))))
             (let ((predicate (cl-typecase partition
@@ -301,20 +311,14 @@ achieved by calling `org-glance-world:persist' method."
                                (t `(member ,partition ,dimension))))
                   (location (f-join (org-glance- world :location)
                                     "dimensions"
-                                    (downcase (format "%s" dimension))
-                                    (format "%s.org" partition))))
+                                    (downcase (format "%s=%s.org" dimension partition)))))
               (org-glance-log :dimensions "Create derived view \"%s -> %s\"" dimension partition)
-              (org-glance-view:create world predicate location nil (org-glance-offset:zero)))))))
+              (org-glance-view:get-or-create world predicate location nil (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:list-dimensions (world)
-  (cl-loop for (dimension . _) in (org-glance- world :dimensions)
-     for location = (f-join (org-glance- world :location) "dimensions" (downcase (format "%s" dimension)))
-     when (and (f-exists? location) (f-readable? location))
-     append (--map (format "%s=%s"
-                           (downcase (format "%s" dimension))
-                           (file-name-sans-extension it))
-                   (--filter (member (file-name-extension it) org-glance-scope-extensions)
-                             (directory-files location)))))
+  (--map (file-name-sans-extension it)
+         (--filter (member (file-name-extension it) org-glance-scope-extensions)
+                   (directory-files (f-join (org-glance- world :location) "dimensions")))))
 
 (cl-defun org-glance-world:choose-dimension (world)
   (completing-read "Choose dimension: "
@@ -322,19 +326,27 @@ achieved by calling `org-glance-world:persist' method."
                    nil
                    t))
 
-(cl-defun org-glance-world:locate-dimension (world dimension)
-  (f-join (org-glance- world :location)
-          "dimensions"
-          (car (s-split "=" dimension))
-          (format "%s.org" (cadr (s-split "=" dimension)))))
+(cl-defun org-glance-world:update-dimension (world dim)
+  (let* ((view-location (org-glance-world:locate-dimension world dim))
+         (view-header (thread-first view-location
+                        (org-glance-view:get-header-location-by-view-location)
+                        (org-glance-view:read-header)))
+         (view (org-glance-view :world world
+                                :type (a-get view-header :type)
+                                :location view-location
+                                :offset (a-get view-header :offset)))
+         (world-offset (org-glance-world:offset world)))
+    (when (org-glance-offset:less? (org-glance- view :offset) world-offset)
+      (with-temp-file view-location
+        (insert-file-contents view-location)
+        (org-mode)
+        (org-glance-view:mark view)
+        (org-glance-view:fetch view)
+        (org-glance-view:write-header view)))
+    view-location))
 
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
-  "TODO optimize me. Instead of simply finding file:
-1. Check if buffer is already opened.
-2. Get dimension offset efficiently.
-3. Apply all changes to it in a separate thread."
-  (let ((location (org-glance-world:locate-dimension world dimension)))
-    (find-file location)))
+  (find-file (org-glance-world:update-dimension world dimension)))
 
 (cl-defun org-glance-world:agenda (world)
   (let* ((dimension (org-glance-world:choose-dimension world))
@@ -416,5 +428,25 @@ achieved by calling `org-glance-world:persist' method."
       (quit
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
+
+(cl-defun org-glance-world:cashew-get (world key)
+  "Get `org-glance-view' from WORLD's cache by KEY."
+  (when (and (f-exists? (org-glance- key :location))
+             (f-file? (org-glance- key :location)))
+    (when-let (view (gethash key (org-glance- world :views)))
+      (prog1 view
+        (org-glance-log :cache "[org-glance-view] cache hit: %s" key)))))
+
+(cl-defun org-glance-world:cashew-set (key view world)
+  "Set `org-glance-view' to the WORLD's cache using KEY."
+  (puthash key view (org-glance- world :views)))
+
+(cl-defun org-glance-world:get-root-directory (location)
+  (cond ((null location) (user-error "World root directory not found"))
+        ((org-glance-world:location? location) location)
+        (t (org-glance-world:get-root-directory (f-parent location)))))
+
+(cl-defun org-glance-world:get-events-after (world offset)
+  (reverse (--take-while (org-glance-offset:less? offset (org-glance- it :offset)) (org-glance-world:events world))))
 
 (provide 'org-glance-world)

@@ -15,7 +15,7 @@
   (lambda (view-name view-type world-name file-name)
     (let* ((location (org-glance-test:get-file file-name))
            (world (org-glance-test:get-world world-name))
-           (view (org-glance-view:create world (read view-type) location)))
+           (view (org-glance-view:get-or-create world (read view-type) location)))
       (org-glance-test:view-put view-name view))
     (And "I find file \"%s\"" file-name)))
 
@@ -54,12 +54,12 @@
               (midx (org-glance-view:marker-at-point)))
           (should (not (org-glance-view:marker-changed? view midx))))))
 
-(Then "^current buffer offset should be latest$"
+(Then "^buffer offset should be latest$"
       (lambda ()
         (let* ((view (org-glance-view:get-buffer-view))
                (world (org-glance- view :world)))
           (should (org-glance-offset:equal-p
-                   (org-glance-view:offset view)
+                   (org-glance-view:get-offset view)
                    (org-glance-world:offset world))))))
 
 (Then "^I shouldn't be able to commit$"
@@ -137,3 +137,8 @@
   (lambda (view class world location buffer)
     (When "I create view \"%s\" from \"%s\" \"%s\" in \"%s\"" view class world location)
     (And "I find file \"%s\" as \"%s\"" location buffer)))
+
+(When "^I select view from \"\\([^\"]+\\)\" where tag = \"\\([^\"]+\\)\"$"
+  (lambda (world-name tag-name)
+    (let ((world (org-glance-test:get-world world-name)))
+      (find-file (org-glance-world:update-dimension world (format "tag=%s" tag-name))))))

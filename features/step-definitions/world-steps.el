@@ -18,7 +18,7 @@
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
        (lambda (world-name relative-location)
          (let* ((location (org-glance-test:get-file relative-location))
-                (world (org-glance-world:create location)))
+                (world (org-glance-world:get-or-create location)))
            (org-glance-test:world-put world-name world))))
 
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"

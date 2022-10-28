@@ -76,7 +76,7 @@
   "Update system state from `org-glance-directory'."
   (interactive)
   (setq org-glance-current-world (org-glance-log :performance
-                                     (org-glance-world:create org-glance-directory))))
+                                     (org-glance-world:get-or-create org-glance-directory))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

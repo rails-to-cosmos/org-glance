@@ -1,5 +1,4 @@
 Feature: Consistent Edit
-  @debug
   Scenario: Basic functionality
     Given world "Phones" in directory "world/phones" with headlines
       """
@@ -148,7 +147,7 @@ Feature: Consistent Edit
     When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
-    And current buffer offset should be latest
+    And buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "Niagara Waterfalls"
@@ -165,7 +164,7 @@ Feature: Consistent Edit
     When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org" as "*hikes*"
 
     Then current buffer should contain 2 headlines
-    And current buffer offset should be latest
+    And buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "STARTED Troodos Mountains"
@@ -332,6 +331,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -344,28 +344,35 @@ Feature: Consistent Edit
       * CANCELLED PHP Course :Cringe:
       """
 
-    When I create view "Hikes" from "(member 'hike tag)" "Adventures" in "views/hikes.org"
-    And create view "Fun" from "(member 'music tag)" "Adventures" in "views/fun.org"
-    And find file "views/hikes.org"
-    And I rename headline "Music Festival" to "Music Festival 2022"
+    When I select view from "Adventures" where tag = "Hike"
+    And rename headline "Music Festival" to "Music Festival 2022"
     And set headline "Music Festival 2022" contents to
     """
     SCHEDULED: <2022-01-01 Sat>
     """
-    And save buffer
-    And kill buffer
-    And find file "views/fun.org"
+
+    Then headline "Music Festival" should not be in current buffer
+    And headline "Music Festival 2022" should be in current buffer
+    And buffer offset should be latest
+
+    When I save buffer
+
+    Then headline "Music Festival" should not be in current buffer
+    And headline "Music Festival 2022" should be in current buffer
+
+    When I select view from "Adventures" where tag = "Music"
 
     Then current buffer should contain 2 headlines
     And marker positions should be consistent
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
+
     And the contents of headline "Music Festival 2022" should be
     """
     SCHEDULED: <2022-01-01 Sat>
     """
-    And current buffer offset should be latest
+    And buffer offset should be latest
 
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to
@@ -379,10 +386,10 @@ Feature: Consistent Edit
     When I save buffer
 
     Then marker positions and hashes should be consistent
-    And current buffer offset should be latest
+    And buffer offset should be latest
 
     When I kill buffer
-    And find file "views/hikes.org"
+    And I select view from "Adventures" where tag = "Hike"
 
     Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
@@ -392,18 +399,18 @@ Feature: Consistent Edit
     SCHEDULED: <2023-01-01 Sun>
     """
     And marker positions and hashes should be consistent
-    And current buffer offset should be latest
+    And buffer offset should be latest
 
     When I rename headline "Music Festival 2023" to "Music Festival 2024"
     And save buffer
     And kill buffer
-    And find file "views/fun.org"
+    And I select view from "Adventures" where tag = "Music"
 
     Then current buffer should contain 2 headlines
     And marker positions and hashes should be consistent
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
-    And current buffer offset should be latest
+    And buffer offset should be latest
 
     # When I commit changes
     # And kill buffer "*fun*"
@@ -420,7 +427,6 @@ Feature: Consistent Edit
     # And I create world "Fun" from ":Hike: AND :Music:" "Adventures"
     # And I create world "Memories" from ":Hike: AND DONE" "Adventures"
 
-  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 
@@ -437,7 +443,7 @@ Feature: Consistent Edit
     When I visit view "TODO" derived from dimension "State" in world "Adventures"
 
     Then current buffer should contain 1 headline
-    And current buffer offset should be latest
+    And buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "Niagara Waterfalls"
@@ -454,7 +460,7 @@ Feature: Consistent Edit
     When I visit view "DONE" derived from dimension "State" in world "Adventures"
 
     Then current buffer should contain 1 headline
-    And current buffer offset should be latest
+    And buffer offset should be latest
     And marker positions and hashes should be consistent
 
     When I go to headline "Niagara Waterfalls"
