@@ -9,6 +9,7 @@
 
 (require 'org-glance-headline)
 (require 'org-glance-world)
+(require 'org-glance-world-model)
 (require 'org-glance-view)
 
 (When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
@@ -58,7 +59,7 @@
                (world (org-glance- view :world)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:get-offset view)
-                   (org-glance-world:offset world))))))
+                   (org-glance-world-model:offset world))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()

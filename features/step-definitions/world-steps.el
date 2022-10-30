@@ -7,7 +7,7 @@
 
 (require 'org-glance)
 (require 'org-glance-headline)
-(require 'org-glance-world)
+(require 'org-glance-world-model)
 (require 'org-glance-scope)
 
 (Given "^world \"\\([^\"]+\\)\"$"
@@ -171,4 +171,4 @@
 (When "^I? ?persist world \"\\([^\"]+\\)\"$"
   (lambda (world-name)
     (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world:persist world))))
+      (org-glance-world-model:persist world))))

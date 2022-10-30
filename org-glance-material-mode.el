@@ -6,7 +6,6 @@
 
 (require 'org-glance-log)
 (require 'org-glance-headline)
-(require 'org-glance-world)
 (require 'org-glance-view)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)

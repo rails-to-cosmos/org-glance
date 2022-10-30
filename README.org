@@ -9,10 +9,22 @@
 
 https://untools.co
 
+* PENDING Implement proper controllers
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-10-30 Sun 14:00]
+- State "STARTED"    from "TODO"       [2022-10-30 Sun 13:10]
+CLOCK: [2022-10-30 Sun 13:10]--[2022-10-30 Sun 14:00] =>  0:50
+:END:
 * TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world:get-headline
-* TODO Bug in view: changes are not applied
 * TODO Cache dimensions
-* TODO Fix file names
+* PENDING Fix file names
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-10-30 Sun 13:06]
+- State "STARTED"    from "PENDING"    [2022-10-30 Sun 13:06]
+- State "PENDING"    from "STARTED"    [2022-10-30 Sun 13:06]
+- State "STARTED"    from "TODO"       [2022-10-30 Sun 12:53]
+CLOCK: [2022-10-30 Sun 12:53]--[2022-10-30 Sun 13:06] =>  0:13
+:END:
 * TODO Optimize fetch event
 * TODO Fetch and backfill operations should work in background
 * TODO Handle encrypted headlines

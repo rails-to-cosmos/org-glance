@@ -78,7 +78,7 @@
 
 (cl-defun org-glance-view:get-or-create (world type location
                                          &optional
-                                           (offset (org-glance-world:offset world)))
+                                           (offset (org-glance-world-model:offset world)))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (let* ((location (file-truename (f-join (org-glance- world :location) location)))
          (key (org-glance-view--key :type type :location location)))
@@ -307,7 +307,7 @@
     (dolist (hash to-remove)
       (org-glance-view:remove-headline view hash))
 
-    (let ((offset (org-glance-world:persist world)))
+    (let ((offset (org-glance-world-model:persist world)))
       (org-glance-log :world "Set view offset: %s" offset)
       (org-glance-view:set-offset view offset)
       (org-glance-log :world "View offset: %s" (org-glance- view :offset)))
@@ -362,7 +362,7 @@
                       (t nil))))
     (let* ((world (org-glance- view :world))
            (view-offset (org-glance-view:get-offset view))
-           (world-offset (org-glance-world:offset world)))
+           (world-offset (org-glance-world-model:offset world)))
       (org-glance-log :events "[%s] Fetch. View offset =  %s" (org-glance- view :type) view-offset)
       (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) world-offset)
       (cl-loop
@@ -483,7 +483,7 @@
 (cl-defun org-glance-view:get-buffer-view ()
   (let ((header (org-glance-view:get-buffer-header))
         (world (thread-first (buffer-file-name)
-                 (org-glance-world:get-root-directory)
+                 (org-glance-world:root)
                  (org-glance-world:get-or-create))))
     (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) (a-get header :offset))))
 
