@@ -380,7 +380,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
     And buffer offset should be latest
 
-  @debug
   Scenario: Destructive modifications
     Given world "Tasks"
 
