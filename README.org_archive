@@ -197,3 +197,27 @@ CLOSED: [2022-10-21 Fri 09:51]
 - State "STARTED"    from "TODO"       [2022-10-21 Fri 09:29]
 CLOCK: [2022-10-21 Fri 09:29]--[2022-10-21 Fri 09:51] =>  0:22
 :END:
+
+* CANCELLED [#A] Actualize indexes of lsm-tree
+CLOSED: [2022-10-29 Sat 08:27]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-29 Sat 08:28
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: CANCELLED
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "TODO"       [2022-10-29 Sat 08:27]
+:END:
+
+* CANCELLED make indexes proper lsm trees
+CLOSED: [2022-10-29 Sat 08:27]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-29 Sat 08:28
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: CANCELLED
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "TODO"       [2022-10-29 Sat 08:27]
+:END:

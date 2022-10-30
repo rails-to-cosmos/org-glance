@@ -332,8 +332,7 @@
         collect (save-excursion
                   (let ((,(car var) (org-glance-log :performance
                                         (org-glance-headline-at-point))))
-                    (org-glance-log :performance
-                        (org-glance-headline:with-headline-at-point ,@forms))))
+                    (org-glance-headline:with-headline-at-point ,@forms)))
         into result
         when (condition-case nil
                  (outline-forward-same-level 1)

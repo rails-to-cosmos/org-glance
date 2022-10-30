@@ -52,6 +52,9 @@
   :group 'org-glance
   :type 'directory)
 
+(defvar org-glance-current-world nil
+  "Current `org-glance-world'.")
+
 (cl-defun org-glance-capture ()
   (interactive)
   (org-glance-world:capture org-glance-current-world))
@@ -79,8 +82,9 @@
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (setq org-glance-current-world (org-glance-log :performance
-                                     (org-glance-world:get-or-create org-glance-directory))))
+  (setq org-glance-current-world
+        (org-glance-log :performance
+            (org-glance-world:get-or-create org-glance-directory))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

@@ -4,6 +4,8 @@
 (require 'f)
 (require 's)
 (require 'ol)
+(require 'org)
+(require 'org-capture)
 
 (declare-function s-replace-regexp 's)
 (declare-function f-mkdir-full-path 'f)
@@ -22,12 +24,18 @@
 (require 'org-glance-types)
 
 (defvar org-glance-worlds (make-hash-table :test #'equal) "List of worlds registered in system.")
-(defvar org-glance-current-world nil "Current `org-glance-world'.")
-(defvar-local org-glance-local-world nil "World used in temporary buffers.")
+
+(cl-deftype org-glance-world:location ()
+  '(satisfies (lambda (location)
+                (and (f-absolute? location)
+                     (f-exists? location)
+                     (f-directory? location)
+                     (f-readable? location)
+                     (f-exists? (f-join location "org-glance-world.md"))))))
 
 (org-glance-class org-glance-world nil
     ((location
-      :type org-glance-directory
+      :type org-glance-world:location
       :initarg :location
       :documentation "Directory containing all the data.")
      (changelog*
@@ -60,44 +68,37 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Views associated with world by type.")))
 
-(cl-defun org-glance-world:location? (location)
-  (and (f-exists? location)
-       (f-directory? location)
-       (f-readable? location)
-       (f-exists? (f-join location "org-glance-world.md"))))
-
 (cl-defun org-glance-world:get-or-create (location)
   "Read `org-glance-world' from LOCATION."
   (or (org-glance-world:get-from-cache location)
       (org-glance-world:read location)
-      (org-glance-world--create location)))
+      (org-glance-world:create location)))
 
 (cl-defun org-glance-world:get-from-cache (location)
-  (when-let (world (gethash location org-glance-worlds))
+  (when-let (world (gethash (file-truename location) org-glance-worlds))
     (org-glance-log :cache "[org-glance-world] cache hit: org-glance-worlds")
     world))
 
-(cl-defun org-glance-world:put-to-cache (world location)
+(cl-defun org-glance-world:put-to-cache (world)
   (org-glance-log :cache "[org-glance-world] cache put: org-glance-worlds")
-  (puthash location world org-glance-worlds))
+  (puthash (org-glance- world :location) world org-glance-worlds))
 
 (cl-defun org-glance-world:read (location)
   (org-glance-log :cache "[org-glance-world] cache miss: %s" location)
-  (when (org-glance-world:location? location)
-    (let* ((changelog (org-glance-log :performance
-                          (org-glance-changelog:read (f-join location "log" "event.log"))))
-           (world (org-glance-world :location location
-                                    :changelog changelog)))
-      (org-glance-world:put-to-cache world location)
-      world)))
+  (let ((world (org-glance-world:create location)))
+    (setf (org-glance- world :changelog) (org-glance-log :performance
+                                             (org-glance-changelog:read (f-join location "log" "event.log"))))
+    world))
 
-(cl-defun org-glance-world--create (location)
+(cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
   (declare (indent 1))
-  (f-mkdir-full-path location)
-  (f-touch (f-join location "org-glance-world.md"))
-  (org-glance-log :cache "[org-glance-world] cache miss: create from scratch")
-  (puthash location (org-glance-world :location location) org-glance-worlds))
+  (let ((location (file-truename location)))
+    (org-glance-log :cache "[org-glance-world] cache miss: create from scratch")
+    (f-mkdir-full-path location)
+    (f-touch (f-join location "org-glance-world.md"))
+    (org-glance-world:put-to-cache
+     (org-glance-world :location location))))
 
 (cl-defun org-glance-world:offset (world)
   (if-let (event (org-glance-changelog:last (org-glance- world :changelog)))
@@ -122,38 +123,46 @@ Return last committed offset."
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (changelog-location (f-join (org-glance- world :location) "log" "event.log")))
-
+    (org-glance-log :world "Persist changes")
     (dolist (event (reverse (org-glance- changelog* :events)))
+      (org-glance-log :world "Process %s" event)
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
-        (org-glance-log :world-events "Handle %s" event)
         (cl-typecase event
           (org-glance-event:RM
-
            (user-error "RM operation has not been implemented yet")
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world headline))
            )
 
           (org-glance-event:PUT
-           (org-glance-log :headlines "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
+           (org-glance-log :world "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
+           (org-glance-log :world "Save headline: %s" headline)
            (org-glance-world:save-headline world headline))
 
           (org-glance-event:UPDATE
+           (org-glance-log :world "Save headline: %s" headline)
            (org-glance-world:save-headline world headline)
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
            )))
 
+      (org-glance-log :world "Push event to changelog: %s" event)
       (org-glance-changelog:push changelog event))
 
+    (org-glance-log :world "Write changelog to %s: \n%s" changelog-location changelog)
     (org-glance-changelog:write changelog changelog-location)
     (setf (org-glance- world :changelog*) (org-glance-changelog))
-    (if (org-glance-changelog:last changelog)
-        (org-glance- (org-glance-changelog:last changelog) :offset)
-      (org-glance-offset:current))))
+
+    (let ((offset (if (org-glance-changelog:last changelog)
+                      (org-glance- (org-glance-changelog:last changelog) :offset)
+                    (org-glance-offset:current))))
+      (org-glance-log :world "Persist world offset: %s" offset)
+      (org-glance-log :world "Actual world offset: %s" (org-glance-world:offset world))
+      offset)))
 
 (cl-defun org-glance-world:add-headline (world headline)
   "Put HEADLINE to WORLD."
+  (org-glance-log :world "Put headline \"%s\" to world \"%s\" " (org-glance- headline :title) world)
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
     (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance- headline :title))
@@ -246,7 +255,8 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:import-headlines (world location)
   "Add headlines from LOCATION to WORLD."
-  (cl-dolist (file (org-glance-scope location))
+  (dolist-with-progress-reporter (file (org-glance-scope location))
+      "Importing headlines"
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
@@ -255,8 +265,8 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:save-headline (world headline)
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
-      (org-glance-world:apply-dimensions world headline)
-      (org-glance-headline:save headline location))
+      (org-glance-headline:save headline location)
+      (org-glance-world:apply-dimensions world headline))
     location))
 
 (cl-defun org-glance-world:generate-headline-id (world headline)
@@ -304,7 +314,7 @@ achieved by calling `org-glance-world:persist' method."
   (cl-loop
      for (dimension . partitions) in (org-glance-world:evaluate-dimensions world headline)
      do (dolist (partition partitions)
-          (when (and partition (not (string-empty-p (format "%s" partition))))
+          (when (not (string-empty-p (format "%s" partition)))
             (let ((predicate (cl-typecase partition
                                (symbol `(member (quote ,partition) ,dimension))
                                (t `(member ,partition ,dimension))))
@@ -346,9 +356,12 @@ achieved by calling `org-glance-world:persist' method."
       (with-temp-file view-location
         (org-mode)
         (insert-file-contents view-location)
-        (org-glance-view:mark-buffer view)
-        (org-glance-view:fetch view)
-        (org-glance-view:write-header view)
+        (org-glance-log :performance
+            (org-glance-view:mark-buffer view))
+        (org-glance-log :performance
+            (org-glance-view:fetch view))
+        (org-glance-log :performance
+            (org-glance-view:write-header view))
         (org-glance-log :buffers "[%s] Buffer after update:\n%s" (org-glance- view :type) (buffer-string))))
 
     view-location))
@@ -358,13 +371,14 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:agenda (world)
   (let* ((dimension (org-glance-world:choose-dimension world))
-         (location (org-glance-world:locate-dimension world dimension))
-         (org-agenda-files (list location))
-         (org-agenda-overriding-header "org-glance agenda")
-         (org-agenda-start-on-weekday nil)
-         (org-agenda-span 21)
-         (org-agenda-start-day "-7d"))
-    (org-agenda-list)))
+         (location (org-glance-world:locate-dimension world dimension)))
+    (let ((lexical-binding nil))
+      (let ((org-agenda-files (list location))
+            (org-agenda-overriding-header "org-glance agenda")
+            (org-agenda-start-on-weekday nil)
+            (org-agenda-span 21)
+            (org-agenda-start-day "-7d"))
+        (org-agenda-list)))))
 
 (cl-defun org-glance-world:capture (world
                                     &key
@@ -376,31 +390,26 @@ achieved by calling `org-glance-world:persist' method."
                                       ;; finalize
                                       )
   (declare (indent 1))
-  (let ((file (make-temp-file "org-glance-" nil ".org")))
+  (let ((file (f-join (org-glance- world :location) "capture.org")))
+    (delete-file file)
     (find-file file)
-    (setq-local org-glance-local-world world)
     (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
-
-    (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
-      (org-capture nil "_"))
-
+    (let ((lexical-binding nil))
+      (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
+        (org-capture nil "_")))
     ;; (when finalize
     ;;   (org-capture-finalize))
     ))
 
 (cl-defun org-glance-capture:after-finalize-hook ()
   "Register captured headline in metastore."
-  (org-glance-headline:map (headline)
-    (org-glance-log :headlines "Register headline \"%s\" in world \"%s\" "
-      (org-glance- headline :title)
-      org-glance-local-world)
-    (org-glance-world:add-headline org-glance-local-world headline))
-
-  (org-glance-world:persist org-glance-local-world)
-
-  (let ((file (buffer-file-name)))
-    (kill-buffer (get-file-buffer file))
-    (delete-file file)))
+  (let ((world (org-glance-world:current)))
+    (org-glance-headline:map (headline)
+      (org-glance-world:add-headline world headline))
+    (org-glance-world:persist world)
+    (let ((file (buffer-file-name)))
+      (kill-buffer (get-file-buffer file))
+      (delete-file file))))
 
 (cl-defun org-glance-world:filter-headlines (world &optional predicate)
   "TODO cache headlines by predicate."
@@ -450,8 +459,14 @@ achieved by calling `org-glance-world:persist' method."
   (puthash key view (org-glance- world :views)))
 
 (cl-defun org-glance-world:get-root-directory (location)
-  (cond ((null location) (user-error "World root directory not found"))
-        ((org-glance-world:location? location) location)
-        (t (org-glance-world:get-root-directory (f-parent location)))))
+  (cl-typecase location
+    (org-glance-world:location location)
+    (otherwise (org-glance-world:get-root-directory (f-parent location)))))
+
+(cl-defun org-glance-world:current ()
+  "Get `org-glance-world' associated with current buffer."
+  (thread-first (buffer-file-name)
+    (org-glance-world:get-root-directory)
+    (org-glance-world:get-or-create)))
 
 (provide 'org-glance-world)

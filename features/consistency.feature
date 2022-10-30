@@ -380,6 +380,34 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
     And buffer offset should be latest
 
+  @debug
+  Scenario: Destructive modifications
+    Given world "Tasks"
+
+    When I add headlines to world "Tasks"
+      """
+      * TODO A
+      * TODO B
+      """
+
+    Then world "Tasks" should contain view "TODO" derived from dimension "State"
+    And world "Tasks" should contain view "A" derived from dimension "Title"
+    And world "Tasks" should contain view "B" derived from dimension "Title"
+
+    When I visit view "A" derived from dimension "Title" in world "Tasks"
+    Then current buffer should contain 1 headline
+
+    When I go to headline "A"
+    And I set title of headline at point to "C"
+    And save buffer
+
+    Then current buffer should contain 0 headlines
+    And world "Tasks" should contain view "C" derived from dimension "Title"
+    And buffer offset should be latest
+
+    When I visit view "C" derived from dimension "Title" in world "Tasks"
+    Then current buffer should contain 1 headline
+
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 

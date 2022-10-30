@@ -270,11 +270,10 @@
                                  (prog1 (org-glance-view:load-markers view mark-cache-file)
                                    (org-glance-log :cache "cache hit: read markers"))
                                (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
-                        (org-glance-log :performance
-                            (prog1 (org-glance-headline:map (headline)
-                                     (org-glance-view--marker :hash (org-glance- headline :hash)
-                                                              :position (point-min)))
-                              (org-glance-log :cache "cache miss: recalculate markers"))))
+                        (prog1 (org-glance-headline:map (headline)
+                                 (org-glance-view--marker :hash (org-glance- headline :hash)
+                                                          :position (point-min)))
+                          (org-glance-log :cache "cache miss: recalculate markers")))
      with result = (make-vector (length markers) nil)
      with hash->midx = (make-hash-table :test #'equal)
      for marker in markers
@@ -309,7 +308,9 @@
       (org-glance-view:remove-headline view hash))
 
     (let ((offset (org-glance-world:persist world)))
-      (org-glance-view:set-offset view offset))
+      (org-glance-log :world "Set view offset: %s" offset)
+      (org-glance-view:set-offset view offset)
+      (org-glance-log :world "View offset: %s" (org-glance- view :offset)))
 
     (dolist-with-progress-reporter (it (hash-table-values (org-glance- world :views)))
         "Fetch related views"
@@ -362,6 +363,8 @@
     (let* ((world (org-glance- view :world))
            (view-offset (org-glance-view:get-offset view))
            (world-offset (org-glance-world:offset world)))
+      (org-glance-log :events "[%s] Fetch. View offset =  %s" (org-glance- view :type) view-offset)
+      (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) world-offset)
       (cl-loop
          with events = (reverse (org-glance-world:events world))
          with relations = (make-vector (length events) nil)

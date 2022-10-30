@@ -25,7 +25,7 @@
          (Given "world \"%s\" in directory \"%s\"" world-name relative-location)
          (When "I add headlines to world \"%s\"" world-name headlines)))
 
-(When "^I? ?add headlines to world \"\\([^\"]+\\)\"$"
+(When "^I? ?add headlines? to world \"\\([^\"]+\\)\"$"
   (lambda (world-name headlines)
     (let ((world (org-glance-test:get-world world-name))
           (strings (->> headlines
@@ -36,11 +36,11 @@
                         (--map (concat "* " it)))))
       (cl-loop
          for string in strings
-         for headline = (org-glance-headline-from-string string)
-         do (org-glance-world:add-headline world headline))
-
-      (org-glance-world:persist world)
-      (org-glance-test:world-put world-name world))))
+         do
+           (org-glance-world:capture world)
+           (delete-region (point-min) (point-max))
+           (insert string)
+           (org-capture-finalize)))))
 
 (When "^I? ?import headlines to world \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (world-name location)

@@ -130,7 +130,7 @@
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
     (let ((world (org-glance-test:get-world world-name)))
-      (find-file (org-glance-world:update-dimension world (format "%s=%s" dimension-name view-name))))))
+      (org-glance-world:browse world (format "%s=%s" dimension-name view-name)))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)
