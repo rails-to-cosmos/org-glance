@@ -366,23 +366,30 @@ achieved by calling `org-glance-world:persist' method."
 
     view-location))
 
+(cl-defmacro org-glance-world:with-locked-dimension (world dimension &rest forms)
+  (declare (indent 2))
+  `(when (--> ,world
+              (org-glance-world:locate-dimension it ,dimension)
+              (get-file-buffer it)
+              (cond ((null it) t)
+                    ((buffer-live-p it) (kill-buffer it))))
+     ,@forms))
+
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
-  (when (-some-> world
-          (org-glance-world:locate-dimension dimension)
-          (get-file-buffer)
-          (kill-buffer))
+  (org-glance-world:with-locked-dimension world dimension
     (find-file (org-glance-world:update-dimension world dimension))))
 
 (cl-defun org-glance-world:agenda (world)
-  (let* ((dimension (org-glance-world:choose-dimension world))
-         (location (org-glance-world:locate-dimension world dimension)))
-    (let ((lexical-binding nil))
-      (let ((org-agenda-files (list location))
-            (org-agenda-overriding-header "org-glance agenda")
-            (org-agenda-start-on-weekday nil)
-            (org-agenda-span 21)
-            (org-agenda-start-day "-7d"))
-        (org-agenda-list)))))
+  (let ((dimension (org-glance-world:choose-dimension world)))
+    (org-glance-world:with-locked-dimension world dimension
+      (let ((location (org-glance-world:update-dimension world dimension))
+            (lexical-binding nil))
+        (let ((org-agenda-files (list location))
+              (org-agenda-overriding-header "org-glance agenda")
+              (org-agenda-start-on-weekday nil)
+              (org-agenda-span 21)
+              (org-agenda-start-day "-7d"))
+          (org-agenda-list))))))
 
 (cl-defun org-glance-world:capture (world
                                     &key
