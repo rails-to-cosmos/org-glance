@@ -221,3 +221,34 @@ CLOSED: [2022-10-29 Sat 08:27]
 :LOGBOOK:
 - State "CANCELLED"  from "TODO"       [2022-10-29 Sat 08:27]
 :END:
+
+* DONE Bug in commit: lady of a certain age                                     :ARCHIVE:
+CLOSED: [2022-10-30 Sun 11:42]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-30 Sun 11:42
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-10-30 Sun 11:42]
+:END:
+- visit lady of a certain age
+- rename it to lady of a certain age 2
+- commit
+- rename it to lady of a certain age 3
+- bug
+- visit tag=song
+- changes were not applied (but event.log is ok)
+
+* DONE Track progress on import
+CLOSED: [2022-10-30 Sun 11:42]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-30 Sun 11:42
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-10-30 Sun 11:42]
+:END:

@@ -11,16 +11,7 @@ https://untools.co
 
 * TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world:get-headline
 * TODO Bug in view: changes are not applied
-* TODO Bug in commit: lady of a certain age
-- visit lady of a certain age
-- rename it to lady of a certain age 2
-- commit
-- rename it to lady of a certain age 3
-- bug
-- visit tag=song
-- changes were not applied (but event.log is ok)
 * TODO Cache dimensions
-* TODO Track progress on import
 * TODO Fix file names
 * TODO Optimize fetch event
 * TODO Fetch and backfill operations should work in background
