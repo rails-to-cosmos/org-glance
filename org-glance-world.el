@@ -346,7 +346,7 @@ achieved by calling `org-glance-world:persist' method."
                                 :offset (a-get view-header :offset)))
          (world-offset (org-glance-world:offset world)))
 
-    (org-glance-log :events "[world] Fetch view %s" dim)
+    (org-glance-log :world "Fetch view %s" dim)
     (org-glance-log :offsets "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
     (org-glance-log :offsets "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
     (org-glance-log :world "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
@@ -367,7 +367,11 @@ achieved by calling `org-glance-world:persist' method."
     view-location))
 
 (cl-defun org-glance-world:browse (world &optional (dimension (org-glance-world:choose-dimension world)))
-  (find-file (org-glance-world:update-dimension world dimension)))
+  (when (-some-> world
+          (org-glance-world:locate-dimension dimension)
+          (get-file-buffer)
+          (kill-buffer))
+    (find-file (org-glance-world:update-dimension world dimension))))
 
 (cl-defun org-glance-world:agenda (world)
   (let* ((dimension (org-glance-world:choose-dimension world))
