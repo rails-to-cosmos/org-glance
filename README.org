@@ -9,13 +9,14 @@
 
 https://untools.co
 
+* TODO optimize fetching relations: traverse changelog from end
 * PENDING Implement proper controllers
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-10-30 Sun 14:00]
 - State "STARTED"    from "TODO"       [2022-10-30 Sun 13:10]
 CLOCK: [2022-10-30 Sun 13:10]--[2022-10-30 Sun 14:00] =>  0:50
 :END:
-* TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world:get-headline
+* TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world-model:get-headline
 * TODO Cache dimensions
 * PENDING Fix file names
 :LOGBOOK:

@@ -72,7 +72,6 @@ Feature: World
     # And world "Stories" should contain headline "Travel to Romania (2)" in staging layer
     # And world "Stories" should not contain headline "Travel to Romania (2)" in committed layer
 
-  @debug
   Scenario: Predicates
     Given world "Stories" in directory "world/stories" with headlines
       """

@@ -103,7 +103,7 @@
 
 (cl-defun org-glance-view:member? (view headline)
   "Decide if HEADLINE should be a part of VIEW."
-  (eval (org-glance- view :type) (org-glance-world:evaluate-dimensions (org-glance- view :world) headline)))
+  (eval (org-glance- view :type) (org-glance-world-model:evaluate-dimensions (org-glance- view :world) headline)))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
@@ -203,7 +203,9 @@
 (cl-defun org-glance-view:add-headline (view headline)
   (declare (indent 0))
   (goto-char (point-max))
-  (org-glance-world:insert-headline (org-glance- view :world) headline)
+  (-> (org-glance- view :world)
+      (org-glance-world-model:get-headline (org-glance- headline :hash))
+      (org-glance-headline:insert))
   ;; TODO optimize this, no need to remark all headlines
   (org-glance-view:mark-buffer view))
 
@@ -298,7 +300,7 @@
       (let* ((headline (org-glance-view:get-marker-headline view midx))
              (old-hash (org-glance-view:get-marker-hash view midx))
              (new-hash (org-glance- headline :hash)))
-        (org-glance-world:update-headline world old-hash headline)
+        (org-glance-world-model:update-headline world old-hash headline)
         (org-glance-view:set-marker-changed view midx nil)
         (org-glance-view:set-marker-hash view midx new-hash)
         (unless (org-glance-view:member? view headline)
@@ -312,11 +314,15 @@
       (org-glance-view:set-offset view offset)
       (org-glance-log :world "View offset: %s" (org-glance- view :offset)))
 
-    (dolist-with-progress-reporter (it (hash-table-values (org-glance- world :views)))
-        "Fetch related views"
-      (when (not (eq view it))
-        (org-glance-view:with-current-buffer it
-          (org-glance-view:fetch it))))
+    ;; (cl-loop
+    ;;    with progress-reporter = (make-progress-reporter "Fetching related views" 0 (hash-table-count (org-glance- world :views)))
+    ;;    for related-view being the hash-values of (org-glance- world :views)
+    ;;    for idx from 0
+    ;;    do (progress-reporter-update progress-reporter idx (prin1-to-string (org-glance- related-view :type)))
+    ;;    when (not (eq view related-view))
+    ;;    do (org-glance-view:with-current-buffer related-view
+    ;;         (org-glance-view:fetch related-view))
+    ;;    finally do (progress-reporter-done progress-reporter))
 
     (org-glance-view:save-markers view (format "%s_markers" (org-glance- view :location)))
 
@@ -366,13 +372,13 @@
       (org-glance-log :events "[%s] Fetch. View offset =  %s" (org-glance- view :type) view-offset)
       (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) world-offset)
       (cl-loop
-         with events = (reverse (org-glance-world:events world))
+         with events = (reverse (org-glance-world-model:events world))
          with relations = (make-vector (length events) nil)
          with progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
          with committed-offset = view-offset
          for event in events ;; TODO optimize
          for idx from 0
-         for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
+         for headline = (org-glance-world-model:get-headline world (org-glance- event :headline :hash))
          for event-offset = (org-glance- event :offset)
 
          when (cl-typep event 'org-glance-event:UPDATE)
@@ -483,7 +489,7 @@
 (cl-defun org-glance-view:get-buffer-view ()
   (let ((header (org-glance-view:get-buffer-header))
         (world (thread-first (buffer-file-name)
-                 (org-glance-world:root)
+                 (org-glance-world-model:root)
                  (org-glance-world:get-or-create))))
     (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) (a-get header :offset))))
 

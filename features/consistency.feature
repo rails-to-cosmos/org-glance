@@ -300,6 +300,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -322,6 +323,7 @@ Feature: Consistent Edit
     Then headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
     And buffer offset should be latest
+    And 1 marker should be changed
 
     When I save buffer
 
@@ -331,16 +333,15 @@ Feature: Consistent Edit
     When I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
-    And marker positions should be consistent
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
-
     And the contents of headline "Music Festival 2022" should be
     """
     SCHEDULED: <2022-01-01 Sat>
     """
     And buffer offset should be latest
+    And 0 markers should be changed
 
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
     And set headline "Music Festival 2023" contents to
@@ -355,9 +356,9 @@ Feature: Consistent Edit
 
     Then marker positions and hashes should be consistent
     And buffer offset should be latest
+    And 0 markers should be changed
 
-    When I kill buffer
-    And I visit view "Hike" derived from dimension "Tag" in world "Adventures"
+    When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
