@@ -136,4 +136,4 @@
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name)))
-          (should (f-exists? (org-glance-world-model:locate-dimension world (format "%s=%s" dimension-name view-name)))))))
+          (should (f-exists? (org-glance-world-model:locate-view world (format "%s=%s" dimension-name view-name)))))))

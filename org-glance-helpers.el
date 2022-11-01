@@ -31,7 +31,7 @@ Example: (org-glance- view :world :location)"
      (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
      (defclass ,name ,superclasses ,slots ,@options-and-doc)))
 
-(cl-defmacro org-glance--with-temp-file (file &rest forms)
+(cl-defmacro org-glance:with-temp-file (file &rest forms)
   (declare (indent 1))
   `(progn
      (mkdir (file-name-directory ,file) t)
@@ -39,17 +39,12 @@ Example: (org-glance- view :world :location)"
        (org-mode)
        ,@forms)))
 
-(cl-defun org-glance:append-to-file (string file)
-  (cond ((and (f-exists-p file) (f-readable-p file)) (append-to-file (concat "\n" string) nil file))
-        ((not (f-exists-p file)) (append-to-file string nil file))
-        (t (user-error "Unable to write file %s" file))))
-
 (cl-defmacro org-glance:with-temp-buffer (&rest forms)
   `(with-temp-buffer
      (org-mode)
      ,@forms))
 
-(cl-defun org-glance:convert-links-to-titles (ast)
+(cl-defun org-glance:links-to-titles (ast)
   "Replace links with its titles in AST."
   (cl-loop for link in (org-element-map ast 'link #'identity)
      do (org-element-set-element link (or (-some->> link

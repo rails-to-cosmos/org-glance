@@ -1,4 +1,4 @@
-(require 'org-glance-view)
+(require 'org-glance-view-model)
 (require 'org-glance-log)
 (require 'org-glance-helpers)
 

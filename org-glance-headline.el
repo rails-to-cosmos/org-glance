@@ -36,10 +36,11 @@
 (require 'org-element)
 (require 's)
 (require 'thunk)
+(require 'type-break)
 
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
-(require 'org-glance-event)
+(require 'org-glance-offset)
 
 (cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
@@ -57,6 +58,11 @@
 (cl-deftype org-glance-hash () 'string)
 
 ;; Extend events suitable for headlines
+(org-glance-class org-glance-event ()
+    ((offset :type org-glance-offset
+             :initarg :offset
+             :initform (org-glance-offset:current))))
+
 (org-glance-class org-glance-event:PUT (org-glance-event)
     ((headline :type org-glance-headline-header
                :initarg :headline)))
@@ -187,7 +193,7 @@
                 (org-element-property :raw-value (car ast))
                 ""))
     (->> (org-element-parse-buffer)
-         org-glance:convert-links-to-titles
+         org-glance:links-to-titles
          org-element-interpret-data
          substring-no-properties
          s-trim)))
@@ -279,7 +285,7 @@
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
-  (org-glance--with-temp-file dest
+  (org-glance:with-temp-file dest
     (org-glance-headline:insert headline))
   headline)
 

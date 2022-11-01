@@ -3,7 +3,6 @@
 (require 'cl-macs)
 
 (require 'org-glance-helpers)
-(require 'org-glance-event)
 (require 'org-glance-headline)
 
 (org-glance-class org-glance-changelog nil
@@ -48,7 +47,7 @@
 (cl-defun org-glance-changelog:write (changelog location)
   (let ((contents (org-glance-changelog:contents changelog)))
     (when (not (string-empty-p contents))
-      (org-glance--with-temp-file location
+      (org-glance:with-temp-file location
         (insert contents)))))
 
 (cl-defun org-glance-changelog:merge (lhs rhs)

@@ -17,7 +17,6 @@
 
 (require 'org-glance-changelog)
 (require 'org-glance-log)
-(require 'org-glance-event)
 (require 'org-glance-headline)
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
@@ -59,12 +58,7 @@
                   (title     . (org-glance- headline :title))
                   (linked    . (org-glance- headline :linked?))
                   (store     . (org-glance- headline :store?))
-                  (encrypted . (org-glance- headline :encrypted?))))
-     (views
-      :type hash-table
-      :initarg :views
-      :initform (make-hash-table :test #'equal)
-      :documentation "Views associated with world by type.")))
+                  (encrypted . (org-glance- headline :encrypted?))))))
 
 (cl-defun org-glance-world-model:create (location)
   "Create world located in directory LOCATION."
@@ -117,11 +111,11 @@ Return last committed offset."
           (org-glance-event:PUT
            (org-glance-log :world "Generate headline id: %s" (org-glance-world-model:generate-headline-id world headline))
            (org-glance-log :world "Save headline: %s" headline)
-           (org-glance-world-model:save-headline world headline))
+           (org-glance-world:save-headline world headline))
 
           (org-glance-event:UPDATE
            (org-glance-log :world "Save headline: %s" headline)
-           (org-glance-world-model:save-headline world headline)
+           (org-glance-world:save-headline world headline)
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world-model:locate-headline world (org-glance- event :hash))
            )))
@@ -233,13 +227,6 @@ achieved by calling `org-glance-world-model:persist' method."
             ((or org-glance-event:RM org-glance-event:UPDATE) t))
      do (puthash (org-glance- event :hash) t removed)))
 
-(cl-defun org-glance-world-model:save-headline (world headline)
-  (let ((location (org-glance-world-model:locate-headline world headline)))
-    (unless (f-exists-p location)
-      (org-glance-headline:save headline location)
-      (org-glance-world-model:apply-dimensions world headline))
-    location))
-
 (cl-defun org-glance-world-model:generate-headline-id (world headline)
   (cl-labels ((unique-id (id path &optional (tryout 0))
                 (let ((dest (if (> tryout 0)
@@ -271,18 +258,6 @@ achieved by calling `org-glance-world-model:persist' method."
                                (org-glance-world-model:get-headlines world))
      when (or (null predicate) (funcall predicate headline))
      collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
-
-(cl-defun org-glance-world:cashew-get (world key)
-  "TODO Refactor"
-  (when (and (f-exists? (org-glance- key :location))
-             (f-file? (org-glance- key :location)))
-    (when-let (view (gethash key (org-glance- world :views)))
-      (prog1 view
-        (org-glance-log :cache "[org-glance-view] cache hit: %s" key)))))
-
-(cl-defun org-glance-world:cashew-set (key view world)
-  "TODO Refactor"
-  (puthash key view (org-glance- world :views)))
 
 (cl-defun org-glance-world-model:root (location)
   (cl-typecase location
