@@ -77,8 +77,9 @@
 
 (cl-defun org-glance-import (location)
   (interactive "DDirectory: ")
-  (org-glance-world:import-headlines org-glance-current-world location)
-  (org-glance-world-model:persist org-glance-current-world))
+  (-> org-glance-current-world
+      (org-glance-world:import-headlines location)
+      (org-glance-world-model:persist)))
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."

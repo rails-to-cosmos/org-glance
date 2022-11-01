@@ -41,7 +41,7 @@
       contain only headlines for which predicate returns non-nil
       value.")
      (location
-      :type org-glance-file
+      :type org-glance-optional-file
       :initarg :location
       :documentation "Location where view persists."))
   "Unique key for `org-glance-view'.")
@@ -61,7 +61,7 @@
       contain only headlines for which predicate returns non-nil
       value.")
      (location
-      :type org-glance-file
+      :type org-glance-optional-file
       :initarg :location
       :documentation "Location where view persists.")
      (offset
@@ -367,10 +367,9 @@
                       ;; not found
                       (t nil))))
     (let* ((world (org-glance- view :world))
-           (view-offset (org-glance-view:get-offset view))
-           (world-offset (org-glance-world-model:offset world)))
+           (view-offset (org-glance-view:get-offset view)))
       (org-glance-log :events "[%s] Fetch. View offset =  %s" (org-glance- view :type) view-offset)
-      (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) world-offset)
+      (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) (org-glance-world-model:offset world))
       (cl-loop
          with events = (reverse (org-glance-world-model:events world))
          with relations = (make-vector (length events) nil)

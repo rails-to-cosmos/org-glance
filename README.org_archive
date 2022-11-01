@@ -264,3 +264,18 @@ CLOSED: [2022-10-30 Sun 12:53]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-10-30 Sun 12:53]
 :END:
+
+* DONE Implement proper controller for world
+CLOSED: [2022-10-31 Mon 09:49]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-31 Mon 09:49
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-10-31 Mon 09:49]
+- State "PENDING"    from "STARTED"    [2022-10-30 Sun 14:00]
+- State "STARTED"    from "TODO"       [2022-10-30 Sun 13:10]
+CLOCK: [2022-10-30 Sun 13:10]--[2022-10-30 Sun 14:00] =>  0:50
+:END:

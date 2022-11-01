@@ -5,11 +5,10 @@
 (require 'org-glance-types)
 
 (cl-deftype org-glance-scope ()
-  '(satisfies org-glance-scope-p))
+  '(satisfies org-glance-scope?))
 
-(cl-defun org-glance-scope-p (scope)
-  (dolist (file scope)
-    (cl-check-type file org-glance-file)))
+(cl-defun org-glance-scope? (scope)
+  (--all? (cl-check-type it org-glance-optional-file) scope))
 
 (defvar org-glance-scope-extensions
   '("org" "org_archive"))

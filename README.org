@@ -9,15 +9,12 @@
 
 https://untools.co
 
+* TODO Implement view mvc
+* TODO Consistent actions (use same underlying logic as in dimensions)
+* TODO Cleanup empty dimensions
+* TODO Cache dimension list
 * TODO optimize fetching relations: traverse changelog from end
-* PENDING Implement proper controllers
-:LOGBOOK:
-- State "PENDING"    from "STARTED"    [2022-10-30 Sun 14:00]
-- State "STARTED"    from "TODO"       [2022-10-30 Sun 13:10]
-CLOCK: [2022-10-30 Sun 13:10]--[2022-10-30 Sun 14:00] =>  0:50
-:END:
 * TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world-model:get-headline
-* TODO Cache dimensions
 * PENDING Fix file names
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-10-30 Sun 13:06]

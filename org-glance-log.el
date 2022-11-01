@@ -1,16 +1,17 @@
 (require 'a)
 
 (defvar org-glance-log:loggers
-  (a-list :events t
-          :world t
-          :headlines t
-          :cache t
-          :dimensions t
-          :contents t
-          :markers t
-          :buffers t
-          :performance t
-          :test t))
+  (a-list :events nil
+          :world nil
+          :headlines nil
+          :cache nil
+          :dimensions nil
+          :contents nil
+          :markers nil
+          :buffers nil
+          :performance nil
+          :offsets nil
+          :test nil))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))
