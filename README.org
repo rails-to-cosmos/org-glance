@@ -9,6 +9,7 @@
 
 https://untools.co
 
+* TODO Use dimension model in controllers (remove all related logic from world model)
 * TODO Implement view mvc
 * TODO Consistent actions (use same underlying logic as in dimensions)
 * TODO Cleanup empty dimensions

@@ -78,7 +78,7 @@
 (cl-defun org-glance-import (location)
   (interactive "DDirectory: ")
   (-> org-glance-current-world
-      (org-glance-world:import-headlines location)
+      (org-glance-world:import location)
       (org-glance-world-model:persist)))
 
 (cl-defun org-glance-init ()

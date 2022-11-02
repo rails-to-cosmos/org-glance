@@ -2,7 +2,6 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
-(require 'highlight)
 
 (require 'org-glance-log)
 (require 'org-glance-headline)

@@ -5,7 +5,7 @@
           :world nil
           :headlines nil
           :cache nil
-          :dimensions nil
+          :dimensions t
           :contents nil
           :markers nil
           :buffers nil
@@ -27,8 +27,7 @@
         (:performance (let ((value (make-symbol "value"))
                             (start (make-symbol "start"))
                             (gcs (make-symbol "gcs"))
-                            (gc (make-symbol "gc"))
-                            (inhibit-message nil))
+                            (gc (make-symbol "gc")))
                         `(let ((,gc gc-elapsed)
                                (,gcs gcs-done)
                                (,start (current-time))

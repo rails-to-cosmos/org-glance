@@ -11,6 +11,7 @@
 (require 'org-glance-offset)
 (require 'org-glance-helpers)
 (require 'org-glance-headline)
+(require 'org-glance-dimension)
 
 ;;; Code:
 
@@ -62,7 +63,7 @@
       :documentation "Hash to idx.")))
 
 (cl-defun org-glance-view:create (world type location offset)
-  "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
+  "Create `org-glance-view' instance from WORLD by TYPE and store it in LOCATION with initial OFFSET."
   (let ((view (org-glance-view :world world
                                :type type
                                :location location
@@ -272,7 +273,8 @@
         (org-glance-world-model:update-headline world old-hash headline)
         (org-glance-view:set-marker-changed view midx nil)
         (org-glance-view:set-marker-hash view midx new-hash)
-        (unless (org-glance-view:member? view headline)
+
+        (unless (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions)
           (push new-hash to-remove))))
 
     (dolist (hash to-remove)
@@ -359,7 +361,7 @@
                                            (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
                                                   (org-glance-log :events "[%s] Skip UPDATE event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                   (org-glance-log :events "[%s] Hashes are equal" (org-glance- view :type)))
-                                                 ((not (org-glance-view:member? view headline))
+                                                 ((not (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions))
 
                                                   (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
                                                     (org-glance-view:remove-headline view (org-glance- event :hash)))
@@ -380,13 +382,13 @@
                                                         (org-glance-view:replace-headline view hash headline))
                                                     (org-glance-log :events "[%s] Derived hash not found. Add headline \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                     (org-glance-view:add-headline view headline)))))
-                  (org-glance-event:PUT (cond ((not (org-glance-view:member? view headline))
+                  (org-glance-event:PUT (cond ((not (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions))
                                                (org-glance-log :events "[%s] Skip PUT event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                (org-glance-log :events "[%s] Validation failed" (org-glance- view :type)))
                                               (t
                                                (org-glance-view:add-headline view headline))))
                   (org-glance-event:RM
-                   (org-glance-log :events "[%s] TIME TO REMOVE HEADLINE %s" (org-glance- view :type) headline)
+                   (org-glance-log :events "[%s] Remove headline %s" (org-glance- view :type) headline)
                    (org-glance-view:remove-headline view (org-glance- event :hash)))
                   (otherwise (user-error "Don't know how to handle event of type %s" (type-of event))))
               (quit (cl-return (org-glance-view:set-offset view committed-offset))))

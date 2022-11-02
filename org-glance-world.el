@@ -2,11 +2,12 @@
 (require 'org-glance-headline)
 (require 'org-glance-world-model)
 (require 'org-glance-world-cache)
+(require 'org-glance-dimension)
 
 (cl-defmacro org-glance-world:with-locked-view (world view &rest forms)
   (declare (indent 2))
   `(when (--> ,world
-              (org-glance-world-model:locate-view it ,view)
+              (org-glance-world:locate-view it ,view)
               (get-file-buffer it)
               (cond ((null it) t)
                     ((buffer-live-p it) (kill-buffer it))))
@@ -22,7 +23,7 @@
                        (-compose #'org-glance-world-cache:put
                                  #'org-glance-world-model:create)))))
 
-(cl-defun org-glance-world:import-headlines (world location)
+(cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
@@ -100,6 +101,7 @@
     (org-link-open-from-string (org-glance- link :org-link))))
 
 (cl-defun org-glance-world:choose-headline (world &optional predicate)
+  "TODO Should be consistent with dimensions."
   (declare (indent 1))
   (let ((headlines (org-glance-log :performance
                        (org-glance-world-model:filter-headlines world predicate))))
@@ -117,34 +119,14 @@
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
 
-(cl-defun org-glance-world-model:evaluate-dimensions (world headline)
-  (cl-loop for (dimension . partition) in (org-glance- world :dimensions)
-     collect (cons dimension (let ((result (eval partition (a-list 'headline headline))))
-                               (cond ((atom result) (list result))
-                                     (t result))))))
-
-(cl-defun org-glance-world-model:apply-dimensions (world headline)
-  (cl-loop
-     for (dimension . partitions) in (org-glance-world-model:evaluate-dimensions world headline)
-     do (dolist (partition partitions)
-          (when (not (string-empty-p (format "%s" partition)))
-            (let ((predicate (cl-typecase partition
-                               (symbol `(member (quote ,partition) ,dimension))
-                               (t `(member ,partition ,dimension))))
-                  (location (f-join (org-glance- world :location)
-                                    "dimensions"
-                                    (downcase (format "%s=%s.org" dimension partition)))))
-              (org-glance-log :dimensions "Create derived view \"%s -> %s\"" dimension partition)
-              (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))))
-
 (cl-defun org-glance-world-model:list-views (world)
   "TODO optimize me later"
   (--map (file-name-sans-extension it)
          (--filter (member (file-name-extension it) org-glance-scope-extensions)
-                   (directory-files (f-join (org-glance- world :location) "dimensions")))))
+                   (directory-files (f-join (org-glance- world :location) "views")))))
 
 (cl-defun org-glance-world:update-view (world view-name)
-  (let* ((view-location (org-glance-world-model:locate-view world view-name))
+  (let* ((view-location (org-glance-world:locate-view world view-name))
          (view-header (thread-first view-location
                         (org-glance-view:get-header-location-by-view-location)
                         (org-glance-view:read-header)))
@@ -174,16 +156,29 @@
 
     view-location))
 
-(cl-defun org-glance-world-model:locate-view (world view-name)
-  (f-join (org-glance- world :location) "dimensions" (format "%s.org" (downcase view-name))))
+(cl-defun org-glance-world:locate-view (world view-name)
+  (f-join (org-glance- world :location) "views" (format "%s.org" (downcase view-name))))
 
 (cl-defun org-glance-world:save-headline (world headline)
   (cl-check-type world org-glance-world)
   (cl-check-type headline org-glance-headline)
+
   (let ((location (org-glance-world-model:locate-headline world headline)))
+
     (unless (f-exists-p location)
-      (org-glance-headline:save headline location)
-      (org-glance-world-model:apply-dimensions world headline))
+      (org-glance-headline:save headline location))
+
+    (cl-loop with dimensions = org-glance-dimensions
+       for dimension in dimensions
+       for partitions = (org-glance-dimension:partitions dimension headline)
+       for predicates = (org-glance-dimension:predicates dimension headline)
+       do (cl-loop for (partition . predicate) in (-zip partitions predicates)
+             for validation-result = (org-glance-dimension:validate predicate headline dimensions)
+             for view-file = (downcase (format "%s=%s.org" (org-glance- dimension :name) validation-result))
+             for location = (f-join (org-glance- world :location) "views" view-file)
+             do (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition validation-result location)
+             do (org-glance-view:get-or-create world predicate location (org-glance-offset:zero))))
+
     location))
 
 (provide 'org-glance-world)

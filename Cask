@@ -7,8 +7,6 @@
 ;; core deps
 (depends-on "a")
 (depends-on "dash")
-(depends-on "highlight")
-(depends-on "load-relative")
 (depends-on "s")
 (depends-on "transient")
 (depends-on "ts")

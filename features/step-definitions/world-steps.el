@@ -46,7 +46,7 @@
 (When "^I? ?import headlines to world \"\\([^\"]+\\)\" from directory \"\\([^\"]+\\)\"$"
   (lambda (world-name location)
     (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world:import-headlines world (org-glance-test:get-file location))
+      (org-glance-world:import world (org-glance-test:get-file location))
       world)))
 
 (Then "^\\([[:digit:]]+\\) staged changes should be in world \"\\([^\"]+\\)\"$"

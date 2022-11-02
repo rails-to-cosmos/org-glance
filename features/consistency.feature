@@ -408,6 +408,7 @@ Feature: Consistent Edit
     When I visit view "C" derived from dimension "Title" in world "Tasks"
     Then current buffer should contain 1 headline
 
+  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 

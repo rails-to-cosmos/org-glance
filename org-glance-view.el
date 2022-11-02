@@ -16,10 +16,6 @@
           (org-glance-view-cache:put view)
           view))))
 
-(cl-defun org-glance-view:member? (view headline)
-  "Decide if HEADLINE should be a part of VIEW."
-  (eval (org-glance- view :type) (org-glance-world-model:evaluate-dimensions (org-glance- view :world) headline)))
-
 (cl-defun org-glance-view:get-buffer-header ()
   (thread-first (buffer-file-name)
     (org-glance-view:get-header-location-by-view-location)

@@ -15,4 +15,6 @@
 (cl-deftype org-glance:list-of (tp)
   `(satisfies (lambda (thing) (org-glance:list-of-p (quote ,tp) thing))))
 
+(cl-deftype org-glance-hash () 'string)
+
 (provide 'org-glance-types)

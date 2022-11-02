@@ -42,6 +42,17 @@
 (require 'org-glance-scope)
 (require 'org-glance-offset)
 
+(defconst org-glance-encrypted-re "aes-encrypted V [0-9]+.[0-9]+-.+\n"
+  "Encrypted header pattern.")
+
+(defconst org-glance-user-property-1-re
+  "[[:blank:]]+\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
+  "How to parse user specified properties.")
+
+(defconst org-glance-user-property-2-re
+  "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
+  "How to parse user specified properties.")
+
 (cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
   "Execute FORMS only if point is at heading."
   (declare (indent 0))
@@ -54,8 +65,6 @@
             (save-excursion (org-back-to-heading t) (point))
             (save-excursion (org-end-of-subtree t t)))
            ,@forms)))))
-
-(cl-deftype org-glance-hash () 'string)
 
 ;; Extend events suitable for headlines
 (org-glance-class org-glance-event ()
@@ -126,23 +135,12 @@
                :initarg :contents
                :documentation "Raw contents of headline.")
      (properties :type list
-                     :initarg :properties
-                     :documentation "Org-mode properties.")
+                 :initarg :properties
+                 :documentation "Org-mode properties.")
      (store :type list
             :initarg :store
             :documentation "Properties specified by user in headline contents."))
   "Serializable headline with additional features on top of `org-element'.")
-
-(defconst org-glance-encrypted-re "aes-encrypted V [0-9]+.[0-9]+-.+\n"
-  "Encrypted header pattern.")
-
-(defconst org-glance-user-property-1-re
-  "[[:blank:]]+\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
-  "How to parse user specified properties.")
-
-(defconst org-glance-user-property-2-re
-  "^\\([[:word:]][[:word:],[:blank:],_]?+\\)\\:[[:blank:]]+\\(.+\\)"
-  "How to parse user specified properties.")
 
 (cl-defun org-glance-headline-header:from-headline (headline)
   "Infer instance of `org-glance-headline-header' from HEADLINE."

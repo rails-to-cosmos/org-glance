@@ -239,7 +239,6 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"
       (lambda (title)
-        (message (buffer-string))
         (should (not (--any (eq it t)
                             (org-glance-headline:map (headline)
                               (string= (org-glance- headline :title) title)))))))
