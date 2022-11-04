@@ -4,17 +4,21 @@
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
 
-(cl-defmacro org-glance-world:with-locked-view (world view &rest forms)
+(cl-defmacro org-glance-world:with-locked-view (world view-name &rest forms)
   (declare (indent 2))
-  `(when (--> ,world
-              (org-glance-world:locate-view it ,view)
-              (get-file-buffer it)
-              (cond ((null it) t)
-                    ((buffer-live-p it) (kill-buffer it))))
-     ,@forms))
+  `(progn
+     (cl-check-type ,world org-glance-world)
+     (cl-check-type ,view-name string)
+     (when (--> ,world
+                (org-glance-world:locate-view it ,view-name)
+                (get-file-buffer it)
+                (cond ((null it) t)
+                      ((buffer-live-p it) (kill-buffer it))))
+       ,@forms)))
 
 (cl-defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
+  (cl-check-type location string)
   (->> location
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
@@ -25,6 +29,8 @@
 
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
+  (cl-check-type world org-glance-world)
+  (cl-check-type location string)
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
     (org-glance:with-temp-buffer
@@ -33,16 +39,20 @@
        (org-glance-world-model:add-headline world headline)))))
 
 (cl-defun org-glance-world:choose-view (world)
+  (cl-check-type world org-glance-world)
   (completing-read "Choose view: "
                    (org-glance-world-model:list-views world)
                    nil
                    t))
 
-(cl-defun org-glance-world:browse (world &optional (view (org-glance-world:choose-view world)))
-  (org-glance-world:with-locked-view world view
-    (find-file (org-glance-world:update-view world view))))
+(cl-defun org-glance-world:browse (world &optional (view-name (org-glance-world:choose-view world)))
+  (cl-check-type world org-glance-world)
+  (cl-check-type view-name string)
+  (org-glance-world:with-locked-view world view-name
+    (find-file (org-glance-world:update-view world view-name))))
 
 (cl-defun org-glance-world:agenda (world)
+  (cl-check-type world org-glance-world)
   (let ((view (org-glance-world:choose-view world)))
     (org-glance-world:with-locked-view world view
       (let ((location (org-glance-world:update-view world view))
@@ -157,6 +167,9 @@
     view-location))
 
 (cl-defun org-glance-world:locate-view (world view-name)
+  (cl-check-type world org-glance-world)
+  (cl-check-type view-name string)
+
   (f-join (org-glance- world :location) "views" (format "%s.org" (downcase view-name))))
 
 (cl-defun org-glance-world:save-headline (world headline)
