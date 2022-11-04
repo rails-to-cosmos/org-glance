@@ -18,7 +18,7 @@
 
 (cl-defun org-glance-view:get-buffer-header ()
   (thread-first (buffer-file-name)
-    (org-glance-view:get-header-location-by-view-location)
+    (org-glance-view:locate-header)
     (org-glance-view:read-header)))
 
 (cl-defun org-glance-view:get-buffer-view ()

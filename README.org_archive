@@ -279,3 +279,29 @@ CLOSED: [2022-10-31 Mon 09:49]
 - State "STARTED"    from "TODO"       [2022-10-30 Sun 13:10]
 CLOCK: [2022-10-30 Sun 13:10]--[2022-10-30 Sun 14:00] =>  0:50
 :END:
+
+* DONE Use dimension model in controllers (remove all related logic from world model)
+CLOSED: [2022-11-04 Fri 10:40]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-11-04 Fri 10:50
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-11-04 Fri 10:40]
+- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:22]
+CLOCK: [2022-11-04 Fri 10:22]--[2022-11-04 Fri 10:40] =>  0:18
+:END:
+
+* DONE Implement view mvc
+CLOSED: [2022-11-04 Fri 10:50]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-11-04 Fri 10:50
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-04 Fri 10:50]
+:END:

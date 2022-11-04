@@ -9,15 +9,11 @@
 
 https://untools.co
 
-* DONE Use dimension model in controllers (remove all related logic from world model)
-CLOSED: [2022-11-04 Fri 10:40]
+* STARTED Consistent actions (use same underlying logic as in dimensions)
 :LOGBOOK:
-- State "DONE"       from "STARTED"    [2022-11-04 Fri 10:40]
-- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:22]
-CLOCK: [2022-11-04 Fri 10:22]--[2022-11-04 Fri 10:40] =>  0:18
+- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:50]
+CLOCK: [2022-11-04 Fri 10:50]
 :END:
-* TODO Implement view mvc
-* TODO Consistent actions (use same underlying logic as in dimensions)
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list
 * TODO optimize fetching relations: traverse changelog from end

@@ -16,7 +16,7 @@
 ;;; Code:
 
 (defconst org-glance-view--header-extension ".h.el")
-(defconst org-glance-view--marker-extension ".m.el")
+(defconst org-glance-view--marker-extension ".m.txt")
 
 (declare-function f-mkdir-full-path 'f)
 
@@ -236,7 +236,7 @@
   ;; TODO make dynamic arrays to optimize add operation
   ;; TODO save markers for further optimizations
   (cl-loop
-     with mark-cache-file = (format "%s_markers" (org-glance- view :location))
+     with mark-cache-file = (org-glance-view:locate-markers view)
      with markers = (or (and (f-exists? mark-cache-file)
                              (condition-case nil
                                  (prog1 (org-glance-view:load-markers view mark-cache-file)
@@ -295,7 +295,7 @@
     ;;         (org-glance-view:fetch related-view))
     ;;    finally do (progress-reporter-done progress-reporter))
 
-    (org-glance-view:save-markers view (format "%s_markers" (org-glance- view :location)))
+    (org-glance-view:save-markers view (org-glance-view:locate-markers view))
 
     (org-glance-log :buffers "[%s] Buffer after commit:\n%s" (org-glance- view :type) (buffer-string))))
 
@@ -402,7 +402,7 @@
 (cl-defun org-glance-view:get-offset (view)
   (let ((buffer-offset (condition-case nil
                            (thread-first (org-glance- view :location)
-                             (org-glance-view:get-header-location-by-view-location)
+                             (org-glance-view:locate-header)
                              (org-glance-view:read-header)
                              (a-get :offset))
                          (file-missing (org-glance-offset:zero))))
@@ -425,7 +425,7 @@
      do (org-glance-view:set-marker-position view idx (+ (org-glance-view:get-marker-position view idx) diff))))
 
 (cl-defun org-glance-view:write-header (view)
-  (with-temp-file (org-glance-view:get-header-location-by-view-location (org-glance- view :location))
+  (with-temp-file (org-glance-view:locate-header (org-glance- view :location))
     (insert (pp-to-string (a-list
                            :type (org-glance- view :type)
                            :offset (org-glance- view :offset))))))
@@ -436,13 +436,15 @@
     (insert-file-contents filename)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(cl-defun org-glance-view:get-header-location-by-view-location (view-location)
+(cl-defun org-glance-view:locate-header (view-location)
   (thread-first view-location
     (file-name-sans-extension)
     (concat org-glance-view--header-extension)))
 
-(cl-defun org-glance-view:get-markers-location-by-view-location (view-location)
-  (thread-first view-location
+(cl-defun org-glance-view:locate-markers (view)
+  (cl-check-type view org-glance-view)
+  (thread-first view
+    (org-glance- :location)
     (file-name-sans-extension)
     (concat org-glance-view--marker-extension)))
 

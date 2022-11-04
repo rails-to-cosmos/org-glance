@@ -94,6 +94,10 @@
   (interactive)
   (org-glance-world:extract org-glance-current-world))
 
+(cl-defun org-glance-backfill ()
+  (interactive)
+  (org-glance-world:backfill org-glance-current-world))
+
 (cl-defun org-glance-import (location)
   (interactive "DDirectory: ")
   (-> org-glance-current-world
