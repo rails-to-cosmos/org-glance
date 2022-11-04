@@ -8,24 +8,6 @@
      (form :type list
            :initarg :form)))
 
-;; TODO prolog implementation is possible
-(defconst org-glance-dimensions
-  (list (org-glance-dimension :name 'tag
-                              :form '(mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags)))
-        (org-glance-dimension :name 'state
-                              :form '(intern (downcase (org-glance- headline :state))))
-        (org-glance-dimension :name 'title
-                              :form '(thread-last (org-glance- headline :title)
-                                      (s-replace-regexp "[[:blank:][:punct:]]+" "-")
-                                      (s-replace-regexp "[[:cntrl:]]+" "")
-                                      (s-replace-regexp "[[:nonascii:]]+" "_")))
-        (org-glance-dimension :name 'linked
-                              :form '(org-glance- headline :linked?))
-        (org-glance-dimension :name 'store
-                              :form '(org-glance- headline :store?))
-        (org-glance-dimension :name 'encrypted
-                              :form '(org-glance- headline :encrypted?))))
-
 (cl-defun org-glance-dimension:partitions (dimension headline)
   (cl-check-type dimension org-glance-dimension)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))

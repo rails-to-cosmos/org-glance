@@ -9,7 +9,13 @@
 
 https://untools.co
 
-* TODO Use dimension model in controllers (remove all related logic from world model)
+* DONE Use dimension model in controllers (remove all related logic from world model)
+CLOSED: [2022-11-04 Fri 10:40]
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2022-11-04 Fri 10:40]
+- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:22]
+CLOCK: [2022-11-04 Fri 10:22]--[2022-11-04 Fri 10:40] =>  0:18
+:END:
 * TODO Implement view mvc
 * TODO Consistent actions (use same underlying logic as in dimensions)
 * TODO Cleanup empty dimensions

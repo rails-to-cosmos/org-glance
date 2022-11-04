@@ -274,7 +274,7 @@
         (org-glance-view:set-marker-changed view midx nil)
         (org-glance-view:set-marker-hash view midx new-hash)
 
-        (unless (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions)
+        (unless (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions))
           (push new-hash to-remove))))
 
     (dolist (hash to-remove)
@@ -361,7 +361,7 @@
                                            (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
                                                   (org-glance-log :events "[%s] Skip UPDATE event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                   (org-glance-log :events "[%s] Hashes are equal" (org-glance- view :type)))
-                                                 ((not (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions))
+                                                 ((not (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions)))
 
                                                   (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
                                                     (org-glance-view:remove-headline view (org-glance- event :hash)))
@@ -382,7 +382,7 @@
                                                         (org-glance-view:replace-headline view hash headline))
                                                     (org-glance-log :events "[%s] Derived hash not found. Add headline \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                     (org-glance-view:add-headline view headline)))))
-                  (org-glance-event:PUT (cond ((not (org-glance-dimension:validate (org-glance- view :type) headline org-glance-dimensions))
+                  (org-glance-event:PUT (cond ((not (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions)))
                                                (org-glance-log :events "[%s] Skip PUT event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
                                                (org-glance-log :events "[%s] Validation failed" (org-glance- view :type)))
                                               (t

@@ -66,9 +66,10 @@
 
 (cl-defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
-  (thread-first (buffer-file-name)
-    (org-glance-world-model:root)
-    (org-glance-world:get-or-create)))
+  (or (thread-first (buffer-file-name)
+        (org-glance-world-model:root)
+        (org-glance-world-cache:get))
+      (user-error "World %s is not registered in the system" (buffer-file-name))))
 
 (cl-defun org-glance-world:after-finalize-hook ()
   "Register captured headline in metastore."
@@ -181,7 +182,7 @@
     (unless (f-exists-p location)
       (org-glance-headline:save headline location))
 
-    (cl-loop with dimensions = org-glance-dimensions
+    (cl-loop with dimensions = (org-glance- world :dimensions)
        for dimension in dimensions
        for partitions = (org-glance-dimension:partitions dimension headline)
        for predicates = (org-glance-dimension:predicates dimension headline)

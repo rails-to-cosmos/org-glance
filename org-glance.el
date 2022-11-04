@@ -37,6 +37,7 @@
 (require 'org-glance-types)
 (require 'org-glance-scope)
 (require 'org-glance-headline)
+(require 'org-glance-dimension)
 (require 'org-glance-world)
 (require 'org-glance-material-mode)
 
@@ -51,6 +52,24 @@
   "Directory that contains current `org-glance-world'."
   :group 'org-glance
   :type 'directory)
+
+;; TODO prolog implementation is possible
+(defconst org-glance-dimensions
+  (list (org-glance-dimension :name 'tag
+                              :form '(mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags)))
+        (org-glance-dimension :name 'state
+                              :form '(intern (downcase (org-glance- headline :state))))
+        (org-glance-dimension :name 'title
+                              :form '(thread-last (org-glance- headline :title)
+                                      (s-replace-regexp "[[:blank:][:punct:]]+" "-")
+                                      (s-replace-regexp "[[:cntrl:]]+" "")
+                                      (s-replace-regexp "[[:nonascii:]]+" "_")))
+        (org-glance-dimension :name 'linked
+                              :form '(org-glance- headline :linked?))
+        (org-glance-dimension :name 'store
+                              :form '(org-glance- headline :store?))
+        (org-glance-dimension :name 'encrypted
+                              :form '(org-glance- headline :encrypted?))))
 
 (defvar org-glance-current-world nil
   "Current `org-glance-world'.")
@@ -83,9 +102,10 @@
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (setq org-glance-current-world
-        (org-glance-log :performance
-            (org-glance-world:get-or-create org-glance-directory))))
+  (let ((world (org-glance-log :performance
+                   (org-glance-world:get-or-create org-glance-directory))))
+    (setf (org-glance- world :dimensions) org-glance-dimensions)
+    (setq org-glance-current-world world)))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

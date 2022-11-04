@@ -1,5 +1,5 @@
 (require 'org-glance-log)
-(require 'org-glance-world-model)
+(require 'org-glance-world)
 (require 'org-glance-view-model)
 (require 'org-glance-view-cache)
 
@@ -23,9 +23,7 @@
 
 (cl-defun org-glance-view:get-buffer-view ()
   (let ((header (org-glance-view:get-buffer-header))
-        (world (thread-first (buffer-file-name)
-                 (org-glance-world-model:root)
-                 (org-glance-world:get-or-create))))
+        (world (org-glance-world:current)))
     (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) (a-get header :offset))))
 
 (provide 'org-glance-view)

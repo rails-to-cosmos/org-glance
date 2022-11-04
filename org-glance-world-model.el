@@ -53,12 +53,7 @@
      (dimensions
       :type list
       :initarg :dimensions
-      :initform '((tag       . (mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags)))
-                  (state     . (intern (downcase (org-glance- headline :state))))
-                  (title     . (org-glance- headline :title))
-                  (linked    . (org-glance- headline :linked?))
-                  (store     . (org-glance- headline :store?))
-                  (encrypted . (org-glance- headline :encrypted?))))))
+      :documentation "World dimensions.")))
 
 (cl-defun org-glance-world-model:create (location)
   "Create world located in directory LOCATION."
