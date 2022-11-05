@@ -106,8 +106,7 @@
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
-  (let ((world (org-glance-log :performance
-                   (org-glance-world:get-or-create org-glance-directory))))
+  (let ((world (org-glance-world:get-or-create org-glance-directory)))
     (setf (org-glance- world :dimensions) org-glance-dimensions)
     (setq org-glance-current-world world)))
 
