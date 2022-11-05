@@ -323,22 +323,23 @@
   (cl-labels ((derive (h  ;; hash
                        rs ;; relations
                        i  ;; relation index
+                       hs ;; hash store
                        )
-                (cond ((gethash h (org-glance- view :hash->midx)) h)
+                (cond ((gethash h hs) h)
                       ((> i 0) (cl-loop for j from i downto 0
                                   for r = (aref rs j) ;; relation
                                   for s = (car r)     ;; source
                                   for d = (cdr r)     ;; derivation
                                   when (string= h d)
-                                  return (derive s rs j)))
+                                  return (derive s rs j hs)))
                       ;; not found
                       (t nil))))
-    (let ((world (org-glance- view :world))
-          (view-offset (org-glance-view:get-offset view))
-          (events (reverse (org-glance-world:events world)))
-          (relations (make-vector (length events) nil))
-          (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
-          (committed-offset view-offset))
+    (let* ((world (org-glance- view :world))
+           (view-offset (org-glance-view:get-offset view))
+           (events (reverse (org-glance-world:events world)))
+           (relations (make-vector (length events) nil))
+           (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
+           (committed-offset view-offset))
       (cl-loop
          for event in events ;; TODO optimize
          for idx from 0
@@ -350,9 +351,10 @@
 
          when (org-glance-offset:less? view-offset event-offset)
          do (condition-case nil
-                (thunk-let* ((event-hash (org-glance- event :hash))
+                (thunk-let* ((hashes (org-glance- view :hash->midx))
+                             (event-hash (org-glance- event :hash))
                              (headline-hash (org-glance- headline :hash))
-                             (derived-hash (derive event-hash relations idx))
+                             (derived-hash (derive event-hash relations idx hashes))
                              (dimensions (org-glance- world :dimensions))
                              (view-type (org-glance- view :type))
 
@@ -360,7 +362,7 @@
                              (headline-derived? (string= derived-hash headline-hash))
                              (dimension-valid? (org-glance-dimension:validate view-type headline dimensions))
                              (dimension-invalid? (not dimension-valid?))
-                             (headline-exists? (gethash event-hash (org-glance- view :hash->midx)))
+                             (headline-exists? (gethash event-hash hashes))
 
                              (remove-headline! (org-glance-view:remove-headline view event-hash))
                              (replace-headline! (org-glance-view:replace-headline view event-hash headline))
