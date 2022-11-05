@@ -9,6 +9,7 @@
 
 https://untools.co
 
+* TODO [#A] Optimize fetch operation
 * TODO Proper cache for headlines
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list

@@ -21,6 +21,7 @@
   "Add headlines from LOCATION to WORLD."
   (cl-check-type world org-glance-world)
   (cl-check-type location string)
+
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
     (org-glance:with-temp-buffer
@@ -31,10 +32,12 @@
 
 (cl-defun org-glance-world:browse (world &optional (derivation (org-glance-world:choose-derivation world)))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-derivation)
+  (cl-check-type derivation (org-glance-type:optional org-glance-derivation))
 
-  (org-glance-world:with-locked-derivation world derivation
-    (find-file (org-glance-world:update-derivation world derivation))))
+  (cl-typecase derivation
+    (org-glance-derivation (org-glance-world:with-locked-derivation world derivation
+                             (find-file (org-glance-world:update-derivation world derivation))))
+    (otherwise nil)))
 
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)

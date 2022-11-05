@@ -15,6 +15,9 @@
 (cl-deftype org-glance-type:list-of (tp)
   `(satisfies (lambda (thing) (org-glance-type:list-of-p (quote ,tp) thing))))
 
+(cl-deftype org-glance-type:optional (tp)
+  `(satisfies (lambda (thing) (or (null thing) (cl-typep thing (quote ,tp))))))
+
 (cl-deftype org-glance-type:hash () 'string)
 
 (cl-deftype org-glance-type:offset () 'time)
