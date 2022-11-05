@@ -10,6 +10,9 @@
 https://untools.co
 
 * TODO [#A] Optimize fetch operation
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-06 Sun 00:19]
+:END:
 * TODO Proper cache for headlines
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list

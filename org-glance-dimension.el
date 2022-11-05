@@ -70,6 +70,6 @@
   (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (car (eval predicate (org-glance-dimension:context headline dimensions))))
+  (not (null (eval predicate (org-glance-dimension:context headline dimensions)))))
 
 (provide 'org-glance-dimension)
