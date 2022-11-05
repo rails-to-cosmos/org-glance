@@ -72,6 +72,7 @@
   `(progn
      (cl-check-type ,world org-glance-world)
      (cl-check-type ,derivation org-glance-derivation)
+
      (when (--> ,world
                 (org-glance-world:locate-derivation it ,derivation)
                 (get-file-buffer it)
@@ -246,13 +247,13 @@ achieved by calling `org-glance-world:persist' method."
     (org-glance- world :changelog*)
     (org-glance- world :changelog))))
 
-(cl-defun org-glance-world:get-headlines (world)
+(cl-defun org-glance-world:headlines (world)
   "Return actual headline hashes from WORLD."
   (cl-check-type world org-glance-world)
 
   (cl-loop
      with removed = (make-hash-table :test #'equal)
-     for event in (org-glance-log :performance (org-glance-world:events world))
+     for event in (org-glance-world:events world)
      when (cl-typecase event
             ((or org-glance-event:PUT org-glance-event:UPDATE)
              (not (gethash (org-glance- event :headline :hash) removed))))
@@ -298,8 +299,7 @@ achieved by calling `org-glance-world:persist' method."
   (cl-check-type world org-glance-world)
   (cl-check-type predicate function)
 
-  (cl-loop for headline in (org-glance-log :performance
-                               (org-glance-world:get-headlines world))
+  (cl-loop for headline in (org-glance-world:headlines world)
      when (funcall predicate headline)
      collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
 

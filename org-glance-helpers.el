@@ -39,6 +39,12 @@ Example: (org-glance- view :world :location)"
        (org-mode)
        ,@forms)))
 
+(cl-defmacro org-glance:with-temp-file-overwrite (file &rest forms)
+  (declare (indent 1))
+  `(org-glance:with-temp-file ,file
+     (insert-file-contents ,file)
+     ,@forms))
+
 (cl-defmacro org-glance:with-temp-buffer (&rest forms)
   `(with-temp-buffer
      (org-mode)

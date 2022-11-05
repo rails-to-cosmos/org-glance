@@ -333,15 +333,13 @@
                                   return (derive s rs j)))
                       ;; not found
                       (t nil))))
-    (let* ((world (org-glance- view :world))
-           (view-offset (org-glance-view:get-offset view)))
-      (org-glance-log :events "[%s] Fetch. View offset =  %s" (org-glance- view :type) view-offset)
-      (org-glance-log :events "[%s] Fetch. World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
+    (let ((world (org-glance- view :world))
+          (view-offset (org-glance-view:get-offset view))
+          (events (reverse (org-glance-world:events world)))
+          (relations (make-vector (length events) nil))
+          (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
+          (committed-offset view-offset))
       (cl-loop
-         with events = (reverse (org-glance-world:events world))
-         with relations = (make-vector (length events) nil)
-         with progress-reporter = (make-progress-reporter "Fetching events" 0 (length events))
-         with committed-offset = view-offset
          for event in events ;; TODO optimize
          for idx from 0
          for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
@@ -352,43 +350,33 @@
 
          when (org-glance-offset:less? view-offset event-offset)
          do (condition-case nil
-                (cl-typecase event
-                  (org-glance-event:UPDATE (org-glance-log :events "Replace headline \"%s\" with \"%s\"" (org-glance- event :hash) (org-glance- headline :hash))
-                                           (cond ((string= (org-glance- headline :hash) (org-glance- event :hash))
-                                                  (org-glance-log :events "[%s] Skip UPDATE event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
-                                                  (org-glance-log :events "[%s] Hashes are equal" (org-glance- view :type)))
-                                                 ((not (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions)))
+                (thunk-let* ((event-hash (org-glance- event :hash))
+                             (headline-hash (org-glance- headline :hash))
+                             (derived-hash (derive event-hash relations idx))
+                             (dimensions (org-glance- world :dimensions))
+                             (view-type (org-glance- view :type))
 
-                                                  (when (gethash (org-glance- event :hash) (org-glance- view :hash->midx))
-                                                    (org-glance-view:remove-headline view (org-glance- event :hash)))
+                             (hashes-equal? (string= headline-hash event-hash))
+                             (headline-derived? (string= derived-hash headline-hash))
+                             (dimension-valid? (org-glance-dimension:validate view-type headline dimensions))
+                             (dimension-invalid? (not dimension-valid?))
+                             (headline-exists? (gethash event-hash (org-glance- view :hash->midx)))
 
-                                                  (org-glance-log :events "[%s] Skip UPDATE event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
-                                                  (org-glance-log :events "[%s] Validation failed" (org-glance- view :type))
-                                                  (org-glance-log :events "[%s] Relations: %s" (org-glance- view :type) relations))
-                                                 ((gethash (org-glance- event :hash) (org-glance- view :hash->midx))
-                                                  (org-glance-view:replace-headline view (org-glance- event :hash) headline))
-                                                 (t
-                                                  (org-glance-log :events "[%s] Track UPDATE event as PUT event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
-                                                  (org-glance-log :events "[%s] Event hash not found: %s" (org-glance- view :type) (org-glance- event :hash))
-                                                  (org-glance-log :events "[%s] Relations: %s" (org-glance- view :type) relations)
-                                                  (org-glance-log :events "[%s] Available hashes: %s" (org-glance- view :type) (hash-table-keys (org-glance- view :hash->midx)))
-                                                  (org-glance-log :events "[%s] Derive hash from relations" (org-glance- view :type))
-                                                  (if-let (hash (derive (org-glance- event :hash) relations idx))
-                                                      (unless (string= hash (org-glance- headline :hash))
-                                                        (org-glance-view:replace-headline view hash headline))
-                                                    (org-glance-log :events "[%s] Derived hash not found. Add headline \"%s\"" (org-glance- view :type) (org-glance- headline :title))
-                                                    (org-glance-view:add-headline view headline)))))
-                  (org-glance-event:PUT (cond ((not (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions)))
-                                               (org-glance-log :events "[%s] Skip PUT event for \"%s\"" (org-glance- view :type) (org-glance- headline :title))
-                                               (org-glance-log :events "[%s] Validation failed" (org-glance- view :type)))
-                                              (t
-                                               (org-glance-view:add-headline view headline))))
-                  (org-glance-event:RM
-                   (org-glance-log :events "[%s] Remove headline %s" (org-glance- view :type) headline)
-                   (org-glance-view:remove-headline view (org-glance- event :hash)))
-                  (otherwise (user-error "Don't know how to handle event of type %s" (type-of event))))
+                             (remove-headline! (org-glance-view:remove-headline view event-hash))
+                             (replace-headline! (org-glance-view:replace-headline view event-hash headline))
+                             (derive-headline! (org-glance-view:replace-headline view derived-hash headline))
+                             (add-headline! (org-glance-view:add-headline view headline)))
+                  (cl-typecase event
+                    (org-glance-event:UPDATE (cond (hashes-equal? nil)
+                                                   ((and dimension-invalid? (not headline-exists?)) nil)
+                                                   ((and dimension-invalid? headline-exists?) remove-headline!)
+                                                   ((and dimension-valid? headline-exists?) replace-headline!)
+                                                   ((and derived-hash (not headline-derived?)) derive-headline!)
+                                                   ((not derived-hash) add-headline!)))
+                    (org-glance-event:PUT (when dimension-valid? add-headline!))
+                    (org-glance-event:RM remove-headline!)
+                    (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
               (quit (cl-return (org-glance-view:set-offset view committed-offset))))
-           (org-glance-log :events "[%s] %s" (org-glance- view :type) event)
            (setq committed-offset event-offset)
            (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
          finally do
@@ -427,7 +415,9 @@
                            :offset (org-glance- view :offset))))))
 
 (cl-defun org-glance-view:read-header (filename)
-  (cl-assert (s-ends-with? org-glance-view--header-extension filename))
+  (cl-assert (and (f-exists? filename)
+                  (s-ends-with? org-glance-view--header-extension filename)))
+
   (with-temp-buffer
     (insert-file-contents filename)
     (read (buffer-substring-no-properties (point-min) (point-max)))))

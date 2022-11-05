@@ -15,8 +15,7 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (org-glance-log :performance
-             (org-glance-view:mark-buffer))
+         (org-glance-view:mark-buffer)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
          (add-hook 'before-save-hook #'org-glance-view:commit nil t)
          (org-overview))
@@ -30,9 +29,7 @@ editor."
   (let* ((view (org-glance-view:get-buffer-view))
          (diff (- (- change-end change-beg) pre-change-length))
          (midx (org-glance-view:marker-at-point view (- change-beg 1))))
-    (org-glance-log :performance
-        (org-glance-view:set-marker-changed view midx t))
-    (org-glance-log :performance
-        (org-glance-view:shift-markers view midx diff))))
+    (org-glance-view:set-marker-changed view midx t)
+    (org-glance-view:shift-markers view midx diff)))
 
 (provide 'org-glance-material-mode)

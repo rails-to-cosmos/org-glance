@@ -350,8 +350,7 @@
                          (outline-next-heading)))
         while (org-at-heading-p)
         collect (save-excursion
-                  (let ((,(car var) (org-glance-log :performance
-                                        (org-glance-headline-at-point))))
+                  (let ((,(car var) (org-glance-headline-at-point)))
                     (org-glance-headline:with-headline-at-point ,@forms)))
         into result
         when (condition-case nil

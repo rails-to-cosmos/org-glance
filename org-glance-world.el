@@ -110,8 +110,7 @@
   (cl-check-type world org-glance-world)
   (cl-check-type predicate function)
 
-  (let ((headlines (org-glance-log :performance
-                       (org-glance-world:filter-headlines world predicate))))
+  (let ((headlines (org-glance-world:filter-headlines world predicate)))
     (thread-last (completing-read "Choose headline: " headlines)
       (a-get headlines)
       (org-glance-world:get-headline world))))
@@ -161,30 +160,18 @@
          (view-header (thread-first view-location
                         (org-glance-view:locate-header)
                         (org-glance-view:read-header)))
-         (view (org-glance-view :world world
-                                :type (a-get view-header :type)
-                                :location view-location
-                                :offset (a-get view-header :offset)))
+         (view-type (a-get view-header :type))
+         (view-offset (a-get view-header :offset))
          (world-offset (org-glance-world:offset world)))
-
-    (org-glance-log :world "Fetch view %s" dim)
-    (org-glance-log :offsets "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
-    (org-glance-log :offsets "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
-    (org-glance-log :world "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
-    (org-glance-log :buffers "[%s] Buffer before update: \n%s" (org-glance- view :type) (buffer-string))
-
-    (when (org-glance-offset:less? (org-glance- view :offset) world-offset)
-      (with-temp-file view-location
-        (org-mode)
-        (insert-file-contents view-location)
-        (org-glance-log :performance
-            (org-glance-view:mark-buffer view))
-        (org-glance-log :performance
-            (org-glance-view:fetch view))
-        (org-glance-log :performance
-            (org-glance-view:write-header view))
-        (org-glance-log :buffers "[%s] Buffer after update:\n%s" (org-glance- view :type) (buffer-string))))
-
+    (when (org-glance-offset:less? view-offset world-offset)
+      (org-glance:with-temp-file-overwrite view-location
+        (let ((view (org-glance-view :world world
+                                     :type view-type
+                                     :location view-location
+                                     :offset view-offset)))
+          (org-glance-view:mark-buffer view)
+          (org-glance-view:fetch view)
+          (org-glance-view:write-header view))))
     view-location))
 
 (cl-defun org-glance-world:backfill (world)
