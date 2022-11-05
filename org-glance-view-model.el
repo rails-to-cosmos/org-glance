@@ -167,15 +167,18 @@
                     (org-glance-view:set-marker-changed ,view midx nil))))))
 
 (cl-defun org-glance-view:add-headline (view headline)
-  (declare (indent 0))
+  (cl-check-type view org-glance-view)
+  (cl-check-type headline org-glance-headline)
+
   (goto-char (point-max))
-  (-> (org-glance- view :world)
-      (org-glance-world:get-headline (org-glance- headline :hash))
-      (org-glance-headline:insert))
+  (org-glance-headline:insert headline)
   ;; TODO optimize this, no need to remark all headlines
   (org-glance-view:mark-buffer view))
 
 (cl-defun org-glance-view:remove-headline (view hash)
+  (cl-check-type view org-glance-view)
+  (cl-check-type hash org-glance-type:hash)
+
   (let* ((midx (gethash hash (org-glance- view :hash->midx)))
          (marker-position (org-glance-view:get-marker-position view midx))
          (size (1- (hash-table-count (org-glance- view :hash->midx))))
@@ -193,7 +196,10 @@
            (delete-region (point-min) (point-max))))))
 
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
-  (declare (indent 0))
+  (cl-check-type view org-glance-view)
+  (cl-check-type old-hash org-glance-type:hash)
+  (cl-check-type headline org-glance-headline)
+
   (thunk-let* ((new-hash (org-glance- headline :hash))
                (midx (gethash old-hash (org-glance- view :hash->midx)))
                (marker-position (org-glance-view:get-marker-position view midx)))
@@ -343,38 +349,47 @@
       (cl-loop
          for event in events ;; TODO optimize
          for idx from 0
-         for headline = (org-glance-world:get-headline world (org-glance- event :headline :hash))
          for event-offset = (org-glance- event :offset)
 
          when (cl-typep event 'org-glance-event:UPDATE)
-         do (aset relations idx (cons (org-glance- event :hash) (org-glance- headline :hash)))
+         do (aset relations idx (cons (org-glance- event :hash) (org-glance- event :headline :hash)))
 
          when (org-glance-offset:less? view-offset event-offset)
          do (condition-case nil
                 (thunk-let* ((hashes (org-glance- view :hash->midx))
+                             (headline* (org-glance- event :headline))
+
                              (event-hash (org-glance- event :hash))
-                             (headline-hash (org-glance- headline :hash))
+                             (headline-hash (org-glance- headline* :hash))
                              (derived-hash (derive event-hash relations idx hashes))
                              (dimensions (org-glance- world :dimensions))
                              (view-type (org-glance- view :type))
 
+                             (headline (org-glance-world:get-headline world headline-hash))
+
                              (hashes-equal? (string= headline-hash event-hash))
                              (headline-derived? (string= derived-hash headline-hash))
-                             (dimension-valid? (org-glance-dimension:validate view-type headline dimensions))
+                             (dimension-valid? (org-glance-dimension:validate view-type headline* dimensions))
                              (dimension-invalid? (not dimension-valid?))
                              (headline-exists? (gethash event-hash hashes))
 
-                             (remove-headline! (org-glance-view:remove-headline view event-hash))
-                             (replace-headline! (org-glance-view:replace-headline view event-hash headline))
+                             (add-headline! (org-glance-view:add-headline view headline))
                              (derive-headline! (org-glance-view:replace-headline view derived-hash headline))
-                             (add-headline! (org-glance-view:add-headline view headline)))
+                             (remove-headline! (org-glance-view:remove-headline view event-hash))
+                             (replace-headline! (org-glance-view:replace-headline view event-hash headline)))
                   (cl-typecase event
-                    (org-glance-event:UPDATE (cond (hashes-equal? nil)
-                                                   ((and dimension-invalid? (not headline-exists?)) nil)
-                                                   ((and dimension-invalid? headline-exists?) remove-headline!)
-                                                   ((and dimension-valid? headline-exists?) replace-headline!)
-                                                   ((and derived-hash (not headline-derived?)) derive-headline!)
-                                                   ((not derived-hash) add-headline!)))
+                    (org-glance-event:UPDATE
+                     (message "Dimension invalid? %s" dimension-invalid?)
+                     (message "Dimension valid? %s" dimension-valid?)
+                     (message "Headline exists? %s %s" headline-exists? event-hash)
+                     (message "Hashes: %s" hashes)
+
+                     (cond (hashes-equal? nil)
+                           ((and dimension-invalid? (not headline-exists?)) nil)
+                           ((and dimension-invalid? headline-exists?) remove-headline!)
+                           ((and dimension-valid? headline-exists?) replace-headline!)
+                           ((and derived-hash (not headline-derived?)) derive-headline!)
+                           ((not derived-hash) add-headline!)))
                     (org-glance-event:PUT (when dimension-valid? add-headline!))
                     (org-glance-event:RM remove-headline!)
                     (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
