@@ -25,9 +25,9 @@
                      (f-exists? location)
                      (f-directory? location)
                      (f-readable? location)
-                     (f-exists? (f-join location "org-glance-world.md"))))))
+                     (f-exists? (f-join location "world.md"))))))
 
 (cl-deftype org-glance-type:scope ()
-  (org-glance-type:list-of org-glance-type:optional-org-file))
+  '(org-glance-type:list-of org-glance-type:optional-org-file))
 
 (provide 'org-glance-types)

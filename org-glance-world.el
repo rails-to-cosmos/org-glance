@@ -26,7 +26,8 @@
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
-       (org-glance-world:add-headline world headline)))))
+       (org-glance-world:add-headline world headline))))
+  world)
 
 (cl-defun org-glance-world:browse (world &optional (derivation (org-glance-world:choose-derivation world)))
   (cl-check-type world org-glance-world)
@@ -63,8 +64,12 @@
       (org-glance-world:add-headline world headline))
     (org-glance-world:persist world)
     (let ((file (buffer-file-name)))
+      (save-buffer)
       (kill-buffer (get-file-buffer file))
       (delete-file file))))
+
+(cl-defun org-glance-world:capture-location (world)
+  (f-join (org-glance- world :location) "capture.org"))
 
 (cl-defun org-glance-world:capture (world
                                     &key
@@ -76,7 +81,7 @@
                                       ;; finalize
                                       )
   (declare (indent 1))
-  (let ((file (f-join (org-glance- world :location) "capture.org")))
+  (let ((file (org-glance-world:capture-location world)))
     (delete-file file)
     (find-file file)
     (add-hook 'org-capture-after-finalize-hook 'org-glance-world:after-finalize-hook 0 t)
@@ -187,7 +192,7 @@
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (cl-typecase event
           (org-glance-event:RM nil)
-          (org-glance-event:PUT (org-glance-world:derive-views world headline))
-          (org-glance-event:UPDATE (org-glance-world:derive-views world headline)))))))
+          (org-glance-event:PUT (org-glance-world:make-derivations world headline))
+          (org-glance-event:UPDATE (org-glance-world:make-derivations world headline)))))))
 
 (provide 'org-glance-world)

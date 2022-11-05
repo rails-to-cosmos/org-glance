@@ -287,6 +287,14 @@
     (org-glance-headline:insert headline))
   headline)
 
+(cl-defun org-glance-headline:with-properties (headline properties)
+  (declare (indent 1))
+  (org-glance:with-temp-buffer
+   (org-glance-headline:insert headline)
+   (cl-loop for (key value) in properties
+      do (org-set-property key value))
+   (org-glance-headline-at-point)))
+
 (cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
   (insert (org-glance- headline :contents) "\n"))
 

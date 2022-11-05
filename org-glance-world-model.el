@@ -52,14 +52,14 @@
   "Create world located in directory LOCATION."
   (declare (indent 1))
   (f-mkdir-full-path location)
-  (f-touch (f-join location "org-glance-world.md"))
+  (f-touch (f-join location "world.md"))
   (org-glance-world :location location))
 
 (cl-defun org-glance-world:read (location)
   (cl-typecase location
     (org-glance-type:world-location (let ((world (org-glance-world:create location)))
-                                 (setf (org-glance- world :changelog) (org-glance-changelog:read (f-join location "log" "event.log")))
-                                 world))
+                                      (setf (org-glance- world :changelog) (org-glance-changelog:read (f-join location "log" "event.log")))
+                                      world))
     (otherwise nil)))
 
 (cl-defun org-glance-world:offset (world)
@@ -85,18 +85,22 @@
 
   (f-join (org-glance- world :location) "views" (org-glance-derivation:filename derivation)))
 
-(cl-defun org-glance-world:derive-views (world headline)
-  (cl-loop with dimensions = (org-glance- world :dimensions)
-     for dimension in dimensions
-     for partitions = (org-glance-dimension:partitions dimension headline)
-     for predicates = (org-glance-dimension:predicates dimension headline)
-     do (cl-loop for (partition . predicate) in (-zip partitions predicates)
+(cl-defun org-glance-world:make-derivations (world headline)
+  (cl-check-type world org-glance-world)
+  (cl-check-type headline org-glance-headline)
+
+  (let ((dimensions (org-glance- world :dimensions)))
+    (dolist-with-progress-reporter (dimension dimensions)
+        "Make derivations"
+      (let ((partitions (org-glance-dimension:partitions dimension headline))
+            (predicates (org-glance-dimension:predicates dimension headline)))
+        (cl-loop for (partition . predicate) in (-zip partitions predicates)
            for derivation = (org-glance-derivation
                              :dimension (format "%s" (org-glance- dimension :name))
                              :value (format "%s" (org-glance-dimension:validate predicate headline dimensions)))
            for location = (org-glance-world:locate-derivation world derivation)
            do (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
-           do (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))
+           do (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.
@@ -113,6 +117,8 @@ In all other places `org-glance-world' should act like pure
 functional data structure.
 
 Return last committed offset."
+  (cl-check-type world org-glance-world)
+
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (changelog-location (f-join (org-glance- world :location) "log" "event.log")))
@@ -125,35 +131,30 @@ Return last committed offset."
            (user-error "RM operation has not been implemented yet")
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world headline))
-           )
+           (org-glance-changelog:push changelog event))
 
           (org-glance-event:PUT
-           (org-glance-log :world "Generate headline id: %s" (org-glance-world:generate-headline-id world headline))
-           (org-glance-log :world "Save headline: %s" headline)
-           (org-glance-world:save-headline world headline)
-           (org-glance-world:derive-views world headline))
+           (let* ((id (org-glance-world:generate-headline-id world headline))
+                  (headline (org-glance-headline:with-properties headline
+                              `(("GLANCE_ID" ,id)
+                                ("DIR" ,(concat "../resources/" id))))))
+             (org-glance-world:save-headline world headline)
+             (org-glance-world:make-derivations world headline)
+             (org-glance-changelog:push changelog (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
 
           (org-glance-event:UPDATE
-           (org-glance-log :world "Save headline: %s" headline)
            (org-glance-world:save-headline world headline)
-           (org-glance-world:derive-views world headline)
+           (org-glance-world:make-derivations world headline)
+           (org-glance-changelog:push changelog event)
            ;; TODO think about when to delete headlines
            ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
-           )))
+           ))))
 
-      (org-glance-log :world "Push event to changelog: %s" event)
-      (org-glance-changelog:push changelog event))
-
-    (org-glance-log :world "Write changelog to %s: \n%s" changelog-location changelog)
     (org-glance-changelog:write changelog changelog-location)
     (setf (org-glance- world :changelog*) (org-glance-changelog))
-
-    (let ((offset (if (org-glance-changelog:last changelog)
-                      (org-glance- (org-glance-changelog:last changelog) :offset)
-                    (org-glance-offset:current))))
-      (org-glance-log :world "Persist world offset: %s" offset)
-      (org-glance-log :world "Actual world offset: %s" (org-glance-world:offset world))
-      offset)))
+    (cl-the org-glance-type:offset (if (org-glance-changelog:last changelog)
+                                       (org-glance- (org-glance-changelog:last changelog) :offset)
+                                     (org-glance-offset:current)))))
 
 (cl-defun org-glance-world:save-headline (world headline)
   (cl-check-type world org-glance-world)
@@ -166,6 +167,7 @@ Return last committed offset."
 
 (cl-defun org-glance-world:add-headline (world headline)
   "Put HEADLINE to WORLD."
+  (declare (indent 1))
   (org-glance-log :world "Put headline \"%s\" to world \"%s\" " (org-glance- headline :title) world)
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
@@ -246,6 +248,8 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:get-headlines (world)
   "Return actual headline hashes from WORLD."
+  (cl-check-type world org-glance-world)
+
   (cl-loop
      with removed = (make-hash-table :test #'equal)
      for event in (org-glance-log :performance (org-glance-world:events world))
@@ -261,19 +265,21 @@ achieved by calling `org-glance-world:persist' method."
   (cl-check-type world org-glance-world)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (cl-labels ((unique-id (id path &optional (tryout 0))
+  (cl-labels ((unique-location (id path &optional (tryout 0))
                 (let ((dest (if (> tryout 0)
                                 (f-join path (format "%s_%d" id tryout))
                               (f-join path (format "%s" id)))))
-                  (cond ((f-exists? dest) (unique-id id path (1+ tryout)))
+                  (cond ((f-exists? dest) (unique-location id path (1+ tryout)))
                         (t dest)))))
-    (unique-id (s-join "_" (list (format-time-string "%Y-%m-%d")
-                                 (thread-last (org-glance- headline :title)
-                                   (replace-regexp-in-string "[^a-z0-9A-Z_]" "_")
-                                   (replace-regexp-in-string "\\-+" "-")
-                                   (replace-regexp-in-string "\\-+$" "")
-                                   (s-truncate 30))))
-               (f-join (org-glance- world :location) "resources"))))
+    (let ((location (unique-location (s-join "_" (list (format-time-string "%Y-%m-%d")
+                                                       (thread-last (org-glance- headline :title)
+                                                         (replace-regexp-in-string "[^a-z0-9A-Z_]" "_")
+                                                         (replace-regexp-in-string "\\-+" "-")
+                                                         (replace-regexp-in-string "\\-+$" "")
+                                                         (s-truncate 30))))
+                                     (f-join (org-glance- world :location) "resources"))))
+      (f-mkdir-full-path location)
+      (file-name-nondirectory location))))
 
 (cl-defun org-glance-world:locate-headline (world headline)
   "Return location of HEADLINE in WORLD."
