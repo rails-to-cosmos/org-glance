@@ -66,7 +66,7 @@
       (lambda (world-name expected-count)
         (let ((world (org-glance-test:get-world world-name)))
           (should (= (string-to-number expected-count)
-                     (length (org-glance-world-model:get-headlines world)))))))
+                     (length (org-glance-world:get-headlines world)))))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain headline \"\\([^\"]+\\)\" in staging layer$"
       (lambda (world-name title)
@@ -92,7 +92,7 @@
       (lambda (world-name expected-count expected-state)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           with events = (org-glance-world-model:events world)
+           with events = (org-glance-world:events world)
            for event in events
            when (cl-typecase event
                   ((or org-glance-event:PUT org-glance-event:UPDATE) (string= (org-glance- event :headline :state) expected-state))
@@ -104,7 +104,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for commented? = (org-glance- headline :commented?)
            unless (null commented?)
            count 1 into count
@@ -114,7 +114,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for archived? = (org-glance- headline :archived?)
            unless (null archived?)
            count 1 into count
@@ -124,7 +124,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for closed? = (org-glance- headline :closed?)
            unless (null closed?)
            count 1 into count
@@ -134,7 +134,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for linked? = (org-glance- headline :linked?)
            unless (null linked?)
            count 1 into count
@@ -144,7 +144,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for store? = (org-glance- headline :store?)
            unless (null store?)
            count 1 into count
@@ -154,7 +154,7 @@
       (lambda (world-name expected-count)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for encrypted? = (org-glance- headline :encrypted?)
            unless (null encrypted?)
            count 1 into count
@@ -164,7 +164,7 @@
       (lambda (world-name expected-count expected-class)
         (cl-loop
            with world = (org-glance-test:get-world world-name)
-           for headline in (org-glance-world-model:get-headlines world)
+           for headline in (org-glance-world:get-headlines world)
            for tags = (org-glance- headline :tags)
            when (member (downcase expected-class) tags)
            count 1 into count
@@ -173,4 +173,4 @@
 (When "^I? ?persist world \"\\([^\"]+\\)\"$"
   (lambda (world-name)
     (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world-model:persist world))))
+      (org-glance-world:persist world))))

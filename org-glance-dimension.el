@@ -8,6 +8,37 @@
      (form :type list
            :initarg :form)))
 
+(org-glance-class org-glance-derivation nil
+    ((dimension :type string :initarg :dimension)
+     (value :type string :initarg :value)))
+
+(cl-defun org-glance-derivation:representation (derivation)
+  (cl-check-type derivation org-glance-derivation)
+
+  (downcase (format "%s=%s"
+                    (org-glance- derivation :dimension)
+                    (org-glance- derivation :value))))
+
+(cl-defun org-glance-derivation:filename (derivation)
+  (cl-check-type derivation org-glance-derivation)
+
+  (downcase (format "%s=%s.org"
+                    (org-glance- derivation :dimension)
+                    (org-glance- derivation :value))))
+
+(cl-defun org-glance-derivation:from-string (s)
+  (cl-check-type s string)
+
+  (cl-destructuring-bind (dimension value)
+      (--> s
+           (downcase it)
+           (s-split-up-to "=" it 2))
+    (org-glance-derivation :dimension dimension
+                           :value value)))
+
+(cl-defun org-glance-derivation:from-key-value (k v)
+  (org-glance-derivation:from-string (downcase (format "%s=%s" k v))))
+
 (cl-defun org-glance-dimension:partitions (dimension headline)
   (cl-check-type dimension org-glance-dimension)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))

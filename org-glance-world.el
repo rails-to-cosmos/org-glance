@@ -6,18 +6,6 @@
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
 
-(cl-defmacro org-glance-world:with-locked-view (world view-name &rest forms)
-  (declare (indent 2))
-  `(progn
-     (cl-check-type ,world org-glance-world)
-     (cl-check-type ,view-name string)
-     (when (--> ,world
-                (org-glance-world:locate-view it ,view-name)
-                (get-file-buffer it)
-                (cond ((null it) t)
-                      ((buffer-live-p it) (kill-buffer it))))
-       ,@forms)))
-
 (cl-defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
   (cl-check-type location string)
@@ -25,9 +13,9 @@
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
                        (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world-model:read)
+                                 #'org-glance-world:read)
                        (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world-model:create)))))
+                                 #'org-glance-world:create)))))
 
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
@@ -38,26 +26,21 @@
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
-       (org-glance-world-model:add-headline world headline)))))
+       (org-glance-world:add-headline world headline)))))
 
-(cl-defun org-glance-world:choose-view (world)
+(cl-defun org-glance-world:browse (world &optional (derivation (org-glance-world:choose-derivation world)))
   (cl-check-type world org-glance-world)
-  (completing-read "Choose view: "
-                   (org-glance-world-model:list-views world)
-                   nil
-                   t))
+  (cl-check-type derivation org-glance-derivation)
 
-(cl-defun org-glance-world:browse (world &optional (view-name (org-glance-world:choose-view world)))
-  (cl-check-type world org-glance-world)
-  (cl-check-type view-name string)
-  (org-glance-world:with-locked-view world view-name
-    (find-file (org-glance-world:update-view world view-name))))
+  (org-glance-world:with-locked-derivation world derivation
+    (find-file (org-glance-world:update-derivation world derivation))))
 
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)
-  (let ((view (org-glance-world:choose-view world)))
-    (org-glance-world:with-locked-view world view
-      (let ((location (org-glance-world:update-view world view))
+
+  (let ((derivation (org-glance-world:choose-derivation world)))
+    (org-glance-world:with-locked-derivation world derivation
+      (let ((location (org-glance-world:update-derivation world derivation))
             (lexical-binding nil))
         (let ((org-agenda-files (list location))
               (org-agenda-overriding-header "org-glance agenda")
@@ -77,8 +60,8 @@
   "Register captured headline in metastore."
   (let ((world (org-glance-world:current)))
     (org-glance-headline:map (headline)
-      (org-glance-world-model:add-headline world headline))
-    (org-glance-world-model:persist world)
+      (org-glance-world:add-headline world headline))
+    (org-glance-world:persist world)
     (let ((file (buffer-file-name)))
       (kill-buffer (get-file-buffer file))
       (delete-file file))))
@@ -116,13 +99,18 @@
 (cl-defun org-glance-world:choose-headline (world &optional predicate)
   "TODO Should be consistent with dimensions."
   (declare (indent 1))
+  (cl-check-type world org-glance-world)
+  (cl-check-type predicate function)
+
   (let ((headlines (org-glance-log :performance
                        (org-glance-world:filter-headlines world predicate))))
     (thread-last (completing-read "Choose headline: " headlines)
       (a-get headlines)
-      (org-glance-world-model:get-headline world))))
+      (org-glance-world:get-headline world))))
 
-(cl-defun org-glance-world:extract (world)
+(cl-defun org-glance-world:extract-headline (world)
+  (cl-check-type world org-glance-world)
+
   (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :store?))))
          (store (org-glance- headline :store)))
     (condition-case nil
@@ -132,14 +120,36 @@
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
 
-(cl-defun org-glance-world-model:list-views (world)
-  "TODO optimize me later"
-  (--map (file-name-sans-extension it)
+(cl-defun org-glance-world:derivations (world)
+  "TODO cache me"
+  (cl-check-type world org-glance-world)
+
+  (--map (--> it
+              (file-name-sans-extension it)
+              (s-split-up-to "=" it 2 t)
+              (-zip-lists '(:dimension :value) it)
+              (-flatten it)
+              (apply #'org-glance-derivation it))
          (--filter (member (file-name-extension it) org-glance-scope-extensions)
                    (directory-files (f-join (org-glance- world :location) "views")))))
 
-(cl-defun org-glance-world:update-view (world view-name)
-  (let* ((view-location (org-glance-world:locate-view world view-name))
+(cl-defun org-glance-world:choose-derivation (world)
+  (cl-check-type world org-glance-world)
+
+  (when-let (choice (condition-case nil
+                        (completing-read "Choose derivation: "
+                                         (--map (org-glance-derivation:representation it)
+                                                (org-glance-world:derivations world))
+                                         nil
+                                         t)
+                      (quit nil)))
+    (org-glance-derivation:from-string choice)))
+
+(cl-defun org-glance-world:update-derivation (world derivation)
+  (cl-check-type world org-glance-world)
+  (cl-check-type derivation org-glance-derivation)
+
+  (let* ((view-location (org-glance-world:locate-derivation world derivation))
          (view-header (thread-first view-location
                         (org-glance-view:locate-header)
                         (org-glance-view:read-header)))
@@ -147,11 +157,11 @@
                                 :type (a-get view-header :type)
                                 :location view-location
                                 :offset (a-get view-header :offset)))
-         (world-offset (org-glance-world-model:offset world)))
+         (world-offset (org-glance-world:offset world)))
 
     (org-glance-log :world "Fetch view %s" dim)
     (org-glance-log :offsets "[%s] View offset = %s" (org-glance- view :type) (org-glance- view :offset))
-    (org-glance-log :offsets "[%s] World offset = %s" (org-glance- view :type) (org-glance-world-model:offset world))
+    (org-glance-log :offsets "[%s] World offset = %s" (org-glance- view :type) (org-glance-world:offset world))
     (org-glance-log :world "[%s] World log:\n%s" (org-glance- view :type) (org-glance-changelog:contents (org-glance- world :changelog)))
     (org-glance-log :buffers "[%s] Buffer before update: \n%s" (org-glance- view :type) (buffer-string))
 
@@ -169,17 +179,12 @@
 
     view-location))
 
-(cl-defun org-glance-world:locate-view (world view-name)
-  (cl-check-type world org-glance-world)
-  (cl-check-type view-name string)
-
-  (f-join (org-glance- world :location) "views" (format "%s.org" (downcase view-name))))
-
 (cl-defun org-glance-world:backfill (world)
   (cl-check-type world org-glance-world)
+
   (let ((changelog (org-glance- world :changelog)))
     (dolist (event (reverse (org-glance- changelog :events)))
-      (thunk-let ((headline (org-glance-world-model:get-headline world (org-glance- event :headline :hash))))
+      (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (cl-typecase event
           (org-glance-event:RM nil)
           (org-glance-event:PUT (org-glance-world:derive-views world headline))

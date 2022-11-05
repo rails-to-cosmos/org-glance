@@ -59,7 +59,7 @@
                (world (org-glance- view :world)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:get-offset view)
-                   (org-glance-world-model:offset world))))))
+                   (org-glance-world:offset world))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()
@@ -130,10 +130,12 @@
 
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
-    (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world:browse world (format "%s=%s" dimension-name view-name)))))
+    (let ((world (org-glance-test:get-world world-name))
+          (derivation (org-glance-derivation:from-key-value dimension-name view-name)))
+      (org-glance-world:browse world derivation))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)
-        (let ((world (org-glance-test:get-world world-name)))
-          (should (f-exists? (org-glance-world:locate-view world (format "%s=%s" dimension-name view-name)))))))
+        (let ((world (org-glance-test:get-world world-name))
+              (derivation (org-glance-derivation:from-key-value dimension-name view-name)))
+          (should (f-exists? (org-glance-world:locate-derivation world derivation))))))

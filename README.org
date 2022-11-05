@@ -9,15 +9,16 @@
 
 https://untools.co
 
-* STARTED Consistent actions (use same underlying logic as in dimensions)
-:LOGBOOK:
-- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:50]
-CLOCK: [2022-11-04 Fri 10:50]
-:END:
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list
-* TODO optimize fetching relations: traverse changelog from end
-* TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world-model:get-headline
+* TODO Optimize fetching relations: traverse changelog from end
+* TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world:get-headline
+* PENDING Consistent actions (use same underlying logic as in dimensions)
+:LOGBOOK:
+- State "PENDING"    from "STARTED"    [2022-11-05 Sat 09:30]
+- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:50]
+CLOCK: [2022-11-04 Fri 10:50]--[2022-11-05 Sat 09:30] => 22:40
+:END:
 * PENDING Fix file names
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-10-30 Sun 13:06]

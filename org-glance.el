@@ -92,7 +92,7 @@
 
 (cl-defun org-glance-extract ()
   (interactive)
-  (org-glance-world:extract org-glance-current-world))
+  (org-glance-world:extract-headline org-glance-current-world))
 
 (cl-defun org-glance-backfill ()
   (interactive)
@@ -102,7 +102,7 @@
   (interactive "DDirectory: ")
   (-> org-glance-current-world
       (org-glance-world:import location)
-      (org-glance-world-model:persist)))
+      (org-glance-world:persist)))
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."

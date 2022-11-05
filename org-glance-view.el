@@ -5,7 +5,7 @@
 
 (cl-defun org-glance-view:get-or-create (world type location
                                          &optional
-                                           (offset (org-glance-world-model:offset world)))
+                                           (offset (org-glance-world:offset world)))
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (cl-check-type world org-glance-world)
   (let* ((location (file-truename (f-join (org-glance- world :location) location)))
