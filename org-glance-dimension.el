@@ -1,6 +1,7 @@
 (require 'a)
 (require 's)
 (require 'org-glance-helpers)
+(require 'org-glance-types)
 
 (org-glance-class org-glance-dimension nil
     ((name :type symbol
@@ -22,9 +23,7 @@
 (cl-defun org-glance-derivation:filename (derivation)
   (cl-check-type derivation org-glance-derivation)
 
-  (downcase (format "%s=%s.org"
-                    (org-glance- derivation :dimension)
-                    (org-glance- derivation :value))))
+  (concat (org-glance-derivation:representation derivation) ".org"))
 
 (cl-defun org-glance-derivation:from-string (s)
   (cl-check-type s string)
@@ -61,14 +60,14 @@
 
 (cl-defun org-glance-dimension:context (headline dimensions)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
-  (cl-check-type dimensions list)
+  (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
 
   (cl-loop for dimension in dimensions
      collect (org-glance-dimension:partitions dimension headline)))
 
 (cl-defun org-glance-dimension:validate (predicate headline dimensions)
   (cl-check-type predicate list)
-  (cl-check-type dimensions list)
+  (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
   (car (eval predicate (org-glance-dimension:context headline dimensions))))

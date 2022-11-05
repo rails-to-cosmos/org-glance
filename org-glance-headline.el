@@ -68,7 +68,7 @@
 
 ;; Extend events suitable for headlines
 (org-glance-class org-glance-event ()
-    ((offset :type org-glance-offset
+    ((offset :type org-glance-type:offset
              :initarg :offset
              :initform (org-glance-offset:current))))
 
@@ -77,11 +77,11 @@
                :initarg :headline)))
 
 (org-glance-class org-glance-event:RM (org-glance-event)
-    ((hash :type org-glance-hash
+    ((hash :type org-glance-type:hash
            :initarg :hash)))
 
 (org-glance-class org-glance-event:UPDATE (org-glance-event)
-    ((hash :type org-glance-hash
+    ((hash :type org-glance-type:hash
            :initarg :hash)
      (headline :type org-glance-headline-header
                :initarg :headline)))
@@ -95,7 +95,7 @@
                :initarg :position)))
 
 (org-glance-class org-glance-headline-header ()
-    ((hash :type org-glance-hash
+    ((hash :type org-glance-type:hash
            :initarg :hash
            :documentation "Hash of original headline contents.")
      (title :type string

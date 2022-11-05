@@ -47,11 +47,11 @@
       contain only headlines for which predicate returns non-nil
       value.")
      (location
-      :type org-glance-optional-file
+      :type org-glance-type:optional-org-file
       :initarg :location
       :documentation "Location where view persists.")
      (offset
-      :type org-glance-offset
+      :type org-glance-type:offset
       :initarg :offset)
      (markers
       :type vector

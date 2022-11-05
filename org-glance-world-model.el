@@ -23,17 +23,9 @@
 (require 'org-glance-scope)
 (require 'org-glance-types)
 
-(cl-deftype org-glance-world:location ()
-  '(satisfies (lambda (location)
-                (and (f-absolute? location)
-                     (f-exists? location)
-                     (f-directory? location)
-                     (f-readable? location)
-                     (f-exists? (f-join location "org-glance-world.md"))))))
-
 (org-glance-class org-glance-world nil
     ((location
-      :type org-glance-world:location
+      :type org-glance-type:world-location
       :initarg :location
       :documentation "Directory containing all the data.")
      (changelog*
@@ -65,7 +57,7 @@
 
 (cl-defun org-glance-world:read (location)
   (cl-typecase location
-    (org-glance-world:location (let ((world (org-glance-world:create location)))
+    (org-glance-type:world-location (let ((world (org-glance-world:create location)))
                                  (setf (org-glance- world :changelog) (org-glance-changelog:read (f-join location "log" "event.log")))
                                  world))
     (otherwise nil)))
@@ -266,6 +258,9 @@ achieved by calling `org-glance-world:persist' method."
      do (puthash (org-glance- event :hash) t removed)))
 
 (cl-defun org-glance-world:generate-headline-id (world headline)
+  (cl-check-type world org-glance-world)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-header))
+
   (cl-labels ((unique-id (id path &optional (tryout 0))
                 (let ((dest (if (> tryout 0)
                                 (f-join path (format "%s_%d" id tryout))
@@ -282,6 +277,8 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:locate-headline (world headline)
   "Return location of HEADLINE in WORLD."
+  (cl-check-type world org-glance-world)
+
   (cl-typecase headline
     ((or org-glance-headline org-glance-headline-header)
      (org-glance-world:locate-headline world (org-glance- headline :hash)))
@@ -302,7 +299,7 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:root (location)
   (cl-typecase location
-    (org-glance-world:location location)
+    (org-glance-type:world-location location)
     (otherwise (org-glance-world:root (f-parent location)))))
 
 (provide 'org-glance-world-model)
