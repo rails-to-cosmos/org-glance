@@ -185,13 +185,21 @@
        substring-no-properties
        s-trim))
 
+(cl-defun org-glance-ast:substitute-links-with-titles (ast)
+  (cl-loop for link in (org-element-map ast 'link #'identity)
+     do (org-element-set-element link (or (-some->> link
+                                            org-element-contents
+                                            org-element-interpret-data)
+                                          (org-element-property :raw-link link)))
+     finally return ast))
+
 (cl-defun org-glance-ast:title (ast)
   (with-temp-buffer
     (insert (or (org-element-property :TITLE (car ast))
                 (org-element-property :raw-value (car ast))
                 ""))
     (->> (org-element-parse-buffer)
-         org-glance:links-to-titles
+         org-glance-ast:substitute-links-with-titles
          org-element-interpret-data
          substring-no-properties
          s-trim)))

@@ -44,15 +44,6 @@ Example: (org-glance- view :world :location)"
      (org-mode)
      ,@forms))
 
-(cl-defun org-glance:links-to-titles (ast)
-  "Replace links with its titles in AST."
-  (cl-loop for link in (org-element-map ast 'link #'identity)
-     do (org-element-set-element link (or (-some->> link
-                                            org-element-contents
-                                            org-element-interpret-data)
-                                          (org-element-property :raw-link link)))
-     finally return ast))
-
 (cl-defmacro org-glance-memc (var bodyform handler)
   "Memory consumption report."
   (declare (indent 2))
@@ -69,10 +60,6 @@ Example: (org-glance- view :world :location)"
        (prog1 ,bodyform
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
-
-(cl-defmacro org-glance-comment (&rest _)
-  (declare (indent 0))
-  t)
 
 (cl-defun org-glance:binary-search (vec
                                     v
