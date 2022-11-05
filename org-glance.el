@@ -122,7 +122,7 @@
                                       :type (a-get view-header :type)
                                       :location view-location
                                       :offset (org-glance-offset:zero))))
-    (cl-clrhash (org-glance- world :cache))
+    (clrhash (org-glance- world :cache))
     (org-glance-world:update-derivation world derivation)
     (org-glance-view:write-header reset-view)))
 

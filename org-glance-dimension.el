@@ -70,6 +70,10 @@
   (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (not (null (eval predicate (org-glance-dimension:context headline dimensions)))))
+  (let ((result (eval predicate (org-glance-dimension:context headline dimensions))))
+    (if (null result)
+        nil ;; validation failed
+      (format "%s" (car result)) ;; return evaluation result
+      )))
 
 (provide 'org-glance-dimension)
