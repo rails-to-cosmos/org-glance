@@ -113,7 +113,7 @@
 (cl-defun org-glance-benchmark ()
   (interactive)
   (let* ((world org-glance-current-world)
-         (derivation (org-glance-derivation :dimension "title" :value "water-counters"))
+         (derivation (org-glance-derivation :dimension "linked" :value "t"))
          (view-location (org-glance-world:locate-derivation world derivation))
          (view-header (thread-first view-location
                         (org-glance-view:locate-header)

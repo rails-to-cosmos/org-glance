@@ -19,10 +19,25 @@ Example: (org-glance- view :world :location)"
          ;; convert other symbols to array indices
          ((and (s-starts-with? "[" s-slot)
                (s-ends-with? "]" s-slot))
-          `(aref ,acc ,(intern (substring s-slot 1 (- (length s-slot) 1)))))
+          (let ((idx (read (substring s-slot 1 (- (length s-slot) 1)))))
+            `(aref ,acc ,idx)))
          (t (user-error "Unknown slot reference: %s" slot)))))
    slots
    :initial-value object))
+
+(defmacro org-glance! (object &rest slots)
+  (let ((get-slots (--take-while (not (eq it :=)) slots))
+        (set-slots (cdr (--drop-while (not (eq it :=)) slots))))
+    (pcase set-slots
+      (`() (user-error "Set slots should contain more than 1 element"))
+      (`(,value) `(setf (org-glance- ,object ,@get-slots) ,value))
+      (value `(setf (org-glance- ,object ,@get-slots) (org-glance- ,@value))))))
+
+(defmacro org-glance++ (object &rest slots)
+  `(cl-incf (org-glance- ,object ,@slots)))
+
+(defmacro org-glance-- (object &rest slots)
+  `(cl-decf (org-glance- ,object ,@slots)))
 
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."

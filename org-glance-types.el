@@ -12,6 +12,12 @@
                                 (and (f-readable-p location)
                                      (f-ext-p location "org"))))))
 
+(cl-deftype org-glance-type:bounded-by (val)
+  `(satisfies (lambda (thing) (and (cl-typep thing 'number) (>= thing 0) (< thing ,val)))))
+
+(cl-deftype org-glance-type:index-of (seq)
+  `(satisfies (lambda (thing) (cl-typep thing '(org-glance-type:bounded-by ,(seq-length seq))))))
+
 (cl-deftype org-glance-type:list-of (tp)
   `(satisfies (lambda (thing) (org-glance-type:list-of-p (quote ,tp) thing))))
 
