@@ -82,41 +82,4 @@ Example: (org-glance- view :world :location)"
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
 
-(cl-defun org-glance:binary-search (vec
-                                    v
-                                    &key
-                                      (l 0)
-                                      (r (1- (length vec)))
-                                      (key #'(lambda (vec idx) (aref vec idx))))
-  (declare (indent 2))
-  (thunk-let* ((m (/ (+ l r 1) 2))
-               (mv (funcall key vec m))
-               (lv (funcall key vec l))
-               (rv (funcall key vec r)))
-    (cond ((= 0 (length vec)) -1)
-          ((< v lv) -1)
-          ((= v lv) l)
-          ((>= v rv) r)
-          ((>= v mv) (org-glance:binary-search vec v :l m :r r :key key))
-          (t (org-glance:binary-search vec v :l l :r (1- m) :key key)))))
-
-;; (eval-when-compile
-;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119] 10)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
-;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
-;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
-
 (provide 'org-glance-helpers)

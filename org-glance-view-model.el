@@ -46,6 +46,8 @@
                        :capacity capacity)))
 
 (cl-defun org-glance-vector:double-capacity! (vec)
+  (cl-check-type vec org-glance-vector)
+
   (let* ((old-arr (org-glance- vec :array))
          (old-capacity (org-glance- vec :capacity))
          (new-capacity (* 2 old-capacity))
@@ -56,6 +58,8 @@
     (org-glance! vec :capacity := new-capacity)))
 
 (cl-defun org-glance-vector:half-capacity! (vec)
+  (cl-check-type vec org-glance-vector)
+
   (let* ((old-arr (org-glance- vec :array))
          (new-capacity (/ (org-glance- vec :capacity) 2))
          (new-arr (make-vector new-capacity nil)))
@@ -122,19 +126,57 @@
 
 (cl-defun org-glance-vector:clear! (vec)
   (cl-check-type vec org-glance-vector)
+
   (org-glance! vec :size := 0)
   (while (> (org-glance- vec :capacity) org-glance-vector:DEFAULT-CAPACITY)
     (org-glance-vector:shrink-maybe! vec))
   vec)
 
+(cl-defun org-glance-vector:binary-search (vec v &key
+                                                   (len #'(lambda (vec) (org-glance-vector:size vec)))
+                                                   (key #'(lambda (vec idx) (org-glance- (org-glance-vector:get vec idx) :position)))
+                                                   (l 0)
+                                                   (r (1- (funcall len vec))))
+  (declare (indent 2))
+  (cl-check-type vec org-glance-vector)
+  (cl-check-type v number)
+
+  (thunk-let* ((m (/ (+ l r 1) 2))
+               (mv (funcall key vec m))
+               (lv (funcall key vec l))
+               (rv (funcall key vec r)))
+    (cond ((= 0 (funcall len vec)) -1)
+          ((< v lv) -1)
+          ((= v lv) l)
+          ((>= v rv) r)
+          ((>= v mv) (org-glance-vector:binary-search vec v :l m :r r :key key :len len))
+          (t (org-glance-vector:binary-search vec v :l l :r (1- m) :key key :len len)))))
+
+;; (eval-when-compile
+;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))
+
+;;   (cl-assert (= -1 (org-glance:binary-search [119] 10)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
+
+;;   (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
+
+;;   (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
+;;   (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
+;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
+;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
+;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
+
 ;; (let ((vec (org-glance-vector:create))
 ;;       (idx 0))
-;;   (org-glance-vector:push-back! vec 1)
-;;   (org-glance-vector:push-back! vec 3)
-;;   (org-glance-vector:push-at! vec 1 2)
-;;   (org-glance-vector:remove-at! vec 0)
-;;   (org-glance-vector:push-back! vec -1)
-;;   (org-glance-vector:clear! vec)
+;;   (org-glance-vector:push-back! vec 119)
+;;   (org-glance-vector:push-back! vec 211)
+;;   (org-glance-vector:push-back! vec 300)
+;;   (org-glance-vector:binary-search vec 120 :key #'(lambda (vec idx) (org-glance-vector:get vec idx)))
 ;;   )
 
 (org-glance-class org-glance-view nil
@@ -159,9 +201,9 @@
       :type org-glance-type:offset
       :initarg :offset)
      (markers
-      :type vector
+      :type org-glance-vector
       :initarg :markers
-      :documentation "Dynamic vector representing headlines.")
+      :documentation "Dynamic array with headlines.")
      (hash->midx
       :type hash-table
       :initarg :hash->midx
@@ -202,7 +244,7 @@
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
   (declare (indent 3))
-  `(if (< -1 ,midx (length (org-glance- ,view :markers)))
+  `(if (< -1 ,midx (org-glance-vector:size (org-glance- ,view :markers)))
        ,then
      ,@else))
 
@@ -217,31 +259,37 @@
 
 (cl-defun org-glance-view:get-marker-position (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- view :markers [midx] :position)
+      (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+        (org-glance- marker :position))
     (point-max)))
 
 (cl-defun org-glance-view:set-marker-position (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (setf (org-glance- view :markers [midx] :position) val)))
+      (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+        (org-glance! marker :position := val))))
 
 (cl-defun org-glance-view:set-marker-hash (view midx val)
   (org-glance-view:if-safe-marker view midx
       (progn
         (remhash (org-glance-view:get-marker-hash view midx) (org-glance- view :hash->midx))
         (puthash val midx (org-glance- view :hash->midx))
-        (setf (org-glance- view :markers [midx] :hash) val))))
+        (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+          (org-glance! marker :hash := val)))))
 
 (cl-defun org-glance-view:get-marker-hash (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- view :markers [midx] :hash)))
+      (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+        (org-glance- marker :hash))))
 
 (cl-defun org-glance-view:marker-changed? (view midx)
   (org-glance-view:if-safe-marker view midx
-      (org-glance- view :markers [midx] :changed?)))
+      (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+        (org-glance- marker :changed?))))
 
 (cl-defun org-glance-view:set-marker-changed (view midx val)
   (org-glance-view:if-safe-marker view midx
-      (setf (org-glance- view :markers [midx] :changed?) val)))
+      (let ((marker (org-glance-vector:get (org-glance- view :markers) midx)))
+        (org-glance! marker :changed? := val))))
 
 (cl-defmacro org-glance-view:with-current-buffer (view &rest forms)
   (declare (indent 1))
@@ -265,12 +313,13 @@
         (midx-var-name (cadr spec)))
     `(org-glance-view:with-current-buffer ,view
        (cl-loop
-          for marker across-ref (org-glance- ,view :markers)
-          for midx from 0
+          with markers = (org-glance- ,view :markers)
+          for midx from 0 below (org-glance-vector:size markers)
+          for marker = (org-glance-vector:get markers midx)
           when (org-glance- marker :changed?)
           collect (unwind-protect
                        (save-excursion
-                         (goto-char (org-glance-view:get-marker-position ,view midx))
+                         (goto-char (org-glance- marker :position))
                          (let ((,midx-var-name midx))
                            ,@forms))
                     (org-glance-view:set-marker-changed ,view midx nil))))))
@@ -279,28 +328,26 @@
   (cl-check-type view org-glance-view)
   (cl-check-type headline org-glance-headline)
 
-  (goto-char (point-max))
-  (org-glance-headline:insert headline))
+  (let* ((markers (org-glance- view :markers))
+         (hash (org-glance- headline :hash))
+         (marker (org-glance-view--marker :hash hash :position (point-max))))
+    (org-glance-vector:push-back! markers marker)
+    (goto-char (point-max))
+    (org-glance-headline:insert headline)
+    (puthash hash (- (org-glance-vector:size markers) 1) (org-glance- view :hash->midx))))
 
 (cl-defun org-glance-view:remove-headline (view hash)
   (cl-check-type view org-glance-view)
   (cl-check-type hash org-glance-type:hash)
 
-  (let* ((midx (org-glance-view:get-marker-index view))
+  (let* ((midx (org-glance-view:get-marker-index view hash))
          (mpos (org-glance-view:get-marker-position view midx))
-         (size (1- (hash-table-count (org-glance- view :hash->midx))))
-         (markers* (make-vector size nil)))
-    (cl-loop for idx from 0 to size
-       when (< idx midx)
-       do (aset markers* idx (aref (org-glance- view :markers) idx))
-       when (> idx midx)
-       do (aset markers* (1- idx) (aref (org-glance- view :markers) (1- idx)))
-       finally do
-         (setf (org-glance- view :markers) markers*)
-         (remhash hash (org-glance- view :hash->midx))
-         (goto-char mpos)
-         (org-glance-headline:with-headline-at-point ;; TODO optimize me
-           (delete-region (point-min) (point-max))))))
+         (markers (org-glance- view :markers)))
+    (goto-char mpos)
+    (org-glance-headline:with-headline-at-point
+      (delete-region (point-min) (point-max)))
+    (org-glance-vector:remove-at! markers midx)
+    (remhash hash (org-glance- view :hash->midx))))
 
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
   (cl-check-type view org-glance-view)
@@ -344,28 +391,24 @@
   "Create effective in-memory representation of VIEW org-mode buffer."
   ;; TODO make dynamic arrays to optimize add operation
   ;; TODO save markers for further optimizations
-  (cl-loop
-     with mark-cache-file = (org-glance-view:locate-markers view)
-     with markers = (or (and (f-exists? mark-cache-file)
-                             (condition-case nil
-                                 (prog1 (org-glance-view:load-markers view mark-cache-file)
-                                   (org-glance-log :cache "cache hit: read markers"))
-                               (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
-                        (prog1 (org-glance-headline:map (headline)
-                                 (org-glance-view--marker :hash (org-glance- headline :hash)
-                                                          :position (point-min)))
-                          (org-glance-log :cache "cache miss: recalculate markers")))
-     with result = (make-vector (length markers) nil)
-     with hash->midx = (make-hash-table :test #'equal)
-     for marker in markers
-     for midx from 0
-     do
-       (puthash (org-glance- marker :hash) midx hash->midx)
-       (aset result midx marker)
-     finally do
-       (setf (org-glance- view :markers) result
-             (org-glance- view :hash->midx) hash->midx)
-       (org-glance-view:save-markers view mark-cache-file)))
+  (let* ((markers-cache-file (org-glance-view:locate-markers view))
+         (markers (or (and (f-exists? markers-cache-file)
+                           (condition-case nil
+                               (prog1 (org-glance-view:load-markers view markers-cache-file)
+                                 (org-glance-log :cache "cache hit: read markers"))
+                             (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
+                      (let ((markers (org-glance-vector:create)))
+                        (org-glance-log :cache "cache miss: recalculate markers")
+                        (org-glance-headline:map (headline)
+                          (org-glance-vector:push-back! markers (org-glance-view--marker :hash (org-glance- headline :hash)
+                                                                                         :position (point-min))))
+                        markers))))
+    (cl-loop with hash->midx = (make-hash-table :test #'equal)
+       for midx below (org-glance-vector:size markers)
+       do (puthash (org-glance- (org-glance-vector:get markers midx) :hash) midx hash->midx)
+       finally do (setf (org-glance- view :markers) markers
+                        (org-glance- view :hash->midx) hash->midx)
+         (org-glance-view:save-markers view markers-cache-file))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (let ((world (org-glance- view :world))
@@ -394,10 +437,12 @@
 
 (cl-defun org-glance-view:save-markers (view location)
   (org-glance-view:with-current-buffer view
-    (let ((hash (buffer-hash)))
+    (let ((markers (org-glance- view :markers))
+          (buffer-hash (buffer-hash)))
       (with-temp-file location
-        (insert (format "%s\n" hash))
-        (cl-loop for marker across-ref (org-glance- view :markers)
+        (insert (format "%s\n" buffer-hash))
+        (cl-loop for midx below (org-glance-vector:size markers)
+           for marker = (org-glance-vector:get markers midx)
            do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position))))))))
 
 (cl-defun org-glance-view:load-markers (view location)
@@ -410,11 +455,13 @@
           (user-error "Mark cache validation failed: \"%s\" vs \"%s\""
                       (buffer-substring-no-properties (point-min) (line-end-position))
                       view-hash))
-        (cl-loop while (and (= 0 (forward-line 1)) (not (eobp)))
-           collect (cl-destructuring-bind (hash position)
-                       (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
-
-                     (org-glance-view--marker :hash hash :position (string-to-number position))))))))
+        (cl-loop with markers = (org-glance-vector:create)
+           while (and (= 0 (forward-line 1)) (not (eobp)))
+           for marker = (cl-destructuring-bind (hash position)
+                            (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
+                          (org-glance-view--marker :hash hash :position (string-to-number position)))
+           do (org-glance-vector:push-back! markers marker)
+           finally return markers)))))
 
 (cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
   (cl-labels ((derive (h  ;; hash
@@ -510,7 +557,6 @@
            (cl-loop for headline being the hash-values of to-add
               do (org-glance-view:add-headline view headline))
            (org-glance-view:set-offset view committed-offset)
-           (org-glance-view:mark-buffer view)
            (progress-reporter-done progress-reporter)))))
 
 (cl-defun org-glance-view:get-offset (view)
@@ -531,11 +577,10 @@
     (&optional
        (view (org-glance-view:get-buffer-view))
        (point (point)))
-  (org-glance:binary-search (org-glance- view :markers) point
-    :key #'(lambda (vec idx) (org-glance- (aref vec idx) :position))))
+  (org-glance-vector:binary-search (org-glance- view :markers) point))
 
 (cl-defun org-glance-view:shift-markers (view midx diff)
-  (cl-loop for idx from (1+ midx) below (length (org-glance- view :markers))
+  (cl-loop for idx from (1+ midx) below (org-glance-vector:size (org-glance- view :markers))
      do (org-glance-view:set-marker-position view idx (+ (org-glance-view:get-marker-position view idx) diff))))
 
 (cl-defun org-glance-view:write-header (view)

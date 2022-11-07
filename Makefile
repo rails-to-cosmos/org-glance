@@ -21,7 +21,7 @@ test:
 debug:
 	${CASK} clean-elc
 	${CASK} build
-	${CASK} exec ecukes --tags @debug
+	${CASK} exec ecukes --tags @debug --debug
 	${CASK} clean-elc
 
 one:

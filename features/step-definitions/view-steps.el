@@ -27,7 +27,9 @@
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
         (should (= (string-to-number changed-markers-count)
-                   (cl-loop for marker across-ref (org-glance- (org-glance-view:get-buffer-view) :markers)
+                   (cl-loop with markers = (org-glance- (org-glance-view:get-buffer-view) :markers)
+                      for midx below (org-glance-vector:size markers)
+                      for marker = (org-glance-vector:get markers midx)
                       when (org-glance- marker :changed?)
                       sum 1)))))
 
@@ -89,7 +91,8 @@
                                                                 (point-max))))
 
                      (and (> midx -1)
-                          (= (org-glance- (aref (org-glance- view :markers) midx) :position) (point-min)))))))
+                          (= (org-glance- (org-glance-vector:get (org-glance- view :markers) midx) :position)
+                             (point-min)))))))
          (should (--all-p (eq it t) hc)))))
 
 (And "^marker positions and hashes should be consistent$"
