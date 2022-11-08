@@ -110,21 +110,5 @@
     (setf (org-glance- world :dimensions) org-glance-dimensions)
     (setq org-glance-current-world world)))
 
-(cl-defun org-glance-benchmark ()
-  (interactive)
-  (let* ((world org-glance-current-world)
-         (derivation (org-glance-derivation :dimension "linked" :value "t"))
-         (view-location (org-glance-world:locate-derivation world derivation))
-         (view-header (thread-first view-location
-                        (org-glance-view:locate-header)
-                        (org-glance-view:read-header)))
-         (reset-view (org-glance-view :world world
-                                      :type (a-get view-header :type)
-                                      :location view-location
-                                      :offset (org-glance-offset:zero))))
-    (clrhash (org-glance- world :cache))
-    (org-glance-world:update-derivation world derivation)
-    (org-glance-view:write-header reset-view)))
-
 (provide 'org-glance)
 ;;; org-glance.el ends here

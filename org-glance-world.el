@@ -2,13 +2,15 @@
 
 (require 'dash)
 (require 'org-glance-headline)
+(require 'org-glance-types)
 (require 'org-glance-world-model)
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
 
 (cl-defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
-  (cl-check-type location string)
+  (cl-check-type location org-glance-type:optional-directory)
+
   (->> location
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
@@ -20,7 +22,7 @@
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
   (cl-check-type world org-glance-world)
-  (cl-check-type location string)
+  (cl-check-type location org-glance-type:directory)
 
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
@@ -72,6 +74,8 @@
       (delete-file file))))
 
 (cl-defun org-glance-world:capture-location (world)
+  (cl-check-type world org-glance-world)
+
   (f-join (org-glance- world :location) "capture.org"))
 
 (cl-defun org-glance-world:capture (world
@@ -84,6 +88,8 @@
                                       ;; finalize
                                       )
   (declare (indent 1))
+  (cl-check-type world org-glance-world)
+
   (let ((file (org-glance-world:capture-location world)))
     (delete-file file)
     (find-file file)
@@ -96,6 +102,8 @@
     ))
 
 (cl-defun org-glance-world:jump (world)
+  (cl-check-type world org-glance-world)
+
   (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :linked?))))
          (links (org-glance- headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
@@ -170,7 +178,7 @@
     (when (org-glance-offset:less? offset world-offset)
       (let ((view (org-glance-view:get-or-create world type location offset)))
         (org-glance:with-temp-file-overwrite location
-          (org-glance-view:mark-buffer view)
+          (org-glance-view:mark view)
           (org-glance-view:fetch view)
           (org-glance-view:write-header view))))
     location))

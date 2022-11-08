@@ -363,7 +363,7 @@
 
       (org-glance-view:set-marker-hash view midx new-hash))))
 
-(cl-defun org-glance-view:mark-buffer (view)
+(cl-defun org-glance-view:mark (view)
   "Create effective in-memory representation of VIEW org-mode buffer."
   (cl-check-type view org-glance-view)
 
@@ -374,7 +374,7 @@
                                  (org-glance-log :cache "cache hit: read markers"))
                              (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
                       (let ((markers (org-glance-vector:create)))
-                        (org-glance-log :cache "[org-glance-view:mark-buffer] cache miss: recalculate markers")
+                        (org-glance-log :cache "[org-glance-view:mark] cache miss: recalculate markers")
                         (org-glance-headline:map (headline)
                           (let ((marker (org-glance-view--marker :hash (org-glance- headline :hash)
                                                                  :position (point-min))))

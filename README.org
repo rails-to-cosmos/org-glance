@@ -11,6 +11,7 @@ https://untools.co
 
 
 * TODO [#A] Overview dimensions and mode
+* TODO [#B] Delete headlines
 * TODO Proper cache for headlines
 * TODO Optimize caches
 * TODO Cleanup empty dimensions
