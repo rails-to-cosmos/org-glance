@@ -15,7 +15,6 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         ;; (org-glance-view:mark-buffer)
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
          (add-hook 'before-save-hook #'org-glance-view:commit nil t)
          (org-overview))

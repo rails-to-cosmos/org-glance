@@ -390,10 +390,10 @@
 
       (org-glance-view:set-marker-hash view midx new-hash))))
 
-(cl-defun org-glance-view:mark-buffer (&optional (view (org-glance-view:get-buffer-view)))
+(cl-defun org-glance-view:mark-buffer (view)
   "Create effective in-memory representation of VIEW org-mode buffer."
-  ;; TODO make dynamic arrays to optimize add operation
-  ;; TODO save markers for further optimizations
+  (cl-check-type view org-glance-view)
+
   (let* ((markers-cache-file (org-glance-view:locate-markers view))
          (markers (or (and (f-exists? markers-cache-file)
                            (condition-case nil
@@ -440,6 +440,8 @@
     (org-glance-view:save-markers view (org-glance-view:locate-markers view))))
 
 (cl-defun org-glance-view:save-markers (view location)
+  (cl-check-type view org-glance-view)
+
   (org-glance-view:with-current-buffer view
     (let ((markers (org-glance- view :markers))
           (buffer-hash (buffer-hash)))
@@ -450,6 +452,8 @@
            do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position))))))))
 
 (cl-defun org-glance-view:load-markers (view location)
+  (cl-check-type view org-glance-view)
+
   (org-glance-view:with-current-buffer view
     (let ((view-hash (buffer-hash)))
       (with-temp-buffer
@@ -467,7 +471,9 @@
            do (org-glance-vector:push-back! markers marker)
            finally return markers)))))
 
-(cl-defun org-glance-view:fetch (&optional (view (org-glance-view:get-buffer-view)))
+(cl-defun org-glance-view:fetch (view)
+  (cl-check-type view org-glance-view)
+
   (cl-labels ((derive (h  ;; hash
                        rs ;; relations
                        i  ;; relation index
