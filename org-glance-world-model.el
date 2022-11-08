@@ -123,9 +123,7 @@ Return last committed offset."
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (changelog-location (f-join (org-glance- world :location) "log" "event.log")))
-    (org-glance-log :world "Persist changes")
     (dolist (event (reverse (org-glance- changelog* :events)))
-      (org-glance-log :world "Process %s" event)
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (cl-typecase event
           (org-glance-event:RM

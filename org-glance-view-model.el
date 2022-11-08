@@ -342,6 +342,7 @@
   (cl-check-type view org-glance-view)
   (cl-check-type hash org-glance-type:hash)
 
+  (org-glance-log :markers "Remove hash: %s" hash)
   (let* ((midx (org-glance-view:get-marker-index view hash))
          (mpos (org-glance-view:get-marker-position view midx))
          (markers (org-glance- view :markers)))
@@ -503,8 +504,7 @@
 
          when (org-glance-offset:less? view-offset event-offset)
          do (condition-case nil
-                (thunk-let* (
-                             (headline* (org-glance- event :headline))
+                (thunk-let* ((headline* (org-glance- event :headline))
 
                              (event-hash (org-glance- event :hash))
                              (headline-hash (org-glance- headline* :hash))
@@ -544,6 +544,7 @@
            (goto-char (point-min))
            (outline-next-heading)
            (delete-region (point) (point-max))
+           (org-glance-vector:clear! (org-glance- view :markers))
            (cl-loop for headline being the hash-values of to-add
               do (org-glance-view:add-headline view headline))
            (org-glance-view:set-offset view committed-offset)

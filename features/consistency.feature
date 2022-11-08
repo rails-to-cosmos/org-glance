@@ -362,6 +362,7 @@ Feature: Consistent Edit
     """
     SCHEDULED: <2023-01-01 Sun>
     """
+    And marker positions should be consistent
     And marker positions and hashes should be consistent
     And buffer offset should be latest
 
