@@ -193,12 +193,17 @@ persistent storage.
 
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-world:persist' method."
+  (cl-check-type world org-glance-world)
+
   (let ((event (org-glance-event:RM :hash hash)))
     (org-glance-changelog:push (org-glance- world :changelog*) event))
   (org-glance-world:remove-headline-from-cache world hash))
 
 (cl-defun org-glance-world:update-headline (world old-hash headline)
   "Update HEADLINE with HASH in WORLD."
+  (cl-check-type world org-glance-world)
+  (cl-check-type headline org-glance-headline)
+
   (let* ((new-hash (org-glance- headline :hash))
          (header (org-glance-headline-header:from-headline headline))
          (changelog (org-glance- world :changelog*))
@@ -214,6 +219,8 @@ achieved by calling `org-glance-world:persist' method."
 
 (cl-defun org-glance-world:get-headline (world hash)
   "Return fully qualified `org-glance-headline' by its hash."
+  (cl-check-type world org-glance-world)
+
   (or
 
    ;; Search LRU cache
@@ -249,6 +256,8 @@ achieved by calling `org-glance-world:persist' method."
       (puthash (org-glance- headline :hash) headline (org-glance- world :headlines))))))
 
 (cl-defun org-glance-world:events (world)
+  (cl-check-type world org-glance-world)
+
   (org-glance-changelog:flatten
    (org-glance-changelog:merge
     (org-glance- world :changelog*)
