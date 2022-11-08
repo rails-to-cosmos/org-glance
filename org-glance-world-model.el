@@ -38,19 +38,19 @@
       :initarg :changelog
       :initform (org-glance-changelog)
       :documentation "Persistent changelog.")
+     (dimensions
+      :type list
+      :initarg :dimensions
+      :documentation "World dimensions.")
      (derivations
       :type (org-glance-type:list-of org-glance-derivation)
       :initarg :derivations
       :initform nil)
-     (cache
+     (headlines
       :type hash-table
-      :initarg :cache
+      :initarg :headlines
       :initform (make-hash-table :test #'equal)
-      :documentation "LRU cache with headlines.")
-     (dimensions
-      :type list
-      :initarg :dimensions
-      :documentation "World dimensions.")))
+      :documentation "LRU cache with headlines.")))
 
 (cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
@@ -177,13 +177,13 @@ Return last committed offset."
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
     (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance- headline :title))
-    (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
+    (puthash (org-glance- headline :hash) headline (org-glance- world :headlines))
     world))
 
 (cl-defun org-glance-world:remove-headline-from-cache (world hash)
-  (when-let (headline (gethash hash (org-glance- world :cache)))
+  (when-let (headline (gethash hash (org-glance- world :headlines)))
     (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance- headline :title))
-    (remhash hash (org-glance- world :cache))))
+    (remhash hash (org-glance- world :headlines))))
 
 (cl-defun org-glance-world:remove-headline (world hash)
   "Return `org-glance-world' with HEADLINES removed from WORLD.
@@ -202,7 +202,7 @@ achieved by calling `org-glance-world:persist' method."
   (let* ((new-hash (org-glance- headline :hash))
          (header (org-glance-headline-header:from-headline headline))
          (changelog (org-glance- world :changelog*))
-         (cache (org-glance- world :cache))
+         (cache (org-glance- world :headlines))
          (event (org-glance-event:UPDATE :hash old-hash
                                          :headline header))
          (offset (org-glance- event :offset)))
@@ -217,7 +217,7 @@ achieved by calling `org-glance-world:persist' method."
   (or
 
    ;; Search LRU cache
-   (when-let (result (gethash hash (org-glance- world :cache)))
+   (when-let (result (gethash hash (org-glance- world :headlines)))
      (org-glance-log :cache "[org-glance-headline] cache hit (hashmap): \"%s\"" (org-glance- result :title))
      result)
 
@@ -246,7 +246,7 @@ achieved by calling `org-glance-world:persist' method."
       (outline-next-heading))
     (when-let (headline (org-glance-headline-at-point))
       (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance- headline :title))
-      (puthash (org-glance- headline :hash) headline (org-glance- world :cache))))))
+      (puthash (org-glance- headline :hash) headline (org-glance- world :headlines))))))
 
 (cl-defun org-glance-world:events (world)
   (org-glance-changelog:flatten
