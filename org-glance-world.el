@@ -178,9 +178,10 @@
     (when (org-glance-offset:less? offset world-offset)
       (let ((view (org-glance-view:get-or-create world type location offset)))
         (org-glance:with-temp-file-overwrite location
-          ;; (org-glance-view:mark view)
+          (org-glance-view:mark view)
           (org-glance-view:fetch view)
-          (org-glance-view:write-header view))))
+          (org-glance-view:write-header view)
+          (org-glance-view:save-markers view))))
     location))
 
 (cl-defun org-glance-world:backfill (world)

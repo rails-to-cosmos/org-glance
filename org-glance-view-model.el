@@ -363,31 +363,28 @@
 
       (org-glance-view:set-marker-hash view midx new-hash))))
 
-;; (cl-defun org-glance-view:mark (view)
-;;   "Create effective in-memory representation of VIEW org-mode buffer."
-;;   (cl-check-type view org-glance-view)
+(cl-defun org-glance-view:mark (view)
+  "Create effective in-memory representation of VIEW org-mode buffer."
+  (cl-check-type view org-glance-view)
 
-;;   (let* ((markers-cache-file (org-glance-view:locate-markers view))
-;;          (markers (or (and (f-exists? markers-cache-file)
-;;                            (condition-case nil
-;;                                (prog1 (org-glance-view:load-markers view markers-cache-file)
-;;                                  (org-glance-log :cache "cache hit: read markers"))
-;;                              (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
-;;                       (let ((markers (org-glance-vector:create)))
-;;                         (org-glance-log :cache "[org-glance-view:mark] cache miss: recalculate markers")
-;;                         (org-glance-headline:map (headline)
-;;                           (let ((marker (org-glance-view--marker :hash (org-glance- headline :hash)
-;;                                                                  :position (point-min))))
-;;                             (org-glance-vector:push-back! markers marker)))
-;;                         markers))))
-;;     (cl-loop with hash->midx = (make-hash-table :test #'equal)
-;;        for midx below (org-glance-vector:size markers)
-;;        for marker = (org-glance-vector:get markers midx)
-;;        do (puthash (org-glance- marker :hash) midx hash->midx)
-;;        finally do
-;;          (setf (org-glance- view :markers) markers
-;;                (org-glance- view :hash->midx) hash->midx)
-;;          (org-glance-view:save-markers view markers-cache-file))))
+  (let ((markers (or (and (f-exists? (org-glance-view:locate-markers view))
+                          (condition-case nil
+                              (prog1 (org-glance-view:load-markers view)
+                                (org-glance-log :cache "cache hit: read markers"))
+                            (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
+                     (let ((markers (org-glance-vector:create)))
+                       (org-glance-log :cache "[org-glance-view:mark] cache miss: recalculate markers")
+                       (org-glance-headline:map (headline)
+                         (let ((marker (org-glance-view--marker :hash (org-glance- headline :hash)
+                                                                :position (point-min))))
+                           (org-glance-vector:push-back! markers marker)))
+                       markers))))
+    (cl-loop with hash->midx = (make-hash-table :test #'equal)
+       for midx below (org-glance-vector:size markers)
+       for marker = (org-glance-vector:get markers midx)
+       do (puthash (org-glance- marker :hash) midx hash->midx)
+       finally do (setf (org-glance- view :markers) markers
+                        (org-glance- view :hash->midx) hash->midx))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (let ((world (org-glance- view :world))
@@ -410,21 +407,20 @@
     (let ((offset (org-glance-world:persist world)))
       (org-glance-view:set-offset view offset))
 
-    (org-glance-view:save-markers view (org-glance-view:locate-markers view))))
+    (org-glance-view:save-markers view)))
 
-(cl-defun org-glance-view:save-markers (view location)
+(cl-defun org-glance-view:save-markers (view)
   (cl-check-type view org-glance-view)
 
-  (org-glance-view:with-current-buffer view
-    (let ((markers (org-glance- view :markers))
-          (buffer-hash (buffer-hash)))
-      (with-temp-file location
-        (insert (format "%s\n" buffer-hash))
-        (cl-loop for midx below (org-glance-vector:size markers)
-           for marker = (org-glance-vector:get markers midx)
-           do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position))))))))
+  (let ((markers (org-glance- view :markers))
+        (buffer-hash (buffer-hash)))
+    (with-temp-file (org-glance-view:locate-markers view)
+      (insert (format "%s\n" buffer-hash))
+      (cl-loop for midx below (org-glance-vector:size markers)
+         for marker = (org-glance-vector:get markers midx)
+         do (insert (format "%s %d\n" (org-glance- marker :hash) (org-glance- marker :position)))))))
 
-(cl-defun org-glance-view:load-markers (view location)
+(cl-defun org-glance-view:load-markers (view &optional (location (org-glance-view:locate-markers view)))
   (cl-check-type view org-glance-view)
 
   (org-glance-view:with-current-buffer view
