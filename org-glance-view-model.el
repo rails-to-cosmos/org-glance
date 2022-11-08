@@ -522,10 +522,9 @@
            (outline-next-heading)
            (delete-region (point) (point-max))
            (org-glance-vector:clear! (org-glance- view :markers))
-           (org-glance-log :performance
-               (dolist-with-progress-reporter (headline (hash-table-values to-add))
-                   "Inserting headlines"
-                 (org-glance-view:add-headline view headline)))
+           (dolist-with-progress-reporter (headline (hash-table-values to-add))
+               "Insert headlines"
+             (org-glance-view:add-headline view headline))
            (org-glance-view:set-offset view committed-offset)))))
 
 (cl-defun org-glance-view:get-offset (view)
