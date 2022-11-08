@@ -93,14 +93,13 @@
   (let ((dimensions (org-glance- world :dimensions)))
     (dolist-with-progress-reporter (dimension dimensions)
         "Make derivations"
-      (let ((partitions (org-glance-dimension:partitions dimension headline))
-            (predicates (org-glance-dimension:predicates dimension headline)))
-        (cl-loop for (partition . predicate) in (-zip partitions predicates)
-           for validation = (org-glance-dimension:validate predicate headline dimensions)
-           when validation
+      (let ((predicates (org-glance-dimension:predicates dimension headline)))
+        (cl-loop for predicate in predicates
+           for partition = (org-glance-dimension:validate predicate headline dimensions)
+           when partition
            do (let* ((derivation (org-glance-derivation
                                   :dimension (format "%s" (org-glance- dimension :name))
-                                  :value validation))
+                                  :value partition))
                      (location (org-glance-world:locate-derivation world derivation)))
                 (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
                 (org-glance-view:get-or-create world predicate location (org-glance-offset:zero))))))))

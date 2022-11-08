@@ -300,16 +300,12 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
-      * TODO Niagara Waterfalls :Hike:
-      * STARTED Troodos Mountains :Hike:
       * TODO Music Festival :Hike:Music:
         SCHEDULED: <2022-09-16 Fri>
-      * DONE Tame Impala Concert :Music:
-      * DONE Kamchatka :Hike:
-      * CANCELLED PHP Course :Cringe:
       """
 
     When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
@@ -331,7 +327,7 @@ Feature: Consistent Edit
 
     When I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
-    Then current buffer should contain 2 headlines
+    Then current buffer should contain 1 headline
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
@@ -359,7 +355,7 @@ Feature: Consistent Edit
 
     When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
 
-    Then current buffer should contain 4 headlines
+    Then current buffer should contain 1 headline
     And headline "Music Festival 2022" should not be in current buffer
     And headline "Music Festival 2023" should be in current buffer
     And the contents of headline "Music Festival 2023" should be
@@ -374,7 +370,7 @@ Feature: Consistent Edit
     And kill buffer
     And I visit view "Music" derived from dimension "Tag" in world "Adventures"
 
-    Then current buffer should contain 2 headlines
+    Then current buffer should contain 1 headline
     And marker positions and hashes should be consistent
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
@@ -407,7 +403,6 @@ Feature: Consistent Edit
     When I visit view "C" derived from dimension "Title" in world "Tasks"
     Then current buffer should contain 1 headline
 
-  @debug
   Scenario: Headline updates without accessing previous state
     Given world "Adventures"
 

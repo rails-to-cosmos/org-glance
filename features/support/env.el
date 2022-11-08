@@ -82,7 +82,11 @@
  (f-delete (f-join org-glance-test:location "ecukes.lock")))
 
 (Teardown
- ;; (with-current-buffer (get-buffer-create "*org-glance-log:dimensions*")
- ;;   (message "Dimensions:")
- ;;   (message (buffer-string)))
+ (cl-loop for (key . value) in org-glance-log:loggers
+    for buffer = (format "*org-glance-log%s*" key)
+    when (and value (get-buffer buffer))
+    do (with-current-buffer buffer
+         (message "%s" key)
+         (message (buffer-string))))
+
  (setq default-directory org-glance-root-path))

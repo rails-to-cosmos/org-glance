@@ -132,11 +132,12 @@
     (org-glance-vector:shrink-maybe! vec))
   vec)
 
-(cl-defun org-glance-vector:binary-search (vec v &key
+(cl-defun org-glance-vector:non-binary-search (vec v &key
                                                    (len #'(lambda (vec) (org-glance-vector:size vec)))
                                                    (key #'(lambda (vec idx) (org-glance- (org-glance-vector:get vec idx) :position)))
                                                    (l 0)
-                                                   (r (1- (funcall len vec))))
+                                                       (r (1- (funcall len vec))))
+  "Binary search for non-binary persons."
   (declare (indent 2))
   (cl-check-type vec org-glance-vector)
   (cl-check-type v number)
@@ -149,8 +150,8 @@
           ((< v lv) -1)
           ((= v lv) l)
           ((>= v rv) r)
-          ((>= v mv) (org-glance-vector:binary-search vec v :l m :r r :key key :len len))
-          (t (org-glance-vector:binary-search vec v :l l :r (1- m) :key key :len len)))))
+          ((>= v mv) (org-glance-vector:non-binary-search vec v :l m :r r :key key :len len))
+          (t (org-glance-vector:non-binary-search vec v :l l :r (1- m) :key key :len len)))))
 
 ;; (eval-when-compile
 ;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))
@@ -176,7 +177,7 @@
 ;;   (org-glance-vector:push-back! vec 119)
 ;;   (org-glance-vector:push-back! vec 211)
 ;;   (org-glance-vector:push-back! vec 300)
-;;   (org-glance-vector:binary-search vec 120 :key #'(lambda (vec idx) (org-glance-vector:get vec idx)))
+;;   (org-glance-vector:non-binary-search vec 120 :key #'(lambda (vec idx) (org-glance-vector:get vec idx)))
 ;;   )
 
 (org-glance-class org-glance-view nil
@@ -203,6 +204,7 @@
      (markers
       :type org-glance-vector
       :initarg :markers
+      :initform (org-glance-vector:create)
       :documentation "Dynamic array with headlines.")
      (hash->midx
       :type hash-table
@@ -398,23 +400,24 @@
                                  (org-glance-log :cache "cache hit: read markers"))
                              (user-error (org-glance-log :cache "cache miss: recalculate markers"))))
                       (let ((markers (org-glance-vector:create)))
-                        (org-glance-log :cache "cache miss: recalculate markers")
+                        (org-glance-log :cache "[org-glance-view:mark-buffer] cache miss: recalculate markers")
                         (org-glance-headline:map (headline)
-                          (org-glance-vector:push-back! markers (org-glance-view--marker :hash (org-glance- headline :hash)
-                                                                                         :position (point-min))))
+                          (let ((marker (org-glance-view--marker :hash (org-glance- headline :hash)
+                                                                 :position (point-min))))
+                            (org-glance-vector:push-back! markers marker)))
                         markers))))
     (cl-loop with hash->midx = (make-hash-table :test #'equal)
        for midx below (org-glance-vector:size markers)
-       do (puthash (org-glance- (org-glance-vector:get markers midx) :hash) midx hash->midx)
-       finally do (setf (org-glance- view :markers) markers
-                        (org-glance- view :hash->midx) hash->midx)
+       for marker = (org-glance-vector:get markers midx)
+       do (puthash (org-glance- marker :hash) midx hash->midx)
+       finally do
+         (setf (org-glance- view :markers) markers
+               (org-glance- view :hash->midx) hash->midx)
          (org-glance-view:save-markers view markers-cache-file))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (let ((world (org-glance- view :world))
         (to-remove '()))
-
-    (org-glance-view:fetch view)
 
     (org-glance-view:consume-changes (view midx)
       (let* ((headline (org-glance-view:get-marker-headline view midx))
@@ -484,8 +487,12 @@
            (relations (make-vector (length events) nil))
            (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
            (committed-offset view-offset)
-           (to-add (make-hash-table :test #'equal))
-           (to-remove (make-hash-table :test #'equal)))
+           (to-add (make-hash-table :test #'equal)))
+
+      ;; initial state
+      (cl-loop for hash being the hash-keys of (org-glance- view :hash->midx) using (hash-values midx)
+         do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
+
       (cl-loop
          for event in events ;; TODO optimize
          for idx from 0
@@ -496,12 +503,12 @@
 
          when (org-glance-offset:less? view-offset event-offset)
          do (condition-case nil
-                (thunk-let* ((hashes (org-glance- view :hash->midx))
+                (thunk-let* (
                              (headline* (org-glance- event :headline))
 
                              (event-hash (org-glance- event :hash))
                              (headline-hash (org-glance- headline* :hash))
-                             (derived-hash (derive event-hash relations idx hashes))
+                             (derived-hash (derive event-hash relations idx to-add))
                              (dimensions (org-glance- world :dimensions))
                              (view-type (org-glance- view :type))
 
@@ -511,32 +518,14 @@
                              (headline-derived? (string= derived-hash headline-hash))
                              (dimension-valid? (org-glance-dimension:validate view-type headline* dimensions))
                              (dimension-invalid? (not dimension-valid?))
-                             (headline-exists? (gethash event-hash hashes))
+                             (headline-exists? (not (null (gethash event-hash to-add))))
 
-                             (add-headline! (progn
-                                              (puthash headline-hash headline to-add)
-                                              (remhash headline-hash to-remove)
-                                              ;; (org-glance-view:add-headline view headline)
-                                              ))
-                             (derive-headline! (progn
-                                                 (puthash headline-hash headline to-add)
-                                                 (remhash headline-hash to-remove)
-                                                 (puthash derived-hash t to-remove)
-                                                 (remhash derived-hash to-add)
-                                                 ;; (org-glance-view:replace-headline view derived-hash headline)
-                                                 ))
-                             (remove-headline! (progn
-                                                 (puthash event-hash t to-remove)
-                                                 (remhash event-hash to-add)
-                                                 ;; (org-glance-view:remove-headline view event-hash)
-                                                 ))
-                             (replace-headline! (progn
-                                                  (puthash headline-hash headline to-add)
-                                                  (remhash headline-hash to-remove)
-                                                  (puthash event-hash t to-remove)
-                                                  (remhash event-hash to-add)
-                                                  ;; (org-glance-view:replace-headline view event-hash headline)
-                                                  )))
+                             (add-headline! (puthash headline-hash headline to-add))
+                             (derive-headline!  (progn (puthash headline-hash headline to-add)
+                                                       (remhash derived-hash to-add)))
+                             (remove-headline!  (progn (remhash event-hash to-add)))
+                             (replace-headline! (progn (puthash headline-hash headline to-add)
+                                                       (remhash event-hash to-add))))
                   (cl-typecase event
                     (org-glance-event:UPDATE (cond (hashes-equal? nil)
                                                    ((and dimension-invalid? (not headline-exists?)) nil)
@@ -552,8 +541,9 @@
            (setq committed-offset event-offset)
            (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
          finally do
-           (cl-loop for hash being the hash-keys of to-remove
-              do (org-glance-view:remove-headline view hash))
+           (goto-char (point-min))
+           (outline-next-heading)
+           (delete-region (point) (point-max))
            (cl-loop for headline being the hash-values of to-add
               do (org-glance-view:add-headline view headline))
            (org-glance-view:set-offset view committed-offset)
@@ -577,7 +567,7 @@
     (&optional
        (view (org-glance-view:get-buffer-view))
        (point (point)))
-  (org-glance-vector:binary-search (org-glance- view :markers) point))
+  (org-glance-vector:non-binary-search (org-glance- view :markers) point))
 
 (cl-defun org-glance-view:shift-markers (view midx diff)
   (cl-loop for idx from (1+ midx) below (org-glance-vector:size (org-glance- view :markers))

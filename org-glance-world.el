@@ -165,10 +165,7 @@
          (world-offset (org-glance-world:offset world)))
     (when (org-glance-offset:less? view-offset world-offset)
       (org-glance:with-temp-file-overwrite view-location
-        (let ((view (org-glance-view :world world
-                                     :type view-type
-                                     :location view-location
-                                     :offset view-offset)))
+        (let ((view (org-glance-view:create world view-type view-location view-offset)))
           (org-glance-view:mark-buffer view)
           (org-glance-view:fetch view)
           (org-glance-view:write-header view))))

@@ -26,12 +26,13 @@
 
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
-        (should (= (string-to-number changed-markers-count)
-                   (cl-loop with markers = (org-glance- (org-glance-view:get-buffer-view) :markers)
-                      for midx below (org-glance-vector:size markers)
-                      for marker = (org-glance-vector:get markers midx)
-                      when (org-glance- marker :changed?)
-                      sum 1)))))
+        (let ((view (org-glance-view:get-buffer-view)))
+          (should (= (string-to-number changed-markers-count)
+                     (cl-loop with markers = (org-glance- (org-glance-view:get-buffer-view) :markers)
+                        for midx below (org-glance-vector:size markers)
+                        for marker = (org-glance-vector:get markers midx)
+                        when (org-glance- marker :changed?)
+                        sum 1))))))
 
 (When "^I? ?commit changes$"
   (lambda ()
