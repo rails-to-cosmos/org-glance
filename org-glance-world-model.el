@@ -90,11 +90,10 @@
   (cl-check-type world org-glance-world)
   (cl-check-type headline org-glance-headline)
 
-  (let ((dimensions (org-glance- world :dimensions)))
-    (dolist-with-progress-reporter (dimension dimensions)
-        "Make derivations"
-      (let ((predicates (org-glance-dimension:predicates dimension headline)))
-        (cl-loop for predicate in predicates
+  (cl-loop with dimensions = (org-glance- world :dimensions)
+     for dimension in dimensions
+     for predicates = (org-glance-dimension:predicates dimension headline)
+     do (cl-loop for predicate in predicates
            for partition = (org-glance-dimension:validate predicate headline dimensions)
            when partition
            do (let* ((derivation (org-glance-derivation
@@ -102,7 +101,7 @@
                                   :value partition))
                      (location (org-glance-world:locate-derivation world derivation)))
                 (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
-                (org-glance-view:get-or-create world predicate location (org-glance-offset:zero))))))))
+                (org-glance-view:get-or-create world predicate location (org-glance-offset:zero))))))
 
 (cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.

@@ -331,3 +331,16 @@ CLOSED: [2022-11-06 Sun 00:19]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-11-06 Sun 00:19]
 :END:
+
+* DONE [#A] Optimize fetch operation
+CLOSED: [2022-11-08 Tue 21:57]
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-11-08 Tue 21:57
+:ARCHIVE_FILE: ~/Stuff/org-glance/README.org
+:ARCHIVE_CATEGORY: org-glance
+:ARCHIVE_TODO: DONE
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-08 Tue 21:57]
+- State "DONE"       from "TODO"       [2022-11-06 Sun 00:19]
+:END:
