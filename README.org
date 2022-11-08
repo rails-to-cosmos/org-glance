@@ -9,6 +9,8 @@
 
 https://untools.co
 
+
+* TODO [#A] Overview dimensions and mode
 * TODO Proper cache for headlines
 * TODO Optimize caches
 * TODO Cleanup empty dimensions
@@ -30,7 +32,6 @@ CLOCK: [2022-10-30 Sun 12:53]--[2022-10-30 Sun 13:06] =>  0:13
 :END:
 * TODO Fetch and backfill operations should work in background
 * TODO Handle encrypted headlines
-* TODO Support overview dimensions
 * TODO Support read-only dimensions
 * TODO Deduplicate classes in wal
 * TODO Consistent markers and all the tests [0/4]
