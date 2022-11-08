@@ -4,12 +4,12 @@
   (a-list :events nil
           :world nil
           :headlines nil
-          :cache t
+          :cache nil
           :dimensions nil
           :contents nil
           :markers nil
           :buffers nil
-          :performance nil
+          :performance t
           :offsets nil
           :test nil))
 

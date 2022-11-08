@@ -78,7 +78,7 @@
 (cl-defun org-glance-vector:shrink-maybe! (vec)
   (cl-check-type vec org-glance-vector)
 
-  (when (< (org-glance- vec :capacity) (* 4 (org-glance- vec :size)))
+  (when (< (* 4 (org-glance- vec :size)) (org-glance- vec :capacity))
     (org-glance-vector:half-capacity! vec)))
 
 (cl-defun org-glance-vector:push-back! (vec elem)
@@ -152,33 +152,6 @@
           ((>= v rv) r)
           ((>= v mv) (org-glance-vector:non-binary-search vec v :l m :r r :key key :len len))
           (t (org-glance-vector:non-binary-search vec v :l l :r (1- m) :key key :len len)))))
-
-;; (eval-when-compile
-;;   (cl-assert (= -1 (org-glance:binary-search [] 10)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119] 10)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119] 1000)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119 211] 0)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 119)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211] 120)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 211)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211] 1000)))
-
-;;   (cl-assert (= -1 (org-glance:binary-search [119 211 300] 100)))
-;;   (cl-assert (= 0 (org-glance:binary-search [119 211 300] 120)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 211)))
-;;   (cl-assert (= 1 (org-glance:binary-search [119 211 300] 250)))
-;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 300)))
-;;   (cl-assert (= 2 (org-glance:binary-search [119 211 300] 1000))))
-
-;; (let ((vec (org-glance-vector:create))
-;;       (idx 0))
-;;   (org-glance-vector:push-back! vec 119)
-;;   (org-glance-vector:push-back! vec 211)
-;;   (org-glance-vector:push-back! vec 300)
-;;   (org-glance-vector:non-binary-search vec 120 :key #'(lambda (vec idx) (org-glance-vector:get vec idx)))
-;;   )
 
 (org-glance-class org-glance-view nil
     ((world
@@ -531,30 +504,29 @@
                          (remove-headline!  (progn (remhash event-hash to-add)))
                          (replace-headline! (progn (puthash headline-hash headline to-add)
                                                    (remhash event-hash to-add))))
-              (condition-case nil
-                  (cl-typecase event
-                    (org-glance-event:UPDATE (cond (hashes-equal? nil)
-                                                   ((and dimension-invalid? (not headline-exists?)) nil)
-                                                   ((and dimension-invalid? headline-exists?) remove-headline!)
-                                                   ((and dimension-valid? headline-exists?) replace-headline!)
-                                                   ((and derived-hash (not headline-derived?)) derive-headline!)
-                                                   ((not derived-hash) add-headline!)))
-                    (org-glance-event:PUT (when dimension-valid? add-headline!))
-                    (org-glance-event:RM remove-headline!)
-                    (otherwise (user-error "Don't know how to handle event of type %s" (type-of event))))
-                (quit (cl-return (org-glance-view:set-offset view committed-offset)))))
-
+              (cl-typecase event
+                (org-glance-event:UPDATE (cond (hashes-equal? nil)
+                                               ((and dimension-invalid? (not headline-exists?)) nil)
+                                               ((and dimension-invalid? headline-exists?) remove-headline!)
+                                               ((and dimension-valid? headline-exists?) replace-headline!)
+                                               ((and derived-hash (not headline-derived?)) derive-headline!)
+                                               ((not derived-hash) add-headline!)))
+                (org-glance-event:PUT (when dimension-valid? add-headline!))
+                (org-glance-event:RM remove-headline!)
+                (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
            (setq committed-offset event-offset)
            (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
          finally do
+           (progress-reporter-done progress-reporter)
            (goto-char (point-min))
            (outline-next-heading)
            (delete-region (point) (point-max))
            (org-glance-vector:clear! (org-glance- view :markers))
-           (cl-loop for headline being the hash-values of to-add
-              do (org-glance-view:add-headline view headline))
-           (org-glance-view:set-offset view committed-offset)
-           (progress-reporter-done progress-reporter)))))
+           (org-glance-log :performance
+               (dolist-with-progress-reporter (headline (hash-table-values to-add))
+                   "Inserting headlines"
+                 (org-glance-view:add-headline view headline)))
+           (org-glance-view:set-offset view committed-offset)))))
 
 (cl-defun org-glance-view:get-offset (view)
   (let ((buffer-offset (condition-case nil
