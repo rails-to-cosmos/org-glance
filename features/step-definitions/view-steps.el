@@ -122,7 +122,7 @@
   (lambda (view-name dimension-name world-name)
     (let ((world (org-glance-test:get-world world-name))
           (derivation (org-glance-derivation:from-key-value dimension-name view-name)))
-      (org-glance-world:browse world derivation))))
+      (org-glance-world:materialize world derivation))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)

@@ -78,9 +78,9 @@
   (interactive)
   (org-glance-world:capture org-glance-current-world))
 
-(cl-defun org-glance-browse ()
+(cl-defun org-glance-materialize ()
   (interactive)
-  (org-glance-world:browse org-glance-current-world))
+  (org-glance-world:materialize org-glance-current-world))
 
 (cl-defun org-glance-agenda ()
   (interactive)

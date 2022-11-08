@@ -30,7 +30,7 @@
        (org-glance-world:add-headline world headline))))
   world)
 
-(cl-defun org-glance-world:browse (world &optional (derivation (org-glance-world:choose-derivation world)))
+(cl-defun org-glance-world:materialize (world &optional (derivation (org-glance-world:choose-derivation world)))
   (cl-check-type world org-glance-world)
   (cl-check-type derivation (org-glance-type:optional org-glance-derivation))
 
