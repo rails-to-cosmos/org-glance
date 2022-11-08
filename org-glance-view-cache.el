@@ -24,13 +24,13 @@
   (if-let (result (gethash key org-glance-view--cache))
       (prog1 (cl-the org-glance-view result)
         (org-glance-log :cache "[org-glance-view] cache hit: %s" key))
-    (org-glance-log :world-cache "cache miss: %s" key)))
+    (org-glance-log :cache "cache miss: %s" key)))
 
 (cl-defun org-glance-view-cache:put (view)
   (cl-check-type view org-glance-view)
   (let ((key (org-glance-view--key :type (org-glance- view :type)
                                    :location (org-glance- view :location))))
-    (org-glance-log :world-cache "cache put: %s" key)
+    (org-glance-log :cache "[org-glance-view] cache put: %s" key)
     (puthash key view org-glance-view--cache)))
 
 (provide 'org-glance-view-cache)

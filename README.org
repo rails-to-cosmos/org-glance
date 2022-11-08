@@ -14,7 +14,6 @@ https://untools.co
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list
 * TODO Optimize fetching relations: traverse changelog from end
-* TODO Bug in caches: every time on fetch cache miss for headlines in org-glance-world:get-headline
 * PENDING Consistent actions (use same underlying logic as in dimensions)
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-11-05 Sat 09:30]
@@ -29,15 +28,10 @@ CLOCK: [2022-11-04 Fri 10:50]--[2022-11-05 Sat 09:30] => 22:40
 - State "STARTED"    from "TODO"       [2022-10-30 Sun 12:53]
 CLOCK: [2022-10-30 Sun 12:53]--[2022-10-30 Sun 13:06] =>  0:13
 :END:
-* TODO Optimize fetch event
 * TODO Fetch and backfill operations should work in background
 * TODO Handle encrypted headlines
 * TODO Support overview dimensions
 * TODO Support read-only dimensions
-* TODO Optimize add event
-* TODO Improve type system
-** TODO consistent types in views (on tag modification)
-** TODO ephemeral types (time-specific / todo-state specific)
 * TODO Deduplicate classes in wal
 * TODO Consistent markers and all the tests [0/4]
 ** TODO headline indented by user
@@ -77,9 +71,6 @@ CLOSED: [2022-08-12 Fri 15:07]
 * TODO Column filters (by *-p features and timestamps)
 * TODO Fulltext search
 * TODO Use https://github.com/alphapapa/makem.sh
-* mew
-** uniquify
-** think about case when headline becomes non-unique after editing
 * TODO Overview [1/5]
 ** TODO overview of all views registered with view-scoped actions
 :LOGBOOK:

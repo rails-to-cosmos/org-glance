@@ -4,7 +4,7 @@
   (a-list :events nil
           :world nil
           :headlines nil
-          :cache nil
+          :cache t
           :dimensions nil
           :contents nil
           :markers nil

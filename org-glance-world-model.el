@@ -38,6 +38,10 @@
       :initarg :changelog
       :initform (org-glance-changelog)
       :documentation "Persistent changelog.")
+     (derivations
+      :type (org-glance-type:list-of org-glance-derivation)
+      :initarg :derivations
+      :initform nil)
      (cache
       :type hash-table
       :initarg :cache
@@ -100,8 +104,10 @@
                                   :dimension (format "%s" (org-glance- dimension :name))
                                   :value partition))
                      (location (org-glance-world:locate-derivation world derivation)))
-                (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
-                (org-glance-view:get-or-create world predicate location (org-glance-offset:zero))))))
+                (unless (f-exists? location)
+                  (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
+                  (push derivation (org-glance- world :derivations))
+                  (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.
@@ -174,6 +180,11 @@ Return last committed offset."
     (puthash (org-glance- headline :hash) headline (org-glance- world :cache))
     world))
 
+(cl-defun org-glance-world:remove-headline-from-cache (world hash)
+  (when-let (headline (gethash hash (org-glance- world :cache)))
+    (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance- headline :title))
+    (remhash hash (org-glance- world :cache))))
+
 (cl-defun org-glance-world:remove-headline (world hash)
   "Return `org-glance-world' with HEADLINES removed from WORLD.
 
@@ -183,10 +194,8 @@ persistent storage.
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-world:persist' method."
   (let ((event (org-glance-event:RM :hash hash)))
-    (org-glance-changelog:push (org-glance- world :changelog*) event)
-    (when-let (headline (gethash hash (org-glance- world :cache)))
-      (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance- headline :title))
-      (remhash hash (org-glance- world :cache)))))
+    (org-glance-changelog:push (org-glance- world :changelog*) event))
+  (org-glance-world:remove-headline-from-cache world hash))
 
 (cl-defun org-glance-world:update-headline (world old-hash headline)
   "Update HEADLINE with HASH in WORLD."
@@ -246,7 +255,7 @@ achieved by calling `org-glance-world:persist' method."
     (org-glance- world :changelog))))
 
 (cl-defun org-glance-world:headlines (world)
-  "Return actual headline hashes from WORLD."
+  "WORLD headlines."
   (cl-check-type world org-glance-world)
 
   (cl-loop

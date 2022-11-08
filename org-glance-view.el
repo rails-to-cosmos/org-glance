@@ -3,11 +3,11 @@
 (require 'org-glance-view-model)
 (require 'org-glance-view-cache)
 
-(cl-defun org-glance-view:get-or-create (world type location
-                                         &optional
-                                           (offset (org-glance-world:offset world)))
+(cl-defun org-glance-view:get-or-create (world type location offset)
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (cl-check-type world org-glance-world)
+  (cl-check-type offset org-glance-type:offset)
+
   (let* ((location (file-truename (f-join (org-glance- world :location) location)))
          (key (org-glance-view--key :type type :location location)))
     (or (org-glance-view-cache:get key)

@@ -128,17 +128,21 @@
        (org-glance-log :info "Kill ring has been cleared")))))
 
 (cl-defun org-glance-world:derivations (world)
-  "TODO cache me"
   (cl-check-type world org-glance-world)
 
-  (--map (--> it
-              (file-name-sans-extension it)
-              (s-split-up-to "=" it 2 t)
-              (-zip-lists '(:dimension :value) it)
-              (-flatten it)
-              (apply #'org-glance-derivation it))
-         (--filter (member (file-name-extension it) org-glance-scope-extensions)
-                   (directory-files (f-join (org-glance- world :location) "views")))))
+  (or (progn
+        (org-glance-log :cache "[org-glance-derivation] cache hit")
+        (org-glance- world :derivations))
+      (org-glance! world :derivations := (progn
+                                           (org-glance-log :cache "[org-glance-derivation] cache miss")
+                                           (--map (--> it
+                                                       (file-name-sans-extension it)
+                                                       (s-split-up-to "=" it 2 t)
+                                                       (-zip-lists '(:dimension :value) it)
+                                                       (-flatten it)
+                                                       (apply #'org-glance-derivation it))
+                                                  (--filter (member (file-name-extension it) org-glance-scope-extensions)
+                                                            (directory-files (f-join (org-glance- world :location) "views"))))))))
 
 (cl-defun org-glance-world:choose-derivation (world)
   (cl-check-type world org-glance-world)
