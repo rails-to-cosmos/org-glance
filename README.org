@@ -12,7 +12,11 @@ https://untools.co
 
 * TODO [#A] Overview dimensions and mode
 * TODO [#B] Delete headlines
-* TODO Proper cache for headlines
+* DONE Proper cache for headlines
+CLOSED: [2022-11-09 Wed 09:06]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-09 Wed 09:06]
+:END:
 * TODO Optimize caches
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list

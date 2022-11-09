@@ -39,9 +39,8 @@
       :initform (org-glance-changelog)
       :documentation "Persistent changelog.")
      (dimensions
-      :type list
-      :initarg :dimensions
-      :documentation "World dimensions.")
+      :type (org-glance-type:list-of org-glance-dimension)
+      :initarg :dimensions)
      (derivations
       :type (org-glance-type:list-of org-glance-derivation)
       :initarg :derivations
@@ -309,15 +308,30 @@ achieved by calling `org-glance-world:persist' method."
                   (postfix (substring headline 2 (length headline))))
               (f-join (org-glance- world :location) "data" prefix postfix)))))
 
-(cl-defun org-glance-world:filter-headlines (world predicate)
-  "TODO cache headlines by predicate."
+;; (cl-defun org-glance-world:filter-headlines (world predicate)
+;;   "TODO cache headlines by predicate."
+;;   (declare (indent 1))
+;;   (cl-check-type world org-glance-world)
+;;   (cl-check-type predicate function)
+
+;;   (cl-loop for headline in (org-glance-world:headlines world)
+;;      when (funcall predicate headline)
+;;      collect headline ;; (cons (org-glance- headline :title) (org-glance- headline :hash))
+;;        ))
+
+(cl-defun org-glance-world:headlines--derived (world derivation)
   (declare (indent 1))
   (cl-check-type world org-glance-world)
-  (cl-check-type predicate function)
+  (cl-check-type derivation org-glance-derivation)
 
-  (cl-loop for headline in (org-glance-world:headlines world)
-     when (funcall predicate headline)
-     collect (cons (org-glance- headline :title) (org-glance- headline :hash))))
+  (let* ((dimension (cl-loop for dimension in (org-glance- world :dimensions)
+                       when (string= (format "%s" (org-glance- dimension :name)) (org-glance- derivation :dimension))
+                       return dimension))
+         (predicate (org-glance-dimension:make-predicate dimension (intern (org-glance- derivation :value))))
+         (headlines (org-glance-world:headlines world)))
+    (cl-loop for headline in headlines
+       when (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))
+       collect headline)))
 
 (cl-defun org-glance-world:root (location)
   (cl-typecase location

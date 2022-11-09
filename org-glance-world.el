@@ -101,10 +101,31 @@
     ;;   (org-capture-finalize))
     ))
 
+(cl-defun org-glance-world:choose-headline--where (world query)
+  "TODO Should be consistent with dimensions."
+  (declare (indent 1))
+  (cl-check-type world org-glance-world)
+  (cl-check-type query string)
+
+  (let ((derivation (org-glance-derivation:from-string query)))
+    (org-glance-world:choose-headline--derived world derivation)))
+
+(cl-defun org-glance-world:choose-headline--derived (world derivation)
+  "TODO Should be consistent with dimensions."
+  (declare (indent 1))
+  (cl-check-type world org-glance-world)
+  (cl-check-type derivation org-glance-derivation)
+
+  (let ((dummies (--map (cons (org-glance- it :title) (org-glance- it :hash))
+                        (org-glance-world:headlines--derived world derivation))))
+    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-derivation:representation derivation)) dummies)
+      (a-get dummies)
+      (org-glance-world:get-headline world))))
+
 (cl-defun org-glance-world:jump (world)
   (cl-check-type world org-glance-world)
 
-  (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :linked?))))
+  (let* ((headline (org-glance-world:choose-headline--where world "linked=t"))
          (links (org-glance- headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
                                              (--drop-while (not (string= link-title (org-glance- it :title))) links)))
@@ -112,21 +133,10 @@
                      (t (user-error "Unable to find links in this headline")))))
     (org-link-open-from-string (org-glance- link :org-link))))
 
-(cl-defun org-glance-world:choose-headline (world &optional predicate)
-  "TODO Should be consistent with dimensions."
-  (declare (indent 1))
-  (cl-check-type world org-glance-world)
-  (cl-check-type predicate function)
-
-  (let ((headlines (org-glance-world:filter-headlines world predicate)))
-    (thread-last (completing-read "Choose headline: " headlines)
-      (a-get headlines)
-      (org-glance-world:get-headline world))))
-
 (cl-defun org-glance-world:extract-headline (world)
   (cl-check-type world org-glance-world)
 
-  (let* ((headline (org-glance-world:choose-headline world #'(lambda (headline) (org-glance- headline :store?))))
+  (let* ((headline (org-glance-world:choose-headline--where world "store=t"))
          (store (org-glance- headline :store)))
     (condition-case nil
         (while t
@@ -152,17 +162,21 @@
                                                   (--filter (member (file-name-extension it) org-glance-scope-extensions)
                                                             (directory-files (f-join (org-glance- world :location) "views"))))))))
 
-(cl-defun org-glance-world:choose-derivation (world)
+(cl-defun org-glance-world:choose-derivation (world &optional dimension)
   (cl-check-type world org-glance-world)
+  (cl-check-type dimension (org-glance-type:optional string))
 
-  (when-let (choice (condition-case nil
-                        (completing-read "Choose derivation: "
-                                         (--map (org-glance-derivation:representation it)
-                                                (org-glance-world:derivations world))
-                                         nil
-                                         t)
-                      (quit nil)))
-    (org-glance-derivation:from-string choice)))
+  (thunk-let* ((derivations (cl-typecase dimension
+                              (string (--filter (string= (org-glance- it :dimension) dimension)
+                                                (org-glance-world:derivations world)))
+                              (otherwise (org-glance-world:derivations world))))
+               (reprs (--map (org-glance-derivation:representation it) derivations)))
+    (when-let (choice (condition-case nil
+                          (if reprs
+                              (completing-read "Choose derivation: " reprs nil t)
+                            (user-error "Derivations not found"))
+                        (quit nil)))
+      (org-glance-derivation:from-string choice))))
 
 (cl-defun org-glance-world:update-derivation (world derivation)
   (cl-check-type world org-glance-world)

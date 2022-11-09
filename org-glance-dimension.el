@@ -4,10 +4,8 @@
 (require 'org-glance-types)
 
 (org-glance-class org-glance-dimension nil
-    ((name :type symbol
-           :initarg :name)
-     (form :type list
-           :initarg :form)))
+    ((name :type symbol :initarg :name)
+     (form :type list   :initarg :form)))
 
 (org-glance-class org-glance-derivation nil
     ((dimension :type string :initarg :dimension)
@@ -38,14 +36,23 @@
 (cl-defun org-glance-derivation:from-key-value (k v)
   (org-glance-derivation:from-string (downcase (format "%s=%s" k v))))
 
+(cl-defun org-glance-dimension:apply (dimension headline)
+  (let ((result (eval (org-glance- dimension :form) (a-list 'headline headline))))
+    (cl-typecase result
+      (atom (list result))
+      (otherwise result))))
+
 (cl-defun org-glance-dimension:partitions (dimension headline)
   (cl-check-type dimension org-glance-dimension)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (cons (org-glance- dimension :name)
-        (let ((result (eval (org-glance- dimension :form) (a-list 'headline headline))))
-          (cond ((atom result) (list result))
-                (t result)))))
+  (cons (org-glance- dimension :name) (org-glance-dimension:apply dimension headline)))
+
+(cl-defun org-glance-dimension:make-predicate (dimension value)
+  (let ((name (org-glance- dimension :name)))
+    (cl-typecase value
+      (symbol `(member (quote ,value) ,name))
+      (t `(member ,value ,name)))))
 
 (cl-defun org-glance-dimension:predicates (dimension headline)
   (cl-check-type dimension org-glance-dimension)
@@ -54,9 +61,7 @@
   (cl-destructuring-bind (name &rest partitions) (org-glance-dimension:partitions dimension headline)
     (cl-loop for partition in partitions
        when (not (string-empty-p (s-trim (format "%s" partition))))
-       collect (cl-typecase partition
-                 (symbol `(member (quote ,partition) ,name))
-                 (t `(member ,partition ,name))))))
+       collect (org-glance-dimension:make-predicate dimension partition))))
 
 (cl-defun org-glance-dimension:context (headline dimensions)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
