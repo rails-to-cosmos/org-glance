@@ -1,7 +1,7 @@
 (require 'a)
 
 (defconst org-glance-log:loggers
-  (a-list :events nil
+  (a-list :events t
           :world nil
           :headlines nil
           :cache nil
@@ -9,7 +9,7 @@
           :contents nil
           :markers nil
           :buffers nil
-          :performance t
+          :performance nil
           :offsets nil
           :test nil))
 

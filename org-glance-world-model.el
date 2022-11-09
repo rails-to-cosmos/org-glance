@@ -106,7 +106,7 @@
                 (unless (f-exists? location)
                   (org-glance-log :dimensions "Create derived view \"%s -> %s\" in %s" partition derivation location)
                   (push derivation (org-glance- world :derivations))
-                  (org-glance-view:get-or-create world predicate location (org-glance-offset:zero)))))))
+                  (org-glance-view:get-or-create world derivation location (org-glance-offset:zero)))))))
 
 (cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.
@@ -319,16 +319,23 @@ achieved by calling `org-glance-world:persist' method."
 ;;      collect headline ;; (cons (org-glance- headline :title) (org-glance- headline :hash))
 ;;        ))
 
+(cl-defun org-glance-world:make-predicate (world derivation)
+  (cl-loop for dimension in (org-glance- world :dimensions)
+     when (string= (org-glance- derivation :dimension)
+                   (format "%s" (org-glance- dimension :name)))
+     return (org-glance-dimension:make-predicate dimension (org-glance- derivation :value))))
+
+(cl-defun org-glance-world:validate-headline (world derivation headline)
+  (let ((predicate (org-glance-world:make-predicate world derivation)))
+    (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))))
+
 (cl-defun org-glance-world:headlines--derived (world derivation)
   (declare (indent 1))
   (cl-check-type world org-glance-world)
   (cl-check-type derivation org-glance-derivation)
 
-  (let* ((dimension (cl-loop for dimension in (org-glance- world :dimensions)
-                       when (string= (format "%s" (org-glance- dimension :name)) (org-glance- derivation :dimension))
-                       return dimension))
-         (predicate (org-glance-dimension:make-predicate dimension (intern (org-glance- derivation :value))))
-         (headlines (org-glance-world:headlines world)))
+  (let ((predicate (org-glance-world:make-predicate world derivation))
+        (headlines (org-glance-world:headlines world)))
     (cl-loop for headline in headlines
        when (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))
        collect headline)))

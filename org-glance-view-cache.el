@@ -7,7 +7,7 @@
 
 (org-glance-class org-glance-view--key nil
     ((type
-      :type (or symbol list)
+      :type org-glance-derivation
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to

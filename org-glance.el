@@ -56,14 +56,11 @@
 ;; TODO prolog implementation is possible
 (defconst org-glance-dimensions
   (list (org-glance-dimension :name 'tag
-                              :form '(mapcar (lambda (tag) (intern (downcase tag))) (org-glance- headline :tags)))
+                              :form '(org-glance- headline :tags))
         (org-glance-dimension :name 'state
-                              :form '(intern (downcase (org-glance- headline :state))))
+                              :form '(org-glance- headline :state))
         (org-glance-dimension :name 'title
-                              :form '(thread-last (org-glance- headline :title)
-                                      (s-replace-regexp "[[:blank:][:punct:]]+" "-")
-                                      (s-replace-regexp "[[:cntrl:]]+" "")
-                                      (s-replace-regexp "[[:nonascii:]]+" "_")))
+                              :form '(org-glance- headline :title))
         (org-glance-dimension :name 'linked
                               :form '(org-glance- headline :linked?))
         (org-glance-dimension :name 'store

@@ -2,6 +2,7 @@
 (require 's)
 (require 'org-glance-helpers)
 (require 'org-glance-types)
+(require 'org-glance-log)
 
 (org-glance-class org-glance-dimension nil
     ((name :type symbol :initarg :name)
@@ -38,9 +39,15 @@
 
 (cl-defun org-glance-dimension:apply (dimension headline)
   (let ((result (eval (org-glance- dimension :form) (a-list 'headline headline))))
-    (cl-typecase result
-      (atom (list result))
-      (otherwise result))))
+    (--map (thread-last it
+             (format "%s")
+             (downcase)
+             (s-replace-regexp "[[:blank:][:punct:]]+" "-")
+             (s-replace-regexp "[[:cntrl:]]+" "")
+             (s-replace-regexp "[[:nonascii:]]+" "_"))
+           (cl-typecase result
+             (atom (list result))
+             (otherwise result)))))
 
 (cl-defun org-glance-dimension:partitions (dimension headline)
   (cl-check-type dimension org-glance-dimension)
@@ -75,6 +82,8 @@
   (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
+  (org-glance-log :events "Predicate: %s" predicate)
+  (org-glance-log :events "Context: %s" (org-glance-dimension:context headline dimensions))
   (let ((result (eval predicate (org-glance-dimension:context headline dimensions))))
     (if (null result)
         nil ;; validation failed

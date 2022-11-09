@@ -161,7 +161,7 @@
      ;; available TODO states
      ;; capture template
      (type
-      :type (or symbol list)
+      :type org-glance-derivation
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
@@ -393,12 +393,13 @@
     (org-glance-view:consume-changes (view midx)
       (let* ((headline (org-glance-view:get-marker-headline view midx))
              (old-hash (org-glance-view:get-marker-hash view midx))
-             (new-hash (org-glance- headline :hash)))
+             (new-hash (org-glance- headline :hash))
+             (predicate (org-glance-world:make-predicate world (org-glance- view :type))))
         (org-glance-world:update-headline world old-hash headline)
         (org-glance-view:set-marker-changed view midx nil)
         (org-glance-view:set-marker-hash view midx new-hash)
 
-        (unless (org-glance-dimension:validate (org-glance- view :type) headline (org-glance- world :dimensions))
+        (unless (org-glance-world:validate-headline world (org-glance- view :type) headline)
           (push new-hash to-remove))))
 
     (dolist (hash to-remove)
@@ -484,13 +485,12 @@
                          (headline-hash (org-glance- headline* :hash))
                          (derived-hash (derive event-hash relations idx to-add))
                          (dimensions (org-glance- world :dimensions))
-                         (view-type (org-glance- view :type))
 
                          (headline (org-glance-world:get-headline world headline-hash))
 
                          (hashes-equal? (string= headline-hash event-hash))
                          (headline-derived? (string= derived-hash headline-hash))
-                         (dimension-valid? (org-glance-dimension:validate view-type headline* dimensions))
+                         (dimension-valid? (org-glance-world:validate-headline world (org-glance- view :type) headline*))
                          (dimension-invalid? (not dimension-valid?))
                          (headline-exists? (not (null (gethash event-hash to-add))))
 
@@ -500,6 +500,10 @@
                          (remove-headline!  (progn (remhash event-hash to-add)))
                          (replace-headline! (progn (puthash headline-hash headline to-add)
                                                    (remhash event-hash to-add))))
+
+              (org-glance-log :events "Dimension valid? %s" dimension-valid?)
+              (org-glance-log :events "Type: %s" (org-glance- view :type))
+
               (cl-typecase event
                 (org-glance-event:UPDATE (cond (hashes-equal? nil)
                                                ((and dimension-invalid? (not headline-exists?)) nil)
