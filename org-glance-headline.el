@@ -241,10 +241,9 @@
 (cl-defun org-glance-ast:linked? (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
-(cl-defun org-glance-headline-at-point (&optional (point (point)))
+(cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (save-excursion
-    (goto-char point)
     (cond ((org-before-first-heading-p) nil)
           (t (org-glance-headline:with-headline-at-point
                (let* ((ast (org-glance-ast:get-buffer-ast))
