@@ -61,7 +61,9 @@
         (org-glance-dimension :name 'linked    :form '(org-glance- headline :linked?))
         (org-glance-dimension :name 'store     :form '(org-glance- headline :store?))
         (org-glance-dimension :name 'encrypted :form '(org-glance- headline :encrypted?))
-        (org-glance-dimension :name 'closed    :form '(org-glance- headline :closed?))))
+        (org-glance-dimension :name 'closed    :form '(org-glance- headline :closed?))
+        (org-glance-dimension :name 'repeated    :form '(org-glance- headline :repeated?))
+        (org-glance-dimension :name 'active    :form '(org-glance- headline :active?))))
 
 (defvar org-glance-current-world nil
   "Current `org-glance-world'.")

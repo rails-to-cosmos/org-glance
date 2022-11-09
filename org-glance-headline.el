@@ -107,6 +107,14 @@
      (tags :type list
            :initarg :tags
            :documentation "List of downcased tags.")
+     (timestamps :type list
+                 :initarg :timestamps)
+     (repeated? :type boolean
+                :initarg :repeated?
+                :documentation "Is the headline repeated?")
+     (active? :type boolean
+              :initarg :active?
+              :documentation "Is the headline active?")
      (commented? :type boolean
                  :initarg :commented?
                  :documentation "Is the headline commented?")
@@ -152,6 +160,9 @@
                           :title (org-glance- headline :title)
                           :state (org-glance- headline :state)
                           :tags (org-glance- headline :tags)
+                          :timestamps (org-glance- headline :timestamps)
+                          :active? (org-glance- headline :active?)
+                          :repeated? (org-glance- headline :repeated?)
                           :commented? (org-glance- headline :commented?)
                           :archived? (org-glance- headline :archived?)
                           :closed? (org-glance- headline :closed?)
@@ -241,43 +252,52 @@
 (cl-defun org-glance-ast:linked? (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
+(cl-defun org-glance-headline:extract-links ()
+  (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
+     collect (org-glance-link
+              :title (substring-no-properties
+                      (or (-some->> element
+                            org-element-contents
+                            org-element-interpret-data)
+                          (org-element-property :raw-link element)))
+              :org-link (s-trim (buffer-substring-no-properties
+                                 (org-element-property :begin element)
+                                 (org-element-property :end element)))
+              :position (org-element-property :begin element))))
+
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
-  (save-excursion
-    (cond ((org-before-first-heading-p) nil)
-          (t (org-glance-headline:with-headline-at-point
-               (let* ((ast (org-glance-ast:get-buffer-ast))
-                      (contents (org-glance-ast:contents ast))
-                      (store (org-glance-headline:extract-store contents))
-                      (links (cl-loop
-                                for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
-                                collect (org-glance-link
-                                         :title (substring-no-properties
-                                                 (or (-some->> element
-                                                       org-element-contents
-                                                       org-element-interpret-data)
-                                                     (org-element-property :raw-link element)))
-                                         :org-link (s-trim (buffer-substring-no-properties
-                                                            (org-element-property :begin element)
-                                                            (org-element-property :end element)))
-                                         :position (org-element-property :begin element)))))
-                 (org-glance-headline
-                  :title (org-glance-ast:title ast)
-                  :state (pcase (org-glance-ast:state contents)
-                           ((pred null) "")
-                           (state state))
-                  :hash (org-glance-ast:hash contents)
-                  :tags (org-glance-ast:class ast)
-                  :commented? (org-glance-ast:commented? ast)
-                  :archived? (org-glance-ast:archived? ast)
-                  :closed? (org-glance-ast:closed? ast)
-                  :encrypted? (org-glance-ast:encrypted? contents)
-                  :linked? (not (null links))
-                  :links links
-                  :store? (not (null store))
-                  :store store
-                  :contents contents
-                  :properties (org-entry-properties))))))))
+  (cl-the (org-glance-type:optional org-glance-headline)
+    (save-excursion
+      (unless (org-before-first-heading-p)
+        (org-glance-headline:with-headline-at-point
+          (let* ((ast (org-glance-ast:get-buffer-ast))
+                 (contents (org-glance-ast:contents ast))
+                 (store (org-glance-headline:extract-store contents))
+                 (links (org-glance-headline:extract-links))
+                 (timestamps (append (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :scheduled headline)))
+                                     (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :deadline headline)))
+                                     (org-element-map ast '(timestamp) #'identity))))
+            (org-glance-headline
+             :title (org-glance-ast:title ast)
+             :state (or (org-glance-ast:state contents) "")
+             :hash (org-glance-ast:hash contents)
+             :tags (org-glance-ast:class ast)
+             :active? (not (null (--filter (member (org-element-property :type it) '(active active-range)) timestamps)))
+             :repeated? (not (null (--filter (and (member (org-element-property :type it) '(active active-range))
+                                                  (> (or (org-element-property :repeater-value it) 0) 0))
+                                             timestamps)))
+             :timestamps (--map (org-element-property :raw-value it) timestamps)
+             :commented? (org-glance-ast:commented? ast)
+             :archived? (org-glance-ast:archived? ast)
+             :closed? (org-glance-ast:closed? ast)
+             :encrypted? (org-glance-ast:encrypted? contents)
+             :linked? (not (null links))
+             :links links
+             :store? (not (null store))
+             :store store
+             :contents contents
+             :properties (org-entry-properties))))))))
 
 (cl-defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
