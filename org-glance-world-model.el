@@ -130,31 +130,32 @@ Return last committed offset."
   (let* ((changelog (org-glance- world :changelog))
          (changelog* (org-glance- world :changelog*))
          (changelog-location (f-join (org-glance- world :location) "log" "event.log")))
-    (dolist (event (reverse (org-glance- changelog* :events)))
-      (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
-        (cl-typecase event
-          (org-glance-event:RM
-           (user-error "RM operation has not been implemented yet")
-           ;; TODO think about when to delete headlines
-           ;; (f-delete (org-glance-world:locate-headline world headline))
-           (org-glance-changelog:push changelog event))
+    (dolist-with-progress-reporter (event (reverse (org-glance- changelog* :events)))
+        (format "Persist world %s" (org-glance- world :location))
+        (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
+          (cl-typecase event
+            (org-glance-event:RM
+             (user-error "RM operation has not been implemented yet")
+             ;; TODO think about when to delete headlines
+             ;; (f-delete (org-glance-world:locate-headline world headline))
+             (org-glance-changelog:push changelog event))
 
-          (org-glance-event:PUT
-           (let* ((id (org-glance-world:generate-headline-id world headline))
-                  (headline (org-glance-headline:with-properties headline
-                              `(("GLANCE_ID" ,id)
-                                ("DIR" ,(concat "../resources/" id))))))
+            (org-glance-event:PUT
+             (let* ((id (org-glance-world:generate-headline-id world headline))
+                    (headline (org-glance-headline:with-properties headline
+                                `(("GLANCE_ID" ,id)
+                                  ("DIR" ,(concat "../resources/" id))))))
+               (org-glance-world:save-headline world headline)
+               (org-glance-world:make-derivations world headline)
+               (org-glance-changelog:push changelog (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
+
+            (org-glance-event:UPDATE
              (org-glance-world:save-headline world headline)
              (org-glance-world:make-derivations world headline)
-             (org-glance-changelog:push changelog (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
-
-          (org-glance-event:UPDATE
-           (org-glance-world:save-headline world headline)
-           (org-glance-world:make-derivations world headline)
-           (org-glance-changelog:push changelog event)
-           ;; TODO think about when to delete headlines
-           ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
-           ))))
+             (org-glance-changelog:push changelog event)
+             ;; TODO think about when to delete headlines
+             ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
+             ))))
 
     (org-glance-changelog:write changelog changelog-location)
     (setf (org-glance- world :changelog*) (org-glance-changelog))
