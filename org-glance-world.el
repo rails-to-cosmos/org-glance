@@ -25,7 +25,7 @@
   (cl-check-type location org-glance-type:directory)
 
   (dolist-with-progress-reporter (file (org-glance-scope location))
-      "Import headlines"
+      (format "Import headlines from %s" location)
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)

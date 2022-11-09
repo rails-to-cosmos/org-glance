@@ -68,6 +68,8 @@
     (otherwise nil)))
 
 (cl-defun org-glance-world:offset (world)
+  (cl-check-type world org-glance-world)
+
   (if-let (event (org-glance-changelog:last (org-glance- world :changelog)))
       (org-glance- event :offset)
     (org-glance-offset:current)))
@@ -175,6 +177,9 @@ Return last committed offset."
 (cl-defun org-glance-world:add-headline (world headline)
   "Put HEADLINE to WORLD."
   (declare (indent 1))
+  (cl-check-type world org-glance-world)
+  (cl-check-type headline org-glance-headline)
+
   (org-glance-log :world "Put headline \"%s\" to world \"%s\" " (org-glance- headline :title) world)
   (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
     (org-glance-changelog:push (org-glance- world :changelog*) event)
@@ -183,6 +188,9 @@ Return last committed offset."
     world))
 
 (cl-defun org-glance-world:remove-headline-from-cache (world hash)
+  (cl-check-type world org-glance-world)
+  (cl-check-type hash string)
+
   (when-let (headline (gethash hash (org-glance- world :headlines)))
     (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance- headline :title))
     (remhash hash (org-glance- world :headlines))))
@@ -196,6 +204,7 @@ persistent storage.
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-world:persist' method."
   (cl-check-type world org-glance-world)
+  (cl-check-type hash string)
 
   (let ((event (org-glance-event:RM :hash hash)))
     (org-glance-changelog:push (org-glance- world :changelog*) event))
@@ -222,6 +231,7 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:get-headline (world hash)
   "Return fully qualified `org-glance-headline' by its hash."
   (cl-check-type world org-glance-world)
+  (cl-check-type hash string)
 
   (or
 
@@ -310,17 +320,6 @@ achieved by calling `org-glance-world:persist' method."
     (string (let ((prefix (substring headline 0 2))
                   (postfix (substring headline 2 (length headline))))
               (f-join (org-glance- world :location) "data" prefix postfix)))))
-
-;; (cl-defun org-glance-world:filter-headlines (world predicate)
-;;   "TODO cache headlines by predicate."
-;;   (declare (indent 1))
-;;   (cl-check-type world org-glance-world)
-;;   (cl-check-type predicate function)
-
-;;   (cl-loop for headline in (org-glance-world:headlines world)
-;;      when (funcall predicate headline)
-;;      collect headline ;; (cons (org-glance- headline :title) (org-glance- headline :hash))
-;;        ))
 
 (cl-defun org-glance-world:make-predicate (world derivation)
   (cl-check-type world org-glance-world)
