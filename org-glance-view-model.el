@@ -501,9 +501,6 @@
                          (replace-headline! (progn (puthash headline-hash headline to-add)
                                                    (remhash event-hash to-add))))
 
-              (org-glance-log :events "Dimension valid? %s" dimension-valid?)
-              (org-glance-log :events "Type: %s" (org-glance- view :type))
-
               (cl-typecase event
                 (org-glance-event:UPDATE (cond (hashes-equal? nil)
                                                ((and dimension-invalid? (not headline-exists?)) nil)

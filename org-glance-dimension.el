@@ -38,6 +38,9 @@
   (org-glance-derivation:from-string (downcase (format "%s=%s" k v))))
 
 (cl-defun org-glance-dimension:apply (dimension headline)
+  (cl-check-type dimension org-glance-dimension)
+  (cl-check-type headline org-glance-headline-header)
+
   (let ((result (eval (org-glance- dimension :form) (a-list 'headline headline))))
     (--map (thread-last it
              (format "%s")
@@ -82,8 +85,6 @@
   (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (org-glance-log :events "Predicate: %s" predicate)
-  (org-glance-log :events "Context: %s" (org-glance-dimension:context headline dimensions))
   (let ((result (eval predicate (org-glance-dimension:context headline dimensions))))
     (if (null result)
         nil ;; validation failed

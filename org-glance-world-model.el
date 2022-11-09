@@ -41,6 +41,8 @@
      (dimensions
       :type (org-glance-type:list-of org-glance-dimension)
       :initarg :dimensions)
+
+     ;; in-memory caches
      (derivations
       :type (org-glance-type:list-of org-glance-derivation)
       :initarg :derivations

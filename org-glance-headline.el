@@ -144,6 +144,8 @@
 
 (cl-defun org-glance-headline-header:from-headline (headline)
   "Infer instance of `org-glance-headline-header' from HEADLINE."
+  (cl-check-type headline (or org-glance-headline-header org-glance-headline))
+
   (cl-typecase headline
     (org-glance-headline (org-glance-headline-header
                           :hash (org-glance- headline :hash)

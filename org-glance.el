@@ -55,18 +55,13 @@
 
 ;; TODO prolog implementation is possible
 (defconst org-glance-dimensions
-  (list (org-glance-dimension :name 'tag
-                              :form '(org-glance- headline :tags))
-        (org-glance-dimension :name 'state
-                              :form '(org-glance- headline :state))
-        (org-glance-dimension :name 'title
-                              :form '(org-glance- headline :title))
-        (org-glance-dimension :name 'linked
-                              :form '(org-glance- headline :linked?))
-        (org-glance-dimension :name 'store
-                              :form '(org-glance- headline :store?))
-        (org-glance-dimension :name 'encrypted
-                              :form '(org-glance- headline :encrypted?))))
+  (list (org-glance-dimension :name 'tag       :form '(org-glance- headline :tags))
+        (org-glance-dimension :name 'state     :form '(org-glance- headline :state))
+        (org-glance-dimension :name 'title     :form '(org-glance- headline :title))
+        (org-glance-dimension :name 'linked    :form '(org-glance- headline :linked?))
+        (org-glance-dimension :name 'store     :form '(org-glance- headline :store?))
+        (org-glance-dimension :name 'encrypted :form '(org-glance- headline :encrypted?))
+        (org-glance-dimension :name 'closed    :form '(org-glance- headline :closed?))))
 
 (defvar org-glance-current-world nil
   "Current `org-glance-world'.")

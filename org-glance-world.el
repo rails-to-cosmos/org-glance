@@ -44,16 +44,19 @@
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)
 
-  (let ((derivation (org-glance-world:choose-derivation world)))
-    (org-glance-world:with-locked-derivation world derivation
-      (let ((location (org-glance-world:update-derivation world derivation))
-            (lexical-binding nil))
-        (let ((org-agenda-files (list location))
-              (org-agenda-overriding-header "org-glance agenda")
-              (org-agenda-start-on-weekday nil)
-              (org-agenda-span 21)
-              (org-agenda-start-day "-7d"))
-          (org-agenda-list))))))
+  (let ((derivation (cl-the (org-glance-type:optional org-glance-derivation)
+                      (org-glance-world:choose-derivation world))))
+    (cl-typecase derivation
+      (org-glance-derivation (org-glance-world:with-locked-derivation world derivation
+                               (let ((location (org-glance-world:update-derivation world derivation))
+                                     (lexical-binding nil))
+                                 (let ((org-agenda-files (list location))
+                                       (org-agenda-overriding-header "org-glance agenda")
+                                       (org-agenda-start-on-weekday nil)
+                                       (org-agenda-span 21)
+                                       (org-agenda-start-day "-7d"))
+                                   (org-agenda-list)))))
+      (otherwise nil))))
 
 (cl-defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
