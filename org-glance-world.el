@@ -30,6 +30,7 @@
      (insert-file-contents file)
      (org-glance-headline:map (headline)
        (org-glance-world:add-headline world headline))))
+
   world)
 
 (cl-defun org-glance-world:materialize (world &optional (derivation (org-glance-world:choose-derivation world)))
