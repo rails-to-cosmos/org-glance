@@ -22,7 +22,8 @@
 (cl-defun org-glance-derivation:filename (derivation)
   (cl-check-type derivation org-glance-derivation)
 
-  (concat (org-glance-derivation:representation derivation) ".org"))
+  (f-join (org-glance- derivation :dimension)
+          (concat (org-glance- derivation :value) ".org")))
 
 (cl-defun org-glance-derivation:from-string (s)
   (cl-check-type s string)

@@ -100,6 +100,8 @@
 
 (cl-defun org-glance-init ()
   "Update system state from `org-glance-directory'."
+  (interactive)
+  (clrhash org-glance-world--cache)
   (let ((world (org-glance-world:get-or-create org-glance-directory)))
     (setf (org-glance- world :dimensions) org-glance-dimensions)
     (setq org-glance-current-world world)))

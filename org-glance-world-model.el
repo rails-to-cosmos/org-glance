@@ -145,7 +145,7 @@ Return last committed offset."
                         (let* ((id (org-glance-world:generate-headline-id world headline))
                                (headline (org-glance-headline:with-properties headline
                                            `(("GLANCE_ID" ,id)
-                                             ("DIR" ,(concat "../resources/" id))))))
+                                             ("DIR" ,(concat "../../resources/" id))))))
                           (org-glance-world:save-headline world headline)
                           (org-glance-world:make-derivations world headline)
                           (org-glance-changelog:push changelog (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
@@ -332,6 +332,7 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:validate-headline (world derivation headline)
   (cl-check-type world org-glance-world)
   (cl-check-type derivation org-glance-derivation)
+  (cl-check-type headline org-glance-headline-header)
 
   (let ((predicate (org-glance-world:make-predicate world derivation)))
     (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))))

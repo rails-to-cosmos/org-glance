@@ -25,7 +25,7 @@
   (cl-check-type location org-glance-type:directory)
 
   (dolist-with-progress-reporter (file (org-glance-scope location))
-      (format "Import headlines from %s" location)
+      "Import headlines"
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
@@ -63,7 +63,7 @@
   "Get `org-glance-world' associated with current buffer."
   (or (thread-first (buffer-file-name)
         (org-glance-world:root)
-        (org-glance-world-cache:get))
+        (org-glance-world:get-or-create))
       (user-error "World %s is not registered in the system" (buffer-file-name))))
 
 (cl-defun org-glance-world:after-finalize-hook ()
@@ -152,19 +152,15 @@
 (cl-defun org-glance-world:derivations (world)
   (cl-check-type world org-glance-world)
 
-  (or (progn
-        (org-glance-log :cache "[org-glance-derivation] cache hit")
-        (org-glance- world :derivations))
-      (org-glance! world :derivations := (progn
-                                           (org-glance-log :cache "[org-glance-derivation] cache miss")
-                                           (--map (--> it
-                                                       (file-name-sans-extension it)
-                                                       (s-split-up-to "=" it 2 t)
-                                                       (-zip-lists '(:dimension :value) it)
-                                                       (-flatten it)
-                                                       (apply #'org-glance-derivation it))
-                                                  (--filter (member (file-name-extension it) org-glance-scope-extensions)
-                                                            (directory-files (f-join (org-glance- world :location) "views"))))))))
+  (or (org-glance- world :derivations)
+      (org-glance! world :derivations := (--map (--> it
+                                                     (file-name-sans-extension it)
+                                                     (list (file-name-nondirectory (f-parent it)) (file-name-nondirectory it))
+                                                     (-zip-lists '(:dimension :value) it)
+                                                     (-flatten it)
+                                                     (apply #'org-glance-derivation it))
+                                                (directory-files-recursively (f-join (org-glance- world :location) "views") ".*\\.org$")))))
+
 
 (cl-defun org-glance-world:choose-derivation (world &optional dimension)
   (cl-check-type world org-glance-world)
