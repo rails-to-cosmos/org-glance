@@ -444,20 +444,21 @@
 (cl-defun org-glance-view:fetch (view)
   (cl-check-type view org-glance-view)
 
-  (cl-labels ((derive (h  ;; hash
-                       rs ;; relations
-                       i  ;; relation index
-                       hs ;; hash store
+  (cl-labels ((derive (hash  ;; hash
+                       relations ;; relations
+                       idx  ;; relation index
+                       known ;; hash store
                        )
-                (cond ((gethash h hs) h)
-                      ((> i 0) (cl-loop for j from i downto 0
-                                  for r = (aref rs j) ;; relation
-                                  for s = (car r)     ;; source
-                                  for d = (cdr r)     ;; derivation
-                                  when (string= h d)
-                                  return (derive s rs j hs)))
-                      ;; not found
-                      (t nil))))
+                "Search for first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
+                (cl-loop with search = hash
+                   for j from idx downto 0
+                   for r = (org-glance- relations [j])
+                   for s = (car r)
+                   for d = (cdr r)
+                   when (gethash search known)
+                   return search
+                   when (string= search d)
+                   do (setq search s))))
     (let* ((world (org-glance- view :world))
            (view-offset (org-glance-view:get-offset view))
            (events (reverse (org-glance-world:events world)))
@@ -471,7 +472,7 @@
          do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
 
       (cl-loop
-         for event in events ;; TODO optimize
+         for event in events
          for idx from 0
          for event-offset = (org-glance- event :offset)
 
