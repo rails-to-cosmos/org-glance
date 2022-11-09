@@ -323,12 +323,18 @@ achieved by calling `org-glance-world:persist' method."
 ;;        ))
 
 (cl-defun org-glance-world:make-predicate (world derivation)
+  (cl-check-type world org-glance-world)
+  (cl-check-type derivation org-glance-derivation)
+
   (cl-loop for dimension in (org-glance- world :dimensions)
      when (string= (org-glance- derivation :dimension)
                    (format "%s" (org-glance- dimension :name)))
      return (org-glance-dimension:make-predicate dimension (org-glance- derivation :value))))
 
 (cl-defun org-glance-world:validate-headline (world derivation headline)
+  (cl-check-type world org-glance-world)
+  (cl-check-type derivation org-glance-derivation)
+
   (let ((predicate (org-glance-world:make-predicate world derivation)))
     (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))))
 
