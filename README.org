@@ -9,6 +9,19 @@
 
 https://untools.co
 
+#+begin_src emacs-lisp
+;; configuration
+
+(setq org-glance-directory "~/glance")
+(org-glance-init)
+
+(define-key global-map (kbd "C-x j +") #'org-glance-capture)
+(define-key global-map (kbd "C-x j m") #'org-glance-materialize)
+(define-key global-map (kbd "C-x j a") #'org-glance-agenda)
+(define-key global-map (kbd "C-x j j") #'org-glance-jump)
+(define-key global-map (kbd "C-x j e") #'org-glance-extract)
+(define-key global-map (kbd "C-x j i") #'org-glance-import)
+#+end_src
 
 * TODO [#A] Overview dimensions and mode
 * TODO [#B] Delete headlines
