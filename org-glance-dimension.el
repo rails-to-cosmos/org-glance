@@ -44,7 +44,7 @@
              (downcase)
              (s-replace-regexp "[[:blank:][:punct:]]+" "-")
              (s-replace-regexp "[[:cntrl:]]+" "")
-             (s-replace-regexp "[[:nonascii:]]+" "_"))
+             (s-replace-regexp "[[:nonascii:]]+" "*"))
            (cl-typecase result
              (atom (list result))
              (otherwise result)))))
