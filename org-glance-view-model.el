@@ -387,28 +387,32 @@
                         (org-glance- view :hash->midx) hash->midx))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
-  (let ((world (org-glance- view :world))
-        (to-remove '()))
+  (org-glance-log :buffers "Commit buffer: %s" (current-buffer))
+  (org-glance-log :buffers "Commit view: %s" view)
 
-    (org-glance-view:consume-changes (view midx)
-      (let* ((headline (org-glance-view:get-marker-headline view midx))
-             (old-hash (org-glance-view:get-marker-hash view midx))
-             (new-hash (org-glance- headline :hash))
-             (predicate (org-glance-world:make-predicate world (org-glance- view :type))))
-        (org-glance-world:update-headline world old-hash headline)
-        (org-glance-view:set-marker-changed view midx nil)
-        (org-glance-view:set-marker-hash view midx new-hash)
+  (org-glance-view:with-current-buffer view
+    (let ((world (org-glance- view :world))
+          (to-remove '()))
 
-        (unless (org-glance-world:validate-headline world (org-glance- view :type) headline)
-          (push new-hash to-remove))))
+      (org-glance-view:consume-changes (view midx)
+        (let* ((headline (org-glance-view:get-marker-headline view midx))
+               (old-hash (org-glance-view:get-marker-hash view midx))
+               (new-hash (org-glance- headline :hash))
+               (predicate (org-glance-world:make-predicate world (org-glance- view :type))))
+          (org-glance-world:update-headline world old-hash headline)
+          (org-glance-view:set-marker-changed view midx nil)
+          (org-glance-view:set-marker-hash view midx new-hash)
 
-    (dolist (hash to-remove)
-      (org-glance-view:remove-headline view hash))
+          (unless (org-glance-world:validate-headline world (org-glance- view :type) headline)
+            (push new-hash to-remove))))
 
-    (let ((offset (org-glance-world:persist world)))
-      (org-glance-view:set-offset view offset))
+      (dolist (hash to-remove)
+        (org-glance-view:remove-headline view hash))
 
-    (org-glance-view:save-markers view)))
+      (let ((offset (org-glance-world:persist world)))
+        (org-glance-view:set-offset view offset))
+
+      (org-glance-view:save-markers view))))
 
 (cl-defun org-glance-view:save-markers (view)
   (cl-check-type view org-glance-view)

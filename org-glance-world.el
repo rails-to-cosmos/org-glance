@@ -44,8 +44,7 @@
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)
 
-  (let ((derivation (cl-the (org-glance-type:optional org-glance-derivation)
-                      (org-glance-world:choose-derivation world))))
+  (let ((derivation (org-glance-world:choose-derivation world)))
     (cl-typecase derivation
       (org-glance-derivation (let ((location (org-glance-world:update-derivation world derivation))
                                    (lexical-binding nil))
