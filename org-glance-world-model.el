@@ -308,6 +308,9 @@ achieved by calling `org-glance-world:persist' method."
 (cl-defun org-glance-world:locate-headline (world headline)
   "Return location of HEADLINE in WORLD."
   (cl-check-type world org-glance-world)
+  (cl-check-type headline (or org-glance-type:hash
+                              org-glance-headline
+                              org-glance-headline-header))
 
   (cl-typecase headline
     ((or org-glance-headline org-glance-headline-header)
@@ -315,6 +318,14 @@ achieved by calling `org-glance-world:persist' method."
     (string (let ((prefix (substring headline 0 2))
                   (postfix (substring headline 2 (length headline))))
               (f-join (org-glance- world :location) "data" prefix postfix)))))
+
+(cl-defun org-glance-world:headline-exists? (world headline)
+  (cl-check-type world org-glance-world)
+  (cl-check-type headline (or org-glance-type:hash
+                              org-glance-headline
+                              org-glance-headline-header))
+
+  (f-exists? (org-glance-world:locate-headline world headline)))
 
 (cl-defun org-glance-world:make-predicate (world derivation)
   (cl-check-type world org-glance-world)

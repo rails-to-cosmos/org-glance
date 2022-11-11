@@ -193,7 +193,7 @@
                                :offset offset)))
     (unless (f-exists? (org-glance- view :location))
       (f-mkdir-full-path (f-parent (org-glance- view :location)))
-      (org-glance-view:write-header view)
+      (org-glance-view:save-header view)
       (org-glance:with-temp-file location
         (insert (s-join "\n"
                         (list "#  -*- mode: org; mode: org-glance-material -*-"
@@ -504,6 +504,17 @@
                          (replace-headline! (progn (puthash headline-hash headline to-add)
                                                    (remhash event-hash to-add))))
 
+              (org-glance-log :events "Event: %s" event)
+
+              (cl-typecase event
+                (org-glance-event:UPDATE (org-glance-log :events "Hashes are equal? %s" hashes-equal?)
+                                         (org-glance-log :events "Source removed? %s" source-removed?)
+                                         (org-glance-log :events "Source exists? %s" source-removed?)
+                                         (org-glance-log :events "Target derived? %s" headline-derived?)))
+
+              (org-glance-log :events "Target removed? %s" target-removed?)
+              (org-glance-log :events "Dimension valid? %s" dimension-valid?)
+
               (cl-typecase event
                 (org-glance-event:UPDATE (cond (hashes-equal? nil)
                                                ((and source-removed? target-removed?) nil)
@@ -542,7 +553,7 @@
 
 (cl-defun org-glance-view:set-offset (view offset)
   (setf (org-glance- view :offset) offset)
-  (org-glance-view:write-header view))
+  (org-glance-view:save-header view))
 
 (cl-defun org-glance-view:marker-at-point
     (&optional
@@ -554,7 +565,7 @@
   (cl-loop for idx from (1+ midx) below (org-glance-vector:size (org-glance- view :markers))
      do (org-glance-view:set-marker-position view idx (+ (org-glance-view:get-marker-position view idx) diff))))
 
-(cl-defun org-glance-view:write-header (view)
+(cl-defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance- view :location))
     (insert (pp-to-string (a-list
                            :type (org-glance- view :type)

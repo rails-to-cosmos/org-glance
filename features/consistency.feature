@@ -8,7 +8,7 @@ Feature: Consistent Edit
       """
 
     When I visit view "Apple" derived from dimension "Tag" in world "Phones"
-    And I go to headline "iPhone 3"
+    And I go to headline with title "iPhone 3"
     And I set title of headline at point to "iPhone 4"
 
     Then 1 marker should be changed
@@ -52,7 +52,7 @@ Feature: Consistent Edit
 
     Then markers positions should be consistent
 
-    When I go to headline "Yummi"
+    When I go to headline with title "Yummi"
     And I insert " the cat"
 
     Then marker at point should be changed
@@ -66,7 +66,7 @@ Feature: Consistent Edit
     # And 0 markers should be changed
     # And marker positions and hashes should be consistent
 
-    When I go to headline "Eric"
+    When I go to headline with title "Eric"
     And I insert " the dog"
 
     Then marker at point should be changed
@@ -86,7 +86,7 @@ Feature: Consistent Edit
       """
 
     When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
-    And go to headline "Tatinek"
+    And go to headline with title "Tatinek"
 
     Then marker at point should not be changed
     And 0 markers should be changed
@@ -109,7 +109,7 @@ Feature: Consistent Edit
       """
 
     When I visit view "Peppa" derived from dimension "Tag" in world "Wishlist"
-    And go to headline "Peppa Pig"
+    And go to headline with title "Peppa Pig"
 
     Then marker at point should not be changed
     And 0 markers should be changed
@@ -131,7 +131,7 @@ Feature: Consistent Edit
     And buffer offset should be latest
     And marker positions and hashes should be consistent
 
-    When I go to headline "Niagara Waterfalls"
+    When I go to headline with title "Niagara Waterfalls"
     And set title of headline at point to "Niagara Waterfalls 2020"
 
     Then markers positions should be consistent
@@ -148,7 +148,7 @@ Feature: Consistent Edit
     And buffer offset should be latest
     And marker positions and hashes should be consistent
 
-    When I go to headline "STARTED Troodos Mountains"
+    When I go to headline with title "STARTED Troodos Mountains"
     And set title of headline at point to "STARTED Troodos Mountains 2019"
 
     Then markers positions should be consistent
@@ -300,7 +300,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
-  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -377,7 +376,6 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
     And buffer offset should be latest
 
-  @debug
   Scenario: Destructive modifications
     Given world "Tasks"
 
@@ -394,7 +392,7 @@ Feature: Consistent Edit
     When I visit view "A" derived from dimension "Title" in world "Tasks"
     Then current buffer should contain 1 headline
 
-    When I go to headline "A"
+    When I go to headline with title "A"
     And I set title of headline at point to "C"
     And save buffer
 
@@ -421,7 +419,7 @@ Feature: Consistent Edit
     And buffer offset should be latest
     And marker positions and hashes should be consistent
 
-    When I go to headline "Niagara Waterfalls"
+    When I go to headline with title "Niagara Waterfalls"
     And set headline todo state to "DONE"
 
     Then marker at point should be changed
@@ -437,7 +435,7 @@ Feature: Consistent Edit
     And buffer offset should be latest
     And marker positions and hashes should be consistent
 
-    When I go to headline "Niagara Waterfalls"
+    When I go to headline with title "Niagara Waterfalls"
     And set headline todo state to "TODO"
 
     Then marker at point should be changed
@@ -451,6 +449,46 @@ Feature: Consistent Edit
     When I visit view "DONE" derived from dimension "State" in world "Adventures"
 
     Then current buffer should contain 0 headlines
+
+  @debug
+  Scenario: Headline updates results in deletion from other dimension
+    Given world "Adventures" in directory "stories/adventures" with headlines
+      """
+      * TODO Niagara Waterfalls
+      Some active timestamp: <2022-11-11 Fri>
+      """
+    Then world "Adventures" should contain view "t" derived from dimension "active"
+    And world "Adventures" should contain view "niagara-waterfalls" derived from dimension "title"
+
+    When I visit view "t" derived from dimension "active" in world "Adventures"
+    Then current buffer should contain 1 headline
+
+    When I visit view "niagara-waterfalls" derived from dimension "title" in world "Adventures"
+    Then current buffer should contain 1 headline
+
+    When I go to headline with title "Niagara Waterfalls"
+    And set headline "Niagara Waterfalls" contents to
+    """
+    Now the timestamp is inactive: [2022-11-11 Fri]
+    """
+    And save buffer
+    And visit view "t" derived from dimension "active" in world "Adventures"
+    Then current buffer should contain 0 headlines
+
+    When I visit view "nil" derived from dimension "active" in world "Adventures"
+    Then current buffer should contain 1 headline
+
+    When I go to headline with title "Niagara Waterfalls"
+    And set headline "Niagara Waterfalls" contents to
+    """
+    Now the timestamp is active: <2022-11-11 Fri>
+    """
+    And save buffer
+
+    Then current buffer should contain 0 headlines
+
+    When I visit view "t" derived from dimension "active" in world "Adventures"
+    Then current buffer should contain 1 headline
 
   # TODO Sync COMMENTED property
   # TODO Sync buffers update offset (maybe not)

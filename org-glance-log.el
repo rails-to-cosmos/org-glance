@@ -2,16 +2,16 @@
 
 (defconst org-glance-log:loggers
   (a-list :events t
-          :world nil
-          :headlines nil
-          :cache nil
-          :dimensions nil
-          :contents nil
-          :markers nil
-          :buffers nil
-          :performance nil
-          :offsets nil
-          :test nil))
+          :world t
+          :headlines t
+          :cache t
+          :dimensions t
+          :contents t
+          :markers t
+          :buffers t
+          :performance t
+          :offsets t
+          :test t))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))

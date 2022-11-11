@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 (require 'org-glance-log)
 (require 'org-glance-world)
 (require 'org-glance-view-model)
@@ -9,13 +11,14 @@
   (cl-check-type type org-glance-derivation)
   (cl-check-type offset org-glance-type:offset)
 
-  (let* ((location (file-truename (f-join (org-glance- world :location) location)))
-         (key (org-glance-view--key :type type :location location)))
-    (or (org-glance-view-cache:get key)
-        (let ((view (org-glance-view:create world type location offset)))
-          (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
-          (org-glance-view-cache:put view)
-          view))))
+  (thunk-let* ((location (file-truename (f-join (org-glance- world :location) location)))
+               (key (org-glance-view--key :type type :location location))
+               (cached-view (org-glance-view-cache:get key))
+               (new-view (org-glance-view:create world type location offset)))
+    (cond ((and (f-exists? location) cached-view) cached-view)
+          (t (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
+             (org-glance-view-cache:put new-view)
+             new-view))))
 
 (cl-defun org-glance-view:get-buffer-view ()
   (let ((header (thread-first (buffer-file-name)

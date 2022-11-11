@@ -38,8 +38,7 @@
   (cl-check-type derivation (org-glance-type:optional org-glance-derivation))
 
   (cl-typecase derivation
-    (org-glance-derivation (org-glance-world:with-locked-derivation world derivation
-                             (find-file (org-glance-world:update-derivation world derivation))))
+    (org-glance-derivation (find-file (org-glance-world:update-derivation world derivation)))
     (otherwise nil)))
 
 (cl-defun org-glance-world:agenda (world)
@@ -48,15 +47,14 @@
   (let ((derivation (cl-the (org-glance-type:optional org-glance-derivation)
                       (org-glance-world:choose-derivation world))))
     (cl-typecase derivation
-      (org-glance-derivation (org-glance-world:with-locked-derivation world derivation
-                               (let ((location (org-glance-world:update-derivation world derivation))
-                                     (lexical-binding nil))
-                                 (let ((org-agenda-files (list location))
-                                       (org-agenda-overriding-header "org-glance agenda")
-                                       (org-agenda-start-on-weekday nil)
-                                       (org-agenda-span 21)
-                                       (org-agenda-start-day "-7d"))
-                                   (org-agenda-list)))))
+      (org-glance-derivation (let ((location (org-glance-world:update-derivation world derivation))
+                                   (lexical-binding nil))
+                               (let ((org-agenda-files (list location))
+                                     (org-agenda-overriding-header "org-glance agenda")
+                                     (org-agenda-start-on-weekday nil)
+                                     (org-agenda-span 21)
+                                     (org-agenda-start-day "-7d"))
+                                 (org-agenda-list))))
       (otherwise nil))))
 
 (cl-defun org-glance-world:current ()
@@ -182,21 +180,22 @@
   (cl-check-type world org-glance-world)
   (cl-check-type derivation org-glance-derivation)
 
-  (let* ((location (org-glance-world:locate-derivation world derivation))
-         (header (thread-first location
-                   (org-glance-view:locate-header)
-                   (org-glance-view:read-header)))
-         (type (a-get header :type))
-         (offset (a-get header :offset))
-         (world-offset (org-glance-world:offset world)))
-    (when (org-glance-offset:less? offset world-offset)
-      (let ((view (org-glance-view:get-or-create world type location offset)))
-        (org-glance:with-temp-file-overwrite location
-          (org-glance-view:mark view)
-          (org-glance-view:fetch view)
-          (org-glance-view:write-header view)
-          (org-glance-view:save-markers view))))
-    location))
+  (org-glance-world:with-locked-derivation world derivation
+    (let* ((location (org-glance-world:locate-derivation world derivation))
+           (header (thread-first location
+                     (org-glance-view:locate-header)
+                     (org-glance-view:read-header)))
+           (type (a-get header :type))
+           (offset (a-get header :offset))
+           (world-offset (org-glance-world:offset world)))
+      (when (org-glance-offset:less? offset world-offset)
+        (let ((view (org-glance-view:get-or-create world type location offset)))
+          (org-glance:with-temp-file-overwrite location
+            (org-glance-view:mark view)
+            (org-glance-view:fetch view)
+            (org-glance-view:save-header view)
+            (org-glance-view:save-markers view))))
+      location)))
 
 (cl-defun org-glance-world:backfill (world)
   (cl-check-type world org-glance-world)
@@ -204,9 +203,10 @@
   (let ((changelog (org-glance- world :changelog)))
     (dolist (event (reverse (org-glance- changelog :events)))
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
-        (cl-typecase event
-          (org-glance-event:RM nil)
-          (org-glance-event:PUT (org-glance-world:make-derivations world headline))
-          (org-glance-event:UPDATE (org-glance-world:make-derivations world headline)))))))
+        (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
+          (cl-typecase event
+            (org-glance-event:RM nil)
+            (org-glance-event:PUT (org-glance-world:make-derivations world headline))
+            (org-glance-event:UPDATE (org-glance-world:make-derivations world headline))))))))
 
 (provide 'org-glance-world)

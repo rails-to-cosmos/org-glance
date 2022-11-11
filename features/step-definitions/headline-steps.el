@@ -17,7 +17,7 @@
     (unless (org-at-heading-p)
       (outline-next-heading))))
 
-(When "^I? ?go to headline \"\\([^\"]+\\)\"$"
+(When "^I? ?go to headline with title \"\\([^\"]+\\)\"$"
   (lambda (title)
     (let ((title-prefix (format "^*\\([A-Z ]+\\)?%s" title)))
       (goto-char (point-min))
@@ -60,7 +60,7 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should contain link")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not contain links?$"
@@ -73,7 +73,7 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be encrypted")))
 
 (Then "^headline at point should not be encrypted$"
@@ -82,7 +82,7 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should not be encrypted")))
 
 (Then "^headline at point should be propertized$"
@@ -95,12 +95,12 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be propertized")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be propertized$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should not be propertized")))
 
 (Then "^headline at point should be archived$"
@@ -113,12 +113,12 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be archived")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be archived$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should not be archived")))
 
 (Then "^headline at point should be commented$"
@@ -131,12 +131,12 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be commented")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be commented$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should not be commented")))
 
 (Then "^headline at point should be closed$"
@@ -149,12 +149,12 @@
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be closed")))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be closed$"
       (lambda (headline-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should not be closed")))
 
 (Then "^the title of headline at point should be \"\\([^\"]+\\)\"$"
@@ -166,7 +166,7 @@
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
       (lambda (headline-title expected-title)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "the title of headline at point should be \"%s\"" expected-title)))
 
 (Then "^headline at point contents should be$"
@@ -192,12 +192,12 @@
 
 (Then "^the contents of headline \"\\([^\"]+\\)\" should be$"
       (lambda (headline-title expected-contents)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point contents should be\n\"\"%s\"\"\"" expected-contents)))
 
 (Then "^headline \"\\([^\"]+\\)\" should be an? \\([^\"]+\\)$"
       (lambda (headline-title expected-class)
-        (When "I go to headline \"%s\"" headline-title)
+        (When "I go to headline with title \"%s\"" headline-title)
         (Then "headline at point should be a %s" expected-class)))
 
 (When "^I? ?set title of headline at point to \"\\([^\"]+\\)\"$"
@@ -206,7 +206,7 @@
 
 (And "^I? ?set headline \"\\([^\"]+\\)\" contents to$"
      (lambda (title contents)
-       (When "I go to headline \"%s\"" title)
+       (When "I go to headline with title \"%s\"" title)
        (org-glance-headline:with-headline-at-point
          (goto-char (point-min))
          (if (= 0 (forward-line))
@@ -245,10 +245,10 @@
 
 (When "^I? ?rename headline \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (from-title to-title)
-    (When "I go to headline \"%s\"" from-title)
+    (When "I go to headline with title \"%s\"" from-title)
     (And "set title of headline at point to \"%s\"" to-title)))
 
 (Then "^headline \"\\([^\"]+\\)\" should be changed$"
   (lambda (headline)
-    (When "I go to headline \"%s\"" headline)
+    (When "I go to headline with title \"%s\"" headline)
     (Then "marker at point should be changed")))
