@@ -206,6 +206,10 @@
           (cl-typecase event
             (org-glance-event:RM nil)
             (org-glance-event:PUT (org-glance-world:make-derivations world headline))
-            (org-glance-event:UPDATE (org-glance-world:make-derivations world headline))))))))
+            (org-glance-event:UPDATE (org-glance-world:make-derivations world headline))))))
+
+    ;; TODO reset all offsets
+    ;; (dolist (derivation (org-glance-world:derivations world)))
+    ))
 
 (provide 'org-glance-world)
