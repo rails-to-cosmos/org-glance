@@ -200,7 +200,8 @@
   (cl-check-type world org-glance-world)
 
   (let ((changelog (org-glance- world :changelog)))
-    (dolist (event (reverse (org-glance- changelog :events)))
+    (dolist-with-progress-reporter (event (reverse (org-glance- changelog :events)))
+        "Backfill"
       (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
         (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
           (cl-typecase event

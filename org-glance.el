@@ -72,6 +72,12 @@
   (interactive)
   (org-glance-world:capture org-glance-current-world))
 
+
+;; (cl-defun org-glance-capture-current ()
+;;   (interactive)
+;;   (org-store-link t t)
+;;   (org-glance-world:capture org-glance-current-world))
+
 (cl-defun org-glance-materialize ()
   (interactive)
   (org-glance-world:materialize org-glance-current-world))

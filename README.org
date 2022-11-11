@@ -23,6 +23,8 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO Store current buffer and capture link to it in world
+* TODO Add tests for out-of-buffer commits
 * TODO [#A] Overview dimensions and mode
 * TODO [#B] Delete headlines
 * DONE Proper cache for headlines
