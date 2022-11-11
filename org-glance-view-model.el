@@ -449,7 +449,7 @@
                        idx  ;; relation index
                        known ;; hash store
                        )
-                "Search for first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
+                "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
                 (cl-loop with search = hash
                    for j from idx downto 0
                    for r = (org-glance- relations [j])
@@ -493,24 +493,29 @@
                          (headline-derived? (string= derived-hash headline-hash))
                          (dimension-valid? (org-glance-world:validate-headline world (org-glance- view :type) headline*))
                          (dimension-invalid? (not dimension-valid?))
-                         (headline-exists? (not (null (gethash event-hash to-add))))
+                         (source-exists? (not (null (gethash event-hash to-add))))
+                         (source-removed? (not (f-exists? (org-glance-world:locate-headline world event-hash))))
+                         (target-removed? (not (f-exists? (org-glance-world:locate-headline world headline-hash))))
 
-                         (add-headline! (puthash headline-hash headline to-add))
+                         (add-target! (puthash headline-hash headline to-add))
+                         (remove-source!  (remhash event-hash to-add))
                          (derive-headline!  (progn (puthash headline-hash headline to-add)
                                                    (remhash derived-hash to-add)))
-                         (remove-headline!  (progn (remhash event-hash to-add)))
                          (replace-headline! (progn (puthash headline-hash headline to-add)
                                                    (remhash event-hash to-add))))
 
               (cl-typecase event
                 (org-glance-event:UPDATE (cond (hashes-equal? nil)
-                                               ((and dimension-invalid? (not headline-exists?)) nil)
-                                               ((and dimension-invalid? headline-exists?) remove-headline!)
-                                               ((and dimension-valid? headline-exists?) replace-headline!)
+                                               ((and source-removed? target-removed?) nil)
+                                               ((and (not source-removed?) target-removed?) remove-source!)
+                                               ((and dimension-invalid? (not source-exists?)) nil)
+                                               ((and dimension-invalid? source-exists?) remove-source!)
+                                               ((and dimension-valid? source-exists?) replace-headline!)
                                                ((and derived-hash (not headline-derived?)) derive-headline!)
-                                               ((not derived-hash) add-headline!)))
-                (org-glance-event:PUT (when dimension-valid? add-headline!))
-                (org-glance-event:RM remove-headline!)
+                                               ((not derived-hash) add-target!)))
+                (org-glance-event:PUT (cond (target-removed? nil)
+                                            (dimension-valid? add-target!)))
+                (org-glance-event:RM remove-source!)
                 (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
            (setq committed-offset event-offset)
            (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))

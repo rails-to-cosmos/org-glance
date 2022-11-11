@@ -300,6 +300,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2023" should not be in current buffer
     And headline "Music Festival 2024" should be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across files
     Given world "Adventures" in directory "stories/adventures" with headlines
       """

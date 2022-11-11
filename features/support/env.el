@@ -61,7 +61,7 @@
   (require 'ert))
 
 (Setup
-)
+ (setq inhibit-message t))
 
 (Before
  (desktop-clear)
@@ -85,8 +85,9 @@
  (cl-loop for (key . value) in org-glance-log:loggers
     for buffer = (format "*org-glance-log%s*" key)
     when (and value (get-buffer buffer))
-    do (with-current-buffer buffer
-         (message "%s" key)
-         (message (buffer-string))))
+    do (let ((inhibit-message nil))
+         (with-current-buffer buffer
+           (message "%s" key)
+           (message (buffer-string)))))
 
  (setq default-directory org-glance-root-path))

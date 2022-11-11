@@ -136,9 +136,7 @@ Return last committed offset."
         (format "Persist world %s" (org-glance- world :location))
         (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
           (cl-typecase event (org-glance-event:RM
-                              (user-error "RM operation has not been implemented yet")
-                              ;; TODO think about when to delete headlines
-                              ;; (f-delete (org-glance-world:locate-headline world headline))
+                              (f-delete (org-glance-world:locate-headline world headline))
                               (org-glance-changelog:push changelog event))
 
                        (org-glance-event:PUT
@@ -154,9 +152,7 @@ Return last committed offset."
                         (org-glance-world:save-headline world headline)
                         (org-glance-world:make-derivations world headline)
                         (org-glance-changelog:push changelog event)
-                        ;; TODO think about when to delete headlines
-                        ;; (f-delete (org-glance-world:locate-headline world (org-glance- event :hash))
-                        ))))
+                        (f-delete (org-glance-world:locate-headline world (org-glance- event :hash)))))))
 
     (org-glance-changelog:write changelog changelog-location)
     (setf (org-glance- world :changelog*) (org-glance-changelog))
