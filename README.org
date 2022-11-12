@@ -23,21 +23,19 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO [#A] Overview dimensions and mode
+* TODO [#A] Relations
+* TODO [#B] Delete headlines
 * TODO Store current buffer and capture link to it in world
 * TODO Add tests for out-of-buffer commits
-* TODO [#A] Overview dimensions and mode
-* TODO [#B] Delete headlines
-* DONE Proper cache for headlines
-CLOSED: [2022-11-09 Wed 09:06]
-:LOGBOOK:
-- State "DONE"       from "TODO"       [2022-11-09 Wed 09:06]
-:END:
 * TODO Optimize caches
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list
 * TODO Optimize fetching relations: traverse changelog from end
-* PENDING Consistent actions (use same underlying logic as in dimensions)
+* DONE Consistent actions (use same underlying logic as in dimensions)
+CLOSED: [2022-11-12 Sat 08:37]
 :LOGBOOK:
+- State "DONE"       from "PENDING"    [2022-11-12 Sat 08:37]
 - State "PENDING"    from "STARTED"    [2022-11-05 Sat 09:30]
 - State "STARTED"    from "TODO"       [2022-11-04 Fri 10:50]
 CLOCK: [2022-11-04 Fri 10:50]--[2022-11-05 Sat 09:30] => 22:40

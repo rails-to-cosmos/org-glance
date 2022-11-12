@@ -16,8 +16,7 @@ editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
          (add-hook 'after-change-functions #'org-glance-material-mode:update nil t)
-         (add-hook 'before-save-hook #'org-glance-view:commit nil t)
-         (org-overview))
+         (add-hook 'before-save-hook #'org-glance-view:commit nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-view:commit t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:update t))))
@@ -29,6 +28,7 @@ editor."
          (diff (- (- change-end change-beg) pre-change-length))
          (midx (org-glance-view:marker-at-point view (- change-beg 1))))
     (org-glance-view:set-marker-changed view midx t)
-    (org-glance-view:shift-markers view midx diff)))
+    (org-glance-view:shift-markers view midx diff)
+    (org-glance-log :markers "Markers:\n%s" (pp-to-string (org-glance- view :markers)))))
 
 (provide 'org-glance-material-mode)

@@ -28,23 +28,25 @@
                             (start (make-symbol "start"))
                             (gcs (make-symbol "gcs"))
                             (gc (make-symbol "gc")))
-                        `(let ((,gc gc-elapsed)
-                               (,gcs gcs-done)
-                               (,start (current-time))
-                               (,value ,@args))
-                           (org-glance-log:with-logger ,logger
-                               "[%s] Elapsed time: %fs%s"
-                             (caar (quote ,args))
-                             (float-time (time-since ,start))
-                             (if (> (- gcs-done ,gcs) 0)
-                                 (format " (%fs in %d GCs)"
-                                         (- gc-elapsed ,gc)
-                                         (- gcs-done ,gcs))
-                               ""))
-                           ,value)))
-        (_ `(org-glance-log:with-logger ,logger
-                "[%s] %s"
-              ,logger (format ,@args))))
+                        `(save-match-data
+                           (let ((,gc gc-elapsed)
+                                 (,gcs gcs-done)
+                                 (,start (current-time))
+                                 (,value ,@args))
+                             (org-glance-log:with-logger ,logger
+                                 "[%s] Elapsed time: %fs%s"
+                               (caar (quote ,args))
+                               (float-time (time-since ,start))
+                               (if (> (- gcs-done ,gcs) 0)
+                                   (format " (%fs in %d GCs)"
+                                           (- gc-elapsed ,gc)
+                                           (- gcs-done ,gcs))
+                                 ""))
+                             ,value))))
+        (_ `(save-match-data
+              (org-glance-log:with-logger ,logger
+                  "[%s] %s"
+                ,logger (format ,@args)))))
     (pcase logger
       (:performance `(progn ,@args))
       (_ nil))))

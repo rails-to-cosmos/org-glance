@@ -161,7 +161,7 @@
      ;; available TODO states
      ;; capture template
      (type
-      :type org-glance-derivation
+      :type org-glance-partition
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to

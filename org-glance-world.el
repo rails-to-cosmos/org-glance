@@ -35,10 +35,10 @@
 
 (cl-defun org-glance-world:materialize (world &optional (derivation (org-glance-world:choose-derivation world)))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation (org-glance-type:optional org-glance-derivation))
+  (cl-check-type derivation (org-glance-type:optional org-glance-partition))
 
   (cl-typecase derivation
-    (org-glance-derivation (find-file (org-glance-world:update-derivation world derivation)))
+    (org-glance-partition (find-file (org-glance-world:update-derivation world derivation)))
     (otherwise nil)))
 
 (cl-defun org-glance-world:agenda (world)
@@ -46,7 +46,7 @@
 
   (let ((derivation (org-glance-world:choose-derivation world)))
     (cl-typecase derivation
-      (org-glance-derivation (let ((location (org-glance-world:update-derivation world derivation))
+      (org-glance-partition (let ((location (org-glance-world:update-derivation world derivation))
                                    (lexical-binding nil))
                                (let ((org-agenda-files (list location))
                                      (org-agenda-overriding-header "org-glance agenda")
@@ -79,15 +79,12 @@
 
   (f-join (org-glance- world :location) "capture.org"))
 
-(cl-defun org-glance-world:capture (world
-                                    &key
-                                      (template "* %?")
-                                      ;; (_ (cond ((use-region-p) (buffer-substring-no-properties
-                                      ;;                           (region-beginning)
-                                      ;;                           (region-end)))
-                                      ;;          (t "")))
-                                      ;; finalize
-                                      )
+(cl-defun org-glance-world:capture (world &key (template "* %?")
+                                            (text (cond ((use-region-p) (buffer-substring-no-properties
+                                                                         (region-beginning)
+                                                                         (region-end)))
+                                                        (t "")))
+                                            finalize)
   (declare (indent 1))
   (cl-check-type world org-glance-world)
 
@@ -97,10 +94,10 @@
     (add-hook 'org-capture-after-finalize-hook 'org-glance-world:after-finalize-hook 0 t)
     (let ((lexical-binding nil))
       (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
-        (org-capture nil "_")))
-    ;; (when finalize
-    ;;   (org-capture-finalize))
-    ))
+        (org-capture nil "_")
+        (insert text)))
+    (when finalize
+      (org-capture-finalize))))
 
 (cl-defun org-glance-world:choose-headline--where (world query)
   "TODO Should be consistent with dimensions."
@@ -108,18 +105,18 @@
   (cl-check-type world org-glance-world)
   (cl-check-type query string)
 
-  (let ((derivation (org-glance-derivation:from-string query)))
+  (let ((derivation (org-glance-partition:from-string query)))
     (org-glance-world:choose-headline--derived world derivation)))
 
 (cl-defun org-glance-world:choose-headline--derived (world derivation)
   "TODO Should be consistent with dimensions."
   (declare (indent 1))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-derivation)
+  (cl-check-type derivation org-glance-partition)
 
   (let ((dummies (--map (cons (org-glance- it :title) (org-glance- it :hash))
                         (org-glance-world:headlines--derived world derivation))))
-    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-derivation:representation derivation)) dummies)
+    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation derivation)) dummies)
       (a-get dummies)
       (org-glance-world:get-headline world))))
 
@@ -155,7 +152,7 @@
                                                      (list (file-name-nondirectory (f-parent it)) (file-name-nondirectory it))
                                                      (-zip-lists '(:dimension :value) it)
                                                      (-flatten it)
-                                                     (apply #'org-glance-derivation it))
+                                                     (apply #'org-glance-partition it))
                                                 (directory-files-recursively (f-join (org-glance- world :location) "views") ".*\\.org$")))))
 
 
@@ -167,17 +164,17 @@
                               (string (--filter (string= (org-glance- it :dimension) dimension)
                                                 (org-glance-world:derivations world)))
                               (otherwise (org-glance-world:derivations world))))
-               (reprs (--map (org-glance-derivation:representation it) derivations)))
+               (reprs (--map (org-glance-partition:representation it) derivations)))
     (when-let (choice (condition-case nil
                           (if reprs
                               (completing-read "Choose derivation: " reprs nil t)
                             (user-error "Derivations not found"))
                         (quit nil)))
-      (org-glance-derivation:from-string choice))))
+      (org-glance-partition:from-string choice))))
 
 (cl-defun org-glance-world:update-derivation (world derivation)
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-derivation)
+  (cl-check-type derivation org-glance-partition)
 
   (org-glance-world:with-locked-derivation world derivation
     (let* ((location (org-glance-world:locate-derivation world derivation))
@@ -199,18 +196,13 @@
 (cl-defun org-glance-world:backfill (world)
   (cl-check-type world org-glance-world)
 
-  (let ((changelog (org-glance- world :changelog)))
-    (dolist-with-progress-reporter (event (reverse (org-glance- changelog :events)))
-        "Backfill"
-      (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
-        (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
-          (cl-typecase event
-            (org-glance-event:RM nil)
-            (org-glance-event:PUT (org-glance-world:make-derivations world headline))
-            (org-glance-event:UPDATE (org-glance-world:make-derivations world headline))))))
-
-    ;; TODO reset all offsets
-    ;; (dolist (derivation (org-glance-world:derivations world)))
-    ))
+  (dolist-with-progress-reporter (event (org-glance-world:events world))
+      "Backfill"
+    (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
+      (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
+        (cl-typecase event
+          (org-glance-event:RM nil)
+          (org-glance-event:PUT (org-glance-world:make-derivations world headline))
+          (org-glance-event:UPDATE (org-glance-world:make-derivations world headline)))))))
 
 (provide 'org-glance-world)

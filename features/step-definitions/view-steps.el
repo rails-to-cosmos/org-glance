@@ -121,11 +121,11 @@
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
     (let ((world (org-glance-test:get-world world-name))
-          (derivation (org-glance-derivation:from-key-value dimension-name view-name)))
+          (derivation (org-glance-partition:from-key-value dimension-name view-name)))
       (org-glance-world:materialize world derivation))))
 
 (Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name))
-              (derivation (org-glance-derivation:from-key-value dimension-name view-name)))
+              (derivation (org-glance-partition:from-key-value dimension-name view-name)))
           (should (f-exists? (org-glance-world:locate-derivation world derivation))))))

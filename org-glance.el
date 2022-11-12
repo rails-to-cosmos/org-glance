@@ -70,13 +70,8 @@
 
 (cl-defun org-glance-capture ()
   (interactive)
-  (org-glance-world:capture org-glance-current-world))
-
-
-;; (cl-defun org-glance-capture-current ()
-;;   (interactive)
-;;   (org-store-link t t)
-;;   (org-glance-world:capture org-glance-current-world))
+  (org-glance-world:capture org-glance-current-world
+    :text (apply #'org-link-make-string (org-store-link t t))))
 
 (cl-defun org-glance-materialize ()
   (interactive)
@@ -111,7 +106,8 @@
   (clrhash org-glance-view--cache)
   (let ((world (org-glance-world:get-or-create org-glance-directory)))
     (setf (org-glance- world :dimensions) org-glance-dimensions)
-    (setq org-glance-current-world world)))
+    (setq org-glance-current-world world)
+    (garbage-collect)))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

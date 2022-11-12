@@ -8,35 +8,35 @@
     ((name :type symbol :initarg :name)
      (form :type list   :initarg :form)))
 
-(org-glance-class org-glance-derivation nil
+(org-glance-class org-glance-partition nil
     ((dimension :type string :initarg :dimension)
      (value :type string :initarg :value)))
 
-(cl-defun org-glance-derivation:representation (derivation)
-  (cl-check-type derivation org-glance-derivation)
+(cl-defun org-glance-partition:representation (partition)
+  (cl-check-type partition org-glance-partition)
 
   (downcase (format "%s=%s"
-                    (org-glance- derivation :dimension)
-                    (org-glance- derivation :value))))
+                    (org-glance- partition :dimension)
+                    (org-glance- partition :value))))
 
-(cl-defun org-glance-derivation:filename (derivation)
-  (cl-check-type derivation org-glance-derivation)
+(cl-defun org-glance-partition:filename (partition)
+  (cl-check-type partition org-glance-partition)
 
-  (f-join (org-glance- derivation :dimension)
-          (concat (org-glance- derivation :value) ".org")))
+  (f-join (org-glance- partition :dimension)
+          (concat (org-glance- partition :value) ".org")))
 
-(cl-defun org-glance-derivation:from-string (s)
+(cl-defun org-glance-partition:from-string (s)
   (cl-check-type s string)
 
   (cl-destructuring-bind (dimension value)
       (--> s
            (downcase it)
            (s-split-up-to "=" it 2))
-    (org-glance-derivation :dimension dimension
+    (org-glance-partition :dimension dimension
                            :value value)))
 
-(cl-defun org-glance-derivation:from-key-value (k v)
-  (org-glance-derivation:from-string (downcase (format "%s=%s" k v))))
+(cl-defun org-glance-partition:from-key-value (k v)
+  (org-glance-partition:from-string (downcase (format "%s=%s" k v))))
 
 (cl-defun org-glance-dimension:apply (dimension headline)
   (cl-check-type dimension org-glance-dimension)
