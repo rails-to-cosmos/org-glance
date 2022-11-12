@@ -23,14 +23,14 @@
       (goto-char (point-min))
       (condition-case nil
           (while (or (null (org-glance-headline-at-point))
-                     (not (string= (org-glance- (org-glance-headline-at-point) :title) title)))
+                     (not (string= (org-glance? (org-glance-headline-at-point) :title) title)))
             (re-search-forward title-prefix))
         (search-failed (error "Headline not found: %s" title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" contents? should be$"
       (lambda (name expected-contents)
         (let* ((headline (gethash name org-glance-test-headlines))
-               (contents (org-glance- headline :contents)))
+               (contents (org-glance? headline :contents)))
           (should (string= (with-temp-buffer
                              (insert expected-contents)
                              (org-align-tags 'all)
@@ -56,7 +56,7 @@
 
 (Then "^headline at point should contain links?$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :linked?))))
+        (should (org-glance? (org-glance-headline-at-point) :linked?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should contain links?$"
       (lambda (headline-title)
@@ -69,7 +69,7 @@
 
 (Then "^headline at point should be encrypted$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :encrypted?))))
+        (should (org-glance? (org-glance-headline-at-point) :encrypted?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be encrypted$"
       (lambda (headline-title)
@@ -78,7 +78,7 @@
 
 (Then "^headline at point should not be encrypted$"
       (lambda ()
-        (should (not (org-glance- (org-glance-headline-at-point) :encrypted?)))))
+        (should (not (org-glance? (org-glance-headline-at-point) :encrypted?)))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be encrypted$"
       (lambda (headline-title)
@@ -87,11 +87,11 @@
 
 (Then "^headline at point should be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :store?))))
+        (should (org-glance? (org-glance-headline-at-point) :store?))))
 
 (Then "^headline at point should not be propertized$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :store?))))
+        (should (org-glance? (org-glance-headline-at-point) :store?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be propertized$"
       (lambda (headline-title)
@@ -105,11 +105,11 @@
 
 (Then "^headline at point should be archived$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :archived?))))
+        (should (org-glance? (org-glance-headline-at-point) :archived?))))
 
 (Then "^headline at point should not be archived$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :archived?))))
+        (should (org-glance? (org-glance-headline-at-point) :archived?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be archived$"
       (lambda (headline-title)
@@ -123,11 +123,11 @@
 
 (Then "^headline at point should be commented$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :commented?))))
+        (should (org-glance? (org-glance-headline-at-point) :commented?))))
 
 (Then "^headline at point should not be commented$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :commented?))))
+        (should (org-glance? (org-glance-headline-at-point) :commented?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be commented$"
       (lambda (headline-title)
@@ -141,11 +141,11 @@
 
 (Then "^headline at point should be closed$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :closed?))))
+        (should (org-glance? (org-glance-headline-at-point) :closed?))))
 
 (Then "^headline at point should not be closed$"
       (lambda ()
-        (should (org-glance- (org-glance-headline-at-point) :closed?))))
+        (should (org-glance? (org-glance-headline-at-point) :closed?))))
 
 (Then "^headline \"\\([^\"]+\\)\" should be closed$"
       (lambda (headline-title)
@@ -161,7 +161,7 @@
   (lambda (expected-title)
     (should
      (string=
-      (org-glance- (org-glance-headline-at-point) :title)
+      (org-glance? (org-glance-headline-at-point) :title)
       expected-title))))
 
 (Then "^the title of headline \"\\([^\"]+\\)\" should be \"\\([^\"]+\\)\"$"
@@ -187,7 +187,7 @@
 (Then "^headline at point should be an? \\([^\"]+\\)$"
       (lambda (expected-class)
         (let* ((headline (org-glance-headline-at-point))
-               (class (org-glance- headline :tags)))
+               (class (org-glance? headline :tags)))
           (should (member expected-class class)))))
 
 (Then "^the contents of headline \"\\([^\"]+\\)\" should be$"
@@ -235,13 +235,13 @@
       (lambda (title)
         (should (--any (eq it t)
                        (org-glance-headline:map (headline)
-                         (string= (org-glance- headline :title) title))))))
+                         (string= (org-glance? headline :title) title))))))
 
 (Then "^headline \"\\([^\"]+\\)\" should not be in current buffer$"
       (lambda (title)
         (should (not (--any (eq it t)
                             (org-glance-headline:map (headline)
-                              (string= (org-glance- headline :title) title)))))))
+                              (string= (org-glance? headline :title) title)))))))
 
 (When "^I? ?rename headline \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (from-title to-title)

@@ -23,6 +23,7 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO Import including attachments
 * TODO [#A] Overview dimensions and mode
 * TODO [#A] Relations
 * TODO [#B] Delete headlines

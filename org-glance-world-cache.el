@@ -13,8 +13,8 @@
 
 (cl-defun org-glance-world-cache:put (world)
   (cl-typecase world
-    (org-glance-world (org-glance-log :cache "[org-glance-world] cache put: %s" (org-glance- world :location))
-                      (puthash (org-glance- world :location) world org-glance-world--cache)
+    (org-glance-world (org-glance-log :cache "[org-glance-world] cache put: %s" (org-glance? world :location))
+                      (puthash (org-glance? world :location) world org-glance-world--cache)
                       world)
     (otherwise nil)))
 

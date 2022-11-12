@@ -28,8 +28,8 @@
 
 (cl-defun org-glance-view-cache:put (view)
   (cl-check-type view org-glance-view)
-  (let ((key (org-glance-view--key :type (org-glance- view :type)
-                                   :location (org-glance- view :location))))
+  (let ((key (org-glance-view--key :type (org-glance? view :type)
+                                   :location (org-glance? view :location))))
     (org-glance-log :cache "[org-glance-view] cache put: %s" key)
     (puthash key view org-glance-view--cache)))
 

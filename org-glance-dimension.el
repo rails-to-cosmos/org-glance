@@ -16,14 +16,14 @@
   (cl-check-type partition org-glance-partition)
 
   (downcase (format "%s=%s"
-                    (org-glance- partition :dimension)
-                    (org-glance- partition :value))))
+                    (org-glance? partition :dimension)
+                    (org-glance? partition :value))))
 
 (cl-defun org-glance-partition:filename (partition)
   (cl-check-type partition org-glance-partition)
 
-  (f-join (org-glance- partition :dimension)
-          (concat (org-glance- partition :value) ".org")))
+  (f-join (org-glance? partition :dimension)
+          (concat (org-glance? partition :value) ".org")))
 
 (cl-defun org-glance-partition:from-string (s)
   (cl-check-type s string)
@@ -42,7 +42,7 @@
   (cl-check-type dimension org-glance-dimension)
   (cl-check-type headline org-glance-headline-header)
 
-  (let ((result (eval (org-glance- dimension :form) (a-list 'headline headline))))
+  (let ((result (eval (org-glance? dimension :form) (a-list 'headline headline))))
     (--map (thread-last it
              (format "%s")
              (downcase)
@@ -57,10 +57,10 @@
   (cl-check-type dimension org-glance-dimension)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
 
-  (cons (org-glance- dimension :name) (org-glance-dimension:apply dimension headline)))
+  (cons (org-glance? dimension :name) (org-glance-dimension:apply dimension headline)))
 
 (cl-defun org-glance-dimension:make-predicate (dimension value)
-  (let ((name (org-glance- dimension :name)))
+  (let ((name (org-glance? dimension :name)))
     (cl-typecase value
       (symbol `(member (quote ,value) ,name))
       (t `(member ,value ,name)))))

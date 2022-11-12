@@ -15,7 +15,7 @@
 
 (cl-defun org-glance-changelog:flatten (changelog)
   "Return list of LOG events deduplicated."
-  (org-glance- changelog :events))
+  (org-glance? changelog :events))
 
 (cl-defun org-glance-changelog:contents (changelog)
   "Return CHANGELOG contents as a string."
@@ -29,7 +29,7 @@
 (cl-defmacro org-glance-changelog:push (changelog event)
   "Append ENTRIES to LOG."
   (declare (indent 1))
-  `(push ,event (org-glance- ,changelog :events)))
+  `(push ,event (org-glance? ,changelog :events)))
 
 (cl-defun org-glance-changelog:read (location)
   (declare (indent 1))
@@ -51,13 +51,13 @@
         (insert contents)))))
 
 (cl-defun org-glance-changelog:merge (lhs rhs)
-  (cl-assert (eq (org-glance- lhs :test) (org-glance- rhs :test)))
+  (cl-assert (eq (org-glance? lhs :test) (org-glance? rhs :test)))
   (org-glance-changelog
-   :events (append (org-glance- lhs :events) (org-glance- rhs :events))
-   :test (org-glance- lhs :test)))
+   :events (append (org-glance? lhs :events) (org-glance? rhs :events))
+   :test (org-glance? lhs :test)))
 
 (cl-defun org-glance-changelog:last (changelog)
-  (car (org-glance- changelog :events)))
+  (car (org-glance? changelog :events)))
 
 (cl-defun org-glance-changelog:filter (changelog func)
   (cl-loop
@@ -66,9 +66,9 @@
      collect event into events
      finally return (org-glance-changelog
                      :events events
-                     :test (org-glance- changelog :test))))
+                     :test (org-glance? changelog :test))))
 
 (cl-defun org-glance-changelog:length (changelog)
-  (length (org-glance- changelog :events)))
+  (length (org-glance? changelog :events)))
 
 (provide 'org-glance-changelog)

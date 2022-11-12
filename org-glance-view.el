@@ -11,7 +11,7 @@
   (cl-check-type type org-glance-partition)
   (cl-check-type offset org-glance-type:offset)
 
-  (thunk-let* ((location (file-truename (f-join (org-glance- world :location) location)))
+  (thunk-let* ((location (file-truename (f-join (org-glance? world :location) location)))
                (key (org-glance-view--key :type type :location location))
                (cached-view (org-glance-view-cache:get key))
                (new-view (org-glance-view:create world type location offset)))

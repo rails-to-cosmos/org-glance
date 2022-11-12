@@ -156,19 +156,19 @@
 
   (cl-typecase headline
     (org-glance-headline (org-glance-headline-header
-                          :hash (org-glance- headline :hash)
-                          :title (org-glance- headline :title)
-                          :state (org-glance- headline :state)
-                          :tags (org-glance- headline :tags)
-                          :timestamps (org-glance- headline :timestamps)
-                          :active? (org-glance- headline :active?)
-                          :repeated? (org-glance- headline :repeated?)
-                          :commented? (org-glance- headline :commented?)
-                          :archived? (org-glance- headline :archived?)
-                          :closed? (org-glance- headline :closed?)
-                          :encrypted? (org-glance- headline :encrypted?)
-                          :linked? (org-glance- headline :linked?)
-                          :store? (org-glance- headline :store?)))
+                          :hash (org-glance? headline :hash)
+                          :title (org-glance? headline :title)
+                          :state (org-glance? headline :state)
+                          :tags (org-glance? headline :tags)
+                          :timestamps (org-glance? headline :timestamps)
+                          :active? (org-glance? headline :active?)
+                          :repeated? (org-glance? headline :repeated?)
+                          :commented? (org-glance? headline :commented?)
+                          :archived? (org-glance? headline :archived?)
+                          :closed? (org-glance? headline :closed?)
+                          :encrypted? (org-glance? headline :encrypted?)
+                          :linked? (org-glance? headline :linked?)
+                          :store? (org-glance? headline :store?)))
     (org-glance-headline-header headline)))
 
 (cl-defun org-glance-ast:get-buffer-ast ()
@@ -326,7 +326,7 @@
    (org-glance-headline-at-point)))
 
 (cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
-  (insert (org-glance- headline :contents) "\n"))
+  (insert (org-glance? headline :contents) "\n"))
 
 ;; (defvar org-glance-headline--bindat-spec
 ;;   '((title str 255)
@@ -342,13 +342,13 @@
 ;;   (cl-flet ((bool->int (bool) (if (null bool) 0 1)))
 ;;     (bindat-pack
 ;;      org-glance-headline--bindat-spec
-;;      (a-list 'title (string-as-unibyte (org-glance- headline :title))
-;;              'archived (bool->int (org-glance- headline :archived?))
-;;              'commented (bool->int (org-glance- headline :commented?))
-;;              'closed (bool->int (org-glance- headline :closed?))
-;;              'encrypted (bool->int (org-glance- headline :encrypted?))
-;;              'linked (bool->int (org-glance- headline :linked?))
-;;              'store (bool->int (org-glance- headline :store?))))))
+;;      (a-list 'title (string-as-unibyte (org-glance? headline :title))
+;;              'archived (bool->int (org-glance? headline :archived?))
+;;              'commented (bool->int (org-glance? headline :commented?))
+;;              'closed (bool->int (org-glance? headline :closed?))
+;;              'encrypted (bool->int (org-glance? headline :encrypted?))
+;;              'linked (bool->int (org-glance? headline :linked?))
+;;              'store (bool->int (org-glance? headline :store?))))))
 
 ;; (cl-defmethod org-glance-headline:unpack (bindat-raw)
 ;;   (bindat-unpack org-glance-headline--bindat-spec bindat-raw))

@@ -5,10 +5,10 @@
 (require 'eieio)
 (require 'thunk)
 
-(defmacro org-glance- (object &rest slots)
+(defmacro org-glance? (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
-Example: (org-glance- view :world :location)"
+Example: (org-glance? view :world :location)"
   (declare (indent 1))
   (cl-reduce
    (lambda (acc slot)
@@ -31,17 +31,17 @@ Example: (org-glance- view :world :location)"
     (pcase set-slots
       (`() (user-error "Set slots should contain more than 1 element"))
       (`(,value) `(progn
-                    (setf (org-glance- ,object ,@get-slots) ,value)
+                    (setf (org-glance? ,object ,@get-slots) ,value)
                     ,value))
       (value `(progn
-                (setf (org-glance- ,object ,@get-slots) (org-glance- ,@value))
+                (setf (org-glance? ,object ,@get-slots) (org-glance? ,@value))
                 ,value)))))
 
 (defmacro org-glance++ (object &rest slots)
-  `(cl-incf (org-glance- ,object ,@slots)))
+  `(cl-incf (org-glance? ,object ,@slots)))
 
 (defmacro org-glance-- (object &rest slots)
-  `(cl-decf (org-glance- ,object ,@slots)))
+  `(cl-decf (org-glance? ,object ,@slots)))
 
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."

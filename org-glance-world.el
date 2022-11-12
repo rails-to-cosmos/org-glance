@@ -77,7 +77,7 @@
 (cl-defun org-glance-world:capture-location (world)
   (cl-check-type world org-glance-world)
 
-  (f-join (org-glance- world :location) "capture.org"))
+  (f-join (org-glance? world :location) "capture.org"))
 
 (cl-defun org-glance-world:capture (world &key (template "* %?")
                                             (text (cond ((use-region-p) (buffer-substring-no-properties
@@ -99,22 +99,13 @@
     (when finalize
       (org-capture-finalize))))
 
-(cl-defun org-glance-world:choose-headline--where (world query)
-  "TODO Should be consistent with dimensions."
-  (declare (indent 1))
-  (cl-check-type world org-glance-world)
-  (cl-check-type query string)
-
-  (let ((partition (org-glance-partition:from-string query)))
-    (org-glance-world:choose-headline--derived world partition)))
-
-(cl-defun org-glance-world:choose-headline--derived (world partition)
+(cl-defun org-glance-world:choose-headline (world partition)
   "TODO Should be consistent with dimensions."
   (declare (indent 1))
   (cl-check-type world org-glance-world)
   (cl-check-type partition org-glance-partition)
 
-  (let ((dummies (--map (cons (org-glance- it :title) (org-glance- it :hash))
+  (let ((dummies (--map (cons (org-glance? it :title) (org-glance? it :hash))
                         (org-glance-world:headlines--derived world partition))))
     (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation partition)) dummies)
       (a-get dummies)
@@ -123,19 +114,21 @@
 (cl-defun org-glance-world:jump (world)
   (cl-check-type world org-glance-world)
 
-  (let* ((headline (org-glance-world:choose-headline--where world "linked=t"))
-         (links (org-glance- headline :links))
-         (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance- it :title) links))))
-                                             (--drop-while (not (string= link-title (org-glance- it :title))) links)))
+  (let* ((partition (org-glance-partition:from-string "linked=t"))
+         (headline (org-glance-world:choose-headline world partition))
+         (links (org-glance? headline :links))
+         (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance? it :title) links))))
+                                             (--drop-while (not (string= link-title (org-glance? it :title))) links)))
                      ((= (length links) 1) (car links))
                      (t (user-error "Unable to find links in this headline")))))
-    (org-link-open-from-string (org-glance- link :org-link))))
+    (org-link-open-from-string (org-glance? link :org-link))))
 
 (cl-defun org-glance-world:extract-headline (world)
   (cl-check-type world org-glance-world)
 
-  (let* ((headline (org-glance-world:choose-headline--where world "store=t"))
-         (store (org-glance- headline :store)))
+  (let* ((partition (org-glance-partition:from-string "store=t"))
+         (headline (org-glance-world:choose-headline world partition))
+         (store (org-glance? headline :store)))
     (condition-case nil
         (while t
           (kill-new (alist-get (org-completing-read "Extract property (press C-g to exit): " store) store nil nil #'string=)))
@@ -146,14 +139,14 @@
 (cl-defun org-glance-world:partitions (world)
   (cl-check-type world org-glance-world)
 
-  (or (org-glance- world :partitions)
+  (or (org-glance? world :partitions)
       (org-glance! world :partitions := (--map (--> it
                                                      (file-name-sans-extension it)
                                                      (list (file-name-nondirectory (f-parent it)) (file-name-nondirectory it))
                                                      (-zip-lists '(:dimension :value) it)
                                                      (-flatten it)
                                                      (apply #'org-glance-partition it))
-                                                (directory-files-recursively (f-join (org-glance- world :location) "views") ".*\\.org$")))))
+                                                (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
 
 
 (cl-defun org-glance-world:choose-partition (world &optional dimension)
@@ -161,7 +154,7 @@
   (cl-check-type dimension (org-glance-type:optional string))
 
   (thunk-let* ((partitions (cl-typecase dimension
-                              (string (--filter (string= (org-glance- it :dimension) dimension)
+                              (string (--filter (string= (org-glance? it :dimension) dimension)
                                                 (org-glance-world:partitions world)))
                               (otherwise (org-glance-world:partitions world))))
                (reprs (--map (org-glance-partition:representation it) partitions)))
@@ -198,8 +191,8 @@
 
   (dolist-with-progress-reporter (event (org-glance-world:events world))
       "Backfill"
-    (thunk-let ((headline (org-glance-world:get-headline world (org-glance- event :headline :hash))))
-      (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
+    (thunk-let ((headline (org-glance-world:get-headline world (org-glance? event :headline :hash))))
+      (when (org-glance-world:headline-exists? world (org-glance? event :headline :hash))
         (cl-typecase event
           (org-glance-event:RM nil)
           (org-glance-event:PUT (org-glance-world:make-partitions world headline))

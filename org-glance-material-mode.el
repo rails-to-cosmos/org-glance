@@ -29,6 +29,6 @@ editor."
          (midx (org-glance-view:marker-at-point view (- change-beg 1))))
     (org-glance-view:set-marker-changed view midx t)
     (org-glance-view:shift-markers view midx diff)
-    (org-glance-log :markers "Markers:\n%s" (pp-to-string (org-glance- view :markers)))))
+    (org-glance-log :markers "Markers:\n%s" (pp-to-string (org-glance? view :markers)))))
 
 (provide 'org-glance-material-mode)
