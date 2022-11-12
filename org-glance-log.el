@@ -1,24 +1,24 @@
 (require 'a)
 
 (defconst org-glance-log:loggers
-  (a-list :events t
-          :world t
-          :headlines t
-          :cache t
-          :dimensions t
-          :contents t
-          :markers t
-          :buffers t
-          :performance t
-          :offsets t
-          :test t))
+  (a-list :events nil
+          :world nil
+          :headlines nil
+          :cache nil
+          :dimensions nil
+          :contents nil
+          :markers nil
+          :buffers nil
+          :performance nil
+          :offsets nil
+          :test nil))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))
   `(let ((result (format ,@forms)))
      (with-current-buffer (get-buffer-create (format "*org-glance-log%s*" ,logger))
        (goto-char (point-max))
-       (insert (format-time-string "%H:%M:%S_%6N") " " result "\n"))))
+       (insert (format-time-string "%H:%M:%S+%6N") " " result "\n"))))
 
 (cl-defmacro org-glance-log (logger &rest args)
   (declare (indent 2))

@@ -106,7 +106,7 @@
   (cl-check-type partition org-glance-partition)
 
   (let ((dummies (--map (cons (org-glance? it :title) (org-glance? it :hash))
-                        (org-glance-world:headlines--derived world partition))))
+                        (org-glance-world:get-partition-headlines world partition))))
     (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation partition)) dummies)
       (a-get dummies)
       (org-glance-world:get-headline world))))
@@ -171,9 +171,7 @@
 
   (org-glance-world:with-locked-partition world partition
     (let* ((location (org-glance-world:locate-partition world partition))
-           (header (thread-first location
-                     (org-glance-view:locate-header)
-                     (org-glance-view:read-header)))
+           (header (org-glance-world:read-partition-header world partition))
            (type (a-get header :type))
            (offset (a-get header :offset))
            (world-offset (org-glance-world:offset world)))
