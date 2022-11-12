@@ -43,9 +43,9 @@
       :initarg :dimensions)
 
      ;; in-memory caches
-     (derivations
+     (partitions
       :type (org-glance-type:list-of org-glance-partition)
-      :initarg :derivations
+      :initarg :partitions
       :initform nil)
      (headlines
       :type hash-table
@@ -74,26 +74,26 @@
       (org-glance- event :offset)
     (org-glance-offset:current)))
 
-(cl-defmacro org-glance-world:with-locked-derivation (world derivation &rest forms)
+(cl-defmacro org-glance-world:with-locked-partition (world partition &rest forms)
   (declare (indent 2))
   `(progn
      (cl-check-type ,world org-glance-world)
-     (cl-check-type ,derivation org-glance-partition)
+     (cl-check-type ,partition org-glance-partition)
 
      (when (--> ,world
-                (org-glance-world:locate-derivation it ,derivation)
+                (org-glance-world:locate-partition it ,partition)
                 (get-file-buffer it)
                 (cond ((null it) t)
                       ((buffer-live-p it) (kill-buffer it))))
        ,@forms)))
 
-(cl-defun org-glance-world:locate-derivation (world derivation)
+(cl-defun org-glance-world:locate-partition (world partition)
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
 
-  (f-join (org-glance- world :location) "views" (org-glance-partition:filename derivation)))
+  (f-join (org-glance- world :location) "views" (org-glance-partition:filename partition)))
 
-(cl-defun org-glance-world:make-derivations (world headline)
+(cl-defun org-glance-world:make-partitions (world headline)
   (cl-check-type world org-glance-world)
   (cl-check-type headline org-glance-headline)
 
@@ -101,16 +101,15 @@
      for dimension in dimensions
      for predicates = (org-glance-dimension:predicates dimension headline)
      do (cl-loop for predicate in predicates
-           for partition = (org-glance-dimension:validate predicate headline dimensions)
-           when partition
-           do (let* ((derivation (org-glance-partition
-                                  :dimension (format "%s" (org-glance- dimension :name))
-                                  :value partition))
-                     (location (org-glance-world:locate-derivation world derivation)))
-                (unless (f-exists? location)
-                  (org-glance-log :dimensions "Create derived view %s in %s" derivation location)
-                  (push derivation (org-glance- world :derivations))
-                  (org-glance-view:get-or-create world derivation location (org-glance-offset:zero)))))))
+           do (when-let (value (org-glance-dimension:validate predicate headline dimensions))
+                (let* ((partition (org-glance-partition
+                                   :dimension (format "%s" (org-glance- dimension :name))
+                                   :value value))
+                       (location (org-glance-world:locate-partition world partition)))
+                  (unless (f-exists? location)
+                    (org-glance-log :dimensions "Create derived view %s in %s" partition location)
+                    (push partition (org-glance- world :partitions))
+                    (org-glance-view:get-or-create world partition location (org-glance-offset:zero))))))))
 
 (cl-defun org-glance-world:persist (world)
   "Persist WORLD changes.
@@ -150,14 +149,14 @@ Return last committed offset."
                               `(("GLANCE_ID" ,id)
                                 ("DIR" ,(concat "../../resources/" id))))))
              (org-glance-world:save-headline world headline)
-             (org-glance-world:make-derivations world headline)
+             (org-glance-world:make-partitions world headline)
              (org-glance-changelog:push changelog
                ;; substitute event with custom properties
                (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
 
           (org-glance-event:UPDATE
            (org-glance-world:save-headline world headline)
-           (org-glance-world:make-derivations world headline)
+           (org-glance-world:make-partitions world headline)
            (org-glance-world:delete-headline world source-hash)
            (org-glance-changelog:push changelog event)))))
 
@@ -342,29 +341,29 @@ achieved by calling `org-glance-world:persist' method."
 
   (f-exists? (org-glance-world:locate-headline world headline)))
 
-(cl-defun org-glance-world:make-predicate (world derivation)
+(cl-defun org-glance-world:make-predicate (world partition)
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
 
   (cl-loop for dimension in (org-glance- world :dimensions)
-     when (string= (org-glance- derivation :dimension)
+     when (string= (org-glance- partition :dimension)
                    (format "%s" (org-glance- dimension :name)))
-     return (org-glance-dimension:make-predicate dimension (org-glance- derivation :value))))
+     return (org-glance-dimension:make-predicate dimension (org-glance- partition :value))))
 
-(cl-defun org-glance-world:validate-headline (world derivation headline)
+(cl-defun org-glance-world:validate-headline (world partition headline)
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
   (cl-check-type headline org-glance-headline-header)
 
-  (let ((predicate (org-glance-world:make-predicate world derivation)))
+  (let ((predicate (org-glance-world:make-predicate world partition)))
     (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))))
 
-(cl-defun org-glance-world:headlines--derived (world derivation)
+(cl-defun org-glance-world:headlines--derived (world partition)
   (declare (indent 1))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
 
-  (let ((predicate (org-glance-world:make-predicate world derivation))
+  (let ((predicate (org-glance-world:make-predicate world partition))
         (headlines (org-glance-world:headlines world)))
     (cl-loop for headline in headlines
        when (org-glance-dimension:validate predicate headline (org-glance- world :dimensions))

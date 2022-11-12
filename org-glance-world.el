@@ -33,20 +33,20 @@
 
   world)
 
-(cl-defun org-glance-world:materialize (world &optional (derivation (org-glance-world:choose-derivation world)))
+(cl-defun org-glance-world:materialize (world &optional (partition (org-glance-world:choose-partition world)))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation (org-glance-type:optional org-glance-partition))
+  (cl-check-type partition (org-glance-type:optional org-glance-partition))
 
-  (cl-typecase derivation
-    (org-glance-partition (find-file (org-glance-world:update-derivation world derivation)))
+  (cl-typecase partition
+    (org-glance-partition (find-file (org-glance-world:update-partition world partition)))
     (otherwise nil)))
 
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)
 
-  (let ((derivation (org-glance-world:choose-derivation world)))
-    (cl-typecase derivation
-      (org-glance-partition (let ((location (org-glance-world:update-derivation world derivation))
+  (let ((partition (org-glance-world:choose-partition world)))
+    (cl-typecase partition
+      (org-glance-partition (let ((location (org-glance-world:update-partition world partition))
                                    (lexical-binding nil))
                                (let ((org-agenda-files (list location))
                                      (org-agenda-overriding-header "org-glance agenda")
@@ -105,18 +105,18 @@
   (cl-check-type world org-glance-world)
   (cl-check-type query string)
 
-  (let ((derivation (org-glance-partition:from-string query)))
-    (org-glance-world:choose-headline--derived world derivation)))
+  (let ((partition (org-glance-partition:from-string query)))
+    (org-glance-world:choose-headline--derived world partition)))
 
-(cl-defun org-glance-world:choose-headline--derived (world derivation)
+(cl-defun org-glance-world:choose-headline--derived (world partition)
   "TODO Should be consistent with dimensions."
   (declare (indent 1))
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
 
   (let ((dummies (--map (cons (org-glance- it :title) (org-glance- it :hash))
-                        (org-glance-world:headlines--derived world derivation))))
-    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation derivation)) dummies)
+                        (org-glance-world:headlines--derived world partition))))
+    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation partition)) dummies)
       (a-get dummies)
       (org-glance-world:get-headline world))))
 
@@ -143,11 +143,11 @@
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
 
-(cl-defun org-glance-world:derivations (world)
+(cl-defun org-glance-world:partitions (world)
   (cl-check-type world org-glance-world)
 
-  (or (org-glance- world :derivations)
-      (org-glance! world :derivations := (--map (--> it
+  (or (org-glance- world :partitions)
+      (org-glance! world :partitions := (--map (--> it
                                                      (file-name-sans-extension it)
                                                      (list (file-name-nondirectory (f-parent it)) (file-name-nondirectory it))
                                                      (-zip-lists '(:dimension :value) it)
@@ -156,28 +156,28 @@
                                                 (directory-files-recursively (f-join (org-glance- world :location) "views") ".*\\.org$")))))
 
 
-(cl-defun org-glance-world:choose-derivation (world &optional dimension)
+(cl-defun org-glance-world:choose-partition (world &optional dimension)
   (cl-check-type world org-glance-world)
   (cl-check-type dimension (org-glance-type:optional string))
 
-  (thunk-let* ((derivations (cl-typecase dimension
+  (thunk-let* ((partitions (cl-typecase dimension
                               (string (--filter (string= (org-glance- it :dimension) dimension)
-                                                (org-glance-world:derivations world)))
-                              (otherwise (org-glance-world:derivations world))))
-               (reprs (--map (org-glance-partition:representation it) derivations)))
+                                                (org-glance-world:partitions world)))
+                              (otherwise (org-glance-world:partitions world))))
+               (reprs (--map (org-glance-partition:representation it) partitions)))
     (when-let (choice (condition-case nil
                           (if reprs
-                              (completing-read "Choose derivation: " reprs nil t)
-                            (user-error "Derivations not found"))
+                              (completing-read "Choose partition: " reprs nil t)
+                            (user-error "Partitions not found"))
                         (quit nil)))
       (org-glance-partition:from-string choice))))
 
-(cl-defun org-glance-world:update-derivation (world derivation)
+(cl-defun org-glance-world:update-partition (world partition)
   (cl-check-type world org-glance-world)
-  (cl-check-type derivation org-glance-partition)
+  (cl-check-type partition org-glance-partition)
 
-  (org-glance-world:with-locked-derivation world derivation
-    (let* ((location (org-glance-world:locate-derivation world derivation))
+  (org-glance-world:with-locked-partition world partition
+    (let* ((location (org-glance-world:locate-partition world partition))
            (header (thread-first location
                      (org-glance-view:locate-header)
                      (org-glance-view:read-header)))
@@ -202,7 +202,7 @@
       (when (org-glance-world:headline-exists? world (org-glance- event :headline :hash))
         (cl-typecase event
           (org-glance-event:RM nil)
-          (org-glance-event:PUT (org-glance-world:make-derivations world headline))
-          (org-glance-event:UPDATE (org-glance-world:make-derivations world headline)))))))
+          (org-glance-event:PUT (org-glance-world:make-partitions world headline))
+          (org-glance-event:UPDATE (org-glance-world:make-partitions world headline)))))))
 
 (provide 'org-glance-world)
