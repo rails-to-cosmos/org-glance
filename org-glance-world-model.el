@@ -93,7 +93,7 @@
 
   (f-join (org-glance? world :location) "views" (org-glance-partition:filename partition)))
 
-(cl-defun org-glance-world:read-partition-header (world partition)
+(cl-defun org-glance-world:read-partition (world partition)
   (-> (org-glance-world:locate-partition world partition)
       (org-glance-view:locate-header)
       (org-glance-view:read-header)))
