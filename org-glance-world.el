@@ -153,11 +153,11 @@
   (cl-check-type world org-glance-world)
   (cl-check-type dimension (org-glance-type:optional string))
 
-  (thunk-let* ((partitions (cl-typecase dimension
-                              (string (--filter (string= (org-glance? it :dimension) dimension)
-                                                (org-glance-world:partitions world)))
-                              (otherwise (org-glance-world:partitions world))))
-               (reprs (--map (org-glance-partition:representation it) partitions)))
+  (let* ((partitions (cl-typecase dimension
+                       (string (--filter (string= (org-glance? it :dimension) dimension)
+                                         (org-glance-world:partitions world)))
+                       (otherwise (org-glance-world:partitions world))))
+         (reprs (--map (org-glance-partition:representation it) partitions)))
     (when-let (choice (condition-case nil
                           (if reprs
                               (completing-read "Choose partition: " reprs nil t)
@@ -179,7 +179,7 @@
     (when (org-glance-offset:less? view-offset world-offset)
       (org-glance-world:with-locked-partition world partition
         (org-glance:with-file-overwrite location
-          (org-glance-view:mark view)
+          (org-glance-view:mark! view)
           (org-glance-view:fetch view)
           (org-glance-view:save-header view)
           (org-glance-view:save-markers view))))

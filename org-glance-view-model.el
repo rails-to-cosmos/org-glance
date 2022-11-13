@@ -252,19 +252,24 @@
         (org-glance-vector:push-back! markers marker)))
     markers))
 
-(cl-defun org-glance-view:mark (view)
-  "Create effective representation of VIEW headline positions."
+(cl-defun org-glance-view:set-markers! (view markers)
   (cl-check-type view org-glance-view)
+  (cl-check-type markers org-glance-vector)
 
   (cl-loop
-     with markers = (or (org-glance-view:load-markers view)
-                        (org-glance-view:make-markers))
      with hash->midx = (make-hash-table :test #'equal)
      for midx below (org-glance-vector:size markers)
      for marker = (org-glance-vector:get markers midx)
      do (puthash (org-glance? marker :hash) midx hash->midx)
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
+
+(cl-defun org-glance-view:mark! (view)
+  "Create effective representation of VIEW headline positions."
+  (cl-check-type view org-glance-view)
+
+  (org-glance-view:set-markers! view (or (org-glance-view:load-markers view)
+                                         (org-glance-view:make-markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-log :buffers "Commit buffer: %s" (current-buffer))
