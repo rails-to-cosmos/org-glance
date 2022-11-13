@@ -104,9 +104,9 @@
   vec)
 
 (cl-defun org-glance-vector:non-binary-search (vec v &key
-                                                   (len #'(lambda (vec) (org-glance-vector:size vec)))
-                                                   (key #'(lambda (vec idx) (org-glance? (org-glance-vector:get vec idx) :position)))
-                                                   (l 0)
+                                                       (len #'(lambda (vec) (org-glance-vector:size vec)))
+                                                       (key #'(lambda (vec idx) (org-glance? (org-glance-vector:get vec idx) :position)))
+                                                       (l 0)
                                                        (r (1- (funcall len vec))))
   "Binary search for non-binary persons."
   (declare (indent 2))

@@ -46,9 +46,9 @@
     (--map (thread-last it
              (format "%s")
              (downcase)
-             (s-replace-regexp "[[:blank:][:punct:]]+" "-")
-             (s-replace-regexp "[[:cntrl:]]+" "")
-             (s-replace-regexp "[[:nonascii:]]+" "*"))
+             (replace-regexp-in-string "[[:blank:][:punct:]]+" "-")
+             (replace-regexp-in-string "[[:cntrl:]]+" "")
+             (replace-regexp-in-string "[[:nonascii:]]+" "*"))
            (cl-typecase result
              (atom (list result))
              (otherwise result)))))

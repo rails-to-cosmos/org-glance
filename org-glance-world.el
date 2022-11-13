@@ -1,6 +1,8 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'dash)
+(require 'org)
+(require 'org-agenda)
 (require 'org-glance-headline)
 (require 'org-glance-types)
 (require 'org-glance-world-model)
@@ -44,15 +46,15 @@
 (cl-defun org-glance-world:agenda (world)
   (cl-check-type world org-glance-world)
 
-  (let ((partition (org-glance-world:choose-partition world)))
-    (cl-typecase partition
-      (org-glance-partition (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
-                                  org-agenda-overriding-header "org-glance agenda"
-                                  org-agenda-start-on-weekday nil
-                                  org-agenda-span 21
-                                  org-agenda-start-day "-7d")
-                            (org-agenda-list))
-      (otherwise nil))))
+  (pcase (org-glance-world:choose-partition world)
+    ((and (cl-struct org-glance-partition) partition) (progn
+                                                        (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
+                                                              org-agenda-overriding-header "org-glance agenda"
+                                                              org-agenda-start-on-weekday nil
+                                                              org-agenda-span 21
+                                                              org-agenda-start-day "-7d")
+                                                        (org-agenda-list)))
+    (_ nil)))
 
 (cl-defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
@@ -167,20 +169,22 @@
   (cl-check-type world org-glance-world)
   (cl-check-type partition org-glance-partition)
 
-  (org-glance-world:with-locked-partition world partition
-    (thunk-let* ((location (org-glance-world:locate-partition world partition))
-                 (header (org-glance-world:read-partition world partition))
-                 (type (a-get header :type))
-                 (offset (a-get header :offset))
-                 (world-offset (org-glance-world:offset world)))
+  (thunk-let* ((location (org-glance-world:locate-partition world partition))
+               (header (org-glance-world:read-partition world partition))
+               (type (a-get header :type))
+               (offset (a-get header :offset))
+               (world-offset (org-glance-world:offset world))
+               (view (org-glance-view:get-or-create world type location offset)))
+
+    (org-glance-world:with-locked-partition world partition
       (when (org-glance-offset:less? offset world-offset)
-        (let ((view (org-glance-view:get-or-create world type location offset)))
-          (org-glance:with-file-overwrite location
-            (org-glance-view:mark view)
-            (org-glance-view:fetch view)
-            (org-glance-view:save-header view)
-            (org-glance-view:save-markers view))))
-      location)))
+        (org-glance:with-file-overwrite location
+          (org-glance-view:mark view)
+          (org-glance-view:fetch view)
+          (org-glance-view:save-header view)
+          (org-glance-view:save-markers view))))
+
+    location))
 
 (cl-defun org-glance-world:backfill (world)
   (cl-check-type world org-glance-world)

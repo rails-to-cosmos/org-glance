@@ -243,16 +243,9 @@
 
       (org-glance-view:set-marker-hash view midx new-hash))))
 
-(cl-defun org-glance-view:load-markers (view)
-  (when (f-exists? (org-glance-view:locate-markers view))
-    (condition-case nil
-        (prog1 (org-glance-view:load-markers view)
-          (org-glance-log :cache "cache hit: read markers"))
-      (user-error (org-glance-log :cache "cache miss: recalculate markers")))))
-
-(cl-defun org-glance-view:make-markers (view)
+(cl-defun org-glance-view:make-markers ()
   (let ((markers (org-glance-vector:create)))
-    (org-glance-log :cache "[org-glance-view:mark] cache miss: recalculate markers")
+    (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
     (org-glance-headline:map (headline)
       (let ((marker (org-glance-view--marker :hash (org-glance? headline :hash)
                                              :position (point-min))))
@@ -264,9 +257,8 @@
   (cl-check-type view org-glance-view)
 
   (cl-loop
-     with markers = (funcall (-orfn #'org-glance-view:load-markers
-                                    #'org-glance-view:make-markers)
-                             view)
+     with markers = (or (org-glance-view:load-markers view)
+                        (org-glance-view:make-markers))
      with hash->midx = (make-hash-table :test #'equal)
      for midx below (org-glance-vector:size markers)
      for marker = (org-glance-vector:get markers midx)
@@ -312,25 +304,30 @@
          for marker = (org-glance-vector:get markers midx)
          do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))))
 
-(cl-defun org-glance-view:load-markers (view &optional (location (org-glance-view:locate-markers view)))
+(cl-defun org-glance-view:load-markers (view)
   (cl-check-type view org-glance-view)
 
-  (org-glance-view:with-current-buffer view
-    (let ((view-hash (buffer-hash)))
-      (with-temp-buffer
-        (insert-file-contents location)
-        (goto-char (point-min))
-        (unless (string= (buffer-substring-no-properties (point) (line-end-position)) view-hash)
-          (user-error "Mark cache validation failed: \"%s\" vs \"%s\""
-                      (buffer-substring-no-properties (point-min) (line-end-position))
-                      view-hash))
-        (cl-loop with markers = (org-glance-vector:create)
-           while (and (= 0 (forward-line 1)) (not (eobp)))
-           for marker = (cl-destructuring-bind (hash position)
-                            (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
-                          (org-glance-view--marker :hash hash :position (string-to-number position)))
-           do (org-glance-vector:push-back! markers marker)
-           finally return markers)))))
+  (let ((location (org-glance-view:locate-markers view)))
+    (when (f-exists? location)
+      (org-glance-view:with-current-buffer view
+        (let ((view-hash (buffer-hash)))
+          (with-temp-buffer
+            (insert-file-contents location)
+            (goto-char (point-min))
+
+            (thunk-let ((mark-hash (buffer-substring-no-properties (point) (line-end-position))))
+              (cond
+                ((string= mark-hash view-hash) (cl-loop with markers = (org-glance-vector:create)
+                                                  while (and (= 0 (forward-line 1)) (not (eobp)))
+                                                  for marker = (cl-destructuring-bind (hash position)
+                                                                   (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
+                                                                 (org-glance-view--marker :hash hash :position (string-to-number position)))
+                                                  do (org-glance-vector:push-back! markers marker)
+                                                  finally return markers))
+                (t (org-glance-log :cache "Mark cache validation failed: \"%s\" vs \"%s\""
+                     (buffer-substring-no-properties (point-min) (line-end-position))
+                     view-hash)
+                   nil)))))))))
 
 (cl-defun org-glance-view:fetch (view)
   (cl-check-type view org-glance-view)

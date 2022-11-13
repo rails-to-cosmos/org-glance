@@ -30,12 +30,8 @@ Example: (org-glance? view :world :location)"
         (set-slots (cdr (--drop-while (not (eq it :=)) slots))))
     (pcase set-slots
       (`() (user-error "Set slots should contain more than 1 element"))
-      (`(,value) `(progn
-                    (setf (org-glance? ,object ,@get-slots) ,value)
-                    ,value))
-      (value `(progn
-                (setf (org-glance? ,object ,@get-slots) (org-glance? ,@value))
-                ,value)))))
+      (`(,value) `(setf (org-glance? ,object ,@get-slots) ,value))
+      (value `(setf (org-glance? ,object ,@get-slots) (org-glance? ,@value))))))
 
 (defmacro org-glance++ (object &rest slots)
   `(cl-incf (org-glance? ,object ,@slots)))
