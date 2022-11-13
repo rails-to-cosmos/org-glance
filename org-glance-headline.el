@@ -319,13 +319,15 @@
 
 (cl-defun org-glance-headline:with-properties (headline properties)
   (declare (indent 1))
+  (cl-check-type headline org-glance-headline)
   (org-glance:with-temp-buffer
    (org-glance-headline:insert headline)
    (cl-loop for (key value) in properties
       do (org-set-property key value))
    (org-glance-headline-at-point)))
 
-(cl-defmethod org-glance-headline:insert ((headline org-glance-headline))
+(cl-defun org-glance-headline:insert (headline)
+  (cl-check-type headline org-glance-headline)
   (insert (org-glance? headline :contents) "\n"))
 
 ;; (defvar org-glance-headline--bindat-spec

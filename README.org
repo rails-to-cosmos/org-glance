@@ -33,14 +33,6 @@ https://untools.co
 * TODO Cleanup empty dimensions
 * TODO Cache dimension list
 * TODO Optimize fetching relations: traverse changelog from end
-* DONE Consistent actions (use same underlying logic as in dimensions)
-CLOSED: [2022-11-12 Sat 08:37]
-:LOGBOOK:
-- State "DONE"       from "PENDING"    [2022-11-12 Sat 08:37]
-- State "PENDING"    from "STARTED"    [2022-11-05 Sat 09:30]
-- State "STARTED"    from "TODO"       [2022-11-04 Fri 10:50]
-CLOCK: [2022-11-04 Fri 10:50]--[2022-11-05 Sat 09:30] => 22:40
-:END:
 * PENDING Fix file names
 :LOGBOOK:
 - State "PENDING"    from "STARTED"    [2022-10-30 Sun 13:06]

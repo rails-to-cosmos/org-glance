@@ -180,9 +180,8 @@
       (org-glance-world:with-locked-partition world partition
         (org-glance:with-file-overwrite location
           (org-glance-view:mark! view)
-          (org-glance-view:fetch view)
-          (org-glance-view:save-header view)
-          (org-glance-view:save-markers view))))
+          (org-glance-view:fetch! view)
+          (org-glance-view:save-header view))))
 
     location))
 

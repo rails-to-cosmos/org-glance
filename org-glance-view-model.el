@@ -17,11 +17,11 @@
 ;;; Code:
 
 (defconst org-glance-view--header-extension ".h")
-(defconst org-glance-view--marker-extension ".m")
+(defconst org-glance-marker-extension ".m")
 
 (declare-function f-mkdir-full-path 'f)
 
-(org-glance-class org-glance-view--marker nil
+(org-glance-class org-glance-marker nil
     ((hash
       :type string
       :initarg :hash)
@@ -185,7 +185,7 @@
 
   (let* ((markers (org-glance? view :markers))
          (hash (org-glance? headline :hash))
-         (marker (org-glance-view--marker :hash hash :position (point-max))))
+         (marker (org-glance-marker :hash hash :position (point-max))))
     (org-glance-vector:push-back! markers marker)
     (goto-char (point-max))
     (org-glance-headline:insert headline)
@@ -247,7 +247,7 @@
   (let ((markers (org-glance-vector:create)))
     (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
     (org-glance-headline:map (headline)
-      (let ((marker (org-glance-view--marker :hash (org-glance? headline :hash)
+      (let ((marker (org-glance-marker :hash (org-glance? headline :hash)
                                              :position (point-min))))
         (org-glance-vector:push-back! markers marker)))
     markers))
@@ -268,8 +268,11 @@
   "Create effective representation of VIEW headline positions."
   (cl-check-type view org-glance-view)
 
-  (org-glance-view:set-markers! view (or (org-glance-view:load-markers view)
-                                         (org-glance-view:make-markers))))
+  (pcase (org-glance-view:load-markers view)
+    ('() (let ((markers (org-glance-view:make-markers)))
+           (org-glance-view:set-markers! view markers)
+           (org-glance-view:save-markers view)))
+    (markers (org-glance-view:set-markers! view markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-log :buffers "Commit buffer: %s" (current-buffer))
@@ -307,7 +310,8 @@
       (insert (format "%s\n" buffer-hash))
       (cl-loop for midx below (org-glance-vector:size markers)
          for marker = (org-glance-vector:get markers midx)
-         do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))))
+         do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))
+    markers))
 
 (cl-defun org-glance-view:load-markers (view)
   (cl-check-type view org-glance-view)
@@ -326,7 +330,7 @@
                                                   while (and (= 0 (forward-line 1)) (not (eobp)))
                                                   for marker = (cl-destructuring-bind (hash position)
                                                                    (s-split " " (buffer-substring-no-properties (point) (line-end-position)))
-                                                                 (org-glance-view--marker :hash hash :position (string-to-number position)))
+                                                                 (org-glance-marker :hash hash :position (string-to-number position)))
                                                   do (org-glance-vector:push-back! markers marker)
                                                   finally return markers))
                 (t (org-glance-log :cache "Mark cache validation failed: \"%s\" vs \"%s\""
@@ -334,105 +338,106 @@
                      view-hash)
                    nil)))))))))
 
-(cl-defun org-glance-view:fetch (view)
+(cl-defun org-glance-view:first-known-anchestor (hash      ;; hash
+                                                 relations ;; relations
+                                                 idx       ;; relation index
+                                                 known     ;; hash store
+                                                 )
+  "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
+  (cl-loop with anchestor = hash
+     for j from idx downto 0
+     for r = (org-glance? relations [j])
+     for s = (car r)
+     for d = (cdr r)
+     when (gethash anchestor known)
+     return anchestor
+     when (string= anchestor d)
+     do (setq anchestor s)))
+
+(cl-defun org-glance-view:fetch! (view)
   (cl-check-type view org-glance-view)
 
-  (cl-labels ((derive (hash  ;; hash
-                       relations ;; relations
-                       idx  ;; relation index
-                       known ;; hash store
-                       )
-                "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
-                (cl-loop with search = hash
-                   for j from idx downto 0
-                   for r = (org-glance? relations [j])
-                   for s = (car r)
-                   for d = (cdr r)
-                   when (gethash search known)
-                   return search
-                   when (string= search d)
-                   do (setq search s))))
-    (let* ((world (org-glance? view :world))
-           (view-offset (org-glance-view:get-offset view))
-           (events (reverse (org-glance-world:events world)))
-           (relations (make-vector (length events) nil))
-           (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
-           (committed-offset view-offset)
-           (to-add (make-hash-table :test #'equal)))
+  (let* ((world (org-glance? view :world))
+         (view-offset (org-glance-view:get-offset view))
+         (events (reverse (org-glance-world:events world)))
+         (relations (make-vector (length events) nil))
+         (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
+         (committed-offset view-offset)
+         (to-add (make-hash-table :test #'equal)))
 
-      ;; initial state
-      (cl-loop for hash being the hash-keys of (org-glance? view :hash->midx) using (hash-values midx)
-         do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
+    ;; initial state
+    (cl-loop for hash being the hash-keys of (org-glance? view :hash->midx) using (hash-values midx)
+       do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
 
-      (cl-loop
-         for event in events
-         for idx from 0
-         for event-offset = (org-glance? event :offset)
+    (cl-loop
+       for event in events
+       for idx from 0
+       for event-offset = (org-glance? event :offset)
 
-         when (cl-typep event 'org-glance-event:UPDATE)
-         do (aset relations idx (cons (org-glance? event :hash) (org-glance? event :headline :hash)))
+       when (cl-typep event 'org-glance-event:UPDATE)
+       do (aset relations idx (cons (org-glance? event :hash) (org-glance? event :headline :hash)))
 
-         when (org-glance-offset:less? view-offset event-offset)
-         do (thunk-let* ((headline* (org-glance? event :headline))
+       when (org-glance-offset:less? view-offset event-offset)
+       do (thunk-let* ((headline* (org-glance? event :headline))
 
-                         (event-hash (org-glance? event :hash))
-                         (headline-hash (org-glance? headline* :hash))
-                         (derived-hash (derive event-hash relations idx to-add))
-                         (dimensions (org-glance? world :dimensions))
+                       (event-hash (org-glance? event :hash))
+                       (headline-hash (org-glance? headline* :hash))
+                       (derived-hash (org-glance-view:first-known-anchestor event-hash relations idx to-add))
+                       (dimensions (org-glance? world :dimensions))
 
-                         (headline (org-glance-world:get-headline world headline-hash))
+                       (headline (org-glance-world:get-headline world headline-hash))
 
-                         (hashes-equal? (string= headline-hash event-hash))
-                         (headline-derived? (string= derived-hash headline-hash))
-                         (dimension-valid? (org-glance-world:validate-headline world (org-glance? view :type) headline*))
-                         (dimension-invalid? (not dimension-valid?))
-                         (source-exists? (not (null (gethash event-hash to-add))))
-                         (source-removed? (not (f-exists? (org-glance-world:locate-headline world event-hash))))
-                         (target-removed? (not (f-exists? (org-glance-world:locate-headline world headline-hash))))
+                       (hashes-equal? (string= headline-hash event-hash))
+                       (headline-derived? (string= derived-hash headline-hash))
+                       (dimension-valid? (org-glance-world:validate-headline world (org-glance? view :type) headline*))
+                       (dimension-invalid? (not dimension-valid?))
+                       (source-exists? (not (null (gethash event-hash to-add))))
+                       (source-removed? (not (f-exists? (org-glance-world:locate-headline world event-hash))))
+                       (target-removed? (not (f-exists? (org-glance-world:locate-headline world headline-hash))))
 
-                         (add-target! (puthash headline-hash headline to-add))
-                         (remove-source!  (remhash event-hash to-add))
-                         (derive-headline!  (progn (puthash headline-hash headline to-add)
-                                                   (remhash derived-hash to-add)))
-                         (replace-headline! (progn (puthash headline-hash headline to-add)
-                                                   (remhash event-hash to-add))))
+                       (add-target! (puthash headline-hash headline to-add))
+                       (remove-source!  (remhash event-hash to-add))
+                       (derive-headline!  (progn (puthash headline-hash headline to-add)
+                                                 (remhash derived-hash to-add)))
+                       (replace-headline! (progn (puthash headline-hash headline to-add)
+                                                 (remhash event-hash to-add))))
 
-              (org-glance-log :events "Event: %s" event)
+            (org-glance-log :events "Event: %s" event)
 
-              (cl-typecase event
-                (org-glance-event:UPDATE (org-glance-log :events "Hashes are equal? %s" hashes-equal?)
-                                         (org-glance-log :events "Source removed? %s" source-removed?)
-                                         (org-glance-log :events "Source exists? %s" source-removed?)
-                                         (org-glance-log :events "Target derived? %s" headline-derived?)))
+            (cl-typecase event
+              (org-glance-event:UPDATE (org-glance-log :events "Hashes are equal? %s" hashes-equal?)
+                                       (org-glance-log :events "Source removed? %s" source-removed?)
+                                       (org-glance-log :events "Source exists? %s" source-removed?)
+                                       (org-glance-log :events "Target derived? %s" headline-derived?)))
 
-              (org-glance-log :events "Target removed? %s" target-removed?)
-              (org-glance-log :events "Dimension valid? %s" dimension-valid?)
+            (org-glance-log :events "Target removed? %s" target-removed?)
+            (org-glance-log :events "Dimension valid? %s" dimension-valid?)
 
-              (cl-typecase event
-                (org-glance-event:UPDATE (cond (hashes-equal? nil)
-                                               ((and source-removed? target-removed?) nil)
-                                               ((and (not source-removed?) target-removed?) remove-source!)
-                                               ((and dimension-invalid? (not source-exists?)) nil)
-                                               ((and dimension-invalid? source-exists?) remove-source!)
-                                               ((and dimension-valid? source-exists?) replace-headline!)
-                                               ((and derived-hash (not headline-derived?)) derive-headline!)
-                                               ((not derived-hash) add-target!)))
-                (org-glance-event:PUT (cond (target-removed? nil)
-                                            (dimension-valid? add-target!)))
-                (org-glance-event:RM remove-source!)
-                (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
-           (setq committed-offset event-offset)
-           (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
-         finally do
-           (progress-reporter-done progress-reporter)
-           (goto-char (point-min))
-           (outline-next-heading)
-           (delete-region (point) (point-max))
-           (org-glance-vector:clear! (org-glance? view :markers))
-           (dolist-with-progress-reporter (headline (hash-table-values to-add))
-               "Insert headlines"
-             (org-glance-view:add-headline view headline))
-           (org-glance-view:set-offset view committed-offset)))))
+            (cl-typecase event
+              (org-glance-event:UPDATE (cond (hashes-equal? nil)
+                                             ((and source-removed? target-removed?) nil)
+                                             ((and (not source-removed?) target-removed?) remove-source!)
+                                             ((and dimension-invalid? (not source-exists?)) nil)
+                                             ((and dimension-invalid? source-exists?) remove-source!)
+                                             ((and dimension-valid? source-exists?) replace-headline!)
+                                             ((and derived-hash (not headline-derived?)) derive-headline!)
+                                             ((not derived-hash) add-target!)))
+              (org-glance-event:PUT (cond (target-removed? nil)
+                                          (dimension-valid? add-target!)))
+              (org-glance-event:RM remove-source!)
+              (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
+         (setq committed-offset event-offset)
+         (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
+       finally do
+         (progress-reporter-done progress-reporter)
+         (goto-char (point-min))
+         (outline-next-heading)
+         (delete-region (point) (point-max))
+         (org-glance-vector:clear! (org-glance? view :markers))
+         (dolist-with-progress-reporter (headline (hash-table-values to-add))
+             "Insert headlines"
+           (org-glance-view:add-headline view headline))
+         (org-glance-view:set-offset view committed-offset))))
 
 (cl-defun org-glance-view:get-offset (view)
   (let ((buffer-offset (condition-case nil
@@ -448,10 +453,9 @@
   (setf (org-glance? view :offset) offset)
   (org-glance-view:save-header view))
 
-(cl-defun org-glance-view:marker-at-point
-    (&optional
-       (view (org-glance-view:get-buffer-view))
-       (point (point)))
+(cl-defun org-glance-view:marker-at-point (&optional
+                                             (view (org-glance-view:get-buffer-view))
+                                             (point (point)))
   (org-glance-vector:non-binary-search (org-glance? view :markers) point))
 
 (cl-defun org-glance-view:shift-markers (view midx diff)
@@ -482,7 +486,7 @@
   (thread-first view
     (org-glance? :location)
     (file-name-sans-extension)
-    (concat org-glance-view--marker-extension)))
+    (concat org-glance-marker-extension)))
 
 (provide 'org-glance-view-model)
 ;;; org-glance-view-model.el ends here
