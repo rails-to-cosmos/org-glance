@@ -171,13 +171,13 @@
 
   (thunk-let* ((location (org-glance-world:locate-partition world partition))
                (header (org-glance-world:read-partition world partition))
-               (type (a-get header :type))
-               (offset (a-get header :offset))
+               (view-type (a-get header :type))
+               (view-offset (a-get header :offset))
                (world-offset (org-glance-world:offset world))
-               (view (org-glance-view:get-or-create world type location offset)))
+               (view (org-glance-view:get-or-create world view-type location view-offset)))
 
-    (org-glance-world:with-locked-partition world partition
-      (when (org-glance-offset:less? offset world-offset)
+    (when (org-glance-offset:less? view-offset world-offset)
+      (org-glance-world:with-locked-partition world partition
         (org-glance:with-file-overwrite location
           (org-glance-view:mark view)
           (org-glance-view:fetch view)
