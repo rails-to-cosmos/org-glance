@@ -24,14 +24,14 @@
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
   (cl-check-type world org-glance-world)
-  (cl-check-type location org-glance-type:directory)
+  (cl-check-type location org-glance-type:readable-directory)
 
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
-       (org-glance-world:add-headline world headline))))
+       (org-glance-world:add-headline! world headline))))
 
   world)
 
@@ -67,7 +67,7 @@
   "Register captured headline in metastore."
   (let ((world (org-glance-world:current)))
     (org-glance-headline:map (headline)
-      (org-glance-world:add-headline world headline))
+      (org-glance-world:add-headline! world headline))
     (org-glance-world:persist world)
     (let ((file (buffer-file-name)))
       (save-buffer)
@@ -79,7 +79,8 @@
 
   (f-join (org-glance? world :location) "capture.org"))
 
-(cl-defun org-glance-world:capture (world &key (template "* %?")
+(cl-defun org-glance-world:capture (world &key
+                                            (template "* %?")
                                             (text (cond ((use-region-p) (buffer-substring-no-properties
                                                                          (region-beginning)
                                                                          (region-end)))
@@ -136,19 +137,6 @@
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
 
-(cl-defun org-glance-world:partitions (world)
-  (cl-check-type world org-glance-world)
-
-  (or (org-glance? world :partitions)
-      (org-glance! world :partitions := (--map (--> it
-                                                     (file-name-sans-extension it)
-                                                     (list (file-name-nondirectory (f-parent it)) (file-name-nondirectory it))
-                                                     (-zip-lists '(:dimension :value) it)
-                                                     (-flatten it)
-                                                     (apply #'org-glance-partition it))
-                                                (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
-
-
 (cl-defun org-glance-world:choose-partition (world &optional dimension)
   (cl-check-type world org-glance-world)
   (cl-check-type dimension (org-glance-type:optional string))
@@ -177,11 +165,10 @@
                (view (org-glance-view:get-or-create world view-type location view-offset)))
 
     (when (org-glance-offset:less? view-offset world-offset)
-      (org-glance-world:with-locked-partition world partition
-        (org-glance:with-file-overwrite location
-          (org-glance-view:mark! view)
-          (org-glance-view:fetch! view)
-          (org-glance-view:save-header view))))
+      (org-glance-world:with-locked-location location
+        (org-glance-view:mark! view)
+        (org-glance-view:fetch! view)
+        (org-glance-view:save-header view)))
 
     location))
 

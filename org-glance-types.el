@@ -4,6 +4,19 @@
 (require 'cl-macs)
 (require 'nadvice)
 
+(defmacro org-glance-fun (name args _ return-type &rest body)
+  (declare (indent 4))
+  (cl-loop with result = `(cl-defun ,name)
+     for (arg _ type) in args
+     collect arg into cl-args
+     collect (list arg type) into cl-types
+     finally return (append result
+                            (list cl-args)
+                            (cl-loop for (arg type) in cl-types
+                               collect `(cl-check-type ,arg ,type))
+                            (list `(cl-the ,return-type
+                                     (progn ,@body))))))
+
 (cl-deftype org-glance-type:bounded-by (val)
   `(satisfies (lambda (thing)
                 (and (cl-typep thing 'number)
@@ -24,7 +37,11 @@
                 (or (null thing)
                     (cl-typep thing (quote ,tp))))))
 
-(cl-deftype org-glance-type:directory ()
+(cl-deftype org-glance-type:readable-file ()
+  `(satisfies (lambda (location) (and (f-readable? location)
+                                 (f-file? location)))))
+
+(cl-deftype org-glance-type:readable-directory ()
   `(satisfies (lambda (location) (and (f-readable? location)
                                  (f-directory? location)))))
 

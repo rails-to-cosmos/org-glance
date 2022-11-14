@@ -72,7 +72,8 @@
 (cl-defun org-glance-capture ()
   (interactive)
   (org-glance-world:capture org-glance-current-world
-    :text (apply #'org-link-make-string (org-store-link t t))))
+    ;; :text (apply #'org-link-make-string (org-store-link t t))
+    ))
 
 (cl-defun org-glance-materialize ()
   (interactive)

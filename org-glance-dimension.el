@@ -10,7 +10,7 @@
 
 (org-glance-class org-glance-partition nil
     ((dimension :type string :initarg :dimension)
-     (value :type string :initarg :value)))
+     (value     :type string :initarg :value)))
 
 (cl-defun org-glance-partition:representation (partition)
   (cl-check-type partition org-glance-partition)
@@ -19,11 +19,11 @@
                     (org-glance? partition :dimension)
                     (org-glance? partition :value))))
 
-(cl-defun org-glance-partition:filename (partition)
+(cl-defun org-glance-partition:path (partition)
   (cl-check-type partition org-glance-partition)
 
   (f-join (org-glance? partition :dimension)
-          (concat (org-glance? partition :value) ".org")))
+          (org-glance? partition :value)))
 
 (cl-defun org-glance-partition:from-string (s)
   (cl-check-type s string)

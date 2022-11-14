@@ -47,25 +47,34 @@
       :type (org-glance-type:list-of org-glance-partition)
       :initarg :partitions
       :initform nil)
-     (headlines
+     (headline-by-hash
       :type hash-table
-      :initarg :headlines
+      :initarg :headline-by-hash
       :initform (make-hash-table :test #'equal)
-      :documentation "LRU cache with headlines.")))
+      :documentation "HASH -> HEADLINE")
+     (relations
+      :type hash-table
+      :initarg :relations
+      :initform (make-hash-table :test #'equal)
+      :documentation "id -> headlines")))
 
 (cl-defun org-glance-world:create (location)
   "Create world located in directory LOCATION."
   (declare (indent 1))
-  (f-mkdir-full-path location)
-  (f-touch (f-join location "world.md"))
-  (org-glance-world :location location))
+  (cl-the org-glance-world
+    (progn
+      (f-mkdir-full-path location)
+      (f-touch (f-join location "world.md"))
+      (org-glance-world :location location))))
 
 (cl-defun org-glance-world:read (location)
-  (cl-typecase location
-    (org-glance-type:world-location (let ((world (org-glance-world:create location)))
-                                      (setf (org-glance? world :changelog) (org-glance-changelog:read (f-join location "log" "event.log")))
-                                      world))
-    (otherwise nil)))
+  (cl-the (org-glance-type:optional org-glance-world)
+    (cl-typecase location
+      (org-glance-type:world-location (let ((world (org-glance-world:create location)))
+                                        (org-glance-world:read-changelog world)
+                                        (org-glance-world:read-relations! world)
+                                        world))
+      (otherwise nil))))
 
 (cl-defun org-glance-world:offset (world)
   (cl-check-type world org-glance-world)
@@ -74,24 +83,35 @@
       (org-glance? event :offset)
     (org-glance-offset:current)))
 
-(cl-defmacro org-glance-world:with-locked-partition (world partition &rest forms)
-  (declare (indent 2))
-  `(progn
-     (cl-check-type ,world org-glance-world)
-     (cl-check-type ,partition org-glance-partition)
-
-     (when (--> ,world
-                (org-glance-world:locate-partition it ,partition)
-                (get-file-buffer it)
-                (cond ((null it) t)
-                      ((buffer-live-p it) (kill-buffer it))))
+(cl-defmacro org-glance-world:with-locked-location (location &rest forms)
+  (declare (indent 1))
+  `(when (--> ,location
+              (get-file-buffer it)
+              (cond ((null it) t)
+                    ((buffer-live-p it) (kill-buffer it))))
+     (org-glance:with-file-overwrite ,location
        ,@forms)))
 
 (cl-defun org-glance-world:locate-partition (world partition)
   (cl-check-type world org-glance-world)
   (cl-check-type partition org-glance-partition)
 
-  (f-join (org-glance? world :location) "views" (org-glance-partition:filename partition)))
+  (f-join (org-glance? world :location) "views"
+          (org-glance-partition:path partition)
+          (format "%s.org" (org-glance-partition:representation partition))))
+
+(cl-defun org-glance-world:partitions (world)
+  (cl-check-type world org-glance-world)
+
+  (or (org-glance? world :partitions)
+      (org-glance! world :partitions := (--map (--> it
+                                                    (file-name-sans-extension it)
+                                                    (list (file-name-nondirectory (f-parent (f-parent it)))
+                                                          (file-name-nondirectory (f-parent it)))
+                                                    (-zip-lists '(:dimension :value) it)
+                                                    (-flatten it)
+                                                    (apply #'org-glance-partition it))
+                                               (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
 
 (cl-defun org-glance-world:read-partition (world partition)
   (-> (org-glance-world:locate-partition world partition)
@@ -134,52 +154,76 @@ functional data structure.
 Return last committed offset."
   (cl-check-type world org-glance-world)
 
-  (let* ((changelog (org-glance? world :changelog))
-         (changelog* (org-glance? world :changelog*))
-         (changelog-location (f-join (org-glance? world :location) "log" "event.log")))
-    (dolist-with-progress-reporter (event (reverse (org-glance? changelog* :events)))
-        (format "Persist world %s" (org-glance? world :location))
-      (thunk-let* ((source-hash (org-glance? event :hash))
-                   (target-hash (org-glance? event :headline :hash))
-                   (headline-exists? (org-glance-world:headline-exists? world target-hash))
-                   (headline (org-glance-world:get-headline world target-hash)))
-        (cl-typecase event
+  (cl-the org-glance-type:offset
+    (let* ((changelog (org-glance? world :changelog))
+           (changelog* (org-glance? world :changelog*)))
+      (dolist-with-progress-reporter (event (reverse (org-glance? changelog* :events)))
+          (format "Persist world %s" (org-glance? world :location))
+        (thunk-let* ((source-hash (org-glance? event :hash))
+                     (target-hash (org-glance? event :headline :hash))
+                     (headline-exists? (org-glance-world:headline-exists? world target-hash))
+                     (headline (org-glance-world:get-headline world target-hash)))
+          (cl-typecase event
+            (org-glance-event:RM (org-glance-world:delete-headline world source-hash))
+            (org-glance-event:PUT (org-glance-world:write-headline world headline)
+                                  (org-glance-world:make-partitions world headline))
+            (org-glance-event:UPDATE (org-glance-world:write-headline world headline)
+                                     (org-glance-world:make-partitions world headline)
+                                     (org-glance-world:delete-headline world source-hash)))
+          (org-glance-changelog:push changelog event)))
 
-          (org-glance-event:RM
-           (org-glance-world:delete-headline world source-hash)
-           (org-glance-changelog:push changelog event))
+      (org-glance-world:write-changelog! world)
+      (org-glance-world:write-relations! world)
 
-          (org-glance-event:PUT
-           (let* ((id (org-glance-world:headline-id world headline))
-                  (headline (org-glance-headline:with-properties headline
-                              `(("GLANCE_ID" ,id)
-                                ("DIR" ,(concat "../../resources/" id))))))
-             (org-glance-world:save-headline world headline)
-             (org-glance-world:make-partitions world headline)
-             (org-glance-changelog:push changelog
-               ;; substitute event with custom properties
-               (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline)))))
+      (if (org-glance-changelog:last changelog)
+          (org-glance? (org-glance-changelog:last changelog) :offset)
+        (org-glance-offset:current)))))
 
-          (org-glance-event:UPDATE
-           (org-glance-world:save-headline world headline)
-           (org-glance-world:make-partitions world headline)
-           (org-glance-world:delete-headline world source-hash)
-           (org-glance-changelog:push changelog event)))))
-
-    (org-glance-changelog:write changelog changelog-location)
-    (setf (org-glance? world :changelog*) (org-glance-changelog))
-    (cl-the org-glance-type:offset (if (org-glance-changelog:last changelog)
-                                       (org-glance? (org-glance-changelog:last changelog) :offset)
-                                     (org-glance-offset:current)))))
-
-(cl-defun org-glance-world:save-headline (world headline)
-  (cl-check-type world org-glance-world)
-  (cl-check-type headline org-glance-headline)
-
+(org-glance-fun org-glance-world:write-headline ((world :: org-glance-world) (headline :: org-glance-headline)) -> org-glance-type:readable-file
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
       (org-glance-headline:save headline location))
     location))
+
+;; (org-glance-fun write-headline! ((world :: World) (headline :: Headline)) -> ReadableFile
+;;   )
+
+(cl-defun org-glance-world:locate-changelog (world)
+  (cl-check-type world org-glance-world)
+
+  (f-join (org-glance? world :location) "log" "event.log"))
+
+(cl-defun org-glance-world:write-changelog! (world)
+  (cl-check-type world org-glance-world)
+
+  (let ((changelog (org-glance? world :changelog))
+        (location (org-glance-world:locate-changelog world)))
+    (org-glance-changelog:write changelog location)
+    (org-glance! world :changelog* := (org-glance-changelog))))
+
+(cl-defun org-glance-world:read-changelog (world)
+  (cl-check-type world org-glance-world)
+
+  (org-glance! world :changelog := (org-glance-changelog:read (org-glance-world:locate-changelog world))))
+
+(cl-defun org-glance-world:locate-relations (world)
+  (cl-check-type world org-glance-world)
+
+  (f-join (org-glance? world :location) "relations.el"))
+
+(cl-defun org-glance-world:write-relations! (world)
+  (cl-check-type world org-glance-world)
+
+  (with-temp-file (org-glance-world:locate-relations world)
+    (insert (pp-to-string (org-glance? world :relations)))))
+
+(cl-defun org-glance-world:read-relations! (world)
+  (cl-check-type world org-glance-world)
+
+  (pcase (org-glance-world:locate-relations world)
+    ((and (cl-struct org-glance-type:readable-file) location) (with-temp-buffer
+                                                                (insert-file-contents-literally location)
+                                                                (org-glance! world :relations := (read (buffer-string)))))))
 
 (cl-defun org-glance-world:delete-headline (world headline)
   (cl-check-type world org-glance-world)
@@ -189,32 +233,37 @@ Return last committed offset."
       (f-delete (org-glance-world:locate-headline world headline))
     (error nil)))
 
-(cl-defun org-glance-world:add-headline (world headline)
+(cl-defun org-glance-world:add-headline! (world headline)
   "Put HEADLINE to WORLD."
-  (declare (indent 1))
   (cl-check-type world org-glance-world)
   (cl-check-type headline org-glance-headline)
 
-  (org-glance-log :world "Put headline \"%s\" to world \"%s\" " (org-glance? headline :title) world)
-  (let ((event (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
-    (org-glance-changelog:push (org-glance? world :changelog*) event)
-    (org-glance-world:add-headline-to-cache world headline)
-    world))
+  (let* ((id (org-glance-world:headline-id world headline))
+         (headline (org-glance-headline:with-properties headline
+                     `(("GLANCE_ID" ,id)
+                       ("DIR" ,(concat "../../../resources/" id))))))
+    (org-glance-world:add-headline-to-cache world id headline)
+    (org-glance-changelog:push (org-glance? world :changelog*)
+      (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
 
-(cl-defun org-glance-world:add-headline-to-cache (world headline)
+  world)
+
+(cl-defun org-glance-world:add-headline-to-cache (world id headline)
   (cl-check-type world org-glance-world)
   (cl-check-type headline org-glance-headline)
+  (cl-check-type id string)
 
   (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance? headline :title))
-  (puthash (org-glance? headline :hash) headline (org-glance? world :headlines)))
+  (puthash id t (org-glance? world :relations))
+  (puthash (org-glance? headline :hash) headline (org-glance? world :headline-by-hash)))
 
 (cl-defun org-glance-world:remove-headline-from-cache (world hash)
   (cl-check-type world org-glance-world)
   (cl-check-type hash string)
 
-  (when-let (headline (gethash hash (org-glance? world :headlines)))
+  (when-let (headline (gethash hash (org-glance? world :headline-by-hash)))
     (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance? headline :title))
-    (remhash hash (org-glance? world :headlines))))
+    (remhash hash (org-glance? world :headline-by-hash))))
 
 (cl-defun org-glance-world:remove-headline (world hash)
   "Return `org-glance-world' with HEADLINES removed from WORLD.
@@ -239,7 +288,7 @@ achieved by calling `org-glance-world:persist' method."
   (let* ((new-hash (org-glance? headline :hash))
          (header (org-glance-headline-header:from-headline headline))
          (changelog (org-glance? world :changelog*))
-         (cache (org-glance? world :headlines))
+         (cache (org-glance? world :headline-by-hash))
          (event (org-glance-event:UPDATE :hash old-hash
                                          :headline header))
          (offset (org-glance? event :offset)))
@@ -250,45 +299,51 @@ achieved by calling `org-glance-world:persist' method."
     offset))
 
 (cl-defun org-glance-world:get-headline-from-cache (world hash)
-  (when-let (result (gethash hash (org-glance? world :headlines)))
-    (org-glance-log :cache "[org-glance-headline] cache hit (hashmap): \"%s\"" (org-glance? result :title))
-    result))
+  (cl-check-type world org-glance-world)
+  (cl-check-type hash org-glance-type:hash)
+
+  (cl-the (org-glance-type:optional org-glance-headline)
+    (gethash hash (org-glance? world :headline-by-hash))))
 
 (cl-defun org-glance-world:get-headline-from-stage (world hash)
-  (when-let (result (cl-loop for event in (org-glance-changelog:flatten (org-glance? world :changelog*))
-                       do (cl-typecase event
-                            (org-glance-event:RM
-                             (pcase hash
-                               ((pred (string= (org-glance? event :hash))) (cl-return nil))))
-                            (org-glance-event:UPDATE
-                             (pcase hash
-                               ((pred (string= (org-glance? event :hash))) (cl-return nil))
-                               ((pred (string= (org-glance? event :headline :hash))) (cl-return (org-glance? event :headline)))))
-                            (org-glance-event:PUT
-                             (pcase hash
-                               ((pred (string= (org-glance? event :headline :hash))) (cl-return (org-glance? event :headline))))))))
-    (org-glance-log :cache "[org-glance-headline] stage hit: \"%s\"" result)
-    result))
+  (cl-check-type world org-glance-world)
+  (cl-check-type hash org-glance-type:hash)
+
+  (cl-the (org-glance-type:optional org-glance-headline)
+    (cl-loop for event in (org-glance-changelog:flatten (org-glance? world :changelog*))
+       do (cl-typecase event
+            (org-glance-event:RM (pcase hash
+                                   ((pred (string= (org-glance? event :hash))) (cl-return nil))))
+            (org-glance-event:UPDATE (pcase hash
+                                       ((pred (string= (org-glance? event :hash))) (cl-return nil))
+                                       ((pred (string= (org-glance? event :headline :hash))) (cl-return (org-glance? event :headline)))))
+            (org-glance-event:PUT (pcase hash
+                                    ((pred (string= (org-glance? event :headline :hash))) (cl-return (org-glance? event :headline)))))))))
 
 (cl-defun org-glance-world:get-headline-from-drive (world hash)
-  (org-glance:with-temp-buffer
-   (org-glance-log :cache "[org-glance-headline] cache miss: \"%s\"" hash)
-   (insert-file-contents (org-glance-world:locate-headline world hash))
-   (goto-char (point-min))
-   (unless (org-at-heading-p)
-     (outline-next-heading))
-   (when-let (headline (org-glance-headline-at-point))
-     (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance? headline :title))
-     (puthash (org-glance? headline :hash) headline (org-glance? world :headlines)))))
+  (cl-check-type world org-glance-world)
+  (cl-check-type hash org-glance-type:hash)
+
+  (cl-the (org-glance-type:optional org-glance-headline)
+    (org-glance:with-temp-buffer
+     (org-glance-log :cache "[org-glance-headline] cache miss: \"%s\"" hash)
+     (insert-file-contents (org-glance-world:locate-headline world hash))
+     (goto-char (point-min))
+     (unless (org-at-heading-p)
+       (outline-next-heading))
+     (when-let (headline (org-glance-headline-at-point))
+       (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance? headline :title))
+       (puthash (org-glance? headline :hash) headline (org-glance? world :headline-by-hash))))))
 
 (cl-defun org-glance-world:get-headline (world hash)
   "Return fully qualified `org-glance-headline' by its hash."
   (cl-check-type world org-glance-world)
   (cl-check-type hash string)
 
-  (or (org-glance-world:get-headline-from-cache world hash)
-      (org-glance-world:get-headline-from-stage world hash)
-      (org-glance-world:get-headline-from-drive world hash)))
+  (cl-the org-glance-headline
+    (or (org-glance-world:get-headline-from-cache world hash)
+        (org-glance-world:get-headline-from-stage world hash)
+        (org-glance-world:get-headline-from-drive world hash))))
 
 (cl-defun org-glance-world:events (world)
   (cl-check-type world org-glance-world)
