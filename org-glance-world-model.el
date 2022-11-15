@@ -58,27 +58,22 @@
       :initform (make-hash-table :test #'equal)
       :documentation "id -> headlines")))
 
-(cl-defun org-glance-world:create (location)
+(org-glance-fun org-glance-world:create ((location :: org-glance-type:optional-directory)) -> org-glance-world
   "Create world located in directory LOCATION."
   (declare (indent 1))
-  (cl-the org-glance-world
-    (progn
-      (f-mkdir-full-path location)
-      (f-touch (f-join location "world.md"))
-      (org-glance-world :location location))))
+  (f-mkdir-full-path location)
+  (f-touch (f-join location "world.md"))
+  (org-glance-world :location location))
 
-(cl-defun org-glance-world:read (location)
-  (cl-the (org-glance-type:optional org-glance-world)
-    (cl-typecase location
-      (org-glance-type:world-location (let ((world (org-glance-world:create location)))
-                                        (org-glance-world:read-changelog world)
-                                        (org-glance-world:read-relations! world)
-                                        world))
-      (otherwise nil))))
+(org-glance-fun org-glance-world:read ((location :: org-glance-type:optional-directory)) -> (org-glance-type:optional org-glance-world)
+  (cl-typecase location
+    (org-glance-type:world-location (let ((world (org-glance-world:create location)))
+                                      (org-glance-world:read-changelog! world)
+                                      (org-glance-world:read-relations! world)
+                                      world))
+    (otherwise nil)))
 
-(cl-defun org-glance-world:offset (world)
-  (cl-check-type world org-glance-world)
-
+(org-glance-fun org-glance-world:offset ((world :: org-glance-world)) -> org-glance-type:offset
   (if-let (event (org-glance-changelog:last (org-glance? world :changelog)))
       (org-glance? event :offset)
     (org-glance-offset:current)))
@@ -92,10 +87,7 @@
      (org-glance:with-file-overwrite ,location
        ,@forms)))
 
-(cl-defun org-glance-world:locate-partition (world partition)
-  (cl-check-type world org-glance-world)
-  (cl-check-type partition org-glance-partition)
-
+(org-glance-fun org-glance-world:locate-partition ((world :: org-glance-world) (partition :: org-glance-partition)) -> org-glance-type:optional-org-file
   (f-join (org-glance? world :location) "views"
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
@@ -180,13 +172,11 @@ Return last committed offset."
         (org-glance-offset:current)))))
 
 (org-glance-fun org-glance-world:write-headline ((world :: org-glance-world) (headline :: org-glance-headline)) -> org-glance-type:readable-file
+  "Persist HEADLINE in WORLD."
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
       (org-glance-headline:save headline location))
     location))
-
-;; (org-glance-fun write-headline! ((world :: World) (headline :: Headline)) -> ReadableFile
-;;   )
 
 (cl-defun org-glance-world:locate-changelog (world)
   (cl-check-type world org-glance-world)
@@ -201,7 +191,7 @@ Return last committed offset."
     (org-glance-changelog:write changelog location)
     (org-glance! world :changelog* := (org-glance-changelog))))
 
-(cl-defun org-glance-world:read-changelog (world)
+(cl-defun org-glance-world:read-changelog! (world)
   (cl-check-type world org-glance-world)
 
   (org-glance! world :changelog := (org-glance-changelog:read (org-glance-world:locate-changelog world))))

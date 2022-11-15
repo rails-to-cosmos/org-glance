@@ -264,15 +264,19 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
+
 (cl-defun org-glance-view:mark! (view)
   "Create effective representation of VIEW headline positions."
   (cl-check-type view org-glance-view)
 
   (pcase (org-glance-view:load-markers view)
     ('() (let ((markers (org-glance-view:make-markers)))
+           (org-glance-log :markers "Make and save: %s" markers)
            (org-glance-view:set-markers! view markers)
            (org-glance-view:save-markers view)))
-    (markers (org-glance-view:set-markers! view markers))))
+    (markers
+     (org-glance-log :markers "Set markers only: %s" markers)
+     (org-glance-view:set-markers! view markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-log :buffers "Commit buffer: %s" (current-buffer))

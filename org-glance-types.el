@@ -6,11 +6,11 @@
 
 (defmacro org-glance-fun (name args _ return-type &rest body)
   (declare (indent 4))
-  (cl-loop with result = `(cl-defun ,name)
+  (cl-loop
      for (arg _ type) in args
      collect arg into cl-args
      collect (list arg type) into cl-types
-     finally return (append result
+     finally return (append `(cl-defun ,name)
                             (list cl-args)
                             (cl-loop for (arg type) in cl-types
                                collect `(cl-check-type ,arg ,type))
