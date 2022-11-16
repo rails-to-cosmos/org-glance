@@ -279,9 +279,6 @@
      (org-glance-view:set-markers! view markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
-  (org-glance-log :buffers "Commit buffer: %s" (current-buffer))
-  (org-glance-log :buffers "Commit view: %s" view)
-
   (org-glance-view:with-current-buffer view
     (let ((world (org-glance? view :world))
           (to-remove '()))
@@ -405,18 +402,6 @@
                                                  (remhash derived-hash to-add)))
                        (replace-headline! (progn (puthash headline-hash headline to-add)
                                                  (remhash event-hash to-add))))
-
-            (org-glance-log :events "Event: %s" event)
-
-            (cl-typecase event
-              (org-glance-event:UPDATE (org-glance-log :events "Hashes are equal? %s" hashes-equal?)
-                                       (org-glance-log :events "Source removed? %s" source-removed?)
-                                       (org-glance-log :events "Source exists? %s" source-removed?)
-                                       (org-glance-log :events "Target derived? %s" headline-derived?)))
-
-            (org-glance-log :events "Target removed? %s" target-removed?)
-            (org-glance-log :events "Dimension valid? %s" dimension-valid?)
-
             (cl-typecase event
               (org-glance-event:UPDATE (cond (hashes-equal? nil)
                                              ((and source-removed? target-removed?) nil)

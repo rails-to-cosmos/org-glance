@@ -50,6 +50,11 @@
                                 (and (f-readable? location)
                                      (f-directory? location))))))
 
+(cl-deftype org-glance-type:optional-file ()
+  `(satisfies (lambda (location) (or (not (f-exists-p location))
+                                (and (f-readable-p location)
+                                     (f-file-p location))))))
+
 (cl-deftype org-glance-type:optional-org-file ()
   `(satisfies (lambda (location) (or (not (f-exists-p location))
                                 (and (f-readable-p location)
