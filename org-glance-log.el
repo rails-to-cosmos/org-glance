@@ -7,7 +7,7 @@
           :cache nil
           :dimensions nil
           :contents nil
-          :markers nil
+          :markers t
           :buffers nil
           :performance nil
           :offsets nil

@@ -287,6 +287,7 @@
         (let* ((headline (org-glance-view:get-marker-headline view midx))
                (old-hash (org-glance-view:get-marker-hash view midx))
                (new-hash (org-glance? headline :hash)))
+
           (org-glance-world:update-headline world old-hash headline)
           (org-glance-view:set-marker-changed view midx nil)
           (org-glance-view:set-marker-hash view midx new-hash)
@@ -448,8 +449,16 @@
   (org-glance-vector:non-binary-search (org-glance? view :markers) point))
 
 (cl-defun org-glance-view:shift-markers (view midx diff)
-  (cl-loop for idx from (1+ midx) below (org-glance-vector:size (org-glance? view :markers))
-     do (org-glance-view:set-marker-position view idx (+ (org-glance-view:get-marker-position view idx) diff))))
+  (cl-loop with asterisk = "\n*"
+     for idx from (1+ midx) below (org-glance-vector:size (org-glance? view :markers))
+     for marker-position = (+ (org-glance-view:get-marker-position view idx) diff)
+     do (org-glance-view:set-marker-position view idx marker-position)
+     when (or (< marker-position (point-min))
+              (< (point-max) marker-position)
+              (not (string= asterisk (buffer-substring-no-properties (1- marker-position) (1+ marker-position)))))
+     collect idx into to-remove
+     finally do (cl-loop for remidx in to-remove
+                   do (org-glance-vector:remove-at! (org-glance? view :markers) remidx))))
 
 (cl-defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))

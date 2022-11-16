@@ -12,10 +12,11 @@
   (cl-check-type offset org-glance-type:offset)
 
   (thunk-let* ((location (file-truename (f-join (org-glance? world :location) location)))
+               (m-loc (concat (file-name-sans-extension location) org-glance-marker-extension))
                (key (org-glance-view--key :type type :location location))
                (cached-view (org-glance-view-cache:get key))
                (new-view (org-glance-view:create world type location offset)))
-    (cond ((and (f-exists? location) cached-view) cached-view)
+    (cond ((and (f-exists? location) (f-exists? m-loc) cached-view) cached-view)
           (t (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
              (org-glance-view-cache:put new-view)
              new-view))))
