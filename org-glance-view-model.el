@@ -22,20 +22,10 @@
 (declare-function f-mkdir-full-path 'f)
 
 (org-glance-class org-glance-marker nil
-    ((hash
-      :type string
-      :initarg :hash)
-     (position
-      :type number
-      :initarg :position)
-     (changed?
-      :type boolean
-      :initarg :changed?
-      :initform nil)
-     (removed?
-      :type boolean
-      :initarg :removed?
-      :initform nil)))
+    ((hash :type string :initarg :hash)
+     (position :type number :initarg :position)
+     (changed? :type boolean :initarg :changed? :initform nil)
+     (removed? :type boolean :initarg :removed? :initform nil)))
 
 (org-glance-class org-glance-view nil
     ((world
@@ -266,7 +256,8 @@
   (org-glance-view:with-current-buffer view
     (cl-loop with markers = (org-glance? view :markers)
        with world = (org-glance? view :world)
-       with to-remove = '()
+       with to-move = '()  ;; hashes to move from current view to another view
+       with to-remove = '()  ;; hashes to remove from current world
        for midx from 0 below (org-glance-vector:size markers)
        when (and (org-glance? view :markers [midx] :changed?)
                  (not (org-glance? view :markers [midx] :removed?)))
@@ -279,21 +270,22 @@
             (org-glance-view:set-marker-hash view midx new-hash)
 
             (unless (org-glance-world:validate-headline world (org-glance? view :type) headline)
-              (push new-hash to-remove)))
+              (push new-hash to-move)))
+       when (org-glance? view :markers [midx] :removed?)
+       do (push midx to-remove)
        finally do
-         (dolist (hash to-remove)
-           (org-glance-view:remove-headline view hash))
+         (dolist (hash to-move)
+             (org-glance-view:remove-headline view hash))
+
+         (cl-loop for midx in to-remove
+            for offset from 0
+            do
+              (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
+              (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
+
          (let ((offset (org-glance-world:persist world)))
            (org-glance-view:set-offset view offset))
          (org-glance-view:save-markers view))))
-
-;; (cl-defun org-glance-view:update-marker (view midx diff)
-;;   ;; (let ((remidxs ))
-;;   ;;   (org-glance-view:remove-markers! view remidxs)
-;;   ;;   ;; (cl-loop for hash in remhashes
-;;   ;;   ;;    do (org-glance-world:remove-headline (org-glance? view :world) hash))
-;;   ;;   )
-;;   )
 
 (cl-defun org-glance-view:save-markers (view)
   (cl-check-type view org-glance-view)
@@ -456,15 +448,6 @@
               (< (point-max) marker-position)
               (not (string= asterisk asterisk*)))
      do (org-glance! marker :removed? := t)))
-
-(org-glance-fun org-glance-view:remove-markers! ((view :: org-glance-view)
-                                                 (remidxs :: (org-glance-type:list-of number))) -> (org-glance-type:list-of org-glance-type:hash)
-  (cl-loop with markers = (org-glance? view :markers)
-     for remidx in remidxs
-     for offset from 0
-     for marker = (org-glance-vector:get markers remidx)
-     collect (org-glance? marker :hash)
-     do (org-glance-vector:remove-at! markers (- remidx offset))))
 
 (cl-defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))

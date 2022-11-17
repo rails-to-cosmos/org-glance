@@ -235,6 +235,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
+  @debug
   Scenario: Multiple views, modifications across buffers
     Given world "Adventures" in directory "stories/adventures" with headlines
       """
@@ -249,11 +250,11 @@ Feature: Consistent Edit
 
     When I visit view "Hike" derived from dimension "Tag" in world "Adventures"
     And rename headline "Music Festival" to "Music Festival 2022"
-    And set headline "Music Festival 2022" contents to
-    """
-    SCHEDULED: <2022-01-01 Sat>
-    """
-    And save buffer
+    # And set headline "Music Festival 2022" contents to
+    # """
+    # SCHEDULED: <2022-01-01 Sat>
+    # """
+    And commit changes
     And visit view "Music" derived from dimension "Tag" in world "Adventures"
 
     Then current buffer should contain 2 headlines
@@ -261,16 +262,16 @@ Feature: Consistent Edit
     And marker positions and hashes should be consistent
     And headline "Music Festival" should not be in current buffer
     And headline "Music Festival 2022" should be in current buffer
-    And the contents of headline "Music Festival 2022" should be
-    """
-    SCHEDULED: <2022-01-01 Sat>
-    """
+    # And the contents of headline "Music Festival 2022" should be
+    # """
+    # SCHEDULED: <2022-01-01 Sat>
+    # """
 
     When I rename headline "Music Festival 2022" to "Music Festival 2023"
-    And set headline "Music Festival 2023" contents to
-    """
-    SCHEDULED: <2023-01-01 Sun>
-    """
+    # And set headline "Music Festival 2023" contents to
+    # """
+    # SCHEDULED: <2023-01-01 Sun>
+    # """
 
     Then headline "Music Festival 2023" should be changed
     And 1 marker should be changed
@@ -284,10 +285,10 @@ Feature: Consistent Edit
     Then current buffer should contain 4 headlines
     And headline "Music Festival 2022" should not be in current buffer
     And headline "Music Festival 2023" should be in current buffer
-    And the contents of headline "Music Festival 2023" should be
-    """
-    SCHEDULED: <2023-01-01 Sun>
-    """
+    # And the contents of headline "Music Festival 2023" should be
+    # """
+    # SCHEDULED: <2023-01-01 Sun>
+    # """
     And marker positions and hashes should be consistent
 
     When I rename headline "Music Festival 2023" to "Music Festival 2024"
@@ -450,7 +451,6 @@ Feature: Consistent Edit
 
     Then current buffer should contain 0 headlines
 
-  @debug
   Scenario: Headline updates results in deletion from other dimension
     Given world "Adventures" in directory "stories/adventures" with headlines
       """

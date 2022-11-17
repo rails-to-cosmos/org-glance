@@ -28,7 +28,8 @@ editor."
   (interactive)
   (org-glance-log :markers "Before update change beg: %d" change-beg)
   (org-glance-log :markers "Before update change end: %d" change-end)
-  (org-glance-log :markers "Before update contents: \"%s\"" (buffer-substring-no-properties change-beg change-end)))
+  (org-glance-log :markers "Before update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
+  (org-glance-log :contents "Before update contents: \"%s\"" (buffer-string)))
 
 (cl-defun org-glance-material-mode:after-update (change-beg change-end change-len)
   "Actualize marker overlay."
@@ -43,6 +44,10 @@ editor."
     (org-glance-log :markers "After update change beg: %d" change-beg)
     (org-glance-log :markers "After update change end: %d" change-end)
     (org-glance-log :markers "After update change len: %d" change-len)
+    (condition-case nil
+        (org-glance-log :markers "After update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
+      (error nil))
+    (org-glance-log :contents "After update contents: \"%s\"" (buffer-string))
     (org-glance-log :markers "After update markers: %s" (pp-to-string (org-glance? view :markers)))
 
     ;; (save-match-data
