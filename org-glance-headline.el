@@ -86,6 +86,12 @@
      (headline :type org-glance-headline-header
                :initarg :headline)))
 
+(org-glance-class org-glance-event:UPDATE* (org-glance-event)
+    ((hash :type org-glance-type:hash
+           :initarg :hash)
+     (headline :type org-glance-headline
+               :initarg :headline)))
+
 (org-glance-class org-glance-link nil
     ((title :type string
             :initarg :title)

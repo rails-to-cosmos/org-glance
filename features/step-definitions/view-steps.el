@@ -36,8 +36,22 @@
 
 (When "^I? ?commit changes$"
   (lambda ()
-    (org-glance-view:commit)
-    (save-buffer)))
+    (let* ((view (org-glance-view:get-buffer-view))
+           (world (org-glance? view :world))
+           (markers (org-glance? view :markers)))
+      (org-glance-log :markers "Before commit markers:\n\"%s\"\n" markers)
+      (org-glance-log :markers "Before commit changelog*:\n\"%s\"\n" (org-glance? world :changelog*))
+      (org-glance-log :markers "Before commit changelog:\n\"%s\"\n" (org-glance? world :changelog))
+      (save-buffer)
+      (org-glance-log :markers "After commit markers:\n\"%s\"\n" markers)
+      (org-glance-log :changelog "After commit changelog*:")
+      (cl-loop for event in (reverse (org-glance? world :changelog* :events))
+         for i from 1
+         do (org-glance-log :changelog "%d) %s" i event))
+      (org-glance-log :changelog "After commit changelog:")
+      (cl-loop for event in (reverse (org-glance? world :changelog :events))
+         for i from 1
+         do (org-glance-log :changelog "%d) %s" i event)))))
 
 (When "^I? ?apply changes$"
   (lambda ()

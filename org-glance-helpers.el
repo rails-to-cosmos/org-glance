@@ -20,7 +20,9 @@ Example: (org-glance? view :world :location)"
          ((and (s-starts-with? "[" s-slot)
                (s-ends-with? "]" s-slot))
           (let ((idx (read (substring s-slot 1 (- (length s-slot) 1)))))
-            `(aref ,acc ,idx)))
+            `(cl-typecase ,acc
+               (org-glance-vector (aref (slot-value ,acc :array) ,idx))
+               (otherwise (aref ,acc ,idx)))))
          (t (user-error "Unknown slot reference: %s" slot)))))
    slots
    :initial-value object))

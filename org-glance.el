@@ -108,8 +108,7 @@
   (clrhash org-glance-view--cache)
   (let ((world (org-glance-world:get-or-create org-glance-directory)))
     (setf (org-glance? world :dimensions) org-glance-dimensions)
-    (setq org-glance-current-world world)
-    (garbage-collect)))
+    (setq org-glance-current-world world)))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

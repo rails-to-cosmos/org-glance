@@ -6,12 +6,13 @@
           :headlines nil
           :cache nil
           :dimensions nil
-          :contents nil
-          :markers t
+          :contents t
+          :markers nil
           :buffers nil
           :performance nil
           :offsets nil
-          :test nil))
+          :test nil
+          :changelog t))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))

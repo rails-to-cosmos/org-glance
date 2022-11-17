@@ -216,10 +216,8 @@
 
 (Then "^current buffer should contain \\([[:digit:]]+\\) headlines?$"
       (lambda (expected-count)
-        (let ((actual-count 0))
-          (org-glance-headline:map (headline)
-            (cl-incf actual-count))
-          (should (= actual-count (string-to-number expected-count))))))
+        (org-glance-log :contents "Contents of buffer %s:\n\"%s\"\n\n" (buffer-name) (buffer-string))
+        (should (= (-sum (org-glance-headline:map (_) 1)) (string-to-number expected-count)))))
 
 (And "^I? ?set headline todo state to \"\\([^\"]+\\)\"$"
      (lambda (state)

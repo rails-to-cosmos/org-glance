@@ -31,6 +31,10 @@
      (changed?
       :type boolean
       :initarg :changed?
+      :initform nil)
+     (removed?
+      :type boolean
+      :initarg :removed?
       :initform nil)))
 
 (org-glance-class org-glance-view nil
@@ -123,13 +127,17 @@
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance! marker :position := val))))
 
+(cl-defun org-glance-view:set-marker-remove (view midx val)
+  (org-glance-view:if-safe-marker view midx
+      (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
+        (org-glance! marker :position := val))))
+
 (cl-defun org-glance-view:set-marker-hash (view midx val)
   (org-glance-view:if-safe-marker view midx
       (progn
         (remhash (org-glance-view:get-marker-hash view midx) (org-glance? view :hash->midx))
         (puthash val midx (org-glance? view :hash->midx))
-        (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
-          (org-glance! marker :hash := val)))))
+        (org-glance! view :markers [midx] :hash := val))))
 
 (cl-defun org-glance-view:get-marker-hash (view midx)
   (org-glance-view:if-safe-marker view midx
@@ -156,29 +164,6 @@
              (save-restriction
                ,@forms)))))))
 
-(cl-defmacro org-glance-view:consume-changes (spec &rest forms)
-  "Pop changed markers one by one from current buffer binding each marker to VAR and executing FORMS.
-
-\(fn (VAR VIEW) FORMS...)"
-  ;; TODO lock, possible data loss
-  (declare (indent 1) (debug ((symbolp form &optional form) forms)))
-  (unless (consp spec) (signal 'wrong-type-argument (list 'consp spec)))
-  (unless (= 2 (length spec)) (signal 'wrong-number-of-arguments (list '(2 . 2) (length spec))))
-  (let ((view (car spec))
-        (midx-var-name (cadr spec)))
-    `(org-glance-view:with-current-buffer ,view
-       (cl-loop
-          with markers = (org-glance? ,view :markers)
-          for midx from 0 below (org-glance-vector:size markers)
-          for marker = (org-glance-vector:get markers midx)
-          when (org-glance? marker :changed?)
-          collect (unwind-protect
-                       (save-excursion
-                         (goto-char (org-glance? marker :position))
-                         (let ((,midx-var-name midx))
-                           ,@forms))
-                    (org-glance-view:set-marker-changed ,view midx nil))))))
-
 (cl-defun org-glance-view:add-headline (view headline)
   (cl-check-type view org-glance-view)
   (cl-check-type headline org-glance-headline)
@@ -195,15 +180,16 @@
   (cl-check-type view org-glance-view)
   (cl-check-type hash org-glance-type:hash)
 
-  (org-glance-log :markers "Remove hash: %s" hash)
-  (let* ((midx (org-glance-view:get-marker-index view hash))
-         (mpos (org-glance-view:get-marker-position view midx))
-         (markers (org-glance? view :markers)))
-    (goto-char mpos)
-    (org-glance-headline:with-headline-at-point
-      (delete-region (point-min) (point-max)))
-    (org-glance-vector:remove-at! markers midx)
-    (remhash hash (org-glance? view :hash->midx))))
+  (org-glance-view:with-current-buffer view
+    (let* ((midx (org-glance-view:get-marker-index view hash))
+           (mpos (org-glance-view:get-marker-position view midx))
+           (markers (org-glance? view :markers)))
+      (goto-char mpos)
+      (org-glance-headline:with-headline-at-point
+        (let ((inhibit-modification-hooks t))
+          (delete-region (point-min) (point-max))
+          (org-glance-vector:remove-at! markers midx)
+          (remhash hash (org-glance? view :hash->midx)))))))
 
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
   (cl-check-type view org-glance-view)
@@ -271,37 +257,43 @@
 
   (pcase (org-glance-view:load-markers view)
     ('() (let ((markers (org-glance-view:make-markers)))
-           (org-glance-log :markers "Make and save: %s" markers)
            (org-glance-view:set-markers! view markers)
            (org-glance-view:save-markers view)))
     (markers
-     (org-glance-log :markers "Set markers only: %s" markers)
      (org-glance-view:set-markers! view markers))))
 
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
-    (let ((world (org-glance? view :world))
-          (to-remove '()))
+    (cl-loop with markers = (org-glance? view :markers)
+       with world = (org-glance? view :world)
+       with to-remove = '()
+       for midx from 0 below (org-glance-vector:size markers)
+       when (and (org-glance? view :markers [midx] :changed?)
+                 (not (org-glance? view :markers [midx] :removed?)))
+       do (let* ((headline (org-glance-view:get-marker-headline view midx))
+                 (old-hash (org-glance-view:get-marker-hash view midx))
+                 (new-hash (org-glance? headline :hash)))
 
-      (org-glance-view:consume-changes (view midx)
-        (let* ((headline (org-glance-view:get-marker-headline view midx))
-               (old-hash (org-glance-view:get-marker-hash view midx))
-               (new-hash (org-glance? headline :hash)))
+            (org-glance-world:update-headline world old-hash headline)
+            (org-glance! view :markers [midx] :changed? := nil)
+            (org-glance-view:set-marker-hash view midx new-hash)
 
-          (org-glance-world:update-headline world old-hash headline)
-          (org-glance-view:set-marker-changed view midx nil)
-          (org-glance-view:set-marker-hash view midx new-hash)
+            (unless (org-glance-world:validate-headline world (org-glance? view :type) headline)
+              (push new-hash to-remove)))
+       finally do
+         (dolist (hash to-remove)
+           (org-glance-view:remove-headline view hash))
+         (let ((offset (org-glance-world:persist world)))
+           (org-glance-view:set-offset view offset))
+         (org-glance-view:save-markers view))))
 
-          (unless (org-glance-world:validate-headline world (org-glance? view :type) headline)
-            (push new-hash to-remove))))
-
-      (dolist (hash to-remove)
-        (org-glance-view:remove-headline view hash))
-
-      (let ((offset (org-glance-world:persist world)))
-        (org-glance-view:set-offset view offset))
-
-      (org-glance-view:save-markers view))))
+;; (cl-defun org-glance-view:update-marker (view midx diff)
+;;   ;; (let ((remidxs ))
+;;   ;;   (org-glance-view:remove-markers! view remidxs)
+;;   ;;   ;; (cl-loop for hash in remhashes
+;;   ;;   ;;    do (org-glance-world:remove-headline (org-glance? view :world) hash))
+;;   ;;   )
+;;   )
 
 (cl-defun org-glance-view:save-markers (view)
   (cl-check-type view org-glance-view)
@@ -448,17 +440,31 @@
                                              (point (point)))
   (org-glance-vector:non-binary-search (org-glance? view :markers) point))
 
-(cl-defun org-glance-view:shift-markers (view midx diff)
+(org-glance-fun org-glance-view:shift-markers! ((view :: org-glance-view)
+                                                (midx :: number)
+                                                (diff :: number)) -> (org-glance-type:list-of number)
   (cl-loop with asterisk = "\n*"
-     for idx from (1+ midx) below (org-glance-vector:size (org-glance? view :markers))
+     with markers = (org-glance? view :markers)
+     for idx from (1+ midx) below (org-glance-vector:size markers)
+     for marker = (org-glance-vector:get markers idx)
      for marker-position = (+ (org-glance-view:get-marker-position view idx) diff)
+     for asterisk* = (condition-case nil
+                         (buffer-substring-no-properties (1- marker-position) (1+ marker-position))
+                       (error ""))
      do (org-glance-view:set-marker-position view idx marker-position)
      when (or (< marker-position (point-min))
               (< (point-max) marker-position)
-              (not (string= asterisk (buffer-substring-no-properties (1- marker-position) (1+ marker-position)))))
-     collect idx into to-remove
-     finally do (cl-loop for remidx in to-remove
-                   do (org-glance-vector:remove-at! (org-glance? view :markers) remidx))))
+              (not (string= asterisk asterisk*)))
+     do (org-glance! marker :removed? := t)))
+
+(org-glance-fun org-glance-view:remove-markers! ((view :: org-glance-view)
+                                                 (remidxs :: (org-glance-type:list-of number))) -> (org-glance-type:list-of org-glance-type:hash)
+  (cl-loop with markers = (org-glance? view :markers)
+     for remidx in remidxs
+     for offset from 0
+     for marker = (org-glance-vector:get markers remidx)
+     collect (org-glance? marker :hash)
+     do (org-glance-vector:remove-at! markers (- remidx offset))))
 
 (cl-defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))

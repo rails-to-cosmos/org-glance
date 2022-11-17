@@ -9,7 +9,10 @@
   (lambda (thing)
     (insert thing)))
 
-(When "^I? ?save buffer$" #'save-buffer)
+(When "^I? ?save buffer$"
+  (lambda ()
+    (save-buffer)))
+
 (When "^I? ?switch to buffer \"\\([^\"]+\\)\"$" #'switch-to-buffer)
 
 (When "^I? ?kill buffer$" #'kill-buffer)

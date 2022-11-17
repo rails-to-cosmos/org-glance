@@ -471,7 +471,7 @@ Feature: Consistent Edit
     """
     Now the timestamp is inactive: [2022-11-11 Fri]
     """
-    And save buffer
+    And commit changes
     And visit view "t" derived from dimension "active" in world "Adventures"
     Then current buffer should contain 0 headlines
 
@@ -483,7 +483,7 @@ Feature: Consistent Edit
     """
     Now the timestamp is active: <2022-11-11 Fri>
     """
-    And save buffer
+    And commit changes
 
     Then current buffer should contain 0 headlines
 

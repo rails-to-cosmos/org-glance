@@ -139,31 +139,40 @@ In all other places `org-glance-world' should act like pure
 functional data structure.
 
 Return last committed offset."
-  (let* ((changelog (org-glance? world :changelog))
-         (changelog* (org-glance? world :changelog*)))
-    (dolist-with-progress-reporter (event (reverse (org-glance? changelog* :events)))
+  (let ((changelog (org-glance? world :changelog)))
+    (dolist-with-progress-reporter (event (reverse (org-glance? world :changelog* :events)))
         (format "Persist world %s" (org-glance? world :location))
       (thunk-let* ((source-hash (org-glance? event :hash))
                    (target-hash (org-glance? event :headline :hash))
                    (headline-exists? (org-glance-world:headline-exists? world target-hash))
+                   (event-headline (org-glance? event :headline))
                    (headline (org-glance-world:get-headline world target-hash)))
         (cl-typecase event
-          (org-glance-event:RM (org-glance-world:delete-headline world source-hash))
-          (org-glance-event:PUT (org-glance-world:write-headline world headline)
-                                (org-glance-world:make-partitions world headline))
-          (org-glance-event:UPDATE (org-glance-world:write-headline world headline)
-                                   (org-glance-world:make-partitions world headline)
-                                   (org-glance-world:delete-headline world source-hash)))
-        (org-glance-changelog:push changelog event)))
+          (org-glance-event:RM
+           (org-glance-world:delete-headline world source-hash)
+           (org-glance-changelog:push changelog event))
+          (org-glance-event:PUT
+           (org-glance-world:write-headline world headline)
+           (org-glance-world:make-partitions world headline)
+           (org-glance-changelog:push changelog event))
+          (org-glance-event:UPDATE*
+           (org-glance-world:write-headline world event-headline)
+           (org-glance-world:make-partitions world event-headline)
+           (org-glance-world:delete-headline world source-hash)
+           (org-glance-changelog:push changelog (org-glance-event:UPDATE :hash source-hash
+                                                                         :headline (org-glance-headline-header:from-headline event-headline))))
+          (otherwise (error "Don't know how to handle event of type %s" (type-of event))))))
 
     (org-glance-world:write-changelog! world)
+    (org-glance! world :changelog* := (org-glance-changelog))
     (org-glance-world:write-relations! world)
 
     (if (org-glance-changelog:last changelog)
         (org-glance? (org-glance-changelog:last changelog) :offset)
       (org-glance-offset:current))))
 
-(org-glance-fun org-glance-world:write-headline ((world :: org-glance-world) (headline :: org-glance-headline)) -> org-glance-type:readable-file
+(org-glance-fun org-glance-world:write-headline ((world :: org-glance-world)
+                                                 (headline :: org-glance-headline)) -> org-glance-type:readable-file
   "Persist HEADLINE in WORLD."
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
@@ -173,11 +182,10 @@ Return last committed offset."
 (org-glance-fun org-glance-world:locate-changelog ((world :: org-glance-world)) -> org-glance-type:optional-file
   (f-join (org-glance? world :location) "log" "event.log"))
 
-(org-glance-fun org-glance-world:write-changelog! ((world :: org-glance-world)) -> org-glance-changelog
+(org-glance-fun org-glance-world:write-changelog! ((world :: org-glance-world)) -> t
   (let ((changelog (org-glance? world :changelog))
         (location (org-glance-world:locate-changelog world)))
-    (org-glance-changelog:write changelog location)
-    (org-glance! world :changelog* := (org-glance-changelog))))
+    (org-glance-changelog:write changelog location)))
 
 (org-glance-fun org-glance-world:read-changelog! ((world :: org-glance-world)) -> org-glance-changelog
   (org-glance! world :changelog := (org-glance-changelog:read (org-glance-world:locate-changelog world))))
@@ -236,24 +244,26 @@ persistent storage.
 
 Actual deletion should be handled in a separate thread and
 achieved by calling `org-glance-world:persist' method."
-  (let ((event (org-glance-event:RM :hash hash)))
-    (org-glance-changelog:push (org-glance? world :changelog*) event))
-  (org-glance-world:remove-headline-from-cache! world hash))
+  (let ((event (org-glance-event:RM :hash hash))
+        (changelog* (org-glance? world :changelog*)))
+    (org-glance-changelog:push changelog* event))
+  ;; Remove headline from cache only on persist
+  ;; (org-glance-world:remove-headline-from-cache! world hash)
+  )
 
 (org-glance-fun org-glance-world:update-headline ((world :: org-glance-world)
                                                   (old-hash :: org-glance-type:hash)
                                                   (headline :: org-glance-headline)) -> org-glance-type:offset
   "Update HEADLINE with HASH in WORLD."
-  (let* ((new-hash (org-glance? headline :hash))
-         (header (org-glance-headline-header:from-headline headline))
-         (changelog (org-glance? world :changelog*))
-         (cache (org-glance? world :headline-by-hash))
-         (event (org-glance-event:UPDATE :hash old-hash :headline header))
+  (let* (;; (new-hash (org-glance? headline :hash))
+         (changelog* (org-glance? world :changelog*))
+         ;; (cache (org-glance? world :headline-by-hash))
+         (event (org-glance-event:UPDATE* :hash old-hash :headline headline))
          (offset (org-glance? event :offset)))
-    (org-glance-changelog:push changelog event)
-    (org-glance-log :cache "Update headline \"%s\" in the world cache" (org-glance? header :title))
-    (puthash new-hash headline cache)
-    (remhash old-hash cache)
+    (org-glance-changelog:push changelog* event)
+    ;; TODO remove from cache on persist only
+    ;; (puthash new-hash headline cache)
+    ;; (remhash old-hash cache)
     offset))
 
 (org-glance-fun org-glance-world:get-headline-from-cache ((world :: org-glance-world)
