@@ -50,18 +50,10 @@ editor."
     (org-glance-log :contents "After update contents: \"%s\"" (buffer-string))
     (org-glance-log :markers "After update markers: %s" (pp-to-string (org-glance? view :markers)))
 
-    ;; (save-match-data
-    ;;   (with-current-buffer (get-buffer-create "*glance-markers*")
-    ;;     (delete-region (point-min) (point-max))
-    ;;     (insert (pp-to-string (org-glance? view :markers)))
-    ;;     ;; (cl-loop with markers = (org-glance? view :markers)
-    ;;     ;;    for midx below (org-glance-vector:size markers)
-    ;;     ;;    for marker = (org-glance-vector:get markers midx)
-    ;;     ;;    for asterisk = (with-current-buffer buffer
-    ;;     ;;                     (buffer-substring-no-properties (1- (org-glance? marker :position)) (1+ (org-glance? marker :position))))
-    ;;     ;;    do (insert (format "\nMarker %d: \"%s\"" midx (if (string= "\n*" asterisk) "T" "F"))))
-
-    ;;     (insert "\n" (pp-to-string (org-glance? view :world :changelog*)))))
-    ))
+    (save-match-data
+      (with-current-buffer (get-buffer-create "*glance-markers*")
+        (delete-region (point-min) (point-max))
+        (insert (pp-to-string (org-glance? view :markers)))
+        (insert "\n" (pp-to-string (org-glance? view :world :changelog*)))))))
 
 (provide 'org-glance-material-mode)

@@ -275,7 +275,7 @@
        do (push midx to-remove)
        finally do
          (dolist (hash to-move)
-             (org-glance-view:remove-headline view hash))
+           (org-glance-view:remove-headline view hash))
 
          (cl-loop for midx in to-remove
             for offset from 0
@@ -447,7 +447,11 @@
      when (or (< marker-position (point-min))
               (< (point-max) marker-position)
               (not (string= asterisk asterisk*)))
-     do (org-glance! marker :removed? := t)))
+     do (org-glance! marker :removed? := t)
+     when (and (>= marker-position (point-min))
+               (>= (point-max) marker-position)
+               (string= asterisk asterisk*))
+     do (org-glance! marker :removed? := nil)))
 
 (cl-defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))

@@ -24,48 +24,24 @@
 (require 'org-glance-types)
 
 (org-glance-class org-glance-world nil
-    ((location
-      :type org-glance-type:world-location
-      :initarg :location
-      :documentation "Directory containing all the data.")
-     (changelog*
-      :type org-glance-changelog
-      :initarg :changelog*
-      :initform (org-glance-changelog)
-      :documentation "In-memory changelog.")
-     (changelog
-      :type org-glance-changelog
-      :initarg :changelog
-      :initform (org-glance-changelog)
-      :documentation "Persistent changelog.")
-     (dimensions
-      :type (org-glance-type:list-of org-glance-dimension)
-      :initarg :dimensions)
+    ((location :type org-glance-type:world-location :initarg :location :documentation "Directory containing all the data.")
+     (changelog* :type org-glance-changelog :initarg :changelog* :initform (org-glance-changelog) :documentation "In-memory changelog.")
+     (changelog :type org-glance-changelog :initarg :changelog :initform (org-glance-changelog) :documentation "Persistent changelog.")
+     (dimensions :type (org-glance-type:list-of org-glance-dimension) :initarg :dimensions)
 
      ;; in-memory caches
-     (partitions
-      :type (org-glance-type:list-of org-glance-partition)
-      :initarg :partitions
-      :initform nil)
-     (headline-by-hash
-      :type hash-table
-      :initarg :headline-by-hash
-      :initform (make-hash-table :test #'equal)
-      :documentation "HASH -> HEADLINE")
-     (relations
-      :type hash-table
-      :initarg :relations
-      :initform (make-hash-table :test #'equal)
-      :documentation "id -> headlines")))
+     (partitions :type (org-glance-type:list-of org-glance-partition) :initarg :partitions :initform nil)
+     (headline-by-hash :type hash-table :initarg :headline-by-hash :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
+     (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "id -> headlines")))
 
-(org-glance-fun org-glance-world:create ((location :: org-glance-type:optional-directory)) -> org-glance-world
+(org-glance-fun org-glance-world:create ((location :: OptionalDirectory)) -> org-glance-world
   "Create world located in directory LOCATION."
   (declare (indent 1))
   (f-mkdir-full-path location)
   (f-touch (f-join location "world.md"))
   (org-glance-world :location location))
 
-(org-glance-fun org-glance-world:read ((location :: org-glance-type:optional-directory)) -> (org-glance-type:optional org-glance-world)
+(org-glance-fun org-glance-world:read ((location :: OptionalDirectory)) -> (org-glance-type:optional org-glance-world)
   (cl-typecase location
     (org-glance-type:world-location (let ((world (org-glance-world:create location)))
                                       (org-glance-world:read-changelog! world)
@@ -73,7 +49,7 @@
                                       world))
     (otherwise nil)))
 
-(org-glance-fun org-glance-world:offset ((world :: org-glance-world)) -> org-glance-type:offset
+(org-glance-fun org-glance-world:offset ((world :: org-glance-world)) -> Offset
   (if-let (event (org-glance-changelog:last (org-glance? world :changelog)))
       (org-glance? event :offset)
     (org-glance-offset:current)))
@@ -87,7 +63,7 @@
      (org-glance:with-file-overwrite ,location
        ,@forms)))
 
-(org-glance-fun org-glance-world:locate-partition ((world :: org-glance-world) (partition :: org-glance-partition)) -> org-glance-type:optional-org-file
+(org-glance-fun org-glance-world:locate-partition ((world :: org-glance-world) (partition :: org-glance-partition)) -> OptionalOrgFile
   (f-join (org-glance? world :location) "views"
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
@@ -124,7 +100,7 @@
                            (push partition (org-glance? world :partitions))
                            (org-glance-view:get-or-create world partition location (org-glance-offset:zero)))))))
 
-(org-glance-fun org-glance-world:persist ((world :: org-glance-world)) -> org-glance-type:offset
+(org-glance-fun org-glance-world:persist ((world :: org-glance-world)) -> Offset
   "Persist WORLD changes.
 
 - Persist event log.
@@ -172,14 +148,14 @@ Return last committed offset."
       (org-glance-offset:current))))
 
 (org-glance-fun org-glance-world:write-headline ((world :: org-glance-world)
-                                                 (headline :: org-glance-headline)) -> org-glance-type:readable-file
+                                                 (headline :: org-glance-headline)) -> ReadableFile
   "Persist HEADLINE in WORLD."
   (let ((location (org-glance-world:locate-headline world headline)))
     (unless (f-exists-p location)
       (org-glance-headline:save headline location))
     location))
 
-(org-glance-fun org-glance-world:locate-changelog ((world :: org-glance-world)) -> org-glance-type:optional-file
+(org-glance-fun org-glance-world:locate-changelog ((world :: org-glance-world)) -> OptionalFile
   (f-join (org-glance? world :location) "log" "event.log"))
 
 (org-glance-fun org-glance-world:write-changelog! ((world :: org-glance-world)) -> t
@@ -190,7 +166,7 @@ Return last committed offset."
 (org-glance-fun org-glance-world:read-changelog! ((world :: org-glance-world)) -> org-glance-changelog
   (org-glance! world :changelog := (org-glance-changelog:read (org-glance-world:locate-changelog world))))
 
-(org-glance-fun org-glance-world:locate-relations ((world :: org-glance-world)) -> org-glance-type:optional-file
+(org-glance-fun org-glance-world:locate-relations ((world :: org-glance-world)) -> OptionalFile
   (f-join (org-glance? world :location) "relations.el"))
 
 (org-glance-fun org-glance-world:write-relations! ((world :: org-glance-world)) -> t
@@ -252,8 +228,8 @@ achieved by calling `org-glance-world:persist' method."
   )
 
 (org-glance-fun org-glance-world:update-headline ((world :: org-glance-world)
-                                                  (old-hash :: org-glance-type:hash)
-                                                  (headline :: org-glance-headline)) -> org-glance-type:offset
+                                                  (old-hash :: Hash)
+                                                  (headline :: org-glance-headline)) -> Offset
   "Update HEADLINE with HASH in WORLD."
   (let* (;; (new-hash (org-glance? headline :hash))
          (changelog* (org-glance? world :changelog*))
@@ -267,11 +243,11 @@ achieved by calling `org-glance-world:persist' method."
     offset))
 
 (org-glance-fun org-glance-world:get-headline-from-cache ((world :: org-glance-world)
-                                                          (hash :: org-glance-type:hash)) -> (org-glance-type:optional org-glance-headline)
+                                                          (hash :: Hash)) -> (org-glance-type:optional org-glance-headline)
   (gethash hash (org-glance? world :headline-by-hash)))
 
 (org-glance-fun org-glance-world:get-headline-from-stage ((world :: org-glance-world)
-                                                          (hash :: org-glance-type:hash)) -> (org-glance-type:optional org-glance-headline)
+                                                          (hash :: Hash)) -> (org-glance-type:optional org-glance-headline)
   (cl-loop for event in (org-glance-changelog:flatten (org-glance? world :changelog*))
      do (cl-typecase event
           (org-glance-event:RM (pcase hash
@@ -283,7 +259,7 @@ achieved by calling `org-glance-world:persist' method."
                                   ((pred (string= (org-glance? event :headline :hash))) (cl-return (org-glance? event :headline))))))))
 
 (org-glance-fun org-glance-world:get-headline-from-drive ((world :: org-glance-world)
-                                                          (hash :: org-glance-type:hash)) -> (org-glance-type:optional org-glance-headline)
+                                                          (hash :: Hash)) -> (org-glance-type:optional org-glance-headline)
   (org-glance:with-temp-buffer
    (org-glance-log :cache "[org-glance-headline] cache miss: \"%s\"" hash)
    (insert-file-contents (org-glance-world:locate-headline world hash))
@@ -295,7 +271,7 @@ achieved by calling `org-glance-world:persist' method."
      (puthash (org-glance? headline :hash) headline (org-glance? world :headline-by-hash)))))
 
 (org-glance-fun org-glance-world:get-headline ((world :: org-glance-world)
-                                               (hash :: org-glance-type:hash)) -> org-glance-headline
+                                               (hash :: Hash)) -> org-glance-headline
   "Return fully qualified `org-glance-headline' by its hash."
   (or (org-glance-world:get-headline-from-cache world hash)
       (org-glance-world:get-headline-from-stage world hash)

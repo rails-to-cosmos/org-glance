@@ -8,7 +8,7 @@
 (defmacro org-glance? (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
-Example: (org-glance? view :world :location)"
+Example: (org-glance? world :view :markers [0] :hash)"
   (declare (indent 1))
   (cl-reduce
    (lambda (acc slot)
@@ -17,8 +17,7 @@ Example: (org-glance? view :world :location)"
          ;; convert :-prefixed symbols to slot names
          ((s-starts-with? ":" s-slot) `(slot-value ,acc ,slot))
          ;; convert other symbols to array indices
-         ((and (s-starts-with? "[" s-slot)
-               (s-ends-with? "]" s-slot))
+         ((and (s-starts-with? "[" s-slot) (s-ends-with? "]" s-slot))
           (let ((idx (read (substring s-slot 1 (- (length s-slot) 1)))))
             `(cl-typecase ,acc
                (org-glance-vector (aref (slot-value ,acc :array) ,idx))

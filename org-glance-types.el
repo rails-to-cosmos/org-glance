@@ -4,7 +4,7 @@
 (require 'cl-macs)
 (require 'nadvice)
 
-(defmacro org-glance-fun (name args _ return-type &rest body)
+(cl-defmacro org-glance-fun (name args _ return-type &rest body)
   (declare (indent 4))
   (cl-loop
      for (arg _ type) in args
@@ -13,9 +13,25 @@
      finally return (append `(cl-defun ,name)
                             (list cl-args)
                             (cl-loop for (arg type) in cl-types
-                               collect `(cl-check-type ,arg ,type))
-                            (list `(cl-the ,return-type
+                               collect `(cl-check-type ,arg ,(pcase (format "%s" type)
+                                                               ((and type (guard (<= 65 (aref type 0) 90))) (read (format "org-glance-type:%s" (let ((case-fold-search nil))
+                                                                                                                                                 (downcase (s-replace-regexp "\\([a-z]\\)\\([A-Z]\\)" "\\1-\\2" type))))))
+                                                               (otherwise type))))
+                            (list `(cl-the ,(pcase (format "%s" return-type)
+                                              ((and return-type (guard (<= 65 (aref return-type 0) 90))) (read (format "org-glance-type:%s" (let ((case-fold-search nil))
+                                                                                                                                              (downcase (s-replace-regexp "\\([a-z]\\)\\([A-Z]\\)" "\\1-\\2" return-type))))))
+                                              (otherwise return-type))
                                      (progn ,@body))))))
+
+
+;; (cl-macroexpand '(org-glance-fun hello ((a :: Hash)) -> HashSum
+;;                   (+ 1 a)))
+
+;; (org-glance-fun hello ((a :: Hash)) -> number
+;;   (+ 1 a))
+
+;; (cl-macroexpand '(org-glance-fun:type number))
+;; (cl-check-type "a" (org-glance-fun:type Hash))
 
 (cl-deftype org-glance-type:bounded-by (val)
   `(satisfies (lambda (thing)
