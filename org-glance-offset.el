@@ -8,11 +8,11 @@
   (time-convert (read s) 'list))
 
 (cl-defun org-glance-offset:current ()
-  (cl-the org-glance-type:offset
+  (cl-the org-glance-offset
     (time-convert nil 'list)))
 
 (cl-defun org-glance-offset:zero ()
-  (cl-the org-glance-type:offset
+  (cl-the org-glance-offset
     '(0 0 0 0)))
 
 (provide 'org-glance-offset)

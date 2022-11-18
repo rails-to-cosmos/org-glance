@@ -42,11 +42,11 @@
       contain only headlines for which predicate returns non-nil
       value.")
      (location
-      :type org-glance-type:optional-org-file
+      :type org-glance-optional-org-file
       :initarg :location
       :documentation "Location where view persists.")
      (offset
-      :type org-glance-type:offset
+      :type org-glance-offset
       :initarg :offset)
      (markers
       :type org-glance-vector
@@ -168,7 +168,7 @@
 
 (cl-defun org-glance-view:remove-headline (view hash)
   (cl-check-type view org-glance-view)
-  (cl-check-type hash org-glance-type:hash)
+  (cl-check-type hash org-glance-hash)
 
   (org-glance-view:with-current-buffer view
     (let* ((midx (org-glance-view:get-marker-index view hash))
@@ -183,7 +183,7 @@
 
 (cl-defun org-glance-view:replace-headline (view old-hash headline)
   (cl-check-type view org-glance-view)
-  (cl-check-type old-hash org-glance-type:hash)
+  (cl-check-type old-hash org-glance-hash)
   (cl-check-type headline org-glance-headline)
 
   (thunk-let* ((new-hash (org-glance? headline :hash))
@@ -434,7 +434,7 @@
 
 (org-glance-fun org-glance-view:shift-markers! ((view :: org-glance-view)
                                                 (midx :: number)
-                                                (diff :: number)) -> (org-glance-type:list-of number)
+                                                (diff :: number)) -> (org-glance-list-of number)
   (cl-loop with asterisk = "\n*"
      with markers = (org-glance? view :markers)
      for idx from (1+ midx) below (org-glance-vector:size markers)

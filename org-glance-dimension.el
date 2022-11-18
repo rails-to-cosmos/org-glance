@@ -76,20 +76,16 @@
 
 (cl-defun org-glance-dimension:context (headline dimensions)
   (cl-check-type headline (or org-glance-headline org-glance-headline-header))
-  (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
+  (cl-check-type dimensions (org-glance-list-of org-glance-dimension))
 
   (cl-loop for dimension in dimensions
      collect (org-glance-dimension:partitions dimension headline)))
 
-(cl-defun org-glance-dimension:validate (predicate headline dimensions)
-  (cl-check-type predicate list)
-  (cl-check-type dimensions (org-glance-type:list-of org-glance-dimension))
-  (cl-check-type headline (or org-glance-headline org-glance-headline-header))
-
-  (let ((result (eval predicate (org-glance-dimension:context headline dimensions))))
-    (if (null result)
-        nil ;; validation failed
-      (format "%s" (car result)) ;; return evaluation result
-      )))
+(org-glance-fun org-glance-dimension:validate ((predicate :: list)
+                                               (headline :: (or Headline HeadlineHeader))
+                                               (dimensions :: (ListOf Dimension))) -> (Optional string)
+  (pcase (eval predicate (org-glance-dimension:context headline dimensions))
+    ((pred (null)) nil)
+    (result (format "%s" (car result)))))
 
 (provide 'org-glance-dimension)

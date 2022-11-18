@@ -9,7 +9,7 @@
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (cl-check-type world org-glance-world)
   (cl-check-type type org-glance-partition)
-  (cl-check-type offset org-glance-type:offset)
+  (cl-check-type offset org-glance-offset)
 
   (thunk-let* ((location (file-truename (f-join (org-glance? world :location) location)))
                (m-loc (concat (file-name-sans-extension location) org-glance-marker-extension))

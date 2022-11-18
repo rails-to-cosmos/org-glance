@@ -14,7 +14,7 @@
       contain only headlines for which predicate returns non-nil
       value.")
      (location
-      :type org-glance-type:optional-org-file
+      :type org-glance-optional-org-file
       :initarg :location
       :documentation "Location where view persists."))
   "Unique key for `org-glance-view'.")

@@ -83,4 +83,13 @@ Example: (org-glance? world :view :markers [0] :hash)"
          (let ((,var (--map (- (car it) (cdr it)) (-zip (memc) initial-memory-consumption))))
            ,handler)))))
 
+(cl-defmacro org-glance-world:with-locked-location (location &rest forms)
+  (declare (indent 1))
+  `(when (--> ,location
+              (get-file-buffer it)
+              (cond ((null it) t)
+                    ((buffer-live-p it) (kill-buffer it))))
+     (org-glance:with-file-overwrite ,location
+       ,@forms)))
+
 (provide 'org-glance-helpers)

@@ -11,7 +11,7 @@
 
 (cl-defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
-  (cl-check-type location org-glance-type:optional-directory)
+  (cl-check-type location org-glance-optional-directory)
 
   (->> location
        (file-truename)
@@ -24,7 +24,7 @@
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
   (cl-check-type world org-glance-world)
-  (cl-check-type location org-glance-type:readable-directory)
+  (cl-check-type location org-glance-readable-directory)
 
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
@@ -37,7 +37,7 @@
 
 (cl-defun org-glance-world:materialize (world &optional (partition (org-glance-world:choose-partition world)))
   (cl-check-type world org-glance-world)
-  (cl-check-type partition (org-glance-type:optional org-glance-partition))
+  (cl-check-type partition (org-glance-optional org-glance-partition))
 
   (cl-typecase partition
     (org-glance-partition (find-file (org-glance-world:updated-partition world partition)))
@@ -139,7 +139,7 @@
 
 (cl-defun org-glance-world:choose-partition (world &optional dimension)
   (cl-check-type world org-glance-world)
-  (cl-check-type dimension (org-glance-type:optional string))
+  (cl-check-type dimension (org-glance-optional string))
 
   (let* ((partitions (cl-typecase dimension
                        (string (--filter (string= (org-glance? it :dimension) dimension)

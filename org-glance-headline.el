@@ -68,7 +68,7 @@
 
 ;; Extend events suitable for headlines
 (org-glance-class org-glance-event ()
-    ((offset :type org-glance-type:offset
+    ((offset :type org-glance-offset
              :initarg :offset
              :initform (org-glance-offset:current))))
 
@@ -77,17 +77,17 @@
                :initarg :headline)))
 
 (org-glance-class org-glance-event:RM (org-glance-event)
-    ((hash :type org-glance-type:hash
+    ((hash :type org-glance-hash
            :initarg :hash)))
 
 (org-glance-class org-glance-event:UPDATE (org-glance-event)
-    ((hash :type org-glance-type:hash
+    ((hash :type org-glance-hash
            :initarg :hash)
      (headline :type org-glance-headline-header
                :initarg :headline)))
 
 (org-glance-class org-glance-event:UPDATE* (org-glance-event)
-    ((hash :type org-glance-type:hash
+    ((hash :type org-glance-hash
            :initarg :hash)
      (headline :type org-glance-headline
                :initarg :headline)))
@@ -101,7 +101,7 @@
                :initarg :position)))
 
 (org-glance-class org-glance-headline-header ()
-    ((hash :type org-glance-type:hash
+    ((hash :type org-glance-hash
            :initarg :hash
            :documentation "Hash of original headline contents.")
      (title :type string
@@ -273,7 +273,7 @@
 
 (cl-defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
-  (cl-the (org-glance-type:optional org-glance-headline)
+  (cl-the (org-glance-optional org-glance-headline)
     (save-excursion
       (unless (org-before-first-heading-p)
         (org-glance-headline:with-headline-at-point
