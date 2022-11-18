@@ -52,9 +52,9 @@
 
 (lance-dec WorldOffset :: World -> Offset)
 (lance-def WorldOffset (world)
-  (if-let (event (org-glance-changelog:last (org-glance? world :changelog)))
-      (org-glance? event :offset)
-    (org-glance-offset:current)))
+  (pcase (org-glance-changelog:last (org-glance? world :changelog))
+    ((pred null) (org-glance-offset:current))
+    (event (org-glance? event :offset))))
 
 (lance-dec LocatePartition :: World -> Partition -> OptionalOrgFile)
 (lance-def LocatePartition (world partition)
@@ -62,8 +62,8 @@
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
 
-(lance-dec Partitions :: World -> (ListOf Partition))
-(lance-def Partitions (world)
+(lance-dec WorldPartitions :: World -> (ListOf Partition))
+(lance-def WorldPartitions (world)
   (or (org-glance? world :partitions)
       (org-glance! world :partitions := (--map (--> it
                                                     (file-name-sans-extension it)
@@ -74,12 +74,14 @@
                                                     (apply #'org-glance-partition it))
                                                (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
 
-(org-glance-fun org-glance-world:read-partition ((world :: World) (partition :: Partition)) -> list
+(lance-dec ReadPartition :: World -> Partition -> list)
+(lance-def ReadPartition (world partition)
   (-> (lance LocatePartition world partition)
       (org-glance-view:locate-header)
       (org-glance-view:read-header)))
 
-(org-glance-fun org-glance-world:make-partitions ((world :: World) (headline :: Headline)) -> t
+(lance-dec MakePartitions :: World -> Headline -> t)
+(lance-def MakePartitions (world headline)
   (cl-loop with dimensions = (org-glance? world :dimensions)
      for dimension in dimensions
      for predicates = (org-glance-dimension:predicates dimension headline)
@@ -95,7 +97,8 @@
                            (push partition (org-glance? world :partitions))
                            (org-glance-view:get-or-create world partition location (org-glance-offset:zero)))))))
 
-(org-glance-fun org-glance-world:persist ((world :: World)) -> Offset
+(lance-dec SaveWorld :: World -> Offset)
+(lance-def SaveWorld (world)
   "Persist WORLD changes.
 
 - Persist event log.
@@ -124,11 +127,11 @@ Return last committed offset."
            (org-glance-changelog:push changelog event))
           (org-glance-event:PUT
            (org-glance-world:write-headline world headline)
-           (org-glance-world:make-partitions world headline)
+           (lance MakePartitions world headline)
            (org-glance-changelog:push changelog event))
           (org-glance-event:UPDATE*
            (org-glance-world:write-headline world event-headline)
-           (org-glance-world:make-partitions world event-headline)
+           (lance MakePartitions world event-headline)
            (org-glance-world:delete-headline world source-hash)
            (org-glance-changelog:push changelog (org-glance-event:UPDATE :hash source-hash
                                                                          :headline (org-glance-headline-header:from-headline event-headline))))
@@ -212,7 +215,7 @@ Append RM event to WAL, but do not remove HEADLINES from the
 persistent storage.
 
 Actual deletion should be handled in a separate thread and
-achieved by calling `org-glance-world:persist' method."
+achieved by calling `(lance SaveWorld)' method."
   (let ((event (org-glance-event:RM :hash hash))
         (changelog* (org-glance? world :changelog*)))
     (org-glance-changelog:push changelog* event))
@@ -300,15 +303,13 @@ achieved by calling `org-glance-world:persist' method."
                 (if (> (length s) len)
                     (format "%s%s" (substring s 0 (- len (length ellipsis))) ellipsis)
                   s)))
-    (let ((location (uniquify (s-join "_" (list (format-time-string "%Y-%m-%d")
-                                                (--> (org-glance? headline :title)
-                                                     (replace-regexp-in-string "[^a-z0-9A-Z_]" "_" it)
-                                                     (replace-regexp-in-string "\\-+" "-" it)
-                                                     (replace-regexp-in-string "\\-+$" "" it)
-                                                     (truncate 30 it ""))))
-                              (org-glance? world :relations))))
-      (f-mkdir-full-path location)
-      (file-name-nondirectory location))))
+    (uniquify (s-join "_" (list (format-time-string "%Y-%m-%d")
+                                (--> (org-glance? headline :title)
+                                     (replace-regexp-in-string "[^a-z0-9A-Z_]" "_" it)
+                                     (replace-regexp-in-string "\\-+" "-" it)
+                                     (replace-regexp-in-string "\\-+$" "" it)
+                                     (truncate 50 it ""))))
+              (org-glance? world :relations))))
 
 (org-glance-fun org-glance-world:locate-headline ((world :: World)
                                                   (headline :: (or Hash

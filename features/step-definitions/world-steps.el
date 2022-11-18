@@ -173,4 +173,4 @@
 (When "^I? ?persist world \"\\([^\"]+\\)\"$"
   (lambda (world-name)
     (let ((world (org-glance-test:get-world world-name)))
-      (org-glance-world:persist world))))
+      (lance SaveWorld world))))

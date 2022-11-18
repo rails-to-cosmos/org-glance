@@ -283,7 +283,7 @@
               (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
               (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
 
-         (let ((offset (org-glance-world:persist world)))
+         (let ((offset (lance SaveWorld world)))
            (org-glance-view:set-offset view offset))
          (org-glance-view:save-markers view))))
 

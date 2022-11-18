@@ -39,6 +39,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-dimension)
 (require 'org-glance-world)
+(require 'org-glance-world-model)
 (require 'org-glance-material-mode)
 
 (defgroup org-glance nil
@@ -104,9 +105,7 @@
 (lance-dec Import :: ReadableDirectory -> t)
 (lance-def Import (location)
   (interactive "DDirectory: ")
-  (-> org-glance-current-world
-      (org-glance-world:import location)
-      (org-glance-world:persist)))
+  (lance SaveWorld (org-glance-world:import org-glance-current-world location)))
 
 (lance-dec Init :: t)
 (lance-def Init ()

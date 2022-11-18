@@ -68,7 +68,7 @@
   (let ((world (org-glance-world:current)))
     (org-glance-headline:map (headline)
       (org-glance-world:add-headline! world headline))
-    (org-glance-world:persist world)
+    (lance SaveWorld world)
     (let ((file (buffer-file-name)))
       (save-buffer)
       (kill-buffer (get-file-buffer file))
@@ -143,8 +143,8 @@
 
   (let* ((partitions (cl-typecase dimension
                        (string (--filter (string= (org-glance? it :dimension) dimension)
-                                         (lance Partitions world)))
-                       (otherwise (lance Partitions world))))
+                                         (lance WorldPartitions world)))
+                       (otherwise (lance WorldPartitions world))))
          (reprs (--map (org-glance-partition:representation it) partitions)))
     (when-let (choice (condition-case nil
                           (if reprs
@@ -158,7 +158,7 @@
   (cl-check-type partition org-glance-partition)
 
   (let* ((location (lance LocatePartition world partition))
-         (header (org-glance-world:read-partition world partition))
+         (header (lance ReadPartition world partition))
          (view-type (a-get header :type))
          (view-offset (a-get header :offset))
          ;; (world-offset (org-glance-world:offset world))
@@ -183,7 +183,7 @@
       (when (org-glance-world:headline-exists? world (org-glance? event :headline :hash))
         (cl-typecase event
           (org-glance-event:RM nil)
-          (org-glance-event:PUT (org-glance-world:make-partitions world headline))
-          (org-glance-event:UPDATE (org-glance-world:make-partitions world headline)))))))
+          (org-glance-event:PUT (lance MakePartitions world headline))
+          (org-glance-event:UPDATE (lance MakePartitions world headline)))))))
 
 (provide 'org-glance-world)
