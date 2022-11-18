@@ -3,8 +3,6 @@
 (require 'f)
 (require 'dash)
 (require 'org-glance)
-(require 'org-glance-helpers)
-(require 'org-glance-log)
 
 (defvar org-glance-support-path (f-dirname load-file-name))
 (defvar org-glance-features-path (f-parent org-glance-support-path))
@@ -51,7 +49,7 @@
   (let ((filter (lambda (event)
                   (cl-typecase event
                     (org-glance-event:RM nil)
-                    ((or org-glance-event:PUT org-glance-event:UPDATE) (string= title (org-glance? event :headline :title)))))))
+                    ((or org-glance-event:PUT org-glance-event:UPDATE) (string= title (lance-get event :headline :title)))))))
     (not (null (org-glance-changelog:last (org-glance-changelog:filter changelog filter))))))
 
 ;; Ensure that we don't load old byte-compiled versions

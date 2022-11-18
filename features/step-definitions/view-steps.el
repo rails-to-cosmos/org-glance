@@ -5,12 +5,6 @@
 (require 'f)
 
 (require 'org-glance)
-(require 'org-glance-scope)
-
-(require 'org-glance-headline)
-(require 'org-glance-world)
-(require 'org-glance-world-model)
-(require 'org-glance-view)
 
 (When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"
   (lambda (view-name file-name)
@@ -28,28 +22,28 @@
       (lambda (changed-markers-count)
         (let ((view (org-glance-view:get-buffer-view)))
           (should (= (string-to-number changed-markers-count)
-                     (cl-loop with markers = (org-glance? (org-glance-view:get-buffer-view) :markers)
+                     (cl-loop with markers = (lance-get (org-glance-view:get-buffer-view) :markers)
                         for midx below (org-glance-vector:size markers)
                         for marker = (org-glance-vector:get markers midx)
-                        when (org-glance? marker :changed?)
+                        when (lance-get marker :changed?)
                         sum 1))))))
 
 (When "^I? ?commit changes$"
   (lambda ()
     (let* ((view (org-glance-view:get-buffer-view))
-           (world (org-glance? view :world))
-           (markers (org-glance? view :markers)))
+           (world (lance-get view :world))
+           (markers (lance-get view :markers)))
       (org-glance-log :markers "Before commit markers:\n\"%s\"\n" (pp-to-string markers))
-      (org-glance-log :markers "Before commit changelog*:\n\"%s\"\n" (pp-to-string (org-glance? world :changelog*)))
-      (org-glance-log :markers "Before commit changelog:\n\"%s\"\n" (pp-to-string (org-glance? world :changelog)))
+      (org-glance-log :markers "Before commit changelog*:\n\"%s\"\n" (pp-to-string (lance-get world :changelog*)))
+      (org-glance-log :markers "Before commit changelog:\n\"%s\"\n" (pp-to-string (lance-get world :changelog)))
       (save-buffer)
       (org-glance-log :markers "After commit markers:\n\"%s\"\n" (pp-to-string markers))
       (org-glance-log :changelog "After commit changelog*:")
-      (cl-loop for event in (reverse (org-glance? world :changelog* :events))
+      (cl-loop for event in (reverse (lance-get world :changelog* :events))
          for i from 1
          do (org-glance-log :changelog "%d) %s" i event))
       (org-glance-log :changelog "After commit changelog:")
-      (cl-loop for event in (reverse (org-glance? world :changelog :events))
+      (cl-loop for event in (reverse (lance-get world :changelog :events))
          for i from 1
          do (org-glance-log :changelog "%d) %s" i event)))))
 
@@ -73,10 +67,10 @@
 (Then "^buffer offset should be latest$"
       (lambda ()
         (let* ((view (org-glance-view:get-buffer-view))
-               (world (org-glance? view :world)))
+               (world (lance-get view :world)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:get-offset view)
-                   (lance WorldOffset world))))))
+                   (lance-run WorldOffset world))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()
@@ -92,7 +86,7 @@
               (hc (org-glance-headline:map (headline)
                     (let ((midx (org-glance-view:marker-at-point)))
                       (and (> midx -1)
-                           (= (org-glance? (org-glance-vector:get (org-glance? view :markers) midx) :position)
+                           (= (lance-get (org-glance-vector:get (lance-get view :markers) midx) :position)
                               (point-min)))))))
          (should (--all-p (eq it t) hc)))))
 
@@ -105,7 +99,7 @@
                       (org-glance-log :markers "Looking for midx: %d" midx)
 
                       (unless (= (org-glance-view:get-marker-position view midx) (point-min))
-                        (org-glance-log :markers "Markers: %s" (org-glance? view :markers))
+                        (org-glance-log :markers "Markers: %s" (lance-get view :markers))
                         (org-glance-log :markers "Marker position: %d" (org-glance-view:get-marker-position view midx))
                         (org-glance-log :markers "Headline: %d %d" (point-min) (point-max))
                         (org-glance-log :markers "Headline contents:\n\"%s\"" (buffer-substring-no-properties (point-min) (point-max)))
@@ -118,16 +112,16 @@
 
 
                         (org-glance-log :markers "Diff: \"%s\"" (buffer-substring-no-properties
-                                                                 (org-glance? marker :end)
+                                                                 (lance-get marker :end)
                                                                  (point-max))))
 
                       (org-glance-log :markers "Marker hash: %s" (org-glance-view:get-marker-hash view midx))
-                      (org-glance-log :markers "Headline hash: %s" (org-glance? headline :hash))
+                      (org-glance-log :markers "Headline hash: %s" (lance-get headline :hash))
                       (org-glance-log :markers "Marker position: %d" (org-glance-view:get-marker-position view midx))
                       (org-glance-log :markers "Headline position: %d" (point-min))
 
                       (and (> midx -1)
-                           (string= (org-glance-view:get-marker-hash view midx) (org-glance? headline :hash))
+                           (string= (org-glance-view:get-marker-hash view midx) (lance-get headline :hash))
                            (= (org-glance-view:get-marker-position view midx) (point-min)))))))
          (org-glance-log :markers "HC: %s" hc)
          (should (--all-p (eq it t) hc)))))
@@ -142,4 +136,4 @@
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name))
               (partition (org-glance-partition:from-key-value dimension-name view-name)))
-          (should (f-exists? (lance LocatePartition world partition))))))
+          (should (f-exists? (lance-run LocatePartition world partition))))))

@@ -1,3 +1,5 @@
+(require 'org-glance)
+
 (Given "^file \"\\([^\"]+\\)\"$"
        (lambda (filename contents)
          (let ((full-path (f-join org-glance-test:location filename)))
