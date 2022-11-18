@@ -143,8 +143,8 @@
 
   (let* ((partitions (cl-typecase dimension
                        (string (--filter (string= (org-glance? it :dimension) dimension)
-                                         (org-glance-world:partitions world)))
-                       (otherwise (org-glance-world:partitions world))))
+                                         (lance Partitions world)))
+                       (otherwise (lance Partitions world))))
          (reprs (--map (org-glance-partition:representation it) partitions)))
     (when-let (choice (condition-case nil
                           (if reprs

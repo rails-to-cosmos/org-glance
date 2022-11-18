@@ -62,7 +62,8 @@
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
 
-(org-glance-fun org-glance-world:partitions ((world :: World)) -> (ListOf Partition)
+(lance-dec Partitions :: World -> (ListOf Partition))
+(lance-def Partitions (world)
   (or (org-glance? world :partitions)
       (org-glance! world :partitions := (--map (--> it
                                                     (file-name-sans-extension it)

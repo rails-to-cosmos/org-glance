@@ -101,8 +101,8 @@
   (interactive)
   (org-glance-world:backfill org-glance-current-world))
 
-(lance-dec Import :: t)
-(lance-def Import ()
+(lance-dec Import :: ReadableDirectory -> t)
+(lance-def Import (location)
   (interactive "DDirectory: ")
   (-> org-glance-current-world
       (org-glance-world:import location)
