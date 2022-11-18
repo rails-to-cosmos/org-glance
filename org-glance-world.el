@@ -17,9 +17,9 @@
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
                        (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world:read)
+                                 #'org-glance-read-world)
                        (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world:create)))))
+                                 #'org-glance-create-world)))))
 
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
@@ -157,7 +157,7 @@
   (cl-check-type world org-glance-world)
   (cl-check-type partition org-glance-partition)
 
-  (let* ((location (org-glance-world:locate-partition world partition))
+  (let* ((location (lance LocatePartition world partition))
          (header (org-glance-world:read-partition world partition))
          (view-type (a-get header :type))
          (view-offset (a-get header :offset))

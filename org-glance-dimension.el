@@ -33,7 +33,7 @@
            (downcase it)
            (s-split-up-to "=" it 2))
     (org-glance-partition :dimension dimension
-                           :value value)))
+                          :value value)))
 
 (cl-defun org-glance-partition:from-key-value (k v)
   (org-glance-partition:from-string (downcase (format "%s=%s" k v))))
@@ -80,6 +80,12 @@
 
   (cl-loop for dimension in dimensions
      collect (org-glance-dimension:partitions dimension headline)))
+
+;; (lance-declare Validate :: list -> (or Headline HeadlineHeader) -> (ListOf Dimension) -> (Optional string))
+;; (lance-define Validate (predicate headline dimensions)
+;;   (pcase (eval predicate (org-glance-dimension:context headline dimensions))
+;;     ((pred (null)) nil)
+;;     (result (format "%s" (car result)))))
 
 (org-glance-fun org-glance-dimension:validate ((predicate :: list)
                                                (headline :: (or Headline HeadlineHeader))

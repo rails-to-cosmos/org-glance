@@ -34,27 +34,30 @@
      (headline-by-hash :type hash-table :initarg :headline-by-hash :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
      (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "id -> headlines")))
 
-(org-glance-fun org-glance-world:create ((location :: OptionalDirectory)) -> World
-  "Create world located in directory LOCATION."
+(lance-dec CreateWorld :: OptionalDirectory -> World)
+(lance-def CreateWorld (location)
   (declare (indent 1))
   (f-mkdir-full-path location)
   (f-touch (f-join location "world.md"))
   (org-glance-world :location location))
 
-(org-glance-fun org-glance-world:read ((location :: OptionalDirectory)) -> (Optional World)
+(lance-dec ReadWorld :: OptionalDirectory -> (Optional World))
+(lance-def ReadWorld (location)
   (cl-typecase location
-    (org-glance-world-location (let ((world (org-glance-world:create location)))
-                                      (org-glance-world:read-changelog! world)
-                                      (org-glance-world:read-relations! world)
-                                      world))
+    (org-glance-world-location (let ((world (lance CreateWorld location)))
+                                 (org-glance-world:read-changelog! world)
+                                 (org-glance-world:read-relations! world)
+                                 world))
     (otherwise nil)))
 
-(org-glance-fun org-glance-world:offset ((world :: World)) -> Offset
+(lance-dec WorldOffset :: World -> Offset)
+(lance-def WorldOffset (world)
   (if-let (event (org-glance-changelog:last (org-glance? world :changelog)))
       (org-glance? event :offset)
     (org-glance-offset:current)))
 
-(org-glance-fun org-glance-world:locate-partition ((world :: World) (partition :: Partition)) -> OptionalOrgFile
+(lance-dec LocatePartition :: World -> Partition -> OptionalOrgFile)
+(lance-def LocatePartition (world partition)
   (f-join (org-glance? world :location) "views"
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
@@ -71,7 +74,7 @@
                                                (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
 
 (org-glance-fun org-glance-world:read-partition ((world :: World) (partition :: Partition)) -> list
-  (-> (org-glance-world:locate-partition world partition)
+  (-> (lance LocatePartition world partition)
       (org-glance-view:locate-header)
       (org-glance-view:read-header)))
 
@@ -85,7 +88,7 @@
                collect (let* ((partition (org-glance-partition
                                           :dimension (format "%s" (org-glance? dimension :name))
                                           :value value))
-                              (location (org-glance-world:locate-partition world partition)))
+                              (location (lance LocatePartition world partition)))
                          (unless (f-exists? location)
                            (org-glance-log :dimensions "Create derived view %s in %s" partition location)
                            (push partition (org-glance? world :partitions))
@@ -339,7 +342,7 @@ achieved by calling `org-glance-world:persist' method."
     (org-glance-dimension:validate predicate headline (org-glance? world :dimensions))))
 
 (org-glance-fun org-glance-world:get-partition-headlines ((world :: World)
-                                                          (partition :: Partition)) -> (ListOf Headline)
+                                                          (partition :: Partition)) -> (ListOf HeadlineHeader)
   (declare (indent 1))
   (let ((predicate (org-glance-world:make-predicate world partition))
         (headlines (org-glance-world:headlines world)))

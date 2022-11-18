@@ -2,11 +2,12 @@
 
 (require 'f)
 (require 'cl-macs)
-(require 'nadvice)
 
+(require 'nadvice)
 (defalias 's-replace-regexp 'replace-regexp-in-string)
 
-(cl-defun org-glance-type-subst (type)
+(cl-defun lance-sub (type)
+  "Substitute lance's type declarations with full elisp declarations."
   (pcase type
     ((and T
           (cl-struct symbol)
@@ -14,8 +15,33 @@
      (read (format "org-glance-%s"
                    (let ((case-fold-search nil))
                      (downcase (s-replace-regexp "\\([a-z]\\)\\([A-Z]\\)" "\\1-\\2" (symbol-name T)))))))
-    ((and T (cl-struct list)) (-map #'org-glance-type-subst T))
+    ((and T (cl-struct list)) (-map #'lance-sub T))
     (_ type)))
+
+(cl-defmacro lance-dec (name _ &rest types)
+  "Declare TYPES for function NAME."
+  (let ((symbol (lance-sub name)))
+    `(progn
+       ,(when-let (arg-types (-butlast types))
+          `(advice-add (quote ,symbol)
+                       :before (lambda (&rest args)
+                                 ,(cl-loop for type in arg-types
+                                     for i from 0
+                                     when (not (eq '-> type))
+                                     collect `(cl-check-type (nth ,(/ i 2) args) ,(lance-sub type))
+                                     into typechecks
+                                     finally return (append '(progn) typechecks)))))
+       (advice-add (quote ,symbol)
+                   :filter-return (lambda (result)
+                                    ,(when-let (return-type (car (last types)))
+                                       `(cl-the ,(lance-sub return-type) result)))))))
+
+(cl-defmacro lance-def (name &rest body)
+  (declare (indent defun))
+  `(cl-defun ,(lance-sub name) ,@body))
+
+(cl-defmacro lance (name &rest args)
+  `(,(lance-sub name) ,@args))
 
 (cl-defmacro org-glance-fun (name args _ return-type &rest body)
   (declare (indent 4))
@@ -26,8 +52,8 @@
      finally return (append `(cl-defun ,name)
                             (list cl-args)
                             (cl-loop for (arg type) in cl-types
-                               collect `(cl-check-type ,arg ,(org-glance-type-subst type)))
-                            (list `(cl-the ,(org-glance-type-subst return-type)
+                               collect `(cl-check-type ,arg ,(lance-sub type)))
+                            (list `(cl-the ,(lance-sub return-type)
                                      (progn ,@body))))))
 
 ;; (cl-macroexpand '(org-glance-fun hello ((a :: (Optional Hash))) -> HashSum

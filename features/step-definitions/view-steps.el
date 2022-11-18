@@ -76,7 +76,7 @@
                (world (org-glance? view :world)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:get-offset view)
-                   (org-glance-world:offset world))))))
+                   (lance WorldOffset world))))))
 
 (Then "^I shouldn't be able to commit$"
       (lambda ()
@@ -142,4 +142,4 @@
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name))
               (partition (org-glance-partition:from-key-value dimension-name view-name)))
-          (should (f-exists? (org-glance-world:locate-partition world partition))))))
+          (should (f-exists? (lance LocatePartition world partition))))))
