@@ -35,11 +35,9 @@
 
   world)
 
+(org-glance-declare org-glance-world:materialize :: World -> (Optional Partition) -> t)
 (cl-defun org-glance-world:materialize (world &optional (partition (org-glance-world:choose-partition world)))
-  (cl-check-type world org-glance-world)
-  (cl-check-type partition (org-glance-optional org-glance-partition))
-
-  (cl-typecase partition
+(cl-typecase partition
     (org-glance-partition (find-file (org-glance-world:updated-partition world partition)))
     (otherwise nil)))
 

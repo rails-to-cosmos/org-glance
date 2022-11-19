@@ -23,8 +23,13 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
-* TODO [#B] Delete headlines
 * TODO [#A] Overview dimensions and mode
+* TODO Remove empty dimensions
+* DONE [#B] Delete headlines
+CLOSED: [2022-11-19 Sat 11:58]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-11-19 Sat 11:58]
+:END:
 * TODO [#A] Relations
 * TODO [#C] Import including attachments
 * TODO Store current buffer and capture link to it in world

@@ -280,7 +280,7 @@
          (cl-loop for midx in to-remove
             for offset from 0
             do
-              (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
+              ;; (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
               (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
 
          (let ((offset (org-glance-world:persist world)))
