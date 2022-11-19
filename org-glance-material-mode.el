@@ -37,7 +37,8 @@ editor."
   (let* ((view (org-glance-view:get-buffer-view))
          (diff (- (- change-end change-beg) change-len))
          (midx (org-glance-view:marker-at-point view (- change-beg 1)))
-         (buffer (current-buffer)))
+         ;; (buffer (current-buffer))
+         )
     (org-glance-view:set-marker-changed view midx t)
     (org-glance-view:shift-markers! view midx diff)
 
