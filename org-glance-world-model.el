@@ -347,7 +347,7 @@ achieved by calling `org-glance-world:persist' method."
   (let ((predicate (org-glance-world:make-predicate world partition)))
     (org-glance-dimension:validate predicate headline (org-glance? world :dimensions))))
 
-(org-glance-declare org-glance-world:get-partition-headlines :: World -> Partition -> (ListOf Headline))
+(org-glance-declare org-glance-world:get-partition-headlines :: World -> Partition -> (ListOf HeadlineHeader))
 (defun org-glance-world:get-partition-headlines (world partition)
   (declare (indent 1))
   (let ((predicate (org-glance-world:make-predicate world partition))
