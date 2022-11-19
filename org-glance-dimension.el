@@ -81,9 +81,8 @@
   (cl-loop for dimension in dimensions
      collect (org-glance-dimension:partitions dimension headline)))
 
-(org-glance-fun org-glance-dimension:validate ((predicate :: list)
-                                               (headline :: (or Headline HeadlineHeader))
-                                               (dimensions :: (ListOf Dimension))) -> (Optional string)
+(org-glance-declare org-glance-dimension:validate :: list -> (or Headline HeadlineHeader) -> (ListOf Dimension) -> (Optional string))
+(defun org-glance-dimension:validate (predicate headline dimensions)
   (pcase (eval predicate (org-glance-dimension:context headline dimensions))
     ((pred (null)) nil)
     (result (format "%s" (car result)))))

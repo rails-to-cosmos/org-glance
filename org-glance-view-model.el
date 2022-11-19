@@ -432,9 +432,8 @@
                                              (point (point)))
   (org-glance-vector:non-binary-search (org-glance? view :markers) point))
 
-(org-glance-fun org-glance-view:shift-markers! ((view :: org-glance-view)
-                                                (midx :: number)
-                                                (diff :: number)) -> (org-glance-list-of number)
+(org-glance-declare org-glance-view:shift-markers! :: org-glance-view -> number -> number -> (org-glance-list-of number))
+(defun org-glance-view:shift-markers! (view midx diff)
   (cl-loop with asterisk = "\n*"
      with markers = (org-glance? view :markers)
      for idx from (1+ midx) below (org-glance-vector:size markers)
