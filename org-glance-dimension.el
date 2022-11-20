@@ -12,31 +12,23 @@
     ((dimension :type string :initarg :dimension)
      (value     :type string :initarg :value)))
 
+(org-glance-declare org-glance-partition:representation :: Partition -> string)
 (cl-defun org-glance-partition:representation (partition)
-  (cl-check-type partition org-glance-partition)
+  (downcase (format "%s=%s" (org-glance? partition :dimension) (org-glance? partition :value))))
 
-  (downcase (format "%s=%s"
-                    (org-glance? partition :dimension)
-                    (org-glance? partition :value))))
-
+(org-glance-declare org-glance-partition:path :: Partition -> OptionalDirectory)
 (cl-defun org-glance-partition:path (partition)
-  (cl-check-type partition org-glance-partition)
+  (f-join (org-glance? partition :dimension) (org-glance? partition :value)))
 
-  (f-join (org-glance? partition :dimension)
-          (org-glance? partition :value)))
-
-(cl-defun org-glance-partition:from-string (s)
-  (cl-check-type s string)
-
+(org-glance-declare org-glance-partition:from-string :: string -> Partition)
+(cl-defun org-glance-partition:from-string (str)
   (cl-destructuring-bind (dimension value)
-      (--> s
-           (downcase it)
-           (s-split-up-to "=" it 2))
-    (org-glance-partition :dimension dimension
-                           :value value)))
+      (--> (downcase str) (s-split-up-to "=" it 2))
+    (org-glance-partition :dimension dimension :value value)))
 
-(cl-defun org-glance-partition:from-key-value (k v)
-  (org-glance-partition:from-string (downcase (format "%s=%s" k v))))
+(org-glance-declare org-glance-partition:from-key-value :: string -> string -> Partition)
+(cl-defun org-glance-partition:from-key-value (key value)
+  (org-glance-partition:from-string (downcase (format "%s=%s" key value))))
 
 (cl-defun org-glance-dimension:apply (dimension headline)
   (cl-check-type dimension org-glance-dimension)

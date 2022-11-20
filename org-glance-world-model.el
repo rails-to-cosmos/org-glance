@@ -57,7 +57,7 @@
       (org-glance? event :offset)
     (org-glance-offset:current)))
 
-(org-glance-declare org-glance-world:locate-partition :: World -> Partition -> OptionalOrgFile)
+(org-glance-declare org-glance-world:locate-partition :: World -> Partition -> OptionalFile)
 (defun org-glance-world:locate-partition (world partition)
   (f-join (org-glance? world :location) "views"
           (org-glance-partition:path partition)
@@ -174,8 +174,8 @@ Return last committed offset."
 
 (org-glance-declare org-glance-world:write-relations! :: World -> t)
 (defun org-glance-world:write-relations! (world)
-       (with-temp-file (org-glance-world:locate-relations world)
-         (insert (pp-to-string (org-glance? world :relations)))))
+  (with-temp-file (org-glance-world:locate-relations world)
+    (insert (pp-to-string (org-glance? world :relations)))))
 
 (org-glance-declare org-glance-world:read-relations! :: World -> t)
 (defun org-glance-world:read-relations! (world)
@@ -337,18 +337,17 @@ achieved by calling `org-glance-world:persist' method."
 
 (org-glance-declare org-glance-world:make-predicate :: World -> Partition -> list)
 (defun org-glance-world:make-predicate (world partition)
-       (cl-loop for dimension in (org-glance? world :dimensions)
-          when (string= (org-glance? partition :dimension)
-                        (format "%s" (org-glance? dimension :name)))
-          return (org-glance-dimension:make-predicate dimension (org-glance? partition :value))))
+  (cl-loop for dimension in (org-glance? world :dimensions)
+     when (string= (org-glance? partition :dimension) (format "%s" (org-glance? dimension :name)))
+     return (org-glance-dimension:make-predicate dimension (org-glance? partition :value))))
 
 (org-glance-declare org-glance-world:validate-headline :: World -> Partition -> HeadlineHeader -> (Optional string))
 (defun org-glance-world:validate-headline (world partition headline)
   (let ((predicate (org-glance-world:make-predicate world partition)))
     (org-glance-dimension:validate predicate headline (org-glance? world :dimensions))))
 
-(org-glance-declare org-glance-world:get-partition-headlines :: World -> Partition -> (ListOf HeadlineHeader))
-(defun org-glance-world:get-partition-headlines (world partition)
+(org-glance-declare org-glance-world:partition-headlines :: World -> Partition -> (ListOf HeadlineHeader))
+(defun org-glance-world:partition-headlines (world partition)
   (declare (indent 1))
   (let ((predicate (org-glance-world:make-predicate world partition))
         (headlines (org-glance-world:headlines world)))

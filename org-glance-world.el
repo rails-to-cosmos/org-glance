@@ -98,21 +98,22 @@
     (when finalize
       (org-capture-finalize))))
 
+(org-glance-declare org-glance-world:dummy-headlines :: World -> Partition -> (ListOf cons))
+(cl-defun org-glance-world:dummy-headlines (world partition)
+  (--map (cons (org-glance? it :title) (org-glance? it :hash))
+         (org-glance-world:partition-headlines world partition)))
+
+(org-glance-declare org-glance-world:choose-headline :: World -> Partition -> (Optional HeadlineHeader))
 (cl-defun org-glance-world:choose-headline (world partition)
-  "TODO Should be consistent with dimensions."
+  "Ask user to choose headline from WORLD using PARTITION to filter list."
   (declare (indent 1))
-  (cl-check-type world org-glance-world)
-  (cl-check-type partition org-glance-partition)
+  (let ((dummies (org-glance-world:dummy-headlines world partition)))
+    (->> (completing-read (format "Choose headline (%s): " (org-glance-partition:representation partition)) dummies)
+         (a-get dummies)
+         (org-glance-world:get-headline world))))
 
-  (let ((dummies (--map (cons (org-glance? it :title) (org-glance? it :hash))
-                        (org-glance-world:get-partition-headlines world partition))))
-    (thread-last (completing-read (format "Choose headline (%s): " (org-glance-partition:representation partition)) dummies)
-      (a-get dummies)
-      (org-glance-world:get-headline world))))
-
+(org-glance-declare org-glance-world:jump :: World -> t)
 (cl-defun org-glance-world:jump (world)
-  (cl-check-type world org-glance-world)
-
   (let* ((partition (org-glance-partition:from-string "linked=t"))
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
