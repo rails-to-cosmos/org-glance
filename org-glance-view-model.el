@@ -240,7 +240,6 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
-
 (cl-defun org-glance-view:mark! (view)
   "Create effective representation of VIEW headline positions."
   (cl-check-type view org-glance-view)
@@ -280,7 +279,8 @@
          (cl-loop for midx in to-remove
             for offset from 0
             do
-              ;; (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
+            ;; Don't remove headlines from the world
+            ;; (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
               (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
 
          (let ((offset (org-glance-world:persist world)))
