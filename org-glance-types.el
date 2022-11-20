@@ -82,11 +82,6 @@
                                 (and (f-readable-p location)
                                      (f-file-p location))))))
 
-(cl-deftype org-glance-optional-org-file ()
-  `(satisfies (lambda (location) (or (not (f-exists-p location))
-                                (and (f-readable-p location)
-                                     (f-ext-p location "org"))))))
-
 (cl-deftype org-glance-hash () 'string)
 
 (cl-deftype org-glance-offset () 'time)
@@ -100,6 +95,6 @@
                      (f-exists? (f-join location "world.md"))))))
 
 (cl-deftype org-glance-scope ()
-  '(org-glance-list-of org-glance-optional-org-file))
+  '(org-glance-list-of org-glance-optional-file))
 
 (provide 'org-glance-types)

@@ -9,10 +9,9 @@
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
 
+(org-glance-declare org-glance-world:get-or-create :: OptionalDirectory -> World)
 (cl-defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
-  (cl-check-type location org-glance-optional-directory)
-
   (->> location
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
@@ -21,30 +20,31 @@
                        (-compose #'org-glance-world-cache:put
                                  #'org-glance-world:create)))))
 
+(org-glance-declare org-glance-world:import :: World -> ReadableDirectory -> World)
 (cl-defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
-  (cl-check-type world org-glance-world)
-  (cl-check-type location org-glance-readable-directory)
-
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
     (org-glance:with-temp-buffer
      (insert-file-contents file)
      (org-glance-headline:map (headline)
        (org-glance-world:add-headline! world headline))))
-
   world)
 
 (org-glance-declare org-glance-world:materialize :: World -> (Optional Partition) -> t)
 (cl-defun org-glance-world:materialize (world &optional (partition (org-glance-world:choose-partition world)))
-(cl-typecase partition
-    (org-glance-partition (find-file (org-glance-world:updated-partition world partition)))
-    (otherwise nil)))
+  "Find `org-mode' file containing headlines of WORLD and PARTITION."
+  (pcase partition
+    ((cl-struct org-glance-partition) (find-file (org-glance-world:updated-partition world partition)))
+    (_ nil)))
 
+(org-glance-declare org-glance-world:agenda :: World -> t)
 (cl-defun org-glance-world:agenda (world)
-  (cl-check-type world org-glance-world)
+  "Show agenda for all active headlines of WORLD."
 
-  (pcase (org-glance-world:choose-partition world)
+  (pcase (if current-prefix-arg
+             (org-glance-world:choose-partition world)
+           (org-glance-partition:from-string "active=t"))
     ((and (cl-struct org-glance-partition) partition) (progn
                                                         (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
                                                               org-agenda-overriding-header "org-glance agenda"
@@ -54,11 +54,12 @@
                                                         (org-agenda-list)))
     (_ nil)))
 
+(org-glance-declare org-glance-world:current :: World)
 (cl-defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
-  (or (thread-first (buffer-file-name)
-        (org-glance-world:root)
-        (org-glance-world:get-or-create))
+  (or (-> (buffer-file-name)
+          (org-glance-world:root)
+          (org-glance-world:get-or-create))
       (user-error "World %s is not registered in the system" (buffer-file-name))))
 
 (cl-defun org-glance-world:after-finalize-hook ()
@@ -72,9 +73,8 @@
       (kill-buffer (get-file-buffer file))
       (delete-file file))))
 
+(org-glance-declare org-glance-world:capture-location :: World -> OptionalFile)
 (cl-defun org-glance-world:capture-location (world)
-  (cl-check-type world org-glance-world)
-
   (f-join (org-glance? world :location) "capture.org"))
 
 (cl-defun org-glance-world:capture (world &key
