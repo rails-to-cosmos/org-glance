@@ -156,11 +156,11 @@
             :documentation "Properties specified by user in headline contents."))
   "Serializable headline with additional features on top of `org-element'.")
 
+(org-glance-declare org-glance-headline-header:from-headline :: (or Headline HeadlineHeader) -> Headline)
 (cl-defun org-glance-headline-header:from-headline (headline)
   "Infer instance of `org-glance-headline-header' from HEADLINE."
-  (cl-check-type headline (or org-glance-headline-header org-glance-headline))
-
   (cl-typecase headline
+    (org-glance-headline-header headline)
     (org-glance-headline (org-glance-headline-header
                           :hash (org-glance? headline :hash)
                           :title (org-glance? headline :title)
@@ -174,8 +174,7 @@
                           :closed? (org-glance? headline :closed?)
                           :encrypted? (org-glance? headline :encrypted?)
                           :linked? (org-glance? headline :linked?)
-                          :store? (org-glance? headline :store?)))
-    (org-glance-headline-header headline)))
+                          :store? (org-glance? headline :store?)))))
 
 (cl-defun org-glance-ast:get-buffer-ast ()
   (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))

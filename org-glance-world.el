@@ -123,10 +123,9 @@
                      (t (user-error "Unable to find links in this headline")))))
     (org-link-open-from-string (org-glance? link :org-link))))
 
-(cl-defun org-glance-world:extract-headline (world)
-  (cl-check-type world org-glance-world)
-
-  (let* ((partition (org-glance-partition:from-string "store=t"))
+(org-glance-declare org-glance-world:extract-property :: World -> t)
+(cl-defun org-glance-world:extract-property (world)
+  (let* ((partition (org-glance-partition:from-string "extractable=t"))
          (headline (org-glance-world:choose-headline world partition))
          (store (org-glance? headline :store)))
     (condition-case nil
@@ -136,10 +135,8 @@
        (setq kill-ring nil)
        (org-glance-log :info "Kill ring has been cleared")))))
 
+(org-glance-declare org-glance-world:choose-partition :: World -> (org-glance-optional string) -> t)
 (cl-defun org-glance-world:choose-partition (world &optional dimension)
-  (cl-check-type world org-glance-world)
-  (cl-check-type dimension (org-glance-optional string))
-
   (let* ((partitions (cl-typecase dimension
                        (string (--filter (string= (org-glance? it :dimension) dimension)
                                          (org-glance-world:partitions world)))
@@ -173,16 +170,15 @@
 
     location))
 
+(org-glance-declare org-glance-world:backfill :: World -> t)
 (cl-defun org-glance-world:backfill (world)
-  (cl-check-type world org-glance-world)
-
   (dolist-with-progress-reporter (event (org-glance-world:events world))
       "Backfill"
     (thunk-let ((headline (org-glance-world:get-headline world (org-glance? event :headline :hash))))
-      (when (org-glance-world:headline-exists? world (org-glance? event :headline :hash))
-        (cl-typecase event
-          (org-glance-event:RM nil)
-          (org-glance-event:PUT (org-glance-world:make-partitions world headline))
-          (org-glance-event:UPDATE (org-glance-world:make-partitions world headline)))))))
+      (cl-typecase event
+        (org-glance-event:RM nil)
+        ((or org-glance-event:PUT org-glance-event:UPDATE)
+         (when (org-glance-world:headline-exists? world (org-glance? event :headline :hash))
+           (org-glance-world:make-partitions world headline)))))))
 
 (provide 'org-glance-world)

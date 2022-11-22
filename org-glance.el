@@ -64,7 +64,10 @@
         (org-glance-dimension :name 'encrypted :form '(org-glance? headline :encrypted?))
         (org-glance-dimension :name 'closed    :form '(org-glance? headline :closed?))
         (org-glance-dimension :name 'repeated  :form '(org-glance? headline :repeated?))
-        (org-glance-dimension :name 'active    :form '(org-glance? headline :active?))))
+        (org-glance-dimension :name 'active    :form '(org-glance? headline :active?))
+        (org-glance-dimension :name 'extractable :form '(or
+                                                         (org-glance? headline :store?)
+                                                         (org-glance? headline :encrypted?)))))
 
 (defvar org-glance-current-world nil
   "Current `org-glance-world'.")
@@ -89,7 +92,7 @@
 
 (cl-defun org-glance-extract ()
   (interactive)
-  (org-glance-world:extract-headline org-glance-current-world))
+  (org-glance-world:extract-property org-glance-current-world))
 
 (cl-defun org-glance-backfill ()
   (interactive)
