@@ -47,7 +47,7 @@
 (defun org-glance-test:normalize-string (s)
   (s-trim (s-replace-regexp "[[:space:]]+" " " s)))
 
-(cl-defun org-glance-test:changelog-contains-headline-with-title (title changelog)
+(defun org-glance-test:changelog-contains-headline-with-title (title changelog)
   (let ((filter (lambda (event)
                   (cl-typecase event
                     (org-glance-event:RM nil)

@@ -13,11 +13,11 @@
            :initarg :test
            :initform #'equal)))
 
-(cl-defun org-glance-changelog:flatten (changelog)
+(defun org-glance-changelog:flatten (changelog)
   "Return list of LOG events deduplicated."
   (org-glance? changelog :events))
 
-(cl-defun org-glance-changelog:contents (changelog)
+(defun org-glance-changelog:contents (changelog)
   "Return CHANGELOG contents as a string."
   (thread-last changelog
     org-glance-changelog:flatten
@@ -31,7 +31,7 @@
   (declare (indent 1))
   `(push ,event (org-glance? ,changelog :events)))
 
-(cl-defun org-glance-changelog:read (location)
+(defun org-glance-changelog:read (location)
   (declare (indent 1))
   (cond ((and (f-exists-p location) (f-readable-p location))
          (with-temp-buffer
@@ -44,22 +44,22 @@
              result)))
         (t (org-glance-changelog))))
 
-(cl-defun org-glance-changelog:write (changelog location)
+(defun org-glance-changelog:write (changelog location)
   (let ((contents (org-glance-changelog:contents changelog)))
     (when (not (string-empty-p contents))
       (org-glance:with-temp-file location
         (insert contents)))))
 
-(cl-defun org-glance-changelog:merge (lhs rhs)
+(defun org-glance-changelog:merge (lhs rhs)
   (cl-assert (eq (org-glance? lhs :test) (org-glance? rhs :test)))
   (org-glance-changelog
    :events (append (org-glance? lhs :events) (org-glance? rhs :events))
    :test (org-glance? lhs :test)))
 
-(cl-defun org-glance-changelog:last (changelog)
+(defun org-glance-changelog:last (changelog)
   (car (org-glance? changelog :events)))
 
-(cl-defun org-glance-changelog:filter (changelog func)
+(defun org-glance-changelog:filter (changelog func)
   (cl-loop
      for event in (org-glance-changelog:flatten changelog)
      when (funcall func event)
@@ -68,7 +68,7 @@
                      :events events
                      :test (org-glance? changelog :test))))
 
-(cl-defun org-glance-changelog:length (changelog)
+(defun org-glance-changelog:length (changelog)
   (length (org-glance? changelog :events)))
 
 (provide 'org-glance-changelog)

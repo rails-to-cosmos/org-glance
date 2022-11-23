@@ -72,39 +72,39 @@
 (defvar org-glance-current-world nil
   "Current `org-glance-world'.")
 
-(cl-defun org-glance-capture ()
+(defun org-glance-capture ()
   (interactive)
   (org-glance-world:capture org-glance-current-world
     ;; :text (apply #'org-link-make-string (org-store-link t t))
     ))
 
-(cl-defun org-glance-materialize ()
+(defun org-glance-materialize ()
   (interactive)
   (org-glance-world:materialize org-glance-current-world))
 
-(cl-defun org-glance-agenda ()
+(defun org-glance-agenda ()
   (interactive)
   (org-glance-world:agenda org-glance-current-world))
 
-(cl-defun org-glance-jump ()
+(defun org-glance-jump ()
   (interactive)
   (org-glance-world:jump org-glance-current-world))
 
-(cl-defun org-glance-extract ()
+(defun org-glance-extract ()
   (interactive)
   (org-glance-world:extract-property org-glance-current-world))
 
-(cl-defun org-glance-backfill ()
+(defun org-glance-backfill ()
   (interactive)
   (org-glance-world:backfill org-glance-current-world))
 
-(cl-defun org-glance-import (location)
+(defun org-glance-import (location)
   (interactive "DDirectory: ")
   (-> org-glance-current-world
       (org-glance-world:import location)
       (org-glance-world:persist)))
 
-(cl-defun org-glance-init ()
+(defun org-glance-init ()
   "Update system state from `org-glance-directory'."
   (interactive)
   (clrhash org-glance-world--cache)

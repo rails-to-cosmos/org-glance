@@ -23,7 +23,7 @@ editor."
          (remove-hook 'before-change-functions #'org-glance-material-mode:before-update t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:after-update t))))
 
-(cl-defun org-glance-material-mode:before-update (change-beg change-end)
+(defun org-glance-material-mode:before-update (change-beg change-end)
   "Actualize marker overlay."
   (interactive)
   (org-glance-log :markers "Before update change beg: %d" change-beg)
@@ -31,7 +31,7 @@ editor."
   (org-glance-log :markers "Before update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
   (org-glance-log :contents "Before update contents: \"%s\"" (buffer-string)))
 
-(cl-defun org-glance-material-mode:after-update (change-beg change-end change-len)
+(defun org-glance-material-mode:after-update (change-beg change-end change-len)
   "Actualize marker overlay."
   (interactive)
   (let* ((view (org-glance-view:get-buffer-view))

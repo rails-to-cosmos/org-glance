@@ -156,11 +156,10 @@
             :documentation "Properties specified by user in headline contents."))
   "Serializable headline with additional features on top of `org-element'.")
 
-(org-glance-declare org-glance-headline-header:from-headline :: (or Headline HeadlineHeader) -> Headline)
-(cl-defun org-glance-headline-header:from-headline (headline)
+(org-glance-declare org-glance-headline-header:from-headline :: (or Headline HeadlineHeader) -> HeadlineHeader)
+(defun org-glance-headline-header:from-headline (headline)
   "Infer instance of `org-glance-headline-header' from HEADLINE."
   (cl-typecase headline
-    (org-glance-headline-header headline)
     (org-glance-headline (org-glance-headline-header
                           :hash (org-glance? headline :hash)
                           :title (org-glance? headline :title)
@@ -174,9 +173,10 @@
                           :closed? (org-glance? headline :closed?)
                           :encrypted? (org-glance? headline :encrypted?)
                           :linked? (org-glance? headline :linked?)
-                          :store? (org-glance? headline :store?)))))
+                          :store? (org-glance? headline :store?)))
+    (org-glance-headline-header headline)))
 
-(cl-defun org-glance-ast:get-buffer-ast ()
+(defun org-glance-ast:get-buffer-ast ()
   (thunk-let* ((subtree (org-element-contents (org-element-parse-buffer)))
                (element (car subtree))
                ;; get offset of the topmost element:
@@ -188,7 +188,7 @@
          do (org-element-put-property headline :level (- level indent-offset))))
     subtree))
 
-(cl-defun org-glance-headline:extract-store (contents)
+(defun org-glance-headline:extract-store (contents)
   (cl-loop for (_ key value)
      in (append (s-match-strings-all org-glance-user-property-1-re contents)
                 (s-match-strings-all org-glance-user-property-2-re contents))
@@ -197,13 +197,13 @@
      finally return (seq-uniq result #'(lambda (a b) (and (string= (car a) (car b))
                                                      (string= (cdr a) (cdr b)))))))
 
-(cl-defun org-glance-ast:contents (ast)
+(defun org-glance-ast:contents (ast)
   (->> ast
        org-element-interpret-data
        substring-no-properties
        s-trim))
 
-(cl-defun org-glance-ast:substitute-links-with-titles (ast)
+(defun org-glance-ast:substitute-links-with-titles (ast)
   (cl-loop for link in (org-element-map ast 'link #'identity)
      do (org-element-set-element link (or (-some->> link
                                             org-element-contents
@@ -211,7 +211,7 @@
                                           (org-element-property :raw-link link)))
      finally return ast))
 
-(cl-defun org-glance-ast:title (ast)
+(defun org-glance-ast:title (ast)
   (with-temp-buffer
     (insert (or (org-element-property :TITLE (car ast))
                 (org-element-property :raw-value (car ast))
@@ -222,7 +222,7 @@
          substring-no-properties
          s-trim)))
 
-(cl-defun org-glance-ast:state (contents)
+(defun org-glance-ast:state (contents)
   (org-glance:with-temp-buffer
    (insert contents)
    (goto-char (point-min))
@@ -232,32 +232,32 @@
      substring-no-properties
      upcase)))
 
-(cl-defun org-glance-ast:hash (contents)
+(defun org-glance-ast:hash (contents)
   (->> contents
        s-trim
        downcase
        (replace-regexp-in-string "[[:space:][:blank:][:cntrl:]]+" " ")
        (secure-hash 'md5)))
 
-(cl-defun org-glance-ast:class (ast)
+(defun org-glance-ast:class (ast)
   (-map #'downcase (org-element-property :tags (car ast))))
 
-(cl-defun org-glance-ast:commented? (ast)
+(defun org-glance-ast:commented? (ast)
   (not (null (org-element-property :commentedp (car ast)))))
 
-(cl-defun org-glance-ast:closed? (ast)
+(defun org-glance-ast:closed? (ast)
   (not (null (org-element-property :closed (car ast)))))
 
-(cl-defun org-glance-ast:archived? (ast)
+(defun org-glance-ast:archived? (ast)
   (not (null (org-element-property :archivedp (car ast)))))
 
-(cl-defun org-glance-ast:encrypted? (contents)
+(defun org-glance-ast:encrypted? (contents)
   (not (null (s-match-strings-all org-glance-encrypted-re contents))))
 
-(cl-defun org-glance-ast:linked? (contents)
+(defun org-glance-ast:linked? (contents)
   (not (null (s-match-strings-all org-link-any-re contents))))
 
-(cl-defun org-glance-headline:extract-links ()
+(defun org-glance-headline:extract-links ()
   (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
      collect (org-glance-link
               :title (substring-no-properties
@@ -270,7 +270,7 @@
                                  (org-element-property :end element)))
               :position (org-element-property :begin element))))
 
-(cl-defun org-glance-headline-at-point ()
+(defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
   (cl-the (org-glance-optional org-glance-headline)
     (save-excursion
@@ -305,7 +305,7 @@
              :contents contents
              :properties (org-entry-properties))))))))
 
-(cl-defun org-glance-headline-from-string (string)
+(defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
   (org-glance:with-temp-buffer
    (insert string)
@@ -314,7 +314,7 @@
      (outline-next-heading))
    (org-glance-headline-at-point)))
 
-(cl-defun org-glance-headline:save (headline dest)
+(defun org-glance-headline:save (headline dest)
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
@@ -322,7 +322,7 @@
     (org-glance-headline:insert headline))
   headline)
 
-(cl-defun org-glance-headline:with-properties (headline properties)
+(defun org-glance-headline:with-properties (headline properties)
   (declare (indent 1))
   (cl-check-type headline org-glance-headline)
   (cl-the org-glance-headline
@@ -332,7 +332,7 @@
         do (org-set-property key value))
      (org-glance-headline-at-point))))
 
-(cl-defun org-glance-headline:insert (headline)
+(defun org-glance-headline:insert (headline)
   (cl-check-type headline org-glance-headline)
   (insert (org-glance? headline :contents) "\n"))
 
@@ -388,7 +388,7 @@
                (error t))
         return result)))
 
-(cl-defun org-glance-headline:read (file)
+(defun org-glance-headline:read (file)
   "Load headline from FILE."
   (org-glance:with-temp-buffer
    (insert-file-contents file)
@@ -397,7 +397,7 @@
      (outline-next-heading))
    (org-glance-headline-at-point)))
 
-(cl-defun org-glance-headline:back-to-headline ()
+(defun org-glance-headline:back-to-headline ()
   "Ensure point is at heading.
 Return t if it is or raise `user-error' otherwise."
   (or (org-at-heading-p)

@@ -10,13 +10,13 @@
      (size     :type number :initarg :size)
      (capacity :type number :initarg :capacity)))
 
-(cl-defun org-glance-vector:create ()
+(defun org-glance-vector:create ()
   (let ((capacity org-glance-vector:DEFAULT-CAPACITY))
     (org-glance-vector :array (make-vector capacity nil)
                        :size 0
                        :capacity capacity)))
 
-(cl-defun org-glance-vector:double-capacity! (vec)
+(defun org-glance-vector:double-capacity! (vec)
   (cl-check-type vec org-glance-vector)
 
   (let* ((old-arr (org-glance? vec :array))
@@ -28,7 +28,7 @@
     (org-glance! vec :array    := new-arr)
     (org-glance! vec :capacity := new-capacity)))
 
-(cl-defun org-glance-vector:half-capacity! (vec)
+(defun org-glance-vector:half-capacity! (vec)
   (cl-check-type vec org-glance-vector)
 
   (let* ((old-arr (org-glance? vec :array))
@@ -40,19 +40,19 @@
     (org-glance! vec :size     := (min (org-glance? vec :size) new-capacity))
     (org-glance! vec :capacity := new-capacity)))
 
-(cl-defun org-glance-vector:enlarge-maybe! (vec)
+(defun org-glance-vector:enlarge-maybe! (vec)
   (cl-check-type vec org-glance-vector)
 
   (when (>= (org-glance? vec :size) (org-glance? vec :capacity))
     (org-glance-vector:double-capacity! vec)))
 
-(cl-defun org-glance-vector:shrink-maybe! (vec)
+(defun org-glance-vector:shrink-maybe! (vec)
   (cl-check-type vec org-glance-vector)
 
   (when (< (* 4 (org-glance? vec :size)) (org-glance? vec :capacity))
     (org-glance-vector:half-capacity! vec)))
 
-(cl-defun org-glance-vector:push-back! (vec elem)
+(defun org-glance-vector:push-back! (vec elem)
   (cl-check-type vec org-glance-vector)
 
   (org-glance-vector:enlarge-maybe! vec)
@@ -60,7 +60,7 @@
     (org-glance! vec :array [idx] := elem))
   (org-glance++ vec :size))
 
-(cl-defun org-glance-vector:push-at! (vec idx elem)
+(defun org-glance-vector:push-at! (vec idx elem)
   (cl-check-type vec org-glance-vector)
   (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
@@ -70,7 +70,7 @@
   (org-glance! vec :array [idx] := elem)
   (org-glance++ vec :size))
 
-(cl-defun org-glance-vector:remove-at! (vec idx)
+(defun org-glance-vector:remove-at! (vec idx)
   (cl-check-type vec org-glance-vector)
   (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
@@ -79,23 +79,23 @@
   (org-glance-- vec :size)
   (org-glance-vector:shrink-maybe! vec))
 
-(cl-defun org-glance-vector:get (vec idx)
+(defun org-glance-vector:get (vec idx)
   (cl-check-type vec org-glance-vector)
   (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
   (org-glance? vec :array [idx]))
 
-(cl-defun org-glance-vector:size (vec)
+(defun org-glance-vector:size (vec)
   (cl-check-type vec org-glance-vector)
 
   (org-glance? vec :size))
 
-(cl-defun org-glance-vector:empty? (vec)
+(defun org-glance-vector:empty? (vec)
   (cl-check-type vec org-glance-vector)
 
   (= 0 (org-glance-vector:size vec)))
 
-(cl-defun org-glance-vector:clear! (vec)
+(defun org-glance-vector:clear! (vec)
   (cl-check-type vec org-glance-vector)
 
   (org-glance! vec :size := 0)

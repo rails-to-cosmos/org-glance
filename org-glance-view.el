@@ -5,7 +5,7 @@
 (require 'org-glance-view-model)
 (require 'org-glance-view-cache)
 
-(cl-defun org-glance-view:get-or-create (world type location offset)
+(defun org-glance-view:get-or-create (world type location offset)
   "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
   (cl-check-type world org-glance-world)
   (cl-check-type type org-glance-partition)
@@ -21,7 +21,7 @@
              (org-glance-view-cache:put new-view)
              new-view))))
 
-(cl-defun org-glance-view:get-buffer-view ()
+(defun org-glance-view:get-buffer-view ()
   (let ((header (thread-first (buffer-file-name)
                   (org-glance-view:locate-header)
                   (org-glance-view:read-header)))

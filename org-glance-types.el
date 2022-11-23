@@ -6,7 +6,7 @@
 
 (defalias 's-replace-regexp 'replace-regexp-in-string)
 
-(cl-defun org-glance-type-subst (type)
+(defun org-glance-type-subst (type)
   (pcase type
     ((and T
           (cl-struct symbol)
@@ -17,7 +17,7 @@
     ((and T (cl-struct list)) (-map #'org-glance-type-subst T))
     (_ type)))
 
-(cl-defun org-glance-subst-type (type)
+(defun org-glance-subst-type (type)
   "Substitute lance's type declarations with full elisp declarations."
   (pcase type
     ((and T (cl-struct symbol) (guard (<= 65 (aref (symbol-name T) 0) 90)))

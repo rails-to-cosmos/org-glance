@@ -59,7 +59,7 @@
       :initform (make-hash-table :test #'equal)
       :documentation "Hash to idx.")))
 
-(cl-defun org-glance-view:create (world type location offset)
+(defun org-glance-view:create (world type location offset)
   "Create `org-glance-view' instance from WORLD by TYPE and store it in LOCATION with initial OFFSET."
   (let ((view (org-glance-view :world world
                                :type type
@@ -97,49 +97,49 @@
        ,then
      ,@else))
 
-(cl-defun org-glance-view:get-marker-headline (view midx)
+(defun org-glance-view:get-marker-headline (view midx)
   (org-glance-view:if-safe-marker view midx
       (save-excursion
         (goto-char (org-glance-view:get-marker-position view midx))
         (org-glance-headline-at-point))))
 
-(cl-defun org-glance-view:get-marker-index (view hash)
+(defun org-glance-view:get-marker-index (view hash)
   (gethash hash (org-glance? view :hash->midx)))
 
-(cl-defun org-glance-view:get-marker-position (view midx)
+(defun org-glance-view:get-marker-position (view midx)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance? marker :position))
     (point-max)))
 
-(cl-defun org-glance-view:set-marker-position (view midx val)
+(defun org-glance-view:set-marker-position (view midx val)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance! marker :position := val))))
 
-(cl-defun org-glance-view:set-marker-remove (view midx val)
+(defun org-glance-view:set-marker-remove (view midx val)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance! marker :position := val))))
 
-(cl-defun org-glance-view:set-marker-hash (view midx val)
+(defun org-glance-view:set-marker-hash (view midx val)
   (org-glance-view:if-safe-marker view midx
       (progn
         (remhash (org-glance-view:get-marker-hash view midx) (org-glance? view :hash->midx))
         (puthash val midx (org-glance? view :hash->midx))
         (org-glance! view :markers [midx] :hash := val))))
 
-(cl-defun org-glance-view:get-marker-hash (view midx)
+(defun org-glance-view:get-marker-hash (view midx)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance? marker :hash))))
 
-(cl-defun org-glance-view:marker-changed? (view midx)
+(defun org-glance-view:marker-changed? (view midx)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance? marker :changed?))))
 
-(cl-defun org-glance-view:set-marker-changed (view midx val)
+(defun org-glance-view:set-marker-changed (view midx val)
   (org-glance-view:if-safe-marker view midx
       (let ((marker (org-glance-vector:get (org-glance? view :markers) midx)))
         (org-glance! marker :changed? := val))))
@@ -154,7 +154,7 @@
              (save-restriction
                ,@forms)))))))
 
-(cl-defun org-glance-view:add-headline (view headline)
+(defun org-glance-view:add-headline (view headline)
   (cl-check-type view org-glance-view)
   (cl-check-type headline org-glance-headline)
 
@@ -166,7 +166,7 @@
     (org-glance-headline:insert headline)
     (puthash hash (- (org-glance-vector:size markers) 1) (org-glance? view :hash->midx))))
 
-(cl-defun org-glance-view:remove-headline (view hash)
+(defun org-glance-view:remove-headline (view hash)
   (cl-check-type view org-glance-view)
   (cl-check-type hash org-glance-hash)
 
@@ -181,7 +181,7 @@
           (org-glance-vector:remove-at! markers midx)
           (remhash hash (org-glance? view :hash->midx)))))))
 
-(cl-defun org-glance-view:replace-headline (view old-hash headline)
+(defun org-glance-view:replace-headline (view old-hash headline)
   (cl-check-type view org-glance-view)
   (cl-check-type old-hash org-glance-hash)
   (cl-check-type headline org-glance-headline)
@@ -219,7 +219,7 @@
 
       (org-glance-view:set-marker-hash view midx new-hash))))
 
-(cl-defun org-glance-view:make-markers ()
+(defun org-glance-view:make-markers ()
   (let ((markers (org-glance-vector:create)))
     (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
     (org-glance-headline:map (headline)
@@ -228,7 +228,7 @@
         (org-glance-vector:push-back! markers marker)))
     markers))
 
-(cl-defun org-glance-view:set-markers! (view markers)
+(defun org-glance-view:set-markers! (view markers)
   (cl-check-type view org-glance-view)
   (cl-check-type markers org-glance-vector)
 
@@ -240,7 +240,7 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
-(cl-defun org-glance-view:mark! (view)
+(defun org-glance-view:mark! (view)
   "Create effective representation of VIEW headline positions."
   (cl-check-type view org-glance-view)
 
@@ -287,7 +287,7 @@
            (org-glance-view:set-offset view offset))
          (org-glance-view:save-markers view))))
 
-(cl-defun org-glance-view:save-markers (view)
+(defun org-glance-view:save-markers (view)
   (cl-check-type view org-glance-view)
 
   (let ((markers (org-glance? view :markers))
@@ -299,7 +299,7 @@
          do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))
     markers))
 
-(cl-defun org-glance-view:load-markers (view)
+(defun org-glance-view:load-markers (view)
   (cl-check-type view org-glance-view)
 
   (let ((location (org-glance-view:locate-markers view)))
@@ -324,7 +324,7 @@
                      view-hash)
                    nil)))))))))
 
-(cl-defun org-glance-view:first-known-anchestor (hash      ;; hash
+(defun org-glance-view:first-known-anchestor (hash      ;; hash
                                                  relations ;; relations
                                                  idx       ;; relation index
                                                  known     ;; hash store
@@ -340,7 +340,7 @@
      when (string= anchestor d)
      do (setq anchestor s)))
 
-(cl-defun org-glance-view:fetch! (view)
+(defun org-glance-view:fetch! (view)
   (cl-check-type view org-glance-view)
 
   (let* ((world (org-glance? view :world))
@@ -413,7 +413,7 @@
            (org-glance-view:add-headline view headline))
          (org-glance-view:set-offset view committed-offset))))
 
-(cl-defun org-glance-view:get-offset (view)
+(defun org-glance-view:get-offset (view)
   (let ((buffer-offset (condition-case nil
                            (thread-first (org-glance? view :location)
                              (org-glance-view:locate-header)
@@ -423,7 +423,7 @@
         (memory-offset (org-glance? view :offset)))
     (-min-by #'org-glance-offset:less? (list buffer-offset memory-offset))))
 
-(cl-defun org-glance-view:set-offset (view offset)
+(defun org-glance-view:set-offset (view offset)
   (setf (org-glance? view :offset) offset)
   (org-glance-view:save-header view))
 
@@ -452,13 +452,13 @@
                (string= asterisk asterisk*))
      do (org-glance! marker :removed? := nil)))
 
-(cl-defun org-glance-view:save-header (view)
+(defun org-glance-view:save-header (view)
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))
     (insert (pp-to-string (a-list
                            :type (org-glance? view :type)
                            :offset (org-glance? view :offset))))))
 
-(cl-defun org-glance-view:read-header (filename)
+(defun org-glance-view:read-header (filename)
   (cl-assert (and (f-exists? filename)
                   (s-ends-with? org-glance-view--header-extension filename)))
 
@@ -466,12 +466,12 @@
     (insert-file-contents filename)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(cl-defun org-glance-view:locate-header (view-location)
+(defun org-glance-view:locate-header (view-location)
   (thread-first view-location
     (file-name-sans-extension)
     (concat org-glance-view--header-extension)))
 
-(cl-defun org-glance-view:locate-markers (view)
+(defun org-glance-view:locate-markers (view)
   (cl-check-type view org-glance-view)
   (thread-first view
     (org-glance? :location)

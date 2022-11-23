@@ -10,7 +10,7 @@
 (require 'org-glance-dimension)
 
 (org-glance-declare org-glance-world:get-or-create :: OptionalDirectory -> World)
-(cl-defun org-glance-world:get-or-create (location)
+(defun org-glance-world:get-or-create (location)
   "Get or create `org-glance-world' from LOCATION."
   (->> location
        (file-truename)
@@ -21,7 +21,7 @@
                                  #'org-glance-world:create)))))
 
 (org-glance-declare org-glance-world:import :: World -> ReadableDirectory -> World)
-(cl-defun org-glance-world:import (world location)
+(defun org-glance-world:import (world location)
   "Add headlines from LOCATION to WORLD."
   (dolist-with-progress-reporter (file (org-glance-scope location))
       "Import headlines"
@@ -39,7 +39,7 @@
     (_ nil)))
 
 (org-glance-declare org-glance-world:agenda :: World -> t)
-(cl-defun org-glance-world:agenda (world)
+(defun org-glance-world:agenda (world)
   "Show agenda for all active headlines of WORLD."
 
   (pcase (if current-prefix-arg
@@ -55,14 +55,14 @@
     (_ nil)))
 
 (org-glance-declare org-glance-world:current :: World)
-(cl-defun org-glance-world:current ()
+(defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
   (or (-> (buffer-file-name)
           (org-glance-world:root)
           (org-glance-world:get-or-create))
       (user-error "World %s is not registered in the system" (buffer-file-name))))
 
-(cl-defun org-glance-world:after-finalize-hook ()
+(defun org-glance-world:after-finalize-hook ()
   "Register captured headline in metastore."
   (let ((world (org-glance-world:current)))
     (org-glance-headline:map (headline)
@@ -74,7 +74,7 @@
       (delete-file file))))
 
 (org-glance-declare org-glance-world:capture-location :: World -> OptionalFile)
-(cl-defun org-glance-world:capture-location (world)
+(defun org-glance-world:capture-location (world)
   (f-join (org-glance? world :location) "capture.org"))
 
 (cl-defun org-glance-world:capture (world &key
@@ -99,12 +99,12 @@
       (org-capture-finalize))))
 
 (org-glance-declare org-glance-world:dummy-headlines :: World -> Partition -> (ListOf cons))
-(cl-defun org-glance-world:dummy-headlines (world partition)
+(defun org-glance-world:dummy-headlines (world partition)
   (--map (cons (org-glance? it :title) (org-glance? it :hash))
          (org-glance-world:partition-headlines world partition)))
 
 (org-glance-declare org-glance-world:choose-headline :: World -> Partition -> (Optional HeadlineHeader))
-(cl-defun org-glance-world:choose-headline (world partition)
+(defun org-glance-world:choose-headline (world partition)
   "Ask user to choose headline from WORLD using PARTITION to filter list."
   (declare (indent 1))
   (let ((dummies (org-glance-world:dummy-headlines world partition)))
@@ -113,7 +113,7 @@
          (org-glance-world:get-headline world))))
 
 (org-glance-declare org-glance-world:jump :: World -> t)
-(cl-defun org-glance-world:jump (world)
+(defun org-glance-world:jump (world)
   (let* ((partition (org-glance-partition:from-string "linked=t"))
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
@@ -124,7 +124,7 @@
     (org-link-open-from-string (org-glance? link :org-link))))
 
 (org-glance-declare org-glance-world:extract-property :: World -> t)
-(cl-defun org-glance-world:extract-property (world)
+(defun org-glance-world:extract-property (world)
   (let* ((partition (org-glance-partition:from-string "extractable=t"))
          (headline (org-glance-world:choose-headline world partition))
          (store (org-glance? headline :store)))
@@ -136,7 +136,7 @@
        (org-glance-log :info "Kill ring has been cleared")))))
 
 (org-glance-declare org-glance-world:choose-partition :: World -> (org-glance-optional string) -> t)
-(cl-defun org-glance-world:choose-partition (world &optional dimension)
+(defun org-glance-world:choose-partition (world &optional dimension)
   (let* ((partitions (cl-typecase dimension
                        (string (--filter (string= (org-glance? it :dimension) dimension)
                                          (org-glance-world:partitions world)))
@@ -149,7 +149,7 @@
                         (quit nil)))
       (org-glance-partition:from-string choice))))
 
-(cl-defun org-glance-world:updated-partition (world partition)
+(defun org-glance-world:updated-partition (world partition)
   (cl-check-type world org-glance-world)
   (cl-check-type partition org-glance-partition)
 
@@ -171,7 +171,7 @@
     location))
 
 (org-glance-declare org-glance-world:backfill :: World -> t)
-(cl-defun org-glance-world:backfill (world)
+(defun org-glance-world:backfill (world)
   (dolist-with-progress-reporter (event (org-glance-world:events world))
       "Backfill"
     (thunk-let ((headline (org-glance-world:get-headline world (org-glance? event :headline :hash))))

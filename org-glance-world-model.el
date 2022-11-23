@@ -124,7 +124,7 @@ Return last committed offset."
                    (headline (org-glance-world:get-headline world target-hash)))
         (cl-typecase event
           (org-glance-event:RM
-           (org-glance-world:delete-headline world source-hash)
+           (org-glance-world:delete-headline! world source-hash)
            (org-glance-changelog:push changelog event))
           (org-glance-event:PUT
            (org-glance-world:write-headline world headline)
@@ -133,7 +133,7 @@ Return last committed offset."
           (org-glance-event:UPDATE*
            (org-glance-world:write-headline world event-headline)
            (org-glance-world:make-partitions world event-headline)
-           (org-glance-world:delete-headline world source-hash)
+           (org-glance-world:delete-headline! world source-hash)
            (org-glance-changelog:push changelog (org-glance-event:UPDATE :hash source-hash
                                                                          :headline (org-glance-headline-header:from-headline event-headline))))
           (otherwise (error "Don't know how to handle event of type %s" (type-of event))))))
@@ -184,8 +184,8 @@ Return last committed offset."
                                                            (insert-file-contents-literally location)
                                                            (org-glance! world :relations := (read (buffer-string)))))))
 
-(org-glance-declare org-glance-world:delete-headline :: World -> (or Hash Headline HeadlineHeader) -> t)
-(defun org-glance-world:delete-headline (world headline)
+(org-glance-declare org-glance-world:delete-headline! :: World -> (or Hash Headline HeadlineHeader) -> t)
+(defun org-glance-world:delete-headline! (world headline)
   (condition-case nil
       (f-delete (org-glance-world:locate-headline world headline))
     (error nil)))
@@ -198,10 +198,14 @@ Return last committed offset."
                      `(("GLANCE_ID" ,id)
                        ("DIR" ,(concat "../../../resources/" id))))))
     (org-glance-world:add-headline-to-cache! world id headline)
-    (org-glance-changelog:push (org-glance? world :changelog*)
-      (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
+    (org-glance-world:add-headline-to-changelog! world headline))
 
   world)
+
+(org-glance-declare org-glance-world:add-headline-to-changelog! :: World -> (or Headline HeadlineHeader) -> t)
+(defun org-glance-world:add-headline-to-changelog! (world headline)
+  (org-glance-changelog:push (org-glance? world :changelog*)
+    (org-glance-event:PUT :headline (org-glance-headline-header:from-headline headline))))
 
 (org-glance-declare org-glance-world:add-headline-to-cache! :: World -> string -> Headline -> Headline)
 (defun org-glance-world:add-headline-to-cache! (world id headline)
@@ -355,7 +359,7 @@ achieved by calling `org-glance-world:persist' method."
        when (org-glance-dimension:validate predicate headline (org-glance? world :dimensions))
        collect headline)))
 
-(cl-defun org-glance-world:root (location)
+(defun org-glance-world:root (location)
   (cl-typecase location
     (org-glance-world-location location)
     (otherwise (org-glance-world:root (f-parent location)))))
