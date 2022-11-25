@@ -31,7 +31,10 @@
 ;;; Code:
 
 (require 'org)
+(require 'org-refile)
+(require 'org-capture)
 (require 'org-element)
+
 (require 'org-glance-log)
 (require 'org-glance-helpers)
 (require 'org-glance-types)
@@ -40,6 +43,19 @@
 (require 'org-glance-dimension)
 (require 'org-glance-world)
 (require 'org-glance-material-mode)
+
+(defvar org-directory "~/org"
+  "Directory with Org files.
+This is just a default location to look for Org files.  There is no need
+at all to put your files into this directory.  It is used in the
+following situations:
+
+1. When a capture template specifies a target file that is not an
+   absolute path.  The path will then be interpreted relative to
+   `org-directory'
+2. When the value of variable `org-agenda-files' is a single file, any
+   relative paths in this file will be taken as relative to
+   `org-directory'.")
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -73,12 +89,14 @@
   "Current `org-glance-world'.")
 
 (defun org-glance-capture ()
+  "Run `org-capture' and add captured headline to current world."
   (interactive)
   (org-glance-world:capture org-glance-current-world
     ;; :text (apply #'org-link-make-string (org-store-link t t))
     ))
 
 (defun org-glance-materialize ()
+  "Choose current world's partition and materialize it."
   (interactive)
   (org-glance-world:materialize org-glance-current-world))
 

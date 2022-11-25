@@ -1,5 +1,6 @@
 CASK ?= cask
 EMACS ?= emacs
+MAKEM ?= ./makem.sh
 
 .PHONY: all test clean init
 
@@ -7,6 +8,7 @@ all: init build test
 
 init:
 	${CASK} install
+	${MAKEM} -s.sandbox --install-deps --install-linters
 
 build:
 	${CASK} clean-elc
@@ -26,3 +28,6 @@ debug:
 
 clean:
 	${CASK} clean-elc
+
+lint:
+	${MAKEM} -s.sandbox lint-elsa
