@@ -251,12 +251,13 @@
     (markers
      (org-glance-view:set-markers! view markers))))
 
+(org-glance-declare org-glance-view:commit :: (Optional View) -> t)
 (cl-defun org-glance-view:commit (&optional (view (org-glance-view:get-buffer-view)))
   (org-glance-view:with-current-buffer view
     (cl-loop with markers = (org-glance? view :markers)
        with world = (org-glance? view :world)
-       with to-move = '()  ;; hashes to move from current view to another view
-       with to-remove = '()  ;; hashes to remove from current world
+       with to-move = '() ;; hashes to be moved from current view to another
+       with to-remove = '() ;; hashes to be removed from current world
        for midx from 0 below (org-glance-vector:size markers)
        when (and (org-glance? view :markers [midx] :changed?)
                  (not (org-glance? view :markers [midx] :removed?)))
@@ -279,7 +280,7 @@
          (cl-loop for midx in to-remove
             for offset from 0
             do
-            ;; Don't remove headlines from the world
+            ;; Don't actually remove headlines from the world yet
             ;; (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
               (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
 
@@ -340,9 +341,8 @@
      when (string= anchestor d)
      do (setq anchestor s)))
 
+(org-glance-declare org-glance-view:fetch! :: View -> t)
 (defun org-glance-view:fetch! (view)
-  (cl-check-type view org-glance-view)
-
   (let* ((world (org-glance? view :world))
          (view-offset (org-glance-view:get-offset view))
          (events (reverse (org-glance-world:events world)))

@@ -149,10 +149,8 @@
                         (quit nil)))
       (org-glance-partition:from-string choice))))
 
+(org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)
 (defun org-glance-world:updated-partition (world partition)
-  (cl-check-type world org-glance-world)
-  (cl-check-type partition org-glance-partition)
-
   (let* ((location (org-glance-world:locate-partition world partition))
          (header (org-glance-world:read-partition world partition))
          (view-type (a-get header :type))
