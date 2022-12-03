@@ -100,18 +100,10 @@
 
 (org-glance-declare org-glance-world:persist :: World -> Offset)
 (defun org-glance-world:persist (world)
-  "Persist WORLD changes.
-
-- Persist event log.
-- Apply PUT operations.
-- TODO Apply RM operations.
-- ...
+  "Apply modifications of WORLD.
 
 This should be the only point to destructively change underlying
 persistent storage.
-
-In all other places `org-glance-world' should act like pure
-functional data structure.
 
 Return last committed offset."
   (let ((changelog (org-glance? world :changelog)))
@@ -237,16 +229,11 @@ achieved by calling `org-glance-world:persist' method."
 
 (org-glance-declare org-glance-world:update-headline :: World -> Hash -> Headline -> Offset)
 (defun org-glance-world:update-headline (world old-hash headline)
-  "Update HEADLINE with HASH in WORLD."
-  (let* (;; (new-hash (org-glance? headline :hash))
-         (changelog* (org-glance? world :changelog*))
-         ;; (cache (org-glance? world :headline-by-hash))
+  "Update HEADLINE with OLD-HASH in WORLD."
+  (let* ((changelog* (org-glance? world :changelog*))
          (event (org-glance-event:UPDATE* :hash old-hash :headline headline))
          (offset (org-glance? event :offset)))
     (org-glance-changelog:push changelog* event)
-    ;; TODO remove from cache on persist only
-    ;; (puthash new-hash headline cache)
-    ;; (remhash old-hash cache)
     offset))
 
 (org-glance-declare org-glance-world:get-headline-from-cache :: World -> Hash -> (Optional Headline))

@@ -450,13 +450,18 @@
                (string= asterisk asterisk*))
      do (org-glance! marker :removed? := nil)))
 
+(org-glance-declare org-glance-view:header :: View -> list)
+(defun org-glance-view:header (view)
+  "Get compact metadata for VIEW."
+  (a-list :type (org-glance? view :type)
+          :offset (org-glance? view :offset)
+          :size (org-glance-vector:size (org-glance? view :markers))))
+
 (org-glance-declare org-glance-view:save-header :: View -> t)
 (defun org-glance-view:save-header (view)
   "Save VIEW header."
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))
-    (insert (pp-to-string (a-list
-                           :type (org-glance? view :type)
-                           :offset (org-glance? view :offset))))))
+    (insert (pp-to-string (org-glance-view:header view)))))
 
 (org-glance-declare org-glance-view:read-header :: ReadableFile -> list)
 (defun org-glance-view:read-header (file)
