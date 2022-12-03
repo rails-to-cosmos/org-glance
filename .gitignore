@@ -8,3 +8,5 @@ ogpm-cache.el
 *.~undo-tree~
 /*.el#
 *.feature#
+/.elsa/
+/.sandbox/
