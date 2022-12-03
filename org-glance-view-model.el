@@ -288,9 +288,8 @@
            (org-glance-view:set-offset view offset))
          (org-glance-view:save-markers view))))
 
+(org-glance-declare org-glance-view:save-markers :: View -> org-glance-vector)
 (defun org-glance-view:save-markers (view)
-  (cl-check-type view org-glance-view)
-
   (let ((markers (org-glance? view :markers))
         (buffer-hash (buffer-hash)))
     (with-temp-file (org-glance-view:locate-markers view)
@@ -300,9 +299,8 @@
          do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))
     markers))
 
+(org-glance-declare org-glance-view:load-markers :: View -> t)
 (defun org-glance-view:load-markers (view)
-  (cl-check-type view org-glance-view)
-
   (let ((location (org-glance-view:locate-markers view)))
     (when (f-exists? location)
       (org-glance-view:with-current-buffer view
@@ -326,10 +324,10 @@
                    nil)))))))))
 
 (defun org-glance-view:first-known-anchestor (hash      ;; hash
-                                                 relations ;; relations
-                                                 idx       ;; relation index
-                                                 known     ;; hash store
-                                                 )
+                                              relations ;; relations
+                                              idx       ;; relation index
+                                              known     ;; hash store
+                                              )
   "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
   (cl-loop with anchestor = hash
      for j from idx downto 0
@@ -452,27 +450,31 @@
                (string= asterisk asterisk*))
      do (org-glance! marker :removed? := nil)))
 
+(org-glance-declare org-glance-view:save-header :: View -> t)
 (defun org-glance-view:save-header (view)
+  "Save VIEW header."
   (with-temp-file (org-glance-view:locate-header (org-glance? view :location))
     (insert (pp-to-string (a-list
                            :type (org-glance? view :type)
                            :offset (org-glance? view :offset))))))
 
-(defun org-glance-view:read-header (filename)
-  (cl-assert (and (f-exists? filename)
-                  (s-ends-with? org-glance-view--header-extension filename)))
-
+(org-glance-declare org-glance-view:read-header :: ReadableFile -> list)
+(defun org-glance-view:read-header (file)
+  "Read header from FILE."
   (with-temp-buffer
-    (insert-file-contents filename)
+    (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
+(org-glance-declare org-glance-view:locate-header :: OptionalFile -> OptionalFile)
 (defun org-glance-view:locate-header (view-location)
+  "Determine header location by VIEW-LOCATION."
   (thread-first view-location
     (file-name-sans-extension)
     (concat org-glance-view--header-extension)))
 
+(org-glance-declare org-glance-view:locate-markers :: View -> OptionalFile)
 (defun org-glance-view:locate-markers (view)
-  (cl-check-type view org-glance-view)
+  "Determine location of markers by VIEW."
   (thread-first view
     (org-glance? :location)
     (file-name-sans-extension)
