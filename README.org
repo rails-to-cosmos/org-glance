@@ -23,6 +23,7 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO Don't save view header if nothing changed
 * TODO [#A] Overview dimensions and mode                                        :feature:
 * TODO [#C] Separate event logs                                                 :optimization:
 * TODO Implement solvers for dimensions

@@ -12,7 +12,7 @@
   (cl-check-type offset org-glance-offset)
 
   (thunk-let* ((location (file-truename (f-join (org-glance? world :location) location)))
-               (m-loc (concat (file-name-sans-extension location) org-glance-marker-extension))
+               (m-loc (concat (file-name-sans-extension location) org-glance-view-marker-extension))
                (key (org-glance-view--key :type type :location location))
                (cached-view (org-glance-view-cache:get key))
                (new-view (org-glance-view:create world type location offset)))

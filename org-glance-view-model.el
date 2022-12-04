@@ -16,8 +16,8 @@
 
 ;;; Code:
 
-(defconst org-glance-view--header-extension ".h")
-(defconst org-glance-marker-extension ".m")
+(defconst org-glance-view-header-extension ".h")
+(defconst org-glance-view-marker-extension ".m")
 
 (declare-function f-mkdir-full-path 'f)
 
@@ -228,10 +228,8 @@
         (org-glance-vector:push-back! markers marker)))
     markers))
 
+(org-glance-declare org-glance-view:set-markers! :: View -> Vector -> t)
 (defun org-glance-view:set-markers! (view markers)
-  (cl-check-type view org-glance-view)
-  (cl-check-type markers org-glance-vector)
-
   (cl-loop
      with hash->midx = (make-hash-table :test #'equal)
      for midx below (org-glance-vector:size markers)
@@ -240,10 +238,9 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
+(org-glance-declare org-glance-view:mark! :: View -> t)
 (defun org-glance-view:mark! (view)
   "Create effective representation of VIEW headline positions."
-  (cl-check-type view org-glance-view)
-
   (pcase (org-glance-view:load-markers view)
     ('() (let ((markers (org-glance-view:make-markers)))
            (org-glance-view:set-markers! view markers)
@@ -475,7 +472,7 @@
   "Determine header location by VIEW-LOCATION."
   (thread-first view-location
     (file-name-sans-extension)
-    (concat org-glance-view--header-extension)))
+    (concat org-glance-view-header-extension)))
 
 (org-glance-declare org-glance-view:locate-markers :: View -> OptionalFile)
 (defun org-glance-view:locate-markers (view)
@@ -483,7 +480,7 @@
   (thread-first view
     (org-glance? :location)
     (file-name-sans-extension)
-    (concat org-glance-marker-extension)))
+    (concat org-glance-view-marker-extension)))
 
 (provide 'org-glance-view-model)
 ;;; org-glance-view-model.el ends here
