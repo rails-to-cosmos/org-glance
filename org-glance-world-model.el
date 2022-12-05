@@ -98,6 +98,28 @@
                            (push partition (org-glance? world :partitions))
                            (org-glance-view:get-or-create world partition location (org-glance-offset:zero)))))))
 
+(org-glance-declare org-glance-world:clear-partitions :: World -> Headline -> t)
+(defun org-glance-world:clear-partitions (world headline)
+  "Remove empty partitions from WORLD considering HEADLINE has been deleted."
+  (cl-loop with dimensions = (org-glance? world :dimensions)
+     for dimension in dimensions
+     for predicates = (org-glance-dimension:predicates dimension headline)
+     do (cl-loop for predicate in predicates
+           for value = (org-glance-dimension:validate predicate headline dimensions)
+           when value
+           do (thunk-let* ((partition (org-glance-partition
+                                       :dimension (format "%s" (org-glance? dimension :name))
+                                       :value value))
+                           (view-location (org-glance-world:locate-partition world partition))
+                           (view-header-location (org-glance-view:locate-header view-location))
+                           (view-header (org-glance-view:read-header view-header-location)))
+                (when (and (f-exists? view-location)
+                           (= 0 (or (a-get view-header :size) -1))
+                           (y-or-n-p (format "View \"%s\" became empty. Remove? " view-location)))
+                  (org-glance-log :dimensions "Remove derived view %s (%s)" partition view-location)
+                  (org-glance! world :partitions := (cl-remove partition (org-glance? world :partitions)))
+                  (f-delete (f-parent view-location) t))))))
+
 (org-glance-declare org-glance-world:persist :: World -> Offset)
 (defun org-glance-world:persist (world)
   "Apply modifications of WORLD.
@@ -115,19 +137,18 @@ Return last committed offset."
                    (event-headline (org-glance? event :headline))
                    (headline (org-glance-world:get-headline world target-hash)))
         (cl-typecase event
-          (org-glance-event:RM
-           (org-glance-world:delete-headline! world source-hash)
-           (org-glance-changelog:push changelog event))
-          (org-glance-event:PUT
-           (org-glance-world:write-headline world headline)
-           (org-glance-world:make-partitions world headline)
-           (org-glance-changelog:push changelog event))
-          (org-glance-event:UPDATE*
-           (org-glance-world:write-headline world event-headline)
-           (org-glance-world:make-partitions world event-headline)
-           (org-glance-world:delete-headline! world source-hash)
-           (org-glance-changelog:push changelog (org-glance-event:UPDATE :hash source-hash
-                                                                         :headline (org-glance-headline-header:from-headline event-headline))))
+          (org-glance-event:RM (let ((headline (org-glance-world:get-headline world source-hash)))
+                                 (org-glance-world:clear-partitions world headline))
+                               (org-glance-world:delete-headline! world source-hash)
+                               (org-glance-changelog:push changelog event))
+          (org-glance-event:PUT (org-glance-world:write-headline world headline)
+                                (org-glance-world:make-partitions world headline)
+                                (org-glance-changelog:push changelog event))
+          (org-glance-event:UPDATE* (org-glance-world:write-headline world event-headline)
+                                    (org-glance-world:make-partitions world event-headline)
+                                    (org-glance-world:delete-headline! world source-hash)
+                                    (org-glance-changelog:push changelog (org-glance-event:UPDATE :hash source-hash
+                                                                                                  :headline (org-glance-headline-header:from-headline event-headline))))
           (otherwise (error "Don't know how to handle event of type %s" (type-of event))))))
 
     (org-glance-world:write-changelog! world)

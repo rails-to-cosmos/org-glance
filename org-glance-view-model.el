@@ -154,10 +154,8 @@
              (save-restriction
                ,@forms)))))))
 
+(org-glance-declare org-glance-view:add-headline :: View -> Headline -> t)
 (defun org-glance-view:add-headline (view headline)
-  (cl-check-type view org-glance-view)
-  (cl-check-type headline org-glance-headline)
-
   (let* ((markers (org-glance? view :markers))
          (hash (org-glance? headline :hash))
          (marker (org-glance-marker :hash hash :position (point-max))))
@@ -166,10 +164,8 @@
     (org-glance-headline:insert headline)
     (puthash hash (- (org-glance-vector:size markers) 1) (org-glance? view :hash->midx))))
 
+(org-glance-declare org-glance-view:remove-headline :: View -> Hash -> t)
 (defun org-glance-view:remove-headline (view hash)
-  (cl-check-type view org-glance-view)
-  (cl-check-type hash org-glance-hash)
-
   (org-glance-view:with-current-buffer view
     (let* ((midx (org-glance-view:get-marker-index view hash))
            (mpos (org-glance-view:get-marker-position view midx))
@@ -181,11 +177,8 @@
           (org-glance-vector:remove-at! markers midx)
           (remhash hash (org-glance? view :hash->midx)))))))
 
+(org-glance-declare org-glance-view:replace-headline :: View -> Hash -> Headline -> t)
 (defun org-glance-view:replace-headline (view old-hash headline)
-  (cl-check-type view org-glance-view)
-  (cl-check-type old-hash org-glance-hash)
-  (cl-check-type headline org-glance-headline)
-
   (thunk-let* ((new-hash (org-glance? headline :hash))
                (midx (gethash old-hash (org-glance? view :hash->midx)))
                (marker-position (org-glance-view:get-marker-position view midx)))
@@ -277,8 +270,10 @@
          (cl-loop for midx in to-remove
             for offset from 0
             do
-            ;; Don't actually remove headlines from the world yet
-            ;; (org-glance-world:remove-headline world (org-glance? view :markers [(- midx offset)] :hash))
+              (let* ((hash (org-glance? view :markers [(- midx offset)] :hash))
+                     (headline (org-glance-world:get-headline world hash)))
+                (when (y-or-n-p (format "Remove headline \"%s\" completely? " (org-glance? headline :title)))
+                  (org-glance-world:remove-headline world hash)))
               (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
 
          (let ((offset (org-glance-world:persist world)))
@@ -320,10 +315,11 @@
                      view-hash)
                    nil)))))))))
 
+(org-glance-declare org-glance-view:first-known-anchestor :: Hash -> vector -> number -> hash-table -> (Optional Hash))
 (defun org-glance-view:first-known-anchestor (hash      ;; hash
                                               relations ;; relations
-                                              idx       ;; relation index
-                                              known     ;; hash store
+                                              idx   ;; relation index
+                                              known ;; hash store
                                               )
   "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
   (cl-loop with anchestor = hash
@@ -341,7 +337,6 @@
   (let* ((world (org-glance? view :world))
          (view-offset (org-glance-view:get-offset view))
          (events (reverse (org-glance-world:events world)))
-         (relations (make-vector (length events) nil))
          (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
          (committed-offset view-offset)
          (to-add (make-hash-table :test #'equal)))
@@ -355,31 +350,24 @@
        for idx from 0
        for event-offset = (org-glance? event :offset)
 
-       when (cl-typep event 'org-glance-event:UPDATE)
-       do (aset relations idx (cons (org-glance? event :hash) (org-glance? event :headline :hash)))
-
        when (org-glance-offset:less? view-offset event-offset)
        do (thunk-let* ((headline* (org-glance? event :headline))
 
                        (event-hash (org-glance? event :hash))
                        (headline-hash (org-glance? headline* :hash))
-                       (derived-hash (org-glance-view:first-known-anchestor event-hash relations idx to-add))
                        (dimensions (org-glance? world :dimensions))
 
                        (headline (org-glance-world:get-headline world headline-hash))
 
                        (hashes-equal? (string= headline-hash event-hash))
-                       (headline-derived? (string= derived-hash headline-hash))
                        (dimension-valid? (org-glance-world:validate-headline world (org-glance? view :type) headline*))
                        (dimension-invalid? (not dimension-valid?))
                        (source-exists? (not (null (gethash event-hash to-add))))
-                       (source-removed? (not (f-exists? (org-glance-world:locate-headline world event-hash))))
-                       (target-removed? (not (f-exists? (org-glance-world:locate-headline world headline-hash))))
+                       (source-removed? (not (org-glance-world:headline-exists? world event-hash)))
+                       (target-removed? (not (org-glance-world:headline-exists? world headline-hash)))
 
                        (add-target! (puthash headline-hash headline to-add))
                        (remove-source!  (remhash event-hash to-add))
-                       (derive-headline!  (progn (puthash headline-hash headline to-add)
-                                                 (remhash derived-hash to-add)))
                        (replace-headline! (progn (puthash headline-hash headline to-add)
                                                  (remhash event-hash to-add))))
             (cl-typecase event
@@ -389,8 +377,7 @@
                                              ((and dimension-invalid? (not source-exists?)) nil)
                                              ((and dimension-invalid? source-exists?) remove-source!)
                                              ((and dimension-valid? source-exists?) replace-headline!)
-                                             ((and derived-hash (not headline-derived?)) derive-headline!)
-                                             ((not derived-hash) add-target!)))
+                                             (t add-target!)))
               (org-glance-event:PUT (cond (target-removed? nil)
                                           (dimension-valid? add-target!)))
               (org-glance-event:RM remove-source!)
