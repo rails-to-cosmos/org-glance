@@ -170,13 +170,17 @@
 
 (org-glance-declare org-glance-world:backfill :: World -> t)
 (defun org-glance-world:backfill (world)
-  (dolist-with-progress-reporter (event (org-glance-world:events world))
+  (dolist-with-progress-reporter (headline (org-glance-world:headlines world))
       "Backfill"
-    (thunk-let ((headline (org-glance-world:get-headline world (org-glance? event :headline :hash))))
-      (cl-typecase event
-        (org-glance-event:RM nil)
-        ((or org-glance-event:PUT org-glance-event:UPDATE)
-         (when (org-glance-world:headline-exists? world (org-glance? event :headline :hash))
-           (org-glance-world:make-partitions world headline)))))))
+    (cl-typecase headline
+      (org-glance-event:RM nil)
+      ((or org-glance-event:PUT org-glance-event:UPDATE)
+       (when (org-glance-world:headline-exists? world headline)
+         (org-glance-world:make-partitions world headline)))))
+
+  (org-glance! world :partitions := (remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
+                                                               ((and (cl-struct org-glance-readable-file) location) it)
+                                                               (otherwise nil))
+                                                             (org-glance? world :partitions)))))
 
 (provide 'org-glance-world)
