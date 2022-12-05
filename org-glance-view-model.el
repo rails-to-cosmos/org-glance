@@ -315,23 +315,6 @@
                      view-hash)
                    nil)))))))))
 
-(org-glance-declare org-glance-view:first-known-anchestor :: Hash -> vector -> number -> hash-table -> (Optional Hash))
-(defun org-glance-view:first-known-anchestor (hash      ;; hash
-                                              relations ;; relations
-                                              idx   ;; relation index
-                                              known ;; hash store
-                                              )
-  "Search for the first known anchestor (member of KNOWN) of HASH through RELATIONS starting at IDX."
-  (cl-loop with anchestor = hash
-     for j from idx downto 0
-     for r = (org-glance? relations [j])
-     for s = (car r)
-     for d = (cdr r)
-     when (gethash anchestor known)
-     return anchestor
-     when (string= anchestor d)
-     do (setq anchestor s)))
-
 (org-glance-declare org-glance-view:fetch! :: View -> t)
 (defun org-glance-view:fetch! (view)
   (let* ((world (org-glance? view :world))
