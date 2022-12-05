@@ -179,9 +179,9 @@
        (when (org-glance-world:headline-exists? world headline)
          (org-glance-world:make-partitions world headline)))))
 
-  (org-glance! world :partitions := (remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
-                                                               ((and (cl-struct org-glance-readable-file) location) it)
-                                                               (otherwise nil))
-                                                             (org-glance? world :partitions)))))
+  (org-glance! world :partitions := (cl-remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
+                                                                  ((cl-struct org-glance-readable-file) it)
+                                                                  (_ nil))
+                                                                (org-glance? world :partitions)))))
 
 (provide 'org-glance-world)
