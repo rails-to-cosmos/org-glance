@@ -114,6 +114,7 @@
 
 (org-glance-declare org-glance-world:jump :: World -> t)
 (defun org-glance-world:jump (world)
+  "Select headline from WORLD and emulate link opening."
   (let* ((partition (org-glance-partition:from-string "linked=t"))
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
