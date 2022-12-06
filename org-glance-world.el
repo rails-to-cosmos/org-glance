@@ -152,20 +152,18 @@
 
 (org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)
 (defun org-glance-world:updated-partition (world partition)
-  (let* ((location (org-glance-world:locate-partition world partition))
-         (header (org-glance-world:read-partition world partition))
-         (view-type (a-get header :type))
-         (view-offset (a-get header :offset))
-         ;; (world-offset (org-glance-world:offset world))
-         (view (org-glance-view:get-or-create world view-type location view-offset)))
+  (thunk-let* ((location (org-glance-world:locate-partition world partition))
+               (header (org-glance-world:read-partition world partition))
+               (view-type (a-get header :type))
+               (view-offset (a-get header :offset))
+               (world-offset (org-glance-world:offset world))
+               (view (org-glance-view:get-or-create world view-type location view-offset)))
 
-    ;; (when (org-glance-offset:less? view-offset world-offset)
-    ;;   )
-
-    (org-glance-world:with-locked-location location
-      (org-glance-view:mark! view)
-      (org-glance-view:fetch! view)
-      (org-glance-view:save-header view))
+    (when (org-glance-offset:less? view-offset world-offset)
+      (org-glance-world:with-locked-location location
+        (org-glance-view:mark! view)
+        (org-glance-view:fetch! view)
+        (org-glance-view:save-header view)))
 
     location))
 
