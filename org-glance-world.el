@@ -173,11 +173,11 @@
 (defun org-glance-world:backfill (world)
   (dolist-with-progress-reporter (headline (org-glance-world:headlines world))
       "Backfill"
-    (cl-typecase headline
-      (org-glance-event:RM nil)
-      ((or org-glance-event:PUT org-glance-event:UPDATE)
-       (when (org-glance-world:headline-exists? world headline)
-         (org-glance-world:make-partitions world headline)))))
+    (pcase headline
+      ((and (or (cl-struct org-glance-event:PUT)
+                (cl-struct org-glance-event:UPDATE))
+            (guard (org-glance-world:headline-exists? world headline)))
+       (org-glance-world:make-partitions world headline))))
 
   (org-glance! world :partitions := (cl-remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
                                                                   ((cl-struct org-glance-readable-file) it)

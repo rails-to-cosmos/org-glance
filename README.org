@@ -23,6 +23,7 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO View shouldn't know about the world
 * TODO [#C] Workflows
 1. TODO Purchase Backpack
 2. DONE → Add "Inventory" tag → Set "" todo state

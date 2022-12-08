@@ -59,21 +59,29 @@
 
 (org-glance-declare org-glance-world:locate-partition :: World -> Partition -> OptionalFile)
 (defun org-glance-world:locate-partition (world partition)
-  (f-join (org-glance? world :location) "views"
+  (f-join (org-glance? world :location)
+          "views"
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
 
 (org-glance-declare org-glance-world:partitions :: World -> (ListOf Partition))
 (defun org-glance-world:partitions (world)
+  "Get WORLD partitions considering cache."
   (or (org-glance? world :partitions)
-      (org-glance! world :partitions := (--map (--> it
-                                                    (file-name-sans-extension it)
-                                                    (list (file-name-nondirectory (f-parent (f-parent it)))
-                                                          (file-name-nondirectory (f-parent it)))
-                                                    (-zip-lists '(:dimension :value) it)
-                                                    (-flatten it)
-                                                    (apply #'org-glance-partition it))
-                                               (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))))
+      (org-glance! world :partitions := (org-glance-world:get-partitions world))))
+
+(org-glance-declare org-glance-world:get-partitions :: World -> (ListOf Partition))
+(defun org-glance-world:get-partitions (world)
+  "Read WORLD partitions from disk.
+Ignore cache."
+  (--map (--> it
+              (file-name-sans-extension it)
+              (list (file-name-nondirectory (f-parent (f-parent it)))
+                    (file-name-nondirectory (f-parent it)))
+              (-zip-lists '(:dimension :value) it)
+              (-flatten it)
+              (apply #'org-glance-partition it))
+         (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))
 
 (org-glance-declare org-glance-world:read-partition :: World -> Partition -> list)
 (defun org-glance-world:read-partition (world partition)
