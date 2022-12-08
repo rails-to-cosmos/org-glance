@@ -102,14 +102,17 @@ following situations:
   (org-glance-world:materialize org-glance-current-world))
 
 (defun org-glance-agenda ()
+  "Display agenda for active headlines."
   (interactive)
   (org-glance-world:agenda org-glance-current-world))
 
 (defun org-glance-jump ()
+  "Jump to headlines that contain links."
   (interactive)
   (org-glance-world:jump org-glance-current-world))
 
 (defun org-glance-extract ()
+  "Extract properties from headlines that contain properties."
   (interactive)
   (org-glance-world:extract-property org-glance-current-world))
 
@@ -118,6 +121,7 @@ following situations:
   (org-glance-world:backfill org-glance-current-world))
 
 (defun org-glance-import (location)
+  "Import headlines from LOCATION."
   (interactive "DDirectory: ")
   (-> org-glance-current-world
       (org-glance-world:import location)

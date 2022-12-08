@@ -85,9 +85,8 @@
 
   (org-glance? vec :array [idx]))
 
+(org-glance-declare org-glance-vector:size :: Vector -> number)
 (defun org-glance-vector:size (vec)
-  (cl-check-type vec org-glance-vector)
-
   (org-glance? vec :size))
 
 (defun org-glance-vector:empty? (vec)
@@ -103,8 +102,7 @@
     (org-glance-vector:shrink-maybe! vec))
   vec)
 
-(cl-defun org-glance-vector:non-binary-search (vec v &key
-                                                       (len #'(lambda (vec) (org-glance-vector:size vec)))
+(cl-defun org-glance-vector:non-binary-search (vec v &key (len #'(lambda (vec) (org-glance-vector:size vec)))
                                                        (key #'(lambda (vec idx) (org-glance? (org-glance-vector:get vec idx) :position)))
                                                        (l 0)
                                                        (r (1- (funcall len vec))))
