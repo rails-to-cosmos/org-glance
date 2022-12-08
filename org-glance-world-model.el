@@ -22,6 +22,7 @@
 (require 'org-glance-helpers)
 (require 'org-glance-scope)
 (require 'org-glance-types)
+(require 'org-glance-view-model)
 
 (org-glance-class org-glance-world nil
     ((location :type org-glance-world-location :initarg :location :documentation "Directory containing all the data.")

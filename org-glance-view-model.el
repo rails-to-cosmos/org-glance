@@ -13,6 +13,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-dimension)
 (require 'org-glance-vector)
+(require 'org-glance-marker)
 
 ;;; Code:
 
@@ -20,12 +21,6 @@
 (defconst org-glance-view-marker-extension ".m")
 
 (declare-function f-mkdir-full-path 'f)
-
-(org-glance-class org-glance-marker nil
-    ((hash :type string :initarg :hash)
-     (position :type number :initarg :position)
-     (changed? :type boolean :initarg :changed? :initform nil)
-     (removed? :type boolean :initarg :removed? :initform nil)))
 
 (org-glance-class org-glance-view nil
     (

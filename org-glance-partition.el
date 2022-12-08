@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 (require 'org-glance-helpers)
 (require 'org-glance-types)
 (require 'org-glance-log)

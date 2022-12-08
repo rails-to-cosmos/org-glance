@@ -23,6 +23,7 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO View model should contain metadata from header
 * DONE View shouldn't know about the world
 CLOSED: [2022-12-08 Thu 22:35]
 :LOGBOOK:
