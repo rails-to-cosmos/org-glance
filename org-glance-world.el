@@ -9,6 +9,7 @@
 (require 'org-glance-world-model)
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
+(require 'org-glance-partition)
 
 (org-glance-declare org-glance-world:get-or-create :: OptionalDirectory -> World)
 (defun org-glance-world:get-or-create (location)

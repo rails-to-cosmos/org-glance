@@ -72,16 +72,16 @@ following situations:
 ;; TODO prolog implementation is possible
 ;; TODO could be implemented in headline header
 (defconst org-glance-dimensions
-  (list (org-glance-dimension :name 'id        :form '(org-glance? headline :id))
-        (org-glance-dimension :name 'tag       :form '(org-glance? headline :tags))
-        (org-glance-dimension :name 'state     :form '(org-glance? headline :state))
-        (org-glance-dimension :name 'title     :form '(org-glance? headline :title))
-        (org-glance-dimension :name 'linked    :form '(org-glance? headline :linked?))
-        (org-glance-dimension :name 'store     :form '(org-glance? headline :store?))
-        (org-glance-dimension :name 'encrypted :form '(org-glance? headline :encrypted?))
-        (org-glance-dimension :name 'closed    :form '(org-glance? headline :closed?))
-        (org-glance-dimension :name 'repeated  :form '(org-glance? headline :repeated?))
-        (org-glance-dimension :name 'active    :form '(org-glance? headline :active?))
+  (list (org-glance-dimension :name 'id          :form '(org-glance? headline :id))
+        (org-glance-dimension :name 'tag         :form '(org-glance? headline :tags))
+        (org-glance-dimension :name 'state       :form '(org-glance? headline :state))
+        (org-glance-dimension :name 'title       :form '(org-glance? headline :title))
+        (org-glance-dimension :name 'linked      :form '(org-glance? headline :linked?))
+        (org-glance-dimension :name 'store       :form '(org-glance? headline :store?))
+        (org-glance-dimension :name 'encrypted   :form '(org-glance? headline :encrypted?))
+        (org-glance-dimension :name 'closed      :form '(org-glance? headline :closed?))
+        (org-glance-dimension :name 'repeated    :form '(org-glance? headline :repeated?))
+        (org-glance-dimension :name 'active      :form '(org-glance? headline :active?))
         (org-glance-dimension :name 'extractable :form '(or
                                                          (org-glance? headline :store?)
                                                          (org-glance? headline :encrypted?)))))

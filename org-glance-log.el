@@ -20,8 +20,12 @@
      (with-current-buffer (get-buffer-create (format "*org-glance-log%s*" ,logger))
        (goto-char (point-max))
        (insert (format-time-string "%H:%M:%S+%6N") " " result "\n")
-       (when (get-buffer-window)
-         (recenter-top-bottom)))))
+
+       (when-let (window (get-buffer-window))
+         (with-selected-window window
+           (goto-char (point-max))
+           (recenter-top-bottom (- -1 (min (max 0 scroll-margin)
+                                           (truncate (/ (window-body-height) 4.0))))))))))
 
 (cl-defmacro org-glance-log (logger &rest args)
   (declare (indent 2))

@@ -4,8 +4,7 @@
 (require 'files)
 (require 'org-glance-types)
 
-(defvar org-glance-scope-extensions
-  '("org" "org_archive"))
+(defvar org-glance-scope-extensions '("org" "org_archive"))
 
 (defvar org-glance-scope:default-scope-alist
   '((file-with-archives . org-glance-scope:file-with-archives)

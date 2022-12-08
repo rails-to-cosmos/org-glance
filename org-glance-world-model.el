@@ -15,6 +15,7 @@
 (require 'eieio)
 
 (require 'org-glance-dimension)
+(require 'org-glance-partition)
 (require 'org-glance-changelog)
 (require 'org-glance-log)
 (require 'org-glance-headline)
@@ -30,8 +31,8 @@
 
      ;; in-memory caches
      (partitions :type (org-glance-list-of org-glance-partition) :initarg :partitions :initform nil)
-     (headline-by-hash :type hash-table :initarg :headline-by-hash :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
-     (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "id -> headlines")))
+     (headlines :type hash-table :initarg :headlines :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
+     (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "ID -> HEADLINES")))
 
 (org-glance-declare org-glance-world:create :: OptionalDirectory -> World)
 (defun org-glance-world:create (location)
@@ -227,13 +228,13 @@ Return last committed offset."
 (defun org-glance-world:add-headline-to-cache! (world id headline)
   (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance? headline :title))
   (puthash id t (org-glance? world :relations))
-  (puthash (org-glance? headline :hash) headline (org-glance? world :headline-by-hash)))
+  (puthash (org-glance? headline :hash) headline (org-glance? world :headlines)))
 
 (org-glance-declare org-glance-world:remove-headline-from-cache! :: World -> Hash -> t)
 (defun org-glance-world:remove-headline-from-cache! (world hash)
-  (when-let (headline (gethash hash (org-glance? world :headline-by-hash)))
+  (when-let (headline (gethash hash (org-glance? world :headlines)))
     (org-glance-log :cache "Remove headline \"%s\" from the world cache" (org-glance? headline :title))
-    (remhash hash (org-glance? world :headline-by-hash))))
+    (remhash hash (org-glance? world :headlines))))
 
 (org-glance-declare org-glance-world:remove-headline :: World -> Hash -> t)
 (defun org-glance-world:remove-headline (world hash)
@@ -262,7 +263,7 @@ achieved by calling `org-glance-world:persist' method."
 
 (org-glance-declare org-glance-world:get-headline-from-cache :: World -> Hash -> (Optional Headline))
 (defun org-glance-world:get-headline-from-cache (world hash)
-  (gethash hash (org-glance? world :headline-by-hash)))
+  (gethash hash (org-glance? world :headlines)))
 
 (org-glance-declare org-glance-world:get-headline-from-stage :: World -> Hash -> (Optional Headline))
 (defun org-glance-world:get-headline-from-stage (world hash)
@@ -286,7 +287,7 @@ achieved by calling `org-glance-world:persist' method."
      (outline-next-heading))
    (when-let (headline (org-glance-headline-at-point))
      (org-glance-log :cache "[org-glance-headline] cache put: \"%s\"" (org-glance? headline :title))
-     (puthash (org-glance? headline :hash) headline (org-glance? world :headline-by-hash)))))
+     (puthash (org-glance? headline :hash) headline (org-glance? world :headlines)))))
 
 (org-glance-declare org-glance-world:get-headline :: World -> Hash -> Headline)
 (defun org-glance-world:get-headline (world hash)
