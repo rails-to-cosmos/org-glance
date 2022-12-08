@@ -5,7 +5,6 @@
 (require 's)
 (require 'ol)
 (require 'org)
-(require 'org-capture)
 
 (declare-function s-replace-regexp 's)
 (declare-function f-mkdir-full-path 'f)
@@ -113,9 +112,12 @@
                            (view-location (org-glance-world:locate-partition world partition))
                            (view-header-location (org-glance-view:locate-header view-location))
                            (view-header (org-glance-view:read-header view-header-location)))
+                (message "Clear partition \"%s\"?" (org-glance-partition:representation partition))
+                (message "File exists? \"%s\" %s" view-location (f-exists? view-location))
+                (message "View size: %d" (or (a-get view-header :size) -1))
                 (when (and (f-exists? view-location)
                            (= 0 (or (a-get view-header :size) -1))
-                           (y-or-n-p (format "View \"%s\" became empty. Remove? " view-location)))
+                           (y-or-n-p (format "Partition \"%s\" became empty. Remove? " (org-glance-partition:representation partition))))
                   (org-glance-log :dimensions "Remove derived view %s (%s)" partition view-location)
                   (org-glance! world :partitions := (cl-remove partition (org-glance? world :partitions)))
                   (f-delete (f-parent view-location) t))))))
@@ -169,7 +171,7 @@ Return last committed offset."
 
 (org-glance-declare org-glance-world:locate-changelog :: World -> OptionalFile)
 (defun org-glance-world:locate-changelog (world)
-  (f-join (org-glance? world :location) "log" "event.log"))
+  (f-join (org-glance? world :location) "event.log"))
 
 (org-glance-declare org-glance-world:write-changelog! :: World -> t)
 (defun org-glance-world:write-changelog! (world)
@@ -210,6 +212,7 @@ Return last committed offset."
          (headline (org-glance-headline:with-properties headline
                      `(("GLANCE_ID" ,id)
                        ("DIR" ,(concat "../../../resources/" id))))))
+    (org-glance-log :headline "Add headline: %s" headline)
     (org-glance-world:add-headline-to-cache! world id headline)
     (org-glance-world:add-headline-to-changelog! world headline))
 
@@ -234,7 +237,7 @@ Return last committed offset."
 
 (org-glance-declare org-glance-world:remove-headline :: World -> Hash -> t)
 (defun org-glance-world:remove-headline (world hash)
-  "Return `org-glance-world' with HEADLINES removed from WORLD.
+  "Return `org-glance-world' with HASH removed from WORLD.
 
 Append RM event to WAL, but do not remove HEADLINES from the
 persistent storage.
@@ -340,7 +343,7 @@ achieved by calling `org-glance-world:persist' method."
     ((or org-glance-headline org-glance-headline-header)
      (org-glance-world:locate-headline world (org-glance? headline :hash)))
     (string (let ((prefix (substring headline 0 2))
-                  (postfix (substring headline 2 (length headline))))
+                  (postfix (format "%s.org" (substring headline 2 (length headline)))))
               (f-join (org-glance? world :location) "data" prefix postfix)))))
 
 (org-glance-declare org-glance-world:headline-exists? :: World -> (or Hash Headline HeadlineHeader) -> boolean)

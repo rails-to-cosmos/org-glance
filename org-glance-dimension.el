@@ -30,10 +30,8 @@
 (defun org-glance-partition:from-key-value (key value)
   (org-glance-partition:from-string (downcase (format "%s=%s" key value))))
 
+(org-glance-declare org-glance-dimension:apply :: Dimension -> HeadlineHeader -> list)
 (defun org-glance-dimension:apply (dimension headline)
-  (cl-check-type dimension org-glance-dimension)
-  (cl-check-type headline org-glance-headline-header)
-
   (let ((result (eval (org-glance? dimension :form) (a-list 'headline headline))))
     (--map (thread-last it
              (format "%s")
@@ -45,10 +43,8 @@
              (atom (list result))
              (otherwise result)))))
 
+(org-glance-declare org-glance-dimension:partitions :: Dimension -> (or Headline HeadlineHeader) -> cons)
 (defun org-glance-dimension:partitions (dimension headline)
-  (cl-check-type dimension org-glance-dimension)
-  (cl-check-type headline (or org-glance-headline org-glance-headline-header))
-
   (cons (org-glance? dimension :name) (org-glance-dimension:apply dimension headline)))
 
 (defun org-glance-dimension:make-predicate (dimension value)

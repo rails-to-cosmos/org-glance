@@ -3,7 +3,7 @@
 (defconst org-glance-log:loggers
   (a-list :events nil
           :world nil
-          :headlines nil
+          :headline t
           :cache nil
           :dimensions nil
           :contents t
@@ -19,7 +19,9 @@
   `(let ((result (format ,@forms)))
      (with-current-buffer (get-buffer-create (format "*org-glance-log%s*" ,logger))
        (goto-char (point-max))
-       (insert (format-time-string "%H:%M:%S+%6N") " " result "\n"))))
+       (insert (format-time-string "%H:%M:%S+%6N") " " result "\n")
+       (when (get-buffer-window)
+         (recenter-top-bottom)))))
 
 (cl-defmacro org-glance-log (logger &rest args)
   (declare (indent 2))

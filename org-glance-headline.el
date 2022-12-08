@@ -101,7 +101,11 @@
                :initarg :position)))
 
 (org-glance-class org-glance-headline-header ()
-    ((hash :type org-glance-hash
+    ((id :type string
+         :initarg :id
+         :initform ""
+         :documentation "Glance ID property.")
+     (hash :type org-glance-hash
            :initarg :hash
            :documentation "Hash of original headline contents.")
      (title :type string
@@ -161,6 +165,7 @@
   "Infer instance of `org-glance-headline-header' from HEADLINE."
   (cl-typecase headline
     (org-glance-headline (org-glance-headline-header
+                          :id (org-glance? headline :id)
                           :hash (org-glance? headline :hash)
                           :title (org-glance? headline :title)
                           :state (org-glance? headline :state)
@@ -270,40 +275,42 @@
                                  (org-element-property :end element)))
               :position (org-element-property :begin element))))
 
+(org-glance-declare org-glance-headline-at-point :: (Optional Headline))
 (defun org-glance-headline-at-point ()
   "Create `org-glance-headline' instance from `org-element' at point."
-  (cl-the (org-glance-optional org-glance-headline)
-    (save-excursion
-      (unless (org-before-first-heading-p)
-        (org-glance-headline:with-headline-at-point
-          (let* ((ast (org-glance-ast:get-buffer-ast))
-                 (contents (org-glance-ast:contents ast))
-                 (store (org-glance-headline:extract-store contents))
-                 (links (org-glance-headline:extract-links))
-                 (timestamps (append (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :scheduled headline)))
-                                     (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :deadline headline)))
-                                     (org-element-map ast '(timestamp) #'identity))))
-            (org-glance-headline
-             :title (org-glance-ast:title ast)
-             :state (or (org-glance-ast:state contents) "")
-             :hash (org-glance-ast:hash contents)
-             :tags (org-glance-ast:class ast)
-             :active? (not (null (--filter (member (org-element-property :type it) '(active active-range)) timestamps)))
-             :repeated? (not (null (--filter (and (member (org-element-property :type it) '(active active-range))
-                                                  (> (or (org-element-property :repeater-value it) 0) 0))
-                                             timestamps)))
-             :timestamps (--map (org-element-property :raw-value it)
-                                (--filter (member (org-element-property :type it) '(active active-range)) timestamps))
-             :commented? (org-glance-ast:commented? ast)
-             :archived? (org-glance-ast:archived? ast)
-             :closed? (org-glance-ast:closed? ast)
-             :encrypted? (org-glance-ast:encrypted? contents)
-             :linked? (not (null links))
-             :links links
-             :store? (not (null store))
-             :store store
-             :contents contents
-             :properties (org-entry-properties))))))))
+  (save-excursion
+    (unless (org-before-first-heading-p)
+      (org-glance-headline:with-headline-at-point
+        (let* ((ast (org-glance-ast:get-buffer-ast))
+               (contents (org-glance-ast:contents ast))
+               (store (org-glance-headline:extract-store contents))
+               (links (org-glance-headline:extract-links))
+               (properties (org-entry-properties))
+               (timestamps (append (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :scheduled headline)))
+                                   (org-element-map ast '(headline) #'(lambda (headline) (org-element-property :deadline headline)))
+                                   (org-element-map ast '(timestamp) #'identity))))
+          (org-glance-headline
+           :id (a-get properties "GLANCE_ID" "")
+           :title (org-glance-ast:title ast)
+           :state (or (org-glance-ast:state contents) "")
+           :hash (org-glance-ast:hash contents)
+           :tags (org-glance-ast:class ast)
+           :active? (not (null (--filter (member (org-element-property :type it) '(active active-range)) timestamps)))
+           :repeated? (not (null (--filter (and (member (org-element-property :type it) '(active active-range))
+                                                (> (or (org-element-property :repeater-value it) 0) 0))
+                                           timestamps)))
+           :timestamps (--map (org-element-property :raw-value it)
+                              (--filter (member (org-element-property :type it) '(active active-range)) timestamps))
+           :commented? (org-glance-ast:commented? ast)
+           :archived? (org-glance-ast:archived? ast)
+           :closed? (org-glance-ast:closed? ast)
+           :encrypted? (org-glance-ast:encrypted? contents)
+           :linked? (not (null links))
+           :links links
+           :store? (not (null store))
+           :store store
+           :contents contents
+           :properties properties))))))
 
 (defun org-glance-headline-from-string (string)
   "Create `org-glance-headline' from string."
@@ -322,9 +329,9 @@
     (org-glance-headline:insert headline))
   headline)
 
+(org-glance-declare org-glance-headline:with-properties :: Headline -> list -> Headline)
 (defun org-glance-headline:with-properties (headline properties)
   (declare (indent 1))
-  (cl-check-type headline org-glance-headline)
   (cl-the org-glance-headline
     (org-glance:with-temp-buffer
      (org-glance-headline:insert headline)

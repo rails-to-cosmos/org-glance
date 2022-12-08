@@ -36,7 +36,7 @@
   "Return list of file S if exists."
   (let ((files (cond ((not (file-exists-p file)) (warn "File \"%s\" does not exist" file) nil)
                      ((not (file-readable-p file)) (warn "File \"%s\" is not readable" file) nil)
-                     ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
+                     ((f-directory? file) (org-glance-scope (directory-files-recursively file ".*")))
                      ;; Filter files in special modes: `org-glance-material' and `org-glance-overview' files.
                      ;; ((with-temp-buffer
                      ;;    (insert-file-contents file)

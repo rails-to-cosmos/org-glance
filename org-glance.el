@@ -72,7 +72,8 @@ following situations:
 ;; TODO prolog implementation is possible
 ;; TODO could be implemented in headline header
 (defconst org-glance-dimensions
-  (list (org-glance-dimension :name 'tag       :form '(org-glance? headline :tags))
+  (list (org-glance-dimension :name 'id        :form '(org-glance? headline :id))
+        (org-glance-dimension :name 'tag       :form '(org-glance? headline :tags))
         (org-glance-dimension :name 'state     :form '(org-glance? headline :state))
         (org-glance-dimension :name 'title     :form '(org-glance? headline :title))
         (org-glance-dimension :name 'linked    :form '(org-glance? headline :linked?))

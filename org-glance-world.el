@@ -3,6 +3,7 @@
 (require 'dash)
 (require 'org)
 (require 'org-agenda)
+(require 'org-capture)
 (require 'org-glance-headline)
 (require 'org-glance-types)
 (require 'org-glance-world-model)
