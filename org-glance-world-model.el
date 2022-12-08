@@ -104,7 +104,7 @@ Ignore cache."
                          (unless (f-exists? location)
                            (org-glance-log :dimensions "Create derived view %s in %s" partition location)
                            (push partition (org-glance? world :partitions))
-                           (org-glance-view:get-or-create world partition location (org-glance-offset:zero)))))))
+                           (org-glance-view:get-or-create partition location (org-glance-offset:zero)))))))
 
 (org-glance-declare org-glance-world:clear-partitions :: World -> Headline -> t)
 (defun org-glance-world:clear-partitions (world headline)
@@ -379,9 +379,11 @@ achieved by calling `org-glance-world:persist' method."
        when (org-glance-dimension:validate predicate headline (org-glance? world :dimensions))
        collect headline)))
 
+(org-glance-declare org-glance-world:root :: (Optional string) -> (Optional WorldLocation))
 (defun org-glance-world:root (location)
-  (cl-typecase location
-    (org-glance-world-location location)
-    (otherwise (org-glance-world:root (f-parent location)))))
+  (pcase location
+    ((guard (null location)) nil)
+    ((cl-struct org-glance-world-location) location)
+    ((cl-struct string) (org-glance-world:root (f-parent location)))))
 
 (provide 'org-glance-world-model)

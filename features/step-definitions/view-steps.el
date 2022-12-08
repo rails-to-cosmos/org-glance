@@ -22,13 +22,13 @@
 (Then "^view \"\\([^\"]+\\)\" should be equal to buffer view$"
       (lambda (view-name)
         (let ((view (org-glance-test:get-view view-name)))
-          (should (eq view (org-glance-view:get-buffer-view))))))
+          (should (eq view (org-glance-view:current))))))
 
 (Then "^\\([[:digit:]]+\\) markers? should be changed$"
       (lambda (changed-markers-count)
-        (let ((view (org-glance-view:get-buffer-view)))
+        (let ((view (org-glance-view:current)))
           (should (= (string-to-number changed-markers-count)
-                     (cl-loop with markers = (org-glance? (org-glance-view:get-buffer-view) :markers)
+                     (cl-loop with markers = (org-glance? (org-glance-view:current) :markers)
                         for midx below (org-glance-vector:size markers)
                         for marker = (org-glance-vector:get markers midx)
                         when (org-glance? marker :changed?)
@@ -36,8 +36,8 @@
 
 (When "^I? ?commit changes$"
   (lambda ()
-    (let* ((view (org-glance-view:get-buffer-view))
-           (world (org-glance? view :world))
+    (let* ((view (org-glance-view:current))
+           (world (org-glance-world:current))
            (markers (org-glance? view :markers)))
       (org-glance-log :markers "Before commit markers:\n\"%s\"\n" (pp-to-string markers))
       (org-glance-log :markers "Before commit changelog*:\n\"%s\"\n" (pp-to-string (org-glance? world :changelog*)))
@@ -60,20 +60,20 @@
 
 (Then "^marker at point should be changed$"
       (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
+        (let ((view (org-glance-view:current))
               (midx (org-glance-view:marker-at-point)))
           (should (org-glance-view:marker-changed? view midx)))))
 
 (Then "^marker at point should not be changed$"
       (lambda ()
-        (let ((view (org-glance-view:get-buffer-view))
+        (let ((view (org-glance-view:current))
               (midx (org-glance-view:marker-at-point)))
           (should (not (org-glance-view:marker-changed? view midx))))))
 
 (Then "^buffer offset should be latest$"
       (lambda ()
-        (let* ((view (org-glance-view:get-buffer-view))
-               (world (org-glance? view :world)))
+        (let* ((view (org-glance-view:current))
+               (world (org-glance-world:current)))
           (should (org-glance-offset:equal-p
                    (org-glance-view:get-offset view)
                    (org-glance-world:offset world))))))
@@ -82,13 +82,13 @@
       (lambda ()
         (should (eq nil (condition-case nil
                             (progn
-                              (org-glance-view:commit (org-glance-view:get-buffer-view))
+                              (org-glance-world:commit)
                               t)
                           (error nil))))))
 
 (And "^markers? positions should be consistent$"
      (lambda ()
-       (let* ((view (org-glance-view:get-buffer-view))
+       (let* ((view (org-glance-view:current))
               (hc (org-glance-headline:map (headline)
                     (let ((midx (org-glance-view:marker-at-point)))
                       (and (> midx -1)
@@ -98,7 +98,7 @@
 
 (And "^marker positions and hashes should be consistent$"
      (lambda ()
-       (let* ((view (org-glance-view:get-buffer-view))
+       (let* ((view (org-glance-view:current))
               (hc (org-glance-headline:map (headline)
                     (let ((midx (org-glance-view:marker-at-point view (point-min))))
 

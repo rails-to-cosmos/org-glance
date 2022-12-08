@@ -5,27 +5,25 @@
 (require 'org-glance-view-model)
 (require 'org-glance-view-cache)
 
-(defun org-glance-view:get-or-create (world type location offset)
-  "Create symbol `org-glance-view' instance from WORLD by TYPE and store it in LOCATION."
-  (cl-check-type world org-glance-world)
-  (cl-check-type type org-glance-partition)
-  (cl-check-type offset org-glance-offset)
-
-  (thunk-let* ((location (file-truename (f-join (org-glance? world :location) location)))
+(org-glance-declare org-glance-view:get-or-create :: Partition -> string -> Offset -> View)
+(defun org-glance-view:get-or-create (type location offset)
+  "Create `org-glance-view' instance by TYPE, LOCATION and OFFSET."
+  (thunk-let* ((location (file-truename location))
                (m-loc (concat (file-name-sans-extension location) org-glance-view-marker-extension))
                (key (org-glance-view--key :type type :location location))
                (cached-view (org-glance-view-cache:get key))
-               (new-view (org-glance-view:create world type location offset)))
+               (new-view (org-glance-view:create type location offset)))
     (cond ((and (f-exists? location) (f-exists? m-loc) cached-view) cached-view)
           (t (org-glance-log :cache "[org-glance-view] cache miss: %s" type)
              (org-glance-view-cache:put new-view)
              new-view))))
 
-(defun org-glance-view:get-buffer-view ()
+(org-glance-declare org-glance-view:current :: View)
+(defun org-glance-view:current ()
+  "Return current view from file-buffer."
   (let ((header (thread-first (buffer-file-name)
                   (org-glance-view:locate-header)
-                  (org-glance-view:read-header)))
-        (world (org-glance-world:current)))
-    (org-glance-view:get-or-create world (a-get header :type) (buffer-file-name) (a-get header :offset))))
+                  (org-glance-view:read-header))))
+    (org-glance-view:get-or-create (a-get header :type) (buffer-file-name) (a-get header :offset))))
 
 (provide 'org-glance-view)

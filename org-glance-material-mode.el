@@ -17,9 +17,9 @@ editor."
   (cond (org-glance-material-mode
          (add-hook 'before-change-functions #'org-glance-material-mode:before-update nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:after-update nil t)
-         (add-hook 'before-save-hook #'org-glance-view:commit nil t))
+         (add-hook 'before-save-hook #'org-glance-world:commit nil t))
         (t
-         (remove-hook 'before-save-hook #'org-glance-view:commit t)
+         (remove-hook 'before-save-hook #'org-glance-world:commit t)
          (remove-hook 'before-change-functions #'org-glance-material-mode:before-update t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:after-update t))))
 
@@ -34,7 +34,7 @@ editor."
 (defun org-glance-material-mode:after-update (change-beg change-end change-len)
   "Actualize marker overlay."
   (interactive)
-  (let* ((view (org-glance-view:get-buffer-view))
+  (let* ((view (org-glance-view:current))
          (diff (- (- change-end change-beg) change-len))
          (midx (org-glance-view:marker-at-point view (- change-beg 1)))
          ;; (buffer (current-buffer))
@@ -51,10 +51,11 @@ editor."
     (org-glance-log :contents "After update contents: \"%s\"" (buffer-string))
     (org-glance-log :markers "After update markers: %s" (pp-to-string (org-glance? view :markers)))
 
-    (save-match-data
-      (with-current-buffer (get-buffer-create "*glance-markers*")
-        (delete-region (point-min) (point-max))
-        (insert (pp-to-string (org-glance? view :markers)))
-        (insert "\n" (pp-to-string (org-glance? view :world :changelog*)))))))
+    ;; (save-match-data
+    ;;   (with-current-buffer (get-buffer-create "*glance-markers*")
+    ;;     (delete-region (point-min) (point-max))
+    ;;     (insert (pp-to-string (org-glance? view :markers)))
+    ;;     (insert "\n" (pp-to-string (org-glance? view :world :changelog*)))))
+    ))
 
 (provide 'org-glance-material-mode)

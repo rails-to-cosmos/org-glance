@@ -3,11 +3,11 @@
 (defconst org-glance-log:loggers
   (a-list :events nil
           :world nil
-          :headline t
+          :headline nil
           :cache nil
           :dimensions nil
-          :contents t
-          :markers t
+          :contents nil
+          :markers nil
           :buffers nil
           :performance nil
           :offsets nil

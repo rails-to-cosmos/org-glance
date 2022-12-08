@@ -10,6 +10,7 @@
 (require 'org-glance-world-cache)
 (require 'org-glance-dimension)
 (require 'org-glance-partition)
+(require 'org-glance-vector)
 
 (org-glance-declare org-glance-world:get-or-create :: OptionalDirectory -> World)
 (defun org-glance-world:get-or-create (location)
@@ -46,7 +47,7 @@
 
   (pcase (if current-prefix-arg
              (org-glance-world:choose-partition world)
-           (org-glance-partition:from-string "active=t"))
+           (org-glance-partition:from-key-value "active" "t"))
     ((and (cl-struct org-glance-partition) partition) (progn
                                                         (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
                                                               org-agenda-overriding-header "org-glance agenda"
@@ -59,10 +60,10 @@
 (org-glance-declare org-glance-world:current :: World)
 (defun org-glance-world:current ()
   "Get `org-glance-world' associated with current buffer."
-  (or (-> (buffer-file-name)
-          (org-glance-world:root)
-          (org-glance-world:get-or-create))
-      (user-error "World %s is not registered in the system" (buffer-file-name))))
+  (or (-some-> (buffer-file-name)
+        (org-glance-world:root)
+        (org-glance-world:get-or-create))
+      (user-error "Buffer is not a member of world: %s" (buffer-file-name))))
 
 (defun org-glance-world:after-finalize-hook ()
   "Register captured headline in metastore."
@@ -159,12 +160,12 @@
                (view-type (a-get header :type))
                (view-offset (a-get header :offset))
                (world-offset (org-glance-world:offset world))
-               (view (org-glance-view:get-or-create world view-type location view-offset)))
+               (view (org-glance-view:get-or-create view-type location view-offset)))
 
     (when (org-glance-offset:less? view-offset world-offset)
       (org-glance-world:with-locked-location location
         (org-glance-view:mark! view)
-        (org-glance-view:fetch! view)
+        (org-glance-world:fetch world view)
         (org-glance-view:save-header view)))
 
     location))
@@ -183,5 +184,109 @@
                                                                   ((cl-struct org-glance-readable-file) it)
                                                                   (_ nil))
                                                                 (org-glance? world :partitions)))))
+
+(org-glance-declare org-glance-world:commit :: t)
+(cl-defun org-glance-world:commit ()
+  "Commit current buffer."
+  (let* ((world (org-glance-world:current))
+         (view (org-glance-view:current))
+         (markers (org-glance? view :markers)))
+    (org-glance-view:with-current-buffer view
+      (cl-loop
+         with to-move = '() ;; hashes to be moved from current view to another
+         with to-remove = '() ;; hashes to be removed from current world
+         for midx from 0 below (org-glance-vector:size markers)
+         when (and (org-glance? view :markers [midx] :changed?)
+                   (not (org-glance? view :markers [midx] :removed?)))
+         do (let* ((headline (org-glance-view:get-marker-headline view midx))
+                   (old-hash (org-glance-view:get-marker-hash view midx))
+                   (new-hash (org-glance? headline :hash)))
+
+              (org-glance-world:update-headline world old-hash headline)
+              (org-glance! view :markers [midx] :changed? := nil)
+              (org-glance-view:set-marker-hash view midx new-hash)
+
+              (unless (org-glance-world:validate-headline world (org-glance? view :type) headline)
+                (push new-hash to-move)))
+         when (org-glance? view :markers [midx] :removed?)
+         do (push midx to-remove)
+         finally do
+           (dolist (hash to-move)
+             (org-glance-view:remove-headline view hash))
+
+           (cl-loop for midx in to-remove
+              for offset from 0
+              do
+                (let* ((hash (org-glance? view :markers [(- midx offset)] :hash))
+                       (headline (org-glance-world:get-headline world hash)))
+                  (when (y-or-n-p (format "Remove headline \"%s\" completely? " (org-glance? headline :title)))
+                    (org-glance-world:remove-headline world hash)))
+                (org-glance-vector:remove-at! (org-glance? view :markers) (- midx offset)))
+
+           (let ((offset (org-glance-world:persist world)))
+             (org-glance-view:set-offset view offset))
+           (org-glance-view:save-markers view)))))
+
+(org-glance-declare org-glance-world:fetch :: World -> View -> t)
+(defun org-glance-world:fetch (world view)
+  (let* ((view-offset (org-glance-view:get-offset view))
+         (events (reverse (org-glance-world:events world)))
+         (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
+         (committed-offset view-offset)
+         (to-add (make-hash-table :test #'equal)))
+
+    ;; initial state
+    (cl-loop for hash being the hash-keys of (org-glance? view :hash->midx) using (hash-values midx)
+       do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
+
+    (cl-loop
+       for event in events
+       for idx from 0
+       for event-offset = (org-glance? event :offset)
+
+       when (org-glance-offset:less? view-offset event-offset)
+       do (thunk-let* ((headline* (org-glance? event :headline))
+
+                       (event-hash (org-glance? event :hash))
+                       (headline-hash (org-glance? headline* :hash))
+                       (dimensions (org-glance? world :dimensions))
+
+                       (headline (org-glance-world:get-headline world headline-hash))
+
+                       (hashes-equal? (string= headline-hash event-hash))
+                       (dimension-valid? (org-glance-world:validate-headline world (org-glance? view :type) headline*))
+                       (dimension-invalid? (not dimension-valid?))
+                       (source-exists? (not (null (gethash event-hash to-add))))
+                       (source-removed? (not (org-glance-world:headline-exists? world event-hash)))
+                       (target-removed? (not (org-glance-world:headline-exists? world headline-hash)))
+
+                       (add-target! (puthash headline-hash headline to-add))
+                       (remove-source!  (remhash event-hash to-add))
+                       (replace-headline! (progn (puthash headline-hash headline to-add)
+                                                 (remhash event-hash to-add))))
+            (cl-typecase event
+              (org-glance-event:UPDATE (cond (hashes-equal? nil)
+                                             ((and source-removed? target-removed?) nil)
+                                             ((and (not source-removed?) target-removed?) remove-source!)
+                                             ((and dimension-invalid? (not source-exists?)) nil)
+                                             ((and dimension-invalid? source-exists?) remove-source!)
+                                             ((and dimension-valid? source-exists?) replace-headline!)
+                                             (t add-target!)))
+              (org-glance-event:PUT (cond (target-removed? nil)
+                                          (dimension-valid? add-target!)))
+              (org-glance-event:RM remove-source!)
+              (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
+         (setq committed-offset event-offset)
+         (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
+       finally do
+         (progress-reporter-done progress-reporter)
+         (goto-char (point-min))
+         (outline-next-heading)
+         (delete-region (point) (point-max))
+         (org-glance-vector:clear! (org-glance? view :markers))
+         (dolist-with-progress-reporter (headline (hash-table-values to-add))
+             "Insert headlines"
+           (org-glance-view:add-headline view headline))
+         (org-glance-view:set-offset view committed-offset))))
 
 (provide 'org-glance-world)
