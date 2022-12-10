@@ -1,11 +1,12 @@
 ;; -*- lexical-binding: t; -*-
 
 (require 'org-glance-log)
-(require 'org-glance-world)
+(require 'org-glance-types)
+(require 'org-glance-partition)
 (require 'org-glance-view-model)
 (require 'org-glance-view-cache)
 
-;; (org-glance-declare org-glance-view:get-or-create :: Partition -> string -> Offset -> View)
+(org-glance-declare org-glance-view:get-or-create :: Partition -> OptionalFile -> Offset -> View)
 (defun org-glance-view:get-or-create (type location offset)
   "Create `org-glance-view' instance by TYPE, LOCATION and OFFSET."
   (thunk-let* ((location (file-truename location))
@@ -18,7 +19,7 @@
              (org-glance-view-cache:put new-view)
              new-view))))
 
-;; (org-glance-declare org-glance-view:current :: View)
+(org-glance-declare org-glance-view:current :: View)
 (defun org-glance-view:current ()
   "Return current view from file-buffer."
   (let ((header (thread-first (buffer-file-name)

@@ -6,6 +6,7 @@
 (require 'org-glance-log)
 (require 'org-glance-headline)
 (require 'org-glance-view)
+(require 'org-glance-world)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with synchronization abilities.")
@@ -15,30 +16,28 @@
 editor."
   nil nil org-glance-material-mode-map
   (cond (org-glance-material-mode
-         (add-hook 'before-change-functions #'org-glance-material-mode:before-update nil t)
+         ;; (add-hook 'before-change-functions #'org-glance-material-mode:before-update nil t)
          (add-hook 'after-change-functions #'org-glance-material-mode:after-update nil t)
          (add-hook 'before-save-hook #'org-glance-world:commit nil t))
         (t
          (remove-hook 'before-save-hook #'org-glance-world:commit t)
-         (remove-hook 'before-change-functions #'org-glance-material-mode:before-update t)
+         ;; (remove-hook 'before-change-functions #'org-glance-material-mode:before-update t)
          (remove-hook 'after-change-functions #'org-glance-material-mode:after-update t))))
 
-(defun org-glance-material-mode:before-update (change-beg change-end)
-  "Actualize marker overlay."
-  (interactive)
-  (org-glance-log :markers "Before update change beg: %d" change-beg)
-  (org-glance-log :markers "Before update change end: %d" change-end)
-  (org-glance-log :markers "Before update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
-  (org-glance-log :contents "Before update contents: \"%s\"" (buffer-string)))
+;; (defun org-glance-material-mode:before-update (change-beg change-end)
+;;   "Actualize marker overlay."
+;;   (interactive)
+;;   (org-glance-log :markers "Before update change beg: %d" change-beg)
+;;   (org-glance-log :markers "Before update change end: %d" change-end)
+;;   (org-glance-log :markers "Before update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
+;;   (org-glance-log :contents "Before update contents: \"%s\"" (buffer-string)))
 
 (defun org-glance-material-mode:after-update (change-beg change-end change-len)
   "Actualize marker overlay."
   (interactive)
   (let* ((view (org-glance-view:current))
          (diff (- (- change-end change-beg) change-len))
-         (midx (org-glance-view:marker-at-point view (- change-beg 1)))
-         ;; (buffer (current-buffer))
-         )
+         (midx (org-glance-view:marker-at-point view (- change-beg 1))))
     (org-glance-view:set-marker-changed view midx t)
     (org-glance-view:shift-markers! view midx diff)
 

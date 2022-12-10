@@ -42,13 +42,6 @@ Example: (org-glance? world :view :markers [0] :hash)"
 (defmacro org-glance-- (object &rest slots)
   `(cl-decf (org-glance? ,object ,@slots)))
 
-(defmacro org-glance-class (name superclasses slots &rest options-and-doc)
-  "`defclass' wrapper that avoids compile-time slot declaration warnings."
-  (declare (indent 3))
-  `(progn
-     (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
-     (defclass ,name ,superclasses ,slots ,@options-and-doc)))
-
 (cl-defmacro org-glance:with-temp-file (file &rest forms)
   (declare (indent 1))
   `(progn

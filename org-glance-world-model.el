@@ -84,11 +84,11 @@ Ignore cache."
               (apply #'org-glance-partition it))
          (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))
 
-(org-glance-declare org-glance-world:read-partition :: World -> Partition -> list)
-(defun org-glance-world:read-partition (world partition)
-  (-> (org-glance-world:locate-partition world partition)
-      (org-glance-view:locate-header)
-      (org-glance-view:read-header)))
+;; (org-glance-declare org-glance-world:read-partition :: World -> Partition -> list)
+;; (defun org-glance-world:read-partition (world partition)
+;;   (-> (org-glance-world:locate-partition world partition)
+;;       (org-glance-view:locate-header)
+;;       (org-glance-view:read-header)))
 
 (org-glance-declare org-glance-world:make-partitions :: World -> Headline -> t)
 (defun org-glance-world:make-partitions (world headline)

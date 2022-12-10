@@ -451,6 +451,7 @@ Feature: Consistent Edit
 
     Then current buffer should contain 0 headlines
 
+  @debug
   Scenario: Headline updates results in deletion from other dimension
     Given world "Adventures" in directory "stories/adventures" with headlines
       """

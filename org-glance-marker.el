@@ -2,10 +2,10 @@
 
 (require 'org-glance-types)
 
-(org-glance-class org-glance-marker nil
-    ((hash :type string :initarg :hash)
-     (position :type number :initarg :position)
-     (changed? :type boolean :initarg :changed? :initform nil)
-     (removed? :type boolean :initarg :removed? :initform nil)))
+(org-glance-class Marker nil
+    ((hash :type String :initarg :hash)
+     (position :type Number :initarg :position)
+     (changed? :type Boolean :initarg :changed? :initform nil)
+     (removed? :type Boolean :initarg :removed? :initform nil)))
 
 (provide 'org-glance-marker)

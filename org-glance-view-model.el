@@ -22,64 +22,50 @@
 
 (declare-function f-mkdir-full-path 'f)
 
-(org-glance-class org-glance-view nil
-    (
-     ;; available TODO states
-     ;; capture template
+(org-glance-class PartitionMetadata ()
+    ;; available TODO states
+    ;; capture template
+    ((location
+      :type OptionalFile
+      :initarg :location
+      :documentation "Location where metadata is stored.")
      (type
-      :type org-glance-partition
+      :type Partition
       :initarg :type
       :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
-     (location
-      :type org-glance-optional-file
-      :initarg :location
-      :documentation "Location where view persists.")
      (offset
-      :type org-glance-offset
-      :initarg :offset)
-     (markers
-      :type org-glance-vector
+      :type Offset
+      :initarg :offset)))
+
+(org-glance-class View (PartitionMetadata)
+    ((markers
+      :type Vector
       :initarg :markers
       :initform (org-glance-vector:create)
       :documentation "Dynamic array with headlines.")
      (hash->midx
-      :type hash-table
+      :type HashTable
       :initarg :hash->midx
       :initform (make-hash-table :test #'equal)
       :documentation "Hash to idx.")))
 
+(org-glance-declare org-glance-view:create :: Partition -> OptionalFile -> Offset -> View)
 (defun org-glance-view:create (type location offset)
   "Create `org-glance-view' instance from WORLD by TYPE and store it in LOCATION with initial OFFSET."
-  (let ((view (org-glance-view :type type
-                               :location location
-                               :offset offset)))
-    (unless (f-exists? (org-glance? view :location))
-      (f-mkdir-full-path (f-parent (org-glance? view :location)))
-      (org-glance-view:save-header view)
+  (let ((view (org-glance-view :type type :location location :offset offset)))
+    (unless (f-exists? location)
+      (f-mkdir-full-path (f-parent location))
       (org-glance:with-temp-org-file location
         (insert (s-join "\n"
                         (list "#  -*- mode: org; mode: org-glance-material -*-"
                               ""
                               "#+STARTUP: overview"
-                              ;; (format "#+TYPE: %s :: %s"
-                              ;;         (org-glance? view :world :location)
-                              ;;         (cl-prin1-to-string (org-glance? view :type)))
-                              ;; (format "#+OFFSET: %s"
-                              ;;         (org-glance? view :offset))
-                              ;; (format "#+PROPERTY: ATTACH_DIR ./../../resources/%s/%s/"
-                              ;;         (thread-first (org-glance? view :location)
-                              ;;           f-parent
-                              ;;           file-name-nondirectory
-                              ;;           downcase)
-                              ;;         (thread-first (org-glance? view :location)
-                              ;;           file-name-nondirectory
-                              ;;           file-name-sans-extension
-                              ;;           downcase))
                               ""
                               "")))))
+    (org-glance-view:save-header view)
     view))
 
 (cl-defmacro org-glance-view:if-safe-marker (view midx then &rest else)
@@ -277,10 +263,10 @@
 
 (defun org-glance-view:get-offset (view)
   (let ((buffer-offset (condition-case nil
-                           (thread-first (org-glance? view :location)
-                             (org-glance-view:locate-header)
-                             (org-glance-view:read-header)
-                             (a-get :offset))
+                           (-> (org-glance? view :location)
+                               (org-glance-view:locate-header)
+                               (org-glance-view:read-header)
+                               (a-get :offset))
                          (file-missing (org-glance-offset:zero))))
         (memory-offset (org-glance? view :offset)))
     (-min-by #'org-glance-offset:less? (list buffer-offset memory-offset))))

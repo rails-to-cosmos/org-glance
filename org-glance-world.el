@@ -18,10 +18,8 @@
   (->> location
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
-                       (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world:read)
-                       (-compose #'org-glance-world-cache:put
-                                 #'org-glance-world:create)))))
+                       (-compose #'org-glance-world-cache:put #'org-glance-world:read)
+                       (-compose #'org-glance-world-cache:put #'org-glance-world:create)))))
 
 (org-glance-declare org-glance-world:import :: World -> ReadableDirectory -> World)
 (defun org-glance-world:import (world location)
@@ -101,7 +99,7 @@
     (when finalize
       (org-capture-finalize))))
 
-(org-glance-declare org-glance-world:dummy-headlines :: World -> Partition -> (ListOf cons))
+(org-glance-declare org-glance-world:dummy-headlines :: World -> Partition -> (ListOf Cons))
 (defun org-glance-world:dummy-headlines (world partition)
   (--map (cons (org-glance? it :title) (org-glance? it :hash))
          (org-glance-world:partition-headlines world partition)))
@@ -153,27 +151,29 @@
                         (quit nil)))
       (org-glance-partition:from-string choice))))
 
+(org-glance-declare org-glance-world:partition-view :: World -> Partition -> View)
+(defun org-glance-world:partition-view (world partition)
+  (let* ((location (org-glance-world:locate-partition world partition))
+         (metadata (-> location (org-glance-view:locate-header) (org-glance-view:read-header)))
+         (type (a-get metadata :type))
+         (offset (a-get metadata :offset)))
+    (org-glance-view:get-or-create type location offset)))
+
 (org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)
 (defun org-glance-world:updated-partition (world partition)
+  ;; TODO optimize (duplicate location calculation)
   (thunk-let* ((location (org-glance-world:locate-partition world partition))
-               (header (org-glance-world:read-partition world partition))
-               (view-type (a-get header :type))
-               (view-offset (a-get header :offset))
-               (world-offset (org-glance-world:offset world))
-               (view (org-glance-view:get-or-create view-type location view-offset)))
-
-    (when (org-glance-offset:less? view-offset world-offset)
+               (view (org-glance-world:partition-view world partition)))
+    (when (org-glance-offset:less? (org-glance? view :offset) (org-glance-world:offset world))
       (org-glance-world:with-locked-location location
         (org-glance-view:mark! view)
         (org-glance-world:fetch world view)
         (org-glance-view:save-header view)))
-
     location))
 
 (org-glance-declare org-glance-world:backfill :: World -> t)
 (defun org-glance-world:backfill (world)
-  (dolist-with-progress-reporter (headline (org-glance-world:headlines world))
-      "Backfill"
+  (dolist-with-progress-reporter (headline (org-glance-world:headlines world)) "Backfill"
     (pcase headline
       ((and (or (cl-struct org-glance-event:PUT)
                 (cl-struct org-glance-event:UPDATE))

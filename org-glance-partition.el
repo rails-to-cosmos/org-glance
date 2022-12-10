@@ -4,9 +4,9 @@
 (require 'org-glance-types)
 (require 'org-glance-log)
 
-(org-glance-class org-glance-partition nil
-    ((dimension :type string :initarg :dimension)
-     (value     :type string :initarg :value)))
+(org-glance-class Partition ()
+    ((dimension :type String :initarg :dimension)
+     (value     :type String :initarg :value)))
 
 (org-glance-declare org-glance-partition:representation :: Partition -> string)
 (defun org-glance-partition:representation (partition)
