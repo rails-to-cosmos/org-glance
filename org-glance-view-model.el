@@ -25,23 +25,21 @@
 (org-glance-class PartitionMetadata ()
     ;; available TODO states
     ;; capture template
-    ((location
-      :type OptionalFile
-      :initarg :location
-      :documentation "Location where metadata is stored.")
-     (type
-      :type Partition
-      :initarg :type
-      :documentation "Type declaration that transforms into predicate of
+    ((type :type Partition
+           :initarg :type
+           :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
-     (offset
-      :type Offset
-      :initarg :offset)))
+     (offset :type Offset
+             :initarg :offset)
+     (size :type Number
+           :initarg :size)))
 
 (org-glance-class View (PartitionMetadata)
-    ((markers
+    ((location :type OptionalFile :initarg :location
+               :documentation "Location where metadata is stored.")
+     (markers
       :type Vector
       :initarg :markers
       :initform (org-glance-vector:create)
@@ -154,41 +152,6 @@
           (org-glance-vector:remove-at! markers midx)
           (remhash hash (org-glance? view :hash->midx)))))))
 
-(org-glance-declare org-glance-view:replace-headline :: View -> Hash -> Headline -> t)
-(defun org-glance-view:replace-headline (view old-hash headline)
-  (thunk-let* ((new-hash (org-glance? headline :hash))
-               (midx (gethash old-hash (org-glance? view :hash->midx)))
-               (marker-position (org-glance-view:get-marker-position view midx)))
-    (goto-char marker-position)
-    (org-glance-headline:with-headline-at-point
-      (let ((inhibit-message t)
-            (org-log-state-notes-into-drawer nil)
-            (org-log-into-drawer nil)
-            (org-log-note-state nil)
-            (org-todo-log-states nil)
-            (org-log-done nil))
-        (org-edit-headline (org-glance? headline :title))
-        (org-todo (org-glance? headline :state))
-        (when (org-glance? headline :commented?)
-          (org-toggle-comment))
-        (org-set-tags (org-glance? headline :tags)))
-
-      (goto-char (point-min))
-      (when (= 0 (forward-line))
-        (delete-region (point) (point-max)))
-      (goto-char (point-max))
-
-      (insert (with-temp-buffer
-                (insert (org-glance? headline :contents))
-                (goto-char (point-min))
-                (forward-line)
-                (buffer-substring-no-properties (point) (point-max))))
-
-      (unless (string= (buffer-substring-no-properties (1- (point-max)) (point-max)) "\n")
-        (insert "\n"))
-
-      (org-glance-view:set-marker-hash view midx new-hash))))
-
 (defun org-glance-view:make-markers ()
   (let ((markers (org-glance-vector:create)))
     (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
@@ -266,7 +229,7 @@
                            (-> (org-glance? view :location)
                                (org-glance-view:locate-header)
                                (org-glance-view:read-header)
-                               (a-get :offset))
+                               (org-glance? :offset))
                          (file-missing (org-glance-offset:zero))))
         (memory-offset (org-glance? view :offset)))
     (-min-by #'org-glance-offset:less? (list buffer-offset memory-offset))))
@@ -300,12 +263,13 @@
                (string= asterisk asterisk*))
      do (org-glance! marker :removed? := nil)))
 
-(org-glance-declare org-glance-view:header :: View -> list)
+(org-glance-declare org-glance-view:header :: View -> PartitionMetadata)
 (defun org-glance-view:header (view)
   "Get compact metadata for VIEW."
-  (a-list :type (org-glance? view :type)
-          :offset (org-glance? view :offset)
-          :size (org-glance-vector:size (org-glance? view :markers))))
+  (org-glance-partition-metadata
+   :type (org-glance? view :type)
+   :offset (org-glance? view :offset)
+   :size (org-glance-vector:size (org-glance? view :markers))))
 
 (org-glance-declare org-glance-view:save-header :: View -> t)
 (defun org-glance-view:save-header (view)
@@ -313,7 +277,7 @@
   (org-glance:with-temp-file (org-glance-view:locate-header (org-glance? view :location))
     (insert (pp-to-string (org-glance-view:header view)))))
 
-(org-glance-declare org-glance-view:read-header :: ReadableFile -> list)
+(org-glance-declare org-glance-view:read-header :: ReadableFile -> PartitionMetadata)
 (defun org-glance-view:read-header (file)
   "Read header from FILE."
   (with-temp-buffer

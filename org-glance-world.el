@@ -42,18 +42,15 @@
 (org-glance-declare org-glance-world:agenda :: World -> t)
 (defun org-glance-world:agenda (world)
   "Show agenda for all active headlines of WORLD."
-
-  (pcase (if current-prefix-arg
-             (org-glance-world:choose-partition world)
-           (org-glance-partition:from-key-value "active" "t"))
-    ((and (cl-struct org-glance-partition) partition) (progn
-                                                        (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
-                                                              org-agenda-overriding-header "org-glance agenda"
-                                                              org-agenda-start-on-weekday nil
-                                                              org-agenda-span 21
-                                                              org-agenda-start-day "-7d")
-                                                        (org-agenda-list)))
-    (_ nil)))
+  (pcase (if current-prefix-arg (org-glance-world:choose-partition world) (org-glance-partition:from-key-value "active" "t"))
+    ((and (cl-struct org-glance-partition) partition)
+     (progn
+       (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
+             org-agenda-overriding-header "org-glance agenda"
+             org-agenda-start-on-weekday nil
+             org-agenda-span 21
+             org-agenda-start-day "-7d")
+       (org-agenda-list)))))
 
 (org-glance-declare org-glance-world:current :: World)
 (defun org-glance-world:current ()
@@ -155,8 +152,8 @@
 (defun org-glance-world:partition-view (world partition)
   (let* ((location (org-glance-world:locate-partition world partition))
          (metadata (-> location (org-glance-view:locate-header) (org-glance-view:read-header)))
-         (type (a-get metadata :type))
-         (offset (a-get metadata :offset)))
+         (type (org-glance? metadata :type))
+         (offset (org-glance? metadata :offset)))
     (org-glance-view:get-or-create type location offset)))
 
 (org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)

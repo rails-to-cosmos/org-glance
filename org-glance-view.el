@@ -25,6 +25,6 @@
   (let ((header (thread-first (buffer-file-name)
                   (org-glance-view:locate-header)
                   (org-glance-view:read-header))))
-    (org-glance-view:get-or-create (a-get header :type) (buffer-file-name) (a-get header :offset))))
+    (org-glance-view:get-or-create (org-glance? header :type) (buffer-file-name) (org-glance? header :offset))))
 
 (provide 'org-glance-view)
