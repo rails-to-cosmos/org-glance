@@ -5,6 +5,8 @@
 (require 'eieio)
 (require 'thunk)
 
+(require 'org-glance-log)
+
 (defmacro org-glance? (object &rest slots)
   "Get mutable pointers from SLOTS recursively starting from OBJECT.
 
@@ -51,13 +53,21 @@ Example: (org-glance? world :view :markers [0] :hash)"
   (declare (indent 1))
   `(progn
      (mkdir (file-name-directory ,file) t)
+     (org-glance-log :file "Interact with file %s" ,file)
+     (with-temp-file ,file ,@forms)))
+
+(cl-defmacro org-glance:with-temp-org-file (file &rest forms)
+  (declare (indent 1))
+  `(progn
+     (mkdir (file-name-directory ,file) t)
+     (org-glance-log :file "Interact with file %s" ,file)
      (with-temp-file ,file
        (org-mode)
        ,@forms)))
 
 (cl-defmacro org-glance:with-file-overwrite (file &rest forms)
   (declare (indent 1))
-  `(org-glance:with-temp-file ,file
+  `(org-glance:with-temp-org-file ,file
      (insert-file-contents ,file)
      ,@forms))
 

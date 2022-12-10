@@ -325,7 +325,7 @@
   "Write HEADLINE to DEST."
   (cond ;; ((and (f-exists? dest) (not (f-empty? dest))) (user-error "Destination exists and is not empty."))
     ((and (f-exists? dest) (not (f-readable? dest))) (user-error "Destination exists and not readable.")))
-  (org-glance:with-temp-file dest
+  (org-glance:with-temp-org-file dest
     (org-glance-headline:insert headline))
   headline)
 

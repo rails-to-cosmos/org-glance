@@ -59,7 +59,7 @@
     (unless (f-exists? (org-glance? view :location))
       (f-mkdir-full-path (f-parent (org-glance? view :location)))
       (org-glance-view:save-header view)
-      (org-glance:with-temp-file location
+      (org-glance:with-temp-org-file location
         (insert (s-join "\n"
                         (list "#  -*- mode: org; mode: org-glance-material -*-"
                               ""
@@ -208,12 +208,13 @@
     (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
     (org-glance-headline:map (headline)
       (let ((marker (org-glance-marker :hash (org-glance? headline :hash)
-                                             :position (point-min))))
+                                       :position (point-min))))
         (org-glance-vector:push-back! markers marker)))
     markers))
 
 (org-glance-declare org-glance-view:set-markers! :: View -> Vector -> t)
 (defun org-glance-view:set-markers! (view markers)
+  (org-glance-log :markers "Set markers: %s" markers)
   (cl-loop
      with hash->midx = (make-hash-table :test #'equal)
      for midx below (org-glance-vector:size markers)
@@ -225,22 +226,29 @@
 (org-glance-declare org-glance-view:mark! :: View -> t)
 (defun org-glance-view:mark! (view)
   "Create effective representation of VIEW headline positions."
+  (org-glance-log :markers "Mark view %s" (org-glance? view :type))
   (pcase (org-glance-view:load-markers view)
-    ('() (let ((markers (org-glance-view:make-markers)))
-           (org-glance-view:set-markers! view markers)
-           (org-glance-view:save-markers view)))
+    ('()
+      (org-glance-log :markers "Markers not loaded")
+      (let ((markers (org-glance-view:make-markers)))
+        (org-glance-view:set-markers! view markers)
+        (org-glance-log :markers "Save markers: %s" (org-glance? view :markers))
+        (org-glance-view:save-markers view)))
     (markers
+     (org-glance-log :markers "Markers loaded: %s" markers)
      (org-glance-view:set-markers! view markers))))
 
 (org-glance-declare org-glance-view:save-markers :: View -> org-glance-vector)
 (defun org-glance-view:save-markers (view)
   (let ((markers (org-glance? view :markers))
         (buffer-hash (buffer-hash)))
-    (with-temp-file (org-glance-view:locate-markers view)
+    (org-glance:with-temp-file (org-glance-view:locate-markers view)
       (insert (format "%s\n" buffer-hash))
       (cl-loop for midx below (org-glance-vector:size markers)
          for marker = (org-glance-vector:get markers midx)
-         do (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))
+         do
+           (org-glance-log :markers "Save marker %d" midx)
+           (insert (format "%s %d\n" (org-glance? marker :hash) (org-glance? marker :position)))))
     markers))
 
 (org-glance-declare org-glance-view:load-markers :: View -> t)
@@ -316,7 +324,7 @@
 (org-glance-declare org-glance-view:save-header :: View -> t)
 (defun org-glance-view:save-header (view)
   "Save VIEW header."
-  (with-temp-file (org-glance-view:locate-header (org-glance? view :location))
+  (org-glance:with-temp-file (org-glance-view:locate-header (org-glance? view :location))
     (insert (pp-to-string (org-glance-view:header view)))))
 
 (org-glance-declare org-glance-view:read-header :: ReadableFile -> list)

@@ -199,7 +199,7 @@ Return last committed offset."
 
 (org-glance-declare org-glance-world:write-relations! :: World -> t)
 (defun org-glance-world:write-relations! (world)
-  (with-temp-file (org-glance-world:locate-relations world)
+  (org-glance:with-temp-file (org-glance-world:locate-relations world)
     (insert (pp-to-string (org-glance? world :relations)))))
 
 (org-glance-declare org-glance-world:read-relations! :: World -> t)

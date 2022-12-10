@@ -4,15 +4,16 @@
   (a-list :events nil
           :world nil
           :headline nil
-          :cache nil
+          :cache t
           :dimensions nil
           :contents nil
-          :markers nil
+          :markers t
           :buffers nil
           :performance nil
           :offsets nil
           :test nil
-          :changelog nil))
+          :changelog nil
+          :file t))
 
 (cl-defmacro org-glance-log:with-logger (logger &rest forms)
   (declare (indent 2))

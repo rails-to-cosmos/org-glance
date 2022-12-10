@@ -230,9 +230,8 @@
 (org-glance-declare org-glance-world:fetch :: World -> View -> t)
 (defun org-glance-world:fetch (world view)
   (let* ((view-offset (org-glance-view:get-offset view))
-         (events (reverse (org-glance-world:events world)))
+         (events (reverse (org-glance-world:events world))) ;; TODO optimize me
          (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
-         (committed-offset view-offset)
          (to-add (make-hash-table :test #'equal)))
 
     ;; initial state
@@ -276,7 +275,7 @@
                                           (dimension-valid? add-target!)))
               (org-glance-event:RM remove-source!)
               (otherwise (user-error "Don't know how to handle event of type %s" (type-of event)))))
-         (setq committed-offset event-offset)
+
          (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length events)))
        finally do
          (progress-reporter-done progress-reporter)
@@ -284,9 +283,11 @@
          (outline-next-heading)
          (delete-region (point) (point-max))
          (org-glance-vector:clear! (org-glance? view :markers))
-         (dolist-with-progress-reporter (headline (hash-table-values to-add))
-             "Insert headlines"
-           (org-glance-view:add-headline view headline))
-         (org-glance-view:set-offset view committed-offset))))
+         (unless (hash-table-empty-p to-add)
+           (dolist-with-progress-reporter (headline (hash-table-values to-add)) "Insert headlines"
+             (org-glance-view:add-headline view headline)))
+
+         (org-glance-view:set-offset view event-offset)
+         (org-glance-view:save-markers view))))
 
 (provide 'org-glance-world)

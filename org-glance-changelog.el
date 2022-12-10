@@ -47,7 +47,7 @@
 (defun org-glance-changelog:write (changelog location)
   (let ((contents (org-glance-changelog:contents changelog)))
     (when (not (string-empty-p contents))
-      (org-glance:with-temp-file location
+      (org-glance:with-temp-org-file location
         (insert contents)))))
 
 (defun org-glance-changelog:merge (lhs rhs)
