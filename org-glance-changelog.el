@@ -6,12 +6,8 @@
 (require 'org-glance-headline)
 
 (org-glance-class org-glance-changelog nil
-    ((events :type list
-             :initarg :events
-             :initform nil)
-     (test :type function
-           :initarg :test
-           :initform #'equal)))
+    ((events :type list :initarg :events :initform nil)
+     (test :type function :initarg :test :initform #'equal)))
 
 (defun org-glance-changelog:flatten (changelog)
   "Return list of LOG events deduplicated."
@@ -19,12 +15,12 @@
 
 (defun org-glance-changelog:contents (changelog)
   "Return CHANGELOG contents as a string."
-  (thread-last changelog
-    org-glance-changelog:flatten
-    reverse
-    (mapcar #'prin1-to-string)
-    (s-join "\n")
-    s-trim))
+  (->> changelog
+       org-glance-changelog:flatten
+       reverse
+       (mapcar #'prin1-to-string)
+       (s-join "\n")
+       s-trim))
 
 (cl-defmacro org-glance-changelog:push (changelog event)
   "Append ENTRIES to LOG."

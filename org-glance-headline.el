@@ -68,37 +68,27 @@
 
 ;; Extend events suitable for headlines
 (org-glance-class org-glance-event ()
-    ((offset :type org-glance-offset
-             :initarg :offset
+    ((offset :type org-glance-offset :initarg :offset
              :initform (org-glance-offset:current))))
 
 (org-glance-class org-glance-event:PUT (org-glance-event)
-    ((headline :type org-glance-headline-header
-               :initarg :headline)))
+    ((headline :type org-glance-headline-header :initarg :headline)))
 
 (org-glance-class org-glance-event:RM (org-glance-event)
-    ((hash :type org-glance-hash
-           :initarg :hash)))
+    ((hash :type org-glance-hash :initarg :hash)))
 
 (org-glance-class org-glance-event:UPDATE (org-glance-event)
-    ((hash :type org-glance-hash
-           :initarg :hash)
-     (headline :type org-glance-headline-header
-               :initarg :headline)))
+    ((hash :type org-glance-hash :initarg :hash)
+     (headline :type org-glance-headline-header :initarg :headline)))
 
 (org-glance-class org-glance-event:UPDATE* (org-glance-event)
-    ((hash :type org-glance-hash
-           :initarg :hash)
-     (headline :type org-glance-headline
-               :initarg :headline)))
+    ((hash :type org-glance-hash :initarg :hash)
+     (headline :type org-glance-headline :initarg :headline)))
 
 (org-glance-class org-glance-link nil
-    ((title :type string
-            :initarg :title)
-     (org-link :type string
-               :initarg :org-link)
-     (position :type number
-               :initarg :position)))
+    ((title :type string :initarg :title)
+     (org-link :type string :initarg :org-link)
+     (position :type number :initarg :position)))
 
 (org-glance-class org-glance-headline-header ()
     ((id :type string

@@ -90,7 +90,7 @@ Ignore cache."
 ;;       (org-glance-view:locate-header)
 ;;       (org-glance-view:read-header)))
 
-(org-glance-declare org-glance-world:make-partitions :: World -> Headline -> t)
+(org-glance-declare org-glance-world:make-partitions :: World -> (or Headline HeadlineHeader) -> t)
 (defun org-glance-world:make-partitions (world headline)
   (cl-loop with dimensions = (org-glance? world :dimensions)
      for dimension in dimensions

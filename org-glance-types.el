@@ -6,6 +6,7 @@
 
 (defalias 's-replace-regexp 'replace-regexp-in-string)
 
+;;;###autoload
 (defun org-glance-subst-type (type)
   "Substitute lance's type declarations with full elisp declarations."
   (pcase type
@@ -16,6 +17,7 @@
     ((and T (cl-struct list)) (-map #'org-glance-subst-type T))
     (_ type)))
 
+;;;###autoload
 (cl-defmacro org-glance-declare (name _ &rest types)
   "Declare TYPES for function NAME."
   `(progn
@@ -33,6 +35,7 @@
                                   ,(when-let (return-type (car (last types)))
                                      `(cl-the ,(org-glance-subst-type return-type) result))))))
 
+;;;###autoload
 (defmacro org-glance-class (name superclasses slots &rest options-and-doc)
   "`defclass' wrapper that avoids compile-time slot declaration warnings."
   (declare (indent 3))
@@ -41,6 +44,7 @@
       (eieio-declare-slots ,@(mapcar (lambda (slot) (intern (format ":%s" (car slot)))) slots))
       (defclass ,name ,superclasses ,slots ,@options-and-doc))))
 
+;;;###autoload
 (defmacro org-glance-type (name arglist &rest body)
   "Define NAME as a new data type."
   (declare (debug cl-defmacro) (doc-string 3) (indent 2))

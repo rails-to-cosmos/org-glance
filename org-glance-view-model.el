@@ -17,38 +17,26 @@
 
 ;;; Code:
 
-(defconst org-glance-view-header-extension ".h")
+(defconst org-glance-view-header-extension ".el")
 (defconst org-glance-view-marker-extension ".m")
 
 (declare-function f-mkdir-full-path 'f)
 
-(org-glance-class PartitionMetadata ()
+(org-glance-class ViewHeader ()
     ;; available TODO states
     ;; capture template
-    ((type :type Partition
-           :initarg :type
+    ((type :type Partition :initarg :type
            :documentation "Type declaration that transforms into predicate of
       one argument: `org-glance-headline'. View is guaranteed to
       contain only headlines for which predicate returns non-nil
       value.")
-     (offset :type Offset
-             :initarg :offset)
-     (size :type Number
-           :initarg :size)))
+     (offset :type Offset :initarg :offset)
+     (size :type Number :initarg :size)))
 
-(org-glance-class View (PartitionMetadata)
-    ((location :type OptionalFile :initarg :location
-               :documentation "Location where metadata is stored.")
-     (markers
-      :type Vector
-      :initarg :markers
-      :initform (org-glance-vector:create)
-      :documentation "Dynamic array with headlines.")
-     (hash->midx
-      :type HashTable
-      :initarg :hash->midx
-      :initform (make-hash-table :test #'equal)
-      :documentation "Hash to idx.")))
+(org-glance-class View (ViewHeader)
+    ((location :type OptionalFile :initarg :location :documentation "Location where metadata is stored.")
+     (markers :type Vector :initarg :markers :initform (org-glance-vector:create) :documentation "Dynamic array with headlines.")
+     (hash->midx :type HashTable :initarg :hash->midx :initform (make-hash-table :test #'equal) :documentation "Hash to idx.")))
 
 (org-glance-declare org-glance-view:create :: Partition -> OptionalFile -> Offset -> View)
 (defun org-glance-view:create (type location offset)
@@ -152,7 +140,8 @@
           (org-glance-vector:remove-at! markers midx)
           (remhash hash (org-glance? view :hash->midx)))))))
 
-(defun org-glance-view:make-markers ()
+(org-glance-declare org-glance-view:mark-current-buffer :: Vector)
+(defun org-glance-view:mark-current-buffer ()
   (let ((markers (org-glance-vector:create)))
     (org-glance-log :cache "[org-glance-view:mark] cache miss: make markers")
     (org-glance-headline:map (headline)
@@ -172,14 +161,14 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
-(org-glance-declare org-glance-view:mark! :: View -> t)
-(defun org-glance-view:mark! (view)
+(org-glance-declare org-glance-view:mark :: View -> t)
+(defun org-glance-view:mark (view)
   "Create effective representation of VIEW headline positions."
   (org-glance-log :markers "Mark view %s" (org-glance? view :type))
   (pcase (org-glance-view:load-markers view)
     ('()
       (org-glance-log :markers "Markers not loaded")
-      (let ((markers (org-glance-view:make-markers)))
+      (let ((markers (org-glance-view:mark-current-buffer)))
         (org-glance-view:set-markers! view markers)
         (org-glance-log :markers "Save markers: %s" (org-glance? view :markers))
         (org-glance-view:save-markers view)))
@@ -263,10 +252,10 @@
                (string= asterisk asterisk*))
      do (org-glance! marker :removed? := nil)))
 
-(org-glance-declare org-glance-view:header :: View -> PartitionMetadata)
-(defun org-glance-view:header (view)
+(org-glance-declare org-glance-view-header:from-view :: View -> ViewHeader)
+(defun org-glance-view-header:from-view (view)
   "Get compact metadata for VIEW."
-  (org-glance-partition-metadata
+  (org-glance-view-header
    :type (org-glance? view :type)
    :offset (org-glance? view :offset)
    :size (org-glance-vector:size (org-glance? view :markers))))
@@ -275,9 +264,9 @@
 (defun org-glance-view:save-header (view)
   "Save VIEW header."
   (org-glance:with-temp-file (org-glance-view:locate-header (org-glance? view :location))
-    (insert (pp-to-string (org-glance-view:header view)))))
+    (insert (pp-to-string (org-glance-view-header:from-view view)))))
 
-(org-glance-declare org-glance-view:read-header :: ReadableFile -> PartitionMetadata)
+(org-glance-declare org-glance-view:read-header :: ReadableFile -> ViewHeader)
 (defun org-glance-view:read-header (file)
   "Read header from FILE."
   (with-temp-buffer
@@ -298,6 +287,12 @@
     (org-glance? :location)
     (file-name-sans-extension)
     (concat org-glance-view-marker-extension)))
+
+(defun org-glance-view:freeze-markers (view)
+  (cl-loop with result = (make-hash-table :test #'equal)
+     for hash being the hash-keys of (org-glance? view :hash->midx) using (hash-values midx)
+     do (puthash hash (org-glance-view:get-marker-headline view midx) result)
+     finally return result))
 
 (provide 'org-glance-view-model)
 ;;; org-glance-view-model.el ends here

@@ -28,7 +28,11 @@ CLOSED: [2022-12-10 Sat 09:23]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2022-12-10 Sat 09:23]
 :END:
-* TODO View model should contain metadata from header
+* DONE View model should contain metadata from header
+CLOSED: [2022-12-11 Sun 21:13]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2022-12-11 Sun 21:13]
+:END:
 * DONE View shouldn't know about the world
 CLOSED: [2022-12-08 Thu 22:35]
 :LOGBOOK:

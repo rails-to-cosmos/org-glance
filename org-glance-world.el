@@ -156,26 +156,65 @@
          (offset (org-glance? metadata :offset)))
     (org-glance-view:get-or-create type location offset)))
 
+(cl-defmacro org-glance-world:with-locked-partition (world partition &rest forms)
+  (declare (indent 2))
+  `(let ((location (org-glance-world:locate-partition ,world ,partition)))
+     (when (--> location
+                (get-file-buffer it)
+                (cond ((null it) t)
+                      ((buffer-live-p it) (kill-buffer it))))
+       (org-glance:with-file-overwrite location
+         ,@forms))))
+
+(defun org-glance-world:view-header (world partition)
+  (with-temp-buffer
+    (insert-file-contents (-> (org-glance-world:locate-partition world partition)
+                              (file-name-sans-extension)
+                              (concat org-glance-view-header-extension)))
+    (read (buffer-substring-no-properties (point-min) (point-max)))))
+
+(defun org-glance-world:locate-partition-changelog (world partition)
+  (f-join (org-glance? world :location)
+          "views"
+          (org-glance-partition:path partition)
+          (format "%s.log" (org-glance-partition:representation partition))))
+
+(defun org-glance-world:partition-changelog (world partition)
+  (org-glance-changelog:read (org-glance-world:locate-partition-changelog world partition)))
+
 (org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)
 (defun org-glance-world:updated-partition (world partition)
   ;; TODO optimize (duplicate location calculation)
-  (thunk-let* ((location (org-glance-world:locate-partition world partition))
-               (view (org-glance-world:partition-view world partition)))
-    (when (org-glance-offset:less? (org-glance? view :offset) (org-glance-world:offset world))
-      (org-glance-world:with-locked-location location
-        (org-glance-view:mark! view)
-        (org-glance-world:fetch world view)
-        (org-glance-view:save-header view)))
-    location))
+  (let* ((partition-header (org-glance-world:view-header world partition))
+         (partition-offset (org-glance? partition-header :offset)))
+
+    (when (org-glance-offset:less? partition-offset (org-glance-world:offset world))
+      (org-glance-world:with-locked-partition world partition
+
+        (let* ((partition-changelog (org-glance-world:partition-changelog world partition))
+               (world-events (reverse (--take-while (org-glance-offset:less? partition-offset (org-glance? it :offset))
+                                                    (org-glance-world:events world))))
+               (partition-events (--filter (pcase it
+                                             ((and (or (cl-struct org-glance-event:UPDATE) (cl-struct org-glance-event:PUT))
+                                                   (guard (org-glance-world:validate-headline world partition (org-glance? it :headline))))
+                                              t)
+                                             ((cl-struct org-glance-event:RM) t))
+                                           world-events)))
+          (org-glance-changelog:write (org-glance-changelog:merge (org-glance-changelog :events partition-events) partition-changelog)
+                                      (org-glance-world:locate-partition-changelog world partition)))
+
+        ;; USE Partition log only here
+        (let ((view (org-glance-world:partition-view world partition)))
+          (org-glance-view:mark view)
+          (org-glance-world:update-view world view)
+          (org-glance-view:save-header view))))
+    (org-glance-world:locate-partition world partition)))
 
 (org-glance-declare org-glance-world:backfill :: World -> t)
 (defun org-glance-world:backfill (world)
   (dolist-with-progress-reporter (headline (org-glance-world:headlines world)) "Backfill"
-    (pcase headline
-      ((and (or (cl-struct org-glance-event:PUT)
-                (cl-struct org-glance-event:UPDATE))
-            (guard (org-glance-world:headline-exists? world headline)))
-       (org-glance-world:make-partitions world headline))))
+    (when (org-glance-world:headline-exists? world headline)
+      (org-glance-world:make-partitions world headline)))
 
   (org-glance! world :partitions := (cl-remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
                                                                   ((cl-struct org-glance-readable-file) it)
@@ -224,23 +263,18 @@
              (org-glance-view:set-offset view offset))
            (org-glance-view:save-markers view)))))
 
-(org-glance-declare org-glance-world:fetch :: World -> View -> t)
-(defun org-glance-world:fetch (world view)
-  (let* ((view-offset (org-glance-view:get-offset view))
-         (events (reverse (org-glance-world:events world))) ;; TODO optimize me
+(org-glance-declare org-glance-world:update-view :: World -> View -> t)
+(defun org-glance-world:update-view (world view)
+  (let* ((offset (org-glance-view:get-offset view))
+         (events (--drop-while (not (org-glance-offset:less? offset (org-glance? it :offset)))
+                               (reverse (org-glance-world:events world))))
          (progress-reporter (make-progress-reporter "Fetching events" 0 (length events)))
-         (to-add (make-hash-table :test #'equal)))
-
-    ;; initial state
-    (cl-loop for hash being the hash-keys of (org-glance? view :hash->midx) using (hash-values midx)
-       do (puthash hash (org-glance-view:get-marker-headline view midx) to-add))
-
+         (to-add (org-glance-view:freeze-markers view)))
     (cl-loop
        for event in events
        for idx from 0
        for event-offset = (org-glance? event :offset)
 
-       when (org-glance-offset:less? view-offset event-offset)
        do (thunk-let* ((headline* (org-glance? event :headline))
 
                        (event-hash (org-glance? event :hash))
