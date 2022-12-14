@@ -8,7 +8,7 @@
 (require 'org-glance)
 (require 'org-glance-headline)
 (require 'org-glance-world)
-(require 'org-glance-world-model)
+(require 'org-glance-world)
 (require 'org-glance-scope)
 
 (Given "^world \"\\([^\"]+\\)\"$"

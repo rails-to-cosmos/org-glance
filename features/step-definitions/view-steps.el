@@ -9,7 +9,7 @@
 
 (require 'org-glance-headline)
 (require 'org-glance-world)
-(require 'org-glance-world-model)
+(require 'org-glance-world)
 (require 'org-glance-view)
 
 (When "^I? ?materialize view \"\\([^\"]+\\)\" to \"\\([^\"]+\\)\"$"

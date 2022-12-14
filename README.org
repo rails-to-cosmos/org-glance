@@ -23,6 +23,10 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
+* TODO Refactor partitions
+- still should not be strongly connected to world
+- manage its own wal
+- one-to-many views
 * DONE Optimize fetch method
 CLOSED: [2022-12-10 Sat 09:23]
 :LOGBOOK:
