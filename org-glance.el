@@ -99,7 +99,7 @@ following situations:
 (defun org-glance-materialize ()
   "Choose current world's partition and materialize it."
   (interactive)
-  (org-glance-world:materialize org-glance-current-world))
+  (org-glance-world:materialize org-glance-current-world (org-glance-world:choose-partition org-glance-current-world)))
 
 (defun org-glance-agenda ()
   "Display agenda for active headlines."
@@ -124,7 +124,7 @@ following situations:
   "Import headlines from LOCATION."
   (interactive "DDirectory: ")
   (-> org-glance-current-world
-      (org-glance-world:import location)
+      (org-glance-world:import-headlines location)
       (org-glance-world:persist)))
 
 (defun org-glance-init ()
@@ -132,7 +132,7 @@ following situations:
   (interactive)
   (clrhash org-glance-world--cache)
   (clrhash org-glance-view--cache)
-  (let ((world (org-glance-world:get-or-create org-glance-directory)))
+  (let ((world (org-glance-world:init org-glance-directory)))
     (setf (org-glance? world :dimensions) org-glance-dimensions)
     (setq org-glance-current-world world)))
 

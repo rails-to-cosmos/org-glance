@@ -39,51 +39,27 @@
      (headlines :type hash-table :initarg :headlines :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
      (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "ID -> HEADLINES")))
 
-(defun org-glance-world-cache:get (location)
-  (let ((world (gethash (file-truename location) org-glance-world--cache)))
-    (if world
-        (org-glance-log :cache "[org-glance-world] cache hit: %s" location)
-      (org-glance-log :cache "[org-glance-world] cache miss: %s" location))
-    world))
-
-(defun org-glance-world-cache:put (world)
-  (cl-typecase world
-    (org-glance-world (org-glance-log :cache "[org-glance-world] cache put: %s" (org-glance? world :location))
-                      (puthash (org-glance? world :location) world org-glance-world--cache)
-                      world)
-    (otherwise nil)))
-
-(org-glance-declare org-glance-world:get-or-create :: OptionalDirectory -> World)
-(defun org-glance-world:get-or-create (location)
+(org-glance-declare org-glance-world:init :: OptionalDirectory -> World)
+(defun org-glance-world:init (location)
   "Get or create `org-glance-world' from LOCATION."
   (->> location
        (file-truename)
-       (funcall (-orfn #'org-glance-world-cache:get
-                       (-compose #'org-glance-world-cache:put #'org-glance-world--read)
-                       (-compose #'org-glance-world-cache:put #'org-glance-world--create)))))
-
-(org-glance-declare org-glance-world:import :: World -> ReadableDirectory -> World)
-(defun org-glance-world:import (world location)
-  "Add headlines from LOCATION to WORLD."
-  (dolist-with-progress-reporter (file (org-glance-scope location))
-      "Import headlines"
-    (org-glance:with-temp-buffer
-     (insert-file-contents file)
-     (org-glance-headline:map (headline)
-       (org-glance-world:add-headline! world headline))))
-  world)
+       (funcall (-orfn #'org-glance-world--cache-get
+                       (-compose #'org-glance-world--cache-put #'org-glance-world--read)
+                       (-compose #'org-glance-world--cache-put #'org-glance-world--create)))))
 
 (org-glance-declare org-glance-world:materialize :: World -> (Optional Partition) -> t)
-(cl-defun org-glance-world:materialize (world &optional (partition (org-glance-world:choose-partition world)))
+(cl-defun org-glance-world:materialize (world partition)
   "Find `org-mode' file containing headlines of WORLD and PARTITION."
   (pcase partition
-    ((cl-struct org-glance-partition) (find-file (org-glance-world:updated-partition world partition)))
-    (_ nil)))
+    ((cl-struct org-glance-partition) (find-file (org-glance-world:updated-partition world partition)))))
 
 (org-glance-declare org-glance-world:agenda :: World -> t)
 (defun org-glance-world:agenda (world)
   "Show agenda for all active headlines of WORLD."
-  (pcase (if current-prefix-arg (org-glance-world:choose-partition world) (org-glance-partition:create "active" "t"))
+  (pcase (if current-prefix-arg
+             (org-glance-world:choose-partition world)
+           (org-glance-partition:create "active" "t"))
     ((and (cl-struct org-glance-partition) partition)
      (progn
        (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
@@ -98,7 +74,7 @@
   "Get `org-glance-world' associated with current buffer."
   (or (-some-> (buffer-file-name)
         (org-glance-world:root)
-        (org-glance-world:get-or-create))
+        (org-glance-world:init))
       (user-error "Buffer is not a member of world: %s" (buffer-file-name))))
 
 (defun org-glance-world--after-finalize-hook ()
@@ -728,5 +704,29 @@ achieved by calling `org-glance-world:persist' method."
                                  (org-glance-world:read-relations! world)
                                  world))
     (otherwise nil)))
+
+(defun org-glance-world--cache-get (location)
+  (let ((world (gethash (file-truename location) org-glance-world--cache)))
+    (if world
+        (org-glance-log :cache "[org-glance-world] cache hit: %s" location)
+      (org-glance-log :cache "[org-glance-world] cache miss: %s" location))
+    world))
+
+(defun org-glance-world--cache-put (world)
+  (cl-typecase world
+    (org-glance-world (org-glance-log :cache "[org-glance-world] cache put: %s" (org-glance? world :location))
+                      (puthash (org-glance? world :location) world org-glance-world--cache)
+                      world)
+    (otherwise nil)))
+
+(org-glance-declare org-glance-world:import-headlines :: World -> ReadableDirectory -> World)
+(defun org-glance-world:import-headlines (world location)
+  "Add headlines from LOCATION to WORLD."
+  (dolist-with-progress-reporter (file (org-glance-scope location)) "Import headlines"
+    (org-glance:with-temp-buffer
+     (insert-file-contents file)
+     (org-glance-headline:map (headline)
+       (org-glance-world:add-headline! world headline))))
+  world)
 
 (provide 'org-glance-world)

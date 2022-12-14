@@ -23,7 +23,11 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
-* TODO Refactor partitions
+* STARTED Refactor partitions
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2022-12-14 Wed 22:29]
+:END:
+- partition should only know its root location
 - still should not be strongly connected to world
 - manage its own wal
 - one-to-many views
