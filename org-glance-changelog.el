@@ -22,7 +22,7 @@
        (s-join "\n")
        s-trim))
 
-(cl-defmacro org-glance-changelog:push (changelog event)
+(cl-defmacro org-glance-changelog:push! (changelog event)
   "Append ENTRIES to LOG."
   (declare (indent 1))
   `(push ,event (org-glance? ,changelog :events)))
@@ -34,7 +34,7 @@
            (insert-file-contents location)
            (let ((result (org-glance-changelog)))
              (while (not (eobp))
-               (org-glance-changelog:push result
+               (org-glance-changelog:push! result
                  (read (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
                (forward-line))
              result)))

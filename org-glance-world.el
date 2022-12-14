@@ -18,8 +18,8 @@
   (->> location
        (file-truename)
        (funcall (-orfn #'org-glance-world-cache:get
-                       (-compose #'org-glance-world-cache:put #'org-glance-world:read)
-                       (-compose #'org-glance-world-cache:put #'org-glance-world:create)))))
+                       (-compose #'org-glance-world-cache:put #'org-glance-world--read)
+                       (-compose #'org-glance-world-cache:put #'org-glance-world--create)))))
 
 (org-glance-declare org-glance-world:import :: World -> ReadableDirectory -> World)
 (defun org-glance-world:import (world location)
@@ -151,7 +151,7 @@
 
 (org-glance-declare org-glance-world:partition-view :: World -> Partition -> View)
 (defun org-glance-world:partition-view (world partition)
-  (let* ((location (org-glance-world:locate-partition world partition))
+  (let* ((location (org-glance-world--locate-partition world partition))
          (metadata (-> location (org-glance-view:locate-header) (org-glance-view:read-header)))
          (type (org-glance? metadata :type))
          (offset (org-glance? metadata :offset)))
@@ -159,7 +159,7 @@
 
 (cl-defmacro org-glance-world:with-locked-partition (world partition &rest forms)
   (declare (indent 2))
-  `(let ((location (org-glance-world:locate-partition ,world ,partition)))
+  `(let ((location (org-glance-world--locate-partition ,world ,partition)))
      (when (--> location
                 (get-file-buffer it)
                 (cond ((null it) t)
@@ -169,12 +169,12 @@
 
 (defun org-glance-world:partition-header (world partition)
   (with-temp-buffer
-    (insert-file-contents (-> (org-glance-world:locate-partition world partition)
+    (insert-file-contents (-> (org-glance-world--locate-partition world partition)
                               (file-name-sans-extension)
                               (concat org-glance-view-header-extension)))
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun org-glance-world:locate-partition-changelog (world partition)
+(defun org-glance-world--locate-partition-changelog (world partition)
   (f-join (org-glance? world :location)
           "dimensions"
           (org-glance-partition:path partition)
@@ -187,7 +187,7 @@
                   (partition ,partition)
                   (partition-header (org-glance-world:partition-header world partition))
                   (partition-offset (org-glance? partition-header :offset))
-                  (partition-changelog-location (org-glance-world:locate-partition-changelog world partition))
+                  (partition-changelog-location (org-glance-world--locate-partition-changelog world partition))
                   (partition-changelog (org-glance-changelog:read partition-changelog-location))
                   (world-events (reverse (--take-while (org-glance-offset:less? partition-offset (org-glance? it :offset))
                                                        (org-glance-world:events world))))
@@ -229,7 +229,7 @@
           (org-glance-view:mark-current-buffer view)
           (org-glance-world:update-view world view)
           (org-glance-view:save-header view))))
-    (org-glance-world:locate-partition world partition)))
+    (org-glance-world--locate-partition world partition)))
 
 (org-glance-declare org-glance-world:backfill :: World -> t)
 (defun org-glance-world:backfill (world)
@@ -237,7 +237,7 @@
     (when (org-glance-world:headline-exists? world headline)
       (org-glance-world:make-partitions world headline)))
 
-  (org-glance! world :partitions := (cl-remove-if #'null (--map (pcase (org-glance-world:locate-partition world it)
+  (org-glance! world :partitions := (cl-remove-if #'null (--map (pcase (org-glance-world--locate-partition world it)
                                                                   ((cl-struct org-glance-readable-file) it)
                                                                   (_ nil))
                                                                 (org-glance? world :partitions)))))

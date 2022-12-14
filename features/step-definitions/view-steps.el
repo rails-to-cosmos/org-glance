@@ -142,4 +142,4 @@
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name))
               (partition (org-glance-partition:create dimension-name view-name)))
-          (should (f-exists? (org-glance-world:locate-partition world partition))))))
+          (should (f-exists? (org-glance-world--locate-partition world partition))))))
