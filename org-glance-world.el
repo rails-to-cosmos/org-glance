@@ -166,7 +166,7 @@
        (org-glance:with-file-overwrite location
          ,@forms))))
 
-(defun org-glance-world:view-header (world partition)
+(defun org-glance-world:partition-header (world partition)
   (with-temp-buffer
     (insert-file-contents (-> (org-glance-world:locate-partition world partition)
                               (file-name-sans-extension)
@@ -179,57 +179,53 @@
           (org-glance-partition:path partition)
           (format "%s.log" (org-glance-partition:representation partition))))
 
-(defun org-glance-world:partition-changelog (world partition)
-  (org-glance-changelog:read (org-glance-world:locate-partition-changelog world partition)))
-
-(cl-defmacro org-glance-world:consume-events (params &rest forms)
+(cl-defmacro org-glance-world:fetch-partition-updates (params &rest forms)
   (declare (indent 1))
   (cl-destructuring-bind (world partition event) params
-    `(org-glance-world:with-locked-partition ,world ,partition
-       (thunk-let* ((world ,world)
-                    (partition ,partition)
-                    (partition-header (org-glance-world:view-header world partition))
-                    (partition-offset (org-glance? partition-header :offset))
-                    (partition-changelog (org-glance-world:partition-changelog world partition))
-                    (world-events (reverse (--take-while (org-glance-offset:less? partition-offset (org-glance? it :offset))
-                                                         (org-glance-world:events world))))
-                    (partition-events (--filter (pcase it
-                                                  ((and (or (cl-struct org-glance-event:UPDATE)
-                                                            (cl-struct org-glance-event:PUT))
-                                                        (guard (org-glance-world:validate-headline world partition (org-glance? it :headline))))
-                                                   t)
-                                                  ((cl-struct org-glance-event:RM) t))
-                                                world-events))
-                    (partition-changelog-location (org-glance-world:locate-partition-changelog world partition))
-                    (result-log (org-glance-changelog:merge (org-glance-changelog :events partition-events) partition-changelog)))
-         (when (org-glance-offset:less? partition-offset (org-glance-world:offset world))
-           (cl-loop
-              with progress-reporter = (make-progress-reporter "Update partition" 0 (length partition-events))
-              for ,event in partition-events
-              for idx from 0
-              do (progn
-                   ,@forms
-                   (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length partition-events))))
-              finally do
-                (org-glance-changelog:write result-log partition-changelog-location)
-                (progress-reporter-done progress-reporter)
-                (org-glance-log :events "Consumed events: %d" (length partition-events))
-              finally return ,event))))))
+    `(thunk-let* ((world ,world)
+                  (partition ,partition)
+                  (partition-header (org-glance-world:partition-header world partition))
+                  (partition-offset (org-glance? partition-header :offset))
+                  (partition-changelog-location (org-glance-world:locate-partition-changelog world partition))
+                  (partition-changelog (org-glance-changelog:read partition-changelog-location))
+                  (world-events (reverse (--take-while (org-glance-offset:less? partition-offset (org-glance? it :offset))
+                                                       (org-glance-world:events world))))
+                  (new-events (--filter (pcase it
+                                          ((and (or (cl-struct org-glance-event:UPDATE)
+                                                    (cl-struct org-glance-event:PUT))
+                                                (guard (org-glance-world:validate-headline world partition (org-glance? it :headline))))
+                                           t)
+                                          ((cl-struct org-glance-event:RM) t))
+                                        world-events))
+                  (result-log (org-glance-changelog:merge (org-glance-changelog :events new-events) partition-changelog)))
+       (when (org-glance-offset:less? partition-offset (org-glance-world:offset world))
+         (cl-loop
+            with progress-reporter = (make-progress-reporter "Update partition" 0 (length new-events))
+            for ,event in new-events
+            for idx from 0
+            do (progn
+                 ,@forms
+                 (progress-reporter-update progress-reporter idx (format " (processed %d events of %d)" idx (length new-events))))
+            finally do
+              (org-glance-changelog:write result-log partition-changelog-location)
+              (progress-reporter-done progress-reporter)
+              (org-glance-log :events "Consumed events: %d" (length new-events))
+            finally return ,event)))))
 
 (org-glance-declare org-glance-world:updated-partition :: World -> Partition -> ReadableFile)
 (defun org-glance-world:updated-partition (world partition)
   ;; TODO optimize (duplicate location calculation)
-  (let* ((partition-header (org-glance-world:view-header world partition))
+  (let* ((partition-header (org-glance-world:partition-header world partition))
          (partition-offset (org-glance? partition-header :offset)))
 
-    (org-glance-world:consume-events (world partition event) event)
+    (org-glance-world:fetch-partition-updates (world partition event)
+      event)
 
     (when (org-glance-offset:less? partition-offset (org-glance-world:offset world))
       (org-glance-world:with-locked-partition world partition
-
         ;; USE Partition log only here
         (let ((view (org-glance-world:partition-view world partition)))
-          (org-glance-view:mark view)
+          (org-glance-view:mark-current-buffer view)
           (org-glance-world:update-view world view)
           (org-glance-view:save-header view))))
     (org-glance-world:locate-partition world partition)))

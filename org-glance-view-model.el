@@ -151,8 +151,8 @@
      finally do (setf (org-glance? view :markers) markers
                       (org-glance? view :hash->midx) hash->midx)))
 
-(org-glance-declare org-glance-view:mark :: View -> t)
-(defun org-glance-view:mark (view)
+(org-glance-declare org-glance-view:mark-current-buffer :: View -> t)
+(defun org-glance-view:mark-current-buffer (view)
   "Create effective representation of VIEW headline positions."
   (pcase (org-glance-view:load-markers view)
     ('()
