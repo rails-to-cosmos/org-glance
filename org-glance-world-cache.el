@@ -1,7 +1,7 @@
 (require 'org-glance-world-model)
 (require 'org-glance-log)
 
-(defvar org-glance-world--cache (make-hash-table :test #'equal)
+(defconst org-glance-world--cache (make-hash-table :test #'equal)
   "List of worlds registered in system.")
 
 (defun org-glance-world-cache:get (location)

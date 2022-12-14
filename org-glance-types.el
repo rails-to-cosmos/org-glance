@@ -98,6 +98,6 @@
                      (f-exists? location)
                      (f-directory? location)
                      (f-readable? location)
-                     (f-exists? (f-join location "world.md"))))))
+                     (f-exists? (f-join location "Glancefile"))))))
 
 (provide 'org-glance-types)

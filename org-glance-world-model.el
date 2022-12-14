@@ -40,7 +40,7 @@
   "Create world located in directory LOCATION."
   (declare (indent 1))
   (f-mkdir-full-path location)
-  (f-touch (f-join location "world.md"))
+  (f-touch (f-join location "Glancefile"))
   (org-glance-world :location location))
 
 (org-glance-declare org-glance-world:read :: OptionalDirectory -> (Optional World))
@@ -83,12 +83,6 @@ Ignore cache."
               (-flatten it)
               (apply #'org-glance-partition it))
          (directory-files-recursively (f-join (org-glance? world :location) "dimensions") ".*\\.org$")))
-
-;; (org-glance-declare org-glance-world:read-partition :: World -> Partition -> list)
-;; (defun org-glance-world:read-partition (world partition)
-;;   (-> (org-glance-world:locate-partition world partition)
-;;       (org-glance-view:locate-header)
-;;       (org-glance-view:read-header)))
 
 (org-glance-declare org-glance-world:make-partitions :: World -> (or Headline HeadlineHeader) -> t)
 (defun org-glance-world:make-partitions (world headline)
