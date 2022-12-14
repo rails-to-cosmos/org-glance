@@ -62,7 +62,6 @@
 
 (defun org-glance-vector:push-at! (vec idx elem)
   (cl-check-type vec org-glance-vector)
-  (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
   (org-glance-vector:enlarge-maybe! vec)
   (cl-loop for j from (org-glance? vec :size) downto (1+ idx)
@@ -72,7 +71,6 @@
 
 (defun org-glance-vector:remove-at! (vec idx)
   (cl-check-type vec org-glance-vector)
-  (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
   (cl-loop for j from (1+ idx) below (org-glance? vec :size)
      do (org-glance! vec :array [(- j 1)] := vec :array [j]))
@@ -81,7 +79,6 @@
 
 (defun org-glance-vector:get (vec idx)
   (cl-check-type vec org-glance-vector)
-  (cl-check-type idx (org-glance-bounded-by (org-glance? vec :size)))
 
   (org-glance? vec :array [idx]))
 

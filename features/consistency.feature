@@ -385,9 +385,9 @@ Feature: Consistent Edit
       * TODO B
       """
 
-    Then world "Tasks" should contain view "TODO" derived from dimension "State"
-    And world "Tasks" should contain view "A" derived from dimension "Title"
-    And world "Tasks" should contain view "B" derived from dimension "Title"
+    Then world "Tasks" should contain partition "TODO" derived from dimension "State"
+    And world "Tasks" should contain partition "A" derived from dimension "Title"
+    And world "Tasks" should contain partition "B" derived from dimension "Title"
 
     When I visit view "A" derived from dimension "Title" in world "Tasks"
     Then current buffer should contain 1 headline
@@ -397,7 +397,7 @@ Feature: Consistent Edit
     And save buffer
 
     Then current buffer should contain 0 headlines
-    And world "Tasks" should contain view "C" derived from dimension "Title"
+    And world "Tasks" should contain partition "C" derived from dimension "Title"
     And buffer offset should be latest
 
     When I visit view "C" derived from dimension "Title" in world "Tasks"
@@ -411,7 +411,7 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls
       """
 
-    Then world "Adventures" should contain view "TODO" derived from dimension "State"
+    Then world "Adventures" should contain partition "TODO" derived from dimension "State"
 
     When I visit view "TODO" derived from dimension "State" in world "Adventures"
 
@@ -427,7 +427,7 @@ Feature: Consistent Edit
 
     When I apply changes
 
-    Then world "Adventures" should contain view "DONE" derived from dimension "State"
+    Then world "Adventures" should contain partition "DONE" derived from dimension "State"
 
     When I visit view "DONE" derived from dimension "State" in world "Adventures"
 
@@ -457,8 +457,8 @@ Feature: Consistent Edit
       * TODO Niagara Waterfalls
       Some active timestamp: <2022-11-11 Fri>
       """
-    Then world "Adventures" should contain view "t" derived from dimension "active"
-    And world "Adventures" should contain view "niagara-waterfalls" derived from dimension "title"
+    Then world "Adventures" should contain partition "t" derived from dimension "active"
+    And world "Adventures" should contain partition "niagara-waterfalls" derived from dimension "title"
 
     When I visit view "t" derived from dimension "active" in world "Adventures"
     Then current buffer should contain 1 headline

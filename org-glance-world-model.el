@@ -25,13 +25,13 @@
 (require 'org-glance-view-model)
 
 (org-glance-class org-glance-world nil
-    ((location :type org-glance-world-location :initarg :location :documentation "Directory containing all the data.")
-     (changelog* :type org-glance-changelog :initarg :changelog* :initform (org-glance-changelog) :documentation "In-memory changelog.")
-     (changelog :type org-glance-changelog :initarg :changelog :initform (org-glance-changelog) :documentation "Persistent changelog.")
-     (dimensions :type (org-glance-list-of org-glance-dimension) :initarg :dimensions)
+    ((location :type WorldLocation :initarg :location :documentation "Directory containing all the data.")
+     (changelog* :type Changelog :initarg :changelog* :initform (org-glance-changelog) :documentation "In-memory changelog.")
+     (changelog :type Changelog :initarg :changelog :initform (org-glance-changelog) :documentation "Persistent changelog.")
+     (dimensions :type (ListOf Dimension) :initarg :dimensions)
 
      ;; in-memory caches
-     (partitions :type (org-glance-list-of org-glance-partition) :initarg :partitions :initform nil)
+     (partitions :type (ListOf Partition) :initarg :partitions :initform nil)
      (headlines :type hash-table :initarg :headlines :initform (make-hash-table :test #'equal) :documentation "HASH -> HEADLINE")
      (relations :type hash-table :initarg :relations :initform (make-hash-table :test #'equal) :documentation "ID -> HEADLINES")))
 

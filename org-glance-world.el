@@ -42,7 +42,7 @@
 (org-glance-declare org-glance-world:agenda :: World -> t)
 (defun org-glance-world:agenda (world)
   "Show agenda for all active headlines of WORLD."
-  (pcase (if current-prefix-arg (org-glance-world:choose-partition world) (org-glance-partition:from-key-value "active" "t"))
+  (pcase (if current-prefix-arg (org-glance-world:choose-partition world) (org-glance-partition:create "active" "t"))
     ((and (cl-struct org-glance-partition) partition)
      (progn
        (setq org-agenda-files (list (org-glance-world:updated-partition world partition))
@@ -113,7 +113,7 @@
 (org-glance-declare org-glance-world:jump :: World -> t)
 (defun org-glance-world:jump (world)
   "Select headline from WORLD and emulate link opening."
-  (let* ((partition (org-glance-partition:from-string "linked=t"))
+  (let* ((partition (org-glance-partition:create "linked" "t"))
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance? it :title) links))))
@@ -124,7 +124,7 @@
 
 (org-glance-declare org-glance-world:extract-property :: World -> t)
 (defun org-glance-world:extract-property (world)
-  (let* ((partition (org-glance-partition:from-string "extractable=t"))
+  (let* ((partition (org-glance-partition:create "extractable" "t"))
          (headline (org-glance-world:choose-headline world partition))
          (store (org-glance? headline :store)))
     (condition-case nil
@@ -146,7 +146,8 @@
                               (completing-read "Choose partition: " reprs nil t)
                             (user-error "Partitions not found"))
                         (quit nil)))
-      (org-glance-partition:from-string choice))))
+      (cl-destructuring-bind (dimension value) (--> choice (s-split-up-to "=" it 2))
+        (org-glance-partition:create dimension value)))))
 
 (org-glance-declare org-glance-world:partition-view :: World -> Partition -> View)
 (defun org-glance-world:partition-view (world partition)
@@ -218,8 +219,8 @@
   (let* ((partition-header (org-glance-world:partition-header world partition))
          (partition-offset (org-glance? partition-header :offset)))
 
-    (org-glance-world:fetch-partition-updates (world partition event)
-      event)
+    ;; (org-glance-world:fetch-partition-updates (world partition event)
+    ;;   event)
 
     (when (org-glance-offset:less? partition-offset (org-glance-world:offset world))
       (org-glance-world:with-locked-partition world partition

@@ -82,16 +82,6 @@
 (org-glance-type OptionalFile ()
   `(satisfies (lambda (location) (or (not (f-exists-p location)) (and (f-readable-p location) (f-file-p location))))))
 
-(org-glance-type org-glance-bounded-by (val)
-  `(satisfies (lambda (thing)
-                (and (cl-typep thing 'number)
-                     (>= thing 0)
-                     (< thing ,val)))))
-
-(org-glance-type org-glance-index-of (seq)
-  `(satisfies (lambda (thing)
-                (cl-typep thing '(org-glance-bounded-by ,(seq-length seq))))))
-
 (org-glance-type org-glance-world-location ()
   '(satisfies (lambda (location)
                 (and (f-absolute? location)

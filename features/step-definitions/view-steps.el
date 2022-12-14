@@ -135,11 +135,11 @@
 (When "^I? ?visit view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\" in world \"\\([^\"]+\\)\"$"
   (lambda (view-name dimension-name world-name)
     (let ((world (org-glance-test:get-world world-name))
-          (partition (org-glance-partition:from-key-value dimension-name view-name)))
+          (partition (org-glance-partition:create dimension-name view-name)))
       (org-glance-world:materialize world partition))))
 
-(Then "^world \"\\([^\"]+\\)\" should contain view \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
+(Then "^world \"\\([^\"]+\\)\" should contain partition \"\\([^\"]+\\)\" derived from dimension \"\\([^\"]+\\)\"$"
       (lambda (world-name view-name dimension-name)
         (let ((world (org-glance-test:get-world world-name))
-              (partition (org-glance-partition:from-key-value dimension-name view-name)))
+              (partition (org-glance-partition:create dimension-name view-name)))
           (should (f-exists? (org-glance-world:locate-partition world partition))))))
