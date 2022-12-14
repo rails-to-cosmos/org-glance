@@ -1,6 +1,6 @@
 Feature: Consistent Edit
   Scenario: Basic functionality
-    Given world "Phones" in directory "world/phones" with headlines
+    Given world "Phones" with headlines
       """
       * iPhone 3 :Apple:
       * iPhone 7 :Apple:
@@ -27,7 +27,7 @@ Feature: Consistent Edit
     # And world "Old phones" should contain headline "iPhone 3" in staging layer
 
   Scenario: Simple changes
-    Given world "Pets" in directory "world/pets" with headlines
+    Given world "Pets" with headlines
       """
       * Yummi :Pomeranian:
         Black and White Doggy
@@ -78,7 +78,7 @@ Feature: Consistent Edit
     And 0 markers should be changed
 
   Scenario: Change headline todo state
-    Given world "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -101,7 +101,7 @@ Feature: Consistent Edit
     Then marker positions and hashes should be consistent
 
   Scenario: Change headline tags
-    Given world "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -120,7 +120,7 @@ Feature: Consistent Edit
     And markers positions should be consistent
 
   Scenario: Change headline title without changing todo state
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -137,7 +137,7 @@ Feature: Consistent Edit
     Then markers positions should be consistent
 
   Scenario: Change headline title with changing todo state (STARTED state is not registered)
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -154,7 +154,7 @@ Feature: Consistent Edit
     Then markers positions should be consistent
 
   Scenario: Change headline contents
-    Given world "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" with headlines
       """
       * TODO Tatinek :Peppa:
       * TODO Peppa Pig :Peppa:
@@ -170,7 +170,7 @@ Feature: Consistent Edit
     Then marker positions and hashes should be consistent
 
   Scenario: Sync commented headlines
-    Given world "Wishlist" in directory "nerdy" with headlines
+    Given world "Wishlist" with headlines
       """
       * TODO COMMENT Tatinek :Peppa:Gift:
       """
@@ -189,7 +189,7 @@ Feature: Consistent Edit
     Then headline "Tatinek" should be commented
 
   Scenario: Real-time sync in live buffers
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -211,7 +211,7 @@ Feature: Consistent Edit
     And headline "Music Festival" should not be in current buffer
 
   Scenario: Sync on read
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -235,9 +235,8 @@ Feature: Consistent Edit
     And headline "Music Festival 2022" should be in current buffer
     And headline "Music Festival" should not be in current buffer
 
-  @debug
   Scenario: Multiple views, modifications across buffers
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls :Hike:
       * STARTED Troodos Mountains :Hike:
@@ -302,7 +301,7 @@ Feature: Consistent Edit
     And headline "Music Festival 2024" should be in current buffer
 
   Scenario: Multiple views, modifications across files
-    Given world "Adventures" in directory "stories/adventures" with headlines
+    Given world "Adventures" with headlines
       """
       * TODO Music Festival :Hike:Music:
         SCHEDULED: <2022-09-16 Fri>
@@ -404,7 +403,7 @@ Feature: Consistent Edit
     When I visit view "C" derived from dimension "Title" in world "Tasks"
     Then current buffer should contain 1 headline
 
-  Scenario: Headline updates without accessing previous state
+  Scenario: Headline update without accessing previous state
     Given world "Adventures"
 
     When I add headlines to world "Adventures"
@@ -452,8 +451,8 @@ Feature: Consistent Edit
     Then current buffer should contain 0 headlines
 
   @debug
-  Scenario: Headline updates results in deletion from other dimension
-    Given world "Adventures" in directory "stories/adventures" with headlines
+  Scenario: Headline update results in deletion from other dimension
+    Given world "Adventures" with headlines
       """
       * TODO Niagara Waterfalls
       Some active timestamp: <2022-11-11 Fri>
@@ -498,7 +497,7 @@ Feature: Consistent Edit
   # Scenario: Test visual representation of markers
   # Scenario: Remove headline
   # Scenario: Add new headline
-  #   Given world "Pets" in directory "world/pets" with headlines
+  #   Given world "Pets" with headlines
   #     """
   #     * Yummi :Pomeranian:
   #     * Eric :Pomeranian:

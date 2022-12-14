@@ -61,7 +61,7 @@
 (org-glance-declare org-glance-world:locate-partition :: World -> Partition -> OptionalFile)
 (defun org-glance-world:locate-partition (world partition)
   (f-join (org-glance? world :location)
-          "views"
+          "dimensions"
           (org-glance-partition:path partition)
           (format "%s.org" (org-glance-partition:representation partition))))
 
@@ -82,7 +82,7 @@ Ignore cache."
               (-zip-lists '(:dimension :value) it)
               (-flatten it)
               (apply #'org-glance-partition it))
-         (directory-files-recursively (f-join (org-glance? world :location) "views") ".*\\.org$")))
+         (directory-files-recursively (f-join (org-glance? world :location) "dimensions") ".*\\.org$")))
 
 ;; (org-glance-declare org-glance-world:read-partition :: World -> Partition -> list)
 ;; (defun org-glance-world:read-partition (world partition)

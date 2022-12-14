@@ -1,6 +1,6 @@
 Feature: World
   Scenario: Import from org-mode files
-    Given world "Tasks" in directory "world/tasks"
+    Given world "Tasks"
     And file "tasks/home/household.org"
       """
       Some contents before the first headline.
@@ -25,7 +25,7 @@ Feature: World
     Then world "Tasks" should contain 4 headlines
 
   Scenario: Create world from scratch
-    Given world "Songs" in directory "songs" with headlines
+    Given world "Songs" with headlines
       """
       * Tae Zori
       * Al Sok
@@ -37,7 +37,7 @@ Feature: World
     And 2 committed changes should be in world "Songs"
 
   Scenario: It's all about titles
-    Given world "Stories" in directory "world/stories" with headlines
+    Given world "Stories" with headlines
       """
       * Hiking in Troodos
       * Travel to Romania
@@ -55,7 +55,7 @@ Feature: World
     # And world "Stories" should not contain headline "Travel to Romania (2)" in committed layer
 
   Scenario: Predicates
-    Given world "Stories" in directory "world/stories" with headlines
+    Given world "Stories" with headlines
       """
       * TODO COMMENT Hiking in Troodos :Travel:
       aes-encrypted V 1.3-OCB-B-4-4-M

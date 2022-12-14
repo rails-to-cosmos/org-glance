@@ -15,17 +15,17 @@
        (lambda (world-name)
          (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))))
 
+(Given "^world \"\\([^\"]+\\)\" with headlines$"
+       (lambda (world-name headlines)
+         (Given "world \"%s\" in directory \"%s\"" world-name (downcase world-name))
+         (When "I add headlines to world \"%s\"" world-name headlines)))
+
 (Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\"$"
        (lambda (world-name relative-location)
          (let* ((location (org-glance-test:get-file relative-location)))
            (setq org-glance-directory location)
            (org-glance-init)
            (org-glance-test:world-put world-name org-glance-current-world))))
-
-(Given "^world \"\\([^\"]+\\)\" in directory \"\\([^\"]+\\)\" with headlines$"
-       (lambda (world-name relative-location headlines)
-         (Given "world \"%s\" in directory \"%s\"" world-name relative-location)
-         (When "I add headlines to world \"%s\"" world-name headlines)))
 
 (When "^I? ?add headlines? to world \"\\([^\"]+\\)\"$"
   (lambda (world-name headlines)
