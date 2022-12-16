@@ -77,17 +77,6 @@
         (org-glance-world:init))
       (user-error "Buffer is not a member of world: %s" (buffer-file-name))))
 
-(defun org-glance-world--after-finalize-hook ()
-  "Register captured headline in metastore."
-  (let ((world (org-glance-world:current)))
-    (org-glance-headline:map (headline)
-      (org-glance-world:add-headline! world headline))
-    (org-glance-world:persist world)
-    (let ((file (buffer-file-name)))
-      (save-buffer)
-      (kill-buffer (get-file-buffer file))
-      (delete-file file))))
-
 (org-glance-declare org-glance-world:capture-location :: World -> OptionalFile)
 (defun org-glance-world:capture-location (world)
   (f-join (org-glance? world :location) "capture.org"))
@@ -728,5 +717,16 @@ achieved by calling `org-glance-world:persist' method."
      (org-glance-headline:map (headline)
        (org-glance-world:add-headline! world headline))))
   world)
+
+(defun org-glance-world--after-finalize-hook ()
+  "Register captured headline in metastore."
+  (let ((world (org-glance-world:current)))
+    (org-glance-headline:map (headline)
+      (org-glance-world:add-headline! world headline))
+    (org-glance-world:persist world)
+    (let ((file (buffer-file-name)))
+      (save-buffer)
+      (kill-buffer (get-file-buffer file))
+      (delete-file file))))
 
 (provide 'org-glance-world)

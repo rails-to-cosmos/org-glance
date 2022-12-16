@@ -31,6 +31,8 @@ https://untools.co
 - still should not be strongly connected to world
 - manage its own wal
 - one-to-many views
+
+* TODO [#C] Changelog and in-memory changelog could be merged
 * DONE Optimize fetch method
 CLOSED: [2022-12-10 Sat 09:23]
 :LOGBOOK:
