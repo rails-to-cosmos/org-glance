@@ -123,7 +123,7 @@
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance? it :title) links))))
-                                             (--drop-while (not (string= link-title (org-glance? it :title))) links)))
+                                             (car (--filter (string= link-title (org-glance? it :title)) links))))
                      ((= (length links) 1) (car links))
                      (t (user-error "Unable to find links in this headline")))))
     (org-link-open-from-string (org-glance? link :org-link))))

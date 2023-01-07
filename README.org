@@ -27,6 +27,7 @@ https://untools.co
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2022-12-14 Wed 22:29]
 :END:
+
 - partition should only know its root location
 - still should not be strongly connected to world
 - manage its own wal

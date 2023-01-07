@@ -41,14 +41,14 @@ editor."
     (org-glance-view:set-marker-changed view midx t)
     (org-glance-view:shift-markers! view midx diff)
 
-    (org-glance-log :markers "After update change beg: %d" change-beg)
-    (org-glance-log :markers "After update change end: %d" change-end)
-    (org-glance-log :markers "After update change len: %d" change-len)
-    (condition-case nil
-        (org-glance-log :markers "After update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
-      (error nil))
-    (org-glance-log :contents "After update contents: \"%s\"" (buffer-string))
-    (org-glance-log :markers "After update markers: %s" (pp-to-string (org-glance? view :markers)))
+    ;; (org-glance-log :markers "After update change beg: %d" change-beg)
+    ;; (org-glance-log :markers "After update change end: %d" change-end)
+    ;; (org-glance-log :markers "After update change len: %d" change-len)
+    ;; (condition-case nil
+    ;;     (org-glance-log :markers "After update marker substring: \"%s\"" (buffer-substring-no-properties change-beg change-end))
+    ;;   (error nil))
+    ;; (org-glance-log :contents "After update contents: \"%s\"" (buffer-string))
+    ;; (org-glance-log :markers "After update markers: %s" (pp-to-string (org-glance? view :markers)))
 
     ;; (save-match-data
     ;;   (with-current-buffer (get-buffer-create "*glance-markers*")
