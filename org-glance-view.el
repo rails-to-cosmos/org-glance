@@ -23,9 +23,9 @@
 (org-glance-declare org-glance-view:current :: View)
 (defun org-glance-view:current ()
   "Return current view from file-buffer."
-  (let ((header (thread-first (buffer-file-name)
-                  (org-glance-view:locate-header)
-                  (org-glance-view:read-header))))
+  (let ((header (-> (buffer-file-name)
+                    (org-glance-view:locate-header)
+                    (org-glance-view:read-header))))
     (org-glance-view:get-or-create (org-glance? header :type) (buffer-file-name) (org-glance? header :offset))))
 
 (provide 'org-glance-view)

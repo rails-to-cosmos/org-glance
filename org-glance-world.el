@@ -119,7 +119,8 @@
 (org-glance-declare org-glance-world:jump :: World -> t)
 (defun org-glance-world:jump (world)
   "Select headline from WORLD and emulate link opening."
-  (let* ((partition (org-glance-partition:create "linked" "t"))
+  (let* ((org-link-frame-setup '((file . find-file)))
+         (partition (org-glance-partition:create "linked" "t"))
          (headline (org-glance-world:choose-headline world partition))
          (links (org-glance? headline :links))
          (link (cond ((> (length links) 1) (let ((link-title (completing-read "Choose link to open: " (--map (org-glance? it :title) links))))

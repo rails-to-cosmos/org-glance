@@ -23,8 +23,9 @@ https://untools.co
 (define-key global-map (kbd "C-x j i") #'org-glance-import)
 #+end_src
 
-* STARTED Refactor partitions
+* PENDING Refactor partitions
 :LOGBOOK:
+- State "PENDING"    from "STARTED"    [2023-01-07 Sat 19:37]
 - State "STARTED"    from "TODO"       [2022-12-14 Wed 22:29]
 :END:
 
