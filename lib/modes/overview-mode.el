@@ -113,6 +113,10 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance-overview:apply-on-headline
     (org-glance-overview:visit-headline)))
 
+(define-key org-glance-overview-mode-map (kbd "j")
+  (org-glance-overview:apply-on-headline
+    (org-glance-overview:jump-headline)))
+
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
 
 (define-key org-glance-overview-mode-map (kbd "n")
@@ -667,6 +671,19 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
         org-glance-headline:id
         org-glance-metastore:get-headline
         org-glance-headline:visit)
+      (forward-char offset))))
+
+(cl-defun org-glance-overview:jump-headline ()
+  (interactive)
+  (org-glance-overview:for-all
+      nil
+    (let ((offset (- (point) (save-excursion
+                               (org-glance-headline:search-parents)
+                               (point)))))
+      (-some->> (org-glance-headline:at-point)
+        org-glance-headline:id
+        org-glance-metastore:get-headline
+        org-glance:open)
       (forward-char offset))))
 
 (cl-defun org-glance-overview:class ()
