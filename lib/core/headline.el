@@ -99,8 +99,13 @@ metastore.")
   (save-excursion
     (org-glance-headline:search-parents)))
 
+(defun org-glance-headline:is-active-todo (state)
+  "Check if the given STATE represents an active TODO item."
+  (not (member state org-done-keywords-for-agenda)))
+
 (cl-defun org-glance-headline:active? (&optional (headline (org-element-at-point)))
   (and (org-glance-headline-p headline)
+       (org-glance-headline:is-active-todo (org-glance-headline:state headline))
        (not (org-glance-headline:commented? headline))
        (not (org-glance-headline:archived? headline))
        (not (org-glance-headline:closed? headline))))
@@ -266,11 +271,13 @@ metastore.")
   "Visit FILE, execute FORMS and close it if it was closed before visit."
   (declare (indent 1) (debug t))
   `(save-window-excursion
-     (let ((buffer-lived-p (buffer-live-p (get-file-buffer ,file)))
+     (let ((inhibit-startup-hooks t)
+           (inhibit-modification-hooks t)
+           (buffer-lived-p (buffer-live-p (get-file-buffer ,file)))
            (buffer (find-file-noselect ,file)))
        (unwind-protect
-            (with-current-buffer buffer
-              ,@forms)
+           (with-current-buffer buffer
+             ,@forms)
          (unless buffer-lived-p
            (kill-buffer buffer))))))
 
@@ -463,7 +470,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
   (org-glance:with-headline-at-point
-   (flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items)))
+   (cl-flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items)))
      (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
                                                    (org-tss-filter-active)
                                                    (org-tss-sort-timestamps))
