@@ -285,6 +285,42 @@ If point is before the first heading, prompt for headline and eval forms on it."
                                                           (org-end-of-subtree t t)))
             (save-buffer)))))))
 
+(cl-defun org-glance-overview:register-headline-in-archive (headline class)
+  "Add HEADLINE overview to CLASS archive."
+  (org-glance:with-file-visited (org-glance-overview:archive-location class)
+    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
+                                       (list (org-glance-headline:id)
+                                             (org-glance-headline:overview)
+                                             (org-glance-overview:partition-mapper)))
+      (save-restriction
+        (widen)
+
+        (condition-case nil
+            (org-glance-overview:remove-headline-from-overview headline class)
+          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+
+        (let ((inhibit-read-only t)
+              (headline-seen-p nil))
+          (unless (or (string-empty-p contents)
+                      (and (memq 'archive (org-glance-headline:classes headline))
+                           (not (eql 'archive class))))
+            (goto-char (point-min))
+
+            (while (and (outline-next-heading)
+                        (org-glance-headline-p)
+                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
+              (when (org-glance-headline-p)
+                (setq headline-seen-p t)))
+
+            (when (and (not headline-seen-p)
+                       (not (org-glance-headline-p)))
+              (insert "\n"))
+
+            (insert (s-trim contents) "\n")
+
+            (save-buffer))))))
+  headline)
+
 ;; (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
 ;;   (org-glance:with-headline-materialized headline
 ;;     (let ((id (intern (org-glance-headline:id headline)))
@@ -457,7 +493,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
          (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
                                       class current-progress (length files)))
-         (return nil)
+         (cl-return nil)
        finally
        do
          (org-glance-with-debug-msg "Persist metastore changes..."
@@ -524,10 +560,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                 'org-glance-headline-changed-face))))))
 
 (define-minor-mode org-glance-overview-mode
-    "A minor read-only mode to use in overview files."
-  nil nil org-glance-overview-mode-map
-  (org-overview)
-  (read-only-mode +1))
+  "A minor read-only mode to use in overview files."
+  :global nil
+  :init-value nil
+  :keymap org-glance-overview-mode-map
+  :after-hook (progn
+                (org-overview)
+                (read-only-mode +1)))
 
 (defvar org-glance-edit-mode-map (make-sparse-keymap)
   "Edit entries in `org-glance-edit-mode'.")
@@ -537,7 +576,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (define-minor-mode org-glance-edit-mode
     "A minor mode to edit and sync overview files."
-  nil nil org-glance-edit-mode-map)
+  :global nil
+  :init-value nil
+  :keymap org-glance-edit-mode-map)
 
 (cl-defun org-glance-edit-mode:start ()
   (interactive)
@@ -569,15 +610,21 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (let ((view-name (s-downcase (format "%s" view-id))))
       (f-join org-glance-directory view-name (concat view-name ".org")))))
 
+(cl-defun org-glance-overview:archive-location (&optional (view-id (org-glance-view:completing-read)))
+  "Path to file where VIEW-ID headlines are stored."
+  (when view-id
+    (let ((view-name (s-downcase (format "%s" view-id))))
+      (f-join org-glance-directory view-name (concat view-name ".org_archive")))))
+
 (cl-defun org-glance-headline:main-role (&optional (headline (org-glance-overview:original-headline)))
   "Assume main role of HEADLINE as role directory where it is stored."
   (cl-loop
-     for view-id in (org-glance-headline:tags headline)
-     for overview-directory = (org-glance-overview:directory view-id)
-     for original-directory = (org-glance-headline:file headline)
-     for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
-     when (f-equal? common-parent overview-directory)
-     do (return view-id)))
+   for view-id in (org-glance-headline:tags headline)
+   for overview-directory = (org-glance-overview:directory view-id)
+   for original-directory = (org-glance-headline:file headline)
+   for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
+   when (f-equal? common-parent overview-directory)
+   do (cl-return view-id)))
 
 (cl-defun org-glance-capture-template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
@@ -613,11 +660,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (let ((filename (-org-glance:make-file-directory
-                   (org-glance-overview:location class))))
-    (with-temp-file filename
-      (org-glance-overview:refresh-widgets class))
-    (find-file filename)))
+  (let ((filenames (list
+                    (-org-glance:make-file-directory (org-glance-overview:location class))
+                    (-org-glance:make-file-directory (org-glance-overview:archive-location class)))))
+    (cl-loop for filename in filenames
+             do (with-temp-file filename
+                  (org-glance-overview:refresh-widgets class)))
+    (find-file (car filenames))))
 
 (cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
   (interactive)
@@ -645,8 +694,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
-        (org-agenda-span 21)
-        (org-agenda-start-day "-7d"))
+        (org-agenda-span 7)
+        (org-agenda-start-day "-2d"))
     (org-agenda-list)
     (switch-to-buffer org-agenda-buffer)
     (delete-other-windows)))

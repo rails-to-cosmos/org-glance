@@ -71,7 +71,8 @@
                               :begin --org-glance-materialized-headline:begin
                               :file --org-glance-materialized-headline:file
                               :buffer --org-glance-materialized-headline:buffer))
-           (source-classes (org-glance-headline:classes)))
+           (source-classes (org-glance-headline:classes))
+           (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
         (org-glance-exception:SOURCE-CORRUPTED (or source-file source-buffer)))
@@ -83,28 +84,28 @@
 
       (unless without-relations
         (cl-loop
-           with relations = (org-glance-headline-relations)
-           with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
-           for relation in relations
-           for progress from 0
-           for relation-id = (org-element-property :id relation)
-           for headline-ref = (org-glance-headline-reference)
-           for state = (intern (or (org-get-todo-state) ""))
-           for done-kws = (mapcar #'intern org-done-keywords)
-           for relation-headline = (org-glance-metastore:get-headline relation-id)
-           do (save-window-excursion
-                (save-excursion
-                  (progress-reporter-update progress-reporter progress)
-                  (condition-case nil
-                      (org-glance:with-headline-materialized relation-headline
-                        (unless (cl-loop
-                                   for rr in (org-glance-headline-relations)
-                                   if (eq (org-element-property :id rr) (intern id))
-                                   return t)
-                          (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
-                    (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))
-                  (redisplay)))
-           finally (progress-reporter-done progress-reporter)))
+         with relations = (org-glance-headline-relations)
+         with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
+         for relation in relations
+         for progress from 0
+         for relation-id = (org-element-property :id relation)
+         for headline-ref = (org-glance-headline-reference)
+         for state = (intern (or (org-get-todo-state) ""))
+         for done-kws = (mapcar #'intern org-done-keywords)
+         for relation-headline = (org-glance-metastore:get-headline relation-id)
+         do (save-window-excursion
+              (save-excursion
+                (progress-reporter-update progress-reporter progress)
+                (condition-case nil
+                    (org-glance:with-headline-materialized relation-headline
+                      (unless (cl-loop
+                               for rr in (org-glance-headline-relations)
+                               if (eq (org-element-property :id rr) (intern id))
+                               return t)
+                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
+                  (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))
+                (redisplay)))
+         finally (progress-reporter-done progress-reporter)))
 
       (let ((new-contents (org-glance:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -126,28 +127,38 @@
 
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
-        (if (memq 'archive source-classes)
-            (cl-loop
-               for class in source-classes
-               if (eql class 'archive)
-               do
-                 (org-glance-overview:register-headline-in-overview source-headline class)
-                 (org-glance-overview:register-headline-in-metastore source-headline class)
-               else
-               do
-                 (org-glance-overview:remove-headline-from-overview source-headline class)
-                 (org-glance-overview:remove-headline-from-metastore source-headline class))
-          (cl-loop
-             for class in source-classes
-             do
-               (org-glance-overview:register-headline-in-overview source-headline class)
-               (org-glance-overview:register-headline-in-metastore source-headline class)))
+        (cond ((memq 'archive source-classes)
+               (cl-loop
+                for class in source-classes
+                if (eql class 'archive)
+                do
+                (org-glance-overview:register-headline-in-overview source-headline class)
+                (org-glance-overview:register-headline-in-metastore source-headline class)
+                else
+                do
+                (org-glance-overview:remove-headline-from-overview source-headline class)
+                (org-glance-overview:remove-headline-from-metastore source-headline class)))
 
-        (cl-loop
-           for class in (seq-difference --org-glance-materialized-headline:classes source-classes)
-           do
-             (org-glance-overview:remove-headline-from-overview source-headline class)
-             (org-glance-overview:remove-headline-from-metastore source-headline class))
+              ((not source-active?)
+               (cl-loop
+                for class in source-classes
+                do
+                (org-glance-overview:remove-headline-from-overview source-headline class)
+                (org-glance-overview:remove-headline-from-metastore source-headline class)
+                (org-glance-overview:register-headline-in-archive source-headline class)))
+
+              (t (cl-loop
+                  for class in source-classes
+                  do
+                  (org-glance-overview:register-headline-in-overview source-headline class)
+                  (org-glance-overview:register-headline-in-metastore source-headline class))
+                 (cl-loop
+                  for class in (seq-difference --org-glance-materialized-headline:classes source-classes)
+                  do
+                  (org-glance-overview:remove-headline-from-overview source-headline class)
+                  (org-glance-overview:remove-headline-from-metastore source-headline class))))
+
+
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
 
