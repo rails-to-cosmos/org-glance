@@ -474,7 +474,7 @@ FIXME. Unstable one. Refactor is needed."
      (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
                                                    (org-tss-filter-active)
                                                    (org-tss-sort-timestamps))
-                          collect (org-element-property :raw-value timestamp)))
+                                collect (org-element-property :raw-value timestamp)))
            (header (save-excursion
                      (goto-char (point-min))
                      (org-end-of-meta-data)
@@ -506,7 +506,7 @@ FIXME. Unstable one. Refactor is needed."
            " "
            tags
            "\n"
-           (if closed
+           (if (and closed (listp closed))
                (concat "CLOSED: "
                        (org-element-property :raw-value closed)
                        (if (or schedule deadline)
