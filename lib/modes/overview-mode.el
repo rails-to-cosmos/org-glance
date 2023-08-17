@@ -287,6 +287,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-archive (headline class)
   "Add HEADLINE overview to CLASS archive."
+  (org-glance-overview:ensure-archive class)
   (org-glance:with-file-visited (org-glance-overview:archive-location class)
     (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
                                        (list (org-glance-headline:id)
@@ -320,38 +321,6 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
             (save-buffer))))))
   headline)
-
-;; (cl-defun org-glance-overview:register-headline-in-write-ahead-log (headline class)
-;;   (org-glance:with-headline-materialized headline
-;;     (let ((id (intern (org-glance-headline:id headline)))
-;;           (class (if (symbolp class) class (intern class))))
-;;       (org-glance-posit:write
-;;        (org-glance-posit (list class 'is-class))
-;;        (org-glance-posit (list id 'thing) (list class 'class))
-;;        (org-glance-posit (list id 'origin) :value (list (org-glance-headline:file headline) (org-glance-headline:begin headline)))
-;;        (org-glance-posit (list id 'title) :value (org-glance-headline:title headline))
-;;        (org-glance-posit (list id 'contents)
-;;                          :value (save-excursion
-;;                                   (org-end-of-meta-data t)
-;;                                   ""
-;;                                   ;; (base64-encode-string
-;;                                   ;;  (buffer-substring-no-properties (point) (point-max))
-;;                                   ;;  t)
-;;                                   ))
-;;        (org-glance-posit (list id 'extractable)
-;;                          :value (save-excursion
-;;                                   (org-end-of-meta-data t)
-;;                                   (when (re-search-forward org-glance:key-value-pair-re nil t)
-;;                                     t)))
-;;        (org-glance-posit (list id 'openable)
-;;                          :value (save-excursion
-;;                                   (org-end-of-meta-data t)
-;;                                   (when (re-search-forward org-any-link-re nil t)
-;;                                     t)))
-;;        (org-glance-posit (list id 'decryptable)
-;;                          :value (save-excursion
-;;                                   (org-end-of-meta-data t)
-;;                                   (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))
 
 (cl-defun org-glance-capture-headline-at-point
     (&optional (class (org-completing-read "Specify class: " (org-glance-classes))))
@@ -681,15 +650,29 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
               (org-glance:format org-glance-overview:header)))
     (goto-char point)))
 
+(cl-defun org-glance-overview:create-archive (&optional (class (org-glance-view:completing-read)))
+  (interactive)
+  (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
+    (with-temp-file filename (org-glance-overview:refresh-widgets class))
+    filename))
+
+(cl-defun org-glance-overview:ensure-archive (&optional (class (org-glance-view:completing-read)))
+  (interactive)
+  (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
+    (unless (file-exists-p filename)
+      (with-temp-file filename (org-glance-overview:refresh-widgets class)))
+    filename))
+
+(cl-defun org-glance-overview:create-overview (&optional (class (org-glance-view:completing-read)))
+  (interactive)
+  (let ((filename (-org-glance:make-file-directory (org-glance-overview:location class))))
+    (with-temp-file filename (org-glance-overview:refresh-widgets class))
+    filename))
+
 (cl-defun org-glance-overview:create (&optional (class (org-glance-view:completing-read)))
   (interactive)
-  (let ((filenames (list
-                    (-org-glance:make-file-directory (org-glance-overview:location class))
-                    (-org-glance:make-file-directory (org-glance-overview:archive-location class)))))
-    (cl-loop for filename in filenames
-             do (with-temp-file filename
-                  (org-glance-overview:refresh-widgets class)))
-    (find-file (car filenames))))
+  (org-glance-overview:create-archive class)
+  (find-file (org-glance-overview:create-overview class)))
 
 (cl-defun org-glance-overview (&optional (class (org-glance-view:completing-read)))
   (interactive)
