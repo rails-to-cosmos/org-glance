@@ -112,13 +112,13 @@ metastore.")
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
-  (while (and (outline-previous-heading) (not (org-glance-headline:active?))))
-  (when (org-glance-headline:active?) (org-glance-headline:at-point)))
+  (outline-previous-heading)
+  (org-glance-headline:at-point))
 
 (cl-defun org-glance-headline:search-forward ()
   (interactive)
-  (while (and (outline-next-heading) (not (org-glance-headline:active?))))
-  (when (org-glance-headline:active?) (org-glance-headline:at-point)))
+  (outline-next-heading)
+  (org-glance-headline:at-point))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
