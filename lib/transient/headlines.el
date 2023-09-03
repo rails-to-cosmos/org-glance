@@ -20,19 +20,4 @@
   (org-glance-init)
   (transient-setup 'org-glance-form-action))
 
-(transient-define-prefix org-glance-form-action--cyrillic ()
-  "Perform action on selected view/headlines"
-  ["Overview"
-   [("ф" "Agenda" org-glance-overview:agenda*)
-    ("щ" "Overview" org-glance-overview)]]
-  ["Actions"
-   [("+" "Capture headline" org-glance-capture)
-    ("у" "Extract property" org-glance:extract)
-    ("л" "Kill headline" org-glance:revoke)
-    ("о" "Open link" org-glance:open)
-    ("ь" "Materialize headline" org-glance:materialize)]]
-  (interactive)
-  (org-glance-init)
-  (transient-setup 'org-glance-form-action--cyrillic))
-
 (org-glance:provide)
