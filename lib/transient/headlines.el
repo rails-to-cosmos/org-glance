@@ -13,7 +13,7 @@
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance:extract)
-    ("k" "Kill headline" org-glance:revoke)
+    ("k" "Kill headline" org-glance-headline-remove)
     ("j" "Open link" org-glance:open)
     ("m" "Materialize headline" org-glance:materialize)]]
   (interactive)
