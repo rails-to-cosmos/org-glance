@@ -20,19 +20,19 @@
 
 (cl-defmethod org-glance-scope ((file string))
   "Return list of file S if exists."
-  (let ((files-list (cond
-                      ((not (file-exists-p file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
-                      ((not (file-readable-p file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
-                      ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
-                      ((with-temp-buffer
-                         (insert-file-contents file)
-                         (hack-local-variables)
-                         (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
-                      (t (list file)))))
+  (let ((files (cond
+                ((not (file-exists-p file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
+                ((not (file-readable-p file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
+                ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
+                ((with-temp-buffer
+                   (insert-file-contents file)
+                   (hack-local-variables)
+                   (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
+                (t (list file)))))
     (cl-loop
-       for file in files-list
-       when (member (file-name-extension file) org-glance-scope:extensions)
-       collect file)))
+     for file in files
+     when (member (file-name-extension file) org-glance-scope:extensions)
+     collect file)))
 
 (cl-defmethod org-glance-scope ((l sequence))
   "Convert L to flattened list of files."
