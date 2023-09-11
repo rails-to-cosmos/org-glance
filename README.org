@@ -7,6 +7,4 @@
 
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
-This project contains Emacs front-end for [[https://github.com/rails-to-cosmos/glance][Glance]].
-
-Work in progress.
+Emacs front-end for [[https://github.com/rails-to-cosmos/glance][Glance]]. Work in progress.
