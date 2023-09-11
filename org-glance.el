@@ -33,44 +33,6 @@
 (require 'org)
 (require 'org-glance-module)
 
-(org-glance:require lib.core.customs)
-
-(cl-defstruct (org-glance-view (:constructor org-glance-view:create))
-  "This structure contains metadata about categorized `org-mode' headlines."
-  (id
-   nil
-   :read-only t
-   :documentation "ID slot is a primary key that uniqly identifies `org-glance-view'."
-   :type 'symbol)
-  (type
-   nil
-   :read-only nil
-   :documentation "List of actions allowed to use on headlines of this view."
-   :type 'list)
-  (scope
-   nil
-   :read-only nil
-   :documentation "List of files/directories where org-glance should search for headlines for this view."
-   :type 'list))
-
-(defvar org-glance:classes (make-hash-table)
-  "Hash table (id->view) that lists all registered classes of things.")
-
-(defun org-glance:get-class (class) (gethash class org-glance:classes))
-
-(eval-and-compile
-  (cl-defmacro org-glance:interactive-lambda (&rest forms)
-    "Define interactive lambda function with FORMS in its body."
-    (declare (indent 0) (debug t))
-    `(lambda ()
-       (interactive)
-       ,@forms)))
-
-(eval-when-compile
-  (org-glance:require
-    cl
-    lib.modes.material-mode))
-
 (org-glance:require
   cl-generic
   cl-lib
@@ -79,11 +41,16 @@
   seq
   subr-x
 
+  lib.core.customs
+  lib.core.data
+  lib.core.func
+  lib.core.globals
+
   lib.core.logging
   lib.core.exceptions
   lib.core.posit
 
-  lib.utils.encryption                  ; encryption utils
+  lib.utils.crypt                  ; encryption utils
   lib.utils.helpers                     ; unsorted, deprecated
   lib.utils.org-tss-mode
 
