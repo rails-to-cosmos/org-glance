@@ -383,7 +383,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
       (when finalize
         (org-capture-finalize)))))
 
-(cl-defun org-glance:revoke ()
+(cl-defun org-glance-headline-remove ()
   (interactive)
   (org-glance-choose-and-apply
    :action (lambda (headline)
@@ -412,7 +412,8 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
          (when-let (choice (or default-choice
                                (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
            (if-let (headline (org-glance-scope--choose-headline choice headlines))
-               (condition-case nil (funcall action headline)
+               (condition-case nil
+                   (funcall action headline)
                  (org-glance-exception:DB-OUTDATED
                   (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
                   (redisplay)

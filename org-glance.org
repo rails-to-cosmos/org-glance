@@ -1,2 +1,3 @@
 * TODO Separate directory for "resources"
 - For each tag create "resources" directory containing attachments
+* TODO Use [[https://github.com/jorgenschaefer/emacs-buttercup][buttercup]] for tests
