@@ -17,6 +17,7 @@
 (depends-on "ledger-mode")
 
 (development
+ (depends-on "elsa")
  (depends-on "ecukes")
  (depends-on "undercover")
  (depends-on "with-simulated-input"))

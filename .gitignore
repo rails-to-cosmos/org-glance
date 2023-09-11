@@ -5,3 +5,14 @@ ogpm-cache.el
 /dist/
 /README.org_archive
 /.ecukes-failing-scenarios
+
+# Devenv
+.devenv*
+devenv.local.nix
+
+# direnv
+.direnv
+
+# pre-commit
+.pre-commit-config.yaml
+

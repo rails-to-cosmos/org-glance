@@ -1,0 +1,2 @@
+* TODO Separate directory for "resources"
+- For each tag create "resources" directory containing attachments

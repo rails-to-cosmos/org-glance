@@ -163,10 +163,10 @@
                                              (org-tss-reset-buffer-timestamps-except-earliest)
 
                                              (cl-loop
-                                                for class in (org-glance-headline:classes)
-                                                do (let ((headline (org-glance-capture-headline-at-point class)))
-                                                     (org-glance-overview:register-headline-in-metastore headline class)
-                                                     (org-glance-overview:register-headline-in-overview headline class))))))))))
+                                              for class in (org-glance-headline:classes)
+                                              do (let ((headline (org-glance-capture-headline-at-point class)))
+                                                   (org-glance-overview:register-headline-in-metastore headline class)
+                                                   (org-glance-overview:register-headline-in-overview headline class))))))))))
 
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest args)
   "Do only if headline has been cloned before auto repeat.
