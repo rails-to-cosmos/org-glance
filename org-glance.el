@@ -1,6 +1,6 @@
-;;; org-glance.el --- org-mode traversing. Fast and convenient.
+;;; org-glance.el --- org-mode traversing. Fast and convenient.  ;; -*- lexical-binding: t -*-
 
-;; Copyright (C) 2018-2022 Dmitry Akatov
+;; Copyright (C) 2018-2023 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
@@ -78,8 +78,6 @@
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 
-(declare-function org-completing-read "org-macs.el")
-
 (declare-function org-glance-def-view (org-glance-module-filename lib.core.view))
 (declare-function org-glance-headline:materialize (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:title (org-glance-module-filename lib.core.headline))
@@ -121,7 +119,7 @@
          (or org-glance-material-mode org-glance-overview-mode)
          (member (org-get-todo-state) org-done-keywords)
          (org-glance-headline:repeated-p))
-    (lexical-let ((contents (org-glance-headline-contents)))
+    (let ((contents (org-glance-headline-contents)))
       (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
                                            (with-temp-buffer
                                              (insert contents)
@@ -148,12 +146,12 @@ Cleanup new headline considering auto-repeat ARGS.
                      (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
                            (pinned (save-excursion
                                      (cl-loop
-                                        while (search-forward "#+begin_pin" nil t)
-                                        collect (save-excursion
-                                                  (beginning-of-line)
-                                                  (buffer-substring-no-properties (point) (save-excursion
-                                                                                            (search-forward "#+end_pin" nil t)
-                                                                                            (point))))))))
+                                      while (search-forward "#+begin_pin" nil t)
+                                      collect (save-excursion
+                                                (beginning-of-line)
+                                                (buffer-substring-no-properties (point) (save-excursion
+                                                                                          (search-forward "#+end_pin" nil t)
+                                                                                          (point))))))))
                        (s-join "\n\n" (append (list header) pinned))))))
       (delete-region (point-min) (point-max))
       (insert contents)
@@ -171,8 +169,8 @@ after capture process has been finished."
        (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
              (t (funcall ,action (org-glance-metastore:choose-headline))))
      (org-glance-exception:HEADLINE-NOT-FOUND
-      (lexical-let ((<buffer> (current-buffer))
-                    (<point> (point)))
+      (let ((<buffer> (current-buffer))
+            (<point> (point)))
         (org-glance-capture
          :default (cadr default)
          :class (org-glance:choose-class "Unknown headline. Please, specify it's class to capture: ")
@@ -196,16 +194,16 @@ after capture process has been finished."
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
   (cl-loop
-     for directory in (org-glance:list-directories org-glance-directory)
-     do (let ((class (intern directory)))
-          (unless (gethash class org-glance:classes nil)
-            (org-glance-class-create class))))
+   for directory in (org-glance:list-directories org-glance-directory)
+   do (let ((class (intern directory)))
+        (unless (gethash class org-glance:classes nil)
+          (org-glance-class-create class))))
 
   (cl-loop
-     for class being the hash-keys of org-glance:classes
-     do (let ((class-name (s-downcase (format "%s" class))))
-          (unless (f-exists? (f-join org-glance-directory class-name))
-            (org-glance-class-remove class))))
+   for class being the hash-keys of org-glance:classes
+   do (let ((class-name (s-downcase (format "%s" class))))
+        (unless (f-exists? (f-join org-glance-directory class-name))
+          (org-glance-class-remove class))))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes))))
 
@@ -215,36 +213,36 @@ after capture process has been finished."
   (org-glance-init)
   (condition-case nil
       (cond
-        ;; active region?
-        ((and (not (org-in-src-block-p))
-              (region-active-p))
-         (lexical-let ((<buffer> (current-buffer))
-                       (<region-beginning> (region-beginning))
-                       (<region-end> (region-end))
-                       (<point> (point)))
-           (org-glance-capture
-            :default (buffer-substring-no-properties <region-beginning> <region-end>)
-            :class (org-glance:choose-class (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
-            :finalize t
-            :callback (lambda ()
-                        (let ((<hl> (org-glance-overview:original-headline)))
-                          (switch-to-buffer <buffer>)
-                          (goto-char <region-beginning>)
-                          (delete-region <region-beginning> <region-end>)
-                          (insert (org-glance:with-headline-narrowed <hl>
-                                    (org-glance-headline-reference))))))))
+       ;; active region?
+       ((and (not (org-in-src-block-p))
+             (region-active-p))
+        (let ((<buffer> (current-buffer))
+              (<region-beginning> (region-beginning))
+              (<region-end> (region-end))
+              (<point> (point)))
+          (org-glance-capture
+           :default (buffer-substring-no-properties <region-beginning> <region-end>)
+           :class (org-glance:choose-class (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
+           :finalize t
+           :callback (lambda ()
+                       (let ((<hl> (org-glance-overview:original-headline)))
+                         (switch-to-buffer <buffer>)
+                         (goto-char <region-beginning>)
+                         (delete-region <region-beginning> <region-end>)
+                         (insert (org-glance:with-headline-narrowed <hl>
+                                   (org-glance-headline-reference))))))))
 
-        ;; mention
-        ((and (not (org-in-src-block-p))
-              (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
-         (org-glance-choose-and-apply
-          :action (lambda (headline)
-                    (insert
-                     (org-glance:with-headline-narrowed headline
-                       (org-glance-headline-reference))))))
+       ;; mention
+       ((and (not (org-in-src-block-p))
+             (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))
+        (org-glance-choose-and-apply
+         :action (lambda (headline)
+                   (insert
+                    (org-glance:with-headline-narrowed headline
+                      (org-glance-headline-reference))))))
 
-        ;; simple @
-        (t (keyboard-quit)))
+       ;; simple @
+       (t (keyboard-quit)))
     (quit (self-insert-command 1 64))))
 
 (cl-defun org-glance:materialize (&optional headline)
@@ -271,16 +269,16 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (let ((action (lambda (headline)
                   (org-glance:with-headline-materialized headline
                     (cl-loop
-                       for (link title pos) in (org-glance-parse-links)
-                       unless (s-starts-with-p "[[org-glance" link)
-                       collect (list title pos)
-                       into links
-                       finally
-                       do (goto-char (cond
-                                       ((> (length links) 1) (cadr (assoc (org-completing-read "Open link: " links) links #'string=)))
-                                       ((= (length links) 1) (cadar links))
-                                       (t (user-error "Unable to find links in headline"))))
-                         (org-open-at-point))))))
+                     for (link title pos) in (org-glance-parse-links)
+                     unless (s-starts-with-p "[[org-glance" link)
+                     collect (list title pos)
+                     into links
+                     finally
+                     do (goto-char (cond
+                                    ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
+                                    ((= (length links) 1) (cadar links))
+                                    (t (user-error "Unable to find links in headline"))))
+                     (org-open-at-point))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply
@@ -299,7 +297,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                                  (org-glance-buffer-key-value-pairs))))
                     (condition-case nil
                         (while t
-                          (kill-new (alist-get (org-completing-read "Extract property: " pairs) pairs nil nil #'string=)))
+                          (kill-new (alist-get (completing-read "Extract property: " pairs nil t) pairs nil nil #'string=)))
                       (quit
                        (setq kill-ring nil)
                        (org-glance:log-info "Kill ring has been cleared")))))))
@@ -325,15 +323,15 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
 
 (cl-defun org-glance-capture
     (&key
-       (class (org-glance:choose-class))
-       (file (make-temp-file "org-glance-" nil ".org"))
-       (default
-           (cond
-             ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
-             (t "")))
-       (callback nil)
-       (finalize nil)
-       (template (org-glance-capture-template class :default default)))
+     (class (org-glance:choose-class))
+     (file (make-temp-file "org-glance-" nil ".org"))
+     (default
+      (cond
+       ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
+       (t "")))
+     (callback nil)
+     (finalize nil)
+     (template (org-glance-capture-template class :default default)))
   (interactive)
 
   (let ((class (if (symbolp class) class (intern class))))
@@ -364,34 +362,34 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
 
 (cl-defun org-glance
     (&key db
-       default-choice
-       (db-init nil)
-       (filter #'(lambda (_) t))
-       (scope '(agenda))
-       (action #'org-glance-headline:visit)
-       (prompt "Glance: "))
+          default-choice
+          (db-init nil)
+          (filter #'(lambda (_) t))
+          (scope '(agenda))
+          (action #'org-glance-headline:visit)
+          (prompt "Glance: "))
   "Deprecated main method, refactoring needed."
   (let ((headlines (org-glance-headlines :db db
                                          :db-init db-init
                                          :scope scope
                                          :filter filter)))
     (unwind-protect
-         (when-let (choice (or default-choice
-                               (org-completing-read prompt (mapcar #'org-glance-headline:title headlines))))
-           (if-let (headline (org-glance-scope--choose-headline choice headlines))
-               (condition-case nil
-                   (funcall action headline)
-                 (org-glance-exception:DB-OUTDATED
-                  (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
-                  (redisplay)
-                  (org-glance :scope scope
-                              :filter filter
-                              :action action
-                              :db db
-                              :db-init t
-                              :default-choice choice
-                              :prompt prompt)))
-             (user-error "Headline not found"))))))
+        (when-let (choice (or default-choice
+                              (completing-read prompt (mapcar #'org-glance-headline:title headlines) nil t)))
+          (if-let (headline (org-glance-scope--choose-headline choice headlines))
+              (condition-case nil
+                  (funcall action headline)
+                (org-glance-exception:DB-OUTDATED
+                 (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
+                 (redisplay)
+                 (org-glance :scope scope
+                             :filter filter
+                             :action action
+                             :db db
+                             :db-init t
+                             :default-choice choice
+                             :prompt prompt)))
+            (user-error "Headline not found"))))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

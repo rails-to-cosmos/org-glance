@@ -88,7 +88,7 @@
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-classes)))
     (if (> (length views) 1)
-        (intern (org-completing-read prompt views))
+        (intern (completing-read prompt views nil t))
       (car views))))
 
 (cl-defun org-glance-def-view (&key
@@ -111,7 +111,7 @@
     view))
 
 (cl-defun org-glance:choose-class (&optional (prompt "Choose view: "))
-  (org-completing-read prompt (org-glance-classes)))
+  (completing-read prompt (org-glance-classes) nil t))
 
 (cl-defun org-glance-capture-template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))

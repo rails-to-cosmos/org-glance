@@ -97,7 +97,7 @@
 (cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
   (let* ((headlines (org-glance-all-headlines filter))
-         (choice (org-completing-read "Headline: " headlines))
+         (choice (completing-read "Headline: " headlines nil t))
          (headline.class (alist-get choice headlines nil nil #'string=)))
     (unless headline.class
       (org-glance-exception:HEADLINE-NOT-FOUND choice))

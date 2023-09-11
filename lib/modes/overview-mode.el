@@ -43,8 +43,10 @@ ${todo-order}
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id
       (org-glance-scope--choose-headline
-       (org-completing-read "Specify headline: "
-                            (mapcar #'org-glance-headline:title (--filter (org-glance-headline:active? it) headlines)))
+       (completing-read "Specify headline: "
+                        (mapcar #'org-glance-headline:title (--filter (org-glance-headline:active? it) headlines))
+                        nil
+                        t)
        headlines)))))
 
 (cl-defmacro org-glance-overview:apply-on-headline (&rest forms)
@@ -323,7 +325,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   headline)
 
 (cl-defun org-glance-capture-headline-at-point
-    (&optional (class (org-completing-read "Specify class: " (org-glance-classes))))
+    (&optional (class (completing-read "Specify class: " (org-glance-classes) nil t)))
   "Extract all possible information from headline at point."
   (declare (indent 1))
   (interactive)
@@ -839,7 +841,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (interactive)
   (let* ((old-class (org-glance-overview:class))
          (new-class (let ((classes (--filter (not (eql old-class it)) (org-glance-classes))))
-                      (intern (org-completing-read "Move headline to: " classes))))
+                      (intern (completing-read "Move headline to: " classes nil t))))
          (original-headline (org-glance-overview:original-headline)))
     (unless (member new-class (org-glance-classes))
       (org-glance-class-create new-class))
@@ -858,7 +860,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (let* ((original-headline (org-glance-overview:original-headline))
          (old-classes (org-glance-headline:classes original-headline))
          (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-classes))))
-                      (intern (org-completing-read "Add class: " views)))))
+                      (intern (completing-read "Add class: " views)))))
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
         (org-toggle-tag (symbol-name new-class) 'on)))))
