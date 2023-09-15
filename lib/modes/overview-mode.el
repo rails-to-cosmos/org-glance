@@ -654,7 +654,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-next-visible-heading 1)
       (backward-char)
       (let ((org-clock-clocktable-default-properties (list :maxlevel 2
-                                                           :properties '("CLOSED")
+                                                           :properties '("CLOSED" "SCHEDULED")
                                                            :link t)))
         (org-clock-report)))))
 
