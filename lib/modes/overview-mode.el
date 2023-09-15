@@ -631,26 +631,32 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (cl-defun org-glance-overview:refresh-widgets (&optional (class (org-glance-overview:class)))
   (interactive)
-  (let* ((inhibit-read-only t)
-         (point (point)))
-    (goto-char (point-min))
-    (org-next-visible-heading 1)
-    (kill-region (point-min) (point))
-    (insert (let ((category (format "#+CATEGORY: %s" class))
-                  (todo-states (cl-loop
+  (save-excursion
+    (let* ((inhibit-read-only t))
+      (goto-char (point-min))
+      (org-next-visible-heading 1)
+      (kill-region (point-min) (point))
+      (insert (let ((category (format "#+CATEGORY: %s" class))
+                    (todo-states (cl-loop
                                   for todo-seq in org-todo-keywords
                                   concat (concat "#+TODO: " (s-join " " (cdr todo-seq)) "\n")
                                   into result
                                   finally return (s-trim result)))
-                  (todo-order (concat "#+TODO_ORDER: " (cl-loop
+                    (todo-order (concat "#+TODO_ORDER: " (cl-loop
                                                           for state in org-glance-overview:state-ordering
                                                           if (string-empty-p state)
                                                           concat "_ " into result
                                                           else
                                                           concat (concat (upcase state) " ") into result
                                                           finally return (s-trim result)))))
-              (org-glance:format org-glance-overview:header)))
-    (goto-char point)))
+                (org-glance:format org-glance-overview:header)))
+      (goto-char (point-min))
+      (org-next-visible-heading 1)
+      (backward-char)
+      (let ((org-clock-clocktable-default-properties (list :maxlevel 2
+                                                           :properties '("CLOSED")
+                                                           :link t)))
+        (org-clock-report)))))
 
 (cl-defun org-glance-overview:create-archive (&optional (class (org-glance-view:completing-read)))
   (interactive)

@@ -470,7 +470,8 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
   (org-glance:with-headline-at-point
-   (cl-flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items)))
+   (cl-flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items))
+             (org-newline (&rest items) (org-glance-join-but-null "\n" items)))
      (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
                                                    (org-tss-filter-active)
                                                    (org-tss-sort-timestamps))
@@ -479,6 +480,9 @@ FIXME. Unstable one. Refactor is needed."
                      (goto-char (point-min))
                      (org-end-of-meta-data)
                      (s-trim (buffer-substring-no-properties (point-min) (point)))))
+           (clocks (org-glance:with-headline-at-point
+                    (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
+                             collect (buffer-substring-no-properties (point-at-bol) (point-at-eol)))))
            (relations (org-glance-headline-relations))
            (tags (org-get-tags-string))
            (state (org-glance-headline:state))
@@ -545,7 +549,10 @@ FIXME. Unstable one. Refactor is needed."
                 (concat "*Timestamps*" (apply #'org-list timestamps)))
 
               (when relations
-                (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))))))
+                (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
+
+              (when clocks
+                (concat "*Time spent*" (apply #'org-newline clocks)))))))
          (condition-case nil
              (org-update-checkbox-count-maybe 'all)
            (error nil))
