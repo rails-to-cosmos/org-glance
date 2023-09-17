@@ -7,6 +7,7 @@
   # https://devenv.sh/packages/
   packages = with pkgs; [
     cask
+    emacs
     python311Packages.python
   ];
 
