@@ -5,9 +5,15 @@
   org-attach
   org-capture)
 
+(defcustom org-glance-clocktable-properties
+  (list :maxlevel 2
+        :properties '("CLOSED" "SCHEDULED")
+        :link t)
+  "Default clocktable properties for glance overview")
+
 (defface org-glance-headline-changed-face
-    '((((background dark)) (:background "#013220"))
-      (((background light)) (:background "honeydew")))
+  '((((background dark)) (:background "#013220"))
+    (((background light)) (:background "honeydew")))
   "*Face used to highlight evaluated paragraph."
   :group 'org-glance :group 'faces)
 
@@ -653,9 +659,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (goto-char (point-min))
       (org-next-visible-heading 1)
       (backward-char)
-      (let ((org-clock-clocktable-default-properties (list :maxlevel 2
-                                                           :properties '("CLOSED" "SCHEDULED")
-                                                           :link t)))
+      (let ((org-clock-clocktable-default-properties org-glance-clocktable-properties))
         (org-clock-report)))))
 
 (cl-defun org-glance-overview:create-archive (&optional (class (org-glance-view:completing-read)))
