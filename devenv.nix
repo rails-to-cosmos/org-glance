@@ -16,7 +16,7 @@
 
   enterShell = ''
     hello
-    git --version
+    emacs --version
   '';
 
   # https://devenv.sh/languages/
