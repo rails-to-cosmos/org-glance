@@ -138,10 +138,9 @@
 Cleanup new headline considering auto-repeat ARGS.
 
 - Remove all data but PINNED of cloned headline."
-  (when (and
-         (or org-glance-material-mode org-glance-overview-mode)
-         org-glance-clone-on-repeat-p
-         (org-glance-headline:repeated-p))
+  (when (and (or org-glance-material-mode org-glance-overview-mode)
+             org-glance-clone-on-repeat-p
+             (org-glance-headline:repeated-p))
     (let ((contents (org-glance:with-headline-at-point
                      (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
                            (pinned (save-excursion
