@@ -432,80 +432,83 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
          (metastore (org-glance-metastore:read metastore-location))
          (overviews '())
          (archives '()))
-    (cl-loop
-     with progress-label = (format "Collecting %s... " class)
-     with progress-reporter = (make-progress-reporter progress-label 0 (length files))
-     for file in (-take-last (- (length files) initial-progress) files)
-     for current-progress from initial-progress
-     if (sit-for 0)
-     do
-     (progress-reporter-update progress-reporter current-progress)
-     (org-glance:with-file-visited file
-       (while-let ((headline (org-glance-headline:search-forward)))
-         (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
-           (cond ((and (member tag tags)
-                       (not (member 'archive tags))
-                       (org-glance-headline:active? headline))
-                  (org-glance-metastore:add-headline headline metastore)
-                  (push (org-glance-headline:overview) overviews))
-                 ((and (member tag tags)
-                       (not (member 'archive tags))
-                       (not (org-glance-headline:active? headline)))
-                  (push (org-glance-headline:overview) archives))))))
-     else do
-     (org-glance-with-debug-msg "Persist metastore changes..."
-       (org-glance-metastore:save metastore metastore-location))
+    (cl-labels ((-register (headline) (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
+                                        (cond ((and (member tag tags)
+                                                    (not (member 'archive tags))
+                                                    (org-glance-headline:active? headline))
+                                               (org-glance-metastore:add-headline headline metastore)
+                                               (push (org-glance-headline:overview) overviews))
+                                              ((and (member tag tags)
+                                                    (not (member 'archive tags))
+                                                    (not (org-glance-headline:active? headline)))
+                                               (push (org-glance-headline:overview) archives))))))
+      (cl-loop with progress-label = (format "Collecting %s... " class)
+               with progress-reporter = (make-progress-reporter progress-label 0 (length files))
+               for file in (-take-last (- (length files) initial-progress) files)
+               for current-progress from initial-progress
+               if (sit-for 0)
+               do
+               (progress-reporter-update progress-reporter current-progress)
+               (org-glance:with-file-visited file
+                 (when-let (headline (org-glance-headline:at-point))
+                   (-register headline))
 
-     (org-glance:with-file-visited (org-glance-overview:location class)
-       (goto-char (point-max))
-       (let ((inhibit-read-only t))
-         (cl-loop for overview in overviews
-                  do (insert overview "\n"))
-         (org-overview)))
+                 (while-let ((headline (org-glance-headline:search-forward)))
+                   (-register headline)))
+               else do
+               (org-glance-with-debug-msg "Persist metastore changes..."
+                 (org-glance-metastore:save metastore metastore-location))
 
-     (org-glance:with-file-visited (org-glance-overview:archive-location class)
-       (goto-char (point-max))
-       (let ((inhibit-read-only t))
-         (cl-loop for archive in archives
-                  do (insert archive "\n"))
-         (org-overview)))
+               (org-glance:with-file-visited (org-glance-overview:location class)
+                 (goto-char (point-max))
+                 (let ((inhibit-read-only t))
+                   (cl-loop for overview in overviews
+                            do (insert overview "\n"))
+                   (org-overview)))
 
-     (puthash class (list :progress current-progress :files files) org-glance-overview-deferred-import-hash-table)
+               (org-glance:with-file-visited (org-glance-overview:archive-location class)
+                 (goto-char (point-max))
+                 (let ((inhibit-read-only t))
+                   (cl-loop for archive in archives
+                            do (insert archive "\n"))
+                   (org-overview)))
 
-     (when (or (null org-glance-overview-deferred-import-timer)
-               (not (memq org-glance-overview-deferred-import-timer timer-idle-list)))
-       (setq org-glance-overview-deferred-import-timer
-             (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
+               (puthash class (list :progress current-progress :files files) org-glance-overview-deferred-import-hash-table)
 
-     (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
-                                  class current-progress (length files)))
-     (cl-return nil)
+               (when (or (null org-glance-overview-deferred-import-timer)
+                         (not (memq org-glance-overview-deferred-import-timer timer-idle-list)))
+                 (setq org-glance-overview-deferred-import-timer
+                       (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
 
-     finally do
-     (org-glance-with-debug-msg "Persist metastore changes..."
-       (org-glance-metastore:save metastore metastore-location))
+               (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
+                                            class current-progress (length files)))
+               (cl-return nil)
 
-     (org-glance:with-file-visited (org-glance-overview:location class)
-       (goto-char (point-max))
-       (let ((inhibit-read-only t))
-         (cl-loop for overview in overviews
-                  do (insert overview "\n"))
-         (org-glance-overview:order)
-         (org-overview)
-         (org-align-tags 'all)))
+               finally do
+               (org-glance-with-debug-msg "Persist metastore changes..."
+                 (org-glance-metastore:save metastore metastore-location))
 
-     (org-glance:with-file-visited (org-glance-overview:archive-location class)
-       (goto-char (point-max))
-       (let ((inhibit-read-only t))
-         (cl-loop for archive in archives
-                  do (insert archive "\n"))
-         (org-glance-overview:order)
-         (org-overview)
-         (org-align-tags 'all)
-         (save-buffer)))
+               (org-glance:with-file-visited (org-glance-overview:location class)
+                 (goto-char (point-max))
+                 (let ((inhibit-read-only t))
+                   (cl-loop for overview in overviews
+                            do (insert overview "\n"))
+                   (org-glance-overview:order)
+                   (org-overview)
+                   (org-align-tags 'all)))
 
-     (remhash class org-glance-overview-deferred-import-hash-table)
-     (progress-reporter-done progress-reporter))))
+               (org-glance:with-file-visited (org-glance-overview:archive-location class)
+                 (goto-char (point-max))
+                 (let ((inhibit-read-only t))
+                   (cl-loop for archive in archives
+                            do (insert archive "\n"))
+                   (org-glance-overview:order)
+                   (org-overview)
+                   (org-align-tags 'all)
+                   (save-buffer)))
+
+               (remhash class org-glance-overview-deferred-import-hash-table)
+               (progress-reporter-done progress-reporter)))))
 
 (cl-defun org-glance-overview:deferred-import-daemon ()
   (if (hash-table-empty-p org-glance-overview-deferred-import-hash-table)

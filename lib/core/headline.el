@@ -154,6 +154,19 @@ metastore.")
       (goto-char (org-glance-headline:begin next-headline))
       next-headline)))
 
+(cl-defun org-glance-headline:list ()
+  (save-excursion
+    (goto-char (point-min))
+
+    (let (result)
+      (when-let (headline (org-glance-headline:at-point))
+        (push headline result))
+
+      (while-let ((headline (org-glance-headline:search-forward)))
+        (push headline result))
+
+      result)))
+
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
   (org-element-property :ORG_GLANCE_ID headline))
@@ -587,7 +600,7 @@ FIXME. Unstable one. Refactor is needed."
   `(save-excursion
      (org-glance-headline:search-parents)
      (unless (org-glance-headline-p)
-       (user-error "Unable to find headline at point"))
+       (error "Unable to find headline at point"))
      (save-restriction
        (org-narrow-to-subtree)
        ,@forms)))
