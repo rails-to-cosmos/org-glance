@@ -97,7 +97,10 @@ metastore.")
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
   (save-excursion
-    (org-glance-headline:search-parents)))
+    (when (condition-case nil
+              (or (org-at-heading-p) (org-back-to-heading))
+            (error nil))
+      (org-glance-headline:search-parents))))
 
 (defun org-glance-headline:is-active-todo (state)
   "Check if the given STATE represents an active TODO item."
@@ -112,13 +115,44 @@ metastore.")
 
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
-  (outline-previous-heading)
-  (org-glance-headline:at-point))
+  (when-let (headline (org-glance-headline:at-point))
+    (goto-char (org-glance-headline:begin headline))
+    (forward-char -1))
+
+  (while (and (not (org-before-first-heading-p))
+              (not (bobp))
+              (not (org-glance-headline:at-point)))
+    (outline-previous-heading))
+
+  (if-let (headline (org-glance-headline:at-point))
+      (progn (goto-char (org-glance-headline:begin headline))
+             headline)
+    (progn (goto-char (point-min)))))
 
 (cl-defun org-glance-headline:search-forward ()
   (interactive)
-  (outline-next-heading)
-  (org-glance-headline:at-point))
+
+  (let ((headline (org-glance-headline:at-point))
+        next-headline)
+    (save-excursion
+
+      (when headline
+        (goto-char (org-glance-headline:end headline))
+        (condition-case nil
+            (progn (beginning-of-line)
+                   (forward-line 1))
+          (end-of-buffer nil)))
+
+      (setq next-headline (org-glance-headline:at-point))
+      (while (and (not (eobp))
+                  (or (not next-headline)
+                      (equal headline next-headline)))
+        (forward-line 1)
+        (setq next-headline (org-glance-headline:at-point))))
+
+    (when (and next-headline (not (equal headline next-headline)))
+      (goto-char (org-glance-headline:begin next-headline))
+      next-headline)))
 
 (cl-defun org-glance-headline:id (&optional (headline (org-glance-headline:at-point)))
   "Return unique identifer of HEADLINE."
@@ -238,6 +272,9 @@ metastore.")
 (cl-defun org-glance-headline:begin (&optional (headline (org-glance-headline:at-point)))
   (org-element-property :begin headline))
 
+(cl-defun org-glance-headline:end (&optional (headline (org-glance-headline:at-point)))
+  (org-element-property :contents-end headline))
+
 (cl-defun org-glance-headline:tags (&optional (headline (org-glance-headline:at-point)))
   (mapcar #'s-titleized-words (org-element-property :tags headline)))
 
@@ -296,18 +333,6 @@ metastore.")
               (org-glance-headline:search-buffer-by-id id)
               (org-glance:with-headline-at-point ,@forms)))
            (t (org-glance-exception:HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
-
-(cl-defmacro org-glance:for-each-headline-in-current-buffer (&rest forms)
-  "Eval FORMS on headline at point.
-If point is before the first heading, eval forms on each headline in buffer."
-  (declare (indent 0) (debug t))
-  `(save-excursion
-     (cl-loop
-        initially (goto-char (point-min))
-        while (and (org-glance-headline:at-point)
-                   (not (eobp)))
-        collect (progn ,@forms)
-        do (org-glance-headline:search-forward))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance-ensure-at-heading)

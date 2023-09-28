@@ -441,21 +441,17 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
      do
      (progress-reporter-update progress-reporter current-progress)
      (org-glance:with-file-visited file
-       (org-element-map (org-element-parse-buffer 'headline) 'headline
-         (lambda (element)
-           (save-excursion
-             (goto-char (org-element-property :begin element))
-             (let* ((headline (org-glance-headline:at-point))
-                    (tags (mapcar #'downcase (org-element-property :tags headline))))
-               (cond ((and (member tag tags)
-                           (not (member 'archive tags))
-                           (org-glance-headline:active? headline))
-                      (org-glance-metastore:add-headline headline metastore)
-                      (push (org-glance-headline:overview) overviews))
-                     ((and (member tag tags)
-                           (not (member 'archive tags))
-                           (not (org-glance-headline:active? headline)))
-                      (push (org-glance-headline:overview) archives))))))))
+       (while-let ((headline (org-glance-headline:search-forward)))
+         (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
+           (cond ((and (member tag tags)
+                       (not (member 'archive tags))
+                       (org-glance-headline:active? headline))
+                  (org-glance-metastore:add-headline headline metastore)
+                  (push (org-glance-headline:overview) overviews))
+                 ((and (member tag tags)
+                       (not (member 'archive tags))
+                       (not (org-glance-headline:active? headline)))
+                  (push (org-glance-headline:overview) archives))))))
      else do
      (org-glance-with-debug-msg "Persist metastore changes..."
        (org-glance-metastore:save metastore metastore-location))
