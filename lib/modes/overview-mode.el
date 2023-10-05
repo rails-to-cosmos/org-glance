@@ -166,7 +166,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 ;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 
-(defcustom org-glance-overview:state-ordering
+(defcustom org-glance-overview:default-state-ordering
   (list
    "started"
    "pending"
@@ -176,20 +176,21 @@ If point is before the first heading, prompt for headline and eval forms on it."
    "cancelled")
   "State-related ordering.")
 
+(cl-defun org-glance-overview:state-ordering (&optional (class (org-glance-overview:class)))
+  (let ((config (f-join (org-glance-overview:directory class) "task-states.el")))
+    (if (and (file-exists-p config) (file-readable-p config))
+        (with-temp-buffer
+          (insert-file-contents config)
+          (read (buffer-substring-no-properties (point-min) (point-max))))
+      org-glance-overview:default-state-ordering)))
+
 (cl-defun org-glance-overview:partition-mapper ()
   "Main method for partitioning headlines in overview."
-  (let* ((class (org-glance-overview:class))
-         (state-ordering-config (f-join (org-glance-overview:directory class) "task-states.el"))
-         (state-ordering (if (and (file-exists-p state-ordering-config)
-                                  (file-readable-p state-ordering-config))
-                             (with-temp-buffer
-                               (insert-file-contents state-ordering-config)
-                               (read (buffer-substring-no-properties (point-min) (point-max))))
-                           org-glance-overview:state-ordering)))
+  (let ((ordering (org-glance-overview:state-ordering)))
     (list
      (not (org-in-archived-heading-p)) ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
      (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
-     (or (-elem-index (downcase (or (org-element-property :todo-keyword (org-element-at-point)) "")) state-ordering) 0) ;; partition by state
+     (or (-elem-index (downcase (or (org-element-property :todo-keyword (org-element-at-point)) "")) ordering) 0) ;; partition by state
      ;; (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
      (or (org-element-property :priority (org-element-at-point)) ?B))))
 
@@ -644,7 +645,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                                   into result
                                   finally return (s-trim result)))
                     (todo-order (concat "#+TODO_ORDER: " (cl-loop
-                                                          for state in org-glance-overview:state-ordering
+                                                          for state in (org-glance-overview:state-ordering class)
                                                           if (string-empty-p state)
                                                           concat "_ " into result
                                                           else
