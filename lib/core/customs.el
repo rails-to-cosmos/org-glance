@@ -1,9 +1,14 @@
 (require 'org-glance-module)
 
-(org-glance:require org)
+(org-glance:require org f)
 
 (defcustom org-glance-directory org-directory
-  "Directory with Org files."
+  "Directory containing org-mode files and metadata."
+  :group 'org-glance
+  :type 'directory)
+
+(defcustom org-glance-resource-directory (f-join org-directory "resources")
+  "Directory containing various non-org resources like attachments, media, binary files etc"
   :group 'org-glance
   :type 'directory)
 
