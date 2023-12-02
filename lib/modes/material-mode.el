@@ -7,7 +7,7 @@
 
   ;; remove these dependencies:
   lib.core.metastore
-  lib.core.view
+  lib.data.view
   lib.modes.overview-mode)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)

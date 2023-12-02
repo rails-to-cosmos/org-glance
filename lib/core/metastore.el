@@ -70,10 +70,10 @@
     (setq id (symbol-name id)))
 
   (cl-loop
-     for class being the hash-keys of org-glance:classes
+     for class being the hash-keys of -org-glance-views
      for metastore = (->> class
-                          org-glance:get-class
-                          org-glance-view:metastore-location
+                          org-glance-view:get
+                          org-glance-view:metastore
                           org-glance-metastore:read)
      for headline = (gethash id metastore)
      when headline
@@ -85,7 +85,7 @@
 
 (cl-defun org-glance-all-headlines (&optional filter)
   (cl-loop
-     for class being the hash-keys of org-glance:classes
+     for class being the hash-keys of -org-glance-views
      append (cl-loop
                for headline in (if filter
                                    (-filter filter (org-glance-view:headlines class))

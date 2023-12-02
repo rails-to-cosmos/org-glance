@@ -42,13 +42,13 @@
   subr-x
 
   lib.core.customs
-  lib.core.data
   lib.core.func
-  lib.core.globals
 
   lib.core.logging
   lib.core.exceptions
   lib.core.posit
+
+  lib.data.view
 
   lib.utils.crypt                  ; encryption utils
   lib.utils.helpers                     ; unsorted, deprecated
@@ -66,7 +66,6 @@
   lib.core.relations
   lib.core.metastore                    ; ok
   lib.core.scope                        ; ? deprecated
-  lib.core.view                         ; migrate to overview
 
   lib.modes.overview-mode               ; good one, improve
   lib.modes.material-mode
@@ -78,14 +77,14 @@
 
 ;; (org-glance:import org-glance:format :from lib.utils.helpers)
 
-(declare-function org-glance-def-view (org-glance-module-filename lib.core.view))
+(declare-function org-glance-def-view (org-glance-module-filename lib.data.view))
 (declare-function org-glance-headline:materialize (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-headline:title (org-glance-module-filename lib.core.headline))
 
 (declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
 (declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
 (declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
-(declare-function org-glance:choose-class (org-glance-module-filename lib.core.view))
+(declare-function org-glance:choose-class (org-glance-module-filename lib.data.view))
 (declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
 (declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
 
@@ -96,7 +95,7 @@
 
 (cl-defun org-glance-class-remove (class)
   (org-glance:log-debug "Remove class \"%s\"" class)
-  (remhash class org-glance:classes))
+  (remhash class -org-glance-views))
 
 (cl-defun org-glance-class-create (class)
   (org-glance:log-debug "Create class \"%s\"" class)
@@ -104,9 +103,9 @@
   (org-glance-def-view :id class)
 
   (org-glance:log-debug "Metastore exists?")
-  (unless (f-exists? (org-glance-view:metastore-location (org-glance:get-class class)))
+  (unless (f-exists? (org-glance-view:metastore (org-glance-view:get class)))
     (org-glance:log-debug "Create metastore")
-    (org-glance-metastore:create (org-glance-view:metastore-location (org-glance:get-class class))))
+    (org-glance-metastore:create (org-glance-view:metastore (org-glance-view:get class))))
 
   (org-glance:log-debug "Overview exists?")
   (unless (f-exists? (org-glance-overview:location class))
@@ -195,16 +194,16 @@ after capture process has been finished."
   (cl-loop
    for directory in (org-glance:list-directories org-glance-directory)
    do (let ((class (intern directory)))
-        (unless (gethash class org-glance:classes nil)
+        (unless (gethash class -org-glance-views nil)
           (org-glance-class-create class))))
 
   (cl-loop
-   for class being the hash-keys of org-glance:classes
+   for class being the hash-keys of -org-glance-views
    do (let ((class-name (s-downcase (format "%s" class))))
         (unless (f-exists? (f-join org-glance-directory class-name))
           (org-glance-class-remove class))))
 
-  (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-classes))))
+  (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-views:list))))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link at point."

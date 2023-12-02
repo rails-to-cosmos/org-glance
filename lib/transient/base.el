@@ -1,6 +1,7 @@
 (require 'transient)
 (require 'org-glance-module)
-(org-glance:require lib.core.view)
+
+(org-glance:require lib.data.view)
 
 (defclass org-glance-transient-variable (transient-variable)
   ((default

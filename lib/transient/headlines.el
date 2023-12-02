@@ -2,7 +2,7 @@
 
 (org-glance:require
   transient
-  lib.core.view
+  lib.data.view
   lib.transient.base)
 
 (transient-define-prefix org-glance-form-action ()
