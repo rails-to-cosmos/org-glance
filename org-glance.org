@@ -1,7 +1,3 @@
-* TODO Separate directory for "resources"
-- For each tag create "resources" directory containing attachments
-* TODO Use [[https://github.com/jorgenschaefer/emacs-buttercup][buttercup]] for tests
-
 * Terms
 
 - headline -- org-element of type 'headline with ORG_GLANCE_ID property specified.
@@ -22,6 +18,10 @@
 - overview(CLASS) -- set of OVERVIEW(HEADLINE of CLASS).
 
 * Tasks
+** TODO ability to encrypt regions, not only headlines
+** TODO Separate directory for "resources"
+- For each tag create "resources" directory containing attachments
+** TODO Use [[https://github.com/jorgenschaefer/emacs-buttercup][buttercup]] for tests
 ** gantt chart view
 1. *STARTED* Project       █████████████████████████
       *DONE* Decomposition ▒▒▒▒▒▒▒
@@ -268,7 +268,24 @@ CLOCK: [2021-09-03 Fri 09:46]--[2021-09-03 Fri 18:15] =>  8:29
 - http://fastcompression.blogspot.com/p/lz4.html
 - https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
 - https://towardsdatascience.com/how-to-build-a-complex-reporting-dashboard-using-dash-and-plotl-4f4257c18a7f#a5c5
+** reddit
+>> isomer
 
+I had a weird dream at some point of a personal mediawiki like software.
+
+You could use it as a personal wiki, and put key/value tags on pages that could be used to search for things later. You could also ask it to suck in all your personal information (calendar, bank statements, etc) and had pre-built pages that gave you breakdowns of spending by category and so on, or a calendar of when you had various expenses. It would suck in your email and annotate expenses with the receipts from your inbox.
+
+it had a bunch of input plugins that would scrape data from various places
+the data was all piled into one big datastructure (something like a RDF triplestore?)
+there were a bunch of templates that would take data out of the datastructure and render them. (perhaps based on schema.org schemas?)
+for example, for data with dates, render it as a timeline, calendar, iCal etc.
+For things with a location, render them on a map, etc.
+people as vCard or a nice contacts page etc.
+Being a wiki, linking is encouraged to go from one to another.
+and a bunch of personal business information type things letting you graph or search things.
+It was easy to create new personal wiki pages with whatever content you’d want, add some key/value tags to them, and have the information incorporated into the datastore. It was easy to go find some data source on the internet (csv, json-ld, graphql etc) and add it as a data source to regularly scrape. And it was easy to create new graphs of data, allowing you to find two data sources (eg covid rates by region, socioeconomic rates by region) and join them, and produce graphs based on that data by just adding some tags to a wiki page.
+
+I know that this sorta exists in a bunch of RDF tools, but I imagined something that was a bit easier to interact with. I tried hacking something up based on this, but I’ve not managed to get it to feel “easy”, instead of having a bunch of obscure incantations to do things.
 * dist-packages
 
 - https://github.com/skeeto/emacsql
