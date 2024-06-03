@@ -89,9 +89,9 @@
 (cl-defun org-glance-view:completing-read (&optional (prompt "Choose view: ") (require-match t))
   "Run completing read PROMPT on registered views filtered by TYPE."
   (let ((views (org-glance-views:list)))
-    (if (> (length views) 1)
-        (intern (completing-read prompt views nil require-match))
-      (car views))))
+    (if (= (length views) 1)
+        (car views)
+      (intern (completing-read prompt views nil require-match)))))
 
 (cl-defun org-glance-def-view (&key id type scope &allow-other-keys)
   (let ((view (or (org-glance-view:get id)

@@ -41,18 +41,18 @@
   seq
   subr-x
 
-  lib.core.customs
-  lib.core.func
+  src.core.customs
+  src.core.func
 
-  lib.core.logging
-  lib.core.exceptions
-  lib.core.posit
+  src.core.logging
+  src.core.exceptions
+  src.core.posit
 
-  lib.data.view
+  src.data.view
 
-  lib.utils.crypt                  ; encryption utils
-  lib.utils.helpers                     ; unsorted, deprecated
-  lib.utils.org-tss-mode
+  src.utils.crypt                  ; encryption utils
+  src.utils.helpers                     ; unsorted, deprecated
+  src.utils.org-tss-mode
 
 ;;; Core APIs
   ;; Description of high-level org-glance entities: Headline, View,
@@ -62,31 +62,31 @@
   ;; Org-glance headline is an org-element headline enriched by some
   ;; shortcuts and helper methods.
 
-  lib.core.headline                     ; good
-  lib.core.relations
-  lib.core.metastore                    ; ok
-  lib.core.scope                        ; ? deprecated
+  src.core.headline                     ; good
+  src.core.relations
+  src.core.metastore                    ; ok
+  src.core.scope                        ; ? deprecated
 
-  lib.modes.overview-mode               ; good one, improve
-  lib.modes.material-mode
-  lib.modes.agenda-mode
+  src.modes.overview-mode               ; good one, improve
+  src.modes.material-mode
+  src.modes.agenda-mode
 
-  lib.view.links
+  src.view.links
 
-  lib.transient.headlines)
+  src.transient.headlines)
 
-;; (org-glance:import org-glance:format :from lib.utils.helpers)
+;; (org-glance:import org-glance:format :from src.utils.helpers)
 
-(declare-function org-glance-def-view (org-glance-module-filename lib.data.view))
-(declare-function org-glance-headline:materialize (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-headline:title (org-glance-module-filename lib.core.headline))
+(declare-function org-glance-def-view (org-glance-module-filename src.data.view))
+(declare-function org-glance-headline:materialize (org-glance-module-filename src.core.headline))
+(declare-function org-glance-headline:title (org-glance-module-filename src.core.headline))
 
-(declare-function org-glance:format (org-glance-module-filename lib.utils.helpers))
-(declare-function org-glance-metastore:choose-headline (org-glance-module-filename lib.core.metastore))
-(declare-function org-glance-headlines (org-glance-module-filename lib.core.metastore))
-(declare-function org-glance:choose-class (org-glance-module-filename lib.data.view))
-(declare-function org-glance-headline:at-point (org-glance-module-filename lib.core.headline))
-(declare-function org-glance-scope--choose-headline (org-glance-module-filename lib.core.scope))
+(declare-function org-glance:format (org-glance-module-filename src.utils.helpers))
+(declare-function org-glance-metastore:choose-headline (org-glance-module-filename src.core.metastore))
+(declare-function org-glance-headlines (org-glance-module-filename src.core.metastore))
+(declare-function org-glance:choose-class (org-glance-module-filename src.data.view))
+(declare-function org-glance-headline:at-point (org-glance-module-filename src.core.headline))
+(declare-function org-glance-scope--choose-headline (org-glance-module-filename src.core.scope))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
