@@ -12,12 +12,12 @@
 (cl-defmacro org-glance:require (&rest modules)
   (declare (indent 0) (debug t))
   `(cl-loop
-      for module in (quote ,modules)
-      for module-name = (format "org-glance.%s" module)
-      for module-path = (f-join org-glance-module-root-directory (concat (s-replace "." "/" module-name) ".el"))
-      collect (condition-case nil
-                  (require (intern module-name) module-path)
-                (file-missing (require module)))))
+    for module in (quote ,modules)
+    for module-name = (format "org-glance.%s" module)
+    for module-path = (f-join org-glance-module-root-directory (concat (s-replace "." "/" module-name) ".el"))
+    collect (condition-case nil
+                (require (intern module-name) module-path)
+              (file-missing (require module)))))
 
 (cl-defmacro org-glance:provide ()
   `(provide (intern (file-name-sans-extension

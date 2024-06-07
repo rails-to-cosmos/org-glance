@@ -4,10 +4,10 @@
   org
   org-element
 
-  lib.core.scope
-  lib.core.exceptions
-  lib.core.headline
-  lib.utils.helpers)
+  src.core.scope
+  src.core.exceptions
+  src.core.headline
+  src.utils.helpers)
 
 (cl-defun org-glance-metastore:save (metastore file)
   (declare (indent 1))

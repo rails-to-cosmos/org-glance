@@ -5,11 +5,11 @@
   org-element
   subr-x
 
-  lib.core.scope
-  lib.core.metastore
-  lib.core.exceptions
-  lib.core.headline
-  lib.utils.helpers)
+  src.core.scope
+  src.core.metastore
+  src.core.exceptions
+  src.core.headline
+  src.utils.helpers)
 
 ;; TODO Move to controller
 (defvar -org-glance-views (make-hash-table)

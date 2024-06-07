@@ -50,7 +50,7 @@
 
   src.data.view
 
-  src.utils.crypt                  ; encryption utils
+  src.utils.crypt                       ; encryption utils
   src.utils.helpers                     ; unsorted, deprecated
   src.utils.org-tss-mode
 

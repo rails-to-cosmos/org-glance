@@ -2,8 +2,8 @@
 
 (org-glance:require
   transient
-  lib.data.view
-  lib.transient.base)
+  src.data.view
+  src.transient.base)
 
 (transient-define-prefix org-glance-form-action ()
   "Perform action on selected view/headlines"

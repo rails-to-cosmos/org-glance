@@ -3,8 +3,8 @@
 (org-glance:require
   org
   org-element
-  lib.core.exceptions
-  lib.utils.helpers)
+  src.core.exceptions
+  src.utils.helpers)
 
 (cl-defun org-glance-headline-p (&optional (headline (org-element-at-point)))
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property specified.

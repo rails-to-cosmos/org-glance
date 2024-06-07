@@ -3,12 +3,12 @@
 (org-glance:require
   ol
 
-  lib.core.headline
+  src.core.headline
 
   ;; remove these dependencies:
-  lib.core.metastore
-  lib.data.view
-  lib.modes.overview-mode)
+  src.core.metastore
+  src.data.view
+  src.modes.overview-mode)
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")

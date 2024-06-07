@@ -4,8 +4,8 @@
   dash
   org
 
-  lib.core.headline
-  lib.utils.helpers)
+  src.core.headline
+  src.utils.helpers)
 
 (defvar org-glance-scope:extensions
   '("org" "org_archive"))
