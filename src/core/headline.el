@@ -134,10 +134,14 @@ metastore.")
 
   (let ((headline (org-glance-headline:at-point))
         next-headline)
+
     (save-excursion
 
       (when headline
-        (goto-char (org-glance-headline:end headline))
+        (if (org-glance-headline:end headline)
+            (goto-char (org-glance-headline:end headline))
+          (goto-char (point-max)))
+
         (condition-case nil
             (progn (beginning-of-line)
                    (forward-line 1))
