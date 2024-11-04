@@ -50,17 +50,20 @@
 (require 'org-glance-ui)
 
 (defcustom org-glance-directory org-directory
-  "Directory containing org-mode files and metadata."
+  "Root directory, containing primary Org mode files and metadata.
+This directory serves as the main location for all Org mode content managed by `org-glance`."
   :group 'org-glance
   :type 'directory)
 
 (defcustom org-glance-resource-directory (f-join org-directory "resources")
-  "Directory containing various non-org resources like attachments, media, binary files etc"
+  "Directory for non-Org resources associated with `org-glance`, such as attachments, media files, and other binary assets.
+Intended for organizing supplementary content that supports Org mode files in the main directory."
   :group 'org-glance
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "Clone repeated headlines instead of repeating it."
+  "If non-nil, create a new headline copy when repeating rather than modifying in place.
+This option enables duplication of repeated tasks, preserving previous instances instead of updating the same headline."
   :group 'org-glance
   :type 'boolean)
 
@@ -89,7 +92,6 @@
 (org-glance:define-exception org-glance-exception:HEADLINE-NOT-FOUND "Headline not found")
 (org-glance:define-exception org-glance-exception:CLASS-NOT-FOUND "Class not found")
 
-;; TODO Move to controller
 (defvar org-glance-views (make-hash-table)
   "Hash table (id->view) that lists all registered tags.")
 
