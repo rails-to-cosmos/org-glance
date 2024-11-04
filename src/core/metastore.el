@@ -70,7 +70,7 @@
     (setq id (symbol-name id)))
 
   (cl-loop
-     for class being the hash-keys of -org-glance-views
+     for class being the hash-keys of org-glance-views
      for metastore = (->> class
                           org-glance-view:get
                           org-glance-view:metastore
@@ -85,7 +85,7 @@
 
 (cl-defun org-glance-all-headlines (&optional filter)
   (cl-loop
-     for class being the hash-keys of -org-glance-views
+     for class being the hash-keys of org-glance-views
      append (cl-loop
                for headline in (if filter
                                    (-filter filter (org-glance-view:headlines class))

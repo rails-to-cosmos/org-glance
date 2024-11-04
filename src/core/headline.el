@@ -302,7 +302,7 @@ metastore.")
     (unless points
       (org-glance-exception:HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
-      (org-glance:log-warning "Headline ID %s is not unique in file %s" id (buffer-file-name)))
+      (message "Headline ID %s is not unique in file %s" id (buffer-file-name)))
     (goto-char (car points))
     (org-glance-headline:at-point)))
 
@@ -315,7 +315,7 @@ metastore.")
 
     (cond ((and file (file-exists-p file)) (find-file file))
           ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
-          (t (org-glance:log-warning "File and buffer not found for visiting. Using current buffer...")))
+          (t (message "File and buffer not found for visiting. Using current buffer...")))
 
     (widen)
     (cond (id (org-glance-headline:search-buffer-by-id id))
@@ -370,7 +370,7 @@ FIXME. Unstable one. Refactor is needed."
   (let ((file (org-glance-headline:file headline))
         (buffer (org-glance-headline:buffer headline)))
     (cond (file (with-temp-buffer
-                  (org-glance:log-debug "Extract contents for headline %s from file %s" (org-glance-headline:id headline) file)
+                  (message "Extract contents for headline %s from file %s" (org-glance-headline:id headline) file)
                   (org-mode)
                   (insert-file-contents file)
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
@@ -379,7 +379,7 @@ FIXME. Unstable one. Refactor is needed."
                   (org-glance-headline:promote-to-the-first-level)
                   (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
           (buffer (with-current-buffer buffer
-                    (org-glance:log-debug "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) buffer)
+                    (message "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) buffer)
                     (save-window-excursion
                       (save-excursion
                         (save-restriction
@@ -404,7 +404,7 @@ FIXME. Unstable one. Refactor is needed."
   (if-let (b (get-buffer f)) ;; buffer name
       (org-glance-headline:extract-from b)
     (with-temp-buffer
-      (org-glance:log-debug "Scan file %s" f)
+      (message "Scan file %s" f)
       (insert-file-contents f)
       (org-mode)
       (cl-loop
@@ -493,7 +493,7 @@ FIXME. Unstable one. Refactor is needed."
   (org-element-property :deadline headline))
 
 (cl-defun org-glance-headline:repeated-p ()
-  (org-tss-headline-repeated-p))
+  (org-glance-ts-headline-repeated-p))
 
 (cl-defun org-glance-headline:generate-directory (location title)
   (abbreviate-file-name
@@ -514,9 +514,9 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance:with-headline-at-point
    (cl-flet ((org-list (&rest items) (org-glance-join-but-null "\n- " items))
              (org-newline (&rest items) (org-glance-join-but-null "\n" items)))
-     (let ((timestamps (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps)
-                                                   (org-tss-filter-active)
-                                                   (org-tss-sort-timestamps))
+     (let ((timestamps (cl-loop for timestamp in (-some->> (org-glance-ts-headline-timestamps)
+                                                   (org-glance-ts-filter-active)
+                                                   (org-glance-ts-sort-timestamps))
                                 collect (org-element-property :raw-value timestamp)))
            (header (save-excursion
                      (goto-char (point-min))

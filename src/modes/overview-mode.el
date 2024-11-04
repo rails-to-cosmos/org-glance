@@ -227,7 +227,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
        collect (gethash key buffers))))
 
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
-  (org-glance:log-debug "Update metastore %s" class)
+  (message "Update metastore %s" class)
   (let* ((metastore-location (-some->> class
                                org-glance-view:get
                                org-glance-view:metastore))
@@ -236,7 +236,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-metastore:save metastore metastore-location)))
 
 (cl-defun org-glance-overview:remove-headline-from-metastore (headline class)
-  (org-glance:log-debug "Remove from metastore %s" class)
+  (message "Remove from metastore %s" class)
   (let* ((metastore-location (-some->> class
                                org-glance-view:get
                                org-glance-view:metastore))
@@ -280,7 +280,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
-  (org-glance:log-debug "Remove from overview %s" class)
+  (message "Remove from overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
     (save-restriction
@@ -391,7 +391,7 @@ Available buffer local variables: `org-glance-capture:id', `org-glance-capture:c
 
 Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `org-glance-capture:default'."
 
-  (org-glance:log-debug
+  (message
    "Finalize capture (id: %s, class: %s)"
    org-glance-capture:id
    org-glance-capture:class)
@@ -404,7 +404,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                         (org-glance-headline:title headline)))
            (tmp-file (org-glance-headline:file headline))
            (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
-      (org-glance:log-debug "Generate headline directory: %s" refile-dir)
+      (message "Generate headline directory: %s" refile-dir)
       (org-set-property "DIR" (abbreviate-file-name refile-dir))
       (save-buffer)
       (kill-buffer)
@@ -414,7 +414,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
       (org-glance-overview class)
 
-      (org-glance:log-debug "Register headline of class %s in metastore: %s"
+      (message "Register headline of class %s in metastore: %s"
                             (pp-to-string class)
                             (pp-to-string headline))
 
@@ -477,7 +477,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                            (setq org-glance-overview-deferred-import-timer
                                  (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
 
-                         (org-glance:log-info (format "%s import has been deferred: %d files processed of %d"
+                         (message (format "%s import has been deferred: %d files processed of %d"
                                                       class progress (length files)))
                          (cl-return nil))
 
@@ -584,7 +584,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
   ;; (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t)
 
-  (org-glance:log-info "Edit mode is now enabled."))
+  (message "Edit mode is now enabled."))
 
 (cl-defun org-glance-edit-mode:apply ()
   (interactive)
@@ -592,7 +592,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (setq-local after-change-functions (cl-remove 'org-glance-overview:track-changes after-change-functions))
   (org-glance-edit-mode -1)
   (org-glance-overview-mode +1)
-  (org-glance:log-info "All changes have been applied."))
+  (message "All changes have been applied."))
 
 (cl-defun org-glance-overview:directory (&optional (class (org-glance-view:completing-read)))
   "Path to file where CLASS headlines are stored."
@@ -757,7 +757,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (save-excursion
     (goto-char (point-min))
     (let ((class (org-glance-headline:string-to-class (org-get-category))))
-      (when (gethash class -org-glance-views)
+      (when (gethash class org-glance-views)
         class))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
@@ -809,7 +809,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview at point."
   (interactive)
-  (org-glance:log-debug "Pull modifications for headline overview.")
+  (message "Pull modifications for headline overview.")
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
@@ -824,7 +824,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
              (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
            nil)
           ((string= current-headline-contents overview-contents)
-           (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
+           (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
            t)
           (t (org-glance-headline:replace-headline-at-point overview-contents)
              (org-overview)
@@ -834,7 +834,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                  (org-update-checkbox-count-maybe)
                (error nil))
              (save-buffer)
-             (org-glance:log-info (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
+             (message (org-glance:format "Headline \"${current-headline-title}\" is now up to date"))
              t))))
 
 (cl-defun org-glance-overview:archive ()

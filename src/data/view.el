@@ -12,12 +12,12 @@
   src.utils.helpers)
 
 ;; TODO Move to controller
-(defvar -org-glance-views (make-hash-table)
+(defvar org-glance-views (make-hash-table)
   "Hash table (id->view) that lists all registered tags.")
 
 (defun org-glance-views:list ()
   "List registered views."
-  (sort (hash-table-keys -org-glance-views) #'s-less?))
+  (sort (hash-table-keys org-glance-views) #'s-less?))
 
 (cl-defstruct (org-glance-view (:constructor org-glance-view:create))
   "This structure contains metadata about categorized `org-mode' headlines."
@@ -28,10 +28,10 @@
 (cl-defmethod org-glance-tag:create ((tag symbol))
   (unless (org-glance-view:get tag))
   (let ((view (org-glance-view:create :id tag ))))
-  (puthash tag () -org-glance-views))
+  (puthash tag () org-glance-views))
 
 (cl-defmethod org-glance-view:get ((tag symbol))
-  (gethash tag -org-glance-views))
+  (gethash tag org-glance-views))
 
 (cl-defmethod org-glance-view:id ((view org-glance-view))
   (downcase (symbol-name (org-glance-view-id view))))
@@ -99,9 +99,9 @@
                                           :type type
                                           :scope scope))))
 
-    (puthash id view -org-glance-views)
+    (puthash id view org-glance-views)
 
-    (org-glance:log-info "View \"%s\"%s is now ready to glance %s"
+    (message "View \"%s\"%s is now ready to glance %s"
                          id
                          (if type (concat " of type \"" (s-trim (pp-to-string type)) "\"") "")
                          (if scope (concat " over scope \"" (s-trim (pp-to-string scope)) "\"") ""))

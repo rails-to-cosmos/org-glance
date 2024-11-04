@@ -162,7 +162,7 @@
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
 
-        (org-glance:log-info "Materialized headline successfully synchronized")))))
+        (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
   (org-glance:with-headline-narrowed (org-glance-metastore:get-headline --org-glance-materialized-headline:id)
@@ -230,11 +230,11 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
 
       (org-glance:material-buffer-default-view)
 
-      (org-glance:log-debug "Promote subtree to the first level")
+      (message "Promote subtree to the first level")
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
       (org-glance-headline:promote-to-the-first-level)
 
-      (org-glance:log-debug "Save current buffer to cache")
+      (message "Save current buffer to cache")
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
       (current-buffer))))
 

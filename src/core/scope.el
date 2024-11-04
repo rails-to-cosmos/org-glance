@@ -21,13 +21,13 @@
 (cl-defmethod org-glance-scope ((file string))
   "Return list of file S if exists."
   (let ((files (cond
-                ((not (file-exists-p file)) (org-glance:log-warning "File \"%s\" does not exist" file) nil)
-                ((not (file-readable-p file)) (org-glance:log-warning "File \"%s\" is not readable" file) nil)
+                ((not (file-exists-p file)) (message "File \"%s\" does not exist" file) nil)
+                ((not (file-readable-p file)) (message "File \"%s\" is not readable" file) nil)
                 ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
                 ((with-temp-buffer
                    (insert-file-contents file)
                    (hack-local-variables)
-                   (alist-get 'org-glance-overview-mode (buffer-local-variables))) (org-glance:log-warning "File \"%s\" is in `org-glance-overview' mode" file) nil)
+                   (alist-get 'org-glance-overview-mode (buffer-local-variables))) (message "File \"%s\" is in `org-glance-overview' mode" file) nil)
                 (t (list file)))))
     (cl-loop
      for file in files

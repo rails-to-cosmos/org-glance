@@ -8,9 +8,9 @@
   ;; (org-glance-headline-reference)
   ;; (org-glance:with-headline-narrowed (org-glance-metastore:get-headline (org-element-property :id relation))
   ;;   (let ((ref )
-  ;;         (ts (cl-loop for timestamp in (-some->> (org-tss-headline-timestamps 'include-schedules)
-  ;;                                         (org-tss-filter-active)
-  ;;                                         (org-tss-sort-timestamps))
+  ;;         (ts (cl-loop for timestamp in (-some->> (org-glance-ts-headline-timestamps 'include-schedules)
+  ;;                                         (org-glance-ts-filter-active)
+  ;;                                         (org-glance-ts-sort-timestamps))
   ;;                collect (org-element-property :raw-value timestamp))))
   ;;     (if ts
   ;;         (concat ref " on " (car ts))

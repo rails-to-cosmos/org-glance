@@ -30,14 +30,18 @@
 
 ;;; Code:
 
+(require 'aes)
 (require 'cl-generic)
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'dash)
+(require 'f)
 (require 'json)
 (require 'org)
+(require 'org-element)
+(require 's)
 (require 'seq)
 (require 'subr-x)
-(require 'f)
 
 (defcustom org-glance-directory org-directory
   "Directory containing org-mode files and metadata."
@@ -60,116 +64,12 @@
     (declare (indent 0) (debug t))
     `(lambda () (interactive) ,@forms)))
 
-(defconst org-glance.log-level.OFF most-positive-fixnum
-  "OFF is a special level that can be used to turn off logging.
-
-This level is initialized to `most-positive-fixnum'.")
-
-(defconst org-glance.log-level.SEVERE 1000
-  "SEVERE is a message level indicating a serious failure.
-In general SEVERE messages should describe events that are of
-considerable importance and which will prevent normal program
-execution.
-
-They should be reasonably intelligible to end users and to system
-administrators. This level is initialized to 1000.")
-
-(defconst org-glance.log-level.WARNING 900
-  "WARNING is a message level indicating a potential problem.
-In general WARNING messages should describe events that will be
-of interest to end users or system managers, or which indicate
-potential problems.
-
-This level is initialized to 900.")
-
-(defconst org-glance.log-level.INFO 800
-  "INFO is a message level for informational messages.
-Typically INFO messages will be written to the console or its
-equivalent.
-
-So the INFO level should only be used for reasonably significant
-messages that will make sense to end users and system
-administrators.
-
-This level is initialized to 800.")
-
-(defconst org-glance.log-level.CONFIG 700
-  "CONFIG is a message level for static configuration messages.
-CONFIG messages are intended to provide a variety of static
-configuration information, to assist in debugging problems that
-may be associated with particular configurations.
-
-For example, CONFIG message might include the CPU type, the
-graphics depth, the GUI look-and-feel, etc. This level is
-initialized to 700.")
-
-(defconst org-glance.log-level.FINE 500
-  "FINE is a message level providing tracing information.
-All of FINE, FINER, and FINEST are intended for relatively
-detailed tracing.
-
-The exact meaning of the three levels will vary between
-subsystems, but in general, FINEST should be used for the most
-voluminous detailed output, FINER for somewhat less detailed
-output, and FINE for the lowest volume (and most important)
-messages.
-
-In general the FINE level should be used for information that
-will be broadly interesting to developers who do not have a
-specialized interest in the specific subsystem.
-
-FINE messages might include things like minor (recoverable)
-failures. Issues indicating potential performance problems are
-also worth logging as FINE. This level is initialized to 500.")
-
-(defconst org-glance.log-level.FINER 400
-  "FINER indicates a fairly detailed tracing message.
-By default logging calls for entering, returning, or throwing an
-exception are traced at this level. This level is initialized to
-400.")
-
-(defconst org-glance.log-level.FINEST 300
-  "ALL indicates that all messages should be logged.
-This level is initialized to `most-negative-fixnum'.")
-
-(defconst org-glance.log-level.ALL most-negative-fixnum
-  "FINEST indicates a highly detailed tracing message.
-This level is initialized to 300.")
-
-(defcustom org-glance:log-level org-glance.log-level.INFO "Logging level."
-  :type `(choice (const :tag "OFF" ,org-glance.log-level.OFF)
-                 (const :tag "SEVERE" ,org-glance.log-level.SEVERE)
-                 (const :tag "WARNING" ,org-glance.log-level.WARNING)
-                 (const :tag "INFO" ,org-glance.log-level.INFO)
-                 (const :tag "CONFIG" ,org-glance.log-level.CONFIG)
-                 (const :tag "FINE" ,org-glance.log-level.FINE)
-                 (const :tag "FINER" ,org-glance.log-level.FINER)
-                 (const :tag "FINEST" ,org-glance.log-level.FINEST)
-                 (const :tag "ALL" ,org-glance.log-level.ALL))
-  :group 'org-glance)
-
-(cl-defun org-glance:log (log-level format-string &rest args)
-  (when (<= org-glance:log-level log-level)
-    (apply #'message format-string args)))
-
-(cl-defun org-glance:log-warning (format-string &rest args)
-  "Log warning if `org-glance:log-level' allows."
-  (apply #'org-glance:log org-glance.log-level.WARNING format-string args))
-
-(cl-defun org-glance:log-info (format-string &rest args)
-  "Log info if `org-glance:log-level' allows."
-  (apply #'org-glance:log org-glance.log-level.INFO format-string args))
-
-(cl-defun org-glance:log-debug (format-string &rest args)
-  "Log debug message if `org-glance:log-level' allows."
-  (apply #'org-glance:log org-glance.log-level.FINEST format-string args))
-
 (cl-defmacro org-glance-with-debug-msg (msg &rest forms)
   (declare (indent 1))
   `(progn
-     (org-glance:log-debug ,msg)
+     (message ,msg)
      ,@forms
-     (org-glance:log-debug (concat ,msg " done"))))
+     (message (concat ,msg " done"))))
 
 (cl-defmacro org-glance:define-exception (name message &optional (parent 'user-error))
   `(progn
@@ -183,21 +83,250 @@ This level is initialized to 300.")
 (org-glance:define-exception org-glance-exception:HEADLINE-NOT-FOUND "Headline not found")
 (org-glance:define-exception org-glance-exception:CLASS-NOT-FOUND "Class not found")
 
+(defun org-glance:encrypt-region (beg end &optional password)
+  "Encrypt region from BEG to END using PASSWORD."
+  (interactive "r")
+  (let* ((original-text (buffer-substring-no-properties beg end))
+         (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
+    (save-excursion
+      (kill-region beg end)
+      (goto-char beg)
+      (insert encrypted-text))))
+
+(defun org-glance:decrypt-region (beg end &optional password)
+  "Decrypt region from BEG to END using PASSWORD."
+  (interactive "r")
+  (if-let (decrypted-text (let ((encrypted (buffer-substring-no-properties beg end)))
+                            (if (with-temp-buffer
+                                  (insert encrypted)
+                                  (aes-is-encrypted))
+                                (aes-decrypt-buffer-or-string encrypted password)
+                              (user-error "Headline is not encrypted"))))
+      (save-excursion
+        (kill-region beg end)
+        (goto-char beg)
+        (insert decrypted-text))
+    (user-error "Wrong password")))
+
+(cl-defun org-glance-now ()
+  (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
+
+(cl-defun org-glance-ensure-at-heading ()
+  (unless (org-at-heading-p)
+    (org-back-to-heading-or-point-min)))
+
+(cl-defun org-glance-generate-id (&optional (class (org-glance-view:completing-read)))
+  (substring-no-properties
+   (format "%s-%s-%s"
+           class
+           (s-join "-" (mapcar #'number-to-string (current-time)))
+           (secure-hash 'md5 (buffer-string)))))
+
+(cl-defun org-glance-class-location (&optional (view-id (org-glance-view:completing-read)))
+  "Path to directory where VIEW-ID resources and metadata are stored."
+  (abbreviate-file-name
+   (f-join org-glance-directory
+           (s-downcase (format "%s" view-id))
+           "resources")))
+
+(cl-defun org-glance-generate-directory (&optional (class (org-glance-view:completing-read)))
+  (save-excursion
+    (org-glance-ensure-at-heading)
+    (save-restriction
+      (org-narrow-to-subtree)
+      (org-glance-headline:generate-directory
+       (org-glance-class-location class)
+       (org-element-property :raw-value (org-element-at-point))))))
+
+(defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
+
+(cl-defun org-glance-buffer-key-value-pairs ()
+  "Extract key-value pairs from buffer.
+Run completing read on keys and copy selected values to kill ring.
+
+Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
+  (save-excursion
+    (goto-char (point-min))
+    (cl-loop
+       while (condition-case nil
+                 (re-search-forward org-glance:key-value-pair-re)
+               (search-failed nil))
+       collect (s-trim (substring-no-properties (match-string 1))) into keys
+       collect (s-trim (substring-no-properties (match-string 2))) into vals
+       finally (return (-zip keys vals)))))
+
+(cl-defun org-glance:list-directories (base-dir)
+  (--filter
+   (f-directory? (f-join base-dir it))
+   (directory-files base-dir nil "^[[:word:]]+")))
+
+(cl-defmacro org-glance:format (fmt)
+  "Like `s-format' but with format fields in it.
+FMT is a string to be expanded against the current lexical
+environment. It is like what is used in `s-lex-format', but has
+an expanded syntax to allow format-strings. For example:
+${user-full-name 20s} will be expanded to the current value of
+the variable `user-full-name' in a field 20 characters wide.
+  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
+  will render as: 2.24
+This function is inspired by the f-strings in Python 3.6, which I
+enjoy using a lot.
+"
+  (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
+         (agetter (cl-loop
+                     for (m0 m1 m2 m3) in matches
+                     collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                    (if s-lex-value-as-lisp "S" "s")
+                                                                  ,m2))
+                                                 (symbol-value (intern ,m1))))))
+         (result `(s-format ,fmt 'aget (list ,@agetter))))
+    `(s-join "\n"
+             (cl-loop
+                with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
+                for line in (s-split "\n" ,result)
+                collect (funcall stripMargin line)))))
+
+(defun -org-glance:make-file-directory (file)
+  (let ((dir (file-name-directory file)))
+    (unless (file-exists-p dir)
+      (make-directory dir t)))
+  file)
+
+(defun -org-glance:collect-tags ()
+  (cl-loop for tag in (org--get-local-tags)
+     collect (downcase tag)))
+
+(defun -org-glance:list-file-archives (filename)
+  "Return list of org-mode files for FILENAME."
+  (let* ((dir (file-name-directory filename))
+         (base-filename (-some->> filename
+                          file-name-nondirectory
+                          file-name-sans-extension)))
+    (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
+
+(defun -org-glance:file-with-archives ()
+  (append (list (buffer-file-name))
+          (-org-glance:list-file-archives (buffer-file-name))))
+
+(defun -org-glance:agenda-with-archives ()
+  (cl-loop for filename in (org-agenda-files)
+     append (list filename)
+     append (-org-glance:list-file-archives filename)))
+
+(cl-defun org-glance-join (separator strings)
+  (let ((joined-strings (s-join separator strings)))
+    (if (string-empty-p joined-strings)
+        ""
+      (concat separator joined-strings))))
+
+(cl-defun org-glance-join-but-null (separator strings)
+  (declare (indent 1))
+  (org-glance-join separator (cl-remove-if #'null strings)))
+
+(defvar-local -org-glance-ts:local-timestamps '())
+
+(define-minor-mode org-glance-ts-mode "Handle multiple repeatable timestamps."
+  (cond (org-glance-ts-mode (advice-add 'org-auto-repeat-maybe :before #'org-glance-ts-capture)
+                      (advice-add 'org-auto-repeat-maybe :after #'org-glance-ts-restore))
+        (t (advice-remove 'org-auto-repeat-maybe #'org-glance-ts-capture)
+           (advice-remove 'org-auto-repeat-maybe #'org-glance-ts-restore))))
+
+(cl-defun org-glance-ts-sort-timestamps (tss)
+  "Sort TSS."
+  (sort tss #'(lambda (lhs rhs) (time-less-p
+                            (org-time-string-to-time (org-element-property :raw-value lhs))
+                            (org-time-string-to-time (org-element-property :raw-value rhs))))))
+
+(cl-defun org-glance-ts-buffer-timestamps (&optional (org-data (org-element-parse-buffer)))
+  (org-element-map org-data '(timestamp) #'identity))
+
+(cl-defun org-glance-ts-buffer-schedules (&optional (org-data (org-element-parse-buffer)))
+  (org-element-map org-data '(headline) #'(lambda (headline) (org-element-property :scheduled headline))))
+
+(cl-defun org-glance-ts-buffer-deadlines (&optional (org-data (org-element-parse-buffer)))
+  (org-element-map org-data '(headline) #'(lambda (headline) (org-element-property :deadline headline))))
+
+(cl-defun org-glance-ts-headline-timestamps (&rest includes)
+  (save-restriction
+    (org-narrow-to-subtree)
+    (cl-loop for timestamp in (let ((org-data (org-element-parse-buffer)))
+                                (append (org-glance-ts-buffer-timestamps org-data)
+                                        (when (member 'include-schedules includes)
+                                          (org-glance-ts-buffer-schedules org-data))
+                                        (when (member 'include-deadlines includes)
+                                          (org-glance-ts-buffer-deadlines org-data))))
+       collect timestamp)))
+
+(cl-defun org-glance-ts-filter-active (tss)
+  (--filter (member (org-element-property :type it) '(active active-range)) tss))
+
+(cl-defun org-glance-ts-filter-repeated (tss)
+  (--filter (and (member (org-element-property :type it) '(active active-range))
+                 (> (or (org-element-property :repeater-value it) 0) 0))
+            tss))
+
+(cl-defun org-glance-ts-capture (&rest args)
+  (setq-local -org-glance-ts:local-timestamps (-some->> (org-glance-ts-headline-timestamps)
+                                          (org-glance-ts-filter-active)
+                                          (org-glance-ts-filter-repeated)
+                                          (org-glance-ts-sort-timestamps))))
+
+(cl-defun org-glance-ts-restore (&rest args)
+  (let ((standard-output 'ignore)
+        (tss* (-some->> (org-glance-ts-headline-timestamps)
+                (org-glance-ts-filter-active)
+                (org-glance-ts-filter-repeated)
+                (org-glance-ts-sort-timestamps))))
+    (cl-loop
+       for tsi from 1 below (length tss*)
+       for ts = (nth tsi -org-glance-ts:local-timestamps)
+       for ts* = (nth tsi tss*)
+       do (save-excursion
+            (goto-char (org-element-property :begin ts*))
+            (delete-region (org-element-property :begin ts*)
+                           (org-element-property :end ts*))
+            (insert (org-element-property :raw-value ts))))))
+
+(cl-defun org-glance-ts-reset-buffer-timestamps-except-earliest ()
+  "Reset active timestamps in buffer except earliest."
+  (let ((standard-output 'ignore)
+        (tss (-some->> (org-glance-ts-headline-timestamps 'include-schedules 'include-deadlines)
+               (org-glance-ts-filter-active)
+               (org-glance-ts-filter-repeated)
+               (org-glance-ts-sort-timestamps))))
+    (cl-loop
+       for ts in tss
+       for index from 0
+       do
+         (goto-char (org-element-property :begin ts))
+         (if (> index 0)
+             (org-toggle-timestamp-type)
+           ;; reset repeater
+           (save-excursion
+             (let ((bound1 (org-element-property :begin ts))
+                   (bound0 (org-element-property :end ts)))
+               (when (and (re-search-forward
+                           (concat "\\(" org-scheduled-time-regexp "\\)\\|\\("
+                                   org-deadline-time-regexp "\\)\\|\\("
+                                   org-ts-regexp "\\)")
+                           bound0 t)
+                          (re-search-backward "[ \t]+\\(?:[.+]\\)?\\+\\([0-9]+\\)[hdwmy]"
+                                              bound1 t))
+                 (replace-match "0" t nil nil 1))))))))
+
+(cl-defun org-glance-ts-headline-repeated-p ()
+  "Is headline at point repeated?"
+  (save-excursion
+    (unless (org-at-heading-p)
+      (org-back-to-heading-or-point-min))
+    (when (append
+           (-some->> (org-glance-ts-headline-timestamps 'include-schedules 'include-deadlines)
+             (org-glance-ts-filter-active)
+             (org-glance-ts-filter-repeated)
+             (org-glance-ts-sort-timestamps)))
+      t)))
+
 (org-glance:require
-  src.data.view
-
-  src.utils.crypt                       ; encryption utils
-  src.utils.helpers                     ; unsorted, deprecated
-  src.utils.org-tss-mode
-
-;;; Core APIs
-  ;; Description of high-level org-glance entities: Headline, View,
-  ;; Scope and Metastore.
-
-;;; Headline API
-  ;; Org-glance headline is an org-element headline enriched by some
-  ;; shortcuts and helper methods.
-
   src.core.headline                     ; good
   src.core.relations
   src.core.metastore                    ; ok
@@ -230,7 +359,7 @@ This level is initialized to 300.")
   :group 'org)
 
 (cl-defun org-glance-class-remove (class)
-  (remhash class -org-glance-views))
+  (remhash class org-glance-views))
 
 (cl-defun org-glance-class-create (class)
   (org-glance-def-view :id class)
@@ -254,7 +383,7 @@ This level is initialized to 300.")
                                        (insert contents)
                                        (goto-char (point-min))
 
-                                       (org-tss-reset-buffer-timestamps-except-earliest)
+                                       (org-glance-ts-reset-buffer-timestamps-except-earliest)
 
                                        (cl-loop
                                         for class in (org-glance-headline:classes)
@@ -315,7 +444,7 @@ after capture process has been finished."
 
   (org-glance-overview-init)
 
-  (add-hook 'org-glance-material-mode-hook #'org-tss-mode)
+  (add-hook 'org-glance-material-mode-hook #'org-glance-ts-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:preserve-history-before-auto-repeat (list :depth -90))
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
@@ -323,11 +452,11 @@ after capture process has been finished."
   (cl-loop
    for directory in (org-glance:list-directories org-glance-directory)
    do (let ((class (intern directory)))
-        (unless (gethash class -org-glance-views nil)
+        (unless (gethash class org-glance-views nil)
           (org-glance-class-create class))))
 
   (cl-loop
-   for class being the hash-keys of -org-glance-views
+   for class being the hash-keys of org-glance-views
    do (let ((class-name (s-downcase (format "%s" class))))
         (unless (f-exists? (f-join org-glance-directory class-name))
           (org-glance-class-remove class))))
@@ -427,7 +556,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
                           (kill-new (alist-get (completing-read "Extract property: " pairs nil t) pairs nil nil #'string=)))
                       (quit
                        (setq kill-ring nil)
-                       (org-glance:log-info "Kill ring has been cleared")))))))
+                       (message "Kill ring has been cleared")))))))
     (if headline
         (funcall action headline)
       (org-glance-choose-and-apply
@@ -486,34 +615,33 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
   (insert "#+begin_pin" "\n\n" "#+end_pin")
   (forward-line -1))
 
-(cl-defun org-glance
-    (&key db
-          default-choice
-          (db-init nil)
-          (filter #'(lambda (_) t))
-          (scope '(agenda))
-          (action #'org-glance-headline:visit)
-          (prompt "Glance: "))
+(cl-defun org-glance (&key db
+                           default
+                           (db-init nil)
+                           (filter #'(lambda (_) t))
+                           (scope '(agenda))
+                           (action #'org-glance-headline:visit)
+                           (prompt "Glance: "))
   "Deprecated main method, refactoring needed."
   (let ((headlines (org-glance-headlines :db db
                                          :db-init db-init
                                          :scope scope
                                          :filter filter)))
     (unwind-protect
-        (when-let (choice (or default-choice
+        (when-let (choice (or default
                               (completing-read prompt (mapcar #'org-glance-headline:title headlines) nil t)))
           (if-let (headline (org-glance-scope--choose-headline choice headlines))
               (condition-case nil
                   (funcall action headline)
                 (org-glance-exception:DB-OUTDATED
-                 (org-glance:log-info "Metastore %s is outdated, actualizing..." db)
+                 (message "Metastore %s is outdated, actualizing..." db)
                  (redisplay)
                  (org-glance :scope scope
                              :filter filter
                              :action action
                              :db db
                              :db-init t
-                             :default-choice choice
+                             :default choice
                              :prompt prompt)))
             (user-error "Headline not found"))))))
 

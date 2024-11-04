@@ -26,7 +26,7 @@
 
 (Then "^I should have \\([[:digit:]]+\\) active classe?s?$"
       (lambda (count)
-        (should (= (hash-table-count -org-glance-views) (string-to-number count)))))
+        (should (= (hash-table-count org-glance-views) (string-to-number count)))))
 
 (Then "^I should have \\([[:digit:]]+\\) things? of class \"\\([^\"]+\\)\" registered$"
       (lambda (count class-name)
