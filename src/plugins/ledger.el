@@ -1,5 +1,3 @@
-(require 'org-glance-module)
-
 (eval-when-compile
   (require 'cl-lib)
   (require 'cl-macs))
@@ -82,5 +80,3 @@ TAGS is a list of strings."
                   do (insert (format "    Expenses%s%s    %s\n" tags title amount)))
          (insert "    Assets:Default\n")
          (switch-to-buffer-other-window "*org-glance-ledger-report*"))))))
-
-(org-glance:provide)

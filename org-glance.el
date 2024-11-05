@@ -1,4 +1,4 @@
-;;; org-glance.el --- org-mode traversing. Fast and convenient.  ;; -*- lexical-binding: t -*-
+;;; org-glance.el --- Peering through the tangled jungle of org-mode, faster than a bureaucrat with a shortcut, sharper than a detective's intuition. A way to skim the surface or dive right in — as fast and convenient as you need it to be.  ;; -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2018-2024 Dmitry Akatov
 
@@ -323,17 +323,6 @@ enjoy using a lot.
 (cl-defun org-glance-join-but-null (separator strings)
   (declare (indent 1))
   (org-glance-join separator (cl-remove-if #'null strings)))
-
-;; (declare-function org-glance-def-view (org-glance-module-filename src.data.view))
-;; (declare-function org-glance-headline:materialize (org-glance-module-filename src.core.headline))
-;; (declare-function org-glance-headline:title (org-glance-module-filename src.core.headline))
-
-;; (declare-function org-glance:format (org-glance-module-filename src.utils.helpers))
-;; (declare-function org-glance-metastore:choose-headline (org-glance-module-filename src.core.metastore))
-;; (declare-function org-glance-headlines (org-glance-module-filename src.core.metastore))
-;; (declare-function org-glance:choose-class (org-glance-module-filename src.data.view))
-;; (declare-function org-glance-headline:at-point (org-glance-module-filename src.core.headline))
-;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename src.core.scope))
 
 (defgroup org-glance nil
   "Options concerning glancing entries."

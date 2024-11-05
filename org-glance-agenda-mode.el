@@ -21,7 +21,7 @@
 
 (define-minor-mode org-glance-agenda-mode "A minor read-only mode to use in glance agenda files."
   :lighter nil
-  :global t
+  :global nil
   :group 'glance
   :keymap org-glance-agenda-mode-map
   (read-only-mode 'toggle))
