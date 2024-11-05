@@ -3,7 +3,7 @@
 
 (define-minor-mode org-glance-material-mode "A minor mode to be activated only in materialized view editor."
   :lighter nil
-  :global t
+  :global nil
   :group 'glance
   :keymap org-glance-material-mode-map)
 
