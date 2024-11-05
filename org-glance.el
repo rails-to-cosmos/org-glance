@@ -1,10 +1,10 @@
-;;; org-glance.el --- org-mode traversing. Fast and convenient.  ;; -*- lexical-binding: t -*-
+;;; org-glance.el --- Peering through the tangled jungle of org-mode, faster than a bureaucrat with a shortcut, sharper than a detective's intuition. A way to skim the surface or dive right in — as fast and convenient as you need it to be.  ;; -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2018-2024 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <akatovda@yandex.com>
 ;; Created: 29 September, 2018
-;; Version: 1.0
+;; Version: 1.0.0
 
 ;; Keywords: org-mode tools
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -67,12 +67,6 @@ This option enables duplication of repeated tasks, preserving previous instances
   :group 'org-glance
   :type 'boolean)
 
-(eval-and-compile  ;; TODO remove it
-  (cl-defmacro org-glance:interactive-lambda (&rest forms)
-    "Define interactive lambda function with FORMS in its body."
-    (declare (indent 0) (debug t))
-    `(lambda () (interactive) ,@forms)))
-
 (cl-defmacro org-glance-with-debug-msg (msg &rest forms)
   (declare (indent 1))
   `(progn
@@ -80,24 +74,19 @@ This option enables duplication of repeated tasks, preserving previous instances
      ,@forms
      (message (concat ,msg " done"))))
 
-(cl-defmacro org-glance:define-exception (name message &optional (parent 'user-error))
+(cl-defmacro org-glance-exception (name message &optional (parent 'user-error))
   `(progn
      (define-error (quote ,name) ,message (quote ,parent))
      (cl-defun ,name (format &rest args)
        (signal (quote ,name) (list (apply #'format format args))))))
 
-(org-glance:define-exception org-glance-exception:SOURCE-CORRUPTED "Headline source corrupted, please reread")
-(org-glance:define-exception org-glance-exception:PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread")
-(org-glance:define-exception org-glance-exception:METASTORE-OUTDATED "Metastore is outdated, please rebuild")
-(org-glance:define-exception org-glance-exception:HEADLINE-NOT-FOUND "Headline not found")
-(org-glance:define-exception org-glance-exception:CLASS-NOT-FOUND "Class not found")
+(org-glance-exception SOURCE-CORRUPTED "Headline source corrupted, please reread")
+(org-glance-exception PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread")
+(org-glance-exception METASTORE-OUTDATED "Metastore is outdated, please rebuild")
+(org-glance-exception HEADLINE-NOT-FOUND "Headline not found")
+(org-glance-exception CLASS-NOT-FOUND "Class not found")
 
-(defvar org-glance-views (make-hash-table)
-  "Hash table (id->view) that lists all registered tags.")
-
-(defun org-glance-views:list ()
-  "List registered views."
-  (sort (hash-table-keys org-glance-views) #'s-less?))
+(defvar org-glance-views (make-hash-table) "Hash table (id->view) that lists all registered tags.")
 
 (cl-defstruct (org-glance-view (:constructor org-glance-view:create))
   "This structure contains metadata about categorized `org-mode' headlines."
@@ -105,16 +94,11 @@ This option enables duplication of repeated tasks, preserving previous instances
   (type nil :type 'list :read-only nil :documentation "Determines list of actions allowed to use on headlines of this view.")
   (scope nil :type 'list :read-only nil :documentation "List of files where org-glance should search for headlines for this view."))
 
-(cl-defmethod org-glance-tag:create ((tag symbol))
-  (unless (org-glance-view:get tag))
-  (let ((view (org-glance-view:create :id tag ))))
-  (puthash tag () org-glance-views))
+(defun org-glance-views:list ()
+  (sort (hash-table-keys org-glance-views) #'s-less?))
 
-(cl-defmethod org-glance-view:get ((tag symbol))
-  (gethash tag org-glance-views))
-
-(cl-defmethod org-glance-view:id ((view org-glance-view))
-  (downcase (symbol-name (org-glance-view-id view))))
+(cl-defmethod org-glance-view:get ((view symbol)) (gethash view org-glance-views))
+(cl-defmethod org-glance-view:id  ((view org-glance-view)) (downcase (symbol-name (org-glance-view-id view))))
 
 (cl-defmethod org-glance-view:metastore ((view org-glance-view))
   (let ((view-id (org-glance-view:id view)))
@@ -340,17 +324,6 @@ enjoy using a lot.
   (declare (indent 1))
   (org-glance-join separator (cl-remove-if #'null strings)))
 
-;; (declare-function org-glance-def-view (org-glance-module-filename src.data.view))
-;; (declare-function org-glance-headline:materialize (org-glance-module-filename src.core.headline))
-;; (declare-function org-glance-headline:title (org-glance-module-filename src.core.headline))
-
-;; (declare-function org-glance:format (org-glance-module-filename src.utils.helpers))
-;; (declare-function org-glance-metastore:choose-headline (org-glance-module-filename src.core.metastore))
-;; (declare-function org-glance-headlines (org-glance-module-filename src.core.metastore))
-;; (declare-function org-glance:choose-class (org-glance-module-filename src.data.view))
-;; (declare-function org-glance-headline:at-point (org-glance-module-filename src.core.headline))
-;; (declare-function org-glance-scope--choose-headline (org-glance-module-filename src.core.scope))
-
 (defgroup org-glance nil
   "Options concerning glancing entries."
   :tag "Org Glance"
@@ -422,7 +395,7 @@ after capture process has been finished."
   `(condition-case default
        (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
              (t (funcall ,action (org-glance-metastore:choose-headline))))
-     (org-glance-exception:HEADLINE-NOT-FOUND
+     (HEADLINE-NOT-FOUND
       (let ((<buffer> (current-buffer))
             (<point> (point)))
         (org-glance-capture
@@ -907,7 +880,7 @@ metastore.")
                   (lambda (el) (when (string= (org-glance-headline:id el) id)
                                  (org-element-property :begin el))))))
     (unless points
-      (org-glance-exception:HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
+      (HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
     (when (> (length points) 1)
       (message "Headline ID %s is not unique in file %s" id (buffer-file-name)))
     (goto-char (car points))
@@ -956,7 +929,7 @@ metastore.")
             (with-current-buffer buffer
               (org-glance-headline:search-buffer-by-id id)
               (org-glance:with-headline-at-point ,@forms)))
-           (t (org-glance-exception:HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
+           (t (HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance-ensure-at-heading)
@@ -1001,7 +974,7 @@ FIXME. Unstable one. Refactor is needed."
                               (outline-next-heading)
                               (org-glance-headline:promote-to-the-first-level)
                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
-          (t (org-glance-exception:HEADLINE-NOT-FOUND "Unable to determine headline location")))))
+          (t (HEADLINE-NOT-FOUND "Unable to determine headline location")))))
 
 (cl-defgeneric org-glance-headline:extract-from (scope)
   "Extract `org-glance-headlines' from scope.")
@@ -1326,7 +1299,7 @@ FIXME. Unstable one. Refactor is needed."
          (choice (completing-read "Headline: " headlines nil t))
          (headline.class (alist-get choice headlines nil nil #'string=)))
     (unless headline.class
-      (org-glance-exception:HEADLINE-NOT-FOUND choice))
+      (HEADLINE-NOT-FOUND choice))
 
     (let ((headline (car headline.class))
           (class (cadr headline.class)))
@@ -1386,7 +1359,7 @@ FIXME. Unstable one. Refactor is needed."
                                             (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
                                                      ((memq link-type '(project project-done)) 'project)
                                                      (t 'subtask))))))
-                                (org-glance-exception:HEADLINE-NOT-FOUND link-type))
+                                (HEADLINE-NOT-FOUND link-type))
                             link-type)
                         link-type)))
                    (t nil))
@@ -1592,7 +1565,7 @@ FIXME. Unstable one. Refactor is needed."
           (if-let (headline (org-glance-scope--choose-headline choice headlines))
               (condition-case nil
                   (funcall action headline)
-                (org-glance-exception:DB-OUTDATED
+                (DB-OUTDATED
                  (message "Metastore %s is outdated, actualizing..." db)
                  (redisplay)
                  (org-glance :scope scope

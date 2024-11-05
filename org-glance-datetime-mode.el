@@ -2,7 +2,7 @@
 
 (define-minor-mode org-glance-datetime-mode "Handle multiple repeatable timestamps."
   :lighter nil
-  :global t
+  :global nil
   :group 'glance
   (cond (org-glance-datetime-mode (advice-add 'org-auto-repeat-maybe :before #'org-glance-datetime-capture)
                             (advice-add 'org-auto-repeat-maybe :after #'org-glance-datetime-restore))

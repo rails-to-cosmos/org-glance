@@ -2,7 +2,6 @@
 
 {
   packages = with pkgs; [
-    cask
-    emacs
+    eask
   ];
 }
