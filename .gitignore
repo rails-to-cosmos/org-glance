@@ -17,3 +17,4 @@ devenv.local.nix
 .pre-commit-config.yaml
 
 *.el#
+/.eask/
