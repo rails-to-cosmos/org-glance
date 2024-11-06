@@ -30,9 +30,10 @@
    [("a" "Agenda" org-glance-overview:agenda*)
     ("o" "Overview" org-glance-overview)]]
   ["Actions"
-   [("+" "Capture headline" org-glance-capture)
+   [;; ("+" "Capture headline" org-glance-capture)
+    ;; ("k" "Kill headline" org-glance-headline-remove)
+
     ("e" "Extract property" org-glance:extract)
-    ("k" "Kill headline" org-glance-headline-remove)
     ("j" "Open link" org-glance:open)
     ("m" "Materialize headline" org-glance:materialize)]]
   (interactive)

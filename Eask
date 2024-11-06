@@ -19,3 +19,6 @@
 (depends-on "f")
 (depends-on "highlight")
 (depends-on "transient")
+
+;; Test dependencies
+(depends-on "with-simulated-input")
