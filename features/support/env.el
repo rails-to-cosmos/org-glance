@@ -35,7 +35,7 @@
        org-glance-test:view-location (f-join org-glance-test:root-location "org-glance")
        org-glance-test:user-location (f-join org-glance-test:root-location "user-data")
        org-glance-directory org-glance-test:view-location
-       org-glance-views (make-hash-table))
+       org-glance-tags (make-hash-table))
 
  (mkdir org-glance-test:view-location)
  (mkdir org-glance-test:user-location)

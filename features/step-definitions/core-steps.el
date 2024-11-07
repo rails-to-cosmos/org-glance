@@ -5,7 +5,7 @@
 
 (When "^I define class \"\\([^\"]+\\)\"$"
   (lambda (class)
-    (org-glance-class-create (intern class))))
+    (org-glance-tag:create (intern class))))
 
 (When "^I capture thing \"\\([^\"]+\\)\" of class \"\\([^\"]+\\)\"$"
   (lambda (thing-title class-name)
@@ -26,11 +26,11 @@
 
 (Then "^I should have \\([[:digit:]]+\\) active classe?s?$"
       (lambda (count)
-        (should (= (hash-table-count org-glance-views) (string-to-number count)))))
+        (should (= (hash-table-count org-glance-tags) (string-to-number count)))))
 
 (Then "^I should have \\([[:digit:]]+\\) things? of class \"\\([^\"]+\\)\" registered$"
       (lambda (count class-name)
-        (should (= (length (org-glance-view:headlines (org-glance-headline:string-to-class class-name)))
+        (should (= (length (org-glance-tag:headlines (org-glance-headline:string-to-class class-name)))
                    (string-to-number count)))))
 
 (Then "^I should be in the buffer \"\\([^\"]+\\)\"$"

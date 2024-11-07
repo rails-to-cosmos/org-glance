@@ -19,6 +19,7 @@
 (depends-on "f")
 (depends-on "highlight")
 (depends-on "transient")
+(depends-on "elsa")
 
 ;; Test dependencies
 (depends-on "with-simulated-input")

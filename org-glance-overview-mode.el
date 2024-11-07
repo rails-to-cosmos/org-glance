@@ -231,8 +231,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:register-headline-in-metastore (headline class)
   (message "Update metastore %s" class)
   (let* ((metastore-location (-some->> class
-                               org-glance-view:get
-                               org-glance-view:metastore))
+                               org-glance-tag:get
+                               org-glance-tag:metadata-file-name))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:add-headline headline metastore)
     (org-glance-metastore:save metastore metastore-location)))
@@ -240,8 +240,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:remove-headline-from-metastore (headline class)
   (message "Remove from metastore %s" class)
   (let* ((metastore-location (-some->> class
-                               org-glance-view:get
-                               org-glance-view:metastore))
+                               org-glance-tag:get
+                               org-glance-tag:metadata-file-name))
          (metastore (org-glance-metastore:read metastore-location)))
     (org-glance-metastore:rem-headline headline metastore)
     (org-glance-metastore:save metastore metastore-location)))
@@ -334,7 +334,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   headline)
 
 (cl-defun org-glance-capture-headline-at-point
-    (&optional (class (completing-read "Specify class: " (org-glance-views:list) nil t)))
+    (&optional (class (completing-read "Specify class: " (org-glance-tags:list) nil t)))
   "Extract all possible information from headline at point."
   (declare (indent 1))
   (interactive)
@@ -343,7 +343,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (org-glance-ensure-at-heading)
       (let* ((class (cond ((symbolp class) (symbol-name class))
                           ((stringp class) class)))
-             (id (org-glance-generate-id class))
+             (id (org-glance-tag:generate-id class))
              (dir (org-glance-generate-directory class))
              (output-file (f-join dir (org-glance:format "${class}.org"))))
 
@@ -380,12 +380,7 @@ Available buffer local variables: `org-glance-capture:id', `org-glance-capture:c
   (goto-char (point-min))
   (or (org-at-heading-p) (org-next-visible-heading 0))
   (org-set-property "ORG_GLANCE_ID" org-glance-capture:id)
-
-  (unless (org-glance-view:get org-glance-capture:class)
-    (when (y-or-n-p (format "Create class %s?" org-glance-capture:class))
-      (save-window-excursion
-        (org-glance-class-create org-glance-capture:class))))
-
+  (org-glance-tag:create org-glance-capture:class)
   (org-toggle-tag (format "%s" org-glance-capture:class) t))
 
 (cl-defun org-glance-capture:after-finalize-hook ()
@@ -402,7 +397,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
     (let* ((id org-glance-capture:id)
            (class org-glance-capture:class)
            (refile-dir (org-glance-headline:generate-directory
-                        (org-glance-class-location class)
+                        (org-glance-tag:location class)
                         (org-glance-headline:title headline)))
            (tmp-file (org-glance-headline:file headline))
            (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
@@ -430,8 +425,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   "Read each org-file from PATH, visit each headline of current overview class and add it to overview."
   (let* ((tag (downcase (symbol-name class)))
          (metastore-location (-some->> class
-                               org-glance-view:get
-                               org-glance-view:metastore))
+                               org-glance-tag:get
+                               org-glance-tag:metadata-file-name))
          (metastore (org-glance-metastore:read metastore-location))
          (overviews '())
          (archives '()))
@@ -456,8 +451,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                       (while-let ((headline (org-glance-headline:search-forward)))
                         (-register headline))))
                else do (progn
-                         (org-glance-with-debug-msg "Persist metastore changes..."
-                           (org-glance-metastore:save metastore metastore-location))
+                         (org-glance-metastore:save metastore metastore-location)
 
                          (org-glance:with-file-visited (org-glance-overview:location class)
                            (goto-char (point-max))
@@ -484,8 +478,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
                          (cl-return nil))
 
                finally do (progn
-                            (org-glance-with-debug-msg "Persist metastore changes..."
-                              (org-glance-metastore:save metastore metastore-location))
+                            (org-glance-metastore:save metastore metastore-location)
 
                             (org-glance:with-file-visited (org-glance-overview:location class)
                               (goto-char (point-max))
@@ -596,19 +589,19 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (org-glance-overview-mode +1)
   (message "All changes have been applied."))
 
-(cl-defun org-glance-overview:directory (&optional (class (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:directory (&optional (class (org-glance-tag:completing-read)))
   "Path to file where CLASS headlines are stored."
   (let ((class-name (s-downcase (format "%s" class))))
     (abbreviate-file-name
      (f-join org-glance-directory class-name))))
 
-(cl-defun org-glance-overview:location (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:location (&optional (view-id (org-glance-tag:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
   (when view-id
     (let ((view-name (s-downcase (format "%s" view-id))))
       (f-join org-glance-directory view-name (concat view-name ".org")))))
 
-(cl-defun org-glance-overview:archive-location (&optional (view-id (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:archive-location (&optional (view-id (org-glance-tag:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
   (when view-id
     (let ((view-name (s-downcase (format "%s" view-id))))
@@ -660,24 +653,24 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (let ((org-clock-clocktable-default-properties org-glance-clocktable-properties))
         (org-clock-report)))))
 
-(cl-defun org-glance-overview:create-archive (&optional (class (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:create-archive (&optional (class (org-glance-tag:completing-read)))
   (interactive)
   (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
     (with-temp-file filename (org-glance-overview:refresh-widgets class))
     filename))
 
-(cl-defun org-glance-overview:ensure-archive (&optional (class (org-glance-view:completing-read)))
+(cl-defun org-glance-overview:ensure-archive (&optional (class (org-glance-tag:completing-read)))
   (interactive)
   (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
     (unless (file-exists-p filename)
       (with-temp-file filename (org-glance-overview:refresh-widgets class)))
     filename))
 
-(cl-defun org-glance-overview:create (&optional (class-name (org-glance-view:completing-read "Overview: " nil)))
+(cl-defun org-glance-overview:create (&optional (class-name (org-glance-tag:completing-read "Overview: " nil)))
   (interactive)
-  (org-glance-view:get 'whitepaper)
-  (let* ((class (org-glance-view:get class-name))
-         (mloc (org-glance-view:metastore class)))
+  (org-glance-tag:get 'whitepaper)
+  (let* ((class (org-glance-tag:get class-name))
+         (mloc (org-glance-tag:metadata-file-name class)))
     (org-glance-metastore:create mloc))
 
   (org-glance-overview:create-archive class-name)
@@ -687,13 +680,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
       (org-glance-overview:refresh-widgets class-name))
     (find-file filename)))
 
-(cl-defun org-glance-overview (&optional (class-name (org-glance-view:completing-read "Overview: " nil)))
+(cl-defun org-glance-overview (&optional (class-name (org-glance-tag:completing-read "Overview: " nil)))
   (interactive)
   (when class-name
     (when-let (location (org-glance-overview:location class-name))
       (if (file-exists-p location)
           (find-file location)
-        (org-glance-class-create class-name)
+        (org-glance-tag:create class-name)
         (org-glance-overview:create class-name)))))
 
 (cl-defun org-glance-overview:agenda ()
@@ -710,7 +703,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-views:list)))
+  (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-tags:list)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
         (org-agenda-span 7)
@@ -759,7 +752,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   (save-excursion
     (goto-char (point-min))
     (let ((class (org-glance-headline:string-to-class (org-get-category))))
-      (when (gethash class org-glance-views)
+      (when (gethash class org-glance-tags)
         class))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
@@ -780,13 +773,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
           (remhash class-name org-glance-overview-deferred-import-hash-table))))
 
     (when (y-or-n-p (format "Clear %s metadata?" class-name))
-      (let ((class (org-glance-view:get class-name)))
+      (let ((class (org-glance-tag:get class-name)))
         (save-buffer)
         (kill-buffer)
         (org-glance-overview:create class-name)
-        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-view:metastore class))))
+        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-tag:metadata-file-name class))))
           (let ((files (--filter (not (s-contains? "sync-conflict" it))
-                                 (org-glance-scope (f-parent (org-glance-view:metastore class))))))
+                                 (org-glance-scope (f-parent (org-glance-tag:metadata-file-name class))))))
             (org-glance-overview:import-headlines-from-files class-name files)
             (org-glance-overview:order)
             (let ((inhibit-read-only t))
@@ -850,26 +843,24 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
   "Move headline to another class."
   (interactive)
   (let* ((old-class (org-glance-overview:class))
-         (new-class (let ((classes (--filter (not (eql old-class it)) (org-glance-views:list))))
+         (new-class (let ((classes (--filter (not (eql old-class it)) (org-glance-tags:list))))
                       (intern (completing-read "Move headline to: " classes nil t))))
          (original-headline (org-glance-overview:original-headline)))
-    (unless (member new-class (org-glance-views:list))
-      (org-glance-class-create new-class))
+    (org-glance-tag:create new-class)
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
-        (cl-loop
-           with tags = (org-get-tags)
-           with indices = (--find-indices (eql old-class (org-glance-headline:string-to-class it)) tags)
-           for index in indices
-           do (org-toggle-tag (nth index tags) 'off)
-           finally (org-toggle-tag (symbol-name new-class) 'on))))))
+        (cl-loop with tags = (org-get-tags)
+                 with indices = (--find-indices (eql old-class (org-glance-headline:string-to-class it)) tags)
+                 for index in indices
+                 do (org-toggle-tag (nth index tags) 'off)
+                 finally (org-toggle-tag (symbol-name new-class) 'on))))))
 
 (cl-defun org-glance-overview:add-class ()
   "Add class to headline."
   (interactive)
   (let* ((original-headline (org-glance-overview:original-headline))
          (old-classes (org-glance-headline:classes original-headline))
-         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-views:list))))
+         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-tags:list))))
                       (intern (completing-read "Add class: " views)))))
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
@@ -924,7 +915,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:class', `or
 ;;                 "];")))))
 
 ;; (cl-defun -og-calw-d (day)
-;;   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-views:list))))
+;;   (let ((org-agenda-files (mapcar 'org-glance-overview:location (org-glance-tags:list))))
 ;;     (org-agenda-list)
 ;;     (org-agenda-day-view day)
 ;;     (switch-to-buffer org-agenda-buffer)
