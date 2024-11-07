@@ -75,59 +75,43 @@ This option enables duplication of repeated tasks, preserving previous instances
   "This structure contains metadata about categorized `org-mode' headlines."
   (id nil :type 'symbol :read-only t :documentation "Unique identifier for `org-glance-tag'."))
 
-(defun org-glance-tags:list ()
+(defun org-glance-tags:list ()  ;; -> list[symbol]
   (sort (hash-table-keys org-glance-tags) #'s-less?))
 
-(cl-defun org-glance-tag:get (tag)
+(cl-defun org-glance-tag:get (tag)  ;; -> org-glance-tag
   (cl-typecase tag
     (symbol (gethash tag org-glance-tags))
     (string (gethash (intern tag) org-glance-tags))
     (org-glance-tag tag)
     (t (user-error (format "Don't know how to get tag \"%s\" of type \"%s\" " tag (type-of tag))))))
 
-(cl-defun org-glance-tag:id (tag)
+(cl-defun org-glance-tag:id (tag)  ;; -> downcased string
   (cl-typecase tag
     (symbol (downcase (symbol-name tag)))
     (string (downcase tag))
     (org-glance-tag (org-glance-tag:id (org-glance-tag-id tag)))
     (t (user-error (format "Don't know how to get tag id \"%s\" of type \"%s\" " tag (type-of tag))))))
 
-(cl-defun org-glance-tag:metadata-file-name (tag)
+(cl-defun org-glance-tag:metadata-file-name (tag)  ;; -> string
   (let ((tag-id (org-glance-tag:id tag)))
     (f-join org-glance-directory tag-id (format "%s.metadata.el" tag-id))))
 
-(cl-defmethod org-glance-tag-filter ((tag org-glance-tag))
-  (-partial
-   #'(lambda (tag headline)
-       (when (-contains?
-              (mapcar #'downcase (org-element-property :tags headline))
-              (downcase (symbol-name (org-glance-tag-id tag))))
-         headline))
-   tag))
+(cl-defun org-glance-tag:filter (tag)  ;; -> callable
+  #'(lambda (headline)
+      (when (-contains? (mapcar #'downcase (org-element-property :tags headline))
+                        (org-glance-tag:id tag))
+        headline)))
 
-(cl-defgeneric org-glance-tag:headlines (tag))
-
-(cl-defmethod org-glance-tag:headlines ((tag null))
-  "When TAG is a symbol, extract org-glance-tag from `org-glance-tag` hashmap by key."
-  nil)
-
-(cl-defmethod org-glance-tag:headlines ((tag symbol))
-  "When TAG is a symbol, extract org-glance-tag from `org-glance-tag` hashmap by key."
-  (org-glance-tag:headlines (org-glance-tag:get tag)))
-
-(cl-defmethod org-glance-tag:headlines ((tag string))
-  "When TAG is a string, extract org-glance-tag from `org-glance-tag` hashmap by key intern."
-  (org-glance-tag:headlines (org-glance-tag:get (intern tag))))
-
-(cl-defmethod org-glance-tag:headlines ((tag list))
-  "When TAG is a list, apply org-glance-tag:headlines for each element of it."
-  (cl-loop for t in tag append (org-glance-tag:headlines t)))
-
-(cl-defmethod org-glance-tag:headlines ((tag org-glance-tag))
-  "Browse each file of a TAG scope, run org-element-map and collect headlines as org-elements."
-  (org-glance-headlines :db (org-glance-tag:metadata-file-name tag)
-                        :scope (list org-glance-directory)
-                        :filter (org-glance-tag-filter tag)))
+(cl-defun org-glance-tag:headlines (tag)  ;; -> list[headline]
+  (cl-typecase tag
+    (org-glance-tag (org-glance-headlines :db (org-glance-tag:metadata-file-name tag)
+                                          :scope (list org-glance-directory)
+                                          :filter (org-glance-tag:filter tag)))
+    (string (org-glance-tag:headlines (org-glance-tag:get tag)))
+    (symbol (org-glance-tag:headlines (org-glance-tag:get tag)))
+    (list (mapcan #'org-glance-tag:headlines tag))
+    (null nil)
+    (t (user-error (format "Unable to get headlines from tag %s of type %s" tag (type-of tag))))))
 
 (cl-defmethod org-glance-tag:headlines* ((tag org-glance-tag))
   "List headlines as formatted strings for TAG."
@@ -1217,11 +1201,7 @@ FIXME. Unstable one. Refactor is needed."
                (org-glance-headline:deserialize)
                (org-glance-headline:enrich :ORG_GLANCE_ID id))))
 
-(cl-defun org-glance-headlines
-    (&key db
-          (scope '(agenda))
-          (filter #'(lambda (_) t))
-          (db-init nil))
+(cl-defun org-glance-headlines (&key db (scope '(agenda)) (filter #'(lambda (_) t)) (db-init nil))
   "Deprecated method, refactor it."
   (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
          (load-db? (and (not (null db)) (file-exists-p db)))
