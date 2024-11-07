@@ -2,7 +2,7 @@
 
 ;; Copyright (C) 2018-2024 Dmitry Akatov
 
-;; Author: Dmitry Akatov <akatovda@yandex.com>
+;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 1.0.0
 
