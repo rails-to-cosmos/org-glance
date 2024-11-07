@@ -113,13 +113,6 @@ This option enables duplication of repeated tasks, preserving previous instances
     (null nil)
     (t (user-error (format "Unable to get headlines from tag %s of type %s" tag (type-of tag))))))
 
-(cl-defmethod org-glance-tag:headlines* ((tag org-glance-tag))
-  "List headlines as formatted strings for TAG."
-  (->> tag
-       (org-glance-tag:headlines)
-       (mapcar #'org-glance-headline:title)
-       (mapcar #'(lambda (hl) (format "[%s] %s" (org-glance-tag-id tag) hl)))))
-
 (cl-defun org-glance-tag:completing-read (&optional (prompt "Choose tag: ") (require-match t))
   "Run completing read PROMPT on registered tags filtered by TYPE."
   (let ((tags (org-glance-tags:list)))
