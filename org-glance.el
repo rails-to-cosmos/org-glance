@@ -71,47 +71,30 @@ This option enables duplication of repeated tasks, preserving previous instances
 
 (defvar org-glance-tags (make-hash-table) "Hash table {tag id -> tag parameters}")
 
-(cl-defstruct (org-glance-tag (:constructor org-glance-tag--create))
-  "This structure contains metadata about categorized `org-mode' headlines."
-  (id nil :type 'symbol :read-only t :documentation "Unique identifier for `org-glance-tag'."))
-
 (defun org-glance-tags:list ()  ;; -> list[symbol]
   (sort (hash-table-keys org-glance-tags) #'s-less?))
 
-(cl-defun org-glance-tag:get (tag)  ;; -> org-glance-tag
+(cl-defun org-glance-tag:exists? (tag) ;; -> bool
   (cl-typecase tag
     (symbol (gethash tag org-glance-tags))
-    (string (gethash (intern tag) org-glance-tags))
-    (org-glance-tag tag)
     (t (user-error (format "Don't know how to get tag \"%s\" of type \"%s\" " tag (type-of tag))))))
 
-(cl-defun org-glance-tag:id (tag)  ;; -> downcased string
-  (cl-typecase tag
-    (symbol (downcase (symbol-name tag)))
-    (string (downcase tag))
-    (org-glance-tag (org-glance-tag:id (org-glance-tag-id tag)))
-    (t (user-error (format "Don't know how to get tag id \"%s\" of type \"%s\" " tag (type-of tag))))))
-
 (cl-defun org-glance-tag:metadata-file-name (tag)  ;; -> string
-  (let ((tag-id (org-glance-tag:id tag)))
-    (f-join org-glance-directory tag-id (format "%s.metadata.el" tag-id))))
+  (f-join org-glance-directory (symbol-name tag) (format "%s.metadata.el" tag)))
 
 (cl-defun org-glance-tag:filter (tag)  ;; -> callable
   #'(lambda (headline)
-      (when (-contains? (mapcar #'downcase (org-element-property :tags headline))
-                        (org-glance-tag:id tag))
+      (when (-contains? (mapcar #'downcase (org-element-property :tags headline)) (symbol-name tag))
         headline)))
 
-(cl-defun org-glance-tag:headlines (tag)  ;; -> list[headline]
-  (cl-typecase tag
-    (org-glance-tag (org-glance-headlines :db (org-glance-tag:metadata-file-name tag)
-                                          :scope (list org-glance-directory)
-                                          :filter (org-glance-tag:filter tag)))
-    (string (org-glance-tag:headlines (org-glance-tag:get tag)))
-    (symbol (org-glance-tag:headlines (org-glance-tag:get tag)))
-    (list (mapcan #'org-glance-tag:headlines tag))
+(cl-defun org-glance-tag:headlines (tags)  ;; -> list[headline]
+  (cl-typecase tags
+    (symbol (org-glance-headlines :db (org-glance-tag:metadata-file-name tags)
+                                  :scope (list org-glance-directory)
+                                  :filter (org-glance-tag:filter tags)))
+    (list (mapcan #'org-glance-tag:headlines tags))
     (null nil)
-    (t (user-error (format "Unable to get headlines from tag %s of type %s" tag (type-of tag))))))
+    (t (user-error (format "Unable to get headlines from tag %s of type %s: symbol or list of symbols expected" tags (type-of tags))))))
 
 (cl-defun org-glance-tag:completing-read (&optional (prompt "Choose tag: ") (require-match t))
   "Run completing read PROMPT on registered tags filtered by TYPE."
@@ -120,12 +103,16 @@ This option enables duplication of repeated tasks, preserving previous instances
         (car tags)
       (intern (completing-read prompt tags nil require-match)))))
 
+(cl-defun org-glance-tag (value)
+  (cl-typecase value
+    (symbol (intern (downcase (symbol-name value))))
+    (string (intern (downcase value)))
+    (t (user-error "Unable to convert value \"%v\" to `org-glance-tag'"))))
+
 (cl-defun org-glance-tag:register (&key id)
-  (or (org-glance-tag:get id)
-      (when-let (tag (org-glance-tag--create :id id))
-        (puthash id tag org-glance-tags)
-        (message "Tag \"%s\" is now ready to glance" id)
-        tag)))
+  (let ((tag (org-glance-tag id)))
+    (puthash tag t org-glance-tags)
+    tag))
 
 (cl-defun org-glance:choose-class (&optional (prompt "Choose tag: "))
   (completing-read prompt (org-glance-tags:list) nil t))
@@ -181,6 +168,11 @@ This option enables duplication of repeated tasks, preserving previous instances
 (cl-defun org-glance-tag:location (&optional (tag (org-glance-tag:completing-read)))
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
+
+(cl-defun org-glance-tag:metastore (tag)
+  (->> tag
+       org-glance-tag:metadata-file-name
+       org-glance-metastore:read))
 
 (cl-defun org-glance-generate-directory (&optional (tag (org-glance-tag:completing-read)))
   (save-excursion
@@ -286,10 +278,8 @@ enjoy using a lot.
 
 (cl-defun org-glance-tag:create (tag)
   (when (org-glance-tag:register :id tag)
-    (unless (f-exists? (org-glance-tag:metadata-file-name (org-glance-tag:get tag)))
-      (org-glance-metastore:create (org-glance-tag:metadata-file-name (org-glance-tag:get tag))))
-    (unless (f-exists? (org-glance-overview:location tag))
-      (org-glance-overview:create tag))))
+    (org-glance-metastore:create (org-glance-tag:metadata-file-name tag))
+    (org-glance-overview:create tag)))
 
 (cl-defun org-glance-materialized-headline:preserve-history-before-auto-repeat (&rest args)
   (when (and org-glance-clone-on-repeat-p
@@ -333,6 +323,7 @@ Cleanup new headline considering auto-repeat ARGS.
       (insert contents)
       (org-delete-property "LAST_REPEAT"))))
 
+;; TODO refactor
 (cl-defmacro org-glance-choose-and-apply (&key filter action)
   "If HEADLINE specified, apply ACTION on it.
 
@@ -379,7 +370,7 @@ after capture process has been finished."
                 (unless (f-exists? (f-join org-glance-directory class-name))
                   (org-glance-tag:remove class))))
 
-  (setq org-agenda-files (mapcar 'org-glance-overview:location (org-glance-tags:list))))
+  (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:list))))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link at point."
@@ -510,7 +501,7 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
   (let ((class (if (symbolp class) class (intern class))))
     (find-file file)
     (setq-local org-glance-capture:id (org-glance-tag:generate-id class)
-                org-glance-capture:class class
+                org-glance-capture:tag class
                 org-glance-capture:default default)
     (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
     (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
@@ -1167,19 +1158,18 @@ FIXME. Unstable one. Refactor is needed."
            (org-glance-headline:serialize headline)
            metastore))
 
-(cl-defun org-glance-metastore:rem-headline (headline metastore)
+(cl-defun org-glance-metastore:remove-headline (headline metastore)
   (remhash (org-glance-headline:id headline)
            metastore))
 
 (cl-defun org-glance-metastore:create (file &optional headlines)
   "Create metastore from HEADLINES and write it to FILE."
-  (org-glance-metastore:save
-      (cl-loop
-       with metastore = (make-hash-table :test 'equal)
-       for headline in headlines
-       do (org-glance-metastore:add-headline headline metastore)
-       finally (return metastore))
-    file))
+  (if (f-exists? file)
+      nil
+    (cl-loop with metastore = (make-hash-table :test 'equal)
+             for headline in headlines
+             do (org-glance-metastore:add-headline headline metastore)
+             finally (org-glance-metastore:save metastore))))
 
 (defun org-glance-metastore:read (file)
   "Read metastore from FILE."
@@ -1211,30 +1201,24 @@ FIXME. Unstable one. Refactor is needed."
   (when (symbolp id)
     (setq id (symbol-name id)))
 
-  (cl-loop
-   for class being the hash-keys of org-glance-tags
-   for metastore = (->> class
-                        org-glance-tag:get
-                        org-glance-tag:metadata-file-name
-                        org-glance-metastore:read)
-   for headline = (gethash id metastore)
-   when headline
-   collect (-> headline
-               (org-glance-headline:deserialize)
-               (org-glance-headline:enrich :ORG_GLANCE_ID id))
-   into result
-   finally (return (car result))))
+  (cl-loop for tag being the hash-keys of org-glance-tags
+           for metastore = (->> tag
+                                org-glance-tag:metadata-file-name
+                                org-glance-metastore:read)
+           for headline = (gethash id metastore)
+           when headline
+           collect (-> headline
+                       (org-glance-headline:deserialize)
+                       (org-glance-headline:enrich :ORG_GLANCE_ID id))
+           into result
+           finally (return (car result))))
 
 (cl-defun org-glance-all-headlines (&optional filter)
-  (cl-loop
-   for class being the hash-keys of org-glance-tags
-   append (cl-loop
-           for headline in (if filter
-                               (-filter filter (org-glance-tag:headlines class))
-                             (org-glance-tag:headlines class))
-           collect (cons
-                    (format "[%s] %s" class (org-glance-headline:title headline))
-                    (list headline class)))))
+  (cl-loop for tag being the hash-keys of org-glance-tags
+           append (cl-loop for headline in (org-glance-tag:headlines tag)
+                           when (or (null filter) (funcall filter headline))
+                           collect (cons (format "[%s] %s" tag (org-glance-headline:title headline))
+                                         (list headline tag)))))
 
 (cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."

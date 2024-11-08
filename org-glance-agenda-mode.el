@@ -1,3 +1,5 @@
+;; Something
+
 (defconst org-glance-agenda:header "#    -*- mode: org; mode: org-glance-agenda -*-")
 
 (defvar org-glance-agenda-mode-map (make-sparse-keymap)
@@ -97,7 +99,7 @@
 
 (cl-defun org-glance-agenda:daily (class date)
   (let ((entries (org-agenda-get-day-entries
-                  (org-glance-overview:location class)
+                  (org-glance-overview:file-name class)
                   date)))
     (cl-loop
        for entry in entries
