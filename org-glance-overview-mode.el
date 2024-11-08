@@ -46,13 +46,13 @@ ${todo-order}
 ;;; medium methods applied for all first-level headlines in current file
 
 (cl-defun org-glance-overview:choose-headline ()
-  "Choose `org-glance-headline' from current overview buffer and goto it."
+  "Choose `org-glance-headline' from current overview buffer and move cursor to it."
   (let ((headlines (org-glance-headline:extract-from (current-buffer))))
     (org-glance-headline:search-buffer-by-id
      (org-glance-headline:id
       (org-glance-scope--choose-headline
        (completing-read "Specify headline: "
-                        (mapcar #'org-glance-headline:title (--filter (org-glance-headline:active? it) headlines))
+                        (mapcar #'org-glance:headline-title (--filter (org-glance-headline:active? it) headlines))
                         nil
                         t)
        headlines)))))
@@ -262,13 +262,13 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline-p)
+                        (org-glance-headline?)
                         (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline-p)
+              (when (org-glance-headline?)
                 (setq headline-seen-p t)))
 
             (when (and (not headline-seen-p)
-                       (not (org-glance-headline-p)))
+                       (not (org-glance-headline?)))
               (insert "\n"))
 
             (insert (s-trim contents) "\n")
@@ -315,13 +315,13 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline-p)
+                        (org-glance-headline?)
                         (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline-p)
+              (when (org-glance-headline?)
                 (setq headline-seen-p t)))
 
             (when (and (not headline-seen-p)
-                       (not (org-glance-headline-p)))
+                       (not (org-glance-headline?)))
               (insert "\n"))
 
             (insert (s-trim contents) "\n")
@@ -336,7 +336,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (interactive)
   (save-window-excursion
     (save-excursion
-      (org-glance-ensure-at-heading)
+      (org-glance:ensure-at-heading)
       (let* ((id (org-glance-tag:id* tag))
              (dir (org-glance:make-directory tag))
              (output-file (f-join dir (format "%s.org" (org-glance-tag:file-name tag)))))
@@ -385,9 +385,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (when-let (headline (org-glance-headline:search-buffer-by-id org-glance-capture:id))
     (let* ((id org-glance-capture:id)
            (class org-glance-capture:tag)
-           (refile-dir (org-glance-headline:generate-directory
+           (refile-dir (org-glance-headline:make-directory
                         (org-glance:tag-file-name class)
-                        (org-glance-headline:title headline)))
+                        (org-glance:headline-title headline)))
            (tmp-file (org-glance-headline:file headline))
            (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
       (message "Generate headline directory: %s" refile-dir)
@@ -396,7 +396,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (kill-buffer)
 
       (f-move tmp-file new-file)
-      (org-glance-headline:enrich headline :file new-file)
+      (org-glance-headline:update headline :file new-file)
 
       (org-glance-overview class)
 
@@ -603,7 +603,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
    when (f-equal? common-parent overview-directory)
    do (cl-return view-id)))
 
-(cl-defun org-glance-capture-template (class &key (default ""))
+(cl-defun org-glance:capture-template (class &key (default ""))
   (let ((class (if (symbolp class) class (intern class)))
         (capture-template-config-file (f-join (org-glance-overview:directory class) "template.org")))
     (s-replace "%?" (concat default "%?")
@@ -773,7 +773,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:search-parents)
-  (let ((title (org-glance-headline:title))
+  (let ((title (org-glance:headline-title))
         (tag (org-glance-overview:tag))
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the tag \"${tag}\" from \"${title}\"?")))
@@ -791,7 +791,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
-         (current-headline-title (org-glance-headline:title current-headline))
+         (current-headline-title (org-glance:headline-title current-headline))
          (current-headline-contents (org-glance-headline-contents current-headline))
          (original-headline (org-glance-overview:original-headline))
          (overview-contents (org-glance:with-headline-narrowed original-headline

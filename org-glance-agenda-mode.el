@@ -113,7 +113,7 @@
 ;; (cl-loop
 ;;    for headline in (org-glance-agenda:daily 'task (list 12 20 2021))
 ;;    collect (org-glance:with-headline-materialized headline
-;;              (cons (org-glance-headline:title headline) (length (org-glance-headline:subtasks)))))
+;;              (cons (org-glance:headline-title headline) (length (org-glance-headline:subtasks)))))
 
 ;; 0. Filter tasks!
 ;; 1. Unfinished tasks count.

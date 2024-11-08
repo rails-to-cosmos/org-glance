@@ -57,7 +57,7 @@
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash))
-           (source-headline (org-glance-headline:enrich (org-glance-headline:at-point)
+           (source-headline (org-glance-headline:update (org-glance-headline:at-point)
                               :begin --org-glance-materialized-headline:begin
                               :file --org-glance-materialized-headline:file
                               :buffer --org-glance-materialized-headline:buffer))
@@ -164,7 +164,7 @@
   (org-cycle-hide-drawers 'all))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
-  (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title headline) ">")))
+  (generate-new-buffer (concat "org-glance:<" (org-glance:headline-title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
   "Materialize HEADLINE and return materialized buffer.
