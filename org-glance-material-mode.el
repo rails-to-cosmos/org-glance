@@ -61,7 +61,7 @@
                               :begin --org-glance-materialized-headline:begin
                               :file --org-glance-materialized-headline:file
                               :buffer --org-glance-materialized-headline:buffer))
-           (source-classes (org-glance-headline:classes))
+           (source-classes (org-glance-headline:tags))
            (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
@@ -186,7 +186,7 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
       (insert contents)
 
       (setq --org-glance-materialized-headline:id id
-            --org-glance-materialized-headline:classes (org-glance-headline:classes)
+            --org-glance-materialized-headline:classes (org-glance-headline:tags)
             --org-glance-materialized-headline:file file
             --org-glance-materialized-headline:buffer buffer
             --org-glance-materialized-headline:begin begin
