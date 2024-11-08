@@ -141,10 +141,10 @@ This option enables duplication of repeated tasks, preserving previous instances
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
 
-(cl-defun org-glance:tag-metastore (tag)
+(cl-defun org-glance:tag-metadata (tag)
   (->> tag
        org-glance-tag:metadata-file-name
-       org-glance-metastore:read))
+       org-glance-metadata:read))
 
 (cl-defun org-glance:make-directory (&optional (tag (org-glance-tags:completing-read)))
   (save-excursion
@@ -236,7 +236,7 @@ enjoy using a lot.
 
 (cl-defun org-glance:create-tag (tag)
   (when (org-glance-tag:register tag org-glance-tags)
-    (org-glance-metastore:create (org-glance-tag:metadata-file-name tag))
+    (org-glance-metadata:create (org-glance-tag:metadata-file-name tag))
     (org-glance-overview:create tag)))
 
 (cl-defun org-glance-materialized-headline:preserve-history-before-auto-repeat (&rest args)
@@ -291,8 +291,8 @@ existing headlines filtered by FILTER.
 If user chooses unexisting headline, capture it and apply ACTION
 after capture process has been finished."
   `(condition-case default
-       (cond (,filter (funcall ,action (org-glance-metastore:choose-headline :filter ,filter)))
-             (t (funcall ,action (org-glance-metastore:choose-headline))))
+       (cond (,filter (funcall ,action (org-glance-metadata:choose-headline :filter ,filter)))
+             (t (funcall ,action (org-glance-metadata:choose-headline))))
      (HEADLINE-NOT-FOUND
       (let ((<buffer> (current-buffer))
             (<point> (point)))
@@ -490,10 +490,10 @@ Return headline or nil if it is not a proper `org-glance-headline'."
   "Map `org-element-property' to `org-glance' extractor method.
 
 It is safe (in terms of backward/forward compability of
-metastores) to append properties to this map.
+metadatas) to append properties to this map.
 
 Do not modify existing properties without backfilling of
-metastore.")
+metadata.")
 
 (setq org-glance-headline:serde-alist
       `((:raw-value  . (:reader org-glance-headline:title      :writer org-glance-headline:title))
@@ -1100,41 +1100,41 @@ FIXME. Unstable one. Refactor is needed."
              id
              alias))))
 
-;; Metastore
+;; Metadata
 
-(cl-defun org-glance-metastore:save (metastore file)
+(cl-defun org-glance-metadata:save (metadata file)
   (declare (indent 1))
   (mkdir (file-name-directory file) 'parents)
   (with-temp-file file
-    (insert (prin1-to-string metastore)))
-  metastore)
+    (insert (prin1-to-string metadata)))
+  metadata)
 
-(cl-defun org-glance-metastore:add-headline (headline metastore)
+(cl-defun org-glance-metadata:add-headline (headline metadata)
   (puthash (org-glance-headline:id headline)
            (org-glance-headline:serialize headline)
-           metastore))
+           metadata))
 
-(cl-defun org-glance-metastore:remove-headline (headline metastore)
+(cl-defun org-glance-metadata:remove-headline (headline metadata)
   (remhash (org-glance-headline:id headline)
-           metastore))
+           metadata))
 
-(cl-defun org-glance-metastore:create (file &optional headlines)
-  "Create metastore from HEADLINES and write it to FILE."
+(cl-defun org-glance-metadata:create (file &optional headlines)
+  "Create metadata from HEADLINES and write it to FILE."
   (unless (f-exists? file)
-    (cl-loop with metastore = (make-hash-table :test 'equal)
+    (cl-loop with metadata = (make-hash-table :test 'equal)
              for headline in headlines
-             do (org-glance-metastore:add-headline headline metastore)
-             finally (org-glance-metastore:save metastore))))
+             do (org-glance-metadata:add-headline headline metadata)
+             finally (org-glance-metadata:save metadata))))
 
-(defun org-glance-metastore:read (file)
-  "Read metastore from FILE."
+(defun org-glance-metadata:read (file)
+  "Read metadata from FILE."
   (with-temp-buffer
     (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun org-glance-metastore:headlines (metastore)
+(defun org-glance-metadata:headlines (metadata)
   (cl-loop
-   for id being the hash-keys of metastore using (hash-value value)
+   for id being the hash-keys of metadata using (hash-value value)
    collect (-> value
                (org-glance-headline:deserialize)
                (org-glance-headline:enrich :ORG_GLANCE_ID id))))
@@ -1145,22 +1145,22 @@ FIXME. Unstable one. Refactor is needed."
          (load-db? (and (not (null db)) (file-exists-p db)))
          (skip-db? (null db)))
     (cond (create-db? (let ((headlines (org-glance-scope-headlines scope filter)))
-                        (org-glance-metastore:create db headlines)
+                        (org-glance-metadata:create db headlines)
                         headlines))
-          (load-db?   (org-glance-metastore:headlines (org-glance-metastore:read db)))
+          (load-db?   (org-glance-metadata:headlines (org-glance-metadata:read db)))
           (skip-db?   (org-glance-scope-headlines scope filter))
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
-(cl-defun org-glance-metastore:get-headline (id)
+(cl-defun org-glance-metadata:get-headline (id)
   "Get headline by ID."
   (when (symbolp id)
     (setq id (symbol-name id)))
 
   (cl-loop for tag being the hash-keys of org-glance-tags
-           for metastore = (->> tag
+           for metadata = (->> tag
                                 org-glance-tag:metadata-file-name
-                                org-glance-metastore:read)
-           for headline = (gethash id metastore)
+                                org-glance-metadata:read)
+           for headline = (gethash id metadata)
            when headline
            collect (-> headline
                        (org-glance-headline:deserialize)
@@ -1175,7 +1175,7 @@ FIXME. Unstable one. Refactor is needed."
                            collect (cons (format "[%s] %s" tag (org-glance-headline:title headline))
                                          (list headline tag)))))
 
-(cl-defun org-glance-metastore:choose-headline (&key (filter #'org-glance-headline:active?))
+(cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
   (let* ((headlines (org-glance-all-headlines filter))
          (choice (completing-read "Headline: " headlines nil t))
@@ -1190,12 +1190,12 @@ FIXME. Unstable one. Refactor is needed."
           :tag tag)))))
 
 (cl-defun org-glance-relation-interpreter (relation)
-  ;; please, avoid metastore here
+  ;; please, avoid metadata here
   (org-element-link-interpreter (org-element-property :link relation)
                                 (org-element-property :contents relation))
 
   ;; (org-glance-headline-reference)
-  ;; (org-glance:with-headline-narrowed (org-glance-metastore:get-headline (org-element-property :id relation))
+  ;; (org-glance:with-headline-narrowed (org-glance-metadata:get-headline (org-element-property :id relation))
   ;;   (let ((ref )
   ;;         (ts (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps 'include-schedules)
   ;;                                         (org-glance-datetime-filter-active)
@@ -1230,7 +1230,7 @@ FIXME. Unstable one. Refactor is needed."
                                     (org-glance-relation-type-parser))))
                    (if (memq link-type '(subtask subtask-done project project-done))
                        ;; actualize link state for subtasks and projects
-                       (if-let (headline (org-glance-metastore:get-headline id))
+                       (if-let (headline (org-glance-metadata:get-headline id))
                            (condition-case nil
                                (org-glance:with-headline-narrowed headline
                                  (let ((state (intern (or (org-get-todo-state) "")))
@@ -1341,10 +1341,10 @@ FIXME. Unstable one. Refactor is needed."
   :group 'faces)
 
 (cl-defun org-glance-link:choose-thing-for-materialization ()
-  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metastore:choose-headline))))
+  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metadata:choose-headline))))
 
 (cl-defun org-glance-link:choose-thing-for-opening ()
-  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metastore:choose-headline
+  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metadata:choose-headline
                                                       :filter #'(lambda (headline)
                                                                   (and
                                                                    (org-glance-headline:active? headline)
@@ -1385,11 +1385,11 @@ FIXME. Unstable one. Refactor is needed."
 
 (defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
-  (org-glance:materialize (org-glance-metastore:get-headline id)))
+  (org-glance:materialize (org-glance-metadata:get-headline id)))
 
 (defun org-glance-link:open (id &optional _)
   "Open org-glance headline identified by ID."
-  (org-glance:open (org-glance-metastore:get-headline id)))
+  (org-glance:open (org-glance-metadata:get-headline id)))
 
 (defun org-glance-link:overview (tag &optional _)
   "Open org-glance headline identified by ID."
@@ -1448,7 +1448,7 @@ FIXME. Unstable one. Refactor is needed."
               (condition-case nil
                   (funcall action headline)
                 (DB-OUTDATED
-                 (message "Metastore %s is outdated, actualizing..." db)
+                 (message "Metadata %s is outdated, actualizing..." db)
                  (redisplay)
                  (org-glance :scope scope
                              :filter filter

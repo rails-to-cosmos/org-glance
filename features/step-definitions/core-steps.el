@@ -52,7 +52,7 @@
 (Then "^headline at point should contain links$"
       (lambda () (should (->> (org-glance-headline:at-point)
                          org-glance-headline:id
-                         org-glance-metastore:get-headline
+                         org-glance-metadata:get-headline
                          org-glance-headline:contains-link?))))
 
 (Then "^headline at point should not be encrypted$"

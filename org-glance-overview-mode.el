@@ -228,19 +228,19 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (cl-loop for key in (sort (hash-table-keys buffers) comparator)
        collect (gethash key buffers))))
 
-(cl-defun org-glance-overview:register-headline-in-metastore (headline tag)
-  ;; TODO implement explicit model for metastore
-  (let ((metastore-file-name (org-glance-tag:metadata-file-name tag))
-        (metastore (org-glance:tag-metastore tag)))
-    (org-glance-metastore:add-headline headline metastore)
-    (org-glance-metastore:save metastore metastore-file-name)))
+(cl-defun org-glance-overview:register-headline-in-metadata (headline tag)
+  ;; TODO implement explicit model for metadata
+  (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
+        (metadata (org-glance:tag-metadata tag)))
+    (org-glance-metadata:add-headline headline metadata)
+    (org-glance-metadata:save metadata metadata-file-name)))
 
-(cl-defun org-glance-overview:remove-headline-from-metastore (headline tag)
-  ;; TODO implement explicit model for metastore
-  (let ((metastore-location (org-glance-tag:metadata-file-name tag))
-        (metastore (org-glance:tag-metastore tag)))
-    (org-glance-metastore:remove-headline headline metastore)
-    (org-glance-metastore:save metastore metastore-location)))
+(cl-defun org-glance-overview:remove-headline-from-metadata (headline tag)
+  ;; TODO implement explicit model for metadata
+  (let ((metadata-location (org-glance-tag:metadata-file-name tag))
+        (metadata (org-glance:tag-metadata tag)))
+    (org-glance-metadata:remove-headline headline metadata)
+    (org-glance-metadata:save metadata metadata-location)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE overview to CLASS file."
@@ -378,7 +378,7 @@ Available buffer local variables: `org-glance-capture:id', `org-glance-capture:t
   (org-toggle-tag (format "%s" org-glance-capture:tag) t))
 
 (cl-defun org-glance-capture:after-finalize-hook ()
-  "Register captured headline in metastore.
+  "Register captured headline in metadata.
 
 Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-glance-capture:default'."
 
@@ -400,11 +400,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
       (org-glance-overview class)
 
-      (message "Register headline of class %s in metastore: %s"
+      (message "Register headline of class %s in metadata: %s"
                             (pp-to-string class)
                             (pp-to-string headline))
 
-      (org-glance-overview:register-headline-in-metastore headline class)
+      (org-glance-overview:register-headline-in-metadata headline class)
       (org-glance-overview:register-headline-in-overview headline class)
 
       (org-overview)
@@ -412,14 +412,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:import-headlines-from-files (tag files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of current overview tag and add it to overview."
-  (let* ((metastore-location (org-glance-tag:metadata-file-name tag))
-         (metastore (org-glance-metastore:read metastore-location))
+  (let* ((metadata-location (org-glance-tag:metadata-file-name tag))
+         (metadata (org-glance-metadata:read metadata-location))
          (overviews '())
          (archives '()))
     (cl-labels ((-register (headline) (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
                                         (when (and (member tag tags) (not (member 'archive tags)))
                                           (cond ((org-glance-headline:active? headline)
-                                                 (org-glance-metastore:add-headline headline metastore)
+                                                 (org-glance-metadata:add-headline headline metadata)
                                                  (push (org-glance-headline:overview) overviews))
                                                 (t
                                                  (push (org-glance-headline:overview) archives)))))))
@@ -437,7 +437,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                       (while-let ((headline (org-glance-headline:search-forward)))
                         (-register headline))))
                else do (progn
-                         (org-glance-metastore:save metastore metastore-location)
+                         (org-glance-metadata:save metadata metadata-location)
 
                          (org-glance:with-file-visited (org-glance-overview:file-name tag)
                            (goto-char (point-max))
@@ -464,7 +464,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                          (cl-return nil))
 
                finally do (progn
-                            (org-glance-metastore:save metastore metastore-location)
+                            (org-glance-metadata:save metadata metadata-location)
 
                             (org-glance:with-file-visited (org-glance-overview:file-name tag)
                               (goto-char (point-max))
@@ -512,7 +512,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                 (save-excursion
                   (->> (org-glance-headline:at-point)
                        org-glance-headline:id
-                       org-glance-metastore:get-headline
+                       org-glance-metadata:get-headline
                        org-glance-headline:visit)
                   (save-restriction
                     (org-narrow-to-subtree)
@@ -658,7 +658,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
     (unless (f-exists? overview-file-name)
       (let ((metadata-file-name (org-glance-tag:metadata-file-name class))
             (overview-file-name (-org-glance:make-file-directory (org-glance-overview:file-name tag))))
-        (org-glance-metastore:create metadata-file-name)
+        (org-glance-metadata:create metadata-file-name)
         (org-glance-overview:create-archive tag)
         (with-temp-file overview-file-name
           (org-glance-overview:refresh-widgets tag))))
@@ -714,7 +714,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                (point)))))
       (-some->> (org-glance-headline:at-point)
         org-glance-headline:id
-        org-glance-metastore:get-headline
+        org-glance-metadata:get-headline
         org-glance-headline:visit)
       (forward-char offset))))
 
@@ -727,7 +727,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                (point)))))
       (-some->> (org-glance-headline:at-point)
         org-glance-headline:id
-        org-glance-metastore:get-headline
+        org-glance-metadata:get-headline
         org-glance:open)
       (forward-char offset))))
 
@@ -853,7 +853,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (org-glance:with-headline-narrowed
       (->> (org-glance-headline:at-point)
            org-glance-headline:id
-           org-glance-metastore:get-headline)
+           org-glance-metadata:get-headline)
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:order ()

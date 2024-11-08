@@ -107,7 +107,7 @@
        collect (org-glance:with-headline-narrowed
                    (->> (org-glance-headline:at-point)
                         org-glance-headline:id
-                        org-glance-metastore:get-headline)
+                        org-glance-metadata:get-headline)
                  (org-glance-headline:at-point)))))
 
 ;; (cl-loop

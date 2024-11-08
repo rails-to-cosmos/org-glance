@@ -82,7 +82,7 @@
          for headline-ref = (org-glance-headline-reference)
          for state = (intern (or (org-get-todo-state) ""))
          for done-kws = (mapcar #'intern org-done-keywords)
-         for relation-headline = (org-glance-metastore:get-headline relation-id)
+         for relation-headline = (org-glance-metadata:get-headline relation-id)
          do (save-window-excursion
               (save-excursion
                 (progress-reporter-update progress-reporter progress)
@@ -123,30 +123,30 @@
                 if (eql class 'archive)
                 do
                 (org-glance-overview:register-headline-in-overview source-headline class)
-                (org-glance-overview:register-headline-in-metastore source-headline class)
+                (org-glance-overview:register-headline-in-metadata source-headline class)
                 else
                 do
                 (org-glance-overview:remove-headline-from-overview source-headline class)
-                (org-glance-overview:remove-headline-from-metastore source-headline class)))
+                (org-glance-overview:remove-headline-from-metadata source-headline class)))
 
               ((not source-active?)
                (cl-loop
                 for class in source-classes
                 do
                 (org-glance-overview:remove-headline-from-overview source-headline class)
-                (org-glance-overview:remove-headline-from-metastore source-headline class)
+                (org-glance-overview:remove-headline-from-metadata source-headline class)
                 (org-glance-overview:register-headline-in-archive source-headline class)))
 
               (t (cl-loop
                   for class in source-classes
                   do
                   (org-glance-overview:register-headline-in-overview source-headline class)
-                  (org-glance-overview:register-headline-in-metastore source-headline class))
+                  (org-glance-overview:register-headline-in-metadata source-headline class))
                  (cl-loop
                   for class in (seq-difference --org-glance-materialized-headline:classes source-classes)
                   do
                   (org-glance-overview:remove-headline-from-overview source-headline class)
-                  (org-glance-overview:remove-headline-from-metastore source-headline class))))
+                  (org-glance-overview:remove-headline-from-metadata source-headline class))))
 
 
 
@@ -155,7 +155,7 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (org-glance:with-headline-narrowed (org-glance-metastore:get-headline --org-glance-materialized-headline:id)
+  (org-glance:with-headline-narrowed (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
     (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
@@ -169,7 +169,7 @@
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
   "Materialize HEADLINE and return materialized buffer.
 
-Synchronize links with metastore if UPDATE-RELATIONS is t."
+Synchronize links with metadata if UPDATE-RELATIONS is t."
   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
     (let ((id (org-glance-headline:id headline))
           (file (org-glance-headline:file headline))
@@ -209,7 +209,7 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
                        (delete-region (match-beginning 0) (match-end 0)))
 
                      (when (memq type '(org-glance-visit org-glance-open))
-                       (when-let (headline (org-glance-metastore:get-headline id))
+                       (when-let (headline (org-glance-metadata:get-headline id))
                          (goto-char (match-beginning 0))
                          (insert
                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
@@ -272,7 +272,7 @@ Synchronize links with metastore if UPDATE-RELATIONS is t."
 
 (cl-defun org-glance-materialize-headline:refresh ()
   (interactive)
-  (when-let (headline (org-glance-metastore:get-headline --org-glance-materialized-headline:id))
+  (when-let (headline (org-glance-metadata:get-headline --org-glance-materialized-headline:id))
     (let ((buffer (buffer-name)))
       (kill-buffer buffer)
       (org-glance-headline:materialize headline)
