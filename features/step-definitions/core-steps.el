@@ -28,11 +28,6 @@
       (lambda (count)
         (should (= (hash-table-count org-glance-tags) (string-to-number count)))))
 
-(Then "^I should have \\([[:digit:]]+\\) things? of class \"\\([^\"]+\\)\" registered$"
-      (lambda (count class-name)
-        (should (= (length (org-glance:headlines-from-tags (org-glance-headline:string-to-class class-name)))
-                   (string-to-number count)))))
-
 (Then "^I should be in the buffer \"\\([^\"]+\\)\"$"
       (lambda (buffer-name)
         (should (string= buffer-name (buffer-name)))))
@@ -53,14 +48,14 @@
       (lambda () (should (->> (org-glance-headline:at-point)
                          org-glance-headline:id
                          org-glance-metadata:get-headline
-                         org-glance-headline:contains-link?))))
+                         org-glance-headline:linked?))))
 
 (Then "^headline at point should not be encrypted$"
-      (lambda () (should (not (org-glance-headline:encrypted-p)))))
+      (lambda () (should (not (org-glance-headline:encrypted?)))))
 
 (Then "^headline at point should not contain properties$"
       (lambda ()
-        (should (not (org-glance-headline:contains-property?)))))
+        (should (not (org-glance-headline:propertized?)))))
 
 (Then "^headline at point should not be archived$"
       (lambda ()

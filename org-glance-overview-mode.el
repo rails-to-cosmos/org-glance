@@ -81,7 +81,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (define-key org-glance-overview-mode-map (kbd "#")
   (org-glance-overview:apply-on-headline
     (let ((headline (org-glance-overview:original-headline)))
-      (if (org-glance-headline:encrypted-p headline)
+      (if (org-glance-headline:encrypted? headline)
           (progn
             (org-glance:with-headline-narrowed headline
               (org-glance-headline:decrypt)
@@ -388,7 +388,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
            (refile-dir (org-glance-headline:make-directory
                         (org-glance:tag-file-name class)
                         (org-glance:headline-title headline)))
-           (tmp-file (org-glance-headline:file headline))
+           (tmp-file (org-glance-headline:file-name headline))
            (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
       (message "Generate headline directory: %s" refile-dir)
       (org-set-property "DIR" (abbreviate-file-name refile-dir))
@@ -598,7 +598,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (cl-loop
    for view-id in (org-glance-headline:tags headline)
    for overview-directory = (org-glance-overview:directory view-id)
-   for original-directory = (org-glance-headline:file headline)
+   for original-directory = (org-glance-headline:file-name headline)
    for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
    when (f-equal? common-parent overview-directory)
    do (cl-return view-id)))
@@ -732,12 +732,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (forward-char offset))))
 
 (cl-defun org-glance-overview:tag ()
-  "Return class name of current overview."
+  "Return tag name of current overview."
   (save-excursion
     (goto-char (point-min))
-    (let ((class (org-glance-headline:string-to-class (org-get-category))))
-      (when (gethash class org-glance-tags)
-        class))))
+    (let ((tag (org-glance-tag:from-string (org-get-category))))
+      (when (gethash tag org-glance-tags)
+        tag))))
 
 (cl-defmacro org-glance-overview:for-all (then &rest else)
   (declare (indent 1) (debug t))
@@ -823,20 +823,20 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (org-toggle-archive-tag))))
 
 (cl-defun org-glance-overview:move ()
-  "Move headline to another class."
+  "Move headline to another tag."
   (interactive)
-  (let* ((old-class (org-glance-overview:tag))
-         (new-class (let ((classes (--filter (not (eql old-class it)) (org-glance-tags:sorted))))
-                      (intern (completing-read "Move headline to: " classes nil t))))
+  (let* ((old-tag (org-glance-overview:tag))
+         (new-tag (let ((tages (--filter (not (eql old-tag it)) (org-glance-tags:sorted))))
+                    (intern (completing-read "Move headline to: " tages nil t))))
          (original-headline (org-glance-overview:original-headline)))
-    (org-glance:create-tag new-class)
+    (org-glance:create-tag new-tag)
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
         (cl-loop with tags = (org-get-tags)
-                 with indices = (--find-indices (eql old-class (org-glance-headline:string-to-class it)) tags)
+                 with indices = (--find-indices (eql old-tag (org-glance-tag:from-string it)) tags)
                  for index in indices
                  do (org-toggle-tag (nth index tags) 'off)
-                 finally (org-toggle-tag (symbol-name new-class) 'on))))))
+                 finally (org-toggle-tag (symbol-name new-tag) 'on))))))
 
 (cl-defun org-glance-overview:add-class ()
   "Add class to headline."

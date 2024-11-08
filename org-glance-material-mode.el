@@ -172,7 +172,7 @@
 Synchronize links with metadata if UPDATE-RELATIONS is t."
   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
     (let ((id (org-glance-headline:id headline))
-          (file (org-glance-headline:file headline))
+          (file (org-glance-headline:file-name headline))
           (buffer (org-glance-headline:buffer headline))
           (begin (org-glance-headline:begin headline))
           (contents (org-glance-headline-contents headline)))
@@ -231,7 +231,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
 (cl-defun org-glance-enable-encrypted-headlines (fn headline &rest args)
   (let ((result (apply fn headline args)))
     (with-current-buffer result
-      (when (org-glance-headline:encrypted-p headline)
+      (when (org-glance-headline:encrypted? headline)
         (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
         (org-glance-headline:decrypt --org-glance-materialized-headline:password)
 
