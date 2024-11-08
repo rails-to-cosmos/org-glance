@@ -707,8 +707,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:visit-headline ()
   (interactive)
-  (org-glance-overview:for-all
-      nil
+  (org-glance-overview:apply-to-buffer-headlines nil
     (let ((offset (- (point) (save-excursion
                                (org-glance-headline:search-parents)
                                (point)))))
@@ -720,7 +719,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:jump-headline ()
   (interactive)
-  (org-glance-overview:for-all
+  (org-glance-overview:apply-to-buffer-headlines
       nil
     (let ((offset (- (point) (save-excursion
                                (org-glance-headline:search-parents)
@@ -739,7 +738,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (when (gethash tag org-glance-tags)
         tag))))
 
-(cl-defmacro org-glance-overview:for-all (then &rest else)
+(cl-defmacro org-glance-overview:apply-to-buffer-headlines (then &rest else)
   (declare (indent 1) (debug t))
   `(if (org-before-first-heading-p)
        ,then
@@ -885,7 +884,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 ;; (cl-defun org-glance-overview:vizualize ()
 ;;   (interactive)
-;;   (org-glance-overview:for-all
+;;   (org-glance-overview:apply-to-buffer-headlines
 ;;       (error "not implemented yet")
 ;;     (let ((relations (org-glance-headline-relations)))
 ;;       (with-temp-file "relations.js"

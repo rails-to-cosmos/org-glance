@@ -669,7 +669,6 @@ Do not modify existing properties without backfilling of metadata.")
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
-  "Visit HEADLINE."
   (let* ((id (org-glance-headline:id headline))
          (file (org-glance-headline:file-name headline))
          (buffer (org-glance-headline:buffer headline))
@@ -680,6 +679,7 @@ Do not modify existing properties without backfilling of metadata.")
           (t (message "File and buffer not found for visiting. Using current buffer...")))
 
     (widen)
+
     (cond (id (org-glance-headline:search-buffer-by-id id))
           (t (goto-char (org-glance-headline:begin headline))))))
 

@@ -9,7 +9,7 @@
 
 (defvar org-glance-materialized-buffers (make-hash-table))
 
-(defvar-local --org-glance-materialized-headline:classes nil)
+(defvar-local --org-glance-materialized-headline:tags nil)
 (defvar-local --org-glance-materialized-headline:begin nil)
 (defvar-local --org-glance-materialized-headline:file nil)
 (defvar-local --org-glance-materialized-headline:buffer nil)
@@ -58,10 +58,10 @@
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash))
            (source-headline (org-glance-headline:update (org-glance-headline:at-point)
-                              :begin --org-glance-materialized-headline:begin
-                              :file --org-glance-materialized-headline:file
-                              :buffer --org-glance-materialized-headline:buffer))
-           (source-classes (org-glance-headline:tags))
+                                                        :begin --org-glance-materialized-headline:begin
+                                                        :file --org-glance-materialized-headline:file
+                                                        :buffer --org-glance-materialized-headline:buffer))
+           (source-tags (org-glance-headline:tags))
            (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
@@ -117,38 +117,25 @@
 
         (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
 
-        (cond ((memq 'archive source-classes)
-               (cl-loop
-                for class in source-classes
-                if (eql class 'archive)
-                do
-                (org-glance-overview:register-headline-in-overview source-headline class)
-                (org-glance-overview:register-headline-in-metadata source-headline class)
-                else
-                do
-                (org-glance-overview:remove-headline-from-overview source-headline class)
-                (org-glance-overview:remove-headline-from-metadata source-headline class)))
+        (cond ((memq 'archive source-tags)
+               (cl-loop for tag in source-tags
+                        if (eq tag 'archive)
+                        do (progn (org-glance-overview:register-headline-in-overview source-headline tag)
+                                  (org-glance-overview:register-headline-in-metadata source-headline tag))
+                        else
+                        do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
+                                  (org-glance-overview:remove-headline-from-metadata source-headline tag))))
 
-              ((not source-active?)
-               (cl-loop
-                for class in source-classes
-                do
-                (org-glance-overview:remove-headline-from-overview source-headline class)
-                (org-glance-overview:remove-headline-from-metadata source-headline class)
-                (org-glance-overview:register-headline-in-archive source-headline class)))
-
-              (t (cl-loop
-                  for class in source-classes
-                  do
-                  (org-glance-overview:register-headline-in-overview source-headline class)
-                  (org-glance-overview:register-headline-in-metadata source-headline class))
-                 (cl-loop
-                  for class in (seq-difference --org-glance-materialized-headline:classes source-classes)
-                  do
-                  (org-glance-overview:remove-headline-from-overview source-headline class)
-                  (org-glance-overview:remove-headline-from-metadata source-headline class))))
-
-
+              ((not source-active?) (cl-loop for tag in source-tags
+                                             do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
+                                                       (org-glance-overview:remove-headline-from-metadata source-headline tag)
+                                                       (org-glance-overview:register-headline-in-archive source-headline tag))))
+              (t (cl-loop for tag in source-tags
+                          do (progn (org-glance-overview:register-headline-in-overview source-headline tag)
+                                    (org-glance-overview:register-headline-in-metadata source-headline tag)))
+                 (cl-loop for tag in (seq-difference --org-glance-materialized-headline:tags source-tags)
+                          do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
+                                    (org-glance-overview:remove-headline-from-metadata source-headline tag)))))
 
         (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
 
@@ -177,16 +164,14 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
           (begin (org-glance-headline:begin headline))
           (contents (org-glance-headline-contents headline)))
 
-      (when file
-        (setq-local default-directory (file-name-directory file)))
+      (setq-local default-directory (file-name-directory file))
 
       (org-mode)
       (org-glance-material-mode +1)
-
       (insert contents)
 
       (setq --org-glance-materialized-headline:id id
-            --org-glance-materialized-headline:classes (org-glance-headline:tags)
+            --org-glance-materialized-headline:tags (org-glance-headline:tags)
             --org-glance-materialized-headline:file file
             --org-glance-materialized-headline:buffer buffer
             --org-glance-materialized-headline:begin begin
@@ -195,36 +180,33 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
       (goto-char (point-min))
 
       (when update-relations
-        (cl-loop
-           while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-           collect (let* ((standard-output 'ignore)
-                          (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-                          (type (intern (car link)))
-                          (id (cadr link)))
+        (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
+                 collect (let* ((standard-output 'ignore)
+                                (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+                                (type (intern (car link)))
+                                (id (cadr link)))
 
-                     (when (memq type '(org-glance-visit
-                                        org-glance-open
-                                        org-glance-overview
-                                        org-glance-state))
-                       (delete-region (match-beginning 0) (match-end 0)))
+                           (when (memq type '(org-glance-visit
+                                              org-glance-open
+                                              org-glance-overview
+                                              org-glance-state))
+                             (delete-region (match-beginning 0) (match-end 0)))
 
-                     (when (memq type '(org-glance-visit org-glance-open))
-                       (when-let (headline (org-glance-metadata:get-headline id))
-                         (goto-char (match-beginning 0))
-                         (insert
-                          (if (or (bolp) (looking-back "[[:blank:]]" 1))
-                              ""
-                            " ")
-                          (org-glance:with-headline-narrowed headline
-                            (org-glance-headline-reference type))))))))
+                           (when (memq type '(org-glance-visit org-glance-open))
+                             (when-let (headline (org-glance-metadata:get-headline id))
+                               (goto-char (match-beginning 0))
+                               (insert
+                                (if (or (bolp) (looking-back "[[:blank:]]" 1))
+                                    ""
+                                  " ")
+                                (org-glance:with-headline-narrowed headline
+                                  (org-glance-headline-reference type))))))))
 
       (org-glance:material-buffer-default-view)
 
       (message "Promote subtree to the first level")
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
       (org-glance-headline:promote-to-the-first-level)
-
-      (message "Save current buffer to cache")
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
       (current-buffer))))
 
