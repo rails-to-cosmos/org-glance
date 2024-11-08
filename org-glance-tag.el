@@ -6,6 +6,9 @@
 (cl-defun org-glance-tag:exists? (tag tags) ;; -> bool
   (gethash tag tags))
 
+(cl-defun org-glance-tag:remove (tag tags)
+  (remhash tag tags))
+
 (cl-defun org-glance-tag:to-string (tag)
   (symbol-name tag))
 

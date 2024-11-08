@@ -231,14 +231,14 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:register-headline-in-metastore (headline tag)
   ;; TODO implement explicit model for metastore
   (let ((metastore-file-name (org-glance-tag:metadata-file-name tag))
-        (metastore (org-glance-tag:metastore tag)))
+        (metastore (org-glance:tag-metastore tag)))
     (org-glance-metastore:add-headline headline metastore)
     (org-glance-metastore:save metastore metastore-file-name)))
 
 (cl-defun org-glance-overview:remove-headline-from-metastore (headline tag)
   ;; TODO implement explicit model for metastore
   (let ((metastore-location (org-glance-tag:metadata-file-name tag))
-        (metastore (org-glance-tag:metastore tag)))
+        (metastore (org-glance:tag-metastore tag)))
     (org-glance-metastore:remove-headline headline metastore)
     (org-glance-metastore:save metastore metastore-location)))
 
@@ -338,7 +338,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (save-excursion
       (org-glance-ensure-at-heading)
       (let* ((id (org-glance-tag:id* tag))
-             (dir (org-glance-generate-directory tag))
+             (dir (org-glance:make-directory tag))
              (output-file (f-join dir (format "%s.org" (org-glance-tag:file-name tag)))))
 
         (mkdir dir 'parents)
@@ -386,7 +386,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
     (let* ((id org-glance-capture:id)
            (class org-glance-capture:tag)
            (refile-dir (org-glance-headline:generate-directory
-                        (org-glance-tag:location class)
+                        (org-glance:tag-file-name class)
                         (org-glance-headline:title headline)))
            (tmp-file (org-glance-headline:file headline))
            (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))

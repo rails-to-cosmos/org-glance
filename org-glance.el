@@ -52,6 +52,11 @@
 (require 'org-glance-datetime-mode)
 (require 'org-glance-ui)
 
+(defgroup org-glance nil
+  "Options concerning glancing entries."
+  :tag "Org Glance"
+  :group 'org)
+
 (defcustom org-glance-directory org-directory
   "Root directory, containing primary Org mode files and metadata.
 This directory serves as the main location for all Org mode content managed by `org-glance`."
@@ -132,27 +137,27 @@ This option enables duplication of repeated tasks, preserving previous instances
   (unless (org-at-heading-p)
     (org-back-to-heading-or-point-min)))
 
-(cl-defun org-glance-tag:location (&optional (tag (org-glance-tags:completing-read)))
+(cl-defun org-glance:tag-file-name (&optional (tag (org-glance-tags:completing-read)))
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
 
-(cl-defun org-glance-tag:metastore (tag)
+(cl-defun org-glance:tag-metastore (tag)
   (->> tag
        org-glance-tag:metadata-file-name
        org-glance-metastore:read))
 
-(cl-defun org-glance-generate-directory (&optional (tag (org-glance-tags:completing-read)))
+(cl-defun org-glance:make-directory (&optional (tag (org-glance-tags:completing-read)))
   (save-excursion
     (org-glance-ensure-at-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (org-glance-headline:generate-directory
-       (org-glance-tag:location tag)
+       (org-glance:tag-file-name tag)
        (org-element-property :raw-value (org-element-at-point))))))
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
-(cl-defun org-glance-buffer-key-value-pairs ()
+(cl-defun org-glance:get-key-value-pairs-from-buffer ()
   "Extract key-value pairs from buffer.
 Run completing read on keys and copy selected values to kill ring.
 
@@ -185,18 +190,16 @@ This function is inspired by the f-strings in Python 3.6, which I
 enjoy using a lot.
 "
   (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
-         (agetter (cl-loop
-                   for (m0 m1 m2 m3) in matches
-                   collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
-                                                                  (if s-lex-value-as-lisp "S" "s")
-                                                                ,m2))
-                                               (symbol-value (intern ,m1))))))
+         (agetter (cl-loop for (m0 m1 m2 m3) in matches
+                           collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                          (if s-lex-value-as-lisp "S" "s")
+                                                                        ,m2))
+                                                       (symbol-value (intern ,m1))))))
          (result `(s-format ,fmt 'aget (list ,@agetter))))
     `(s-join "\n"
-             (cl-loop
-              with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
-              for line in (s-split "\n" ,result)
-              collect (funcall stripMargin line)))))
+             (cl-loop with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
+                      for line in (s-split "\n" ,result)
+                      collect (funcall stripMargin line)))))
 
 (defun -org-glance:make-file-directory (file)
   (let ((dir (file-name-directory file)))
@@ -230,14 +233,6 @@ enjoy using a lot.
 (cl-defun org-glance-join-but-null (separator strings)
   (declare (indent 1))
   (org-glance-join separator (cl-remove-if #'null strings)))
-
-(defgroup org-glance nil
-  "Options concerning glancing entries."
-  :tag "Org Glance"
-  :group 'org)
-
-(cl-defun org-glance:remove-tag (tag)
-  (remhash tag org-glance-tags))
 
 (cl-defun org-glance:create-tag (tag)
   (when (org-glance-tag:register tag org-glance-tags)
@@ -329,7 +324,7 @@ after capture process has been finished."
 
   (cl-loop for tag being the hash-keys of org-glance-tags
            unless (f-exists? (f-join org-glance-directory (org-glance-tag:file-name tag)))
-           do (org-glance:remove-tag tag))
+           do (org-glance-tag:remove tag org-glance-tags))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted))))
 
@@ -420,7 +415,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 If headline doesn't contain key-value pairs, role `can-be-extracted' should be revoked."
   (let ((action (lambda (headline)
                   (let ((pairs (org-glance:with-headline-materialized headline
-                                 (org-glance-buffer-key-value-pairs))))
+                                 (org-glance:get-key-value-pairs-from-buffer))))
                     (condition-case nil
                         (while t
                           (kill-new (alist-get (completing-read "Extract property: " pairs nil t) pairs nil nil #'string=)))
@@ -674,7 +669,7 @@ metastore.")
 
 (cl-defun org-glance-parse-links ()
   "Simple org-link parser, return list of cons cells (link . contents)."
-  (let ((descriptions (cl-loop for (key . val) in (org-glance-buffer-key-value-pairs)
+  (let ((descriptions (cl-loop for (key . val) in (org-glance:get-key-value-pairs-from-buffer)
                                collect (cons val key)))
         (links (cl-loop
                 for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
