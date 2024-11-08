@@ -1299,16 +1299,15 @@ FIXME. Unstable one. Refactor is needed."
           (if-let (headline (org-glance-scope--choose-headline choice headlines))
               (condition-case nil
                   (funcall action headline)
-                (DB-OUTDATED
-                 (message "Metadata %s is outdated, actualizing..." db)
-                 (redisplay)
-                 (org-glance :scope scope
-                             :filter filter
-                             :action action
-                             :db db
-                             :db-init t
-                             :default choice
-                             :prompt prompt)))
+                (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
+                             (redisplay)
+                             (org-glance :scope scope
+                                         :filter filter
+                                         :action action
+                                         :db db
+                                         :db-init t
+                                         :default choice
+                                         :prompt prompt)))
             (user-error "Headline not found"))))))
 
 (provide 'org-glance)
