@@ -1,4 +1,4 @@
-;;; org-glance.el --- Peering through the tangled jungle of org-mode, faster than a bureaucrat with a shortcut, sharper than a detective's intuition. A way to skim the surface or dive right in — as fast and convenient as you need it to be.  ;; -*- lexical-binding: t -*-
+;;; org-glance.el --- Org-mode mindmap.  ;; -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2018-2024 Dmitry Akatov
 
@@ -52,6 +52,7 @@
 (require 'org-glance-agenda-mode)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-ui)
+(require 'org-glance-utils)
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -59,20 +60,17 @@
   :group 'org)
 
 (defcustom org-glance-directory org-directory
-  "Root directory, containing primary Org mode files and metadata.
-This directory serves as the main location for all Org mode content managed by `org-glance`."
+  "Main location for all Org mode content managed by `org-glance`."
   :group 'org-glance
   :type 'directory)
 
 (defcustom org-glance-resource-directory (f-join org-directory "resources")
-  "Directory for non-Org resources associated with `org-glance`, such as attachments, media files, and other binary assets.
-Intended for organizing supplementary content that supports Org mode files in the main directory."
+  "Directory for non-Org resources associated with `org-glance`."
   :group 'org-glance
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "If non-nil, create a new headline copy when repeating rather than modifying in place.
-This option enables duplication of repeated tasks, preserving previous instances instead of updating the same headline."
+  "Create a new headline copy when repeating rather than modifying in place."
   :group 'org-glance
   :type 'boolean)
 
@@ -237,6 +235,7 @@ enjoy using a lot.
   (-org-glance:join-leading-separator separator (cl-remove-if #'null strings)))
 
 (cl-defun org-glance:create-tag (tag)
+  (cl-assert (and (symbolp tag) (symbol-downcased-p tag)))
   (when (org-glance-tag:register tag org-glance-tags)
     (org-glance-metadata:create (org-glance-tag:metadata-file-name tag))
     (org-glance-overview:create tag)))
@@ -980,7 +979,7 @@ FIXME. Unstable one. Refactor is needed."
     (cl-loop with metadata = (make-hash-table :test 'equal)
              for headline in headlines
              do (org-glance-metadata:add-headline headline metadata)
-             finally (org-glance-metadata:save metadata))))
+             finally (org-glance-metadata:save metadata file))))
 
 (defun org-glance-metadata:read (file)
   (with-temp-buffer
