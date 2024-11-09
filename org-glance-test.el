@@ -23,10 +23,10 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest test-tag-management ()
   (with-temp-glance-directory
-    (org-glance:create-tag 'a)  ;; by default, tags are lowercased symbols
-    (org-glance:create-tag "b")
+    (org-glance:create-tag 'foo)
+    (org-glance:create-tag 'bar)
 
-    (should (and (org-glance-tag:exists? 'a org-glance-tags)
-                 (org-glance-tag:exists? 'b org-glance-tags)))))
+    (should (and (org-glance-tag:exists? 'foo org-glance-tags)
+                 (org-glance-tag:exists? 'bar org-glance-tags)))))
 
 (provide 'org-glance-test)
