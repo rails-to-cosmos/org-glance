@@ -27,12 +27,6 @@
 (cl-defun org-glance-tag:from-headline-at-point ()
   (mapcar #'org-glance-tag:from-string (org-get-tags)))
 
-;; TODO refactor is needed for all the filters
-(cl-defun org-glance-tag:filter (tag) ;; -> callable
-  #'(lambda (headline)
-      (when (-contains? (mapcar #'downcase (org-element-property :tags headline)) (symbol-name tag))
-        headline)))
-
 (cl-defun org-glance-tag:register (tag tags)
   (puthash tag t tags)
   tag)

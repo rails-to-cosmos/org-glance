@@ -86,14 +86,16 @@
   (let ((tag-string (org-glance-tag:to-string tag)))
     (f-join org-glance-directory tag-string (format "%s.metadata.el" tag-string))))
 
-(cl-defun org-glance:headlines-from-tags (tags) ;; -> list[headline]
-  (cl-typecase tags
-    (symbol (org-glance-headlines :db (org-glance:tag-metadata-file-name tags)
-                                  :scope (list org-glance-directory)
-                                  :filter (org-glance-tag:filter tags)))
-    (list (mapcan #'org-glance:headlines-from-tags tags))
-    (null nil)
-    (t (user-error (format "Unable to get headlines from tag %s of type %s: symbol or list of symbols expected" tags (type-of tags))))))
+;; TODO refactor is needed for all the filters
+(cl-defun org-glance:tag-filter (tag) ;; -> callable
+  #'(lambda (headline)
+      (when (-contains? (mapcar #'downcase (org-element-property :tags headline)) (symbol-name tag))
+        headline)))
+
+(cl-defun org-glance:tag-headlines (tag) ;; -> list[headline]
+  (org-glance-headlines :db (org-glance:tag-metadata-file-name tag)
+                        :scope (list org-glance-directory)
+                        :filter (org-glance:tag-filter tag)))
 
 (cl-defun org-glance-tags:completing-read (&optional (prompt "Tag: ") (require-match t))
   "Run completing read PROMPT on registered tags filtered by TYPE."
@@ -1019,7 +1021,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-all-headlines (&optional filter)
   (cl-loop for tag being the hash-keys of org-glance-tags
-           append (cl-loop for headline in (org-glance:headlines-from-tags tag)
+           append (cl-loop for headline in (org-glance:tag-headlines tag)
                            when (or (null filter) (funcall filter headline))
                            collect (cons (format "[%s] %s" tag (org-glance:headline-title headline))
                                          (list headline tag)))))
