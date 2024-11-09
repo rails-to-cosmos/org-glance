@@ -11,7 +11,7 @@
 (source "melpa")
 (source "org")
 
-(depends-on "emacs" "26.1")
+(depends-on "emacs" "29.1")
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")

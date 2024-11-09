@@ -1,13 +1,17 @@
-;;; org-glance.el --- Org-mode mindmap.  ;; -*- lexical-binding: t -*-
+;; -*- lexical-binding: t -*-
+
+;;; org-glance.el --- Org-mode mindmap.
 
 ;; Copyright (C) 2018-2024 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
-
-;; Keywords: org-mode tools
+;; Package-Requires: ((emacs "26.1") (aes) (dash) (f) (highlight) (transient) (elsa) (with-simulated-input))
+;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
+;; Source: gnu, melpa, org
+;; License: GPL-3+
 
 ;; This file is not part of GNU Emacs.
 
@@ -50,7 +54,6 @@
 (require 'org-glance-exceptions)
 (require 'org-glance-overview-mode)
 (require 'org-glance-material-mode)
-(require 'org-glance-agenda-mode)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-ui)
 (require 'org-glance-utils)
