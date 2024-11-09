@@ -61,7 +61,7 @@
                                                         :begin --org-glance-materialized-headline:begin
                                                         :file --org-glance-materialized-headline:file
                                                         :buffer --org-glance-materialized-headline:buffer))
-           (source-tags (org-glance-headline:tags))
+           (source-tags (org-glance-headline:tags source-headline))
            (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
@@ -171,7 +171,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
       (insert contents)
 
       (setq --org-glance-materialized-headline:id id
-            --org-glance-materialized-headline:tags (org-glance-headline:tags)
+            --org-glance-materialized-headline:tags (org-glance-headline:tags headline)
             --org-glance-materialized-headline:file file
             --org-glance-materialized-headline:buffer buffer
             --org-glance-materialized-headline:begin begin
@@ -205,7 +205,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
       (org-glance:material-buffer-default-view)
 
       (message "Promote subtree to the first level")
-      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
+      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level headline)))
       (org-glance-headline:promote-to-the-first-level)
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
       (current-buffer))))

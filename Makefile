@@ -4,7 +4,8 @@ info:
 	eask info
 
 build:
-	eask package ./build
+	eask package ./dist
+	eask reinstall
 
 test:
 	eask install

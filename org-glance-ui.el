@@ -37,7 +37,6 @@
     ("j" "Open link" org-glance:open)
     ("m" "Materialize headline" org-glance:materialize)]]
   (interactive)
-  (org-glance-init)
   (transient-setup 'org-glance-form-action))
 
 (provide 'org-glance-ui)

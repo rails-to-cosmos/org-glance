@@ -227,14 +227,14 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
                                        (org-glance-datetime-reset-buffer-timestamps-except-earliest)
 
                                        (cl-loop
-                                        for class in (org-glance-headline:tags)
+                                        for class in (org-glance-headline:tags (org-glance-headline:at-point))
                                         do (let ((headline (org-glance-capture-headline-at-point class)))
                                              (org-glance-overview:register-headline-in-archive headline class))))))))))
 
 (cl-defmacro org-glance:with-headline-at-point (&rest forms)
   `(save-excursion
      (org-glance-headline:search-parents)
-     (unless (org-glance-headline?)
+     (unless (org-glance-headline? (org-glance-headline:at-point))
        (error "Unable to find headline at point"))
      (save-restriction
        (org-narrow-to-subtree)
@@ -535,7 +535,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
   (org-glance:ensure-at-heading)
-  (while (and (not (org-glance-headline?))
+  (while (and (not (org-glance-headline? (org-glance-headline:at-point)))
               (not (org-before-first-heading-p))
               (not (bobp)))
     (org-up-heading-or-point-min))
@@ -693,11 +693,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
   (org-glance:ensure-at-heading)
-  (while (and (org-glance-headline?) (looking-at "^\\*\\*"))
+  (while (and (org-glance-headline? (org-glance-headline:at-point)) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
 (cl-defun org-glance-headline:replace-headline-at-point (new-contents)
-  (let ((beg (org-glance-headline:begin))
+  (let ((beg (org-glance-headline:begin (org-glance-headline:at-point)))
         (end (save-excursion (org-end-of-subtree t)))
         (inhibit-read-only t))
     (delete-region beg end)
@@ -755,10 +755,10 @@ FIXME. Unstable one. Refactor is needed."
   "Extract headlines from buffer B."
   (with-current-buffer b
     (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (e)
-        (when (org-glance-headline? e)
+      (lambda (headline)
+        (when (org-glance-headline? headline)
           (save-excursion
-            (goto-char (org-glance-headline:begin e))
+            (goto-char (org-glance-headline:begin headline))
             (org-glance-headline:update (org-glance-headline:create-from-element-at-point)
               :buffer b)))))))
 
@@ -819,24 +819,25 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance:with-headline-at-point
    (cl-flet ((org-list (&rest items) (-org-glance:join-leading-separator-but-null "\n- " items))
              (org-newline (&rest items) (-org-glance:join-leading-separator-but-null "\n" items)))
-     (let ((timestamps (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
-                                                   (org-glance-datetime-filter-active)
-                                                   (org-glance-datetime-sort-timestamps))
-                                collect (org-element-property :raw-value timestamp)))
-           (clocks (org-glance:with-headline-at-point
-                    (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
-                             collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
-           (relations (org-glance-headline-relations))
-           (tags (org-make-tag-string (org-get-tags nil t)))
-           (state (org-glance-headline:state))
-           (id (org-glance-headline:id))
-           (title (org-glance:headline-title))
-           (priority (org-glance-headline:priority))
-           (closed (org-element-property :closed (org-element-at-point)))
-           (schedule (org-glance-headline:schedule))
-           (deadline (org-glance-headline:deadline))
-           (encrypted (org-glance-headline:encrypted?))
-           (linked (org-glance-headline:linked?)))
+     (let* ((timestamps (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
+                                                    (org-glance-datetime-filter-active)
+                                                    (org-glance-datetime-sort-timestamps))
+                                 collect (org-element-property :raw-value timestamp)))
+            (clocks (org-glance:with-headline-at-point
+                     (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
+                              collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
+            (relations (org-glance-headline-relations))
+            (tags (org-make-tag-string (org-get-tags nil t)))
+            (headline (org-glance-headline:at-point))
+            (state (org-glance-headline:state headline))
+            (id (org-glance-headline:id headline))
+            (title (org-glance:headline-title))
+            (priority (org-glance-headline:priority headline))
+            (closed (org-element-property :closed (org-element-at-point)))
+            (schedule (org-glance-headline:schedule headline))
+            (deadline (org-glance-headline:deadline headline))
+            (encrypted (org-glance-headline:encrypted? headline))
+            (linked (org-glance-headline:linked? headline)))
        (with-temp-buffer
          (insert
           (concat
@@ -902,14 +903,14 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline-reference (&optional (type 'org-glance-visit))
   (org-glance:with-headline-at-point
-   (let* ((id (org-glance-headline:id))
-          (state (org-glance-headline:state))
+   (let* ((headline (org-glance-headline:at-point))
+          (id (org-glance-headline:id headline))
+          (state (org-glance-headline:state headline))
           (alias (-some->> (org-glance:headline-alias)
                    (replace-regexp-in-string (format "^%s[[:space:]]*" state) "")))
-          (tags (org-glance-headline:tags))
-          (tag (s-join ", " (cl-loop
-                               for tag in tags
-                               collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
+          (tags (org-glance-headline:tags headline))
+          (tag (s-join ", " (cl-loop for tag in tags
+                                     collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
      (format "%s%s [[%s:%s][%s]]"
              (if (string-empty-p state) "" (format "[[org-glance-state:%s][%s]] " state state))
              tag
