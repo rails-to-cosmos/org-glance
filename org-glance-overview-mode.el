@@ -656,7 +656,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (interactive)
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
-      (let ((metadata-file-name (org-glance-tag:metadata-file-name class))
+      (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
             (overview-file-name (-org-glance:make-file-directory (org-glance-overview:file-name tag))))
         (org-glance-metadata:create metadata-file-name)
         (org-glance-overview:create-archive tag)
