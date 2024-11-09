@@ -27,10 +27,6 @@
 (cl-defun org-glance-tag:from-headline-at-point ()
   (mapcar #'org-glance-tag:from-string (org-get-tags)))
 
-(cl-defun org-glance-tag:metadata-file-name (tag)  ;; -> string
-  (let ((tag-string (org-glance-tag:to-string tag)))
-    (f-join org-glance-directory tag-string (format "%s.metadata.el" tag-string))))
-
 ;; TODO refactor is needed for all the filters
 (cl-defun org-glance-tag:filter (tag) ;; -> callable
   #'(lambda (headline)

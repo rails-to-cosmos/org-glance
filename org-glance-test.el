@@ -18,14 +18,18 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
                 ,@body)
        (delete-directory org-glance-directory t))))
 
-(ert-deftest test-initial-state ()
+(ert-deftest initial-state ()
   (with-temp-glance-directory
     (should (= (length (org-glance-tags:list)) 0))))
 
-(ert-deftest test-basic-tag-management ()
+(ert-deftest basic-tag-management ()
   (with-temp-glance-directory
     (org-glance:create-tag 'foo)
     (should (org-glance-tag:exists? 'foo org-glance-tags))
+
+    ;; (org-glance:remove-tag 'foo)
+    ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
+
     (should-error (org-glance:create-tag "bar") :type 'error)
     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 

@@ -82,9 +82,13 @@
 (cl-defun org-glance-tags:sorted () ;; -> list[symbol]
   (sort (org-glance-tags:list) #'s-less?))
 
-(cl-defun org-glance:headlines-from-tags (tags)  ;; -> list[headline]
+(cl-defun org-glance:tag-metadata-file-name (tag)  ;; -> string
+  (let ((tag-string (org-glance-tag:to-string tag)))
+    (f-join org-glance-directory tag-string (format "%s.metadata.el" tag-string))))
+
+(cl-defun org-glance:headlines-from-tags (tags) ;; -> list[headline]
   (cl-typecase tags
-    (symbol (org-glance-headlines :db (org-glance-tag:metadata-file-name tags)
+    (symbol (org-glance-headlines :db (org-glance:tag-metadata-file-name tags)
                                   :scope (list org-glance-directory)
                                   :filter (org-glance-tag:filter tags)))
     (list (mapcan #'org-glance:headlines-from-tags tags))
@@ -144,7 +148,7 @@
 
 (cl-defun org-glance:tag-metadata (tag)
   (->> tag
-       org-glance-tag:metadata-file-name
+       org-glance:tag-metadata-file-name
        org-glance-metadata:read))
 
 (cl-defun org-glance:make-directory (&optional (tag (org-glance-tags:completing-read)))
@@ -238,7 +242,7 @@ enjoy using a lot.
     (error "Tag should be a downcased symbol."))
 
   (when (org-glance-tag:register tag org-glance-tags)
-    (org-glance-metadata:create (org-glance-tag:metadata-file-name tag))
+    (org-glance-metadata:create (org-glance:tag-metadata-file-name tag))
     (org-glance-overview:create tag)))
 
 (cl-defun org-glance-materialized-headline:preserve-history-before-auto-repeat (&rest _)
@@ -1003,7 +1007,7 @@ FIXME. Unstable one. Refactor is needed."
 
   (cl-loop for tag being the hash-keys of org-glance-tags
            for metadata = (->> tag
-                                org-glance-tag:metadata-file-name
+                                org-glance:tag-metadata-file-name
                                 org-glance-metadata:read)
            for headline = (gethash id metadata)
            when headline

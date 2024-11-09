@@ -230,14 +230,14 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
+  (let ((metadata-file-name (org-glance:tag-metadata-file-name tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:add-headline headline metadata)
     (org-glance-metadata:save metadata metadata-file-name)))
 
 (cl-defun org-glance-overview:remove-headline-from-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-location (org-glance-tag:metadata-file-name tag))
+  (let ((metadata-location (org-glance:tag-metadata-file-name tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:remove-headline headline metadata)
     (org-glance-metadata:save metadata metadata-location)))
@@ -412,7 +412,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:import-headlines-from-files (tag files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of current overview tag and add it to overview."
-  (let* ((metadata-location (org-glance-tag:metadata-file-name tag))
+  (let* ((metadata-location (org-glance:tag-metadata-file-name tag))
          (metadata (org-glance-metadata:read metadata-location))
          (overviews '())
          (archives '()))
@@ -657,7 +657,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (interactive)
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
-      (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
+      (let ((metadata-file-name (org-glance:tag-metadata-file-name tag))
             (overview-file-name (org-glance-overview:file-name tag)))
         (org-glance--make-file-directory overview-file-name)
         (org-glance-metadata:create metadata-file-name)
@@ -762,9 +762,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
         (save-buffer)
         (kill-buffer)
         (org-glance-overview:create tag)
-        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-tag:metadata-file-name tag))))
+        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance:tag-metadata-file-name tag))))
           (let ((files (--filter (not (s-contains? "sync-conflict" it))
-                                 (org-glance-scope (f-parent (org-glance-tag:metadata-file-name tag))))))
+                                 (org-glance-scope (f-parent (org-glance:tag-metadata-file-name tag))))))
             (org-glance-overview:import-headlines-from-files tag files)
             (org-glance-overview:order)
             (let ((inhibit-read-only t))
