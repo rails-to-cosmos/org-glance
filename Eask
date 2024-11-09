@@ -1,5 +1,5 @@
 (package "org-glance"
-         "1.0.0"
+         "0.0.1"
          "Org-mode mindmap.")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
