@@ -78,8 +78,11 @@ This option enables duplication of repeated tasks, preserving previous instances
 
 (defvar org-glance-tags (make-hash-table) "Hash table {tag id -> tag parameters}")
 
-(defun org-glance-tags:sorted ()  ;; -> list[symbol]
-  (sort (hash-table-keys org-glance-tags) #'s-less?))
+(cl-defun org-glance-tags:list ()  ;; -> list[symbol]
+  (hash-table-keys org-glance-tags))
+
+(cl-defun org-glance-tags:sorted () ;; -> list[symbol]
+  (sort (org-glance-tags:list) #'s-less?))
 
 (cl-defun org-glance:headlines-from-tags (tags)  ;; -> list[headline]
   (cl-typecase tags
@@ -304,11 +307,11 @@ after capture process has been finished."
                        (goto-char <point>)
                        (funcall ,action <hl>))))))))
 
-(cl-defun org-glance-init ()
+(cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Update all changed entities from `org-glance-directory'."
 
-  (unless (f-exists? org-glance-directory)
-    (mkdir org-glance-directory t))
+  (unless (f-exists? directory)
+    (mkdir directory t))
 
   (org-glance-overview-init)
 
@@ -317,12 +320,12 @@ after capture process has been finished."
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
-  (cl-loop for directory in (org-glance:list-directories org-glance-directory)
-           for tag = (org-glance-tag:read directory)
+  (cl-loop for dir in (org-glance:list-directories directory)
+           for tag = (org-glance-tag:read dir)
            do (org-glance:create-tag tag))
 
   (cl-loop for tag being the hash-keys of org-glance-tags
-           unless (f-exists? (f-join org-glance-directory (org-glance-tag:file-name tag)))
+           unless (f-exists? (f-join directory (org-glance-tag:file-name tag)))
            do (org-glance-tag:remove tag org-glance-tags))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted))))
