@@ -612,6 +612,30 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
                      (t "* %?")))))
 
+(cl-defmacro org-glance:format (fmt)
+  "Like `s-format' but with format fields in it.
+FMT is a string to be expanded against the current lexical
+environment. It is like what is used in `s-lex-format', but has
+an expanded syntax to allow format-strings. For example:
+${user-full-name 20s} will be expanded to the current value of
+the variable `user-full-name' in a field 20 characters wide.
+  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
+  will render as: 2.24
+This function is inspired by the f-strings in Python 3.6, which I
+enjoy using a lot.
+"
+  (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
+         (agetter (cl-loop for (_ m1 m2 m3) in matches
+                           collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                          (if s-lex-value-as-lisp "S" "s")
+                                                                        ,m2))
+                                                       (symbol-value (intern ,m1))))))
+         (result `(s-format ,fmt 'aget (list ,@agetter))))
+    `(s-join "\n"
+             (cl-loop with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
+                      for line in (s-split "\n" ,result)
+                      collect (funcall stripMargin line)))))
+
 (cl-defun org-glance-overview:refresh-widgets (&optional (tag (org-glance-overview:tag)))
   (interactive)
   (save-excursion
@@ -689,7 +713,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted)))
+  (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
         (org-agenda-span 7)
@@ -827,7 +851,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   "Move headline to another tag."
   (interactive)
   (let* ((old-tag (org-glance-overview:tag))
-         (new-tag (let ((tages (--filter (not (eql old-tag it)) (org-glance-tags:sorted))))
+         (new-tag (let ((tages (--filter (not (eql old-tag it)) (org-glance:tags-sorted))))
                     (intern (completing-read "Move headline to: " tages nil t))))
          (original-headline (org-glance-overview:original-headline)))
     (org-glance:create-tag new-tag)
@@ -844,7 +868,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (interactive)
   (let* ((original-headline (org-glance-overview:original-headline))
          (old-classes (org-glance-headline:tags original-headline))
-         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-tags:sorted))))
+         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance:tags-sorted))))
                       (intern (completing-read "Add class: " views)))))
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
@@ -899,7 +923,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 ;;                 "];")))))
 
 ;; (cl-defun -og-calw-d (day)
-;;   (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted))))
+;;   (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
 ;;     (org-agenda-list)
 ;;     (org-agenda-day-view day)
 ;;     (switch-to-buffer org-agenda-buffer)

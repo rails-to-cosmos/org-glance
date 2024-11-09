@@ -20,7 +20,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest initial-state ()
   (with-temp-glance-directory
-    (should (= (length (org-glance-tags:list)) 0))))
+    (should (= (length (org-glance:tags)) 0))))
 
 (ert-deftest basic-tag-management ()
   (with-temp-glance-directory

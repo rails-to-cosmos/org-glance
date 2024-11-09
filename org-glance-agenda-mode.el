@@ -1,4 +1,4 @@
-;; Something
+(require 'org-glance-customs)
 
 (defconst org-glance-agenda:header "#    -*- mode: org; mode: org-glance-agenda -*-")
 

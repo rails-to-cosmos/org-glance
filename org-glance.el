@@ -4,7 +4,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.0.0
+;; Version: 0.0.1
 
 ;; Keywords: org-mode tools
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -44,6 +44,7 @@
 (require 'seq)
 (require 'subr-x)
 
+(require 'org-glance-customs)
 (require 'org-glance-tag)
 (require 'org-glance-headline)
 (require 'org-glance-exceptions)
@@ -59,32 +60,17 @@
   :tag "Org Glance"
   :group 'org)
 
-(defcustom org-glance-directory org-directory
-  "Main location for all Org mode content managed by `org-glance`."
-  :group 'org-glance
-  :type 'directory)
+(defvar org-glance-tags (make-hash-table)
+  "Hash table {tag id -> tag parameters}")
 
-(defcustom org-glance-resource-directory (f-join org-directory "resources")
-  "Directory for non-Org resources associated with `org-glance`."
-  :group 'org-glance
-  :type 'directory)
-
-(defcustom org-glance-clone-on-repeat-p nil
-  "Create a new headline copy when repeating rather than modifying in place."
-  :group 'org-glance
-  :type 'boolean)
-
-(defvar org-glance-tags (make-hash-table) "Hash table {tag id -> tag parameters}")
-
-(cl-defun org-glance-tags:list ()  ;; -> list[symbol]
+(cl-defun org-glance:tags ()  ;; -> list[symbol]
   (hash-table-keys org-glance-tags))
 
-(cl-defun org-glance-tags:sorted () ;; -> list[symbol]
-  (sort (org-glance-tags:list) #'s-less?))
+(cl-defun org-glance:tags-sorted () ;; -> list[symbol]
+  (sort (org-glance:tags) #'s-less?))
 
 (cl-defun org-glance:tag-metadata-file-name (tag)  ;; -> string
-  (let ((tag-string (org-glance-tag:to-string tag)))
-    (f-join org-glance-directory tag-string (format "%s.metadata.el" tag-string))))
+  (format "%s/%s/%s.metadata.el" org-glance-directory tag tag))
 
 ;; TODO refactor is needed for all the filters
 (cl-defun org-glance:tag-filter (tag) ;; -> callable
@@ -99,7 +85,7 @@
 
 (cl-defun org-glance-tags:completing-read (&optional (prompt "Tag: ") (require-match t))
   "Run completing read PROMPT on registered tags filtered by TYPE."
-  (let ((tags (org-glance-tags:sorted)))
+  (let ((tags (org-glance:tags-sorted)))
     (if (= (length tags) 1)
         (car tags)
       (intern (completing-read prompt tags nil require-match)))))
@@ -181,30 +167,6 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
 
 (cl-defun org-glance:list-directories (base-dir)
   (--filter (f-directory? (f-join base-dir it)) (directory-files base-dir nil "^[[:word:]]+")))
-
-(cl-defmacro org-glance:format (fmt)
-  "Like `s-format' but with format fields in it.
-FMT is a string to be expanded against the current lexical
-environment. It is like what is used in `s-lex-format', but has
-an expanded syntax to allow format-strings. For example:
-${user-full-name 20s} will be expanded to the current value of
-the variable `user-full-name' in a field 20 characters wide.
-  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
-  will render as: 2.24
-This function is inspired by the f-strings in Python 3.6, which I
-enjoy using a lot.
-"
-  (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
-         (agetter (cl-loop for (_ m1 m2 m3) in matches
-                           collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
-                                                                          (if s-lex-value-as-lisp "S" "s")
-                                                                        ,m2))
-                                                       (symbol-value (intern ,m1))))))
-         (result `(s-format ,fmt 'aget (list ,@agetter))))
-    `(s-join "\n"
-             (cl-loop with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
-                      for line in (s-split "\n" ,result)
-                      collect (funcall stripMargin line)))))
 
 (defun org-glance--make-file-directory (file)
   (let ((dir (file-name-directory file)))
@@ -343,7 +305,7 @@ after capture process has been finished."
            unless (f-exists? (f-join directory (org-glance-tag:file-name tag)))
            do (org-glance-tag:remove tag org-glance-tags))
 
-  (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted))))
+  (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
 
 (cl-defmacro org-glance:with-file-visited (file &rest forms)
   "Visit FILE, execute FORMS and close it if it was closed before visit."
@@ -1019,6 +981,7 @@ FIXME. Unstable one. Refactor is needed."
            into result
            finally (return (car result))))
 
+;; TODO refactor, slow
 (cl-defun org-glance-all-headlines (&optional filter)
   (cl-loop for tag being the hash-keys of org-glance-tags
            append (cl-loop for headline in (org-glance:tag-headlines tag)
@@ -1026,6 +989,7 @@ FIXME. Unstable one. Refactor is needed."
                            collect (cons (format "[%s] %s" tag (org-glance:headline-title headline))
                                          (list headline tag)))))
 
+;; TODO refactor, slow
 (cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
   (let* ((headlines (org-glance-all-headlines filter))
@@ -1038,7 +1002,7 @@ FIXME. Unstable one. Refactor is needed."
           (tag (cadr headline.tag)))
       (org-glance:with-headline-narrowed headline
         (org-glance-headline:update (org-glance-headline:create-from-element-at-point)
-          :tag tag)))))
+                                    :tag tag)))))
 
 (cl-defun org-glance-relation-interpreter (relation)
   ;; please, avoid metadata here

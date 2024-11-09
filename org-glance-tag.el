@@ -31,11 +31,7 @@
   (puthash tag t tags)
   tag)
 
-(cl-defun org-glance-tag:id* (&optional (tag (org-glance-tags:completing-read)))
-  (substring-no-properties
-   (format "%s-%s-%s"
-           tag
-           (s-join "-" (mapcar #'number-to-string (current-time)))
-           (secure-hash 'md5 (buffer-string)))))
+(cl-defun org-glance-tag:id* (tag)
+  (format "%s-%s-%s" tag (s-join "-" (mapcar #'number-to-string (current-time))) (secure-hash 'md5 (buffer-string))))
 
 (provide 'org-glance-tag)
