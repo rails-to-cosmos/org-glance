@@ -1,3 +1,5 @@
+(require 'org)
+
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."
   :group 'org-glance
