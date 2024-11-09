@@ -1,3 +1,5 @@
+;; Something
+
 (defconst org-glance-agenda:header "#    -*- mode: org; mode: org-glance-agenda -*-")
 
 (defvar org-glance-agenda-mode-map (make-sparse-keymap)
@@ -97,7 +99,7 @@
 
 (cl-defun org-glance-agenda:daily (class date)
   (let ((entries (org-agenda-get-day-entries
-                  (org-glance-overview:location class)
+                  (org-glance-overview:file-name class)
                   date)))
     (cl-loop
        for entry in entries
@@ -105,13 +107,13 @@
        collect (org-glance:with-headline-narrowed
                    (->> (org-glance-headline:at-point)
                         org-glance-headline:id
-                        org-glance-metastore:get-headline)
+                        org-glance-metadata:get-headline)
                  (org-glance-headline:at-point)))))
 
 ;; (cl-loop
 ;;    for headline in (org-glance-agenda:daily 'task (list 12 20 2021))
 ;;    collect (org-glance:with-headline-materialized headline
-;;              (cons (org-glance-headline:title headline) (length (org-glance-headline:subtasks)))))
+;;              (cons (org-glance:headline-title headline) (length (org-glance-headline:subtasks)))))
 
 ;; 0. Filter tasks!
 ;; 1. Unfinished tasks count.
