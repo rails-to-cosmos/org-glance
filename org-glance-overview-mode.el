@@ -389,7 +389,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                         (org-glance:tag-file-name class)
                         (org-glance:headline-title headline)))
            (tmp-file (org-glance-headline:file-name headline))
-           (new-file (-org-glance:make-file-directory (f-join refile-dir (format "%s.org" class)))))
+           (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" class)))))
       (message "Generate headline directory: %s" refile-dir)
       (org-set-property "DIR" (abbreviate-file-name refile-dir))
       (save-buffer)
@@ -612,27 +612,28 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
                      (t "* %?")))))
 
-(cl-defun org-glance-overview:refresh-widgets (&optional (class (org-glance-overview:tag)))
+(cl-defun org-glance-overview:refresh-widgets (&optional (tag (org-glance-overview:tag)))
   (interactive)
   (save-excursion
-    (let* ((inhibit-read-only t))
+    (let* ((inhibit-read-only t)
+           (inhibit-message t)
+           (category (format "#+CATEGORY: %s" tag))
+           (todo-states (cl-loop for todo-seq in org-todo-keywords
+                                 concat (concat "#+TODO: " (s-join " " (cdr todo-seq)) "\n")
+                                 into result
+                                 finally return (s-trim result)))
+
+           (todo-order (concat "#+TODO_ORDER: " (cl-loop for state in (org-glance-overview:state-ordering tag)
+                                                         if (string-empty-p state)
+                                                         concat "_ " into result
+                                                         else
+                                                         concat (concat (upcase state) " ") into result
+                                                         finally return (s-trim result)))))
+
       (goto-char (point-min))
       (org-next-visible-heading 1)
       (delete-region (point-min) (point))
-      (insert (let ((category (format "#+CATEGORY: %s" class))
-                    (todo-states (cl-loop
-                                  for todo-seq in org-todo-keywords
-                                  concat (concat "#+TODO: " (s-join " " (cdr todo-seq)) "\n")
-                                  into result
-                                  finally return (s-trim result)))
-                    (todo-order (concat "#+TODO_ORDER: " (cl-loop
-                                                          for state in (org-glance-overview:state-ordering class)
-                                                          if (string-empty-p state)
-                                                          concat "_ " into result
-                                                          else
-                                                          concat (concat (upcase state) " ") into result
-                                                          finally return (s-trim result)))))
-                (org-glance:format org-glance-overview:header)))
+      (insert (org-glance:format org-glance-overview:header))
       (goto-char (point-min))
       (org-next-visible-heading 1)
       (backward-char)
@@ -641,13 +642,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:create-archive (&optional (class (org-glance-tags:completing-read)))
   (interactive)
-  (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
+  (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location class))))
     (with-temp-file filename (org-glance-overview:refresh-widgets class))
     filename))
 
 (cl-defun org-glance-overview:ensure-archive (&optional (class (org-glance-tags:completing-read)))
   (interactive)
-  (let ((filename (-org-glance:make-file-directory (org-glance-overview:archive-location class))))
+  (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location class))))
     (unless (file-exists-p filename)
       (with-temp-file filename (org-glance-overview:refresh-widgets class)))
     filename))
@@ -657,7 +658,8 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
       (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
-            (overview-file-name (-org-glance:make-file-directory (org-glance-overview:file-name tag))))
+            (overview-file-name (org-glance-overview:file-name tag)))
+        (org-glance--make-file-directory overview-file-name)
         (org-glance-metadata:create metadata-file-name)
         (org-glance-overview:create-archive tag)
         (with-temp-file overview-file-name

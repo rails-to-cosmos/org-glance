@@ -16,7 +16,7 @@
     (format "%d-%02d-%02d" year month day)))
 
 (cl-defun org-glance-agenda-location (&optional (date (org-glance-agenda--read-date)))
-  (-org-glance:make-file-directory
+  (org-glance--make-file-directory
    (f-join org-glance-directory
            "agenda"
            (format "%s.org" (org-glance-date-format date)))))

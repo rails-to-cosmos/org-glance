@@ -200,7 +200,7 @@ enjoy using a lot.
                       for line in (s-split "\n" ,result)
                       collect (funcall stripMargin line)))))
 
-(defun -org-glance:make-file-directory (file)
+(defun org-glance--make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
       (make-directory dir t)))
@@ -832,7 +832,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:make-directory (location title)
   (abbreviate-file-name
    (make-temp-file
-    (-org-glance:make-file-directory
+    (org-glance--make-file-directory
      (f-join location
              (concat (format-time-string "%Y-%m-%d_")
                      (->> title
