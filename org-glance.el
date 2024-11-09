@@ -112,7 +112,7 @@ This option enables duplication of repeated tasks, preserving previous instances
   (let* ((original-text (buffer-substring-no-properties beg end))
          (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
     (save-excursion
-      (kill-region beg end)
+      (delete-region beg end)
       (goto-char beg)
       (insert encrypted-text))))
 
@@ -126,7 +126,7 @@ This option enables duplication of repeated tasks, preserving previous instances
                                 (aes-decrypt-buffer-or-string encrypted password)
                               (user-error "Headline is not encrypted"))))
       (save-excursion
-        (kill-region beg end)
+        (delete-region beg end)
         (goto-char beg)
         (insert decrypted-text))
     (user-error "Wrong password")))
@@ -452,12 +452,12 @@ If headline doesn't contain key-value pairs, role `can-be-extracted' should be r
       (org-capture nil "_")
       (when finalize (org-capture-finalize)))))
 
-(cl-defun org-glance-headline-remove ()
-  (interactive)
-  (org-glance-choose-and-apply
-   :action (lambda (headline)
-             (org-glance:with-headline-materialized headline
-               (org-set-tags '())))))
+;; (cl-defun org-glance-headline-remove ()
+;;   (interactive)
+;;   (org-glance-choose-and-apply
+;;    :action (lambda (headline)
+;;              (org-glance:with-headline-materialized headline
+;;                (org-set-tags '())))))
 
 (cl-defun org-glance:insert-pin-block ()
   (interactive)
@@ -474,7 +474,7 @@ Do not modify existing properties without backfilling of metadata.")
 (setq org-glance-headline:serde-alist
       `((:raw-value  . (:reader org-glance:headline-title      :writer org-glance:headline-title))
         (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
-        (:file       . (:reader org-glance-headline:file-name       :writer org-glance-headline:file-name))
+        (:file       . (:reader org-glance-headline:file-name  :writer org-glance-headline:file-name))
         (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
         (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
         (:linked    . (:reader org-glance-headline:linked?    :writer (lambda (headline)
