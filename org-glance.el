@@ -160,13 +160,12 @@ Run completing read on keys and copy selected values to kill ring.
 Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
   (save-excursion
     (goto-char (point-min))
-    (cl-loop
-     while (condition-case nil
-               (re-search-forward org-glance:key-value-pair-re)
-             (search-failed nil))
-     collect (s-trim (substring-no-properties (match-string 1))) into keys
-     collect (s-trim (substring-no-properties (match-string 2))) into vals
-     finally (return (-zip-pair keys vals)))))
+    (cl-loop while (condition-case nil
+                       (re-search-forward org-glance:key-value-pair-re)
+                     (search-failed nil))
+             collect (s-trim (substring-no-properties (match-string 1))) into keys
+             collect (s-trim (substring-no-properties (match-string 2))) into vals
+             finally (return (-zip-pair keys vals)))))
 
 (cl-defun org-glance:list-directories (base-dir)
   (--filter (f-directory? (f-join base-dir it)) (directory-files base-dir nil "^[[:word:]]+")))
