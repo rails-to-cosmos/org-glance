@@ -288,8 +288,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
                 (org-glance-exception:HEADLINE-NOT-FOUND nil))
           (let ((inhibit-read-only t))
-            (kill-region (org-entry-beginning-position) (save-excursion
-                                                          (org-end-of-subtree t t)))
+            (delete-region (org-entry-beginning-position) (save-excursion
+                                                            (org-end-of-subtree t t)))
             (save-buffer)))))))
 
 (cl-defun org-glance-overview:register-headline-in-archive (headline class)
@@ -618,7 +618,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
     (let* ((inhibit-read-only t))
       (goto-char (point-min))
       (org-next-visible-heading 1)
-      (kill-region (point-min) (point))
+      (delete-region (point-min) (point))
       (insert (let ((category (format "#+CATEGORY: %s" class))
                     (todo-states (cl-loop
                                   for todo-seq in org-todo-keywords
