@@ -234,7 +234,9 @@ enjoy using a lot.
   (-org-glance:join-leading-separator separator (cl-remove-if #'null strings)))
 
 (cl-defun org-glance:create-tag (tag)
-  (cl-assert (and (symbolp tag) (symbol-downcased-p tag)))
+  (unless (and (symbolp tag) (symbol-downcased-p tag))
+    (error "Tag should be a downcased symbol."))
+
   (when (org-glance-tag:register tag org-glance-tags)
     (org-glance-metadata:create (org-glance-tag:metadata-file-name tag))
     (org-glance-overview:create tag)))

@@ -1,3 +1,4 @@
+(require 'ert)
 (require 'org-glance)
 
 (cl-defmacro with-temp-directory (dir &rest body)
@@ -21,12 +22,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (with-temp-glance-directory
     (should (= (length (org-glance-tags:list)) 0))))
 
-(ert-deftest test-tag-management ()
+(ert-deftest test-basic-tag-management ()
   (with-temp-glance-directory
     (org-glance:create-tag 'foo)
-    (org-glance:create-tag 'bar)
-
-    (should (and (org-glance-tag:exists? 'foo org-glance-tags)
-                 (org-glance-tag:exists? 'bar org-glance-tags)))))
+    (should (org-glance-tag:exists? 'foo org-glance-tags))
+    (should-error (org-glance:create-tag "bar") :type 'error)
+    (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
 (provide 'org-glance-test)
