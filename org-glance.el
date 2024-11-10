@@ -534,7 +534,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
   (org-glance:ensure-at-heading)
-  (while (and (not (org-glance-headline? (org-glance-headline:at-point)))
+  (while (and ;; (not (org-glance-headline? (org-glance-headline:at-point)))
               (not (org-before-first-heading-p))
               (not (bobp)))
     (org-up-heading-or-point-min))
