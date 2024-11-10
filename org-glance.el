@@ -709,7 +709,6 @@ FIXME. Unstable one. Refactor is needed."
   (let ((file (org-glance-headline:file-name headline))
         (buffer (org-glance-headline:buffer headline)))
     (cond (file (with-temp-buffer
-                  (message "Extract contents for headline %s from file %s" (org-glance-headline:id headline) file)
                   (org-mode)
                   (insert-file-contents file)
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
@@ -718,7 +717,6 @@ FIXME. Unstable one. Refactor is needed."
                   (org-glance-headline:promote-to-the-first-level)
                   (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
           (buffer (with-current-buffer buffer
-                    (message "Extract contents for headline %s from buffer %s" (org-glance-headline:id headline) buffer)
                     (save-window-excursion
                       (save-excursion
                         (save-restriction
