@@ -92,12 +92,12 @@
                                for rr in (org-glance-headline-relations)
                                if (eq (org-element-property :id rr) (intern id))
                                return t)
-                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
+                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
                   (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))
                 (redisplay)))
          finally (progress-reporter-done progress-reporter)))
 
-      (let ((new-contents (org-glance:with-headline-at-point
+      (let ((new-contents (org-glance-headline:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
                              (with-temp-buffer
                                (org-mode)
@@ -142,7 +142,7 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (org-glance:with-headline-narrowed (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
+  (org-glance-headline:with-narrowed-headline (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
     (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
@@ -199,7 +199,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
                                 (if (or (bolp) (looking-back "[[:blank:]]" 1))
                                     ""
                                   " ")
-                                (org-glance:with-headline-narrowed headline
+                                (org-glance-headline:with-narrowed-headline headline
                                   (org-glance-headline-reference type))))))))
 
       (org-glance:material-buffer-default-view)

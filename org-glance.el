@@ -49,6 +49,8 @@
 (require 'subr-x)
 
 (require 'org-glance-customs)
+(require 'org-glance-utils)
+
 (require 'org-glance-tag)
 (require 'org-glance-headline)
 (require 'org-glance-exceptions)
@@ -56,7 +58,7 @@
 (require 'org-glance-material-mode)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-ui)
-(require 'org-glance-utils)
+
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -126,13 +128,6 @@
         (insert decrypted-text))
     (user-error "Wrong password")))
 
-(cl-defun org-glance-now ()
-  (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
-
-(cl-defun org-glance:ensure-at-heading ()
-  (unless (org-at-heading-p)
-    (org-back-to-heading-or-point-min)))
-
 (cl-defun org-glance:tag-file-name (&optional (tag (org-glance-tags:completing-read)))
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
@@ -142,66 +137,14 @@
        org-glance:tag-metadata-file-name
        org-glance-metadata:read))
 
-(cl-defun org-glance:make-directory (&optional (tag (org-glance-tags:completing-read)))
+(cl-defun org-glance:make-tag-directory (&optional (tag (org-glance-tags:completing-read)))
   (save-excursion
-    (org-glance:ensure-at-heading)
+    (org-glance--back-to-heading)
     (save-restriction
       (org-narrow-to-subtree)
       (org-glance-headline:make-directory
        (org-glance:tag-file-name tag)
        (org-element-property :raw-value (org-element-at-point))))))
-
-(defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
-
-(cl-defun org-glance:buffer-key-value-pairs ()
-  "Extract key-value pairs from buffer.
-Run completing read on keys and copy selected values to kill ring.
-
-Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
-  (save-excursion
-    (goto-char (point-min))
-    (cl-loop while (condition-case nil
-                       (re-search-forward org-glance:key-value-pair-re)
-                     (search-failed nil))
-             collect (s-trim (substring-no-properties (match-string 1))) into keys
-             collect (s-trim (substring-no-properties (match-string 2))) into vals
-             finally (return (-zip-pair keys vals)))))
-
-(cl-defun org-glance:list-directories (base-dir)
-  (--filter (f-directory? (f-join base-dir it)) (directory-files base-dir nil "^[[:word:]]+")))
-
-(defun org-glance--make-file-directory (file)
-  (let ((dir (file-name-directory file)))
-    (unless (file-exists-p dir)
-      (make-directory dir t)))
-  file)
-
-(defun -org-glance:list-file-archives (filename)
-  "Return list of org-mode files for FILENAME."
-  (let* ((dir (file-name-directory filename))
-         (base-filename (-some->> filename
-                          file-name-nondirectory
-                          file-name-sans-extension)))
-    (directory-files-recursively dir (format "%s.org\\.*" base-filename))))
-
-(defun -org-glance:file-with-archives ()
-  (append (list (buffer-file-name))
-          (-org-glance:list-file-archives (buffer-file-name))))
-
-(defun -org-glance:agenda-with-archives ()
-  (cl-loop for filename in (org-agenda-files)
-           append (list filename)
-           append (-org-glance:list-file-archives filename)))
-
-(cl-defun -org-glance:join-leading-separator (separator strings)
-  (let ((joined-strings (s-join separator strings)))
-    (if (string-empty-p joined-strings)
-        ""
-      (concat separator joined-strings))))
-
-(cl-defun -org-glance:join-leading-separator-but-null (separator strings)
-  (declare (indent 1))
-  (-org-glance:join-leading-separator separator (cl-remove-if #'null strings)))
 
 (cl-defun org-glance:create-tag (tag)
   (unless (and (symbolp tag) (symbol-downcased-p tag))
@@ -230,15 +173,6 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
                                         do (let ((headline (org-glance-capture-headline-at-point class)))
                                              (org-glance-overview:register-headline-in-archive headline class))))))))))
 
-(cl-defmacro org-glance:with-headline-at-point (&rest forms)
-  `(save-excursion
-     (org-glance-headline:search-parents)
-     (unless (org-glance-headline? (org-glance-headline:at-point))
-       (error "Unable to find headline at point"))
-     (save-restriction
-       (org-narrow-to-subtree)
-       ,@forms)))
-
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest _)
   "Do only if headline has been cloned before auto repeat.
 Cleanup new headline considering auto-repeat ARGS.
@@ -247,7 +181,7 @@ Cleanup new headline considering auto-repeat ARGS.
   (when (and (or org-glance-material-mode org-glance-overview-mode)
              org-glance-clone-on-repeat-p
              (org-glance-headline:repeated-p))
-    (let ((contents (org-glance:with-headline-at-point
+    (let ((contents (org-glance-headline:with-headline-at-point
                      (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
                            (pinned (save-excursion
                                      (cl-loop
@@ -299,7 +233,7 @@ after capture process has been finished."
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
   (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
-  (cl-loop for dir in (org-glance:list-directories directory)
+  (cl-loop for dir in (org-glance--list-directories directory)
            for tag = (org-glance-tag:read dir)
            do (org-glance:create-tag tag))
 
@@ -309,40 +243,9 @@ after capture process has been finished."
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
 
-(cl-defmacro org-glance:with-file-visited (file &rest forms)
-  "Visit FILE, execute FORMS and close it if it was closed before visit."
-  (declare (indent 1) (debug t))
-  `(save-window-excursion
-     (let ((inhibit-startup-hooks t)
-           (inhibit-modification-hooks t)
-           (buffer-lived-p (buffer-live-p (get-file-buffer ,file)))
-           (buffer (find-file-noselect ,file)))
-       (unwind-protect
-           (with-current-buffer buffer
-             ,@forms)
-         (unless buffer-lived-p
-           (kill-buffer buffer))))))
-
-(cl-defmacro org-glance:with-headline-narrowed (headline &rest forms)
-  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
-  (declare (indent 1) (debug t))
-  `(let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
-         (id (org-glance-headline:id ,headline))
-         (file (org-glance-headline:file-name ,headline))
-         (buffer (org-glance-headline:buffer ,headline)))
-     (cond (file (org-glance:with-file-visited file
-                   (org-glance-headline:search-buffer-by-id id)
-                   (org-glance:with-headline-at-point ,@forms)))
-           ((and buffer (buffer-live-p buffer))
-            (with-current-buffer buffer
-              (org-glance-headline:search-buffer-by-id id)
-              (org-glance:with-headline-at-point ,@forms)))
-           (t (HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
-
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."
   (interactive)
-  (org-glance-init)
   (let ((active-region? (and (not (org-in-src-block-p)) (region-active-p)))
         (mention? (and (not (org-in-src-block-p)) (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))))
     (condition-case nil
@@ -352,17 +255,17 @@ after capture process has been finished."
                                 (org-glance-capture :default (buffer-substring-no-properties <region-beginning> <region-end>)
                                                     :class (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
                                                     :finalize t
-                                                    :callback (lambda () (let ((<hl> (org-glance-overview:original-headline)))
+                                                    :callback (lambda () (let ((headline (org-glance-overview:original-headline)))
                                                                       (switch-to-buffer <buffer>)
                                                                       (goto-char <region-beginning>)
                                                                       (delete-region <region-beginning> <region-end>)
-                                                                      (insert (org-glance:with-headline-narrowed <hl>
+                                                                      (insert (org-glance-headline:with-narrowed-headline headline
                                                                                 (org-glance-headline-reference))))))))
 
               (mention? (org-glance-choose-and-apply
                          :action (lambda (headline)
                                    (insert
-                                    (org-glance:with-headline-narrowed headline
+                                    (org-glance-headline:with-narrowed-headline headline
                                       (org-glance-headline-reference))))))
 
               ;; simple @
@@ -392,7 +295,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (let ((action (lambda (headline)
                   (org-glance:with-headline-materialized headline
-                    (cl-loop for (link title pos) in (org-glance-parse-links)
+                    (cl-loop for (link title pos) in (org-glance--parse-links)
                              unless (s-starts-with-p "[[org-glance" link)
                              collect (list title pos)
                              into links
@@ -415,7 +318,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (interactive)
   (let ((action (lambda (headline)
                   (let ((pairs (org-glance:with-headline-materialized headline
-                                 (org-glance:buffer-key-value-pairs))))
+                                 (org-glance--buffer-key-value-pairs))))
                     (condition-case nil
                         (while t
                           (kill-new (alist-get (completing-read "Extract property: " pairs nil t) pairs nil nil #'string=)))
@@ -476,78 +379,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
 ;; Headline
 
-(defvar org-glance-headline:serde-alist nil
-  "Map `org-element-property' to `org-glance' extractor method.")
-
-(setq org-glance-headline:serde-alist
-      `((:raw-value  . (:reader org-glance:headline-title      :writer org-glance:headline-title))
-        (:begin      . (:reader org-glance-headline:begin      :writer org-glance-headline:begin))
-        (:file       . (:reader org-glance-headline:file-name  :writer org-glance-headline:file-name))
-        (:commentedp . (:reader org-glance-headline:commented? :writer org-glance-headline:commented?))
-        (:archivedp  . (:reader org-glance-headline:archived?  :writer org-glance-headline:archived?))
-        (:linked    . (:reader org-glance-headline:linked?    :writer (lambda (headline)
-                                                                        (save-excursion
-                                                                          (save-restriction
-                                                                            (org-narrow-to-subtree)
-                                                                            ;; (org-end-of-meta-data t)
-                                                                            (when (org-glance-parse-links)
-                                                                              'contains-link))))))
-        (:propertized        . (:reader org-glance-headline:propertized?       :writer (lambda (headline)
-                                                                                         (save-excursion
-                                                                                           (save-restriction
-                                                                                             (org-narrow-to-subtree)
-                                                                                             (org-end-of-meta-data t)
-                                                                                             (when (re-search-forward org-glance:key-value-pair-re nil t)
-                                                                                               'contains-properties))))))
-        (:encrypted . (:reader org-glance-headline:encrypted? :writer (lambda (headline)
-                                                                        (save-excursion
-                                                                          (org-end-of-meta-data t)
-                                                                          (when (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")
-                                                                            'encrypted)))))
-        (:buffer . (:reader org-glance-headline:buffer :writer (lambda (headline)
-                                                                 (condition-case nil
-                                                                     (buffer-name (get-file-buffer (org-glance-headline:file-name headline)))
-                                                                   (wrong-type-argument (buffer-name))))))
-        (:closed . (:reader org-glance-headline:closed? :writer org-glance-headline:closed?))))
-
-(cl-defun org-glance-headline:serialize (headline)
-  (cl-loop for (_ . methods) in org-glance-headline:serde-alist
-           collect (funcall (plist-get methods :reader) headline)))
-
-(cl-defun org-glance-headline:deserialize (value)
-  (cl-loop with element = (org-element-create 'headline)
-           for (property . _) in org-glance-headline:serde-alist
-           for index from 0
-           do (org-glance-headline:update element property (nth index value))
-           finally (return element)))
-
-(cl-defun org-glance-headline:create-from-element-at-point ()
-  "Create `org-glance-headline' from element at point."
-  (let ((prototype (org-element-at-point)))
-    (when (eql 'headline (org-element-type prototype))
-      (cl-loop
-       for (property . methods) in org-glance-headline:serde-alist
-       for index from 0
-       do (org-glance-headline:update prototype property (funcall (plist-get methods :writer) prototype))
-       finally (return prototype)))))
-
-(cl-defun org-glance-headline:search-parents ()
-  "Traverse parents in search of a proper `org-glance-headline'."
-  (org-glance:ensure-at-heading)
-  (while (and ;; (not (org-glance-headline? (org-glance-headline:at-point)))
-              (not (org-before-first-heading-p))
-              (not (bobp)))
-    (org-up-heading-or-point-min))
-  (org-glance-headline:create-from-element-at-point))
-
-(cl-defun org-glance-headline:at-point ()
-  "Search for the first occurence of `org-glance-headline' in parent headlines."
-  (save-excursion
-    (when (condition-case nil
-              (or (org-at-heading-p) (org-back-to-heading))
-            (error nil))
-      (org-glance-headline:search-parents))))
-
 (cl-defun org-glance-headline:search-backward ()
   (interactive)
   (when-let (headline (org-glance-headline:at-point))
@@ -606,53 +437,12 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
       result)))
 
-(cl-defun org-glance-parse-links ()
-  "Simple org-link parser, return list of cons cells (link . contents)."
-  (let ((descriptions (cl-loop for (key . val) in (org-glance:buffer-key-value-pairs)
-                               collect (cons val key)))
-        (links (cl-loop
-                for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
-                for beg = (org-element-property :begin element)
-                for end = (org-element-property :end element)
-                for title = (substring-no-properties
-                             (or (-some->> element
-                                   org-element-contents
-                                   org-element-interpret-data)
-                                 (org-element-property :raw-link element)))
-                for link = (s-trim (buffer-substring-no-properties beg end))
-                collect title into titles
-                collect link into links
-                collect beg into positions
-                finally return (-zip links titles positions))))
-    (cl-loop
-     for (link title pos) in links
-     for description = (alist-get link descriptions nil nil #'string=)
-     when description
-     collect (list link description pos)
-     else
-     collect (list link title pos))))
-
-(cl-defun org-glance-remove-links (&rest types)
-  (save-excursion
-    (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-             do (let* ((link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-                       (type (intern (car link))))
-                  (when (memq type types)
-                    (delete-region (match-beginning 0) (match-end 0)))))))
-
-(cl-defun org-glance-replace-links-with-titles ()
-  (cl-loop for (link title _) in (org-glance-parse-links)
-           do (save-excursion
-                (goto-char (point-min))
-                (while (search-forward link nil t)
-                  (replace-match title t t)))))
-
 (cl-defun org-glance:headline-title (&optional (headline (org-glance-headline:at-point)))
   "Get title of HEADLINE, cleanup links."
   (with-temp-buffer
     (save-excursion (insert (org-glance-headline:title headline)))
-    (org-glance-remove-links 'org-glance-overview 'org-glance-state)
-    (org-glance-replace-links-with-titles)
+    (org-glance--remove-links 'org-glance-overview 'org-glance-state)
+    (org-glance--substitute-links)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defun org-glance:headline-alias (&optional (headline (org-glance-headline:at-point)))
@@ -660,18 +450,21 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (with-temp-buffer
     (save-excursion
       (insert (org-glance-headline:alias headline)))
-    (org-glance-remove-links 'org-glance-overview 'org-glance-state)
-    (org-glance-replace-links-with-titles)
+    (org-glance--remove-links 'org-glance-overview 'org-glance-state)
+    (org-glance--substitute-links)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((points (org-element-map (org-element-parse-buffer 'headline) 'headline
-                  (lambda (el) (when (string= (org-glance-headline:id el) id)
-                                 (org-element-property :begin el))))))
+                  (lambda (element) (when (string= (org-glance-headline:id element) id)
+                                 (org-element-property :begin element))))))
+
     (unless points
       (HEADLINE-NOT-FOUND "Headline not found in file %s: %s" (buffer-file-name) id))
+
     (when (> (length points) 1)
       (message "Headline ID %s is not unique in file %s" id (buffer-file-name)))
+
     (goto-char (car points))
     (org-glance-headline:at-point)))
 
@@ -691,7 +484,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
           (t (goto-char (org-glance-headline:begin headline))))))
 
 (cl-defun org-glance-headline:promote-to-the-first-level ()
-  (org-glance:ensure-at-heading)
+  (org-glance--back-to-heading)
   (while (and (org-glance-headline? (org-glance-headline:at-point)) (looking-at "^\\*\\*"))
     (org-promote-subtree)))
 
@@ -756,18 +549,18 @@ FIXME. Unstable one. Refactor is needed."
         (when (org-glance-headline? headline)
           (save-excursion
             (goto-char (org-glance-headline:begin headline))
-            (org-glance-headline:update (org-glance-headline:create-from-element-at-point)
+            (org-glance-headline:update (org-glance-headline:from-element (org-element-at-point))
               :buffer b)))))))
 
 (cl-defun org-glance-headline:add-log-note (string &rest objects)
-  (org-glance:with-headline-at-point
+  (org-glance-headline:with-headline-at-point
    (goto-char (org-log-beginning t))
    (insert (apply #'format string objects) "\n")))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
   (interactive)
-  (org-glance:with-headline-at-point
+  (org-glance-headline:with-headline-at-point
    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
          (end (save-excursion (org-end-of-subtree t) (point))))
      (org-glance:encrypt-region beg end password))))
@@ -775,7 +568,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:decrypt (&optional password)
   "Decrypt subtree at point with PASSWORD."
   (interactive)
-  (org-glance:with-headline-at-point
+  (org-glance-headline:with-headline-at-point
    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
          (end (save-excursion (org-end-of-subtree t) (point))))
      (org-glance:decrypt-region beg end password))))
@@ -813,14 +606,14 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline:overview ()
   "Return HEADLINE high-level usability characteristics."
-  (org-glance:with-headline-at-point
-   (cl-flet ((org-list (&rest items) (-org-glance:join-leading-separator-but-null "\n- " items))
-             (org-newline (&rest items) (-org-glance:join-leading-separator-but-null "\n" items)))
+  (org-glance-headline:with-headline-at-point
+   (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
+             (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
      (let* ((timestamps (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
                                                     (org-glance-datetime-filter-active)
                                                     (org-glance-datetime-sort-timestamps))
                                  collect (org-element-property :raw-value timestamp)))
-            (clocks (org-glance:with-headline-at-point
+            (clocks (org-glance-headline:with-headline-at-point
                      (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
                               collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
             (relations (org-glance-headline-relations))
@@ -850,6 +643,7 @@ FIXME. Unstable one. Refactor is needed."
            " "
            tags
            "\n"
+
            (if (and closed (listp closed))
                (concat "CLOSED: "
                        (org-element-property :raw-value closed)
@@ -857,6 +651,7 @@ FIXME. Unstable one. Refactor is needed."
                            " "
                          ""))
              "")
+
            (if schedule
                (concat "SCHEDULED: "
                        (org-element-property :raw-value schedule)
@@ -864,9 +659,11 @@ FIXME. Unstable one. Refactor is needed."
                            " "
                          ""))
              "")
+
            (if deadline
                (concat "DEADLINE: " (org-element-property :raw-value deadline))
              "")
+
            (if (or schedule deadline closed)
                "\n"
              "")
@@ -876,7 +673,7 @@ FIXME. Unstable one. Refactor is needed."
            ":DIR: " (abbreviate-file-name default-directory) "\n"
            ":END:"
 
-           (-org-glance:join-leading-separator-but-null "\n\n"
+           (org-glance--join-leading-separator-but-null "\n\n"
              (list
 
               (when (or encrypted linked)
@@ -899,7 +696,7 @@ FIXME. Unstable one. Refactor is needed."
          (buffer-string))))))
 
 (cl-defun org-glance-headline-reference (&optional (type 'org-glance-visit))
-  (org-glance:with-headline-at-point
+  (org-glance-headline:with-headline-at-point
    (let* ((headline (org-glance-headline:at-point))
           (id (org-glance-headline:id headline))
           (state (org-glance-headline:state headline))
@@ -947,11 +744,9 @@ FIXME. Unstable one. Refactor is needed."
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
 (defun org-glance-metadata:headlines (metadata)
-  (cl-loop
-   for id being the hash-keys of metadata using (hash-value value)
-   collect (-> value
-               (org-glance-headline:deserialize)
-               (org-glance-headline:update :ORG_GLANCE_ID id))))
+  (cl-loop for id being the hash-keys of metadata using (hash-value value)
+           collect (-> (org-glance-headline:deserialize value)
+                       (org-glance-headline:update :ORG_GLANCE_ID id))))
 
 (cl-defun org-glance-headlines (&key db (scope '(agenda)) (filter #'(lambda (_) t)) (db-init nil))
   "Deprecated method, refactor it."
@@ -1001,8 +796,8 @@ FIXME. Unstable one. Refactor is needed."
 
     (let ((headline (car headline.tag))
           (tag (cadr headline.tag)))
-      (org-glance:with-headline-narrowed headline
-        (org-glance-headline:update (org-glance-headline:create-from-element-at-point)
+      (org-glance-headline:with-narrowed-headline headline
+        (org-glance-headline:update (org-glance-headline:from-element (org-element-at-point))
                                     :tag tag)))))
 
 (cl-defun org-glance-relation-interpreter (relation)
@@ -1011,7 +806,7 @@ FIXME. Unstable one. Refactor is needed."
                                 (org-element-property :contents relation))
 
   ;; (org-glance-headline-reference)
-  ;; (org-glance:with-headline-narrowed (org-glance-metadata:get-headline (org-element-property :id relation))
+  ;; (org-glance-headline:with-narrowed-headline (org-glance-metadata:get-headline (org-element-property :id relation))
   ;;   (let ((ref )
   ;;         (ts (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps 'include-schedules)
   ;;                                         (org-glance-datetime-filter-active)
@@ -1034,7 +829,7 @@ FIXME. Unstable one. Refactor is needed."
 
 (cl-defun org-glance-headline-relations ()
   "Get all first-level relations of headline at point."
-  (org-glance:with-headline-at-point
+  (org-glance-headline:with-headline-at-point
    (cl-loop
     with relations = (make-hash-table)
     for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
@@ -1048,7 +843,7 @@ FIXME. Unstable one. Refactor is needed."
                        ;; actualize link state for subtasks and projects
                        (if-let (headline (org-glance-metadata:get-headline id))
                            (condition-case nil
-                               (org-glance:with-headline-narrowed headline
+                               (org-glance-headline:with-narrowed-headline headline
                                  (let ((state (intern (or (org-get-todo-state) "")))
                                        (done-kws (mapcar #'intern org-done-keywords)))
                                    (cond ((memq state done-kws) (cond ((memq link-type '(subtask subtask-done)) 'subtask-done)
@@ -1082,9 +877,9 @@ FIXME. Unstable one. Refactor is needed."
   '("org" "org_archive"))
 
 (defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . -org-glance:file-with-archives)
+  '((file-with-archives . org-glance--file-with-archives)
     (agenda . org-agenda-files)
-    (agenda-with-archives . -org-glance:agenda-with-archives)))
+    (agenda-with-archives . org-glance--agenda-with-archives)))
 
 (cl-defgeneric org-glance-scope (_)
   "Convert input to list of files if possible.")

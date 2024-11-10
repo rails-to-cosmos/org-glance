@@ -1,6 +1,10 @@
 (require 'highlight)
 (require 'org-attach)
 (require 'org-capture)
+(require 'ol)
+
+(require 'org-glance-headline)
+(require 'org-glance-utils)
 
 (defcustom org-glance-clocktable-properties
   (list :maxlevel 2
@@ -83,7 +87,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (let ((headline (org-glance-overview:original-headline)))
       (if (org-glance-headline:encrypted? headline)
           (progn
-            (org-glance:with-headline-narrowed headline
+            (org-glance-headline:with-narrowed-headline headline
               (org-glance-headline:decrypt)
               (save-buffer))
             (org-glance-overview:pull))
@@ -244,8 +248,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE overview to CLASS file."
-  (org-glance:with-file-visited (org-glance-overview:file-name class)
-    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
+  (org-glance--with-file-visited (org-glance-overview:file-name class)
+    (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
                                        (list (org-glance-headline:id)
                                              (org-glance-headline:overview)
                                              (org-glance-overview:partition-mapper)))
@@ -295,8 +299,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
 (cl-defun org-glance-overview:register-headline-in-archive (headline class)
   "Add HEADLINE overview to CLASS archive."
   (org-glance-overview:ensure-archive class)
-  (org-glance:with-file-visited (org-glance-overview:archive-location class)
-    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
+  (org-glance--with-file-visited (org-glance-overview:archive-location class)
+    (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
                                        (list (org-glance-headline:id)
                                              (org-glance-headline:overview)
                                              (org-glance-overview:partition-mapper)))
@@ -336,9 +340,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (interactive)
   (save-window-excursion
     (save-excursion
-      (org-glance:ensure-at-heading)
+      (org-glance--back-to-heading)
       (let* ((id (org-glance-tag:id* tag))
-             (dir (org-glance:make-directory tag))
+             (dir (org-glance:make-tag-directory tag))
              (output-file (f-join dir (format "%s.org" (org-glance-tag:file-name tag)))))
 
         (mkdir dir 'parents)
@@ -430,7 +434,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                if (sit-for 0)
                do (progn
                     (progress-reporter-update progress-reporter progress)
-                    (org-glance:with-file-visited file
+                    (org-glance--with-file-visited file
                       (when-let (headline (org-glance-headline:at-point))
                         (-register headline))
 
@@ -439,14 +443,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                else do (progn
                          (org-glance-metadata:save metadata metadata-location)
 
-                         (org-glance:with-file-visited (org-glance-overview:file-name tag)
+                         (org-glance--with-file-visited (org-glance-overview:file-name tag)
                            (goto-char (point-max))
                            (let ((inhibit-read-only t))
                              (cl-loop for overview in overviews
                                       do (insert overview "\n"))
                              (org-overview)))
 
-                         (org-glance:with-file-visited (org-glance-overview:archive-location tag)
+                         (org-glance--with-file-visited (org-glance-overview:archive-location tag)
                            (goto-char (point-max))
                            (let ((inhibit-read-only t))
                              (cl-loop for archive in archives
@@ -466,7 +470,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                finally do (progn
                             (org-glance-metadata:save metadata metadata-location)
 
-                            (org-glance:with-file-visited (org-glance-overview:file-name tag)
+                            (org-glance--with-file-visited (org-glance-overview:file-name tag)
                               (goto-char (point-max))
                               (let ((inhibit-read-only t))
                                 (cl-loop for overview in overviews
@@ -475,7 +479,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                 (org-overview)
                                 (org-align-tags 'all)))
 
-                            (org-glance:with-file-visited (org-glance-overview:archive-location tag)
+                            (org-glance--with-file-visited (org-glance-overview:archive-location tag)
                               (goto-char (point-max))
                               (let ((inhibit-read-only t))
                                 (cl-loop for archive in archives
@@ -819,7 +823,7 @@ enjoy using a lot.
          (current-headline-title (org-glance:headline-title current-headline))
          (current-headline-contents (org-glance-headline-contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (overview-contents (org-glance:with-headline-narrowed original-headline
+         (overview-contents (org-glance-headline:with-narrowed-headline original-headline
                               (org-glance-headline:overview))))
     (cond ((null overview-contents)
            (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
@@ -875,7 +879,7 @@ enjoy using a lot.
         (org-toggle-tag (symbol-name new-class) 'on)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance:with-headline-narrowed
+  (org-glance-headline:with-narrowed-headline
       (->> (org-glance-headline:at-point)
            org-glance-headline:id
            org-glance-metadata:get-headline)
