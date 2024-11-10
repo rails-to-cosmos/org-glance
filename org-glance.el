@@ -59,6 +59,24 @@
 (require 'org-glance-datetime-mode)
 (require 'org-glance-ui)
 
+(declare-function org-glance--join-leading-separator "org-glance-utils.el" (separator strings))
+(declare-function org-glance--join-leading-separator-but-null "org-glance-utils.el" (spearator strings))
+(declare-function org-glance--make-file-directory "org-glance-utils.el" (file))
+(declare-function org-glance--substitute-links "org-glance-utils.el")
+(declare-function org-glance--parse-links "org-glance-utils.el")
+(declare-function org-glance--remove-links "org-glance-utils.el" (&rest types))
+(declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
+(declare-function org-glance--list-directories "org-glance-utils.el" (base-dir))
+(declare-function org-glance--back-to-heading "org-glance-utils.el")
+
+(declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
+(declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
+(declare-function org-glance-headline:from-element "org-glance-headline.el" (element))
+(declare-function org-glance-headline:search-parents "org-glance-headline.el")
+(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
+(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
+(declare-function org-glance-headline:at-point "org-glance-headline.el")
 
 (defgroup org-glance nil
   "Options concerning glancing entries."
@@ -738,12 +756,12 @@ FIXME. Unstable one. Refactor is needed."
              do (org-glance-metadata:add-headline headline metadata)
              finally (org-glance-metadata:save metadata file))))
 
-(defun org-glance-metadata:read (file)
+(cl-defun org-glance-metadata:read (file)
   (with-temp-buffer
     (insert-file-contents file)
     (read (buffer-substring-no-properties (point-min) (point-max)))))
 
-(defun org-glance-metadata:headlines (metadata)
+(cl-defun org-glance-metadata:headlines (metadata)
   (cl-loop for id being the hash-keys of metadata using (hash-value value)
            collect (-> (org-glance-headline:deserialize value)
                        (org-glance-headline:update :ORG_GLANCE_ID id))))

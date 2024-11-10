@@ -4,8 +4,6 @@
 
 (require 'org-glance-utils)
 
-;; TODO remove optionals
-
 (defvar org-glance-headline:spec `((:raw-value   . (:reader org-glance:headline-title        :writer org-glance:headline-title))
                                    (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
                                    (:file        . (:reader org-glance-headline:file-name    :writer org-glance-headline:file-name))
@@ -17,6 +15,24 @@
                                    (:buffer      . (:reader org-glance-headline:buffer       :writer org-glance-element:buffer))
                                    (:closed      . (:reader org-glance-headline:closed?      :writer org-glance-headline:closed?)))
   "Map `org-element-property' to `org-glance' extractor method.")
+
+(cl-defun org-glance-headline:update (element &rest properties)
+  "Enrich `org-element' ELEMENT with PROPERTIES."
+  (cl-loop for (key value) on properties by #'cddr
+           do (org-element-put-property element key value)
+           finally (return element)))
+
+(cl-defun org-glance-headline:serialize (headline)
+  (cl-loop for (_ . methods) in org-glance-headline:spec
+           for reader = (plist-get methods :reader)
+           collect (funcall reader headline)))
+
+(cl-defun org-glance-headline:deserialize (value)
+  (cl-loop with element = (org-element-create 'headline)
+           for (property . _) in org-glance-headline:spec
+           for index from 0
+           do (org-glance-headline:update element property (nth index value))
+           finally (return element)))
 
 (cl-defun org-glance-element:linked? (element)
   (and (org-glance-headline? element)
@@ -46,12 +62,6 @@
 Return headline or nil if it is not a proper `org-glance-headline'."
   (when (org-element-property :ORG_GLANCE_ID headline)
     headline))
-
-(cl-defun org-glance-headline:update (element &rest properties)
-  "Enrich `org-element' ELEMENT with PROPERTIES."
-  (cl-loop for (key value) on properties by #'cddr
-           do (org-element-put-property element key value)
-           finally (return element)))
 
 (cl-defun org-glance-headline:title (headline)
   (or (org-element-property :TITLE headline)
@@ -142,13 +152,14 @@ Return headline or nil if it is not a proper `org-glance-headline'."
 (cl-defun org-glance-headline:deadline (headline)
   (org-element-property :deadline headline))
 
+;; TODO check it for correctness
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
   (org-glance--back-to-heading)
 
   (while (not (or ;; (org-glance-headline? (org-element-at-point))
-                  (org-before-first-heading-p)
-                  (bobp)))
+               (org-before-first-heading-p)
+               (bobp)))
     (org-up-heading-or-point-min))
 
   (-some-> (org-element-at-point)
@@ -187,18 +198,6 @@ Return headline or nil if it is not a proper `org-glance-headline'."
               (org-glance-headline:search-buffer-by-id id)
               (org-glance-headline:with-headline-at-point ,@forms)))
            (t (HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
-
-(cl-defun org-glance-headline:serialize (headline)
-  (cl-loop for (_ . methods) in org-glance-headline:spec
-           for reader = (plist-get methods :reader)
-           collect (funcall reader headline)))
-
-(cl-defun org-glance-headline:deserialize (value)
-  (cl-loop with element = (org-element-create 'headline)
-           for (property . _) in org-glance-headline:spec
-           for index from 0
-           do (org-glance-headline:update element property (nth index value))
-           finally (return element)))
 
 (cl-defun org-glance-headline:from-element (element)
   (when (eql 'headline (org-element-type element))
