@@ -168,7 +168,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
-    (org-glance-capture :class (org-glance-overview:tag))))
+    (org-glance-capture :tag (org-glance-overview:tag))))
 
 ;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 
@@ -250,7 +250,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   "Add HEADLINE overview to CLASS file."
   (org-glance--with-file-visited (org-glance-overview:file-name class)
     (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
-                                       (list (org-glance-headline:id)
+                                       (list (org-glance-headline:id headline)
                                              (org-glance-headline:overview)
                                              (org-glance-overview:partition-mapper)))
       (save-restriction
@@ -301,7 +301,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (org-glance-overview:ensure-archive class)
   (org-glance--with-file-visited (org-glance-overview:archive-location class)
     (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
-                                       (list (org-glance-headline:id)
+                                       (list (org-glance-headline:id headline)
                                              (org-glance-headline:overview)
                                              (org-glance-overview:partition-mapper)))
       (save-restriction
@@ -534,7 +534,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
     (let ((diff (buffer-substring-no-properties start end)))
       (when (and (not (org-before-first-heading-p))
                  (not (and (eobp) (string= diff "\n"))))
-        (when-let (id (org-glance-headline:id))
+        (when-let (id (org-glance-headline:id (org-glance-headline:at-point)))
           (cl-pushnew id org-glance-overview:changed-headlines :test #'string=)
           (hlt-highlight-region (org-glance-headline:begin)
                                 (save-excursion (org-end-of-subtree t t))
