@@ -22,7 +22,7 @@
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2024-11-11 Mon 22:11]
 :END:
-
+** TODO Thunkify headline derivative properties if possible
 ** TODO ability to encrypt regions, not only headlines
 ** TODO Separate directory for "resources"
 - For each tag create "resources" directory containing attachments
