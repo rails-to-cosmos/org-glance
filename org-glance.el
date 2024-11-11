@@ -315,7 +315,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (let ((action (lambda (headline)
                   (org-glance:with-headline-materialized headline
                     (cl-loop for (link title pos) in (org-glance--parse-links)
-                             unless (s-starts-with-p "[[org-glance" link)
+                             unless (s-starts-with-p "[[org-glance-" link)
                              collect (list title pos)
                              into links
                              finally

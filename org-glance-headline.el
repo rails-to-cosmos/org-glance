@@ -14,7 +14,7 @@
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 (declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
 
-(defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title        :writer org-glance-headline:plain-title))
+(defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
                                      (:file        . (:reader org-glance-headline:file-name    :writer org-glance-headline:file-name))
                                      (:commentedp  . (:reader org-glance-headline:commented?   :writer org-glance-headline:commented?))
@@ -25,6 +25,14 @@
                                      (:buffer      . (:reader org-glance-headline:buffer       :writer org-glance-element:buffer))
                                      (:closed      . (:reader org-glance-headline:closed?      :writer org-glance-headline:closed?)))
   "Map `org-element-property' to `org-glance' extractor method.")
+
+(cl-defmacro org-glance-headline:with-element-narrowing (element &rest forms)
+  (declare (indent 1) (debug t))
+  `(save-excursion
+     (save-restriction
+       (goto-char (org-element-property :begin element))
+       (org-narrow-to-element)
+       ,@forms)))
 
 (cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
   `(save-excursion
@@ -87,18 +95,18 @@
 
 (cl-defun org-glance-element:linked? (element)
   (and (org-glance-headline? element)
-       (org-glance-headline:with-narrowed-headline element
+       (org-glance-headline:with-element-narrowing element
          (not (null (org-glance--parse-links))))))
 
 (cl-defun org-glance-element:propertized? (element)
   (and (org-glance-headline? element)
-       (org-glance-headline:with-narrowed-headline element
+       (org-glance-headline:with-element-narrowing element
          (org-end-of-meta-data t)
          (not (null (re-search-forward org-glance:key-value-pair-re nil t))))))
 
 (cl-defun org-glance-element:encrypted? (element)
   (and (org-glance-headline? element)
-       (org-glance-headline:with-narrowed-headline element
+       (org-glance-headline:with-element-narrowing element
          (org-end-of-meta-data t)
          (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
 
