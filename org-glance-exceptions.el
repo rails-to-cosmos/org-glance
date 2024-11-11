@@ -1,13 +1,13 @@
-(cl-defmacro org-glance-exception-define (name message &optional (parent 'user-error))
+(cl-defmacro org-glance-exception:define (name message &optional (parent 'user-error))
   `(progn
      (define-error (quote ,name) ,message (quote ,parent))
      (cl-defun ,name (format &rest args)
        (signal (quote ,name) (list (apply #'format format args))))))
 
-(org-glance-exception-define SOURCE-CORRUPTED "Headline source corrupted, please reread")
-(org-glance-exception-define PROPERTIES-CORRUPTED "Headline metadata corrupted, please reread")
-(org-glance-exception-define METADATA-OUTDATED "Metadata is outdated, please rebuild")
-(org-glance-exception-define HEADLINE-NOT-FOUND "Headline not found")
-(org-glance-exception-define CLASS-NOT-FOUND "Class not found")
+
+(org-glance-exception:define org-glance-exception:corrupted-properties "Headline metadata corrupted, please reread")
+(org-glance-exception:define org-glance-exception:outdated-metadata "Metadata is outdated, please rebuild")
+(org-glance-exception:define org-glance-exception:headline-not-found "Headline not found")
+(org-glance-exception:define org-glance-exception:tag-not-found "Tag not found")
 
 (provide 'org-glance-exceptions)

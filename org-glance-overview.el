@@ -56,7 +56,7 @@ ${todo-order}
      (org-glance-headline:id
       (org-glance-scope--choose-headline
        (completing-read "Specify headline: "
-                        (mapcar #'org-glance:headline-title (--filter (org-glance-headline:active? it) headlines))
+                        (mapcar #'org-glance-headline:plain-title (--filter (org-glance-headline:active? it) headlines))
                         nil
                         t)
        headlines)))))
@@ -234,14 +234,14 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-file-name (org-glance:tag-metadata-file-name tag))
+  (let ((metadata-file-name (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:add-headline headline metadata)
     (org-glance-metadata:save metadata metadata-file-name)))
 
 (cl-defun org-glance-overview:remove-headline-from-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-location (org-glance:tag-metadata-file-name tag))
+  (let ((metadata-location (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:remove-headline headline metadata)
     (org-glance-metadata:save metadata metadata-location)))
@@ -257,7 +257,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
         (widen)
         (condition-case nil
             (org-glance-overview:remove-headline-from-overview headline class)
-          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+          (org-glance-exception:org-glance-exception:headline-not-found nil))
         (let ((inhibit-read-only t)
               (headline-seen-p nil))
           (unless (or (string-empty-p contents)
@@ -290,7 +290,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (save-excursion
         (when (condition-case nil
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                (org-glance-exception:HEADLINE-NOT-FOUND nil))
+                (org-glance-exception:org-glance-exception:headline-not-found nil))
           (let ((inhibit-read-only t))
             (delete-region (org-entry-beginning-position) (save-excursion
                                                             (org-end-of-subtree t t)))
@@ -309,7 +309,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
         (condition-case nil
             (org-glance-overview:remove-headline-from-overview headline class)
-          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+          (org-glance-exception:org-glance-exception:headline-not-found nil))
 
         (let ((inhibit-read-only t)
               (headline-seen-p nil))
@@ -391,7 +391,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
            (class org-glance-capture:tag)
            (refile-dir (org-glance-headline:make-directory
                         (org-glance:tag-file-name class)
-                        (org-glance:headline-title headline)))
+                        (org-glance-headline:plain-title headline)))
            (tmp-file (org-glance-headline:file-name headline))
            (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" class)))))
       (message "Generate headline directory: %s" refile-dir)
@@ -416,7 +416,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:import-headlines-from-files (tag files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of current overview tag and add it to overview."
-  (let* ((metadata-location (org-glance:tag-metadata-file-name tag))
+  (let* ((metadata-location (org-glance-metadata:location tag))
          (metadata (org-glance-metadata:read metadata-location))
          (overviews '())
          (archives '()))
@@ -685,7 +685,7 @@ enjoy using a lot.
   (interactive)
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
-      (let ((metadata-file-name (org-glance:tag-metadata-file-name tag))
+      (let ((metadata-file-name (org-glance-metadata:location tag))
             (overview-file-name (org-glance-overview:file-name tag)))
         (org-glance--make-file-directory overview-file-name)
         (org-glance-metadata:create metadata-file-name)
@@ -790,9 +790,9 @@ enjoy using a lot.
         (save-buffer)
         (kill-buffer)
         (org-glance-overview:create tag)
-        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance:tag-metadata-file-name tag))))
+        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-metadata:location tag))))
           (let ((files (--filter (not (s-contains? "sync-conflict" it))
-                                 (org-glance-scope (f-parent (org-glance:tag-metadata-file-name tag))))))
+                                 (org-glance-scope (f-parent (org-glance-metadata:location tag))))))
             (org-glance-overview:import-headlines-from-files tag files)
             (org-glance-overview:order)
             (let ((inhibit-read-only t))
@@ -802,7 +802,7 @@ enjoy using a lot.
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:search-parents)
-  (let ((title (org-glance:headline-title))
+  (let ((title (org-glance-headline:plain-title))
         (tag (org-glance-overview:tag))
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the tag \"${tag}\" from \"${title}\"?")))
@@ -820,15 +820,15 @@ enjoy using a lot.
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
-         (current-headline-title (org-glance:headline-title current-headline))
-         (current-headline-contents (org-glance-headline-contents current-headline))
+         (current-headline-title (org-glance-headline:plain-title current-headline))
+         (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
          (overview-contents (org-glance-headline:with-narrowed-headline original-headline
                               (org-glance-headline:overview))))
     (cond ((null overview-contents)
            (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
                (org-glance-overview:kill-headline :force t)
-             (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
+             (org-glance-exception:org-glance-exception:headline-not-found "Original headline not found"))
            nil)
           ((string= current-headline-contents overview-contents)
            (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
@@ -933,4 +933,4 @@ enjoy using a lot.
 ;;     (switch-to-buffer org-agenda-buffer)
 ;;     (delete-other-windows)))
 
-(provide 'org-glance-overview-mode)
+(provide 'org-glance-overview)

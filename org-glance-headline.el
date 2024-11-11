@@ -3,18 +3,69 @@
 (require 'org-element)
 
 (require 'org-glance-utils)
+(require 'org-glance-tag)
 
-(defvar org-glance-headline:spec `((:raw-value   . (:reader org-glance:headline-title        :writer org-glance:headline-title))
-                                   (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
-                                   (:file        . (:reader org-glance-headline:file-name    :writer org-glance-headline:file-name))
-                                   (:commentedp  . (:reader org-glance-headline:commented?   :writer org-glance-headline:commented?))
-                                   (:archivedp   . (:reader org-glance-headline:archived?    :writer org-glance-headline:archived?))
-                                   (:linked      . (:reader org-glance-headline:linked?      :writer org-glance-element:linked?))
-                                   (:propertized . (:reader org-glance-headline:propertized? :writer org-glance-element:propertized?))
-                                   (:encrypted   . (:reader org-glance-headline:encrypted?   :writer org-glance-element:encrypted?))
-                                   (:buffer      . (:reader org-glance-headline:buffer       :writer org-glance-element:buffer))
-                                   (:closed      . (:reader org-glance-headline:closed?      :writer org-glance-headline:closed?)))
+(defvar org-glance:key-value-pair-re)
+
+(declare-function org-glance--back-to-heading "org-glance-utils.el")
+(declare-function org-glance--parse-links "org-glance-utils.el")
+(declare-function org-glance--with-file-visited "org-glance-utils.el")
+
+(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
+(declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
+
+(defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title        :writer org-glance-headline:plain-title))
+                                     (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
+                                     (:file        . (:reader org-glance-headline:file-name    :writer org-glance-headline:file-name))
+                                     (:commentedp  . (:reader org-glance-headline:commented?   :writer org-glance-headline:commented?))
+                                     (:archivedp   . (:reader org-glance-headline:archived?    :writer org-glance-headline:archived?))
+                                     (:linked      . (:reader org-glance-headline:linked?      :writer org-glance-element:linked?))
+                                     (:propertized . (:reader org-glance-headline:propertized? :writer org-glance-element:propertized?))
+                                     (:encrypted   . (:reader org-glance-headline:encrypted?   :writer org-glance-element:encrypted?))
+                                     (:buffer      . (:reader org-glance-headline:buffer       :writer org-glance-element:buffer))
+                                     (:closed      . (:reader org-glance-headline:closed?      :writer org-glance-headline:closed?)))
   "Map `org-element-property' to `org-glance' extractor method.")
+
+(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
+  `(save-excursion
+     (org-glance-headline:search-parents)
+     (unless (org-glance-headline? (org-glance-headline:at-point))
+       (error "Unable to find headline at point"))
+     (save-restriction
+       (org-narrow-to-subtree)
+       ,@forms)))
+
+(cl-defmacro org-glance-headline:with-narrowed-headline (headline &rest forms)
+  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
+  (declare (indent 1) (debug t))
+  `(let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
+         (id (org-glance-headline:id ,headline))
+         (file (org-glance-headline:file-name ,headline))
+         (buffer (org-glance-headline:buffer ,headline)))
+     (cond (file (org-glance--with-file-visited file
+                   (org-glance-headline:search-buffer-by-id id)
+                   (org-glance-headline:with-headline-at-point ,@forms)))
+           ((and buffer (buffer-live-p buffer))
+            (with-current-buffer buffer
+              (org-glance-headline:search-buffer-by-id id)
+              (org-glance-headline:with-headline-at-point ,@forms)))
+           (t (org-glance-exception:headline-not-found (prin1-to-string ,headline))))))
+
+(cl-defun org-glance-headline:buffer-positions (id)
+  (org-element-map (org-element-parse-buffer 'headline) 'headline
+    (lambda (element) (when (string= (org-glance-headline:id element) id)
+                   (org-element-property :begin element)))))
+
+(cl-defun org-glance-headline:search-buffer-by-id (id)
+  (let ((positions (org-glance-headline:buffer-positions id)))
+    (unless positions
+      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" (buffer-file-name) id))
+
+    (when (> (length positions) 1)
+      (message "Headline ID %s is not unique in file %s" id (buffer-file-name)))
+
+    (goto-char (car positions))
+    (org-glance-headline:at-point)))
 
 (cl-defun org-glance-headline:update (element &rest properties)
   "Enrich `org-element' ELEMENT with PROPERTIES."
@@ -52,10 +103,10 @@
          (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
 
 (cl-defun org-glance-element:buffer (element)
-  (and (org-glance-headline? element)
-       (condition-case nil
-           (buffer-name (get-file-buffer (org-glance-headline:file-name headline)))
-         (wrong-type-argument nil))))
+  (when-let (headline (org-glance-headline? element))
+    (condition-case nil
+        (buffer-name (get-file-buffer (org-glance-headline:file-name headline)))
+      (wrong-type-argument nil))))
 
 (cl-defun org-glance-headline? (headline)
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property specified.
@@ -174,31 +225,6 @@ Return headline or nil if it is not a proper `org-glance-headline'."
             (error nil))
       (org-glance-headline:search-parents))))
 
-(cl-defmacro org-glance-headline:with-headline-at-point (&rest forms)
-  `(save-excursion
-     (org-glance-headline:search-parents)
-     (unless (org-glance-headline? (org-glance-headline:at-point))
-       (error "Unable to find headline at point"))
-     (save-restriction
-       (org-narrow-to-subtree)
-       ,@forms)))
-
-(cl-defmacro org-glance-headline:with-narrowed-headline (headline &rest forms)
-  "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
-  (declare (indent 1) (debug t))
-  `(let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
-         (id (org-glance-headline:id ,headline))
-         (file (org-glance-headline:file-name ,headline))
-         (buffer (org-glance-headline:buffer ,headline)))
-     (cond (file (org-glance--with-file-visited file
-                   (org-glance-headline:search-buffer-by-id id)
-                   (org-glance-headline:with-headline-at-point ,@forms)))
-           ((and buffer (buffer-live-p buffer))
-            (with-current-buffer buffer
-              (org-glance-headline:search-buffer-by-id id)
-              (org-glance-headline:with-headline-at-point ,@forms)))
-           (t (HEADLINE-NOT-FOUND (prin1-to-string ,headline))))))
-
 (cl-defun org-glance-headline:from-element (element)
   (when (eql 'headline (org-element-type element))
     (cl-loop for (property . methods) in org-glance-headline:spec
@@ -207,5 +233,71 @@ Return headline or nil if it is not a proper `org-glance-headline'."
              for value = (funcall writer element)
              do (org-glance-headline:update element property value)
              finally (return element))))
+
+;; TODO replace all implicit ...:at-point methods with the explicit pure functions
+(cl-defun org-glance-headline:promote-to-the-first-level ()
+  (org-glance--back-to-heading)
+  (while (and (org-glance-headline? (org-glance-headline:at-point)) (looking-at "^\\*\\*"))
+    (org-promote-subtree)))
+
+;; TODO replace all implicit ...:at-point methods with the explicit pure functions
+(cl-defun org-glance-headline:replace-headline-at-point (contents)
+  (let ((beg (org-glance-headline:begin (org-glance-headline:at-point)))
+        (end (save-excursion (org-end-of-subtree t)))
+        (inhibit-read-only t))
+    (delete-region beg end)
+    (goto-char beg)
+    (insert contents)))
+
+;; TODO replace all implicit ...:at-point methods with the explicit pure functions
+(cl-defun org-glance-headline:contents (headline)
+  "Extracts HEADLINE contents.
+FIXME. Unstable one. Refactor is needed."
+  (let ((file (org-glance-headline:file-name headline))
+        (buffer (org-glance-headline:buffer headline)))
+    (cond (file (with-temp-buffer
+                  (org-mode)
+                  (insert-file-contents file)
+                  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+                  (org-narrow-to-subtree)
+                  (goto-char (point-min))
+                  (org-glance-headline:promote-to-the-first-level)
+                  (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+          (buffer (with-current-buffer buffer
+                    (save-window-excursion
+                      (save-excursion
+                        (save-restriction
+                          (widen)
+                          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
+                          (org-narrow-to-subtree)
+                          (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                            (with-temp-buffer
+                              (org-mode)
+                              (insert contents)
+                              (goto-char (point-min))
+                              (outline-next-heading)
+                              (org-glance-headline:promote-to-the-first-level)
+                              (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
+          (t (org-glance-exception:headline-not-found "Unable to determine headline location")))))
+
+(cl-defun org-glance-headline:hash (headline)
+  (let ((contents (org-glance-headline:contents headline)))
+    (with-temp-buffer
+      (org-mode)
+      (insert contents)
+      (buffer-hash))))
+
+(cl-defun org-glance-headline:plain-title (headline)
+  (with-temp-buffer
+    (save-excursion (insert (org-glance-headline:title headline)))
+    (org-glance--remove-links 'org-glance-overview 'org-glance-state)
+    (org-glance--substitute-links)
+    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+
+;; TODO replace all implicit ...:at-point methods with the explicit pure functions
+(cl-defun org-glance-headline:add-log-note (string &rest objects)
+  (org-glance-headline:with-headline-at-point
+   (goto-char (org-log-beginning t))
+   (insert (apply #'format string objects) "\n")))
 
 (provide 'org-glance-headline)

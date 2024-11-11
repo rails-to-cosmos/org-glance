@@ -68,7 +68,7 @@
 (And "^I rename headline to \"\\([^\"]+\\)\"$"
      (lambda (new-title)
        (should (org-glance--back-to-heading))
-       (replace-string (org-glance:headline-title) new-title nil (point-min) (save-excursion (end-of-line) (point)))))
+       (replace-string (org-glance-headline:plain-title) new-title nil (point-min) (save-excursion (end-of-line) (point)))))
 
 (And "^I sync materialized headline$"
      (lambda ()
