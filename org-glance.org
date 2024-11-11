@@ -28,6 +28,7 @@
 - [ ] Linters
 - [ ] Look at ht / map for hash table manipulation
 - [ ] [[https://elpa.gnu.org/packages/persist.html][Persist]] for caching
+- [ ] [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]]
 ** TODO Thunkify headline derivative properties if possible
 ** TODO ability to encrypt regions, not only headlines
 ** TODO Separate directory for "resources"
