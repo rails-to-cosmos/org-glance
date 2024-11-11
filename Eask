@@ -15,6 +15,7 @@
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
+(depends-on "ht")
 (depends-on "highlight")
 (depends-on "transient")
 (depends-on "elsa")

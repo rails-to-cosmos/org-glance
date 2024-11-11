@@ -11,12 +11,6 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defun org-glance-test:capture (title &keys tag)
-  (with-simulated-input ((insert (org-glance-tag:to-string tag)) "RET")
-    (org-glance-capture))
-  (insert title)
-  (org-capture-finalize))
-
 (cl-defmacro with-temp-glance-directory (&rest body)
   (declare (indent 0))
   `(let ((org-glance-directory (make-temp-file "temp-dir-" t)))
@@ -24,6 +18,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn (org-glance-init org-glance-directory)
                 ,@body)
        (delete-directory org-glance-directory t))))
+
+(cl-defun org-glance-test:capture (title &keys tag)
+  (with-simulated-input ((insert (org-glance-tag:to-string tag)) "RET")
+    (org-glance-capture))
+  (insert title)
+  (org-capture-finalize))
 
 (ert-deftest org-glance-test:initial-state ()
   (with-temp-glance-directory

@@ -26,6 +26,7 @@
 - [ ] Test main scenarios
 - [ ] Benchmarks
 - [ ] Linters
+- [ ] Look at ht / map for hash table manipulation
 ** TODO Thunkify headline derivative properties if possible
 ** TODO ability to encrypt regions, not only headlines
 ** TODO Separate directory for "resources"
