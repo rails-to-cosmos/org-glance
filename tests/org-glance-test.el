@@ -11,7 +11,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defun org-glance-test:capture (title tag)
+(cl-defun org-glance-test:capture (title &keys tag)
   (with-simulated-input ((insert (org-glance-tag:to-string tag)) "RET")
     (org-glance-capture))
   (insert title)
