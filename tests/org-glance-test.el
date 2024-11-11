@@ -1,4 +1,5 @@
 (require 'ert)
+(require 'with-simulated-input)
 (require 'org-glance)
 
 (cl-defmacro with-temp-directory (dir &rest body)
@@ -9,6 +10,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
      (unwind-protect
          (progn ,@body)
        (delete-directory ,dir t))))
+
+(cl-defun org-glance-test:capture (title tag)
+  (with-simulated-input ((insert (org-glance-tag:to-string tag)) "RET")
+    (org-glance-capture))
+  (insert title)
+  (org-capture-finalize))
 
 (cl-defmacro with-temp-glance-directory (&rest body)
   (declare (indent 0))
@@ -22,15 +29,21 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (with-temp-glance-directory
     (should (= (length (org-glance:tags)) 0))))
 
-(ert-deftest org-glance-test:basic-tag-management ()
+(ert-deftest org-glance-test:tag-management ()
   (with-temp-glance-directory
-    (org-glance:create-tag 'foo)
-    (should (org-glance-tag:exists? 'foo org-glance-tags))
+    (let ((tag 'foo))
+      (org-glance:create-tag tag)
+      (should (org-glance-tag:exists? tag org-glance-tags)))
 
     ;; (org-glance:remove-tag 'foo)
     ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
 
     (should-error (org-glance:create-tag "bar") :type 'error)
     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
+
+(ert-deftest org-glance-test:tag-overview ()
+  (with-temp-glance-directory
+    (org-glance:create-tag 'foo)
+    (org-glance-test:capture "Hello, world!" :tag 'foo)))
 
 (provide 'org-glance-test)

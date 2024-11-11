@@ -11,4 +11,4 @@ test:
 	eask install
 	eask recompile
 	eask test activate
-	eask test --debug --verbose 5 ert org-glance-test.el
+	eask test --debug --verbose 5 ert tests/*.el
