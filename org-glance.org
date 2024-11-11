@@ -22,6 +22,10 @@
 :LOGBOOK:
 - State "STARTED"    from "TODO"       [2024-11-11 Mon 22:11]
 :END:
+
+- [ ] Test main scenarios
+- [ ] Benchmarks
+- [ ] Linters
 ** TODO Thunkify headline derivative properties if possible
 ** TODO ability to encrypt regions, not only headlines
 ** TODO Separate directory for "resources"
