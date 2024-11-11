@@ -21,17 +21,12 @@
 ;; TODO refactor, slow
 (cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
   "Main retriever, refactor needed."
-  (let* ((headlines (org-glance-all-headlines filter))
-         (choice (completing-read "Headline: " headlines nil t))
-         (headline.tag (alist-get choice headlines nil nil #'string=)))
-    (unless headline.tag
-      (org-glance-exception:headline-not-found choice))
-
-    (let ((headline (car headline.tag))
-          (tag (cadr headline.tag)))
-      (org-glance-headline:with-narrowed-headline headline
-        (org-glance-headline:update (org-glance-headline:from-element (org-element-at-point))
-                                    :tag tag)))))
+  (let* ((headers (org-glance-metadata:read-headers filter))
+         (choice (completing-read "Headline: " headers nil t)))
+    (cl-destructuring-bind (header tag)
+        (alist-get choice headers nil nil #'string=)
+      (org-glance-headline:with-narrowed-headline header
+        (org-glance-headline:update (org-glance-headline:at-point) :tag tag)))))
 
 (cl-defun org-glance-metadata:headlines (metadata)
   (cl-loop for id being the hash-keys of metadata using (hash-value value)

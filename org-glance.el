@@ -650,7 +650,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
 ;; TODO refactor, slow
-(cl-defun org-glance-all-headlines (&optional filter)
+(cl-defun org-glance-metadata:read-headers (&optional filter)
   (cl-loop for tag being the hash-keys of org-glance-tags
            append (cl-loop for headline in (org-glance:tag-headlines tag)
                            when (or (null filter) (funcall filter headline))
