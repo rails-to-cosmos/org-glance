@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'dash)
 (require 'org)
 (require 'org-element)
@@ -116,11 +118,11 @@
         (buffer-name (get-file-buffer (org-glance-headline:file-name headline)))
       (wrong-type-argument nil))))
 
-(cl-defun org-glance-headline? (headline)
+(cl-defun org-glance-headline? (element)
   "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property specified.
 Return headline or nil if it is not a proper `org-glance-headline'."
-  (when (org-element-property :ORG_GLANCE_ID headline)
-    headline))
+  (when (org-element-property :ORG_GLANCE_ID element)
+    element))
 
 (cl-defun org-glance-headline:title (headline)
   (or (org-element-property :TITLE headline)
@@ -307,5 +309,22 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance-headline:with-headline-at-point
    (goto-char (org-log-beginning t))
    (insert (apply #'format string objects) "\n")))
+
+(iter-defun org-glance-headline:forward-iterator ()
+  "Iterate over buffer headlines from top to bottom."
+  (if-let ((headline (org-glance-headline:from-element (org-element-at-point))))
+      (iter-yield headline)
+    (outline-previous-heading))
+
+  (while (not (eobp))
+    (when-let ((headline (org-glance-headline:from-element (org-element-at-point))))
+      (iter-yield headline))
+    (outline-next-heading)))
+
+(cl-defun org-glance-headline:test-iter ()
+  (interactive)
+  (let ((it (org-glance-headline:forward-iterator)))
+    (while-let ((headline (iter-next it)))
+      (message (org-glance-headline:id headline)))))
 
 (provide 'org-glance-headline)

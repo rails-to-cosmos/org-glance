@@ -398,51 +398,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
 ;; Headline
 
-(cl-defun org-glance-headline:search-backward ()
-  (interactive)
-  (when-let (headline (org-glance-headline:at-point))
-    (goto-char (org-glance-headline:begin headline))
-    (forward-char -1))
-
-  (while (and (not (org-before-first-heading-p))
-              (not (bobp))
-              (not (org-glance-headline:at-point)))
-    (outline-previous-heading))
-
-  (if-let (headline (org-glance-headline:at-point))
-      (progn (goto-char (org-glance-headline:begin headline))
-             headline)
-    (progn (goto-char (point-min)))))
-
-(cl-defun org-glance-headline:search-forward ()
-  (interactive)
-
-  (let ((headline (org-glance-headline:at-point))
-        next-headline)
-
-    (save-excursion
-
-      (when headline
-        (if (org-glance-headline:end headline)
-            (goto-char (org-glance-headline:end headline))
-          (goto-char (point-max)))
-
-        (condition-case nil
-            (progn (beginning-of-line)
-                   (forward-line 1))
-          (end-of-buffer nil)))
-
-      (setq next-headline (org-glance-headline:at-point))
-      (while (and (not (eobp))
-                  (or (not next-headline)
-                      (equal headline next-headline)))
-        (forward-line 1)
-        (setq next-headline (org-glance-headline:at-point))))
-
-    (when (and next-headline (not (equal headline next-headline)))
-      (goto-char (org-glance-headline:begin next-headline))
-      next-headline)))
-
 (cl-defun org-glance-headline:list ()
   (save-excursion
     (goto-char (point-min))
@@ -563,7 +518,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
             (headline (org-glance-headline:at-point))
             (state (org-glance-headline:state headline))
             (id (org-glance-headline:id headline))
-            (title (org-glance-headline:plain-title))
+            (title (org-glance-headline:plain-title headline))
             (priority (org-glance-headline:priority headline))
             (closed (org-element-property :closed (org-element-at-point)))
             (schedule (org-glance-headline:schedule headline))

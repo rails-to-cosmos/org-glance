@@ -132,27 +132,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-overview:jump-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-
-(define-key org-glance-overview-mode-map (kbd "n")
-  (org-glance:interactive-lambda
-    (when (org-glance-headline:at-point)
-      (outline-hide-subtree))
-    (org-glance-headline:search-forward)
-    ;; (when (org-glance-headline:at-point)
-    ;;   (outline-show-subtree)
-    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
-    ))
-
-(define-key org-glance-overview-mode-map (kbd "p")
-  (org-glance:interactive-lambda
-    (when (org-glance-headline:at-point)
-      (outline-hide-subtree))
-    (org-glance-headline:search-backward)
-    ;; (when (org-glance-headline:at-point)
-    ;;   (outline-show-subtree)
-    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
-    ))
-
+(define-key org-glance-overview-mode-map (kbd "n") #'outline-next-heading)
+(define-key org-glance-overview-mode-map (kbd "p") #'outline-previous-heading)
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 
 (define-key org-glance-overview-mode-map (kbd "k")
@@ -257,7 +238,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
         (widen)
         (condition-case nil
             (org-glance-overview:remove-headline-from-overview headline class)
-          (org-glance-exception:org-glance-exception:headline-not-found nil))
+          (org-glance-exception:headline-not-found nil))
         (let ((inhibit-read-only t)
               (headline-seen-p nil))
           (unless (or (string-empty-p contents)
@@ -266,13 +247,13 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline?)
+                        (org-glance-headline? (org-element-at-point))
                         (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline?)
+              (when (org-glance-headline? (org-element-at-point))
                 (setq headline-seen-p t)))
 
             (when (and (not headline-seen-p)
-                       (not (org-glance-headline?)))
+                       (not (org-glance-headline? (org-element-at-point))))
               (insert "\n"))
 
             (insert (s-trim contents) "\n")
@@ -319,13 +300,13 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline?)
+                        (org-glance-headline? (org-element-at-point))
                         (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline?)
+              (when (org-glance-headline? (org-element-at-point))
                 (setq headline-seen-p t)))
 
             (when (and (not headline-seen-p)
-                       (not (org-glance-headline?)))
+                       (not (org-glance-headline? (org-element-at-point))))
               (insert "\n"))
 
             (insert (s-trim contents) "\n")

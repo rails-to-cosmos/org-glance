@@ -13,7 +13,7 @@
 (When "^I jump to the first headline$"
   (lambda ()
     (goto-char (point-min))
-    (org-glance-headline:search-forward)))
+    (org-next-visible-heading 1)))
 
 (When "^I kill headline at point$"
   (lambda ()
