@@ -32,6 +32,6 @@
   tag)
 
 (cl-defun org-glance-tag:id* (tag)
-  (format "%s-%s" tag (md5 (s-join "-" (mapcar #'number-to-string (current-time))))))
+  (format "%s-%s" tag (md5 (s-concat (prin1-to-string (current-time)) (buffer-string)))))
 
 (provide 'org-glance-tag)
