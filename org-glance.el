@@ -7,7 +7,7 @@
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.1") (aes) (dash) (f) (highlight) (transient) (elsa) (with-simulated-input) (ht))
+;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
@@ -363,14 +363,14 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 ;;               :template (org-glance-headline:contents headline)))))
 
 (cl-defun org-glance-capture (&key (tag (org-glance-tags:completing-read))
-                                   (file (make-temp-file "org-glance-" nil ".org"))
                                    (default (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
                                                   (t "")))
                                    (callback nil)
                                    (finalize nil)
                                    (template (org-glance:capture-template tag :default default)))
   (interactive)
-  (let ((tag (if (symbolp tag) tag (intern tag))))
+  (let ((tag (if (symbolp tag) tag (intern tag)))
+        (file (make-temp-file "org-glance-" nil ".org")))
     (find-file file)
     (setq-local org-glance-capture:id (org-glance-tag:id* tag)
                 org-glance-capture:tag tag
@@ -378,7 +378,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
     (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
     (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-    (let ((org-capture-templates (list (list "_" "Thing" 'entry (list 'file file) template))))
+    (let ((org-capture-templates (list (list "_" "_" 'entry (list 'file file) template))))
       (org-capture nil "_")
       (when finalize (org-capture-finalize)))))
 

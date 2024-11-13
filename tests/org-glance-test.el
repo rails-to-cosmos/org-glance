@@ -1,7 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'ert)
-(require 'with-simulated-input)
 (require 'org-glance)
 
 (cl-defmacro with-temp-directory (dir &rest body)
@@ -22,7 +21,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
        (delete-directory org-glance-directory t))))
 
 (cl-defun org-glance-test:capture (tag title)
-  (with-simulated-input ((insert (org-glance-tag:to-string tag)) "RET")
+  (cl-letf (((symbol-function 'org-glance-tags:completing-read) (lambda (&rest _) tag)))
     (org-glance-capture))
   (insert title)
   (org-capture-finalize))
@@ -43,26 +42,10 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should-error (org-glance:create-tag "bar") :type 'error)
     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
-;; (ert-deftest org-glance-test:tag-overview ()
-;;   (with-temp-glance-directory
-;;     (org-glance:create-tag 'foo)
-;;     (org-glance-test:capture 'foo "Hello, world!")))
-
-(require 'ert)
-(require 'org-capture)
-
-(defun my-org-capture-template ()
-  "Define a simple Org capture template for testing."
-  (setq org-capture-templates
-        '(("t" "Test entry" entry (file+headline "~/test.org" "Tasks")
-           "* TODO Test capture\n"))))
-
-(ert-deftest test-org-capture ()
-  (my-org-capture-template)
-  (cl-letf (((symbol-function 'org-capture-finalize) (lambda (&rest _) (message "Finalized")))
-            ((symbol-function 'org-capture-kill) (lambda (&rest _) (message "Killed"))))
-    (with-temp-buffer
-      (org-capture nil "t")
-      (should (string-match-p "* TODO Test capture" (buffer-string))))))
+(ert-deftest org-glance-test:tag-overview ()
+  (let ((tag 'foo))
+    (with-temp-glance-directory
+      (org-glance:create-tag tag)
+      (org-glance-test:capture tag "Hello, world!"))))
 
 (provide 'org-glance-test)

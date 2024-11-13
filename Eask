@@ -12,6 +12,7 @@
 (source "org")
 
 (depends-on "emacs" "29.1")
+(depends-on "org")
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
@@ -19,6 +20,3 @@
 (depends-on "highlight")
 (depends-on "transient")
 (depends-on "elsa")
-
-;; Test dependencies
-(depends-on "with-simulated-input")

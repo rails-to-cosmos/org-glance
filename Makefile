@@ -16,4 +16,7 @@ build:
 	eask reinstall
 
 test:
+	eask recompile
+	eask package ./dist
+	eask reinstall
 	eask test --verbose 5 ert tests/*.el
