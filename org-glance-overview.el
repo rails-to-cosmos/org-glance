@@ -252,9 +252,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
               (when (org-glance-headline? (org-element-at-point))
                 (setq headline-seen-p t)))
 
-            (when (and (not headline-seen-p)
-                       (not (org-glance-headline? (org-element-at-point))))
-              (insert "\n"))
+            ;; (when (and (not headline-seen-p)
+            ;;            (not (org-glance-headline? (org-element-at-point))))
+            ;;   (insert "\n"))
 
             (insert (s-trim contents) "\n")
 

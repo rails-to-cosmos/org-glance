@@ -110,9 +110,7 @@
 (cl-defun org-glance-tags:completing-read (&optional (prompt "Tag: ") (require-match t))
   "Run completing read PROMPT on registered tags filtered by TYPE."
   (let ((tags (org-glance:tags-sorted)))
-    (if (= (length tags) 1)
-        (car tags)
-      (intern (completing-read prompt tags nil require-match)))))
+    (org-glance-tag:from-string (completing-read prompt tags nil require-match))))
 
 (cl-defun org-glance:capture-template (tag &key (default ""))
   (let ((capture-template-config-file (f-join (org-glance-overview:directory tag) "capture-template.org")))
@@ -384,19 +382,10 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
       (org-capture nil "_")
       (when finalize (org-capture-finalize)))))
 
-;; (cl-defun org-glance-headline-remove ()
-;;   (interactive)
-;;   (org-glance-choose-and-apply
-;;    :action (lambda (headline)
-;;              (org-glance:with-headline-materialized headline
-;;                (org-set-tags '())))))
-
 (cl-defun org-glance:insert-pin-block ()
   (interactive)
   (insert "#+begin_pin" "\n\n" "#+end_pin")
   (forward-line -1))
-
-;; Headline
 
 (cl-defun org-glance-headline:list ()
   (save-excursion
