@@ -263,7 +263,6 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:remove-headline-from-overview (headline class)
   "Add HEADLINE clone in overview VIEW-ID file."
-  (message "Remove from overview %s" class)
   (save-window-excursion
     (org-glance-overview class)
     (save-restriction
@@ -273,8 +272,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
                 (org-glance-exception:org-glance-exception:headline-not-found nil))
           (let ((inhibit-read-only t))
-            (delete-region (org-entry-beginning-position) (save-excursion
-                                                            (org-end-of-subtree t t)))
+            (delete-region (org-entry-beginning-position) (save-excursion (org-end-of-subtree t t)))
             (save-buffer)))))))
 
 (cl-defun org-glance-overview:register-headline-in-archive (headline class)
