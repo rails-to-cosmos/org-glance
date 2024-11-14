@@ -24,6 +24,7 @@
 :END:
 
 - [ ] Test main scenarios
+  - [ ] Proper sessions / tag namespaces for testing and distributed dbs
 - [ ] Benchmarks
 - [ ] Linters
 - [ ] Look at ht / map for hash table manipulation

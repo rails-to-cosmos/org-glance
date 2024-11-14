@@ -12,13 +12,13 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defmacro with-temp-glance-directory (&rest body)
+(cl-defmacro org-glance:with-temp-session (&rest body)
   (declare (indent 0))
-  `(let ((org-glance-directory (make-temp-file "temp-dir-" t)))
-     (unwind-protect
-         (progn (org-glance-init org-glance-directory)
-                ,@body)
-       (delete-directory org-glance-directory t))))
+  `(unwind-protect
+       (with-temp-directory org-glance-directory
+         (org-glance-init org-glance-directory)
+         ,@body)
+     (org-glance-init org-glance-directory)))
 
 (cl-defun org-glance-test:capture (tag title)
   (cl-letf (((symbol-function 'org-glance-tags:completing-read) (lambda (&rest _) tag)))
@@ -27,11 +27,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (org-capture-finalize))
 
 (ert-deftest org-glance-test:initial-state ()
-  (with-temp-glance-directory
+  (org-glance:with-temp-session
     (should (= (length (org-glance:tags)) 0))))
 
 (ert-deftest org-glance-test:tag-management ()
-  (with-temp-glance-directory
+  (org-glance:with-temp-session
     (let ((tag 'foo))
       (org-glance:create-tag tag)
       (should (org-glance-tag:exists? tag org-glance-tags)))
@@ -44,8 +44,14 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:tag-overview ()
   (let ((tag 'foo))
-    (with-temp-glance-directory
+    (org-glance:with-temp-session
       (org-glance:create-tag tag)
-      (org-glance-test:capture tag "Hello, world!"))))
+      (should (org-glance-tag:exists? tag org-glance-tags))
+      (should (= 1 (length (org-glance:tags))))
+      (should (= 0 (length (org-glance:tag-headlines tag))))
+
+      (org-glance-test:capture tag "Hello, world!")
+
+      (should (= 1 (length (org-glance:tag-headlines tag)))))))
 
 (provide 'org-glance-test)

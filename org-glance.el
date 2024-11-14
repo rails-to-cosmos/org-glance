@@ -82,13 +82,11 @@
 
 (declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
 
-(defgroup org-glance nil
-  "Options concerning glancing entries."
+(defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
   :group 'org)
 
-(defvar org-glance-tags (make-hash-table)
-  "Hash table {tag id -> tag parameters}")
+(defvar org-glance-tags (make-hash-table) "Hash table {tag -> `org-glance-tag-info'}")
 
 (cl-defun org-glance:tags ()  ;; -> list[symbol]
   (hash-table-keys org-glance-tags))
@@ -104,7 +102,7 @@
 
 (cl-defun org-glance:tag-headlines (tag) ;; -> list[headline]
   (org-glance-headlines :db (org-glance-metadata:location tag)
-                        :scope (list org-glance-directory)
+                        :scope org-glance-directory
                         :filter (org-glance:tag-filter tag)))
 
 (cl-defun org-glance-tags:completing-read (&optional (prompt "Tag: ") (require-match t))
@@ -167,7 +165,7 @@
   (unless (and (symbolp tag) (symbol-downcased-p tag))
     (error "Tag should be a downcased symbol."))
 
-  (when (org-glance-tag:register tag org-glance-tags)
+  (when (org-glance-tag:register tag org-glance-tags :namespace org-glance-directory)
     (org-glance-metadata:create (org-glance-metadata:location tag))
     (org-glance-overview:create tag)))
 
@@ -255,7 +253,7 @@ after capture process has been finished."
            do (org-glance:create-tag tag))
 
   (cl-loop for tag being the hash-keys of org-glance-tags
-           unless (f-exists? (f-join directory (org-glance-tag:file-name tag)))
+           unless (f-exists? (f-join directory (org-glance-tag:to-string tag)))
            do (org-glance-tag:remove tag org-glance-tags))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))

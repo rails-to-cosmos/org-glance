@@ -324,7 +324,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (org-glance--back-to-heading)
       (let* ((id (org-glance-tag:id* tag))
              (dir (org-glance:make-tag-directory tag))
-             (output-file (f-join dir (format "%s.org" (org-glance-tag:file-name tag)))))
+             (output-file (f-join dir (format "%s.org" (org-glance-tag:to-string tag)))))
 
         (mkdir dir 'parents)
 
@@ -369,13 +369,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
   (when-let (headline (org-glance-headline:search-buffer-by-id org-glance-capture:id))
     (let* ((id org-glance-capture:id)
-           (class org-glance-capture:tag)
+           (tag org-glance-capture:tag)
            (refile-dir (org-glance-headline:make-directory
-                        (org-glance:tag-file-name class)
+                        (org-glance:tag-file-name tag)
                         (org-glance-headline:plain-title headline)))
            (tmp-file (org-glance-headline:file-name headline))
-           (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" class)))))
-      (message "Generate headline directory: %s" refile-dir)
+           (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" tag)))))
       (org-set-property "DIR" (abbreviate-file-name refile-dir))
       (save-buffer)
       (kill-buffer)
@@ -383,14 +382,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (f-move tmp-file new-file)
       (org-glance-headline:update headline :file new-file)
 
-      (org-glance-overview class)
+      (org-glance-overview tag)
 
-      (message "Register headline of class %s in metadata: %s"
-                            (pp-to-string class)
-                            (pp-to-string headline))
-
-      (org-glance-overview:register-headline-in-metadata headline class)
-      (org-glance-overview:register-headline-in-overview headline class)
+      (org-glance-overview:register-headline-in-metadata headline tag)
+      (org-glance-overview:register-headline-in-overview headline tag)
 
       (org-overview)
       (org-glance-headline:search-buffer-by-id id))))
