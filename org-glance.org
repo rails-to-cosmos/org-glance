@@ -23,8 +23,9 @@
 - State "STARTED"    from "TODO"       [2024-11-11 Mon 22:11]
 :END:
 
-- [ ] Test main scenarios
-  - [ ] Proper sessions / tag namespaces for testing and distributed dbs
+- [-] Test main scenarios
+  - [X] Proper sessions / tag namespaces for testing and distributed dbs
+  - [ ] Headline data model
 - [ ] Benchmarks
 - [ ] Linters
 - [ ] Look at ht / map for hash table manipulation

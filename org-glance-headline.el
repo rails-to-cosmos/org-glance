@@ -3,9 +3,18 @@
 (require 'dash)
 (require 'org)
 (require 'org-element)
+(require 'cl-lib)
 
 (require 'org-glance-utils)
 (require 'org-glance-tag)
+
+(defun org-glance--valid-headline? (headline)
+  ;; dumb checker, will improve afterwards
+  (listp headline))
+
+(cl-deftype org-glance-headline ()
+  "Type representing a customized org-element for headlines."
+  '(satisfies org-glance--valid-headline?))
 
 (defvar org-glance:key-value-pair-re)
 

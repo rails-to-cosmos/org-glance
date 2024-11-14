@@ -185,17 +185,20 @@ If point is before the first heading, prompt for headline and eval forms on it."
           ;; (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
           (or (org-element-property :priority (org-element-at-point)) ?B))))
 
-(cl-defun org-glance-overview:partition-comparator (headline1 headline2)
-  "Main method to compare HEADLINE1 with HEADLINE2."
+(cl-defun org-glance-overview:partition-comparator (lhs rhs)
+  "Main method to compare LHS with RHS."
+  (cl-check-type lhs org-glance-headline)
+  (cl-check-type rhs org-glance-headline)
+
   (cl-loop
-     for (i j) in (-zip-lists headline1 headline2)
-     when (cond ((not (eql (type-of i) (type-of j))) nil)
-                ((stringp i) (not (string= i j)))
-                (t (not (eql i j))))
-     return (cond ((stringp i) (string< i j))
-                  ((numberp i) (< i j))
-                  ((booleanp i) i)
-                  (t nil))))
+   for (i j) in (-zip-lists lhs rhs)
+   when (cond ((not (eql (type-of i) (type-of j))) nil)
+              ((stringp i) (not (string= i j)))
+              (t (not (eql i j))))
+   return (cond ((stringp i) (string< i j))
+                ((numberp i) (< i j))
+                ((booleanp i) i)
+                (t nil))))
 
 (cl-defun org-glance-overview:partition (&key using (test #'equal) (comparator #'<))
   (declare (indent 0))
