@@ -42,7 +42,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should-error (org-glance:create-tag "bar") :type 'error)
     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
-(ert-deftest org-glance-test:tag-overview ()
+(ert-deftest org-glance-test:overview ()
   (let ((tag 'foo))
     (org-glance:with-temp-session
       (org-glance:create-tag tag)
@@ -52,6 +52,9 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
       (org-glance-test:capture tag "Hello, world!")
 
-      (should (= 1 (length (org-glance:tag-headlines tag)))))))
+      (should (= 1 (length (org-glance:tag-headlines tag))))
+
+      (org-glance-overview tag)
+      (org-glance-overview:materialize-headline))))
 
 (provide 'org-glance-test)

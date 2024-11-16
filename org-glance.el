@@ -793,7 +793,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                          :db-init t
                                          :default choice
                                          :prompt prompt)))
-            (user-error "Headline not found"))))))
+            (error "Headline not found"))))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

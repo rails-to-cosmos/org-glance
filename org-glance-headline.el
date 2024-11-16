@@ -67,7 +67,8 @@
            ((and buffer (buffer-live-p buffer))
             (with-current-buffer buffer
               (org-glance-headline:search-buffer-by-id id)
-              (org-glance-headline:with-headline-at-point ,@forms)))
+              (org-glance-headline:with-headline-at-point
+               ,@forms)))
            (t (org-glance-exception:headline-not-found (prin1-to-string ,headline))))))
 
 (cl-defun org-glance-headline:buffer-positions (id)
@@ -78,10 +79,10 @@
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((positions (org-glance-headline:buffer-positions id)))
     (unless positions
-      (org-glance-exception:headline-not-found "Headline not found in file %s: %s" (buffer-file-name) id))
+      (error "Headline %s not found in file %s" id (buffer-file-name)))
 
     (when (> (length positions) 1)
-      (message "Headline ID %s is not unique in file %s" id (buffer-file-name)))
+      (error "Headline %s is not unique in file %s" id (buffer-file-name)))
 
     (goto-char (car positions))
     (org-glance-headline:at-point)))
@@ -226,23 +227,20 @@ Return headline or nil if it is not a proper `org-glance-headline'."
 (cl-defun org-glance-headline:search-parents ()
   "Traverse parents in search of a proper `org-glance-headline'."
   (org-glance--back-to-heading)
-
-  (while (not (or ;; (org-glance-headline? (org-element-at-point))
-               (org-before-first-heading-p)
-               (bobp)))
-    (org-up-heading-or-point-min))
-
-  (-some-> (org-element-at-point)
-    (org-glance-headline?)
-    (org-glance-headline:from-element)))
+  (cl-do ((element (org-element-at-point) (org-element-at-point)))
+      ;; until:
+      ((or (org-glance-headline? element) (org-before-first-heading-p) (bobp))
+       ;; return:
+       (if (org-glance-headline? element)
+           (org-glance-headline:from-element element)
+         nil))
+    ;; body:
+    (org-up-heading-or-point-min)))
 
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
   (save-excursion
-    (when (condition-case nil
-              (or (org-at-heading-p) (org-back-to-heading))
-            (error nil))
-      (org-glance-headline:search-parents))))
+    (org-glance-headline:search-parents)))
 
 (cl-defun org-glance-headline:from-element (element)
   (when (eql 'headline (org-element-type element))

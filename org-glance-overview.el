@@ -680,14 +680,13 @@ enjoy using a lot.
           (org-glance-overview:refresh-widgets tag))))
     overview-file-name))
 
-(cl-defun org-glance-overview (&optional (class-name (org-glance-tags:completing-read "Overview: " nil)))
+(cl-defun org-glance-overview (&optional (tag (org-glance-tags:completing-read "Overview: " nil)))
   (interactive)
-  (when class-name
-    (when-let (location (org-glance-overview:file-name class-name))
-      (if (file-exists-p location)
-          (find-file location)
-        (org-glance:create-tag class-name)
-        (org-glance-overview:create class-name)))))
+  (when-let (location (org-glance-overview:file-name tag))
+    (if (file-exists-p location)
+        (find-file location)
+      (org-glance:create-tag tag)
+      (org-glance-overview:create tag))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
