@@ -79,7 +79,7 @@
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((positions (org-glance-headline:buffer-positions id)))
     (unless positions
-      (error "Headline %s not found in file %s" id (buffer-file-name)))
+      (org-glance-exception:headline-not-found "Headline %s not found in file %s" id (buffer-file-name)))
 
     (when (> (length positions) 1)
       (error "Headline %s is not unique in file %s" id (buffer-file-name)))
@@ -240,7 +240,9 @@ Return headline or nil if it is not a proper `org-glance-headline'."
 (cl-defun org-glance-headline:at-point ()
   "Search for the first occurence of `org-glance-headline' in parent headlines."
   (save-excursion
-    (org-glance-headline:search-parents)))
+    (when-let ((headline (org-glance-headline:search-parents)))
+      ;; tood reduce
+      (org-element-put-property (org-element-put-property headline :buffer (current-buffer)) :file (buffer-file-name)))))
 
 (cl-defun org-glance-headline:from-element (element)
   (when (eql 'headline (org-element-type element))
@@ -295,7 +297,7 @@ FIXME. Unstable one. Refactor is needed."
                               (outline-next-heading)
                               (org-glance-headline:promote-to-the-first-level)
                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
-          (t (org-glance-exception:headline-not-found "Unable to determine headline location")))))
+          (t (error "Unable to determine headline location")))))
 
 (cl-defun org-glance-headline:hash (headline)
   (let ((contents (org-glance-headline:contents headline)))

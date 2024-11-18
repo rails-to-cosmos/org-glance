@@ -97,19 +97,15 @@
     (let* ((headline (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id))
            (id --org-glance-materialized-headline:id)
            (source-file --org-glance-materialized-headline:file)
-           (source-buffer --org-glance-materialized-headline:buffer)
-           (source-hash (cond (source-file (with-temp-buffer
-                                             (org-mode)
-                                             (insert-file-contents source-file)
-                                             (-> (org-glance-headline:search-buffer-by-id id)
-                                                 (org-glance-headline:hash))))
-                              (source-buffer (with-current-buffer source-buffer
-                                               (-> (org-glance-headline:search-buffer-by-id id)
-                                                   (org-glance-headline:hash))))))
+           (source-hash (with-temp-buffer
+                          (org-mode)
+                          (insert-file-contents source-file)
+                          (-> (org-glance-headline:search-buffer-by-id id)
+                              (org-glance-headline:hash))))
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash headline))
-           (source-headline (org-glance-headline:update (org-glance-headline:at-point)
+           (source-headline (org-glance-headline:update headline
                                                         :begin --org-glance-materialized-headline:begin
                                                         :file --org-glance-materialized-headline:file
                                                         :buffer --org-glance-materialized-headline:buffer))
@@ -117,10 +113,10 @@
            (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
-        (org-glance-exception:source-corrupted (or source-file source-buffer)))
+        (error "Source file corrupted, please reread: %s" source-file))
 
       (when (string= glance-hash current-hash)
-        (org-glance-exception:headline-not-modified (or source-file source-buffer)))
+        (user-error "Headline has not been modified: %s" source-file))
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
