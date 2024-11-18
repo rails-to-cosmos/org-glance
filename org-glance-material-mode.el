@@ -1,7 +1,37 @@
+(require 's)
+(require 'dash)
+(require 'org-glance-utils)
+(require 'org-glance-headline)
+(require 'org-glance-overview)
+
+(declare-function s-split-up-to "s.el" (separator s n &optional omit-nulls))
+
+(declare-function org-glance-headline:contents "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:decrypt "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:encrypt "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:plain-title "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:promote-to-the-first-level "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
+(declare-function org-glance-headline:replace-headline-at-point "org-glance-headline.el" (contents))
+(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
+(declare-function org-glance-headline:demote "org-glance-headline.el" (level))
+(declare-function org-glance-headline:add-log-note "org-glance-headline.el" (string &rest objects))
+(declare-function org-glance-headline:search-parents "org-glance-headline.el" ())
+(declare-function org-glance-headline:at-point "org-glance-headline.el" ())
+(declare-function org-glance-headline:hash "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
+
+(declare-function org-glance-metadata:get-headline "org-glance-metadata.el" (id))
+(declare-function org-glance-headline-reference "org-glance-metadata.el" (&optional (type 'org-glance-visit)))
+(declare-function org-glance-headline-relations "org-glance-metadata.el" ())
+
+(declare-function org-glance--now "org-glance-utils.el")
+
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
 
-(define-minor-mode org-glance-material-mode "A minor mode to be activated only in materialized view editor."
+(define-minor-mode org-glance-material-mode
+  "A minor mode to be activated only in materialized view editor."
   :lighter nil
   :global nil
   :group 'glance
@@ -19,13 +49,13 @@
 (defvar-local --org-glance-materialized-headline:password nil)
 
 (defcustom org-glance-after-materialize-sync-hook nil
-  "Hook that is run after a materialized buffer is synchronized to its source file."
+  "Runs after a materialized buffer has been synchronized with its source file."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
 
 (defcustom org-glance-before-materialize-sync-hook nil
-  "Normal hook that is run before a materialized buffer is synchronized to its source file."
+  "Runs before a materialized buffer has been synchronized with its source file."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
@@ -34,41 +64,59 @@
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 (define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
-(define-error 'org-glance-exception:HEADLINE-NOT-MODIFIED "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-exception:HEADLINE-NOT-MODIFIED (format &rest args)
-  (signal 'org-glance-exception:HEADLINE-NOT-MODIFIED (list (apply #'format-message format args))))
+(define-error 'org-glance-exception:source-corrupted "No changes made in materialized view" 'user-error)
+(cl-defun org-glance-exception:source-corrupted (format &rest args)
+  (signal 'org-glance-exception:source-corrupted (list (apply #'format-message format args))))
+
+(define-error 'org-glance-exception:headline-not-modified "No changes made in materialized view" 'user-error)
+(cl-defun org-glance-exception:headline-not-modified (format &rest args)
+  (signal 'org-glance-exception:headline-not-modified (list (apply #'format-message format args))))
+
+(cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
+  "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
+  (declare (indent 1) (debug t))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline nil))
+         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+     (unwind-protect
+         (with-current-buffer materialized-buffer
+           (org-glance-headline:search-parents)
+           ,@forms)
+       (when (buffer-live-p materialized-buffer)
+         (with-current-buffer materialized-buffer
+           (condition-case nil
+               (org-glance-materialized-headline-apply 'without-relations)
+             (error nil)))
+         (with-demoted-errors "Unable to kill buffer: %s"
+           (kill-buffer materialized-buffer))))))
 
 (cl-defun org-glance-materialized-headline-apply (&optional without-relations)
   "Push material buffer changes to all headline origins and views."
   (interactive)
   (save-excursion
-    (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id)
-    (let* ((id --org-glance-materialized-headline:id)
+
+    (let* ((headline (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id))
+           (id --org-glance-materialized-headline:id)
            (source-file --org-glance-materialized-headline:file)
-           (source-buffer --org-glance-materialized-headline:buffer)
-           (source-hash (cond (source-file (with-temp-buffer
-                                             (org-mode)
-                                             (insert-file-contents source-file)
-                                             (org-glance-headline:search-buffer-by-id id)
-                                             (org-glance-headline:hash)))
-                              (source-buffer (with-current-buffer source-buffer
-                                               (org-glance-headline:search-buffer-by-id id)
-                                               (org-glance-headline:hash)))))
+           (source-hash (with-temp-buffer
+                          (org-mode)
+                          (insert-file-contents source-file)
+                          (-> (org-glance-headline:search-buffer-by-id id)
+                              (org-glance-headline:hash))))
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
-           (current-hash (org-glance-headline:hash))
-           (source-headline (org-glance-headline:update (org-glance-headline:at-point)
+           (current-hash (org-glance-headline:hash headline))
+           (source-headline (org-glance-headline:update headline
                                                         :begin --org-glance-materialized-headline:begin
                                                         :file --org-glance-materialized-headline:file
                                                         :buffer --org-glance-materialized-headline:buffer))
-           (source-tags (org-glance-headline:tags))
+           (source-tags (org-glance-headline:tags source-headline))
            (source-active? (org-glance-headline:active? source-headline)))
 
       (unless (string= glance-hash source-hash)
-        (org-glance-exception:SOURCE-CORRUPTED (or source-file source-buffer)))
+        (error "Source file corrupted, please reread: %s" source-file))
 
       (when (string= glance-hash current-hash)
-        (org-glance-exception:HEADLINE-NOT-MODIFIED (or source-file source-buffer)))
+        (user-error "Headline has not been modified: %s" source-file))
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
@@ -92,12 +140,12 @@
                                for rr in (org-glance-headline-relations)
                                if (eq (org-element-property :id rr) (intern id))
                                return t)
-                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance-now))))
-                  (org-glance-exception:HEADLINE-NOT-FOUND (message "Relation not found: %s" relation-id)))
+                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
+                  (org-glance-exception:org-glance-exception:headline-not-found (message "Relation not found: %s" relation-id)))
                 (redisplay)))
          finally (progress-reporter-done progress-reporter)))
 
-      (let ((new-contents (org-glance:with-headline-at-point
+      (let ((new-contents (org-glance-headline:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
                              (with-temp-buffer
                                (org-mode)
@@ -142,8 +190,8 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (org-glance:with-headline-narrowed (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
-    (org-glance-headline:hash)))
+  (-> (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
+      (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
   "Default restriction of material buffer."
@@ -151,7 +199,7 @@
   (org-cycle-hide-drawers 'all))
 
 (cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
-  (generate-new-buffer (concat "org-glance:<" (org-glance:headline-title headline) ">")))
+  (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
   "Materialize HEADLINE and return materialized buffer.
@@ -162,7 +210,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
           (file (org-glance-headline:file-name headline))
           (buffer (org-glance-headline:buffer headline))
           (begin (org-glance-headline:begin headline))
-          (contents (org-glance-headline-contents headline)))
+          (contents (org-glance-headline:contents headline)))
 
       (setq-local default-directory (file-name-directory file))
 
@@ -171,11 +219,11 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
       (insert contents)
 
       (setq --org-glance-materialized-headline:id id
-            --org-glance-materialized-headline:tags (org-glance-headline:tags)
+            --org-glance-materialized-headline:tags (org-glance-headline:tags headline)
             --org-glance-materialized-headline:file file
             --org-glance-materialized-headline:buffer buffer
             --org-glance-materialized-headline:begin begin
-            --org-glance-materialized-headline:hash (org-glance-headline:hash))
+            --org-glance-materialized-headline:hash (org-glance-headline:hash headline))
 
       (goto-char (point-min))
 
@@ -199,13 +247,13 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
                                 (if (or (bolp) (looking-back "[[:blank:]]" 1))
                                     ""
                                   " ")
-                                (org-glance:with-headline-narrowed headline
+                                (org-glance-headline:with-narrowed-headline headline
                                   (org-glance-headline-reference type))))))))
 
       (org-glance:material-buffer-default-view)
 
       (message "Promote subtree to the first level")
-      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level)))
+      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level headline)))
       (org-glance-headline:promote-to-the-first-level)
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
       (current-buffer))))
@@ -231,23 +279,6 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
                     (org-glance-headline:promote-to-the-first-level))
                   0 'local)))
     result))
-
-(cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
-  (declare (indent 1) (debug t))
-  `(let ((materialized-buffer (org-glance-headline:materialize ,headline nil))
-         (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-     (unwind-protect
-          (with-current-buffer materialized-buffer
-            (org-glance-headline:search-parents)
-            ,@forms)
-       (when (buffer-live-p materialized-buffer)
-         (with-current-buffer materialized-buffer
-           (condition-case nil
-               (org-glance-materialized-headline-apply 'without-relations)
-             (error nil)))
-         (with-demoted-errors "Unable to kill buffer: %s"
-           (kill-buffer materialized-buffer))))))
 
 (cl-defun org-glance-materialized-headline-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))

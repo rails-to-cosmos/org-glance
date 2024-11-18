@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'ert)
 (require 'org-glance)
 
@@ -10,23 +12,49 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defmacro with-temp-glance-directory (&rest body)
+(cl-defmacro org-glance:with-temp-session (&rest body)
   (declare (indent 0))
-  `(let ((org-glance-directory (make-temp-file "temp-dir-" t)))
-     (unwind-protect
-         (progn (org-glance-init org-glance-directory)
-                ,@body)
-       (delete-directory org-glance-directory t))))
+  `(unwind-protect
+       (with-temp-directory org-glance-directory
+         (org-glance-init org-glance-directory)
+         ,@body)
+     (org-glance-init org-glance-directory)))
 
-(ert-deftest test-initial-state ()
-  (with-temp-glance-directory
-    (should (= (length (org-glance-tags:list)) 0))))
+(cl-defun org-glance-test:capture (tag title)
+  (cl-letf (((symbol-function 'org-glance-tags:completing-read) (lambda (&rest _) tag)))
+    (org-glance-capture))
+  (insert title)
+  (org-capture-finalize))
 
-(ert-deftest test-basic-tag-management ()
-  (with-temp-glance-directory
-    (org-glance:create-tag 'foo)
-    (should (org-glance-tag:exists? 'foo org-glance-tags))
+(ert-deftest org-glance-test:initial-state ()
+  (org-glance:with-temp-session
+    (should (= (length (org-glance:tags)) 0))))
+
+(ert-deftest org-glance-test:tag-management ()
+  (org-glance:with-temp-session
+    (let ((tag 'foo))
+      (org-glance:create-tag tag)
+      (should (org-glance-tag:exists? tag org-glance-tags)))
+
+    ;; (org-glance:remove-tag 'foo)
+    ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
+
     (should-error (org-glance:create-tag "bar") :type 'error)
     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
+
+(ert-deftest org-glance-test:overview ()
+  (let ((tag 'foo))
+    (org-glance:with-temp-session
+      (org-glance:create-tag tag)
+      (should (org-glance-tag:exists? tag org-glance-tags))
+      (should (= 1 (length (org-glance:tags))))
+      (should (= 0 (length (org-glance:tag-headlines tag))))
+
+      (org-glance-test:capture tag "Hello, world!")
+
+      (should (= 1 (length (org-glance:tag-headlines tag))))
+
+      (org-glance-overview tag)
+      (org-glance-overview:materialize-headline))))
 
 (provide 'org-glance-test)

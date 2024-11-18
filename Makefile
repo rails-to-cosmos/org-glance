@@ -1,25 +1,22 @@
-CASK ?= cask
-EMACS ?= emacs
+.PHONY: init build test info
 
-.PHONY: all test clean init
-
-all: init build test
+info:
+	eask info
 
 init:
-	${CASK} install
+	eask install-deps
+	eask recompile
+	eask install
+	eask test activate
 
 build:
-	${CASK} clean-elc
-	${CASK} build
+	eask install-deps
+	eask recompile
+	eask package ./dist
+	eask reinstall
 
 test:
-	${CASK} clean-elc
-	${CASK} build
-	${CASK} exec ecukes --debug
-	${CASK} clean-elc
-
-it:  # run integration tests
-	./script/it.sh
-
-clean:
-	${CASK} clean-elc
+	eask recompile
+	eask package ./dist
+	eask reinstall
+	eask test --verbose 5 ert org-glance-test.el

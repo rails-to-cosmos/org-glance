@@ -1,6 +1,11 @@
 (require 'highlight)
 (require 'org-attach)
 (require 'org-capture)
+(require 'ol)
+
+(require 'org-glance-headline)
+(require 'org-glance-tag)
+(require 'org-glance-utils)
 
 (defcustom org-glance-clocktable-properties
   (list :maxlevel 2
@@ -52,7 +57,7 @@ ${todo-order}
      (org-glance-headline:id
       (org-glance-scope--choose-headline
        (completing-read "Specify headline: "
-                        (mapcar #'org-glance:headline-title (--filter (org-glance-headline:active? it) headlines))
+                        (mapcar #'org-glance-headline:plain-title (--filter (org-glance-headline:active? it) headlines))
                         nil
                         t)
        headlines)))))
@@ -83,7 +88,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (let ((headline (org-glance-overview:original-headline)))
       (if (org-glance-headline:encrypted? headline)
           (progn
-            (org-glance:with-headline-narrowed headline
+            (org-glance-headline:with-narrowed-headline headline
               (org-glance-headline:decrypt)
               (save-buffer))
             (org-glance-overview:pull))
@@ -128,27 +133,8 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-overview:jump-headline)))
 
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-overview:agenda)
-
-(define-key org-glance-overview-mode-map (kbd "n")
-  (org-glance:interactive-lambda
-    (when (org-glance-headline:at-point)
-      (outline-hide-subtree))
-    (org-glance-headline:search-forward)
-    ;; (when (org-glance-headline:at-point)
-    ;;   (outline-show-subtree)
-    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
-    ))
-
-(define-key org-glance-overview-mode-map (kbd "p")
-  (org-glance:interactive-lambda
-    (when (org-glance-headline:at-point)
-      (outline-hide-subtree))
-    (org-glance-headline:search-backward)
-    ;; (when (org-glance-headline:at-point)
-    ;;   (outline-show-subtree)
-    ;;   (org-cycle-hide-drawers 'org-cycle-hide-drawers))
-    ))
-
+(define-key org-glance-overview-mode-map (kbd "n") #'outline-next-heading)
+(define-key org-glance-overview-mode-map (kbd "p") #'outline-previous-heading)
 (define-key org-glance-overview-mode-map (kbd "q") #'bury-buffer)
 
 (define-key org-glance-overview-mode-map (kbd "k")
@@ -164,7 +150,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (define-key org-glance-overview-mode-map (kbd "+")
   (org-glance:interactive-lambda
-    (org-glance-capture :class (org-glance-overview:tag))))
+    (org-glance-capture :tag (org-glance-overview:tag))))
 
 ;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 
@@ -178,35 +164,41 @@ If point is before the first heading, prompt for headline and eval forms on it."
    "cancelled")
   "State-related ordering.")
 
-(cl-defun org-glance-overview:state-ordering (&optional (class (org-glance-overview:tag)))
-  (let ((config (f-join (org-glance-overview:directory class) "task-states.el")))
+(cl-defun org-glance-overview:state-ordering (tag)
+  (cl-check-type tag org-glance-tag)
+
+  (let ((config (f-join (org-glance-overview:directory tag) "task-states.el")))
     (if (and (file-exists-p config) (file-readable-p config))
         (with-temp-buffer
           (insert-file-contents config)
           (read (buffer-substring-no-properties (point-min) (point-max))))
       org-glance-overview:default-state-ordering)))
 
-(cl-defun org-glance-overview:partition-mapper ()
+(cl-defun org-glance-overview:partition-mapper (tag)
   "Main method for partitioning headlines in overview."
-  (let ((ordering (org-glance-overview:state-ordering)))
-    (list
-     (not (org-in-archived-heading-p)) ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
-     (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
-     (or (-elem-index (downcase (or (org-element-property :todo-keyword (org-element-at-point)) "")) ordering) 0) ;; partition by state
-     ;; (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
-     (or (org-element-property :priority (org-element-at-point)) ?B))))
+  (cl-check-type tag org-glance-tag)
 
-(cl-defun org-glance-overview:partition-comparator (headline1 headline2)
-  "Main method to compare HEADLINE1 with HEADLINE2."
+  (let ((ordering (org-glance-overview:state-ordering tag)))
+    (list (not (org-in-archived-heading-p)) ;; partition by ARCHIVED. "not" means archived headlines should be in a bottom
+          (not (org-in-commented-heading-p)) ;; partition by COMMENTED. "not" means commented headlines should be in a bottom
+          (or (-elem-index (downcase (or (org-element-property :todo-keyword (org-element-at-point)) "")) ordering) 0) ;; partition by state
+          ;; (downcase (s-join ":" (sort (org-get-tags) #'string<))) ;; partition by tag string.
+          (or (org-element-property :priority (org-element-at-point)) ?B))))
+
+(cl-defun org-glance-overview:partition-comparator (lhs rhs)
+  "Main method to compare LHS with RHS."
+  (cl-check-type lhs org-glance-headline)
+  (cl-check-type rhs org-glance-headline)
+
   (cl-loop
-     for (i j) in (-zip-lists headline1 headline2)
-     when (cond ((not (eql (type-of i) (type-of j))) nil)
-                ((stringp i) (not (string= i j)))
-                (t (not (eql i j))))
-     return (cond ((stringp i) (string< i j))
-                  ((numberp i) (< i j))
-                  ((booleanp i) i)
-                  (t nil))))
+   for (i j) in (-zip-lists lhs rhs)
+   when (cond ((not (eql (type-of i) (type-of j))) nil)
+              ((stringp i) (not (string= i j)))
+              (t (not (eql i j))))
+   return (cond ((stringp i) (string< i j))
+                ((numberp i) (< i j))
+                ((booleanp i) i)
+                (t nil))))
 
 (cl-defun org-glance-overview:partition (&key using (test #'equal) (comparator #'<))
   (declare (indent 0))
@@ -230,30 +222,30 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
 (cl-defun org-glance-overview:register-headline-in-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
+  (let ((metadata-file-name (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:add-headline headline metadata)
     (org-glance-metadata:save metadata metadata-file-name)))
 
 (cl-defun org-glance-overview:remove-headline-from-metadata (headline tag)
   ;; TODO implement explicit model for metadata
-  (let ((metadata-location (org-glance-tag:metadata-file-name tag))
+  (let ((metadata-location (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
     (org-glance-metadata:remove-headline headline metadata)
     (org-glance-metadata:save metadata metadata-location)))
 
 (cl-defun org-glance-overview:register-headline-in-overview (headline class)
   "Add HEADLINE overview to CLASS file."
-  (org-glance:with-file-visited (org-glance-overview:file-name class)
-    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
-                                       (list (org-glance-headline:id)
+  (org-glance--with-file-visited (org-glance-overview:file-name class)
+    (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
+                                       (list (org-glance-headline:id headline)
                                              (org-glance-headline:overview)
-                                             (org-glance-overview:partition-mapper)))
+                                             (org-glance-overview:partition-mapper class)))
       (save-restriction
         (widen)
         (condition-case nil
             (org-glance-overview:remove-headline-from-overview headline class)
-          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+          (org-glance-exception:headline-not-found nil))
         (let ((inhibit-read-only t)
               (headline-seen-p nil))
           (unless (or (string-empty-p contents)
@@ -262,66 +254,68 @@ If point is before the first heading, prompt for headline and eval forms on it."
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline?)
-                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline?)
+                        (org-glance-headline? (org-element-at-point))
+                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper class) partition))
+              (when (org-glance-headline? (org-element-at-point))
                 (setq headline-seen-p t)))
 
-            (when (and (not headline-seen-p)
-                       (not (org-glance-headline?)))
-              (insert "\n"))
+            ;; (when (and (not headline-seen-p)
+            ;;            (not (org-glance-headline? (org-element-at-point))))
+            ;;   (insert "\n"))
 
             (insert (s-trim contents) "\n")
 
             (save-buffer))))))
   headline)
 
-(cl-defun org-glance-overview:remove-headline-from-overview (headline class)
+(cl-defun org-glance-overview:remove-headline-from-overview (headline tag)
   "Add HEADLINE clone in overview VIEW-ID file."
-  (message "Remove from overview %s" class)
+  (cl-check-type tag org-glance-tag)
+
   (save-window-excursion
-    (org-glance-overview class)
+    (org-glance-overview tag)
     (save-restriction
       (widen)
       (save-excursion
         (when (condition-case nil
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                (org-glance-exception:HEADLINE-NOT-FOUND nil))
+                (org-glance-exception:org-glance-exception:headline-not-found nil))
           (let ((inhibit-read-only t))
-            (delete-region (org-entry-beginning-position) (save-excursion
-                                                            (org-end-of-subtree t t)))
+            (delete-region (org-entry-beginning-position) (save-excursion (org-end-of-subtree t t)))
             (save-buffer)))))))
 
-(cl-defun org-glance-overview:register-headline-in-archive (headline class)
+(cl-defun org-glance-overview:register-headline-in-archive (headline tag)
   "Add HEADLINE overview to CLASS archive."
-  (org-glance-overview:ensure-archive class)
-  (org-glance:with-file-visited (org-glance-overview:archive-location class)
-    (seq-let (id contents partition) (org-glance:with-headline-narrowed headline
-                                       (list (org-glance-headline:id)
+  (cl-check-type tag org-glance-tag)
+
+  (org-glance-overview:ensure-archive tag)
+  (org-glance--with-file-visited (org-glance-overview:archive-location tag)
+    (seq-let (id contents partition) (org-glance-headline:with-narrowed-headline headline
+                                       (list (org-glance-headline:id headline)
                                              (org-glance-headline:overview)
-                                             (org-glance-overview:partition-mapper)))
+                                             (org-glance-overview:partition-mapper tag)))
       (save-restriction
         (widen)
 
         (condition-case nil
-            (org-glance-overview:remove-headline-from-overview headline class)
-          (org-glance-exception:HEADLINE-NOT-FOUND nil))
+            (org-glance-overview:remove-headline-from-overview headline tag)
+          (org-glance-exception:org-glance-exception:headline-not-found nil))
 
         (let ((inhibit-read-only t)
               (headline-seen-p nil))
           (unless (or (string-empty-p contents)
                       (and (memq 'archive (org-glance-headline:tags headline))
-                           (not (eql 'archive class))))
+                           (not (eql 'archive tag))))
             (goto-char (point-min))
 
             (while (and (outline-next-heading)
-                        (org-glance-headline?)
-                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper) partition))
-              (when (org-glance-headline?)
+                        (org-glance-headline? (org-element-at-point))
+                        (org-glance-overview:partition-comparator (org-glance-overview:partition-mapper tag) partition))
+              (when (org-glance-headline? (org-element-at-point))
                 (setq headline-seen-p t)))
 
             (when (and (not headline-seen-p)
-                       (not (org-glance-headline?)))
+                       (not (org-glance-headline? (org-element-at-point))))
               (insert "\n"))
 
             (insert (s-trim contents) "\n")
@@ -336,10 +330,10 @@ If point is before the first heading, prompt for headline and eval forms on it."
   (interactive)
   (save-window-excursion
     (save-excursion
-      (org-glance:ensure-at-heading)
+      (org-glance--back-to-heading)
       (let* ((id (org-glance-tag:id* tag))
-             (dir (org-glance:make-directory tag))
-             (output-file (f-join dir (format "%s.org" (org-glance-tag:file-name tag)))))
+             (dir (org-glance:make-tag-directory tag))
+             (output-file (f-join dir (format "%s.org" (org-glance-tag:to-string tag)))))
 
         (mkdir dir 'parents)
 
@@ -384,13 +378,12 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
   (when-let (headline (org-glance-headline:search-buffer-by-id org-glance-capture:id))
     (let* ((id org-glance-capture:id)
-           (class org-glance-capture:tag)
+           (tag org-glance-capture:tag)
            (refile-dir (org-glance-headline:make-directory
-                        (org-glance:tag-file-name class)
-                        (org-glance:headline-title headline)))
+                        (org-glance:tag-file-name tag)
+                        (org-glance-headline:plain-title headline)))
            (tmp-file (org-glance-headline:file-name headline))
-           (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" class)))))
-      (message "Generate headline directory: %s" refile-dir)
+           (new-file (org-glance--make-file-directory (f-join refile-dir (format "%s.org" tag)))))
       (org-set-property "DIR" (abbreviate-file-name refile-dir))
       (save-buffer)
       (kill-buffer)
@@ -398,21 +391,17 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
       (f-move tmp-file new-file)
       (org-glance-headline:update headline :file new-file)
 
-      (org-glance-overview class)
+      (org-glance-overview tag)
 
-      (message "Register headline of class %s in metadata: %s"
-                            (pp-to-string class)
-                            (pp-to-string headline))
-
-      (org-glance-overview:register-headline-in-metadata headline class)
-      (org-glance-overview:register-headline-in-overview headline class)
+      (org-glance-overview:register-headline-in-metadata headline tag)
+      (org-glance-overview:register-headline-in-overview headline tag)
 
       (org-overview)
       (org-glance-headline:search-buffer-by-id id))))
 
 (cl-defun org-glance-overview:import-headlines-from-files (tag files &optional (initial-progress 0))
   "Read each org-file from PATH, visit each headline of current overview tag and add it to overview."
-  (let* ((metadata-location (org-glance-tag:metadata-file-name tag))
+  (let* ((metadata-location (org-glance-metadata:location tag))
          (metadata (org-glance-metadata:read metadata-location))
          (overviews '())
          (archives '()))
@@ -430,7 +419,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                if (sit-for 0)
                do (progn
                     (progress-reporter-update progress-reporter progress)
-                    (org-glance:with-file-visited file
+                    (org-glance--with-file-visited file
                       (when-let (headline (org-glance-headline:at-point))
                         (-register headline))
 
@@ -439,14 +428,14 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                else do (progn
                          (org-glance-metadata:save metadata metadata-location)
 
-                         (org-glance:with-file-visited (org-glance-overview:file-name tag)
+                         (org-glance--with-file-visited (org-glance-overview:file-name tag)
                            (goto-char (point-max))
                            (let ((inhibit-read-only t))
                              (cl-loop for overview in overviews
                                       do (insert overview "\n"))
                              (org-overview)))
 
-                         (org-glance:with-file-visited (org-glance-overview:archive-location tag)
+                         (org-glance--with-file-visited (org-glance-overview:archive-location tag)
                            (goto-char (point-max))
                            (let ((inhibit-read-only t))
                              (cl-loop for archive in archives
@@ -466,7 +455,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                finally do (progn
                             (org-glance-metadata:save metadata metadata-location)
 
-                            (org-glance:with-file-visited (org-glance-overview:file-name tag)
+                            (org-glance--with-file-visited (org-glance-overview:file-name tag)
                               (goto-char (point-max))
                               (let ((inhibit-read-only t))
                                 (cl-loop for overview in overviews
@@ -475,7 +464,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
                                 (org-overview)
                                 (org-align-tags 'all)))
 
-                            (org-glance:with-file-visited (org-glance-overview:archive-location tag)
+                            (org-glance--with-file-visited (org-glance-overview:archive-location tag)
                               (goto-char (point-max))
                               (let ((inhibit-read-only t))
                                 (cl-loop for archive in archives
@@ -491,11 +480,11 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 (cl-defun org-glance-overview:deferred-import-daemon ()
   (if (hash-table-empty-p org-glance-overview-deferred-import-hash-table)
       (cancel-timer org-glance-overview-deferred-import-timer)
-    (let* ((class (cl-first (hash-table-keys org-glance-overview-deferred-import-hash-table)))
-           (config (gethash class org-glance-overview-deferred-import-hash-table))
+    (let* ((tag (cl-first (hash-table-keys org-glance-overview-deferred-import-hash-table)))
+           (config (gethash tag org-glance-overview-deferred-import-hash-table))
            (files (plist-get config :files))
            (progress (plist-get config :progress)))
-      (org-glance-overview:import-headlines-from-files class files progress))))
+      (org-glance-overview:import-headlines-from-files tag files progress))))
 
 (cl-defun org-glance-overview:sync-headlines ()
   (when (and org-glance-overview:changed-headlines
@@ -530,7 +519,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
     (let ((diff (buffer-substring-no-properties start end)))
       (when (and (not (org-before-first-heading-p))
                  (not (and (eobp) (string= diff "\n"))))
-        (when-let (id (org-glance-headline:id))
+        (when-let (id (org-glance-headline:id (org-glance-headline:at-point)))
           (cl-pushnew id org-glance-overview:changed-headlines :test #'string=)
           (hlt-highlight-region (org-glance-headline:begin)
                                 (save-excursion (org-end-of-subtree t t))
@@ -575,23 +564,23 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (org-glance-overview-mode +1)
   (message "All changes have been applied."))
 
-(cl-defun org-glance-overview:directory (&optional (class (org-glance-tags:completing-read)))
+(cl-defun org-glance-overview:directory (&optional (tag (org-glance-tags:completing-read)))
   "Path to file where CLASS headlines are stored."
-  (let ((class-name (s-downcase (format "%s" class))))
-    (abbreviate-file-name
-     (f-join org-glance-directory class-name))))
+  (cl-check-type tag org-glance-tag)
 
-(cl-defun org-glance-overview:file-name (&optional (view-id (org-glance-tags:completing-read)))
-  "Path to file where VIEW-ID headlines are stored."
-  (when view-id
-    (let ((view-name (s-downcase (format "%s" view-id))))
-      (f-join org-glance-directory view-name (concat view-name ".org")))))
+  (abbreviate-file-name (f-join org-glance-directory (org-glance-tag:to-string tag))))
 
-(cl-defun org-glance-overview:archive-location (&optional (view-id (org-glance-tags:completing-read)))
+(cl-defun org-glance-overview:file-name (&optional (tag (org-glance-tags:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
-  (when view-id
-    (let ((view-name (s-downcase (format "%s" view-id))))
-      (f-join org-glance-directory view-name (concat view-name ".org_archive")))))
+  (cl-check-type tag org-glance-tag)
+
+  (format "%s/%s/%s.org" org-glance-directory tag tag))
+
+(cl-defun org-glance-overview:archive-location (&optional (tag (org-glance-tags:completing-read)))
+  "Path to file where VIEW-ID headlines are stored."
+  (cl-check-type tag org-glance-tag)
+
+  (format "%s/%s/%s.org_archive" org-glance-directory tag tag))
 
 (cl-defun org-glance-headline:main-role (&optional (headline (org-glance-overview:original-headline)))
   "Assume main role of HEADLINE as role directory where it is stored."
@@ -603,14 +592,39 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
    when (f-equal? common-parent overview-directory)
    do (cl-return view-id)))
 
-(cl-defun org-glance:capture-template (class &key (default ""))
-  (let ((class (if (symbolp class) class (intern class)))
-        (capture-template-config-file (f-join (org-glance-overview:directory class) "template.org")))
+(cl-defun org-glance:capture-template (tag &key (default ""))
+  (cl-check-type tag org-glance-tag)
+
+  (let ((capture-template-config-file (f-join (org-glance-overview:directory tag) "template.org")))
     (s-replace "%?" (concat default "%?")
                (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
                                                                   (insert-file-contents capture-template-config-file)
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
                      (t "* %?")))))
+
+(cl-defmacro org-glance:format (fmt)
+  "Like `s-format' but with format fields in it.
+FMT is a string to be expanded against the current lexical
+environment. It is like what is used in `s-lex-format', but has
+an expanded syntax to allow format-strings. For example:
+${user-full-name 20s} will be expanded to the current value of
+the variable `user-full-name' in a field 20 characters wide.
+  (let ((f (sqrt 5)))  (org-glance:format \"${f 1.2f}\"))
+  will render as: 2.24
+This function is inspired by the f-strings in Python 3.6, which I
+enjoy using a lot.
+"
+  (let* ((matches (s-match-strings-all "${\\(?3:\\(?1:[^} ]+\\) *\\(?2:[^}]*\\)\\)}" (eval fmt)))
+         (agetter (cl-loop for (_ m1 m2 m3) in matches
+                           collect `(cons ,m3  (format (format "%%%s" (if (string= ,m2 "")
+                                                                          (if s-lex-value-as-lisp "S" "s")
+                                                                        ,m2))
+                                                       (symbol-value (intern ,m1))))))
+         (result `(s-format ,fmt 'aget (list ,@agetter))))
+    `(s-join "\n"
+             (cl-loop with stripMargin = (-partial 'replace-regexp-in-string "^\\W*|" "")
+                      for line in (s-split "\n" ,result)
+                      collect (funcall stripMargin line)))))
 
 (cl-defun org-glance-overview:refresh-widgets (&optional (tag (org-glance-overview:tag)))
   (interactive)
@@ -657,7 +671,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (interactive)
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
-      (let ((metadata-file-name (org-glance-tag:metadata-file-name tag))
+      (let ((metadata-file-name (org-glance-metadata:location tag))
             (overview-file-name (org-glance-overview:file-name tag)))
         (org-glance--make-file-directory overview-file-name)
         (org-glance-metadata:create metadata-file-name)
@@ -666,14 +680,13 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
           (org-glance-overview:refresh-widgets tag))))
     overview-file-name))
 
-(cl-defun org-glance-overview (&optional (class-name (org-glance-tags:completing-read "Overview: " nil)))
+(cl-defun org-glance-overview (&optional (tag (org-glance-tags:completing-read "Overview: " nil)))
   (interactive)
-  (when class-name
-    (when-let (location (org-glance-overview:file-name class-name))
-      (if (file-exists-p location)
-          (find-file location)
-        (org-glance:create-tag class-name)
-        (org-glance-overview:create class-name)))))
+  (when-let (location (org-glance-overview:file-name tag))
+    (if (file-exists-p location)
+        (find-file location)
+      (org-glance:create-tag tag)
+      (org-glance-overview:create tag))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
@@ -689,7 +702,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted)))
+  (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted)))
         (org-agenda-overriding-header "org-glance agenda")
         (org-agenda-start-on-weekday nil)
         (org-agenda-span 7)
@@ -762,9 +775,9 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
         (save-buffer)
         (kill-buffer)
         (org-glance-overview:create tag)
-        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-tag:metadata-file-name tag))))
+        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-metadata:location tag))))
           (let ((files (--filter (not (s-contains? "sync-conflict" it))
-                                 (org-glance-scope (f-parent (org-glance-tag:metadata-file-name tag))))))
+                                 (org-glance-scope (f-parent (org-glance-metadata:location tag))))))
             (org-glance-overview:import-headlines-from-files tag files)
             (org-glance-overview:order)
             (let ((inhibit-read-only t))
@@ -774,7 +787,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
   (interactive)
   (org-glance-headline:search-parents)
-  (let ((title (org-glance:headline-title))
+  (let ((title (org-glance-headline:plain-title))
         (tag (org-glance-overview:tag))
         (original-headline (org-glance-overview:original-headline)))
     (when (or force (y-or-n-p (org-glance:format "Revoke the tag \"${tag}\" from \"${title}\"?")))
@@ -792,15 +805,15 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
-         (current-headline-title (org-glance:headline-title current-headline))
-         (current-headline-contents (org-glance-headline-contents current-headline))
+         (current-headline-title (org-glance-headline:plain-title current-headline))
+         (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (overview-contents (org-glance:with-headline-narrowed original-headline
+         (overview-contents (org-glance-headline:with-narrowed-headline original-headline
                               (org-glance-headline:overview))))
     (cond ((null overview-contents)
            (if (y-or-n-p (org-glance:format "Original headline for \"${current-headline-title}\" not found. Remove it from overview?"))
                (org-glance-overview:kill-headline :force t)
-             (org-glance-exception:HEADLINE-NOT-FOUND "Original headline not found"))
+             (org-glance-exception:org-glance-exception:headline-not-found "Original headline not found"))
            nil)
           ((string= current-headline-contents overview-contents)
            (message (org-glance:format "Headline \"${current-headline-title}\" is up to date"))
@@ -827,7 +840,7 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   "Move headline to another tag."
   (interactive)
   (let* ((old-tag (org-glance-overview:tag))
-         (new-tag (let ((tages (--filter (not (eql old-tag it)) (org-glance-tags:sorted))))
+         (new-tag (let ((tages (--filter (not (eql old-tag it)) (org-glance:tags-sorted))))
                     (intern (completing-read "Move headline to: " tages nil t))))
          (original-headline (org-glance-overview:original-headline)))
     (org-glance:create-tag new-tag)
@@ -844,42 +857,46 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
   (interactive)
   (let* ((original-headline (org-glance-overview:original-headline))
          (old-classes (org-glance-headline:tags original-headline))
-         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance-tags:sorted))))
+         (new-class (let ((views (--filter (not (member it old-classes)) (org-glance:tags-sorted))))
                       (intern (completing-read "Add class: " views)))))
     (save-window-excursion
       (org-glance:with-headline-materialized original-headline
         (org-toggle-tag (symbol-name new-class) 'on)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance:with-headline-narrowed
+  (org-glance-headline:with-narrowed-headline
       (->> (org-glance-headline:at-point)
            org-glance-headline:id
            org-glance-metadata:get-headline)
     (org-glance-headline:at-point)))
 
-(cl-defun org-glance-overview:order ()
+(cl-defun org-glance-overview:beginning-of-headlines ()
+  (save-excursion
+    (goto-char (point-min))
+    (outline-next-heading)
+    (point)))
+
+(cl-defun org-glance-overview:order (&optional (tag (org-glance-overview:tag)))
   (interactive)
+  (cl-check-type tag org-glance-tag)
+
   (save-excursion
     (let ((inhibit-read-only t)
-          (beginning-of-headlines (save-excursion
-                                    (goto-char (point-min))
-                                    (outline-next-heading)
-                                    (point)))
+          (beginning-of-headlines (org-glance-overview:beginning-of-headlines))
           (end-of-headlines (point-max)))
 
-      (cl-loop
-         for buffer in (org-glance-overview:partition
-                         :using #'org-glance-overview:partition-mapper
-                         :comparator #'org-glance-overview:partition-comparator)
-         do
-           (goto-char (point-max))
-           (insert (let ((standard-output 'ignore))
-                     (with-current-buffer buffer
-                       (set-mark (point-min))
-                       (goto-char (point-max))
-                       (org-sort-entries nil ?a)
-                       (buffer-substring-no-properties (point-min) (point-max)))))
-           (kill-buffer buffer))
+      (cl-loop for buffer in (org-glance-overview:partition
+                               :using (-partial org-glance-overview:partition-mapper tag)
+                               :comparator #'org-glance-overview:partition-comparator)
+               do
+               (goto-char (point-max))
+               (insert (let ((standard-output 'ignore))
+                         (with-current-buffer buffer
+                           (set-mark (point-min))
+                           (goto-char (point-max))
+                           (org-sort-entries nil ?a)
+                           (buffer-substring-no-properties (point-min) (point-max)))))
+               (kill-buffer buffer))
       (delete-region beginning-of-headlines end-of-headlines)
       (org-overview)
       (save-buffer))))
@@ -899,10 +916,10 @@ Buffer local variables: `org-glance-capture:id', `org-glance-capture:tag', `org-
 ;;                 "];")))))
 
 ;; (cl-defun -og-calw-d (day)
-;;   (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance-tags:sorted))))
+;;   (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
 ;;     (org-agenda-list)
 ;;     (org-agenda-day-view day)
 ;;     (switch-to-buffer org-agenda-buffer)
 ;;     (delete-other-windows)))
 
-(provide 'org-glance-overview-mode)
+(provide 'org-glance-overview)

@@ -1,6 +1,4 @@
-(package "org-glance"
-         "0.0.1"
-         "Org-mode mindmap.")
+(package "org-glance" "0.0.1" "Org-mode mindmap.")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "graph" "mindmap")
@@ -13,13 +11,12 @@
 (source "melpa")
 (source "org")
 
-(depends-on "emacs" "26.1")
+(depends-on "emacs" "29.1")
+(depends-on "org")
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
+(depends-on "ht")
 (depends-on "highlight")
 (depends-on "transient")
 (depends-on "elsa")
-
-;; Test dependencies
-(depends-on "with-simulated-input")
