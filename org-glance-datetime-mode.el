@@ -1,3 +1,5 @@
+(require 'dash)
+
 (defvar-local -org-glance-datetime:local-timestamps '())
 
 (define-minor-mode org-glance-datetime-mode "Handle multiple repeatable timestamps."
