@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'highlight)
 (require 'org-attach)
 (require 'org-capture)

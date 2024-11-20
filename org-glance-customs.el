@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'org)
 
 (defcustom org-glance-directory org-directory

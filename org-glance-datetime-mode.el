@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'dash)
 
 (defvar-local -org-glance-datetime:local-timestamps '())

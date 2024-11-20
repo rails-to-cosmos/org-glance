@@ -1,3 +1,4 @@
+;; -*- lexical-binding: t -*-
 ;; `org-glance-tag' and `org-glance-tag-info' data models
 
 (require 'org)

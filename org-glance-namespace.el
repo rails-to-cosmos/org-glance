@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'cl-lib)
 
 (cl-defun org-glance--valid-directory? (dir)

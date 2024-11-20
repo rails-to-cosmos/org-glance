@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 's)
 (require 'dash)
 (require 'org-glance-utils)

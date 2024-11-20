@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'transient)
 
 (defclass org-glance-transient-variable (transient-variable)

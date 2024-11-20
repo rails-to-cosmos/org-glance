@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (cl-defmacro org-glance-exception:define (name message &optional (parent 'user-error))
   `(progn
      (define-error (quote ,name) ,message (quote ,parent))

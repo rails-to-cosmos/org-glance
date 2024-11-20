@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t -*-
+
 (require 'org-glance-tag)
 (require 'org-glance-headline)
 
