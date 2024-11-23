@@ -644,12 +644,16 @@ enjoy using a lot.
                                                          concat "_ " into result
                                                          else
                                                          concat (concat (upcase state) " ") into result
-                                                         finally return (s-trim result)))))
+                                                         finally return (s-trim result))))
+           (header (s-replace-all `(("${category}" . ,category)
+                                    ("${todo-states}" . ,todo-states)
+                                    ("${todo-order}" . ,todo-order))
+                                  org-glance-overview:header)))
 
       (goto-char (point-min))
       (org-next-visible-heading 1)
       (delete-region (point-min) (point))
-      (insert (org-glance:format org-glance-overview:header))
+      (insert header)
       (goto-char (point-min))
       (org-next-visible-heading 1)
       (backward-char)
@@ -659,14 +663,16 @@ enjoy using a lot.
 (cl-defun org-glance-overview:create-archive (&optional (class (org-glance-tags:completing-read)))
   (interactive)
   (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location class))))
-    (with-temp-file filename (org-glance-overview:refresh-widgets class))
+    (with-temp-file filename
+      (org-glance-overview:refresh-widgets class))
     filename))
 
 (cl-defun org-glance-overview:ensure-archive (&optional (class (org-glance-tags:completing-read)))
   (interactive)
   (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location class))))
     (unless (file-exists-p filename)
-      (with-temp-file filename (org-glance-overview:refresh-widgets class)))
+      (with-temp-file filename
+        (org-glance-overview:refresh-widgets class)))
     filename))
 
 (cl-defun org-glance-overview:create (&optional (tag (org-glance-tags:completing-read "Overview: " nil)))
