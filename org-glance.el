@@ -174,19 +174,18 @@
              (or org-glance-material-mode org-glance-overview-mode)
              (member (org-get-todo-state) org-done-keywords)
              (org-glance-headline:repeated-p))
-    (let ((contents (org-glance-headline:contents)))
-      (run-with-idle-timer 1 nil
-                           #'(lambda () (save-window-excursion
-                                     (with-temp-buffer
-                                       (insert contents)
-                                       (goto-char (point-min))
+    (let ((contents (org-glance-headline:contents (org-glance-headline:at-point))))
+      (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
+                                           (with-temp-buffer
+                                             (insert contents)
+                                             (goto-char (point-min))
 
-                                       (org-glance-datetime-reset-buffer-timestamps-except-earliest)
+                                             (org-glance-datetime-reset-buffer-timestamps-except-earliest)
 
-                                       (cl-loop
-                                        for class in (org-glance-headline:tags (org-glance-headline:at-point))
-                                        do (let ((headline (org-glance-capture-headline-at-point class)))
-                                             (org-glance-overview:register-headline-in-archive headline class))))))))))
+                                             (cl-loop
+                                              for class in (org-glance-headline:tags (org-glance-headline:at-point))
+                                              do (let ((headline (org-glance-capture-headline-at-point class)))
+                                                   (org-glance-overview:register-headline-in-archive headline class))))))))))
 
 (cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest _)
   "Do only if headline has been cloned before auto repeat.

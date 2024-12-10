@@ -220,7 +220,7 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (format-time-string "%Y-%m-%d %H:%M:%S")))
 
 (cl-defun org-glance-headline:level (headline)
-  (org-element-property :level headline))
+  (or (org-element-property :level headline) 1))
 
 (cl-defun org-glance-headline:buffer (headline)
   (let ((buffer (org-element-property :buffer headline)))
