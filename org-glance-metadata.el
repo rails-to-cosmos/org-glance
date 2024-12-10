@@ -75,7 +75,7 @@
                    (replace-regexp-in-string (format "^%s[[:space:]]*" state) "")))
           (tags (org-glance-headline:tags headline))
           (tag (s-join ", " (cl-loop for tag in tags
-                                     collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
+                                     collect (format "[[org-glance-overview:%s][%s]]" tag tag)))))
      (format "%s%s [[%s:%s][%s]]"
              (if (string-empty-p state) "" (format "[[org-glance-state:%s][%s]] " state state))
              tag
