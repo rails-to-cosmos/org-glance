@@ -48,9 +48,8 @@
   metadata)
 
 (cl-defun org-glance-metadata:add-headline (headline metadata)
-  (puthash (org-glance-headline:id headline)
-           (org-glance-headline:serialize headline)
-           metadata))
+  (let ((id (org-glance-headline:id headline)))
+    (puthash id (org-glance-headline:serialize headline) metadata)))
 
 (cl-defun org-glance-metadata:remove-headline (headline metadata)
   (remhash (org-glance-headline:id headline)
@@ -76,7 +75,7 @@
                    (replace-regexp-in-string (format "^%s[[:space:]]*" state) "")))
           (tags (org-glance-headline:tags headline))
           (tag (s-join ", " (cl-loop for tag in tags
-                                     collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
+                                     collect (format "[[org-glance-overview:%s][%s]]" tag tag)))))
      (format "%s%s [[%s:%s][%s]]"
              (if (string-empty-p state) "" (format "[[org-glance-state:%s][%s]] " state state))
              tag
