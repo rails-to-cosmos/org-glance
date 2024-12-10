@@ -48,9 +48,8 @@
   metadata)
 
 (cl-defun org-glance-metadata:add-headline (headline metadata)
-  (puthash (org-glance-headline:id headline)
-           (org-glance-headline:serialize headline)
-           metadata))
+  (let ((id (org-glance-headline:id headline)))
+    (puthash id (org-glance-headline:serialize headline) metadata)))
 
 (cl-defun org-glance-metadata:remove-headline (headline metadata)
   (remhash (org-glance-headline:id headline)

@@ -163,7 +163,7 @@
 
 (cl-defun org-glance:create-tag (tag)
   (unless (and (symbolp tag) (symbol-downcased-p tag))
-    (error "Tag should be a downcased symbol."))
+    (error "Expected downcased symbol for tag, bug got \"%s\" of type \"%s\"." tag (type-of tag)))
 
   (when (org-glance-tag:register tag org-glance-tags :namespace org-glance-directory)
     (org-glance-metadata:create (org-glance-metadata:location tag))
@@ -226,14 +226,13 @@ after capture process has been finished."
      (org-glance-exception:headline-not-found
       (let ((<buffer> (current-buffer))
             (<point> (point)))
-        (org-glance-capture
-         :default (cadr default)
-         :class (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")
-         :callback (lambda ()
-                     (let ((<hl> (org-glance-overview:original-headline)))
-                       (switch-to-buffer <buffer>)
-                       (goto-char <point>)
-                       (funcall ,action <hl>))))))))
+        (org-glance-capture :default (cadr default)
+                            :tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")
+                            :callback (lambda ()
+                                        (let ((<hl> (org-glance-overview:original-headline)))
+                                          (switch-to-buffer <buffer>)
+                                          (goto-char <point>)
+                                          (funcall ,action <hl>))))))))
 
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Update all changed entities from `org-glance-directory'."
@@ -268,7 +267,7 @@ after capture process has been finished."
                                     (<region-beginning> (region-beginning))
                                     (<region-end> (region-end)))
                                 (org-glance-capture :default (buffer-substring-no-properties <region-beginning> <region-end>)
-                                                    :class (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
+                                                    :tag (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
                                                     :finalize t
                                                     :callback (lambda () (let ((headline (org-glance-overview:original-headline)))
                                                                       (switch-to-buffer <buffer>)
@@ -367,14 +366,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                    (finalize nil)
                                    (template (org-glance:capture-template tag :default default)))
   (interactive)
-  (let ((tag (if (symbolp tag) tag (intern tag)))
+  (let ((id (org-glance-tag:id* tag))
         (file (make-temp-file "org-glance-" nil ".org")))
     (find-file file)
-    (setq-local org-glance-capture:id (org-glance-tag:id* tag)
-                org-glance-capture:tag tag
-                org-glance-capture:default default)
-    (add-hook 'org-capture-prepare-finalize-hook 'org-glance-capture:prepare-finalize-hook 0 t)
-    (add-hook 'org-capture-after-finalize-hook 'org-glance-capture:after-finalize-hook 0 t)
+    (add-hook 'org-capture-prepare-finalize-hook (lambda () (org-glance-capture:prepare-finalize-hook id tag)) 0 t)
+    (add-hook 'org-capture-after-finalize-hook (lambda () (org-glance-capture:after-finalize-hook id tag)) 0 t)
     (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
     (let ((org-capture-templates (list (list "_" "_" 'entry (list 'file file) template))))
       (org-capture nil "_")
@@ -487,97 +483,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                           (s-truncate 30))
                      "-")))
     'directory)))
-
-(cl-defun org-glance-headline:overview ()
-  "Return HEADLINE high-level usability characteristics."
-  (org-glance-headline:with-headline-at-point
-   (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
-             (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
-     (let* ((timestamps (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
-                                                    (org-glance-datetime-filter-active)
-                                                    (org-glance-datetime-sort-timestamps))
-                                 collect (org-element-property :raw-value timestamp)))
-            (clocks (org-glance-headline:with-headline-at-point
-                     (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
-                              collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
-            (relations (org-glance-headline-relations))
-            (tags (org-make-tag-string (org-get-tags nil t)))
-            (headline (org-glance-headline:at-point))
-            (state (org-glance-headline:state headline))
-            (id (org-glance-headline:id headline))
-            (title (org-glance-headline:plain-title headline))
-            (priority (org-glance-headline:priority headline))
-            (closed (org-element-property :closed (org-element-at-point)))
-            (schedule (org-glance-headline:schedule headline))
-            (deadline (org-glance-headline:deadline headline))
-            (encrypted (org-glance-headline:encrypted? headline))
-            (linked (org-glance-headline:linked? headline)))
-       (with-temp-buffer
-         (insert
-          (concat
-           "* "
-           state
-           (if (string-empty-p state)
-               ""
-             " ")
-           (if priority
-               (concat "[#" (char-to-string priority) "]" " ")
-             "")
-           title
-           " "
-           tags
-           "\n"
-
-           (if (and closed (listp closed))
-               (concat "CLOSED: "
-                       (org-element-property :raw-value closed)
-                       (if (or schedule deadline)
-                           " "
-                         ""))
-             "")
-
-           (if schedule
-               (concat "SCHEDULED: "
-                       (org-element-property :raw-value schedule)
-                       (if deadline
-                           " "
-                         ""))
-             "")
-
-           (if deadline
-               (concat "DEADLINE: " (org-element-property :raw-value deadline))
-             "")
-
-           (if (or schedule deadline closed)
-               "\n"
-             "")
-
-           ":PROPERTIES:\n"
-           ":ORG_GLANCE_ID: " id "\n"
-           ":DIR: " (abbreviate-file-name default-directory) "\n"
-           ":END:"
-
-           (org-glance--join-leading-separator-but-null "\n\n"
-             (list
-
-              (when (or encrypted linked)
-                (concat "*Features*"
-                        (org-list
-                         (when encrypted "Encrypted")
-                         (when linked "Linked"))))
-
-              (when timestamps
-                (concat "*Timestamps*" (apply #'org-list timestamps)))
-
-              (when relations
-                (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
-
-              (when clocks
-                (concat "*Time spent*" (apply #'org-newline clocks)))))))
-         (condition-case nil
-             (org-update-checkbox-count-maybe 'all)
-           (error nil))
-         (buffer-string))))))
 
 (cl-defun org-glance-headlines (&key db (scope '(agenda)) (filter #'(lambda (_) t)) (db-init nil))
   "Deprecated method, refactor it."
