@@ -1,7 +1,11 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'org-glance-tag)
+(require 'org-glance-exception)
 (require 'org-glance-headline)
+(require 'org-glance-tag)
+
+(org-glance-exception:define org-glance-metadata-!-outdated
+  "Headline metadata is outdated")
 
 (cl-defun org-glance-metadata:get-headline (id)
   "Get headline by ID."
@@ -10,8 +14,8 @@
 
   (cl-loop for tag being the hash-keys of org-glance-tags
            for metadata = (->> tag
-                               org-glance-metadata:location
-                               org-glance-metadata:read)
+                               (org-glance-metadata:location)
+                               (org-glance-metadata:read))
            for headline = (gethash id metadata)
            when headline
            collect (-> headline
@@ -22,7 +26,7 @@
 
 ;; TODO refactor, slow
 (cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
-  "Main retriever, refactor needed."
+  "Main retriever, refactor it."
   (let* ((headers (org-glance-metadata:read-headers filter))
          (choice (completing-read "Headline: " headers nil t)))
     (cl-destructuring-bind (header tag)
@@ -52,8 +56,7 @@
     (puthash id (org-glance-headline:serialize headline) metadata)))
 
 (cl-defun org-glance-metadata:remove-headline (headline metadata)
-  (remhash (org-glance-headline:id headline)
-           metadata))
+  (remhash (org-glance-headline:id headline) metadata))
 
 (cl-defun org-glance-metadata:create (file &optional headlines)
   "Create metadata from HEADLINES and write it to FILE."
@@ -134,7 +137,7 @@
                                                  (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
                                                           ((memq link-type '(project project-done)) 'project)
                                                           (t 'subtask))))))
-                                     (org-glance-exception:headline-not-found link-type))
+                                     (org-glance-headline-!-not-found link-type))
                                  link-type)
                              link-type)))
                         (t nil))

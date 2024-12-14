@@ -123,6 +123,13 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
       (make-directory dir t)))
   file)
 
+(cl-defun org-glance--valid-directory? (dir)
+  "Check if DIR is an existing, readable, and writable directory."
+  (and (stringp dir)
+       (file-directory-p dir)
+       (file-readable-p dir)
+       (file-writable-p dir)))
+
 (cl-defun org-glance--encode-string (string)
   (base64-encode-string (encode-coding-string string 'utf-8) t))
 

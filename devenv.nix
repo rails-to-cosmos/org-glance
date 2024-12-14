@@ -1,7 +1,5 @@
 { pkgs, ... }:
 
 {
-  packages = with pkgs; [
-    eask
-  ];
+  packages = with pkgs; [eask emacs];
 }

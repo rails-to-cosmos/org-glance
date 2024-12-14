@@ -2,7 +2,7 @@
 
 ;;; org-glance.el --- Org-mode mindmap.
 
-;; Copyright (C) 2018-2024 Dmitry Akatov
+;; Copyright (C) 2018-2025 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
@@ -48,39 +48,50 @@
 (require 'seq)
 (require 'subr-x)
 
-(require 'org-glance-customs)
+(require 'org-glance-datetime-mode)
+(require 'org-glance-exception)
+(require 'org-glance-headline)
+(require 'org-glance-material-mode)
+(require 'org-glance-metadata)
+(require 'org-glance-overview)
+(require 'org-glance-tag)
+(require 'org-glance-ui)
 (require 'org-glance-utils)
 
-(require 'org-glance-tag)
-(require 'org-glance-headline)
-(require 'org-glance-exceptions)
-(require 'org-glance-overview)
-(require 'org-glance-material-mode)
-(require 'org-glance-datetime-mode)
-(require 'org-glance-metadata)
-(require 'org-glance-ui)
-
+(declare-function org-glance--back-to-heading "org-glance-utils.el")
+(declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
 (declare-function org-glance--join-leading-separator "org-glance-utils.el" (separator strings))
 (declare-function org-glance--join-leading-separator-but-null "org-glance-utils.el" (spearator strings))
+(declare-function org-glance--list-directories "org-glance-utils.el" (base-dir))
 (declare-function org-glance--make-file-directory "org-glance-utils.el" (file))
-(declare-function org-glance--substitute-links "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--remove-links "org-glance-utils.el" (&rest types))
-(declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
-(declare-function org-glance--list-directories "org-glance-utils.el" (base-dir))
-(declare-function org-glance--back-to-heading "org-glance-utils.el")
-
-(declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
+(declare-function org-glance--substitute-links "org-glance-utils.el")
+(declare-function org-glance-headline:at-point "org-glance-headline.el")
 (declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
 (declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
 (declare-function org-glance-headline:from-element "org-glance-headline.el" (element))
-(declare-function org-glance-headline:search-parents "org-glance-headline.el")
-(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
-(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
-(declare-function org-glance-headline:at-point "org-glance-headline.el")
 (declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
+(declare-function org-glance-headline:search-parents "org-glance-headline.el")
+(declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
+(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
+(declare-function org-glance-headline-!-not-found "org-glance-exceptions.el")
 
-(declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
+(defcustom org-glance-directory org-directory
+  "Main location for all Org mode content managed by `org-glance`."
+  :group 'org-glance
+  :type 'directory)
+
+(defcustom org-glance-resource-directory (f-join org-directory "resources")
+  "Directory for non-Org resources associated with `org-glance`."
+  :group 'org-glance
+  :type 'directory)
+
+(defcustom org-glance-clone-on-repeat-p nil
+  "Create a new headline copy when repeating rather than modifying in place."
+  :group 'org-glance
+  :type 'boolean)
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -222,7 +233,7 @@ after capture process has been finished."
   `(condition-case default
        (cond (,filter (funcall ,action (org-glance-metadata:choose-headline :filter ,filter)))
              (t (funcall ,action (org-glance-metadata:choose-headline))))
-     (org-glance-exception:headline-not-found
+     (org-glance-headline-!-not-found
       (let ((<buffer> (current-buffer))
             (<point> (point)))
         (org-glance-capture :default (cadr default)

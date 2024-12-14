@@ -18,7 +18,7 @@
 (defface org-glance-headline-changed-face
   '((((background dark)) (:background "#013220"))
     (((background light)) (:background "honeydew")))
-  "*Face used to highlight evaluated paragraph."
+  "Face used to highlight evaluated paragraph."
   :group 'org-glance :group 'faces)
 
 (cl-defmacro org-glance:interactive-lambda (&rest forms)
@@ -30,7 +30,8 @@
   "Init overview mode."
   (set-face-extend 'org-glance-headline-changed-face t))
 
-(defconst org-glance-overview:header "#    -*- mode: org; mode: org-glance-overview -*-
+(defconst org-glance-overview:header
+  "#    -*- mode: org; mode: org-glance-overview -*-
 
 ${category}
 ${todo-states}
@@ -65,15 +66,13 @@ ${todo-order}
        headlines)))))
 
 (cl-defmacro org-glance-overview:apply-on-headline (&rest forms)
-  "Eval FORMS on headline at point.
-If point is before the first heading, prompt for headline and eval forms on it."
+  "Eval FORMS on headline at point. If point is not at the headline, prompt user to choose headline and eval forms on it."
   (declare (indent 0) (debug t))
   `(org-glance:interactive-lambda
      (when (org-before-first-heading-p)
        (org-glance-overview:choose-headline))
      ,@forms))
 
-;; lightweight methods applied for current headline
 (define-key org-glance-overview-mode-map (kbd ";") #'org-glance-overview:archive)
 (define-key org-glance-overview-mode-map (kbd ",") #'beginning-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "<") #'beginning-of-buffer)
@@ -223,6 +222,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
              collect (gethash key buffers))))
 
 (cl-defun org-glance-overview:register-headline-in-metadata (headline tag)
+  (cl-check-type headline org-glance-headline)
+  (cl-check-type tag org-glance-tag)
+
   ;; TODO implement explicit metadata model
   (let ((metadata-file-name (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
@@ -230,6 +232,9 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (org-glance-metadata:save metadata metadata-file-name)))
 
 (cl-defun org-glance-overview:remove-headline-from-metadata (headline tag)
+  (cl-check-type headline org-glance-headline)
+  (cl-check-type tag org-glance-tag)
+
   ;; TODO implement explicit model for metadata
   (let ((metadata-location (org-glance-metadata:location tag))
         (metadata (org-glance:tag-metadata tag)))
@@ -247,7 +252,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
 
       (condition-case nil
           (org-glance-overview:remove-headline-from-overview headline tag)
-        (org-glance-exception:headline-not-found nil))
+        (org-glance-headline-!-not-found nil))
 
       (let ((inhibit-read-only t))
         (goto-char (point-max))
@@ -267,7 +272,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
       (save-excursion
         (when (condition-case nil
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                (org-glance-exception:org-glance-exception:headline-not-found nil))
+                (org-glance-exception:org-glance-headline-!-not-found nil))
           (let ((inhibit-read-only t))
             (delete-region (org-entry-beginning-position) (save-excursion (org-end-of-subtree t t)))
             (save-buffer)))))))
@@ -745,7 +750,7 @@ If point is before the first heading, prompt for headline and eval forms on it."
     (cond ((null overview-contents)
            (if (y-or-n-p (format "Original headline for \"%s\" not found. Remove it from overview?" current-headline-title))
                (org-glance-overview:kill-headline :force t)
-             (org-glance-exception:org-glance-exception:headline-not-found "Original headline not found"))
+             (org-glance-exception:org-glance-headline-!-not-found "Original headline not found"))
            nil)
           ((string= current-headline-contents overview-contents)
            (message (format "Headline \"%s\" is up to date" current-headline-title))

@@ -5,11 +5,18 @@
 (require 'org-element)
 (require 'cl-lib)
 
+(require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
-(defun org-glance--valid-headline? (headline)
-  ;; dumb checker, will improve afterwards
+(org-glance-exception:define org-glance-headline-!-not-found
+  "Headline not found")
+
+(org-glance-exception:define org-glance-headline-!-metadata-corrupted
+  "Headline metadata corrupted, please reread")
+
+(cl-defun org-glance--valid-headline? (headline)
+  ;; TODO dumb checker, improve it afterwards
   (and (listp headline) (org-element-type-p headline (list 'headline))))
 
 (cl-deftype org-glance-headline ()
@@ -23,7 +30,7 @@
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
-(declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
+(declare-function org-glance-headline-!-not-found "org-glance-exceptions.el")
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
@@ -78,7 +85,7 @@
               (org-glance-headline:search-buffer-by-id id)
               (org-glance-headline:with-headline-at-point
                ,@forms)))
-           (t (org-glance-exception:headline-not-found (prin1-to-string ,headline))))))
+           (t (org-glance-headline-!-not-found (prin1-to-string ,headline))))))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -88,7 +95,7 @@
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((positions (org-glance-headline:buffer-positions id)))
     (unless positions
-      (org-glance-exception:headline-not-found "Headline %s not found in file %s" id (buffer-file-name)))
+      (org-glance-headline-!-not-found "Headline %s not found in file %s" id (buffer-file-name)))
 
     (when (> (length positions) 1)
       (error "Headline %s is not unique in file %s" id (buffer-file-name)))
