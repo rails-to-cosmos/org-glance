@@ -5,7 +5,11 @@
 (require 's)
 (require 'cl-lib)
 
+(require 'org-glance-exception)
 (require 'org-glance-namespace)
+
+(org-glance-exception:define org-glance-tag-!-not-found
+  "Tag not found")
 
 (defun org-glance--valid-tag? (tag)
   "Return t if TAG is a downcased, non-nil symbol."
