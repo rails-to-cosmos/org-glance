@@ -117,10 +117,23 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
 (cl-defun org-glance--list-directories (base-dir)
   (--filter (f-directory? (f-join base-dir it)) (directory-files base-dir nil "^[[:word:]]+")))
 
-(defun org-glance--make-file-directory (file)
+(cl-defun org-glance--make-file-directory (file)
   (let ((dir (file-name-directory file)))
     (unless (file-exists-p dir)
       (make-directory dir t)))
   file)
+
+(cl-defun org-glance--valid-directory? (dir)
+  "Check if DIR is an existing, readable, and writable directory."
+  (and (stringp dir)
+       (file-directory-p dir)
+       (file-readable-p dir)
+       (file-writable-p dir)))
+
+(cl-defun org-glance--encode-string (string)
+  (base64-encode-string (encode-coding-string string 'utf-8) t))
+
+(cl-defun org-glance--decode-string (string)
+  (decode-coding-string (base64-decode-string string) 'utf-8))
 
 (provide 'org-glance-utils)

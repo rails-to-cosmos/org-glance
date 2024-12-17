@@ -5,12 +5,19 @@
 (require 'org-element)
 (require 'cl-lib)
 
+(require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
-(defun org-glance--valid-headline? (headline)
-  ;; dumb checker, will improve afterwards
-  (listp headline))
+(org-glance-exception:define org-glance-headline-!-not-found
+  "Headline not found")
+
+(org-glance-exception:define org-glance-headline-!-metadata-corrupted
+  "Headline metadata corrupted, please reread")
+
+(cl-defun org-glance--valid-headline? (headline)
+  ;; TODO dumb checker, improve it afterwards
+  (and (listp headline) (org-element-type-p headline (list 'headline))))
 
 (cl-deftype org-glance-headline ()
   "Type representing a customized org-element for headlines."
@@ -23,7 +30,7 @@
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
-(declare-function org-glance-exception:headline-not-found "org-glance-exceptions.el")
+(declare-function org-glance-headline-!-not-found "org-glance-exceptions.el")
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
@@ -36,6 +43,15 @@
                                      (:buffer      . (:reader org-glance-headline:buffer       :writer org-glance-element:buffer))
                                      (:closed      . (:reader org-glance-headline:closed?      :writer org-glance-headline:closed?)))
   "Map `org-element-property' to `org-glance' extractor method.")
+
+(cl-defun org-glance-headline:at-point ()
+  "Search for the first occurence of `org-glance-headline' in parent headlines."
+  (when-let (headline (save-excursion (org-glance-headline:search-parents)))
+    (setq headline (org-element-put-property headline :buffer (current-buffer)))
+    (setq headline (org-element-put-property headline :file (buffer-file-name)))
+    (let ((contents (buffer-substring-no-properties (org-element-property :begin headline) (org-element-property :end headline))))
+      (setq headline (org-element-put-property headline :contents (org-glance--encode-string contents))))
+    headline))
 
 (cl-defmacro org-glance-headline:with-element-narrowing (element &rest forms)
   (declare (indent 1) (debug t))
@@ -69,7 +85,7 @@
               (org-glance-headline:search-buffer-by-id id)
               (org-glance-headline:with-headline-at-point
                ,@forms)))
-           (t (org-glance-exception:headline-not-found (prin1-to-string ,headline))))))
+           (t (org-glance-headline-!-not-found (prin1-to-string ,headline))))))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -79,7 +95,7 @@
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((positions (org-glance-headline:buffer-positions id)))
     (unless positions
-      (org-glance-exception:headline-not-found "Headline %s not found in file %s" id (buffer-file-name)))
+      (org-glance-headline-!-not-found "Headline %s not found in file %s" id (buffer-file-name)))
 
     (when (> (length positions) 1)
       (error "Headline %s is not unique in file %s" id (buffer-file-name)))
@@ -89,6 +105,7 @@
 
 (cl-defun org-glance-headline:update (element &rest properties)
   "Enrich `org-element' ELEMENT with PROPERTIES."
+  (declare (indent 1))
   (cl-loop for (key value) on properties by #'cddr
            do (org-element-put-property element key value)
            finally (return element)))
@@ -210,7 +227,7 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (format-time-string "%Y-%m-%d %H:%M:%S")))
 
 (cl-defun org-glance-headline:level (headline)
-  (org-element-property :level headline))
+  (or (org-element-property :level headline) 1))
 
 (cl-defun org-glance-headline:buffer (headline)
   (let ((buffer (org-element-property :buffer headline)))
@@ -236,13 +253,6 @@ Return headline or nil if it is not a proper `org-glance-headline'."
          nil))
     ;; body:
     (org-up-heading-or-point-min)))
-
-(cl-defun org-glance-headline:at-point ()
-  "Search for the first occurence of `org-glance-headline' in parent headlines."
-  (save-excursion
-    (when-let ((headline (org-glance-headline:search-parents)))
-      ;; tood reduce
-      (org-element-put-property (org-element-put-property headline :buffer (current-buffer)) :file (buffer-file-name)))))
 
 (cl-defun org-glance-headline:from-element (element)
   (when (eql 'headline (org-element-type element))
@@ -319,21 +329,106 @@ FIXME. Unstable one. Refactor is needed."
    (goto-char (org-log-beginning t))
    (insert (apply #'format string objects) "\n")))
 
-(iter-defun org-glance-headline:forward-iterator ()
-  "Iterate over buffer headlines from top to bottom."
-  (if-let ((headline (org-glance-headline:from-element (org-element-at-point))))
-      (iter-yield headline)
-    (outline-previous-heading))
+(cl-defun org-glance-headline:timestamps (headline)
+  (cl-check-type headline org-glance-headline)
+  (with-temp-buffer
+    (insert (org-glance--decode-string (org-element-property :contents headline)))
+    (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
+                                (org-glance-datetime-filter-active)
+                                (org-glance-datetime-sort-timestamps))
+             collect (org-element-property :raw-value timestamp))))
 
-  (while (not (eobp))
-    (when-let ((headline (org-glance-headline:from-element (org-element-at-point))))
-      (iter-yield headline))
-    (outline-next-heading)))
+(cl-defun org-glance-headline:clocks (headline)
+  (cl-check-type headline org-glance-headline)
+  (with-temp-buffer
+    (insert (org-glance--decode-string (org-element-property :contents headline)))
+    (cl-loop while (re-search-forward org-clock-line-re (point-max) t)
+             collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
 
-(cl-defun org-glance-headline:test-iter ()
-  (interactive)
-  (let ((it (org-glance-headline:forward-iterator)))
-    (while-let ((headline (iter-next it)))
-      (message (org-glance-headline:id headline)))))
+(cl-defun org-glance-headline:tag-string (headline)
+  (cl-check-type headline org-glance-headline)
+  (concat ":" (s-join ":" (mapcar #'org-glance-tag:to-string (org-glance-headline:tags headline))) ":"))
+
+(cl-defun org-glance-headline:overview (headline)
+  "Return HEADLINE high-level usability characteristics."
+  (cl-check-type headline org-glance-headline)
+  (with-temp-buffer
+    (insert (org-glance--decode-string (org-element-property :contents headline)))
+    (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
+              (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
+      (let* ((timestamps (org-glance-headline:timestamps headline))
+             (clocks (org-glance-headline:clocks headline))
+             ;; (relations (org-glance-headline-relations))
+             (tags (org-glance-headline:tag-string headline))
+             (state (org-glance-headline:state headline))
+             (id (org-glance-headline:id headline))
+             (title (org-glance-headline:plain-title headline))
+             (priority (org-glance-headline:priority headline))
+             (closed (org-element-property :closed headline))
+             (schedule (org-glance-headline:schedule headline))
+             (deadline (org-glance-headline:deadline headline))
+             (encrypted (org-glance-headline:encrypted? headline))
+             (linked (org-glance-headline:linked? headline)))
+        (with-temp-buffer (insert
+                           (concat
+                            "* "
+                            state
+                            (if (string-empty-p state) "" " ")
+                            (if priority (concat "[#" (char-to-string priority) "]" " ") "")
+                            title
+                            (if (string-empty-p tags) "" " ")
+                            tags
+                            "\n"
+
+                            (if (and closed (listp closed))
+                                (concat "CLOSED: "
+                                        (org-element-property :raw-value closed)
+                                        (if (or schedule deadline)
+                                            " "
+                                          ""))
+                              "")
+
+                            (if schedule
+                                (concat "SCHEDULED: "
+                                        (org-element-property :raw-value schedule)
+                                        (if deadline
+                                            " "
+                                          ""))
+                              "")
+
+                            (if deadline
+                                (concat "DEADLINE: " (org-element-property :raw-value deadline))
+                              "")
+
+                            (if (or schedule deadline closed)
+                                "\n"
+                              "")
+
+                            ":PROPERTIES:\n"
+                            ":ORG_GLANCE_ID: " id "\n"
+                            ":DIR: " (abbreviate-file-name default-directory) "\n"
+                            ":END:"
+
+                            (org-glance--join-leading-separator-but-null "\n\n"
+                              (list
+
+                               (when (or encrypted linked)
+                                 (concat "*Features*"
+                                         (org-list
+                                          (when encrypted "Encrypted")
+                                          (when linked "Linked"))))
+
+                               (when timestamps
+                                 (concat "*Timestamps*" (apply #'org-list timestamps)))
+
+                               ;; (when relations
+                               ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
+
+                               (when clocks
+                                 (concat "*Time spent*" (apply #'org-newline clocks)))))))
+          (condition-case nil
+              (org-update-checkbox-count-maybe 'all)
+            (error nil)))))
+    (s-trim (buffer-string))))
 
 (provide 'org-glance-headline)

@@ -9,7 +9,7 @@
   :global nil
   :group 'glance
   (cond (org-glance-datetime-mode (advice-add 'org-auto-repeat-maybe :before #'org-glance-datetime-capture)
-                            (advice-add 'org-auto-repeat-maybe :after #'org-glance-datetime-restore))
+                                  (advice-add 'org-auto-repeat-maybe :after #'org-glance-datetime-restore))
         (t (advice-remove 'org-auto-repeat-maybe #'org-glance-datetime-capture)
            (advice-remove 'org-auto-repeat-maybe #'org-glance-datetime-restore))))
 
