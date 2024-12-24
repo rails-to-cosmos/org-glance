@@ -369,9 +369,9 @@ ${todo-order}
                                         (when (and (member tag tags) (not (member 'archive tags)))
                                           (cond ((org-glance-headline:active? headline)
                                                  (org-glance-metadata:add-headline headline metadata)
-                                                 (push (org-glance-headline:overview) overviews))
+                                                 (push (org-glance-headline:overview headline) overviews))
                                                 (t
-                                                 (push (org-glance-headline:overview) archives)))))))
+                                                 (push (org-glance-headline:overview headline) archives)))))))
       (cl-loop with progress-label = (format "Collecting %s... " tag)
                with progress-reporter = (make-progress-reporter progress-label 0 (length files))
                for file in (-take-last (- (length files) initial-progress) files)
@@ -739,15 +739,13 @@ ${todo-order}
 (cl-defun org-glance-overview:pull ()
   "Pull any modifications from original headline to it's overview at point."
   (interactive)
-  (message "Pull modifications for headline overview.")
   (let* ((inhibit-read-only t)
          (initial-point (point))
          (current-headline (org-glance-headline:at-point))
          (current-headline-title (org-glance-headline:plain-title current-headline))
          (current-headline-contents (org-glance-headline:contents current-headline))
          (original-headline (org-glance-overview:original-headline))
-         (overview-contents (org-glance-headline:with-narrowed-headline original-headline
-                              (org-glance-headline:overview))))
+         (overview-contents (org-glance-headline:overview original-headline)))
     (cond ((null overview-contents)
            (if (y-or-n-p (format "Original headline for \"%s\" not found. Remove it from overview?" current-headline-title))
                (org-glance-overview:kill-headline :force t)

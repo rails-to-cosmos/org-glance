@@ -278,36 +278,11 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (goto-char beg)
     (insert contents)))
 
-;; TODO replace all implicit ...:at-point methods with the explicit pure functions
 (cl-defun org-glance-headline:contents (headline)
   "Extracts HEADLINE contents.
 FIXME. Unstable one. Refactor is needed."
-  (let ((file (org-glance-headline:file-name headline))
-        (buffer (org-glance-headline:buffer headline)))
-    (cond (file (with-temp-buffer
-                  (org-mode)
-                  (insert-file-contents file)
-                  (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                  (org-narrow-to-subtree)
-                  (goto-char (point-min))
-                  (org-glance-headline:promote-to-the-first-level)
-                  (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-          (buffer (with-current-buffer buffer
-                    (save-window-excursion
-                      (save-excursion
-                        (save-restriction
-                          (widen)
-                          (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                          (org-narrow-to-subtree)
-                          (let ((contents (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                            (with-temp-buffer
-                              (org-mode)
-                              (insert contents)
-                              (goto-char (point-min))
-                              (outline-next-heading)
-                              (org-glance-headline:promote-to-the-first-level)
-                              (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))))
-          (t (error "Unable to determine headline location")))))
+  (cl-check-type headline org-glance-headline)
+  (org-glance--decode-string (org-element-property :contents headline)))
 
 (cl-defun org-glance-headline:hash (headline)
   (let ((contents (org-glance-headline:contents headline)))
