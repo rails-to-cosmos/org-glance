@@ -285,11 +285,10 @@ FIXME. Unstable one. Refactor is needed."
   (org-glance--decode-string (org-element-property :contents headline)))
 
 (cl-defun org-glance-headline:hash (headline)
-  (let ((contents (org-glance-headline:contents headline)))
-    (with-temp-buffer
-      (org-mode)
-      (insert contents)
-      (buffer-hash))))
+  (cl-check-type headline org-glance-headline)
+  (with-temp-buffer
+    (insert (org-element-property :contents headline))
+    (buffer-hash)))
 
 (cl-defun org-glance-headline:plain-title (headline)
   (with-temp-buffer
