@@ -235,9 +235,9 @@ after capture process has been finished."
              (t (funcall ,action (org-glance-metadata:choose-headline))))
      (org-glance-headline-!-not-found
       (let ((<buffer> (current-buffer))
-            (<point> (point)))
-        (org-glance-capture :default (cadr default)
-                            :tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")
+            (<point> (point))
+            (tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")))
+        (org-glance-capture tag :default (cadr default)
                             :callback (lambda ()
                                         (let ((<hl> (org-glance-overview:original-headline)))
                                           (switch-to-buffer <buffer>)
@@ -275,9 +275,10 @@ after capture process has been finished."
     (condition-case nil
         (cond (active-region? (let ((<buffer> (current-buffer))
                                     (<region-beginning> (region-beginning))
-                                    (<region-end> (region-end)))
-                                (org-glance-capture :default (buffer-substring-no-properties <region-beginning> <region-end>)
-                                                    :tag (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))
+                                    (<region-end> (region-end))
+                                    (tag (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))))
+                                (org-glance-capture tag
+                                                    :default (buffer-substring-no-properties <region-beginning> <region-end>)
                                                     :finalize t
                                                     :callback (lambda () (let ((headline (org-glance-overview:original-headline)))
                                                                       (switch-to-buffer <buffer>)
@@ -369,12 +370,13 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 ;;               :class (org-element-property :class headline)
 ;;               :template (org-glance-headline:contents headline)))))
 
-(cl-defun org-glance-capture (&key (tag (org-glance-tags:completing-read))
-                                   (default (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
-                                                  (t "")))
-                                   (callback nil)
-                                   (finalize nil)
-                                   (template (org-glance:capture-template tag :default default)))
+(cl-defun org-glance-capture (tag &key
+                                  (default (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
+                                                 (t "")))
+                                  (callback nil)
+                                  (finalize nil)
+                                  (template (org-glance:capture-template tag :default default)))
+  (declare (indent 1))
   (interactive)
   (let ((id (org-glance-tag:id* tag))
         (file (make-temp-file "org-glance-" nil ".org")))

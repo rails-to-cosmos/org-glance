@@ -151,7 +151,7 @@ ${todo-order}
 
 (define-key org-glance-overview-mode-map (kbd "+")
             (org-glance:interactive-lambda
-              (org-glance-capture :tag (org-glance-overview:tag))))
+              (org-glance-capture (org-glance-overview:tag))))
 
 ;; (define-key org-glance-overview-mode-map (kbd "*") #'org-glance-overview:import-headlines-from-directory)
 

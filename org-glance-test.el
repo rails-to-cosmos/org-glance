@@ -44,13 +44,10 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (= 1 (length (org-glance:tags))))
       (should (= 0 (length (org-glance:tag-headlines tag))))
 
-      (org-glance-capture :tag tag :default "Hello, world!" :finalize t)
+      (org-glance-capture tag :default "Hello, world!" :finalize t)
+      (should (= 1 (length (org-glance:tag-headlines tag))))
 
-      ;; (should (= 1 (length (org-glance:tag-headlines tag))))
-
-      ;; (org-glance-overview tag)
-      ;; (org-glance-overview:materialize-headline)
-
-      )))
+      (org-glance-overview tag)
+      (org-glance-overview:materialize-headline))))
 
 (provide 'org-glance-test)
