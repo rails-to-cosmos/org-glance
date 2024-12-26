@@ -17,7 +17,9 @@
 
 (cl-defun org-glance--valid-headline? (headline)
   ;; TODO dumb checker, improve it afterwards
-  (and (listp headline) (org-element-type-p headline (list 'headline))))
+  (listp headline)
+  ;; (and (listp headline) (org-element-type-p headline (list 'headline)))
+  )
 
 (cl-deftype org-glance-headline ()
   "Type representing a customized org-element for headlines."
@@ -287,7 +289,7 @@ FIXME. Unstable one. Refactor is needed."
 (cl-defun org-glance-headline:hash (headline)
   (cl-check-type headline org-glance-headline)
   (with-temp-buffer
-    (insert (org-element-property :contents headline))
+    (insert (org-glance-headline:contents headline))
     (buffer-hash)))
 
 (cl-defun org-glance-headline:plain-title (headline)

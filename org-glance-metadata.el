@@ -9,6 +9,7 @@
 
 (cl-defun org-glance-metadata:get-headline (id)
   "Get headline by ID."
+
   (when (symbolp id)
     (setq id (symbol-name id)))
 
