@@ -56,9 +56,10 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
       (let ((headline (org-glance-headline:at-point)))
         (should (org-glance-headline? headline))
-        (should (string= (org-glance-headline:title headline) headline-title)))
+        (should (string= (org-glance-headline:title headline) headline-title))
 
-      ;; (org-glance-overview:materialize-headline)
-      )))
+        (org-glance-overview:materialize-headline)
+
+        (should (eql (org-glance-headline:at-point) headline))))))
 
 (provide 'org-glance-test)
