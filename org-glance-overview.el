@@ -125,10 +125,6 @@ ${todo-order}
                 (org-cycle-hide-drawers 'org-cycle-hide-drawers))
               (save-buffer)))
 
-(define-key org-glance-overview-mode-map (kbd "v")
-            (org-glance-overview:apply-on-headline
-              (org-glance-overview:visit-headline)))
-
 (define-key org-glance-overview-mode-map (kbd "j")
             (org-glance-overview:apply-on-headline
               (org-glance-overview:jump-headline)))
@@ -635,25 +631,8 @@ ${todo-order}
       (switch-to-buffer org-agenda-buffer))))
 
 (cl-defun org-glance-overview:materialize-headline ()
-  (interactive)
-  (let* ((headline (org-glance-overview:original-headline))
-         (buffer (org-glance-materialized-headline-buffer headline)))
-    (switch-to-buffer
-     (if (buffer-live-p buffer)
-         buffer
-       (org-glance-headline:materialize headline)))))
-
-(cl-defun org-glance-overview:visit-headline ()
-  (interactive)
-  (org-glance-overview:apply-to-buffer-headlines nil
-    (let ((offset (- (point) (save-excursion
-                               (org-glance-headline:search-parents)
-                               (point)))))
-      (-some->> (org-glance-headline:at-point)
-        org-glance-headline:id
-        org-glance-metadata:get-headline
-        org-glance-headline:visit)
-      (forward-char offset))))
+  (let ((headline (org-glance-overview:original-headline)))
+    (switch-to-buffer (org-glance-headline:materialize headline))))
 
 (cl-defun org-glance-overview:jump-headline ()
   (interactive)
