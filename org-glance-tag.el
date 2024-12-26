@@ -74,9 +74,8 @@ NAMESPACE should be a string representing an existing readable and writable dire
 
   tag)
 
-(cl-defun org-glance-tag:id* (tag)
+(cl-defun org-glance-tag:generate-id (tag)
   (cl-check-type tag org-glance-tag)
-
   (format "%s-%s" tag (md5 (s-concat (prin1-to-string (current-time)) (buffer-string)))))
 
 (provide 'org-glance-tag)

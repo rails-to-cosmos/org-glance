@@ -15,7 +15,7 @@
 (org-glance-exception:define org-glance-headline-!-metadata-corrupted
   "Headline metadata corrupted, please reread")
 
-(cl-defun org-glance--valid-headline? (headline)
+(cl-defun org-glance-headline? (headline)
   ;; TODO dumb checker, improve it afterwards
   (listp headline)
   ;; (and (listp headline) (org-element-type-p headline (list 'headline)))
@@ -23,7 +23,7 @@
 
 (cl-deftype org-glance-headline ()
   "Type representing a customized org-element for headlines."
-  '(satisfies org-glance--valid-headline?))
+  '(satisfies org-glance-headline?))
 
 (defvar org-glance:key-value-pair-re)
 

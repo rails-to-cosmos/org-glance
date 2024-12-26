@@ -378,7 +378,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                   (template (org-glance:capture-template tag :default default)))
   (declare (indent 1))
   (interactive)
-  (let ((id (org-glance-tag:id* tag))
+  (let ((id (org-glance-tag:generate-id tag))
         (file (make-temp-file "org-glance-" nil ".org")))
     (find-file file)
     (add-hook 'org-capture-prepare-finalize-hook (lambda () (org-glance-capture:prepare-finalize-hook id tag)) 0 t)

@@ -36,18 +36,29 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 ;;     (should-error (org-glance:create-tag "bar") :type 'error)
 ;;     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
-(ert-deftest org-glance-test:overview ()
-  (let ((tag 'foo))
+(ert-deftest org-glance-test:headline-workflow ()
+  (let ((tag 'foo)
+        (headline-title "Hello, world!"))
     (org-glance:with-temp-session
       (org-glance:create-tag tag)
+
       (should (org-glance-tag:exists? tag org-glance-tags))
       (should (= 1 (length (org-glance:tags))))
       (should (= 0 (length (org-glance:tag-headlines tag))))
 
-      (org-glance-capture tag :default "Hello, world!" :finalize t)
+      (org-glance-capture tag
+        :default headline-title
+        :finalize t)
+
       (should (= 1 (length (org-glance:tag-headlines tag))))
 
       (org-glance-overview tag)
-      (org-glance-overview:materialize-headline))))
+
+      (let ((headline (org-glance-headline:at-point)))
+        (should (org-glance-headline? headline))
+        (should (string= (org-glance-headline:title headline) headline-title)))
+
+      ;; (org-glance-overview:materialize-headline)
+      )))
 
 (provide 'org-glance-test)

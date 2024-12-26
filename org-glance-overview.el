@@ -112,7 +112,7 @@ ${todo-order}
             (org-glance:interactive-lambda
               (if (org-before-first-heading-p)
                   (progn
-                    (org-glance-overview:refresh-widgets)
+                    (org-glance-overview:refresh-widgets (org-glance-overview:tag))
                     (org-glance-overview:order)
                     (pulse-momentary-highlight-region
                      (point-min)
@@ -298,7 +298,7 @@ ${todo-order}
   (save-window-excursion
     (save-excursion
       (org-glance--back-to-heading)
-      (let* ((id (org-glance-tag:id* tag))
+      (let* ((id (org-glance-tag:generate-id tag))
              (dir (org-glance:make-tag-directory tag))
              (output-file (f-join dir (format "%s.org" (org-glance-tag:to-string tag)))))
 
@@ -506,28 +506,26 @@ ${todo-order}
   :init-value nil
   :keymap org-glance-edit-mode-map)
 
-(cl-defun org-glance-edit-mode:start ()
-  (interactive)
-  (org-glance-edit-mode +1)
-  (org-glance-overview-mode -1)
-  (defvar-local org-glance-overview:changed-headlines '())
-  (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
-  ;; (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t)
+;; (cl-defun org-glance-edit-mode:start ()
+;;   (interactive)
+;;   (org-glance-edit-mode +1)
+;;   (org-glance-overview-mode -1)
+;;   (defvar-local org-glance-overview:changed-headlines '())
+;;   (cl-pushnew 'org-glance-overview:track-changes after-change-functions)
+;;   ;; (add-hook 'before-save-hook #'org-glance-overview:sync-headlines t t)
+;;   (message "Edit mode is now enabled."))
 
-  (message "Edit mode is now enabled."))
-
-(cl-defun org-glance-edit-mode:apply ()
-  (interactive)
-  (org-glance-overview:sync-headlines)
-  (setq-local after-change-functions (cl-remove 'org-glance-overview:track-changes after-change-functions))
-  (org-glance-edit-mode -1)
-  (org-glance-overview-mode +1)
-  (message "All changes have been applied."))
+;; (cl-defun org-glance-edit-mode:apply ()
+;;   (interactive)
+;;   (org-glance-overview:sync-headlines)
+;;   (setq-local after-change-functions (cl-remove 'org-glance-overview:track-changes after-change-functions))
+;;   (org-glance-edit-mode -1)
+;;   (org-glance-overview-mode +1)
+;;   (message "All changes have been applied."))
 
 (cl-defun org-glance-overview:directory (&optional (tag (org-glance-tags:completing-read)))
   "Path to file where CLASS headlines are stored."
   (cl-check-type tag org-glance-tag)
-
   (abbreviate-file-name (f-join org-glance-directory (org-glance-tag:to-string tag))))
 
 (cl-defun org-glance-overview:file-name (&optional (tag (org-glance-tags:completing-read)))
@@ -538,22 +536,10 @@ ${todo-order}
 (cl-defun org-glance-overview:archive-location (&optional (tag (org-glance-tags:completing-read)))
   "Path to file where VIEW-ID headlines are stored."
   (cl-check-type tag org-glance-tag)
-
   (format "%s/%s/%s.org_archive" org-glance-directory tag tag))
-
-(cl-defun org-glance-headline:main-role (&optional (headline (org-glance-overview:original-headline)))
-  "Assume main role of HEADLINE as role directory where it is stored."
-  (cl-loop
-   for view-id in (org-glance-headline:tags headline)
-   for overview-directory = (org-glance-overview:directory view-id)
-   for original-directory = (org-glance-headline:file-name headline)
-   for common-parent = (abbreviate-file-name (f-common-parent (list overview-directory original-directory)))
-   when (f-equal? common-parent overview-directory)
-   do (cl-return view-id)))
 
 (cl-defun org-glance:capture-template (tag &key (default ""))
   (cl-check-type tag org-glance-tag)
-
   (let ((capture-template-config-file (f-join (org-glance-overview:directory tag) "template.org")))
     (s-replace "%?" (concat default "%?")
                (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
@@ -561,8 +547,8 @@ ${todo-order}
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
                      (t "* %?")))))
 
-(cl-defun org-glance-overview:refresh-widgets (&optional (tag (org-glance-overview:tag)))
-  (interactive)
+(cl-defun org-glance-overview:refresh-widgets (tag)
+  (cl-check-type tag org-glance-tag)
   (save-excursion
     (let* ((inhibit-read-only t)
            (inhibit-message t)
@@ -593,23 +579,23 @@ ${todo-order}
       (let ((org-clock-clocktable-default-properties org-glance-clocktable-properties))
         (org-clock-report)))))
 
-(cl-defun org-glance-overview:create-archive (&optional (tag (org-glance-tags:completing-read)))
-  (interactive)
+(cl-defun org-glance-overview:create-archive (tag)
+  (cl-check-type tag org-glance-tag)
   (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location tag))))
     (with-temp-file filename
       (org-glance-overview:refresh-widgets tag))
     filename))
 
-(cl-defun org-glance-overview:ensure-archive (&optional (tag (org-glance-tags:completing-read)))
-  (interactive)
+(cl-defun org-glance-overview:ensure-archive (tag)
+  (cl-check-type tag org-glance-tag)
   (let ((filename (org-glance--make-file-directory (org-glance-overview:archive-location tag))))
     (unless (file-exists-p filename)
       (with-temp-file filename
         (org-glance-overview:refresh-widgets tag)))
     filename))
 
-(cl-defun org-glance-overview:create (&optional (tag (org-glance-tags:completing-read "Overview: " nil)))
-  (interactive)
+(cl-defun org-glance-overview:create (tag)
+  (cl-check-type tag org-glance-tag)
   (let ((overview-file-name (org-glance-overview:file-name tag)))
     (unless (f-exists? overview-file-name)
       (let ((metadata-file-name (org-glance-metadata:location tag))
@@ -621,8 +607,9 @@ ${todo-order}
           (org-glance-overview:refresh-widgets tag))))
     overview-file-name))
 
-(cl-defun org-glance-overview (&optional (tag (org-glance-tags:completing-read "Overview: " nil)))
-  (interactive)
+(cl-defun org-glance-overview (tag)
+  (interactive (list (org-glance-tags:completing-read "Overview: " nil)))
+  (cl-check-type tag org-glance-tag)
   (when-let (location (org-glance-overview:file-name tag))
     (if (file-exists-p location)
         (find-file location)
@@ -634,20 +621,18 @@ ${todo-order}
   (lexical-let ((org-agenda-start-on-weekday nil)
                 (org-agenda-overriding-header "org-glance agenda"))
     (let ((org-agenda-files (list (buffer-file-name))))
-      (org-agenda-list nil "-7d" 21))
-
-    ;; (switch-to-buffer org-agenda-buffer)
-    ;; (delete-other-windows)
-    ))
+      (save-window-excursion
+        (org-agenda-list nil "-7d" 21)))
+    (switch-to-buffer org-agenda-buffer)))
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
   (lexical-let ((org-agenda-overriding-header "org-glance agenda")
                 (org-agenda-start-on-weekday nil))
     (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
-      (org-agenda-list nil "-2d" 7)
-      (switch-to-buffer org-agenda-buffer)
-      (delete-other-windows))))
+      (save-window-excursion
+        (org-agenda-list nil "-2d" 7))
+      (switch-to-buffer org-agenda-buffer))))
 
 (cl-defun org-glance-overview:materialize-headline ()
   (interactive)
