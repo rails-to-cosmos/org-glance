@@ -63,4 +63,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
         (should (eql (org-glance-headline:at-point) headline))))))
 
+
+;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
+
 (provide 'org-glance-test)
