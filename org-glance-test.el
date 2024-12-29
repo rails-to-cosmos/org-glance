@@ -39,7 +39,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 (ert-deftest org-glance-test:headline-workflow ()
   (org-glance:with-temp-session
     (let ((tag 'foo)
-          (headline-title "Hello, world!"))
+          (title "Hello, world!"))
 
       (org-glance:create-tag tag)
 
@@ -47,20 +47,18 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (= 1 (length (org-glance:tags))))
       (should (= 0 (length (org-glance:tag-headlines tag))))
 
-      (org-glance-capture tag
-        :default headline-title
-        :finalize t)
+      (org-glance-capture tag :title title :finalize t)
 
       (should (= 1 (length (org-glance:tag-headlines tag))))
 
       (org-glance-overview tag)
 
       (let ((headline (org-glance-headline:at-point)))
-        (should (org-glance-headline? headline))
-        (should (string= (org-glance-headline:title headline) headline-title))
+        (should (string= (org-glance-headline:title headline) title))
 
         (org-glance-overview:materialize-headline)
 
-        (should (eql (org-glance-headline:at-point) headline))))))
+        (let ((materialized-headline (org-glance-headline:at-point)))
+          (should (string= (org-glance-headline:hash materialized-headline) (org-glance-headline:hash headline))))))))
 
 (provide 'org-glance-test)

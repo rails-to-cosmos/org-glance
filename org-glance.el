@@ -237,12 +237,13 @@ after capture process has been finished."
       (let ((<buffer> (current-buffer))
             (<point> (point))
             (tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")))
-        (org-glance-capture tag :default (cadr default)
-                            :callback (lambda ()
-                                        (let ((<hl> (org-glance-overview:original-headline)))
-                                          (switch-to-buffer <buffer>)
-                                          (goto-char <point>)
-                                          (funcall ,action <hl>))))))))
+        (org-glance-capture tag
+          :title (cadr default)
+          :callback (lambda ()
+                      (let ((<hl> (org-glance-overview:original-headline)))
+                        (switch-to-buffer <buffer>)
+                        (goto-char <point>)
+                        (funcall ,action <hl>))))))))
 
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Update all changed entities from `org-glance-directory'."
@@ -371,11 +372,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 ;;               :template (org-glance-headline:contents headline)))))
 
 (cl-defun org-glance-capture (tag &key
-                                  (default (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
-                                                 (t "")))
+                                  (title (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
+                                               (t "")))
                                   (callback nil)
                                   (finalize nil)
-                                  (template (org-glance:capture-template tag :default default)))
+                                  (template (org-glance:capture-template tag :default title)))
   (declare (indent 1))
   (interactive)
   (let ((id (org-glance-tag:generate-id tag))

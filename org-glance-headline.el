@@ -21,9 +21,7 @@
   ;; (and (listp headline) (org-element-type-p headline (list 'headline)))
   )
 
-(cl-deftype org-glance-headline ()
-  "Type representing a customized org-element for headlines."
-  '(satisfies org-glance-headline?))
+(cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
 
 (defvar org-glance:key-value-pair-re)
 
@@ -154,6 +152,7 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     element))
 
 (cl-defun org-glance-headline:title (headline)
+  (cl-check-type headline org-glance-headline)
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)
       ""))
