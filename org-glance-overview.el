@@ -610,21 +610,21 @@ ${todo-order}
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)
-  (lexical-let ((org-agenda-start-on-weekday nil)
-                (org-agenda-overriding-header "org-glance agenda"))
-    (let ((org-agenda-files (list (buffer-file-name))))
-      (save-window-excursion
-        (org-agenda-list nil "-7d" 21)))
+  (let ((org-agenda-start-on-weekday nil)
+        (org-agenda-overriding-header "org-glance agenda")
+        (org-agenda-files (list (buffer-file-name))))
+    (save-window-excursion
+      (org-agenda-list nil "-7d" 21))
     (switch-to-buffer org-agenda-buffer)))
 
 (cl-defun org-glance-overview:agenda* ()
   (interactive)
-  (lexical-let ((org-agenda-overriding-header "org-glance agenda")
-                (org-agenda-start-on-weekday nil))
-    (let ((org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
-      (save-window-excursion
-        (org-agenda-list nil "-2d" 7))
-      (switch-to-buffer org-agenda-buffer))))
+  (let ((org-agenda-overriding-header "org-glance agenda")
+        (org-agenda-start-on-weekday nil)
+        (org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
+    (save-window-excursion
+      (org-agenda-list nil "-2d" 7))
+    (switch-to-buffer org-agenda-buffer)))
 
 (cl-defun org-glance-overview:materialize-headline ()
   (let ((headline (org-glance-overview:original-headline)))
@@ -632,16 +632,14 @@ ${todo-order}
 
 (cl-defun org-glance-overview:jump-headline ()
   (interactive)
-  (org-glance-overview:apply-to-buffer-headlines
-      nil
-    (let ((offset (- (point) (save-excursion
-                               (org-glance-headline:search-parents)
-                               (point)))))
-      (-some->> (org-glance-headline:at-point)
-        org-glance-headline:id
-        org-glance-metadata:get-headline
-        org-glance:open)
-      (forward-char offset))))
+  (let ((offset (- (point) (save-excursion
+                             (org-glance-headline:search-parents)
+                             (point)))))
+    (-some->> (org-glance-headline:at-point)
+      org-glance-headline:id
+      org-glance-metadata:get-headline
+      org-glance:open)
+    (forward-char offset)))
 
 (cl-defun org-glance-overview:tag ()
   "Return tag name of current overview."
@@ -650,12 +648,6 @@ ${todo-order}
     (let ((tag (org-glance-tag:from-string (org-get-category))))
       (when (gethash tag org-glance-tags)
         tag))))
-
-(cl-defmacro org-glance-overview:apply-to-buffer-headlines (then &rest else)
-  (declare (indent 1) (debug t))
-  `(if (org-before-first-heading-p)
-       ,then
-     ,@else))
 
 (cl-defun org-glance-overview:reread ()
   "Completely rebuild current overview file."
