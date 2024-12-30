@@ -15,13 +15,11 @@
 (org-glance-exception:define org-glance-headline-!-metadata-corrupted
   "Headline metadata corrupted, please reread")
 
-(cl-defun org-glance-headline? (headline)
-  ;; TODO dumb checker, improve it afterwards
-  (listp headline)
-  ;; (and (listp headline) (org-element-type-p headline (list 'headline)))
-  )
-
+(cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
 (cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
+
+(cl-defun org-glance-headline-metadata? (headline-metadata) (and (listp headline-metadata) (eq (car headline-metadata) 'headline-metadata)))
+(cl-deftype org-glance-headline-metadata () '(satisfies org-glance-headline-metadata?))
 
 (defvar org-glance:key-value-pair-re)
 
@@ -146,14 +144,8 @@
         (buffer-name (get-file-buffer (org-glance-headline:file-name headline)))
       (wrong-type-argument nil))))
 
-(cl-defun org-glance-headline? (element)
-  "Assume HEADLINE is an `org-element' with :ORG_GLANCE_ID property specified.
-Return headline or nil if it is not a proper `org-glance-headline'."
-  (when (org-element-property :ORG_GLANCE_ID element)
-    element))
-
 (cl-defun org-glance-headline:title (headline)
-  (cl-check-type headline org-glance-headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (or (org-element-property :TITLE headline)
       (org-element-property :raw-value headline)
       ""))
