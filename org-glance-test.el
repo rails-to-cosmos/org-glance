@@ -76,6 +76,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
              (material (org-glance-test:materialize-headline tag id)))
         (should (= 1 (length (org-glance:tag-headlines tag))))
         (should (string= (org-glance-headline:title overview) title))
+        (should (string= (org-glance-headline:title metadata) title))
+
         (should (string= (org-glance-headline:hash material) (org-glance-headline:hash overview)))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
