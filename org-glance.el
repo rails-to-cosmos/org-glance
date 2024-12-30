@@ -298,20 +298,15 @@ after capture process has been finished."
               (t (keyboard-quit)))
       (quit (self-insert-command 1 64)))))
 
-(cl-defun org-glance:materialize (&optional headline)
+(cl-defun org-glance:materialize (headline)
   "Materialize HEADLINE in a new buffer."
-  (interactive)
-  (let ((action (lambda (headline)
-                  (let ((buffer (org-glance-materialized-headline-buffer headline)))
-                    (switch-to-buffer
-                     (if (buffer-live-p buffer)
-                         buffer
-                       (org-glance-headline:materialize headline)))))))
-    (if headline
-        (funcall action headline)
-      (org-glance-choose-and-apply
-       :filter #'org-glance-headline:active?
-       :action action))))
+  (interactive (list (org-glance-metadata:choose-headline)))
+  (cl-check-type headline org-glance-headline)
+  (let ((buffer (org-glance-materialized-headline-buffer headline)))
+    (switch-to-buffer
+     (if (buffer-live-p buffer)
+         buffer
+       (org-glance-headline:materialize headline)))))
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.
@@ -385,9 +380,12 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     (add-hook 'org-capture-prepare-finalize-hook (lambda () (org-glance-capture:prepare-finalize-hook id tag)) 0 t)
     (add-hook 'org-capture-after-finalize-hook (lambda () (org-glance-capture:after-finalize-hook id tag)) 0 t)
     (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
+
     (let ((org-capture-templates (list (list "_" "_" 'entry (list 'file file) template))))
       (org-capture nil "_")
-      (when finalize (org-capture-finalize)))))
+      (when finalize (org-capture-finalize)))
+
+    id))
 
 (cl-defun org-glance:insert-pin-block ()
   (interactive)

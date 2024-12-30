@@ -11,15 +11,13 @@
 (org-glance-exception:define org-glance-tag-!-not-found
   "Tag not found")
 
-(defun org-glance--valid-tag? (tag)
+(cl-defun org-glance-tag? (tag)
   "Return t if TAG is a downcased, non-nil symbol."
   (and (symbolp tag)
        (not (null tag))
        (string= (symbol-name tag) (downcase (symbol-name tag)))))
 
-(cl-deftype org-glance-tag ()
-  "Type representing a downcased, non-nil symbol."
-  '(satisfies org-glance--valid-tag?))
+(cl-deftype org-glance-tag () '(satisfies org-glance-tag?))
 
 (cl-defstruct (org-glance-tag-info (:type vector))
   (tag nil :read-only t :type org-glance-tag)

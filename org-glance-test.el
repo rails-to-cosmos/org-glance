@@ -36,34 +36,35 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 ;;     (should-error (org-glance:create-tag "bar") :type 'error)
 ;;     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
+(cl-defun org-glance-test:create-tag (tag)
+  (cl-check-type tag org-glance-tag)
+  (org-glance:create-tag tag)
+  (should (org-glance-tag:exists? tag org-glance-tags))
+  (should (= 1 (length (org-glance:tags))))
+  (should (= 0 (length (org-glance:tag-headlines tag)))))
+
+(cl-defun org-glance-test:add-headline (tag title)
+  (cl-check-type tag org-glance-tag)
+  (org-glance-capture tag :title title :finalize t))
+
 (ert-deftest org-glance-test:headline-workflow ()
   (org-glance:with-temp-session
-    (let ((tag 'foo)
-          (title "Hello, world!"))
+   (let ((tag 'foo)
+         (title "Hello, world!"))
 
-      (org-glance:create-tag tag)
+     (org-glance-test:create-tag tag)
+     (let ((headline-id (org-glance-test:add-headline tag title)))
+       (should (= 1 (length (org-glance:tag-headlines tag))))
 
-      (should (org-glance-tag:exists? tag org-glance-tags))
-      (should (= 1 (length (org-glance:tags))))
-      (should (= 0 (length (org-glance:tag-headlines tag))))
+       (org-glance-overview tag)
 
-      (org-glance-capture tag :title title :finalize t)
+       (let ((headline (org-glance-headline:search-buffer-by-id headline-id)))
+         (should (string= (org-glance-headline:title headline) title))
 
-      (should (= 1 (length (org-glance:tag-headlines tag))))
-
-      (org-glance-overview tag)
-
-      (let ((headline (org-glance-headline:at-point)))
-        (should (string= (org-glance-headline:title headline) title))
-
-        (org-glance-overview:materialize-headline)
-
-        (let ((materialized-headline (org-glance-headline:at-point)))
-          (should (string= (org-glance-headline:hash materialized-headline)
-                           (org-glance-headline:hash headline))))
-
-
-        ))))
+         (org-glance-overview:materialize-headline)
+         (let ((materialized-headline (org-glance-headline:at-point)))
+           (should (string= (org-glance-headline:hash materialized-headline)
+                            (org-glance-headline:hash headline)))))))))
 
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine

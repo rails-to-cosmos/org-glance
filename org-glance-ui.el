@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'transient)
+(require 'org-glance-utils)
 
 (defclass org-glance-transient-variable (transient-variable)
   ((default :initarg :default :initform nil)))

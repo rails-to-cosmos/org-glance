@@ -5,6 +5,11 @@
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
+(cl-defmacro org-glance:interactive-lambda (&rest forms)
+  "Define interactive lambda function with FORMS in its body."
+  (declare (indent 0) (debug t))
+  `(lambda () (interactive) ,@forms))
+
 (cl-defmacro org-glance--with-file-visited (file &rest forms)
   "Visit FILE, execute FORMS and close it if it was closed before visit."
   (declare (indent 1) (debug t))

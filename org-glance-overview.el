@@ -22,11 +22,6 @@
   "Face used to highlight evaluated paragraph."
   :group 'org-glance :group 'faces)
 
-(cl-defmacro org-glance:interactive-lambda (&rest forms)
-  "Define interactive lambda function with FORMS in its body."
-  (declare (indent 0) (debug t))
-  `(lambda () (interactive) ,@forms))
-
 (cl-defun org-glance-overview-init ()
   "Init overview mode."
   (set-face-extend 'org-glance-headline-changed-face t))
