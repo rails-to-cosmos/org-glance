@@ -59,7 +59,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
         (org-glance-overview:materialize-headline)
 
         (let ((materialized-headline (org-glance-headline:at-point)))
-          (should (string= (org-glance-headline:hash materialized-headline) (org-glance-headline:hash headline))))))))
+          (should (string= (org-glance-headline:hash materialized-headline)
+                           (org-glance-headline:hash headline))))
+
+
+        ))))
 
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
