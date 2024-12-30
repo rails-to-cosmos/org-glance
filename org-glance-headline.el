@@ -281,8 +281,6 @@ Return headline or nil if it is not a proper `org-glance-headline'."
     (insert contents)))
 
 (cl-defun org-glance-headline:contents (headline)
-  "Extracts HEADLINE contents.
-FIXME. Unstable one. Refactor is needed."
   (cl-check-type headline org-glance-headline)
   (org-glance--decode-string (org-element-property :contents headline)))
 
