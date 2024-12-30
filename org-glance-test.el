@@ -41,30 +41,44 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (org-glance:create-tag tag)
   (should (org-glance-tag:exists? tag org-glance-tags))
   (should (= 1 (length (org-glance:tags))))
-  (should (= 0 (length (org-glance:tag-headlines tag)))))
+  (should (= 0 (length (org-glance:tag-headlines tag))))
+  tag)
 
 (cl-defun org-glance-test:add-headline (tag title)
   (cl-check-type tag org-glance-tag)
+  (cl-check-type title string)
   (org-glance-capture tag :title title :finalize t))
+
+(cl-defun org-glance-test:headline-overview (tag id)
+  (cl-check-type tag org-glance-tag)
+  (cl-check-type id string)
+  (save-window-excursion
+    (org-glance-overview tag)
+    (org-glance-headline:search-buffer-by-id id)))
+
+(cl-defun org-glance-test:materialize-headline (tag id)
+  (cl-check-type tag org-glance-tag)
+  (cl-check-type id string)
+  (save-window-excursion
+    (org-glance-test:headline-overview tag id)
+    (org-glance-overview:materialize-headline)
+    (org-glance-headline:search-buffer-by-id id)))
 
 (ert-deftest org-glance-test:headline-workflow ()
   (org-glance:with-temp-session
-   (let ((tag 'foo)
-         (title "Hello, world!"))
+    (let* (;; TODO generate entities
+           (tag (org-glance-test:create-tag 'foo))
+           (title "Hello, world!")
 
-     (org-glance-test:create-tag tag)
-     (let ((headline-id (org-glance-test:add-headline tag title)))
-       (should (= 1 (length (org-glance:tag-headlines tag))))
-
-       (org-glance-overview tag)
-
-       (let ((headline (org-glance-headline:search-buffer-by-id headline-id)))
-         (should (string= (org-glance-headline:title headline) title))
-
-         (org-glance-overview:materialize-headline)
-         (let ((materialized-headline (org-glance-headline:at-point)))
-           (should (string= (org-glance-headline:hash materialized-headline)
-                            (org-glance-headline:hash headline)))))))))
+           (id (org-glance-test:add-headline tag title))
+           (metadata (org-glance-metadata:get-headline id))
+           (overview (org-glance-test:headline-overview tag id))
+           (material (org-glance-test:materialize-headline tag id)))
+      (prin1 metadata)
+      (should (= 1 (length (org-glance:tag-headlines tag))))
+      (should (string= (org-glance-headline:title overview) title))
+      (should (string= (org-glance-headline:hash material)
+                       (org-glance-headline:hash overview))))))
 
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine

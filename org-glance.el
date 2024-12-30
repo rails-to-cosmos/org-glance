@@ -68,8 +68,7 @@
 (declare-function org-glance--remove-links "org-glance-utils.el" (&rest types))
 (declare-function org-glance--substitute-links "org-glance-utils.el")
 (declare-function org-glance-headline:at-point "org-glance-headline.el")
-(declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
-(declare-function org-glance-headline:deserialize "org-glance-headline.el" (value))
+(declare-function org-glance-headline:deserialize "org-glance-headline.el" (id value))
 (declare-function org-glance-headline:from-element "org-glance-headline.el" (element))
 (declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
 (declare-function org-glance-headline:search-parents "org-glance-headline.el")
@@ -157,11 +156,6 @@
 (cl-defun org-glance:tag-file-name (&optional (tag (org-glance-tags:completing-read)))
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
-
-(cl-defun org-glance:tag-metadata (tag)
-  (->> tag
-       org-glance-metadata:location
-       org-glance-metadata:read))
 
 (cl-defun org-glance:make-tag-directory (&optional (tag (org-glance-tags:completing-read)))
   (save-excursion
@@ -306,7 +300,8 @@ after capture process has been finished."
     (switch-to-buffer
      (if (buffer-live-p buffer)
          buffer
-       (org-glance-headline:materialize headline)))))
+       (org-glance-headline:materialize headline))))
+  headline)
 
 (cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE.

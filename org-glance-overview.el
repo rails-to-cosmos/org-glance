@@ -7,6 +7,7 @@
 (require 'org-agenda)
 
 (require 'org-glance-headline)
+(require 'org-glance-metadata)
 (require 'org-glance-tag)
 (require 'org-glance-utils)
 
@@ -215,7 +216,7 @@ ${todo-order}
 
   ;; TODO implement explicit metadata model
   (let ((metadata-file-name (org-glance-metadata:location tag))
-        (metadata (org-glance:tag-metadata tag)))
+        (metadata (org-glance-metadata:read-tag-metadata tag)))
     (org-glance-metadata:add-headline headline metadata)
     (org-glance-metadata:save metadata metadata-file-name)))
 
@@ -225,7 +226,7 @@ ${todo-order}
 
   ;; TODO implement explicit model for metadata
   (let ((metadata-location (org-glance-metadata:location tag))
-        (metadata (org-glance:tag-metadata tag)))
+        (metadata (org-glance-metadata:read-tag-metadata tag)))
     (org-glance-metadata:remove-headline headline metadata)
     (org-glance-metadata:save metadata metadata-location)))
 

@@ -115,8 +115,9 @@
            for reader = (plist-get methods :reader)
            collect (funcall reader headline)))
 
-(cl-defun org-glance-headline:deserialize (value)
-  (cl-loop with element = (org-element-create 'headline)
+(cl-defun org-glance-headline:deserialize (id value)
+  (cl-loop with element = (-> (org-element-create 'headline)
+                              (org-glance-headline:update :ORG_GLANCE_ID id))
            for (property . _) in org-glance-headline:spec
            for index from 0
            do (org-glance-headline:update element property (nth index value))

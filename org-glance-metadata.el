@@ -7,21 +7,19 @@
 (org-glance-exception:define org-glance-metadata-!-outdated
   "Headline metadata is outdated")
 
-(cl-defun org-glance-metadata:get-headline (id)
-  "Get headline by ID."
+(cl-defun org-glance-metadata:read-tag-metadata (tag)
+  (->> tag
+       org-glance-metadata:location
+       org-glance-metadata:read))
 
-  (when (symbolp id)
-    (setq id (symbol-name id)))
+(cl-defun org-glance-metadata:get-headline (id)
+  (cl-check-type id string)
 
   (cl-loop for tag being the hash-keys of org-glance-tags
-           for metadata = (->> tag
-                               (org-glance-metadata:location)
-                               (org-glance-metadata:read))
-           for headline = (gethash id metadata)
+           for metadata = (org-glance-metadata:read-tag-metadata tag)
+           for headline = (gethash id metadata) ;; TODO use symbols instead of strings
            when headline
-           collect (-> headline
-                       (org-glance-headline:deserialize)
-                       (org-glance-headline:update :ORG_GLANCE_ID id))
+           collect (org-glance-headline:deserialize id headline)
            into result
            finally (return (car result))))
 
@@ -37,8 +35,7 @@
 
 (cl-defun org-glance-metadata:headlines (metadata)
   (cl-loop for id being the hash-keys of metadata using (hash-value value)
-           collect (-> (org-glance-headline:deserialize value)
-                       (org-glance-headline:update :ORG_GLANCE_ID id))))
+           collect (org-glance-headline:deserialize id value)))
 
 (cl-defun org-glance-metadata:read (file)
   (with-temp-buffer
