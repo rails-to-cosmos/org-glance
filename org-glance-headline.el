@@ -116,7 +116,7 @@
            collect (funcall reader headline)))
 
 (cl-defun org-glance-headline:deserialize (id value)
-  (cl-loop with element = (-> (org-element-create 'headline)
+  (cl-loop with element = (-> (org-element-create 'headline-metadata)
                               (org-glance-headline:update :ORG_GLANCE_ID id))
            for (property . _) in org-glance-headline:spec
            for index from 0

@@ -14,14 +14,11 @@
 
 (cl-defun org-glance-metadata:get-headline (id)
   (cl-check-type id string)
-
   (cl-loop for tag being the hash-keys of org-glance-tags
            for metadata = (org-glance-metadata:read-tag-metadata tag)
-           for headline = (gethash id metadata) ;; TODO use symbols instead of strings
+           for headline = (gethash id metadata)
            when headline
-           collect (org-glance-headline:deserialize id headline)
-           into result
-           finally (return (car result))))
+           return (org-glance-headline:deserialize id headline)))
 
 ;; TODO refactor, slow
 (cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
