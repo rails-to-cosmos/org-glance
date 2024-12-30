@@ -4,6 +4,7 @@
 (require 'org-attach)
 (require 'org-capture)
 (require 'ol)
+(require 'org-agenda)
 
 (require 'org-glance-headline)
 (require 'org-glance-tag)
