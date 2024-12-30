@@ -64,22 +64,19 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (org-glance-overview:materialize-headline)
     (org-glance-headline:search-buffer-by-id id)))
 
-(ert-deftest org-glance-test:headline-workflow ()
+(ert-deftest org-glance-test:consistency ()
   (org-glance:with-temp-session
-    (let* (;; TODO generate entities
-           (tag (org-glance-test:create-tag 'foo))
-           (title "Hello, world!")
+    (let (;; TODO generate such entities
+          (tag (org-glance-test:create-tag 'foo))
+          (title "Hello, world!"))
 
-           (id (org-glance-test:add-headline tag title))
-           (metadata (org-glance-metadata:get-headline id))
-           (overview (org-glance-test:headline-overview tag id))
-           (material (org-glance-test:materialize-headline tag id)))
-      (prin1 metadata)
-      (should (= 1 (length (org-glance:tag-headlines tag))))
-      (should (string= (org-glance-headline:title overview) title))
-      (should (string= (org-glance-headline:hash material)
-                       (org-glance-headline:hash overview))))))
-
+      (let* ((id (org-glance-test:add-headline tag title))
+             (metadata (org-glance-metadata:get-headline id))
+             (overview (org-glance-test:headline-overview tag id))
+             (material (org-glance-test:materialize-headline tag id)))
+        (should (= 1 (length (org-glance:tag-headlines tag))))
+        (should (string= (org-glance-headline:title overview) title))
+        (should (string= (org-glance-headline:hash material) (org-glance-headline:hash overview)))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
