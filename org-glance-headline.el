@@ -292,7 +292,7 @@
 (cl-defun org-glance-headline:plain-title (headline)
   (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (with-temp-buffer
-    (save-excursion (insert (org-glance-headline:title headline)))
+    (insert (org-glance-headline:title headline))
     (org-glance--remove-links 'org-glance-overview 'org-glance-state)
     (org-glance--substitute-links)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))

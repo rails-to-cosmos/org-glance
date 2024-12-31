@@ -197,7 +197,8 @@
   (org-display-inline-images)
   (org-cycle-hide-drawers 'all))
 
-(cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:generate-materialized-buffer (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
