@@ -303,6 +303,11 @@
    (goto-char (org-log-beginning t))
    (insert (apply #'format string objects) "\n")))
 
+(cl-defun org-glance-headline:equal? (a b)
+  (cl-check-type a org-glance-headline)
+  (cl-check-type b org-glance-headline)
+  (and (string= (org-glance-headline:hash a) (org-glance-headline:hash b))))
+
 (cl-defun org-glance-headline:timestamps (headline)
   (cl-check-type headline org-glance-headline)
   (with-temp-buffer

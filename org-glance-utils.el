@@ -43,8 +43,8 @@
              do (delete-region (match-beginning 0) (match-end 0)))))
 
 (cl-defun org-glance--buffer-links ()
-  (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
-           for beg = (org-element-property :begin element)
+  (cl-loop for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
+           for beg = (org-element-property :begin link)
            for end = (org-element-property :end element)
            for title = (substring-no-properties
                         (or (-some->> element
