@@ -12,7 +12,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defmacro org-glance:with-temp-session (&rest body)
+(cl-defmacro org-glance-test:session (&rest body)
   (declare (indent 0))
   `(unwind-protect
        (with-temp-directory org-glance-directory
@@ -21,11 +21,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
      (org-glance-init org-glance-directory)))
 
 ;; (ert-deftest org-glance-test:initial-state ()
-;;   (org-glance:with-temp-session
+;;   (org-glance-test:session
 ;;     (should (= (length (org-glance:tags)) 0))))
 
 ;; (ert-deftest org-glance-test:tag-management ()
-;;   (org-glance:with-temp-session
+;;   (org-glance-test:session
 ;;     (let ((tag 'foo))
 ;;       (org-glance:create-tag tag)
 ;;       (should (org-glance-tag:exists? tag org-glance-tags)))
@@ -70,22 +70,21 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (org-glance:materialize headline)))
 
 (ert-deftest org-glance-test:consistency ()
-  (org-glance:with-temp-session
-    (let (;; TODO generate such entities
-          (tag (org-glance-test:create-tag 'foo))
-          (title "Hello, world!"))
+  (org-glance-test:session
+   (let (;; TODO generate such entities
+         (tag (org-glance-test:create-tag 'foo))
+         (title "Hello, world!"))
 
-      (let* ((id (org-glance-test:add-headline tag title))
-             (metadata (org-glance-metadata:headline-metadata id))
-             (overview (org-glance-test:headline-overview tag id))
-             (material (org-glance-test:materialize id))
-             (material-overview (org-glance-test:materialize-overview tag id)))
-        (should (= 1 (length (org-glance:tag-headlines tag))))
-        (should (string= (org-glance-headline:title overview) title))
-        (should (string= (org-glance-headline:title metadata) title))
-        (should (org-glance-headline:equal? material overview))
-        (should (org-glance-headline:equal? overview material-overview))
-        (should (org-glance-headline:equal? material material-overview))))))
+     (let* ((id (org-glance-test:add-headline tag title))
+            (metadata (org-glance-metadata:headline-metadata id))
+            (overview (org-glance-test:headline-overview tag id))
+            (material (org-glance-test:materialize id))
+            (material-overview (org-glance-test:materialize-overview tag id)))
+       (should (= 1 (length (org-glance:tag-headlines tag))))
+       (should (string= (org-glance-headline:title overview) title))
+       (should (org-glance-headline:equal? material overview))
+       (should (org-glance-headline:equal? overview material-overview))
+       (should (org-glance-headline:equal? material material-overview))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
