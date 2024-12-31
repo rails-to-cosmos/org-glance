@@ -56,13 +56,18 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (org-glance-overview tag)
     (org-glance-headline:search-buffer-by-id id)))
 
-(cl-defun org-glance-test:materialize-headline (tag id)
+(cl-defun org-glance-test:materialize-overview (tag id)
   (cl-check-type tag org-glance-tag)
   (cl-check-type id string)
   (save-window-excursion
     (org-glance-test:headline-overview tag id)
     (org-glance-overview:materialize-headline)
     (org-glance-headline:search-buffer-by-id id)))
+
+(cl-defun org-glance-test:materialize (id)
+  (cl-check-type id string)
+  (let ((headline (org-glance-metadata:headline id)))
+    (org-glance:materialize headline)))
 
 (ert-deftest org-glance-test:consistency ()
   (org-glance:with-temp-session
@@ -71,14 +76,16 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
           (title "Hello, world!"))
 
       (let* ((id (org-glance-test:add-headline tag title))
-             (metadata (org-glance-metadata:get-headline id))
+             (metadata (org-glance-metadata:headline-metadata id))
              (overview (org-glance-test:headline-overview tag id))
-             (material (org-glance-test:materialize-headline tag id)))
+             (material (org-glance-test:materialize id))
+             (material-overview (org-glance-test:materialize-overview tag id)))
         (should (= 1 (length (org-glance:tag-headlines tag))))
         (should (string= (org-glance-headline:title overview) title))
         (should (string= (org-glance-headline:title metadata) title))
-        (should (string= (org-glance-headline:contents overview) (org-glance-headline:contents material)))
-        (should (string= (org-glance-headline:hash material) (org-glance-headline:hash overview)))
+        (should (string= (org-glance-headline:contents overview) (org-glance-headline:contents material-overview)))
+        (should (string= (org-glance-headline:hash material-overview) (org-glance-headline:hash overview)))
+        (should (equal material material-overview))
         ;; (should (string= (org-glance-headline:contents metadata) (org-glance-headline:contents material)))
         ))))
 

@@ -183,6 +183,7 @@
 
 (cl-defun org-glance-headline:id (headline)
   "Return unique identifer of HEADLINE."
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (org-element-property :ORG_GLANCE_ID headline))
 
 (cl-defun org-glance-headline:state (headline)
@@ -289,6 +290,7 @@
     (buffer-hash)))
 
 (cl-defun org-glance-headline:plain-title (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (with-temp-buffer
     (save-excursion (insert (org-glance-headline:title headline)))
     (org-glance--remove-links 'org-glance-overview 'org-glance-state)

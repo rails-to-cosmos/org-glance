@@ -225,8 +225,8 @@ existing headlines filtered by FILTER.
 If user chooses unexisting headline, capture it and apply ACTION
 after capture process has been finished."
   `(condition-case default
-       (cond (,filter (funcall ,action (org-glance-metadata:choose-headline :filter ,filter)))
-             (t (funcall ,action (org-glance-metadata:choose-headline))))
+       (cond (,filter (funcall ,action (org-glance-metadata:completing-read :filter ,filter)))
+             (t (funcall ,action (org-glance-metadata:completing-read))))
      (org-glance-headline-!-not-found
       (let ((<buffer> (current-buffer))
             (<point> (point))
@@ -294,13 +294,9 @@ after capture process has been finished."
 
 (cl-defun org-glance:materialize (headline)
   "Materialize HEADLINE in a new buffer."
-  (interactive (list (org-glance-metadata:choose-headline)))
+  (interactive (list (org-glance-metadata:completing-read)))
   (cl-check-type headline org-glance-headline)
-  (let ((buffer (org-glance-materialized-headline-buffer headline)))
-    (switch-to-buffer
-     (if (buffer-live-p buffer)
-         buffer
-       (org-glance-headline:materialize headline))))
+  (switch-to-buffer (org-glance-headline:materialize headline))
   headline)
 
 (cl-defun org-glance:open (&optional headline)
@@ -503,12 +499,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
           (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
 
 ;; TODO refactor, slow
-(cl-defun org-glance-metadata:read-headers (&optional filter)
+(cl-defun org-glance-metadata:completing-read-options (&optional filter)
   (cl-loop for tag being the hash-keys of org-glance-tags
-           append (cl-loop for headline in (org-glance:tag-headlines tag)
-                           when (or (null filter) (funcall filter headline))
-                           collect (cons (format "[%s] %s" tag (org-glance-headline:plain-title headline))
-                                         (list headline tag)))))
+           append (cl-loop for headline-metadata in (org-glance:tag-headlines tag)
+                           when (or (null filter) (funcall filter headline-metadata))
+                           collect (cons (format "[%s] %s" tag (org-glance-headline:plain-title headline-metadata)) headline-metadata))))
 
 (defvar org-glance-scope:extensions
   '("org" "org_archive"))
@@ -589,10 +584,10 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   :group 'faces)
 
 (cl-defun org-glance-link:choose-thing-for-materialization ()
-  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metadata:choose-headline))))
+  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metadata:completing-read))))
 
 (cl-defun org-glance-link:choose-thing-for-opening ()
-  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metadata:choose-headline
+  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metadata:completing-read
                                                       :filter #'(lambda (headline)
                                                                   (and
                                                                    (org-glance-headline:active? headline)
@@ -633,11 +628,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
 (defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
-  (org-glance:materialize (org-glance-metadata:get-headline id)))
+  (org-glance:materialize (org-glance-metadata:headline-metadata id)))
 
 (defun org-glance-link:open (id &optional _)
   "Open org-glance headline identified by ID."
-  (org-glance:open (org-glance-metadata:get-headline id)))
+  (org-glance:open (org-glance-metadata:headline-metadata id)))
 
 (defun org-glance-link:overview (tag &optional _)
   "Open org-glance headline identified by ID."

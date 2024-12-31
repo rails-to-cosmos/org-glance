@@ -450,7 +450,7 @@ ${todo-order}
               (save-excursion
                 (->> (org-glance-headline:at-point)
                      org-glance-headline:id
-                     org-glance-metadata:get-headline
+                     org-glance-metadata:headline-metadata
                      org-glance-headline:visit)
                 (save-restriction
                   (org-narrow-to-subtree)
@@ -634,7 +634,7 @@ ${todo-order}
                              (point)))))
     (-some->> (org-glance-headline:at-point)
       org-glance-headline:id
-      org-glance-metadata:get-headline
+      org-glance-metadata:headline-metadata
       org-glance:open)
     (forward-char offset)))
 
@@ -752,7 +752,7 @@ ${todo-order}
   (org-glance-headline:with-narrowed-headline
       (->> (org-glance-headline:at-point)
            org-glance-headline:id
-           org-glance-metadata:get-headline)
+           org-glance-metadata:headline-metadata)
     (org-glance-headline:at-point)))
 
 (cl-defun org-glance-overview:beginning-of-headlines ()
