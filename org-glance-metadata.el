@@ -1,39 +1,43 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'org-glance-tag)
+(require 'org-glance-exception)
 (require 'org-glance-headline)
+(require 'org-glance-tag)
 
-(cl-defun org-glance-metadata:get-headline (id)
-  "Get headline by ID."
-  (when (symbolp id)
-    (setq id (symbol-name id)))
+(org-glance-exception:define org-glance-metadata-!-outdated
+  "Headline metadata is outdated")
 
+(cl-defun org-glance-metadata:read-tag-metadata (tag)
+  (->> tag
+       org-glance-metadata:location
+       org-glance-metadata:read))
+
+(cl-defun org-glance-metadata:headline-metadata (id)
+  (cl-check-type id string)
   (cl-loop for tag being the hash-keys of org-glance-tags
-           for metadata = (->> tag
-                               org-glance-metadata:location
-                               org-glance-metadata:read)
+           for metadata = (org-glance-metadata:read-tag-metadata tag)
            for headline = (gethash id metadata)
            when headline
-           collect (-> headline
-                       (org-glance-headline:deserialize)
-                       (org-glance-headline:update :ORG_GLANCE_ID id))
-           into result
-           finally (return (car result))))
+           return (org-glance-headline:deserialize id headline)))
 
-;; TODO refactor, slow
-(cl-defun org-glance-metadata:choose-headline (&key (filter #'org-glance-headline:active?))
-  "Main retriever, refactor needed."
-  (let* ((headers (org-glance-metadata:read-headers filter))
-         (choice (completing-read "Headline: " headers nil t)))
-    (cl-destructuring-bind (header tag)
-        (alist-get choice headers nil nil #'string=)
-      (org-glance-headline:with-narrowed-headline header
-        (org-glance-headline:update (org-glance-headline:at-point) :tag tag)))))
+(cl-defun org-glance-metadata:headline (id)
+  (cl-check-type id string)
+  (let ((headline-metadata (org-glance-metadata:headline-metadata id)))
+    (save-window-excursion
+      (save-excursion
+        (save-restriction
+          (org-glance-headline:visit headline-metadata)
+          (org-glance-headline:at-point))))))
+
+(cl-defun org-glance-metadata:completing-read (&key (filter #'org-glance-headline:active?))
+  (let* ((headlines-metadata (org-glance-metadata:completing-read-options filter))
+         (user-choice (completing-read "Headline: " headlines-metadata nil t))
+         (headline-metadata (alist-get user-choice headlines-metadata nil nil #'string=)))
+    (org-glance-metadata:headline (org-glance-headline:id headline-metadata))))
 
 (cl-defun org-glance-metadata:headlines (metadata)
   (cl-loop for id being the hash-keys of metadata using (hash-value value)
-           collect (-> (org-glance-headline:deserialize value)
-                       (org-glance-headline:update :ORG_GLANCE_ID id))))
+           collect (org-glance-headline:deserialize id value)))
 
 (cl-defun org-glance-metadata:read (file)
   (with-temp-buffer
@@ -48,13 +52,11 @@
   metadata)
 
 (cl-defun org-glance-metadata:add-headline (headline metadata)
-  (puthash (org-glance-headline:id headline)
-           (org-glance-headline:serialize headline)
-           metadata))
+  (let ((id (org-glance-headline:id headline)))
+    (puthash id (org-glance-headline:serialize headline) metadata)))
 
 (cl-defun org-glance-metadata:remove-headline (headline metadata)
-  (remhash (org-glance-headline:id headline)
-           metadata))
+  (remhash (org-glance-headline:id headline) metadata))
 
 (cl-defun org-glance-metadata:create (file &optional headlines)
   "Create metadata from HEADLINES and write it to FILE."
@@ -76,7 +78,7 @@
                    (replace-regexp-in-string (format "^%s[[:space:]]*" state) "")))
           (tags (org-glance-headline:tags headline))
           (tag (s-join ", " (cl-loop for tag in tags
-                                     collect (format "[[org-glance-overview:%s][%s]]" (downcase tag) tag)))))
+                                     collect (format "[[org-glance-overview:%s][%s]]" tag tag)))))
      (format "%s%s [[%s:%s][%s]]"
              (if (string-empty-p state) "" (format "[[org-glance-state:%s][%s]] " state state))
              tag
@@ -90,7 +92,7 @@
                                 (org-element-property :contents relation))
 
   ;; (org-glance-headline-reference)
-  ;; (org-glance-headline:with-narrowed-headline (org-glance-metadata:get-headline (org-element-property :id relation))
+  ;; (org-glance-headline:with-narrowed-headline (org-glance-metadata:headline-metadata (org-element-property :id relation))
   ;;   (let ((ref )
   ;;         (ts (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps 'include-schedules)
   ;;                                         (org-glance-datetime-filter-active)
@@ -124,7 +126,7 @@
                                             (org-glance-relation-type-parser))))
                            (if (memq link-type '(subtask subtask-done project project-done))
                                ;; actualize link state for subtasks and projects
-                               (if-let (headline (org-glance-metadata:get-headline id))
+                               (if-let (headline (org-glance-metadata:headline-metadata id))
                                    (condition-case nil
                                        (org-glance-headline:with-narrowed-headline headline
                                          (let ((state (intern (or (org-get-todo-state) "")))
@@ -135,7 +137,7 @@
                                                  (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
                                                           ((memq link-type '(project project-done)) 'project)
                                                           (t 'subtask))))))
-                                     (org-glance-exception:headline-not-found link-type))
+                                     (org-glance-headline-!-not-found link-type))
                                  link-type)
                              link-type)))
                         (t nil))

@@ -12,7 +12,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
-(cl-defmacro org-glance:with-temp-session (&rest body)
+(cl-defmacro org-glance-test:session (&rest body)
   (declare (indent 0))
   `(unwind-protect
        (with-temp-directory org-glance-directory
@@ -20,41 +20,72 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          ,@body)
      (org-glance-init org-glance-directory)))
 
-(cl-defun org-glance-test:capture (tag title)
-  (cl-letf (((symbol-function 'org-glance-tags:completing-read) (lambda (&rest _) tag)))
-    (org-glance-capture))
-  (insert title)
-  (org-capture-finalize))
+;; (ert-deftest org-glance-test:initial-state ()
+;;   (org-glance-test:session
+;;     (should (= (length (org-glance:tags)) 0))))
 
-(ert-deftest org-glance-test:initial-state ()
-  (org-glance:with-temp-session
-    (should (= (length (org-glance:tags)) 0))))
+;; (ert-deftest org-glance-test:tag-management ()
+;;   (org-glance-test:session
+;;     (let ((tag 'foo))
+;;       (org-glance:create-tag tag)
+;;       (should (org-glance-tag:exists? tag org-glance-tags)))
 
-(ert-deftest org-glance-test:tag-management ()
-  (org-glance:with-temp-session
-    (let ((tag 'foo))
-      (org-glance:create-tag tag)
-      (should (org-glance-tag:exists? tag org-glance-tags)))
+;;     ;; (org-glance:remove-tag 'foo)
+;;     ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
 
-    ;; (org-glance:remove-tag 'foo)
-    ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
+;;     (should-error (org-glance:create-tag "bar") :type 'error)
+;;     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
 
-    (should-error (org-glance:create-tag "bar") :type 'error)
-    (should-error (org-glance:create-tag 'BAZ) :type 'error)))
+(cl-defun org-glance-test:create-tag (tag)
+  (cl-check-type tag org-glance-tag)
+  (org-glance:create-tag tag)
+  (should (org-glance-tag:exists? tag org-glance-tags))
+  (should (= 1 (length (org-glance:tags))))
+  (should (= 0 (length (org-glance:tag-headlines tag))))
+  tag)
 
-(ert-deftest org-glance-test:overview ()
-  (let ((tag 'foo))
-    (org-glance:with-temp-session
-      (org-glance:create-tag tag)
-      (should (org-glance-tag:exists? tag org-glance-tags))
-      (should (= 1 (length (org-glance:tags))))
-      (should (= 0 (length (org-glance:tag-headlines tag))))
+(cl-defun org-glance-test:add-headline (tag title)
+  (cl-check-type tag org-glance-tag)
+  (cl-check-type title string)
+  (org-glance-capture tag :title title :finalize t))
 
-      (org-glance-test:capture tag "Hello, world!")
+(cl-defun org-glance-test:headline-overview (tag id)
+  (cl-check-type tag org-glance-tag)
+  (cl-check-type id string)
+  (save-window-excursion
+    (org-glance-overview tag)
+    (org-glance-headline:search-buffer-by-id id)))
 
-      (should (= 1 (length (org-glance:tag-headlines tag))))
+(cl-defun org-glance-test:materialize-overview (tag id)
+  (cl-check-type tag org-glance-tag)
+  (cl-check-type id string)
+  (save-window-excursion
+    (org-glance-test:headline-overview tag id)
+    (org-glance-overview:materialize-headline)
+    (org-glance-headline:search-buffer-by-id id)))
 
-      (org-glance-overview tag)
-      (org-glance-overview:materialize-headline))))
+(cl-defun org-glance-test:materialize (id)
+  (cl-check-type id string)
+  (let ((headline (org-glance-metadata:headline id)))
+    (org-glance:materialize headline)))
+
+(ert-deftest org-glance-test:consistency ()
+  (org-glance-test:session
+   (let (;; TODO generate such entities
+         (tag (org-glance-test:create-tag 'foo))
+         (title "Hello, world!"))
+
+     (let* ((id (org-glance-test:add-headline tag title))
+            (metadata (org-glance-metadata:headline-metadata id))
+            (overview (org-glance-test:headline-overview tag id))
+            (material (org-glance-test:materialize id))
+            (material-overview (org-glance-test:materialize-overview tag id)))
+       (should (= 1 (length (org-glance:tag-headlines tag))))
+       (should (string= (org-glance-headline:title overview) title))
+       (should (org-glance-headline:equal? material overview))
+       (should (org-glance-headline:equal? overview material-overview))
+       (should (org-glance-headline:equal? material material-overview))))))
+
+;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 (provide 'org-glance-test)

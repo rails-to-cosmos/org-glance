@@ -5,17 +5,19 @@
 (require 's)
 (require 'cl-lib)
 
+(require 'org-glance-exception)
 (require 'org-glance-namespace)
 
-(defun org-glance--valid-tag? (tag)
+(org-glance-exception:define org-glance-tag-!-not-found
+  "Tag not found")
+
+(cl-defun org-glance-tag? (tag)
   "Return t if TAG is a downcased, non-nil symbol."
   (and (symbolp tag)
        (not (null tag))
        (string= (symbol-name tag) (downcase (symbol-name tag)))))
 
-(cl-deftype org-glance-tag ()
-  "Type representing a downcased, non-nil symbol."
-  '(satisfies org-glance--valid-tag?))
+(cl-deftype org-glance-tag () '(satisfies org-glance-tag?))
 
 (cl-defstruct (org-glance-tag-info (:type vector))
   (tag nil :read-only t :type org-glance-tag)
@@ -70,9 +72,8 @@ NAMESPACE should be a string representing an existing readable and writable dire
 
   tag)
 
-(cl-defun org-glance-tag:id* (tag)
+(cl-defun org-glance-tag:generate-id (tag)
   (cl-check-type tag org-glance-tag)
-
   (format "%s-%s" tag (md5 (s-concat (prin1-to-string (current-time)) (buffer-string)))))
 
 (provide 'org-glance-tag)

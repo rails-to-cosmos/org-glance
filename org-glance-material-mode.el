@@ -6,28 +6,25 @@
 (require 'org-glance-headline)
 (require 'org-glance-overview)
 
-(declare-function s-split-up-to "s.el" (separator s n &optional omit-nulls))
-
-(declare-function org-glance-headline:contents "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:decrypt "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:encrypt "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:plain-title "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:promote-to-the-first-level "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
-(declare-function org-glance-headline:replace-headline-at-point "org-glance-headline.el" (contents))
-(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
-(declare-function org-glance-headline:demote "org-glance-headline.el" (level))
-(declare-function org-glance-headline:add-log-note "org-glance-headline.el" (string &rest objects))
-(declare-function org-glance-headline:search-parents "org-glance-headline.el" ())
-(declare-function org-glance-headline:at-point "org-glance-headline.el" ())
-(declare-function org-glance-headline:hash "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
-
-(declare-function org-glance-metadata:get-headline "org-glance-metadata.el" (id))
+(declare-function org-glance--now "org-glance-utils.el")
 (declare-function org-glance-headline-reference "org-glance-metadata.el" (&optional (type 'org-glance-visit)))
 (declare-function org-glance-headline-relations "org-glance-metadata.el" ())
-
-(declare-function org-glance--now "org-glance-utils.el")
+(declare-function org-glance-headline:add-log-note "org-glance-headline.el" (string &rest objects))
+(declare-function org-glance-headline:at-point "org-glance-headline.el" ())
+(declare-function org-glance-headline:contents "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:decrypt "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:demote "org-glance-headline.el" (level))
+(declare-function org-glance-headline:encrypt "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:hash "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:plain-title "org-glance-headline.el" (headline))
+(declare-function org-glance-headline:promote-to-the-first-level "org-glance-headline.el" (&optional password))
+(declare-function org-glance-headline:replace-headline-at-point "org-glance-headline.el" (contents))
+(declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
+(declare-function org-glance-headline:search-parents "org-glance-headline.el" ())
+(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
+(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
+(declare-function org-glance-metadata:headline-metadata "org-glance-metadata.el" (id))
+(declare-function s-split-up-to "s.el" (separator s n &optional omit-nulls))
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -132,7 +129,7 @@
          for headline-ref = (org-glance-headline-reference)
          for state = (intern (or (org-get-todo-state) ""))
          for done-kws = (mapcar #'intern org-done-keywords)
-         for relation-headline = (org-glance-metadata:get-headline relation-id)
+         for relation-headline = (org-glance-metadata:headline-metadata relation-id)
          do (save-window-excursion
               (save-excursion
                 (progress-reporter-update progress-reporter progress)
@@ -143,7 +140,7 @@
                                if (eq (org-element-property :id rr) (intern id))
                                return t)
                         (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
-                  (org-glance-exception:org-glance-exception:headline-not-found (message "Relation not found: %s" relation-id)))
+                  (org-glance-exception:org-glance-headline-!-not-found (message "Relation not found: %s" relation-id)))
                 (redisplay)))
          finally (progress-reporter-done progress-reporter)))
 
@@ -192,7 +189,7 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (-> (org-glance-metadata:get-headline --org-glance-materialized-headline:id)
+  (-> (org-glance-metadata:headline-metadata --org-glance-materialized-headline:id)
       (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
@@ -200,13 +197,11 @@
   (org-display-inline-images)
   (org-cycle-hide-drawers 'all))
 
-(cl-defun org-glance-headline:generate-materialized-buffer (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:generate-materialized-buffer (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
-  "Materialize HEADLINE and return materialized buffer.
-
-Synchronize links with metadata if UPDATE-RELATIONS is t."
   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
     (let ((id (org-glance-headline:id headline))
           (file (org-glance-headline:file-name headline))
@@ -229,28 +224,28 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
 
       (goto-char (point-min))
 
-      (when update-relations
-        (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-                 collect (let* ((standard-output 'ignore)
-                                (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-                                (type (intern (car link)))
-                                (id (cadr link)))
+      ;; (when update-relations
+      ;;   (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
+      ;;            collect (let* ((standard-output 'ignore)
+      ;;                           (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+      ;;                           (type (intern (car link)))
+      ;;                           (id (cadr link)))
 
-                           (when (memq type '(org-glance-visit
-                                              org-glance-open
-                                              org-glance-overview
-                                              org-glance-state))
-                             (delete-region (match-beginning 0) (match-end 0)))
+      ;;                      (when (memq type '(org-glance-visit
+      ;;                                         org-glance-open
+      ;;                                         org-glance-overview
+      ;;                                         org-glance-state))
+      ;;                        (delete-region (match-beginning 0) (match-end 0)))
 
-                           (when (memq type '(org-glance-visit org-glance-open))
-                             (when-let (headline (org-glance-metadata:get-headline id))
-                               (goto-char (match-beginning 0))
-                               (insert
-                                (if (or (bolp) (looking-back "[[:blank:]]" 1))
-                                    ""
-                                  " ")
-                                (org-glance-headline:with-narrowed-headline headline
-                                  (org-glance-headline-reference type))))))))
+      ;;                      (when (memq type '(org-glance-visit org-glance-open))
+      ;;                        (when-let (headline (org-glance-metadata:headline-metadata id))
+      ;;                          (goto-char (match-beginning 0))
+      ;;                          (insert
+      ;;                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
+      ;;                               ""
+      ;;                             " ")
+      ;;                           (org-glance-headline:with-narrowed-headline headline
+      ;;                             (org-glance-headline-reference type))))))))
 
       (org-glance:material-buffer-default-view)
 
@@ -287,7 +282,7 @@ Synchronize links with metadata if UPDATE-RELATIONS is t."
 
 (cl-defun org-glance-materialize-headline:refresh ()
   (interactive)
-  (when-let (headline (org-glance-metadata:get-headline --org-glance-materialized-headline:id))
+  (when-let (headline (org-glance-metadata:headline-metadata --org-glance-materialized-headline:id))
     (let ((buffer (buffer-name)))
       (kill-buffer buffer)
       (org-glance-headline:materialize headline)

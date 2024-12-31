@@ -19,4 +19,4 @@ test:
 	eask recompile
 	eask package ./dist
 	eask reinstall
-	eask test --verbose 5 ert org-glance-test.el
+	eask test ert org-glance-test.el
