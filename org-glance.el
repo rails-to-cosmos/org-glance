@@ -167,7 +167,7 @@
        (org-element-property :raw-value (org-element-at-point))))))
 
 (cl-defun org-glance:create-tag (tag)
-  (unless (and (symbolp tag) (symbol-downcased-p tag))
+  (unless (and (symbolp tag) (org-glance--symbol-downcased? tag))
     (error "Expected downcased symbol for tag, bug got \"%s\" of type \"%s\"." tag (type-of tag)))
 
   (when (org-glance-tag:register tag org-glance-tags :namespace org-glance-directory)

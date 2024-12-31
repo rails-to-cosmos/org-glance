@@ -29,7 +29,7 @@
 (cl-defun org-glance--now ()
   (format-time-string (org-time-stamp-format 'long 'inactive) (current-time)))
 
-(defun symbol-downcased-p (sym)
+(defun org-glance--symbol-downcased? (sym)
   "Return t if SYM is downcased (i.e., all lowercase), nil otherwise."
   (let ((name (symbol-name sym)))
     (string= name (downcase name))))
