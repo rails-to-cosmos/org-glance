@@ -151,26 +151,32 @@
       ""))
 
 (cl-defun org-glance-headline:begin (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (org-element-property :begin headline))
 
 (cl-defun org-glance-headline:end (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (org-element-property :contents-end headline))
 
 (cl-defun org-glance-headline:tags (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (mapcar #'org-glance-tag:from-string (org-element-property :tags headline)))
 
 (cl-defun org-glance-headline:encrypted? (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (not (null (org-element-property :encrypted headline))))
 
 (cl-defun org-glance-headline:linked? (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (not (null (org-element-property :linked headline))))
 
 (cl-defun org-glance-headline:propertized? (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (not (null (org-element-property :propertized headline))))
 
 (cl-defun org-glance-headline:active? (headline)
-  (and (org-glance-headline? headline)
-       (not (org-glance-headline:done? headline))
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
+  (and (not (org-glance-headline:done? headline))
        (not (org-glance-headline:commented? headline))
        (not (org-glance-headline:archived? headline))
        (not (org-glance-headline:closed? headline))))
