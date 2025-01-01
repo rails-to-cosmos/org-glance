@@ -16,6 +16,7 @@ build:
 	eask reinstall
 
 test:
+	make clean
 	eask recompile
 	eask package ./dist
 	eask reinstall

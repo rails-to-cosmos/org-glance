@@ -4,7 +4,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-tag)
 
-(org-glance-exception:define org-glance-metadata-!-outdated
+(org-glance-exception:define org-glance-metadata:outdated!
   "Headline metadata is outdated")
 
 (cl-defun org-glance-metadata:read-tag-metadata (tag)

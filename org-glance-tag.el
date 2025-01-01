@@ -8,7 +8,7 @@
 (require 'org-glance-exception)
 (require 'org-glance-namespace)
 
-(org-glance-exception:define org-glance-tag-!-not-found
+(org-glance-exception:define org-glance-tag:not-found!
   "Tag not found")
 
 (cl-defun org-glance-tag? (tag)

@@ -12,7 +12,7 @@
 (org-glance-exception:define org-glance-headline:not-found!
   "Headline not found")
 
-(org-glance-exception:define org-glance-headline-!-metadata-corrupted
+(org-glance-exception:define org-glance-headline:metadata-corrupted!
   "Headline metadata corrupted, please reread")
 
 (cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
@@ -71,19 +71,13 @@
 (cl-defmacro org-glance-headline:with-narrowed-headline (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup))
-         (id (org-glance-headline:id ,headline))
-         (file (org-glance-headline:file-name ,headline))
-         (buffer (org-glance-headline:buffer ,headline)))
-     (cond (file (org-glance--with-file-visited file
-                   (org-glance-headline:search-buffer-by-id id)
-                   (org-glance-headline:with-headline-at-point ,@forms)))
-           ((and buffer (buffer-live-p buffer))
-            (with-current-buffer buffer
-              (org-glance-headline:search-buffer-by-id id)
-              (org-glance-headline:with-headline-at-point
-               ,@forms)))
-           (t (org-glance-headline:not-found! (prin1-to-string ,headline))))))
+  `(progn
+     (cl-check-type ,headline org-glance-headline)
+     (with-temp-buffer
+       (org-mode)
+       (insert (org-glance-headline:contents ,headline))
+       (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+         ,@forms))))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline

@@ -301,31 +301,25 @@ after capture process has been finished."
   (switch-to-buffer (org-glance-headline:materialize headline))
   headline)
 
-(cl-defun org-glance:open (&optional headline)
-  "Run `org-open-at-point' on any `org-link' inside HEADLINE.
+(cl-defun org-glance:open (headline)
+  "Run `org-open-at-point' on any `org-link' inside HEADLINE's contents.
 If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
 If headline doesn't contain links, role `can-be-opened' should be revoked."
-  (interactive)
-  (let ((action (lambda (headline)
-                  (org-glance:with-headline-materialized headline
-                    (cl-loop for (link title pos) in (org-glance--parse-links)
-                             unless (s-starts-with-p "[[org-glance-" link)
-                             collect (list title pos)
-                             into links
-                             finally
-                             do (goto-char (cond ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
-                                                 ((= (length links) 1) (cadar links))
-                                                 (t (user-error "Unable to find links in headline"))))
-                             (org-open-at-point))))))
-    (if headline
-        (funcall action headline)
-      (org-glance-choose-and-apply
-       :filter (lambda (headline)
-                 (and
-                  (org-glance-headline:active? headline)
-                  (org-glance-headline:linked? headline)))
-       :action action))))
+  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline)
+                                                                    (and
+                                                                     (org-glance-headline:active? headline)
+                                                                     (org-glance-headline:linked? headline))))))
+  (org-glance-headline:with-narrowed-headline headline
+    (cl-loop for (link title pos) in (org-glance--parse-links)
+             unless (s-starts-with-p "[[org-glance-" link)
+             collect (list title pos)
+             into links
+             finally
+             do (goto-char (cond ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
+                                 ((= (length links) 1) (cadar links))
+                                 (t (user-error "Unable to find links in headline"))))
+             (org-open-at-point))))
 
 (cl-defun org-glance:extract (&optional headline)
   "Materialize HEADLINE and retrieve key-value pairs from its contents."
@@ -394,20 +388,21 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     (org-glance--substitute-links)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
-(cl-defun org-glance-headline:visit (&optional (headline (org-glance-headline:at-point)))
+(cl-defun org-glance-headline:visit (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
+
   (let* ((id (org-glance-headline:id headline))
          (file (org-glance-headline:file-name headline))
          (buffer (org-glance-headline:buffer headline))
          (revert-without-query (list file)))
 
-    (cond ((and file (file-exists-p file)) (find-file file))
-          ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
-          (t (message "File and buffer not found for visiting. Using current buffer...")))
+    (cond ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
+          ((and file (file-exists-p file)) (find-file file))
+          (t (error "Unable to visit headline: location not found.")))
 
     (widen)
 
-    (cond (id (org-glance-headline:search-buffer-by-id id))
-          (t (goto-char (org-glance-headline:begin headline))))))
+    (org-glance-headline:search-buffer-by-id id)))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."

@@ -1,6 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'ert)
+(require 's)
 (require 'org-glance)
 
 (cl-defmacro with-temp-directory (dir &rest body)
@@ -44,10 +45,14 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (should (= 0 (length (org-glance:tag-headlines tag))))
   tag)
 
-(cl-defun org-glance-test:add-headline (tag title)
+(cl-defun org-glance-test:add-headline (tag title &optional contents)
   (cl-check-type tag org-glance-tag)
   (cl-check-type title string)
-  (org-glance-capture tag :title title :finalize t))
+  (org-glance-capture tag
+    :title (if contents
+               (s-concat title "\n" contents)
+             title)
+    :finalize t))
 
 (cl-defun org-glance-test:headline-overview (tag id)
   (cl-check-type tag org-glance-tag)
@@ -71,20 +76,33 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:consistency ()
   (org-glance-test:session
-   (let (;; TODO generate such entities
-         (tag (org-glance-test:create-tag 'foo))
-         (title "Hello, world!"))
+    (let* (;; TODO generate such entities
+           (tag (org-glance-test:create-tag 'foo))
+           (title "Hello, world!")
+           (id (org-glance-test:add-headline tag title))
+           (metadata (org-glance-metadata:headline-metadata id))
+           (overview (org-glance-test:headline-overview tag id))
+           (material (org-glance-test:materialize id))
+           (material-overview (org-glance-test:materialize-overview tag id)))
+      (should (= 1 (length (org-glance:tag-headlines tag))))
+      (should (string= (org-glance-headline:title overview) title))
+      (should (org-glance-headline:equal? material overview))
+      (should (org-glance-headline:equal? overview material-overview))
+      (should (org-glance-headline:equal? material material-overview)))))
 
-     (let* ((id (org-glance-test:add-headline tag title))
-            (metadata (org-glance-metadata:headline-metadata id))
-            (overview (org-glance-test:headline-overview tag id))
-            (material (org-glance-test:materialize id))
-            (material-overview (org-glance-test:materialize-overview tag id)))
-       (should (= 1 (length (org-glance:tag-headlines tag))))
-       (should (string= (org-glance-headline:title overview) title))
-       (should (org-glance-headline:equal? material overview))
-       (should (org-glance-headline:equal? overview material-overview))
-       (should (org-glance-headline:equal? material material-overview))))))
+(ert-deftest org-glance-test:interaction ()
+  (org-glance-test:session
+    (let* (;; TODO generate such entities
+           (tag (org-glance-test:create-tag 'foo))
+           (title "foo")
+           (temp-file-name (f-join org-glance-directory "tmp.txt"))
+           (contents (format "[[file:%s][tmp.txt]]" temp-file-name))
+           (id (org-glance-test:add-headline tag title contents))
+           (headline (org-glance-test:materialize id)))
+      (org-glance:open headline)
+      ;; Seems org-mode opens file: links asynchronously, so it is enough to see that user-error has not been raised.
+      ;; (should (f-equal? (buffer-file-name) temp-file-name))
+      )))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
