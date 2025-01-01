@@ -90,7 +90,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (org-glance-headline:equal? overview material-overview))
       (should (org-glance-headline:equal? material material-overview)))))
 
-(ert-deftest org-glance-test:interaction ()
+(ert-deftest org-glance-test:links ()
   (org-glance-test:session
     (let* (;; TODO generate such entities
            (tag (org-glance-test:create-tag 'foo))
@@ -100,7 +100,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
            (id (org-glance-test:add-headline tag title contents))
            (headline (org-glance-test:materialize id)))
       (org-glance:open headline)
-      ;; Seems org-mode opens file: links asynchronously, so it is enough to see that user-error has not been raised.
+      ;; Seems org-mode opens file-links asynchronously, so it should be enough to see that user-error has not been raised.
       ;; (should (f-equal? (buffer-file-name) temp-file-name))
       )))
 
