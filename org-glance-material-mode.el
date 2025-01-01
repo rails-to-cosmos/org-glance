@@ -253,13 +253,9 @@
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level headline)))
       (org-glance-headline:promote-to-the-first-level)
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
-      (current-buffer))))
 
-(cl-defun org-glance-enable-encrypted-headlines (fn headline &rest args)
-  (let ((result (apply fn headline args)))
-    (with-current-buffer result
       (when (org-glance-headline:encrypted? headline)
-        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))
+        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))  ;; TODO don't store it unencrypted
         (org-glance-headline:decrypt --org-glance-materialized-headline:password)
 
         (add-hook 'org-glance-before-materialize-sync-hook
@@ -274,8 +270,7 @@
                     (org-glance-headline:demote --org-glance-materialized-headline:indent)
                     (org-glance-headline:decrypt --org-glance-materialized-headline:password)
                     (org-glance-headline:promote-to-the-first-level))
-                  0 'local)))
-    result))
+                  0 'local)))))
 
 (cl-defun org-glance-materialized-headline-buffer (headline)
   (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))

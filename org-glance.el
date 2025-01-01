@@ -250,7 +250,6 @@ after capture process has been finished."
   (add-hook 'org-glance-material-mode-hook #'org-glance-datetime-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:preserve-history-before-auto-repeat (list :depth -90))
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
-  (advice-add 'org-glance-headline:materialize :around #'org-glance-enable-encrypted-headlines)
 
   (cl-loop for dir in (org-glance--list-directories directory)
            for tag = (org-glance-tag:read dir)

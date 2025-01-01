@@ -749,11 +749,9 @@ ${todo-order}
         (org-toggle-tag (symbol-name new-tag) 'on)))))
 
 (cl-defun org-glance-overview:original-headline ()
-  (org-glance-headline:with-narrowed-headline
-      (->> (org-glance-headline:at-point)
-           org-glance-headline:id
-           org-glance-metadata:headline-metadata)
-    (org-glance-headline:at-point)))
+  (->> (org-glance-headline:at-point)
+       org-glance-headline:id
+       org-glance-metadata:headline))
 
 (cl-defun org-glance-overview:beginning-of-headlines ()
   (save-excursion
