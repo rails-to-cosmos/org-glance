@@ -79,7 +79,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (let* (;; TODO generate such entities
            (tag (org-glance-test:create-tag 'foo))
            (title "Hello, world!")
-           (id (org-glance-test:add-headline tag title))
+           (contents "Some contents")
+           (id (org-glance-test:add-headline tag title contents))
            (metadata (org-glance-metadata:headline-metadata id))
            (overview (org-glance-test:headline-overview tag id))
            (material (org-glance-test:materialize id))
@@ -102,6 +103,16 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (org-glance:open headline)
       ;; Seems org-mode opens file-links asynchronously, so it should be enough to see that user-error has not been raised.
       ;; (should (f-equal? (buffer-file-name) temp-file-name))
+      )))
+
+(ert-deftest org-glance-test:properties ()
+  (org-glance-test:session
+    (let* (;; TODO generate such entities
+           (tag (org-glance-test:create-tag 'foo))
+           (title "Hello, world!")
+           (contents "- foo: bar")
+           (id (org-glance-test:add-headline tag title contents))
+           (headline (org-glance-test:materialize id)))
       )))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine

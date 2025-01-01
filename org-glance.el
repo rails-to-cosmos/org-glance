@@ -337,7 +337,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
         (funcall action headline)
       (org-glance-choose-and-apply
        :filter (lambda (headline)
-                 (pp headline)
                  (and
                   (org-glance-headline:active? headline)
                   (or (org-glance-headline:propertized? headline)
