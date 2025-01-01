@@ -9,7 +9,7 @@
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
-(org-glance-exception:define org-glance-headline-!-not-found
+(org-glance-exception:define org-glance-headline:not-found!
   "Headline not found")
 
 (org-glance-exception:define org-glance-headline-!-metadata-corrupted
@@ -28,7 +28,7 @@
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
-(declare-function org-glance-headline-!-not-found "org-glance-exceptions.el")
+(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
@@ -83,7 +83,7 @@
               (org-glance-headline:search-buffer-by-id id)
               (org-glance-headline:with-headline-at-point
                ,@forms)))
-           (t (org-glance-headline-!-not-found (prin1-to-string ,headline))))))
+           (t (org-glance-headline:not-found! (prin1-to-string ,headline))))))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -93,7 +93,7 @@
 (cl-defun org-glance-headline:search-buffer-by-id (id)
   (let ((positions (org-glance-headline:buffer-positions id)))
     (unless positions
-      (org-glance-headline-!-not-found "Headline %s not found in file %s" id (buffer-file-name)))
+      (org-glance-headline:not-found! "Headline %s not found in file %s" id (buffer-file-name)))
 
     (when (> (length positions) 1)
       (error "Headline %s is not unique in file %s" id (buffer-file-name)))
@@ -409,5 +409,17 @@
               (org-update-checkbox-count-maybe 'all)
             (error nil)))))
     (s-trim (buffer-string))))
+
+(cl-defun org-glance-headline:buffer-headlines (buffer)
+  "Extract headlines from BUFFER."
+  (with-current-buffer buffer
+    (org-element-map (org-element-parse-buffer 'headline) 'headline
+      (lambda (headline)
+        (when (org-glance-headline? headline)
+          (save-excursion
+            (goto-char (org-glance-headline:begin headline))
+            (org-glance-headline:update (org-glance-headline:from-element (org-element-at-point))
+              :buffer buffer
+              :file (buffer-file-name buffer))))))))
 
 (provide 'org-glance-headline)

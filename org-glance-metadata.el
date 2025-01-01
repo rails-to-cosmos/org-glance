@@ -137,7 +137,7 @@
                                                  (t (cond ((memq link-type '(subtask subtask-done)) 'subtask)
                                                           ((memq link-type '(project project-done)) 'project)
                                                           (t 'subtask))))))
-                                     (org-glance-headline-!-not-found link-type))
+                                     (org-glance-headline:not-found! link-type))
                                  link-type)
                              link-type)))
                         (t nil))

@@ -52,15 +52,13 @@ ${todo-order}
 
 (cl-defun org-glance-overview:choose-headline ()
   "Choose `org-glance-headline' from current overview buffer and move cursor to it."
-  (let ((headlines (org-glance-headline:extract-from (current-buffer))))
-    (org-glance-headline:search-buffer-by-id
-     (org-glance-headline:id
-      (org-glance-scope--choose-headline
-       (completing-read "Specify headline: "
-                        (mapcar #'org-glance-headline:plain-title (--filter (org-glance-headline:active? it) headlines))
-                        nil
-                        t)
-       headlines)))))
+  (let* ((headlines (org-glance-headline:buffer-headlines (current-buffer)))
+         (headlines-active (--filter (org-glance-headline:active? it) headlines))
+         (titles (mapcar #'org-glance-headline:plain-title headlines-active))
+         (title (completing-read "Specify headline: " titles nil t))
+         (headline (org-glance-scope--choose-headline title headlines))
+         (id (org-glance-headline:id headline)))
+    (org-glance-headline:search-buffer-by-id id)))
 
 (cl-defmacro org-glance-overview:apply-on-headline (&rest forms)
   "Eval FORMS on headline at point. If point is not at the headline, prompt user to choose headline and eval forms on it."
@@ -241,7 +239,7 @@ ${todo-order}
 
       (condition-case nil
           (org-glance-overview:remove-headline-from-overview headline tag)
-        (org-glance-headline-!-not-found nil))
+        (org-glance-headline:not-found! nil))
 
       (let ((inhibit-read-only t))
         (goto-char (point-max))
@@ -261,7 +259,7 @@ ${todo-order}
       (save-excursion
         (when (condition-case nil
                   (org-glance-headline:search-buffer-by-id (org-glance-headline:id headline))
-                (org-glance-exception:org-glance-headline-!-not-found nil))
+                (org-glance-headline:not-found! nil))
           (let ((inhibit-read-only t))
             (delete-region (org-entry-beginning-position) (save-excursion (org-end-of-subtree t t)))
             (save-buffer)))))))
@@ -698,7 +696,7 @@ ${todo-order}
     (cond ((null overview-contents)
            (if (y-or-n-p (format "Original headline for \"%s\" not found. Remove it from overview?" current-headline-title))
                (org-glance-overview:kill-headline :force t)
-             (org-glance-exception:org-glance-headline-!-not-found "Original headline not found"))
+             (org-glance-headline:not-found! "Original headline not found"))
            nil)
           ((string= current-headline-contents overview-contents)
            (message (format "Headline \"%s\" is up to date" current-headline-title))

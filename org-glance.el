@@ -75,7 +75,7 @@
 (declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
 (declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
 (declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
-(declare-function org-glance-headline-!-not-found "org-glance-exceptions.el")
+(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
 
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."
@@ -227,7 +227,7 @@ after capture process has been finished."
   `(condition-case default
        (cond (,filter (funcall ,action (org-glance-metadata:completing-read :filter ,filter)))
              (t (funcall ,action (org-glance-metadata:completing-read))))
-     (org-glance-headline-!-not-found
+     (org-glance-headline:not-found!
       (let ((<buffer> (current-buffer))
             (<point> (point))
             (tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")))
@@ -267,19 +267,22 @@ after capture process has been finished."
   (let ((active-region? (and (not (org-in-src-block-p)) (region-active-p)))
         (mention? (and (not (org-in-src-block-p)) (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))))
     (condition-case nil
-        (cond (active-region? (let ((<buffer> (current-buffer))
-                                    (<region-beginning> (region-beginning))
-                                    (<region-end> (region-end))
-                                    (tag (org-glance-tags:completing-read (format "Specify class for \"%s\": " (buffer-substring-no-properties <region-beginning> <region-end>)))))
-                                (org-glance-capture tag
-                                                    :default (buffer-substring-no-properties <region-beginning> <region-end>)
-                                                    :finalize t
-                                                    :callback (lambda () (let ((headline (org-glance-overview:original-headline)))
-                                                                      (switch-to-buffer <buffer>)
-                                                                      (goto-char <region-beginning>)
-                                                                      (delete-region <region-beginning> <region-end>)
-                                                                      (insert (org-glance-headline:with-narrowed-headline headline
-                                                                                (org-glance-headline-reference))))))))
+        (cond (active-region? (error "Not implemented")
+                              ;; (let* ((buffer (current-buffer))
+                              ;;        (region-beginning (region-beginning))
+                              ;;        (region-end (region-end))
+                              ;;        (tag (org-glance-tags:completing-read (format "Specify tag for \"%s\": " (buffer-substring-no-properties region-beginning region-end))))
+                              ;;        (callback (lambda () (let ((headline (org-glance-overview:original-headline)))
+                              ;;                          (switch-to-buffer buffer)
+                              ;;                          (goto-char region-beginning)
+                              ;;                          (delete-region region-beginning region-end)
+                              ;;                          (insert (org-glance-headline:with-narrowed-headline headline
+                              ;;                                    (org-glance-headline-reference)))))))
+                              ;;   (org-glance-capture tag
+                              ;;     :default (buffer-substring-no-properties <region-beginning> <region-end>)
+                              ;;     :finalize t
+                              ;;     :callback callback))
+                              )
 
               (mention? (org-glance-choose-and-apply
                          :action (lambda (headline)
@@ -382,19 +385,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (insert "#+begin_pin" "\n\n" "#+end_pin")
   (forward-line -1))
 
-(cl-defun org-glance-headline:list ()
-  (save-excursion
-    (goto-char (point-min))
-
-    (let (result)
-      (when-let (headline (org-glance-headline:at-point))
-        (push headline result))
-
-      (while-let ((headline (org-glance-headline:search-forward)))
-        (push headline result))
-
-      result)))
-
 (cl-defun org-glance:headline-alias (&optional (headline (org-glance-headline:at-point)))
   "Get title of HEADLINE considering alias property."
   (with-temp-buffer
@@ -418,32 +408,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
     (cond (id (org-glance-headline:search-buffer-by-id id))
           (t (goto-char (org-glance-headline:begin headline))))))
-
-(cl-defgeneric org-glance-headline:extract-from (scope)
-  "Extract `org-glance-headlines' from scope.")
-
-(cl-defmethod org-glance-headline:extract-from ((f string))
-  "Extract headlines from file F."
-  (if-let (b (get-buffer f)) ;; buffer name
-      (org-glance-headline:extract-from b)
-    (with-temp-buffer
-      (message "Scan file %s" f)
-      (insert-file-contents f)
-      (org-mode)
-      (cl-loop
-       for headline in (org-glance-headline:extract-from (current-buffer))
-       collect (org-glance-headline:update headline :file (abbreviate-file-name f))))))
-
-(cl-defmethod org-glance-headline:extract-from ((b buffer))
-  "Extract headlines from buffer B."
-  (with-current-buffer b
-    (org-element-map (org-element-parse-buffer 'headline) 'headline
-      (lambda (headline)
-        (when (org-glance-headline? headline)
-          (save-excursion
-            (goto-char (org-glance-headline:begin headline))
-            (org-glance-headline:update (org-glance-headline:from-element (org-element-at-point))
-              :buffer b)))))))
 
 (cl-defun org-glance-headline:encrypt (&optional password)
   "Encrypt subtree at point with PASSWORD."
@@ -557,9 +521,11 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
   (--first (string= (org-glance-headline:plain-title it) choice) headlines))
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
-  (cl-loop
-   for file in (org-glance-scope scope)
-   append (-non-nil (mapcar filter (org-glance-headline:extract-from file)))))
+  (cl-loop for file in (org-glance-scope scope)
+           append (with-temp-buffer
+                    (org-mode)
+                    (insert-file-contents file)
+                    (-non-nil (mapcar filter (org-glance-headline:buffer-headlines (current-buffer)))))))
 
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))

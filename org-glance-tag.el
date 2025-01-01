@@ -23,9 +23,7 @@
   (tag nil :read-only t :type org-glance-tag)
   (namespace nil :read-only t :type org-glance-namespace))
 
-(cl-defun org-glance-tag-info (&key tag namespace)
-  "Create an `org-glance-tag-info` struct with validated NAMESPACE.
-NAMESPACE should be a string representing an existing readable and writable directory."
+(cl-defun org-glance-tag-info (tag &key namespace)
   (cl-check-type tag org-glance-tag)
   (cl-check-type namespace org-glance-namespace)
 
@@ -57,7 +55,7 @@ NAMESPACE should be a string representing an existing readable and writable dire
   (cl-typecase value
     (symbol (intern (downcase (symbol-name value))))
     (string (org-glance-tag:from-string value))
-    (t (error "Unable to convert value \"%v\" to `org-glance-tag'"))))
+    (t (error "Unable to convert value \"%v\" to `org-glance-tag'" value))))
 
 (cl-defun org-glance-tag:from-headline-at-point ()
   (mapcar #'org-glance-tag:from-string (org-get-tags)))
@@ -67,7 +65,7 @@ NAMESPACE should be a string representing an existing readable and writable dire
   (cl-check-type namespace org-glance-namespace)
   (cl-check-type tags hash-table)
 
-  (let ((tag-info (org-glance-tag-info :tag tag :namespace namespace)))
+  (let ((tag-info (org-glance-tag-info tag :namespace namespace)))
     (puthash tag tag-info tags))
 
   tag)

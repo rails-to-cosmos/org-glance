@@ -140,7 +140,7 @@
                                if (eq (org-element-property :id rr) (intern id))
                                return t)
                         (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
-                  (org-glance-exception:org-glance-headline-!-not-found (message "Relation not found: %s" relation-id)))
+                  (org-glance-headline:not-found! (message "Relation not found: %s" relation-id)))
                 (redisplay)))
          finally (progress-reporter-done progress-reporter)))
 
@@ -202,6 +202,7 @@
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
 
 (cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
+  (cl-check-type headline org-glance-headline)
   (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
     (let ((id (org-glance-headline:id headline))
           (file (org-glance-headline:file-name headline))
@@ -249,13 +250,12 @@
 
       (org-glance:material-buffer-default-view)
 
-      (message "Promote subtree to the first level")
       (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level headline)))
       (org-glance-headline:promote-to-the-first-level)
       (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
 
       (when (org-glance-headline:encrypted? headline)
-        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: "))  ;; TODO don't store it unencrypted
+        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: ")) ;; TODO don't store it unencrypted
         (org-glance-headline:decrypt --org-glance-materialized-headline:password)
 
         (add-hook 'org-glance-before-materialize-sync-hook

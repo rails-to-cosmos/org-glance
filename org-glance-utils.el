@@ -1,5 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
+(require 'f)
 (require 'dash)
 (require 'org-element)
 
@@ -43,14 +44,14 @@
              do (delete-region (match-beginning 0) (match-end 0)))))
 
 (cl-defun org-glance--buffer-links ()
-  (cl-loop for link in (org-element-map (org-element-parse-buffer) 'link #'identity)
-           for beg = (org-element-property :begin link)
-           for end = (org-element-property :end link)
+  (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
+           for beg = (org-element-property :begin link-element)
+           for end = (org-element-property :end link-element)
            for title = (substring-no-properties
-                        (or (-some->> link
+                        (or (-some->> link-element
                               (org-element-contents)
                               (org-element-interpret-data))
-                            (org-element-property :raw-link link)))
+                            (org-element-property :raw-link link-element)))
            for link = (s-trim (buffer-substring-no-properties beg end))
            collect title into titles
            collect link into links
