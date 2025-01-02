@@ -284,7 +284,4 @@
 
     ))
 
-(cl-defun org-glance-materialized-headline-buffer (headline)
-  (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
-
 (provide 'org-glance-material-mode)
