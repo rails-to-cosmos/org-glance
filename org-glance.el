@@ -321,27 +321,27 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                  (t (user-error "Unable to find links in headline"))))
              (org-open-at-point))))
 
-(cl-defun org-glance:extract (&optional headline)
+(cl-defun org-glance:extract (headline &optional choice)
   "Materialize HEADLINE and retrieve key-value pairs from its contents."
-  (interactive)
-  (let ((action (lambda (headline)
-                  (let ((pairs (org-glance:with-headline-materialized headline
-                                 (org-glance--buffer-key-value-pairs))))
-                    (condition-case nil
-                        (while t
-                          (kill-new (alist-get (completing-read "Extract property: " pairs nil t) pairs nil nil #'string=)))
-                      (quit
-                       (setq kill-ring nil)
-                       (message "Kill ring has been cleared")))))))
-    (if headline
-        (funcall action headline)
-      (org-glance-choose-and-apply
-       :filter (lambda (headline)
-                 (and
-                  (org-glance-headline:active? headline)
-                  (or (org-glance-headline:propertized? headline)
-                      (org-glance-headline:encrypted? headline))))
-       :action action))))
+  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline) (and (org-glance-headline:active? headline)
+                                                                                     (or (org-glance-headline:propertized? headline)
+                                                                                         (org-glance-headline:encrypted? headline)))))))
+  (cl-check-type headline org-glance-headline)
+  (org-glance-headline:with-narrowed-headline headline
+    (let* ((pairs (org-glance--buffer-key-value-pairs))
+           (interaction (not choice))
+           result)
+      (condition-case nil
+          (if interaction
+              (while t
+                (let ((choice (completing-read "Extract: " pairs nil t)))
+                  (setq result (alist-get choice pairs nil nil #'string=))
+                  (kill-new result)))
+            (setq result (alist-get choice pairs nil nil #'string=))
+            (kill-new result))
+        (quit (setq kill-ring nil)
+              (message "Kill ring has been cleared")))
+      result)))
 
 ;; (cl-defun org-glance:prototype ()
 ;;   (interactive)

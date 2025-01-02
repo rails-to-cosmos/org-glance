@@ -100,6 +100,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
            (contents (format "[[file:%s][tmp.txt]]" temp-file-name))
            (id (org-glance-test:add-headline tag title contents))
            (headline (org-glance-test:materialize id)))
+      (should (org-glance-headline:linked? headline))
       (org-glance:open headline)
       ;; Seems org-mode opens file-links asynchronously, so it should be enough to see that user-error has not been raised.
       ;; (should (f-equal? (buffer-file-name) temp-file-name))
@@ -113,7 +114,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
            (contents "- foo: bar")
            (id (org-glance-test:add-headline tag title contents))
            (headline (org-glance-test:materialize id)))
-      )))
+      (should (org-glance-headline:propertized? headline))
+      (should (string= "bar" (org-glance:extract headline "foo"))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
