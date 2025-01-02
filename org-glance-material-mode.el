@@ -189,7 +189,7 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (-> (org-glance-metadata:headline-metadata --org-glance-materialized-headline:id)
+  (-> (org-glance-metadata:headline --org-glance-materialized-headline:id)
       (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
