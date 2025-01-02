@@ -117,6 +117,20 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (org-glance-headline:propertized? headline))
       (should (string= "bar" (org-glance:extract headline "foo"))))))
 
+(ert-deftest org-glance-test:encryption ()
+  (org-glance-test:session
+    (let* (;; TODO generate such entities
+           (tag (org-glance-test:create-tag 'foo))
+           (title "Hello, world!")
+           (contents "- foo: bar")
+           (id (org-glance-test:add-headline tag title contents))
+           (headline (org-glance-test:materialize id)))
+      (org-glance:with-headline-materialized headline
+        (org-glance-headline:encrypt "123"))
+      ;; (should (org-glance-headline:propertized? headline))
+      ;; (should (string= "bar" (org-glance:extract headline "foo")))
+      )))
+
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 (provide 'org-glance-test)

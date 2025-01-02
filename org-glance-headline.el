@@ -71,13 +71,12 @@
 (cl-defmacro org-glance-headline:with-narrowed-headline (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(progn
+  `(with-temp-buffer
      (cl-check-type ,headline org-glance-headline)
-     (with-temp-buffer
-       (org-mode)
-       (insert (org-glance-headline:contents ,headline))
-       (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-         ,@forms))))
+     (org-mode)
+     (insert (org-glance-headline:contents ,headline))
+     (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+       ,@forms)))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
