@@ -128,31 +128,6 @@
                                                                   (buffer-substring-no-properties (point-min) (point-max))))
                      (t "* %?")))))
 
-(defun org-glance:encrypt-region (beg end &optional password)
-  "Encrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (let* ((original-text (buffer-substring-no-properties beg end))
-         (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
-    (save-excursion
-      (delete-region beg end)
-      (goto-char beg)
-      (insert encrypted-text))))
-
-(defun org-glance:decrypt-region (beg end &optional password)
-  "Decrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (if-let (decrypted-text (let ((encrypted (buffer-substring-no-properties beg end)))
-                            (if (with-temp-buffer
-                                  (insert encrypted)
-                                  (aes-is-encrypted))
-                                (aes-decrypt-buffer-or-string encrypted password)
-                              (user-error "Headline is not encrypted"))))
-      (save-excursion
-        (delete-region beg end)
-        (goto-char beg)
-        (insert decrypted-text))
-    (user-error "Wrong password")))
-
 (cl-defun org-glance:tag-file-name (&optional (tag (org-glance-tags:completing-read)))
   "Path to directory where TAG-ID resources and metadata are stored."
   (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
@@ -387,43 +362,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     (org-glance--substitute-links)
     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
-(cl-defun org-glance-headline:visit (headline)
-  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
-
-  (let* ((id (org-glance-headline:id headline))
-         (file (org-glance-headline:file-name headline))
-         (buffer (org-glance-headline:buffer headline))
-         (revert-without-query (list file)))
-
-    (cond ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
-          ((and file (file-exists-p file)) (find-file file))
-          (t (error "Unable to visit headline: location not found.")))
-
-    (widen)
-
-    (org-glance-headline:search-buffer-by-id id)))
-
-(cl-defun org-glance-headline:encrypt (&optional password)
-  "Encrypt subtree at point with PASSWORD."
-  (interactive)
-  (org-glance-headline:with-headline-at-point
-   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-         (end (save-excursion (org-end-of-subtree t) (point))))
-     (org-glance:encrypt-region beg end password))))
-
-(cl-defun org-glance-headline:decrypt (&optional password)
-  "Decrypt subtree at point with PASSWORD."
-  (interactive)
-  (org-glance-headline:with-headline-at-point
-   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-         (end (save-excursion (org-end-of-subtree t) (point))))
-     (org-glance:decrypt-region beg end password))))
-
-(cl-defun org-glance-headline:demote (level)
-  (cl-loop repeat level
-           do (org-with-limited-levels
-               (org-map-tree 'org-demote))))
-
 ;; Relations
 
 (cl-defun org-glance-headline:repeated-p ()
@@ -509,10 +447,6 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 (cl-defmethod org-glance-scope ((f function))
   "Adapt result of F."
   (-some->> f funcall org-glance-scope))
-
-(defun org-glance-scope--choose-headline (choice headlines)
-  "Deprecated helper."
-  (--first (string= (org-glance-headline:plain-title it) choice) headlines))
 
 (cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
   (cl-loop for file in (org-glance-scope scope)
@@ -646,7 +580,7 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
     (unwind-protect
         (when-let (choice (or default
                               (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
-          (if-let (headline (org-glance-scope--choose-headline choice headlines))
+          (if-let (headline (org-glance-headline:select-by-title choice headlines))
               (condition-case nil
                   (funcall action headline)
                 (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)

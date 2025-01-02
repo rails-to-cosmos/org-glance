@@ -416,4 +416,44 @@
               :buffer buffer
               :file (buffer-file-name buffer))))))))
 
+(cl-defun org-glance-headline:select-by-title (title headlines)
+  (--first (string= (org-glance-headline:plain-title it) title) headlines))
+
+(cl-defun org-glance-headline:encrypt (&optional password)
+  "Encrypt subtree at point with PASSWORD."
+  (interactive)
+  (org-glance-headline:with-headline-at-point
+   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+         (end (save-excursion (org-end-of-subtree t) (point))))
+     (org-glance--encrypt-region beg end password))))
+
+(cl-defun org-glance-headline:decrypt (&optional password)
+  "Decrypt subtree at point with PASSWORD."
+  (interactive)
+  (org-glance-headline:with-headline-at-point
+   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+         (end (save-excursion (org-end-of-subtree t) (point))))
+     (org-glance--decrypt-region beg end password))))
+
+(cl-defun org-glance-headline:demote (level)
+  (cl-loop repeat level
+           do (org-with-limited-levels
+               (org-map-tree 'org-demote))))
+
+(cl-defun org-glance-headline:visit (headline)
+  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
+
+  (let* ((id (org-glance-headline:id headline))
+         (file (org-glance-headline:file-name headline))
+         (buffer (org-glance-headline:buffer headline))
+         (revert-without-query (list file)))
+
+    (cond ((and buffer (buffer-live-p buffer)) (switch-to-buffer buffer))
+          ((and file (file-exists-p file)) (find-file file))
+          (t (error "Unable to visit headline: location not found.")))
+
+    (widen)
+
+    (org-glance-headline:search-buffer-by-id id)))
+
 (provide 'org-glance-headline)

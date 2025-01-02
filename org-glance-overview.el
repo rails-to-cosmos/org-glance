@@ -56,7 +56,7 @@ ${todo-order}
          (headlines-active (--filter (org-glance-headline:active? it) headlines))
          (titles (mapcar #'org-glance-headline:plain-title headlines-active))
          (title (completing-read "Specify headline: " titles nil t))
-         (headline (org-glance-scope--choose-headline title headlines))
+         (headline (org-glance-headline:select-by-title title headlines))
          (id (org-glance-headline:id headline)))
     (org-glance-headline:search-buffer-by-id id)))
 
