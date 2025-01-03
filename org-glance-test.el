@@ -124,12 +124,15 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
            (title "Hello, world!")
            (contents "- foo: bar")
            (id (org-glance-test:add-headline tag title contents))
-           (headline (org-glance-test:materialize id)))
+           (headline (org-glance-test:materialize id))
+           (initial-contents (org-glance-headline:contents headline)))
       (org-glance:with-headline-materialized headline
         (org-glance-headline:encrypt "123"))
-      ;; (should (org-glance-headline:propertized? headline))
-      ;; (should (string= "bar" (org-glance:extract headline "foo")))
-      )))
+      (should (string= initial-contents (org-glance-headline:contents headline))))
+
+    ;; (should (org-glance-headline:propertized? headline))
+    ;; (should (string= "bar" (org-glance:extract headline "foo")))
+    ))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
