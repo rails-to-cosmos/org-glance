@@ -17,10 +17,14 @@
   (title nil :read-only t :type string)
   (contents nil :read-only t :type string)
   (hash nil :read-only t :type string)
+
+  ;; metadata
   (archived? nil :read-only t :type bool)
   (commented? nil :read-only t :type bool)
+  (closed? nil :read-only t :type bool)
   (-links nil :read-only t :type list)
-  (-properties nil :read-only t :type list))
+  (-properties nil :read-only t :type list)
+  (-encrypted? nil :read-only t :type bool))
 
 (cl-defun org-glance-headline1:links (headline)
   (cl-check-type headline org-glance-headline1)
@@ -30,6 +34,10 @@
   (cl-check-type headline org-glance-headline1)
   (thunk-force (org-glance-headline1:-properties headline)))
 
+(cl-defun org-glance-headline1:encrypted? (headline)
+  (cl-check-type headline org-glance-headline1)
+  (thunk-force (org-glance-headline1:-encrypted? headline)))
+
 (cl-defun org-glance-headline1:from-element (element)
   (let ((buffer (org-element-property :buffer element))
         (begin (org-element-property :begin element))
@@ -38,31 +46,38 @@
         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
+        (closed? (not (null (org-element-property :closed element))))
         (title (or (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
                    "")))
-
     (cl-destructuring-bind (contents hash)
         (with-current-buffer buffer
           (save-restriction
             (narrow-to-region begin end)
             (list (buffer-substring-no-properties (point-min) (point-max)) (buffer-hash))))
-
-      (make-org-glance-headline1 :id id
-                                 :title title
-                                 :tags tags
-                                 :hash hash
-                                 :contents (org-glance--encode-string contents)
-                                 :archived? archived?
-                                 :commented? commented?
-                                 :-links (thunk-delay (with-temp-buffer
-                                                        (org-mode)
-                                                        (insert contents)
-                                                        (org-glance--parse-links)))
-                                 :-properties (thunk-delay (with-temp-buffer
-                                                             (org-mode)
-                                                             (insert contents)
-                                                             (org-glance--buffer-key-value-pairs)))))))
+      (make-org-glance-headline1
+       :id id
+       :title title
+       :tags tags
+       :hash hash
+       :contents (org-glance--encode-string contents)
+       :archived? archived?
+       :commented? commented?
+       :closed? closed?
+       :-links (thunk-delay (with-temp-buffer
+                              (org-mode)
+                              (insert contents)
+                              (org-glance--parse-links)))
+       :-properties (thunk-delay (with-temp-buffer
+                                   (org-mode)
+                                   (insert contents)
+                                   (org-glance--buffer-key-value-pairs)))
+       :-encrypted? (thunk-delay (with-temp-buffer
+                                   (org-mode)
+                                   (insert contents)
+                                   (goto-char (point-min))
+                                   (org-end-of-meta-data t)
+                                   (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))))
 
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
