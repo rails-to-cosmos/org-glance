@@ -74,7 +74,7 @@
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
   (declare (indent 1) (debug t))
-  `(let ((materialized-buffer (org-glance-headline:materialize ,headline nil))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
      (unwind-protect
          (with-current-buffer materialized-buffer
