@@ -10,6 +10,14 @@
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
+(defvar org-glance:key-value-pair-re)
+
+(declare-function org-glance--back-to-heading "org-glance-utils.el")
+(declare-function org-glance--parse-links "org-glance-utils.el")
+(declare-function org-glance--with-file-visited "org-glance-utils.el")
+(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
+(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
+
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
   (id nil :read-only t :type string)
@@ -17,6 +25,7 @@
   (title nil :read-only t :type string)
   (contents nil :read-only t :type string)
   (hash nil :read-only t :type string)
+  (state nil :read-only t :type string)
 
   (archived? nil :read-only t :type bool)
   (closed? nil :read-only t :type bool)
@@ -27,9 +36,23 @@
   (-links nil :read-only t :type list)
   (-properties nil :read-only t :type list))
 
-(cl-defun org-glance-headline1:encrypted? (headline) (thunk-force (org-glance-headline1:-encrypted? headline)))
-(cl-defun org-glance-headline1:links (headline) (thunk-force (org-glance-headline1:-links headline)))
-(cl-defun org-glance-headline1:properties (headline) (thunk-force (org-glance-headline1:-properties headline)))
+(cl-defun org-glance-headline1:active? (headline)
+  (and (not (org-glance-headline1:done? headline))
+       (not (org-glance-headline1:commented? headline))
+       (not (org-glance-headline1:archived? headline))
+       (not (org-glance-headline1:closed? headline))))
+
+(cl-defun org-glance-headline1:encrypted? (headline)
+  (thunk-force (org-glance-headline1:-encrypted? headline)))
+
+(cl-defun org-glance-headline1:links (headline)
+  (thunk-force (org-glance-headline1:-links headline)))
+
+(cl-defun org-glance-headline1:properties (headline)
+  (thunk-force (org-glance-headline1:-properties headline)))
+
+(cl-defun org-glance-headline1:done? (headline)
+  (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
 (cl-defun org-glance-headline1:from-element (element)
   (let ((buffer (org-element-property :buffer element))
@@ -40,6 +63,7 @@
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
         (closed? (not (null (org-element-property :closed element))))
+        (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
         (title (or (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
                    "")))
@@ -53,6 +77,7 @@
        :title title
        :tags tags
        :hash hash
+       :state state
        :contents (org-glance--encode-string contents)
        :archived? archived?
        :commented? commented?
@@ -88,19 +113,13 @@
 (org-glance-exception:define org-glance-headline:not-found! "Headline not found")
 (org-glance-exception:define org-glance-headline:metadata-corrupted! "Headline metadata corrupted, please reread")
 
+;; Outdated:
+
 (cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
 (cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
 
 (cl-defun org-glance-headline-metadata? (headline-metadata) (and (listp headline-metadata) (eq (car headline-metadata) 'headline-metadata)))
 (cl-deftype org-glance-headline-metadata () '(satisfies org-glance-headline-metadata?))
-
-(defvar org-glance:key-value-pair-re)
-
-(declare-function org-glance--back-to-heading "org-glance-utils.el")
-(declare-function org-glance--parse-links "org-glance-utils.el")
-(declare-function org-glance--with-file-visited "org-glance-utils.el")
-(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
-(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
@@ -470,9 +489,9 @@
 
                                (when clocks
                                  (concat "*Time spent*" (apply #'org-newline clocks)))))))
-          (condition-case nil
-              (org-update-checkbox-count-maybe 'all)
-            (error nil)))))
+                          (condition-case nil
+                              (org-update-checkbox-count-maybe 'all)
+                            (error nil)))))
     (s-trim (buffer-string))))
 
 (cl-defun org-glance-headline:buffer-headlines (buffer)
