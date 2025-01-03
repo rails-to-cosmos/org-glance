@@ -18,15 +18,14 @@
   (hash nil :read-only t :type string))
 
 (cl-defun org-glance-headline1:from-element (element)
-  (let* ((buffer (org-element-property :buffer element))
-         (begin (org-element-property :begin element))
-         (end (org-element-property :end element))
-         (id (org-element-property :ORG_GLANCE_ID element))
-         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
-         (title (or (org-element-property :TITLE element)
-                    (org-element-property :raw-value element)
-                    "")))
-
+  (let ((buffer (org-element-property :buffer element))
+        (begin (org-element-property :begin element))
+        (end (org-element-property :end element))
+        (id (org-element-property :ORG_GLANCE_ID element))
+        (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
+        (title (or (org-element-property :TITLE element)
+                   (org-element-property :raw-value element)
+                   "")))
     (cl-destructuring-bind (contents hash)
         (with-current-buffer buffer
           (save-restriction
@@ -51,14 +50,8 @@
       ;; do:
       (org-up-heading-or-point-min))))
 
-;; (org-glance-headline1:title (make-org-glance-headline1 :title "Hello" :contents "Hey"))
-;; (org-glance-headline1? (make-org-glance-headline1 :title "Hello" :contents "Hey"))
-
-(org-glance-exception:define org-glance-headline:not-found!
-  "Headline not found")
-
-(org-glance-exception:define org-glance-headline:metadata-corrupted!
-  "Headline metadata corrupted, please reread")
+(org-glance-exception:define org-glance-headline:not-found! "Headline not found")
+(org-glance-exception:define org-glance-headline:metadata-corrupted! "Headline metadata corrupted, please reread")
 
 (cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
 (cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
@@ -71,9 +64,8 @@
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
-
-(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 (declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
+(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
