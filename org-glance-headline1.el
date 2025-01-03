@@ -15,7 +15,6 @@
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
-(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
@@ -23,7 +22,7 @@
   (id nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
-  (contents nil :read-only t :type string)
+  (-contents nil :read-only t :type string)
   (hash nil :read-only t :type string)
   (state nil :read-only t :type string)
   (archived? nil :read-only t :type bool)
@@ -50,6 +49,9 @@
 
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
+
+(cl-defun org-glance-headline1:contents (headline)
+  (org-glance--decode-string (org-glance-headline1:-contents headline)))
 
 (cl-defun org-glance-headline1:from-element (element)
   (let ((id (org-element-property :ORG_GLANCE_ID element))
@@ -78,7 +80,7 @@
        :tags tags
        :hash hash
        :state state
-       :contents (org-glance--encode-string contents)
+       :-contents (org-glance--encode-string contents)
        :archived? archived?
        :commented? commented?
        :closed? closed?
