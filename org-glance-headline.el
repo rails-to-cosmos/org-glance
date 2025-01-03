@@ -9,9 +9,8 @@
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
-(cl-defstruct (org-glance-headline1
-               (:predicate org-glance-headline1?)
-               (:conc-name org-glance-headline1:))
+(cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
+                                    (:conc-name org-glance-headline1:))
   (id nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
@@ -24,8 +23,7 @@
          (end (org-element-property :end element))
          (id (org-element-property :ORG_GLANCE_ID element))
          (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
-         (title (or (org-element-property :ALIAS element)
-                    (org-element-property :TITLE element)
+         (title (or (org-element-property :TITLE element)
                     (org-element-property :raw-value element)
                     "")))
 
