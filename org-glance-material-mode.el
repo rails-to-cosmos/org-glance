@@ -86,7 +86,8 @@
                (org-glance-materialized-headline-apply)
              (error nil)))
          (with-demoted-errors "Unable to kill buffer: %s"
-           (kill-buffer materialized-buffer))))))
+           (kill-buffer materialized-buffer))))
+     ))
 
 (cl-defun org-glance-materialized-headline-apply ()
   "Synchronized material buffer changes across all headline origins and views."
@@ -153,6 +154,7 @@
                                (org-glance-headline:demote indent-level)
                                (buffer-substring-no-properties (point-min) (point-max)))))))
 
+        ;; FIXME: headline mutation!
         (cond (source-file (with-temp-file source-file
                              (org-mode)
                              (insert-file-contents source-file)
