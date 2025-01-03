@@ -36,19 +36,17 @@
                                :contents contents)))
 
 (cl-defun org-glance-headline1:at-point ()
-  (when-let (headline (save-excursion
-                        (org-glance--back-to-heading)
-                        (cl-do ((element (org-element-at-point) (org-element-at-point)))
-                            ;; until:
-                            ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
-                             ;; return:
-                             (if (and (listp element) (eq (car element) 'headline))
-                                 (org-glance-headline1:from-element element)
-                               nil))
-                          ;; body:
-                          (org-up-heading-or-point-min))
-                        ))
-    headline))
+  (save-excursion
+    (org-glance--back-to-heading)
+    (cl-do ((element (org-element-at-point) (org-element-at-point)))
+        ;; until:
+        ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
+         ;; return:
+         (if (and (listp element) (eq (car element) 'headline))
+             (org-glance-headline1:from-element element)
+           nil))
+      ;; do:
+      (org-up-heading-or-point-min))))
 
 ;; (org-glance-headline1:title (make-org-glance-headline1 :title "Hello" :contents "Hey"))
 ;; (org-glance-headline1? (make-org-glance-headline1 :title "Hello" :contents "Hey"))
