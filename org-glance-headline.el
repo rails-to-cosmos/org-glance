@@ -9,6 +9,50 @@
 (require 'org-glance-utils)
 (require 'org-glance-tag)
 
+(cl-defstruct (org-glance-headline1
+               (:predicate org-glance-headline1?)
+               (:conc-name org-glance-headline1:))
+  (id nil :read-only t :type string)
+  (tags nil :read-only t :type list)
+  (title nil :read-only t :type string)
+  (contents nil :read-only t :type string))
+
+(cl-defun org-glance-headline1:from-element (element)
+  (let* ((buffer (org-element-property :buffer element))
+         (begin (org-element-property :begin element))
+         (end (org-element-property :end element))
+         (id (org-element-property :ORG_GLANCE_ID element))
+         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
+         (title (or (org-element-property :ALIAS element)
+                    (org-element-property :TITLE element)
+                    (org-element-property :raw-value element)
+                    ""))
+         (contents (org-glance--encode-string
+                    (with-current-buffer buffer
+                      (buffer-substring-no-properties begin end)))))
+    (make-org-glance-headline1 :id id
+                               :title title
+                               :tags tags
+                               :contents contents)))
+
+(cl-defun org-glance-headline1:at-point ()
+  (when-let (headline (save-excursion
+                        (org-glance--back-to-heading)
+                        (cl-do ((element (org-element-at-point) (org-element-at-point)))
+                            ;; until:
+                            ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
+                             ;; return:
+                             (if (and (listp element) (eq (car element) 'headline))
+                                 (org-glance-headline1:from-element element)
+                               nil))
+                          ;; body:
+                          (org-up-heading-or-point-min))
+                        ))
+    headline))
+
+;; (org-glance-headline1:title (make-org-glance-headline1 :title "Hello" :contents "Hey"))
+;; (org-glance-headline1? (make-org-glance-headline1 :title "Hello" :contents "Hey"))
+
 (org-glance-exception:define org-glance-headline:not-found!
   "Headline not found")
 
