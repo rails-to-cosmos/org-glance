@@ -18,25 +18,18 @@
   (contents nil :read-only t :type string)
   (hash nil :read-only t :type string)
 
-  ;; metadata
   (archived? nil :read-only t :type bool)
-  (commented? nil :read-only t :type bool)
   (closed? nil :read-only t :type bool)
+  (commented? nil :read-only t :type bool)
+
+  ;; lazy attributes start with "-"
+  (-encrypted? nil :read-only t :type bool)
   (-links nil :read-only t :type list)
-  (-properties nil :read-only t :type list)
-  (-encrypted? nil :read-only t :type bool))
+  (-properties nil :read-only t :type list))
 
-(cl-defun org-glance-headline1:links (headline)
-  (cl-check-type headline org-glance-headline1)
-  (thunk-force (org-glance-headline1:-links headline)))
-
-(cl-defun org-glance-headline1:properties (headline)
-  (cl-check-type headline org-glance-headline1)
-  (thunk-force (org-glance-headline1:-properties headline)))
-
-(cl-defun org-glance-headline1:encrypted? (headline)
-  (cl-check-type headline org-glance-headline1)
-  (thunk-force (org-glance-headline1:-encrypted? headline)))
+(cl-defun org-glance-headline1:encrypted? (headline) (thunk-force (org-glance-headline1:-encrypted? headline)))
+(cl-defun org-glance-headline1:links (headline) (thunk-force (org-glance-headline1:-links headline)))
+(cl-defun org-glance-headline1:properties (headline) (thunk-force (org-glance-headline1:-properties headline)))
 
 (cl-defun org-glance-headline1:from-element (element)
   (let ((buffer (org-element-property :buffer element))
