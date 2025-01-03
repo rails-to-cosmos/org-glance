@@ -15,7 +15,8 @@
   (id nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
-  (contents nil :read-only t :type string))
+  (contents nil :read-only t :type string)
+  (hash nil :read-only t :type string))
 
 (cl-defun org-glance-headline1:from-element (element)
   (let* ((buffer (org-element-property :buffer element))
@@ -26,14 +27,18 @@
          (title (or (org-element-property :ALIAS element)
                     (org-element-property :TITLE element)
                     (org-element-property :raw-value element)
-                    ""))
-         (contents (org-glance--encode-string
-                    (with-current-buffer buffer
-                      (buffer-substring-no-properties begin end)))))
-    (make-org-glance-headline1 :id id
-                               :title title
-                               :tags tags
-                               :contents contents)))
+                    "")))
+
+    (cl-destructuring-bind (contents hash)
+        (with-current-buffer buffer
+          (save-restriction
+            (narrow-to-region begin end)
+            (list (buffer-hash) (org-glance--encode-string (buffer-substring-no-properties (point-min) (point-max))))))
+      (make-org-glance-headline1 :id id
+                                 :title title
+                                 :tags tags
+                                 :hash hash
+                                 :contents contents))))
 
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
