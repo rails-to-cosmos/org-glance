@@ -67,7 +67,7 @@
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
 (cl-defun org-glance-headline1 (element)
-  "Create `org-glance-headline1' from `org-element'."
+  "Create `org-glance-headline1' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
