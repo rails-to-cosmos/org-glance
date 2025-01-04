@@ -20,7 +20,7 @@ test:
 	eask recompile
 	eask package ./dist
 	eask reinstall
-	eask test ert org-glance-test.el
+	eask run command test
 
 clean:
 	eask clean elc

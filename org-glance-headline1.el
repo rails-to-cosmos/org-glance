@@ -4,6 +4,7 @@
 (require 'org)
 (require 'org-element)
 (require 'cl-lib)
+(require 'cl-macs)
 (require 'thunk)
 
 (require 'org-glance-exception)
@@ -34,8 +35,6 @@
   (-links nil :read-only t :type list)
   (-properties nil :read-only t :type list))
 
-;; public methods
-
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
     (org-glance--back-to-heading)
@@ -44,7 +43,7 @@
         ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
          ;; return:
          (when (and (listp element) (eq (car element) 'headline))
-           (org-glance-headline1 element)))
+           (org-glance-headline1--from-element element)))
       ;; do:
       (org-up-heading-or-point-min))))
 
@@ -66,7 +65,7 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline1 (element)
+(cl-defun org-glance-headline1--from-element (element)
   "Create `org-glance-headline1' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
@@ -79,7 +78,7 @@
                    "")))
 
     (cl-destructuring-bind (contents hash)
-        (let ((buffer (org-element-property :buffer element))
+        (let ((buffer (or (org-element-property :buffer element) (current-buffer)))
               (begin (org-element-property :begin element))
               (end (org-element-property :end element)))
           (with-current-buffer buffer
@@ -87,7 +86,6 @@
               (narrow-to-region begin end)
               (list (buffer-substring-no-properties (point-min) (point-max))
                     (buffer-hash)))))
-
       (make-org-glance-headline1
        :id id
        :title title

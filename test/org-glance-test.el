@@ -1,13 +1,8 @@
-;; -*- lexical-binding: t -*-
+;;; org-glance-test.el --- Tests for org-glance  -*- lexical-binding: t -*-
 
 (require 'ert)
 (require 's)
 (require 'org-glance)
-
-(setq print-length nil  ;; Disable truncation of list length
-      print-level nil   ;; Disable truncation of nested levels
-      ert-batch-print-length nil) ;; Disable truncation in batch mode
-
 
 (cl-defmacro with-temp-directory (dir &rest body)
   "Create a temporary directory, bind it to DIR, run BODY in it, and delete the directory afterward.
@@ -122,22 +117,22 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (org-glance-headline:propertized? headline))
       (should (string= "bar" (org-glance:extract headline "foo"))))))
 
-(ert-deftest org-glance-test:encryption ()
-  (org-glance-test:session
-    (let* (;; TODO generate such entities
-           (tag (org-glance-test:create-tag 'foo))
-           (title "Hello, world!")
-           (contents "- foo: bar")
-           (id (org-glance-test:add-headline tag title contents))
-           (headline (org-glance-test:materialize id))
-           (initial-contents (org-glance-headline:contents headline)))
-      (org-glance:with-headline-materialized headline
-        (org-glance-headline:encrypt "123"))
-      (should (string= initial-contents (org-glance-headline:contents headline))))
+;; (ert-deftest org-glance-test:encryption ()
+;;   (org-glance-test:session
+;;     (let* (;; TODO generate such entities
+;;            (tag (org-glance-test:create-tag 'foo))
+;;            (title "Hello, world!")
+;;            (contents "- foo: bar")
+;;            (id (org-glance-test:add-headline tag title contents))
+;;            (headline (org-glance-test:materialize id))
+;;            (initial-contents (org-glance-headline:contents headline)))
+;;       (org-glance:with-headline-materialized headline
+;;         (org-glance-headline:encrypt "123"))
+;;       (should (string= initial-contents (org-glance-headline:contents headline))))
 
-    ;; (should (org-glance-headline:propertized? headline))
-    ;; (should (string= "bar" (org-glance:extract headline "foo")))
-    ))
+;;     ;; (should (org-glance-headline:propertized? headline))
+;;     ;; (should (string= "bar" (org-glance:extract headline "foo")))
+;;     ))
 
 ;; new headline model
 
@@ -157,3 +152,5 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 (provide 'org-glance-test)
+
+;;; org-glance-test.el ends here

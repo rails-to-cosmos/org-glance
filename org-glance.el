@@ -7,7 +7,7 @@
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht))
+;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
