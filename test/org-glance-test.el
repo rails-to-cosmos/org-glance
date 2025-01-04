@@ -140,7 +140,6 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (with-temp-buffer
     (org-mode)
     (insert contents)
-    ;; (goto-char (point-min))
     (org-glance-headline1:at-point)))
 
 (ert-deftest org-glance-test:headline-active ()

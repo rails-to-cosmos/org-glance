@@ -1,4 +1,4 @@
-.PHONY: init build test info clean
+.PHONY: init build test info clean lint
 
 info:
 	eask info
@@ -21,6 +21,10 @@ test:
 	eask package ./dist
 	eask reinstall
 	eask run command test
+
+lint:
+	make clean
+	eask lint checkdoc
 
 clean:
 	eask clean elc
