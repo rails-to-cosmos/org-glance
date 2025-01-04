@@ -19,18 +19,34 @@
 
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
-  (id nil :read-only t :type string)
-  (tags nil :read-only t :type list)
-  (title nil :read-only t :type string)
-  (-contents nil :read-only t :type string)
-  (hash nil :read-only t :type string)
-  (state nil :read-only t :type string)
   (archived? nil :read-only t :type bool)
   (closed? nil :read-only t :type bool)
   (commented? nil :read-only t :type bool)
-  (-encrypted? nil :read-only t :type bool)  ;; lazy attributes start with "-"
+  (contents nil :read-only t :type string)
+  (hash nil :read-only t :type string)
+  (id nil :read-only t :type string)
+  (state nil :read-only t :type string)
+  (tags nil :read-only t :type list)
+  (title nil :read-only t :type string)
+
+  ;; lazy attributes start with "-"
+  (-encrypted? nil :read-only t :type bool)
   (-links nil :read-only t :type list)
   (-properties nil :read-only t :type list))
+
+;; public methods
+
+(cl-defun org-glance-headline1:at-point ()
+  (save-excursion
+    (org-glance--back-to-heading)
+    (cl-do ((element (org-element-at-point) (org-element-at-point)))
+        ;; until:
+        ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
+         ;; return:
+         (when (and (listp element) (eq (car element) 'headline))
+           (org-glance-headline1 element)))
+      ;; do:
+      (org-up-heading-or-point-min))))
 
 (cl-defun org-glance-headline1:active? (headline)
   (and (not (org-glance-headline1:done? headline))
@@ -50,10 +66,8 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline1:contents (headline)
-  (org-glance--decode-string (org-glance-headline1:-contents headline)))
-
-(cl-defun org-glance-headline1:from-element (element)
+(cl-defun org-glance-headline1 (element)
+  "Create `org-glance-headline1' from `org-element'."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
@@ -80,7 +94,7 @@
        :tags tags
        :hash hash
        :state state
-       :-contents (org-glance--encode-string contents)
+       :contents contents
        :archived? archived?
        :commented? commented?
        :closed? closed?
@@ -101,18 +115,5 @@
                        (goto-char (point-min))
                        (org-end-of-meta-data t)
                        (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))))
-
-(cl-defun org-glance-headline1:at-point ()
-  (save-excursion
-    (org-glance--back-to-heading)
-    (cl-do ((element (org-element-at-point) (org-element-at-point)))
-        ;; until:
-        ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
-         ;; return:
-         (if (and (listp element) (eq (car element) 'headline))
-             (org-glance-headline1:from-element element)
-           nil))
-      ;; do:
-      (org-up-heading-or-point-min))))
 
 (provide 'org-glance-headline1)

@@ -4,6 +4,9 @@
 (require 'org-glance-headline)
 (require 'org-glance-tag)
 
+(declare-function org-glance-headline:deserialize "org-glance-headline.el" (id value))
+(declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
+
 (org-glance-exception:define org-glance-metadata:outdated!
   "Headline metadata is outdated")
 
