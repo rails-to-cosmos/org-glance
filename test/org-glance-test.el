@@ -145,13 +145,17 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (org-glance-headline1:at-point)))
 
 (ert-deftest org-glance-test:headline-parser ()
-  (with-temp-buffer
-    (insert "* foo\n")
-    (insert "** bar :a:B:c:")
-    (let ((bar (org-glance-headline1:at-point)))
-      (should (equal (org-glance-headline1:tags bar) '(a b c)))
-      (should (string= (org-glance-headline1:title bar) "bar"))
-      (should (string= (org-glance-headline1:contents bar) "** bar :a:B:c:")))))
+  (let ((bar (org-glance-test:headline1
+              "* foo"
+              "** bar :a:B:c:"
+              ":PROPERTIES:"
+              ":ORG_GLANCE_ID: bar"
+              ":END:")))
+    (should (equal (org-glance-headline1:tags bar) '(a b c)))
+    (should (string= (org-glance-headline1:title bar) "bar"))
+    (should (string= (org-glance-headline1:state bar) ""))
+    (should (string= (org-glance-headline1:id bar) "bar"))
+    (should (string= (org-glance-headline1:contents bar) "** bar :a:B:c:\n:PROPERTIES:\n:ORG_GLANCE_ID: bar\n:END:"))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))

@@ -20,15 +20,17 @@
 
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
-  (archived? nil :read-only t :type bool)
-  (closed? nil :read-only t :type bool)
-  (commented? nil :read-only t :type bool)
   (contents nil :read-only t :type string)
   (hash nil :read-only t :type string)
   (id nil :read-only t :type string)
   (state nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
+
+  ;; metadata
+  (archived? nil :read-only t :type bool)
+  (closed? nil :read-only t :type bool)
+  (commented? nil :read-only t :type bool)
 
   ;; lazy attributes start with "-"
   (-encrypted? nil :read-only t :type (or bool function))
