@@ -41,10 +41,10 @@
              while t
              for element = (org-element-at-point)
              for headline? = (and (listp element) (eq (car element) 'headline))
-             if (or headline? (org-before-first-heading-p) (bobp))
-             return (if headline?
-                        (org-glance-headline1--from-element element)
-                      (error "Unable to find `org-glance-headline1' at point"))
+             if headline?
+             return (org-glance-headline1--from-element element)
+             else if (or (org-before-first-heading-p) (bobp))
+             do (error "Unable to find `org-glance-headline1' at point")
              else
              do (org-up-heading-or-point-min))))
 
