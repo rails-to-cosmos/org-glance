@@ -160,10 +160,14 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (eq 1 (length (org-glance-headline1:links headline))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
-  (let ((headline (-> (org-glance-test:headline1 "* TODO Hello, world!" "foo bar")
-                      (org-glance-headline1:encrypt "password"))))
-    (should (org-glance-headline1:encrypted? headline))
-    (org-glance-headline1:contents headline)))
+  (let* ((original (org-glance-test:headline1 "* TODO Hello, world!" "foo bar"))
+         (password "password")
+         (encrypted (org-glance-headline1:encrypt original password))
+         (decrypted (org-glance-headline1:decrypt encrypted password)))
+    (should (not (org-glance-headline1:encrypted? original)))
+    (should (org-glance-headline1:encrypted? encrypted))
+    (should (not (string= (org-glance-headline1:contents original) (org-glance-headline1:contents encrypted))))
+    (should (string= (org-glance-headline1:contents decrypted) (org-glance-headline1:contents original)))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 

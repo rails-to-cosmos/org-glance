@@ -145,4 +145,28 @@
                                :-properties (org-glance-headline1:-properties headline)
                                :-encrypted? t)))
 
+(cl-defun org-glance-headline1:decrypt (headline password)
+  (cl-check-type headline org-glance-headline1)
+  (cl-check-type password string)
+  (let ((contents (with-temp-buffer
+                    (org-mode)
+                    (insert (org-glance-headline1:contents headline))
+                    (goto-char (point-min))
+                    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                          (end (save-excursion (org-end-of-subtree t) (point))))
+                      (org-glance--decrypt-region beg end password))
+                    (buffer-string))))
+    (make-org-glance-headline1 :id (org-glance-headline1:id headline)
+                               :title (org-glance-headline1:title headline)
+                               :tags (org-glance-headline1:tags headline)
+                               :hash (org-glance-headline1:hash headline)
+                               :state (org-glance-headline1:state headline)
+                               :contents contents
+                               :archived? (org-glance-headline1:archived? headline)
+                               :commented? (org-glance-headline1:commented? headline)
+                               :closed? (org-glance-headline1:closed? headline)
+                               :-links (org-glance-headline1:-links headline)
+                               :-properties (org-glance-headline1:-properties headline)
+                               :-encrypted? nil)))
+
 (provide 'org-glance-headline1)
