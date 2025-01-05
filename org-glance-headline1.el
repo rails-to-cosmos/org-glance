@@ -31,9 +31,9 @@
   (title nil :read-only t :type string)
 
   ;; lazy attributes start with "-"
-  (-encrypted? nil :read-only t :type bool)
-  (-links nil :read-only t :type list)
-  (-properties nil :read-only t :type list))
+  (-encrypted? nil :read-only t :type (or bool function))
+  (-links nil :read-only t :type (or list function))
+  (-properties nil :read-only t :type (or list function)))
 
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
