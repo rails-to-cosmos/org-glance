@@ -72,6 +72,28 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
+(cl-defun org-glance-headline1--links-extractor (contents)
+  (thunk-delay
+   (with-temp-buffer
+     (insert contents)
+     (org-glance--parse-links))))
+
+(cl-defun org-glance-headline1--user-properties-extractor (contents)
+  (thunk-delay
+   (with-temp-buffer
+     (org-mode)
+     (insert contents)
+     (org-glance--buffer-key-value-pairs))))
+
+(cl-defun org-glance-headline1--encrypted-property-extractor (contents)
+  (thunk-delay
+   (with-temp-buffer
+     (org-mode)
+     (insert contents)
+     (goto-char (point-min))
+     (org-end-of-meta-data t)
+     (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
+
 (cl-defun org-glance-headline1--from-element (element)
   "Create `org-glance-headline1' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
@@ -93,33 +115,18 @@
               (narrow-to-region begin end)
               (list (buffer-substring-no-properties (point-min) (point-max))
                     (buffer-hash)))))
-      (make-org-glance-headline1
-       :id id
-       :title title
-       :tags tags
-       :hash hash
-       :state state
-       :contents contents
-       :archived? archived?
-       :commented? commented?
-       :closed? closed?
-       :-links (thunk-delay
-                (with-temp-buffer
-                  (org-mode)
-                  (insert contents)
-                  (org-glance--parse-links)))
-       :-properties (thunk-delay
-                     (with-temp-buffer
-                       (org-mode)
-                       (insert contents)
-                       (org-glance--buffer-key-value-pairs)))
-       :-encrypted? (thunk-delay
-                     (with-temp-buffer
-                       (org-mode)
-                       (insert contents)
-                       (goto-char (point-min))
-                       (org-end-of-meta-data t)
-                       (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))))
+      (make-org-glance-headline1 :id id
+                                 :title title
+                                 :tags tags
+                                 :hash hash
+                                 :state state
+                                 :contents contents
+                                 :archived? archived?
+                                 :commented? commented?
+                                 :closed? closed?
+                                 :-links (org-glance-headline1--links-extractor contents)
+                                 :-properties (org-glance-headline1--user-properties-extractor contents)
+                                 :-encrypted? (org-glance-headline1--encrypted-property-extractor contents)))))
 
 (cl-defun org-glance-headline1:encrypt (headline password)
   (cl-check-type headline org-glance-headline1)

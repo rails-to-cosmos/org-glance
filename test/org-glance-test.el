@@ -166,6 +166,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (decrypted (org-glance-headline1:decrypt encrypted password)))
     (should (not (org-glance-headline1:encrypted? original)))
     (should (org-glance-headline1:encrypted? encrypted))
+    (should (not (org-glance-headline1:encrypted? decrypted)))
     (should (not (string= (org-glance-headline1:contents original) (org-glance-headline1:contents encrypted))))
     (should (string= (org-glance-headline1:contents decrypted) (org-glance-headline1:contents original)))))
 
