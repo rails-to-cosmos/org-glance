@@ -136,10 +136,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 ;; new headline model
 
-(cl-defun org-glance-test:headline1 (contents)
+(cl-defun org-glance-test:headline1 (title &key (contents nil))
   (with-temp-buffer
     (org-mode)
-    (insert contents)
+    (insert title)
+    (when contents
+      (insert "\n" contents))
     (org-glance-headline1:at-point)))
 
 (ert-deftest org-glance-test:headline-active ()
@@ -147,6 +149,10 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (let ((headline (org-glance-test:headline1 "* TODO Hello, world!")))
       (should (org-glance-headline1:active? headline))
       (should (not (org-glance-headline1:done? headline))))))
+
+(ert-deftest org-glance-test:headline-properties ()
+  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" :contents "- foo: bar")))
+    (should (string= "bar" (org-glance-headline1:get-property "foo" headline)))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
