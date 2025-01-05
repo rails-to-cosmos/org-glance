@@ -37,15 +37,16 @@
 
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
-    (org-glance--back-to-heading)
-    (cl-do ((element (org-element-at-point) (org-element-at-point)))
-        ;; until:
-        ((or (and (listp element) (eq (car element) 'headline)) (org-before-first-heading-p) (bobp))
-         ;; return:
-         (when (and (listp element) (eq (car element) 'headline))
-           (org-glance-headline1--from-element element)))
-      ;; do:
-      (org-up-heading-or-point-min))))
+    (cl-loop initially (org-glance--back-to-heading)
+             while t
+             for element = (org-element-at-point)
+             for headline? = (and (listp element) (eq (car element) 'headline))
+             if (or headline? (org-before-first-heading-p) (bobp))
+             return (if headline?
+                        (org-glance-headline1--from-element element)
+                      (error "Unable to find `org-glance-headline1' at point"))
+             else
+             do (org-up-heading-or-point-min))))
 
 (cl-defun org-glance-headline1:active? (headline)
   (and (not (org-glance-headline1:done? headline))

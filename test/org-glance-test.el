@@ -144,6 +144,13 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
              do (insert "\n" line))
     (org-glance-headline1:at-point)))
 
+(ert-deftest org-glance-test:headline-parser ()
+  (with-temp-buffer
+    (insert "* foo\n")
+    (insert "** bar\n")
+    (let ((bar (org-glance-headline1:at-point)))
+      (should (string= (org-glance-headline1:title bar) "bar")))))
+
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
     (let ((headline (org-glance-test:headline1 "* TODO Hello, world!")))
