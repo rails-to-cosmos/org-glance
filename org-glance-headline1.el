@@ -40,8 +40,7 @@
     (cl-loop initially (org-glance--back-to-heading)
              while t
              for element = (org-element-at-point)
-             for headline? = (and (listp element) (eq (car element) 'headline))
-             if headline?
+             if (and (listp element) (eq (car element) 'headline))  ;; if (org-element-type-p element 'headline)
              return (org-glance-headline1--from-element element)
              else if (or (org-before-first-heading-p) (bobp))
              do (error "Unable to find `org-glance-headline1' at point")
