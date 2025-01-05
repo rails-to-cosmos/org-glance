@@ -152,7 +152,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:headline-properties ()
   (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" :contents "- foo: bar")))
-    (should (string= "bar" (org-glance-headline1:get-property "foo" headline)))))
+    (should (eq 1 (length (org-glance-headline1:properties headline))))
+    (should (string= "bar" (org-glance-headline1:get-user-property "foo" headline)))))
+
+(ert-deftest org-glance-test:headline-links ()
+  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" :contents "[[https:duckduckgo.com][ddg]]")))
+    (should (eq 1 (length (org-glance-headline1:links headline))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 

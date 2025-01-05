@@ -62,7 +62,7 @@
 (cl-defun org-glance-headline1:properties (headline)
   (thunk-force (org-glance-headline1:-properties headline)))
 
-(cl-defun org-glance-headline1:get-property (property headline)
+(cl-defun org-glance-headline1:get-user-property (property headline)
   (alist-get property (org-glance-headline1:properties headline) nil nil #'string=))
 
 (cl-defun org-glance-headline1:done? (headline)
