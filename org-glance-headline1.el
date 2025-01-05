@@ -83,14 +83,12 @@
 (cl-defun org-glance-headline1--user-properties-extractor (contents)
   (thunk-delay
    (with-temp-buffer
-     (org-mode)
      (insert contents)
      (org-glance--buffer-key-value-pairs))))
 
 (cl-defun org-glance-headline1--encrypted-property-extractor (contents)
   (thunk-delay
    (with-temp-buffer
-     (org-mode)
      (insert contents)
      (goto-char (point-min))
      (org-end-of-meta-data t)
@@ -134,7 +132,6 @@
   (cl-check-type headline org-glance-headline1)
   (cl-check-type password string)
   (let ((contents (with-temp-buffer
-                    (org-mode)
                     (insert (org-glance-headline1:contents headline))
                     (goto-char (point-min))
                     (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
@@ -158,7 +155,6 @@
   (cl-check-type headline org-glance-headline1)
   (cl-check-type password string)
   (let ((contents (with-temp-buffer
-                    (org-mode)
                     (insert (org-glance-headline1:contents headline))
                     (goto-char (point-min))
                     (let ((beg (save-excursion (org-end-of-meta-data t) (point)))

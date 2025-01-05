@@ -15,11 +15,9 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (cl-defmacro org-glance-test:session (&rest body)
   (declare (indent 0))
-  `(unwind-protect
-       (with-temp-directory org-glance-directory
-         (org-glance-init org-glance-directory)
-         ,@body)
-     (org-glance-init org-glance-directory)))
+  `(with-temp-directory org-glance-directory
+     (org-glance-init org-glance-directory)
+     ,@body))
 
 ;; (ert-deftest org-glance-test:initial-state ()
 ;;   (org-glance-test:session
@@ -138,7 +136,6 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (cl-defun org-glance-test:headline1 (&rest contents)
   (with-temp-buffer
-    (org-mode)
     (cl-loop initially (insert (car contents))
              for line in (cdr contents)
              do (insert "\n" line))
