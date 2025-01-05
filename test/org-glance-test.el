@@ -150,7 +150,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (insert "** bar :a:B:c:")
     (let ((bar (org-glance-headline1:at-point)))
       (should (equal (org-glance-headline1:tags bar) '(a b c)))
-      (should (string= (org-glance-headline1:title bar) "bar")))))
+      (should (string= (org-glance-headline1:title bar) "bar"))
+      (should (string= (org-glance-headline1:contents bar) "** bar :a:B:c:")))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
