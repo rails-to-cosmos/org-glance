@@ -54,16 +54,20 @@
        (not (org-glance-headline1:closed? headline))))
 
 (cl-defun org-glance-headline1:encrypted? (headline)
-  (thunk-force (org-glance-headline1:-encrypted? headline)))
+  (let ((encrypted? (org-glance-headline1:-encrypted? headline)))
+    (cl-typecase encrypted?
+      (boolean encrypted?)
+      (compiled-function (thunk-force encrypted?))
+      (otherwise (error "Lazy evaluation failed: encrypted?")))))
 
 (cl-defun org-glance-headline1:links (headline)
   (thunk-force (org-glance-headline1:-links headline)))
 
-(cl-defun org-glance-headline1:properties (headline)
+(cl-defun org-glance-headline1:user-properties (headline)
   (thunk-force (org-glance-headline1:-properties headline)))
 
 (cl-defun org-glance-headline1:get-user-property (property headline)
-  (alist-get property (org-glance-headline1:properties headline) nil nil #'string=))
+  (alist-get property (org-glance-headline1:user-properties headline) nil nil #'string=))
 
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
@@ -116,5 +120,29 @@
                        (goto-char (point-min))
                        (org-end-of-meta-data t)
                        (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))))))
+
+(cl-defun org-glance-headline1:encrypt (headline password)
+  (cl-check-type headline org-glance-headline1)
+  (cl-check-type password string)
+  (let ((contents (with-temp-buffer
+                    (org-mode)
+                    (insert (org-glance-headline1:contents headline))
+                    (goto-char (point-min))
+                    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                          (end (save-excursion (org-end-of-subtree t) (point))))
+                      (org-glance--encrypt-region beg end password))
+                    (buffer-string))))
+    (make-org-glance-headline1 :id (org-glance-headline1:id headline)
+                               :title (org-glance-headline1:title headline)
+                               :tags (org-glance-headline1:tags headline)
+                               :hash (org-glance-headline1:hash headline)
+                               :state (org-glance-headline1:state headline)
+                               :contents contents
+                               :archived? (org-glance-headline1:archived? headline)
+                               :commented? (org-glance-headline1:commented? headline)
+                               :closed? (org-glance-headline1:closed? headline)
+                               :-links (org-glance-headline1:-links headline)
+                               :-properties (org-glance-headline1:-properties headline)
+                               :-encrypted? t)))
 
 (provide 'org-glance-headline1)

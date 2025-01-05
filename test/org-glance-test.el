@@ -136,12 +136,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 ;; new headline model
 
-(cl-defun org-glance-test:headline1 (title &key (contents nil))
+(cl-defun org-glance-test:headline1 (&rest contents)
   (with-temp-buffer
     (org-mode)
-    (insert title)
-    (when contents
-      (insert "\n" contents))
+    (insert (car contents))
+    (cl-dolist (line (cdr contents))
+      (insert "\n" line))
     (org-glance-headline1:at-point)))
 
 (ert-deftest org-glance-test:headline-active ()
@@ -151,13 +151,19 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
       (should (not (org-glance-headline1:done? headline))))))
 
 (ert-deftest org-glance-test:headline-properties ()
-  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" :contents "- foo: bar")))
-    (should (eq 1 (length (org-glance-headline1:properties headline))))
+  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" "- foo: bar")))
+    (should (eq 1 (length (org-glance-headline1:user-properties headline))))
     (should (string= "bar" (org-glance-headline1:get-user-property "foo" headline)))))
 
 (ert-deftest org-glance-test:headline-links ()
-  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" :contents "[[https:duckduckgo.com][ddg]]")))
+  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
     (should (eq 1 (length (org-glance-headline1:links headline))))))
+
+(ert-deftest org-glance-test:headline-encryption ()
+  (let ((headline (-> (org-glance-test:headline1 "* TODO Hello, world!" "foo bar")
+                      (org-glance-headline1:encrypt "password"))))
+    (should (org-glance-headline1:encrypted? headline))
+    (org-glance-headline1:contents headline)))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
