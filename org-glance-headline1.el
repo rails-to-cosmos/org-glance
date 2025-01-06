@@ -26,6 +26,7 @@
   (state nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
+  (priority nil :read-only t :type number)
 
   ;; metadata
   (archived? nil :read-only t :type bool)
@@ -102,7 +103,9 @@
         (commented? (not (null (org-element-property :commentedp element))))
         (closed? (not (null (org-element-property :closed element))))
         (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
-        (title (or (org-element-property :TITLE element)
+        (priority (org-element-property :priority element))
+        (title (or (org-element-property :ORG_GLANCE_TITLE element)
+                   (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
                    "")))
 
@@ -120,6 +123,7 @@
                                  :tags tags
                                  :hash hash
                                  :state state
+                                 :priority priority
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?
@@ -144,6 +148,7 @@
                                :hash (org-glance-headline1:hash headline)
                                :state (org-glance-headline1:state headline)
                                :contents contents
+                               :priority (org-glance-headline1:priority headline)
                                :archived? (org-glance-headline1:archived? headline)
                                :commented? (org-glance-headline1:commented? headline)
                                :closed? (org-glance-headline1:closed? headline)
@@ -166,6 +171,7 @@
                                :tags (org-glance-headline1:tags headline)
                                :hash (org-glance-headline1:hash headline)
                                :state (org-glance-headline1:state headline)
+                               :priority (org-glance-headline1:priority headline)
                                :contents contents
                                :archived? (org-glance-headline1:archived? headline)
                                :commented? (org-glance-headline1:commented? headline)

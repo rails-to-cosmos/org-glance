@@ -142,17 +142,18 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (org-glance-headline1:at-point)))
 
 (ert-deftest org-glance-test:headline-parser ()
-  (let ((bar (org-glance-test:headline1
-              "* foo"
-              "** bar :a:B:c:"
-              ":PROPERTIES:"
-              ":ORG_GLANCE_ID: bar"
-              ":END:")))
-    (should (equal (org-glance-headline1:tags bar) '(a b c)))
-    (should (string= (org-glance-headline1:title bar) "bar"))
-    (should (string= (org-glance-headline1:state bar) ""))
-    (should (string= (org-glance-headline1:id bar) "bar"))
-    (should (string= (org-glance-headline1:contents bar) "** bar :a:B:c:\n:PROPERTIES:\n:ORG_GLANCE_ID: bar\n:END:"))))
+  (let* ((contents (list "* foo"
+                         "** [#A] bar :a:B:c:"
+                         ":PROPERTIES:"
+                         ":ORG_GLANCE_ID: bar"
+                         ":END:"))
+         (headline (apply #'org-glance-test:headline1 contents)))
+    (should (equal (org-glance-headline1:tags headline) '(a b c)))
+    (should (= (org-glance-headline1:priority headline) 65))
+    (should (string= (org-glance-headline1:title headline) "bar"))
+    (should (string= (org-glance-headline1:state headline) ""))
+    (should (string= (org-glance-headline1:id headline) "bar"))
+    (should (string= (org-glance-headline1:contents headline) (s-join "\n" (cdr contents))))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
