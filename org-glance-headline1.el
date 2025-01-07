@@ -180,4 +180,13 @@
                                :-properties (org-glance-headline1:-properties headline)
                                :-encrypted? nil)))
 
+(cl-defun org-glance-headline1:search-forward (id)
+  (cl-check-type id string)
+  (save-excursion
+    (cl-loop while (search-forward id nil 'no-error)
+             for headline = (org-glance-headline1:at-point)
+             when (and (org-glance-headline1? headline)
+                       (string= id (org-glance-headline1:id headline)))
+             return headline)))
+
 (provide 'org-glance-headline1)

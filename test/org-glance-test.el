@@ -181,6 +181,26 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (not (string= (org-glance-headline1:contents original) (org-glance-headline1:contents encrypted))))
     (should (string= (org-glance-headline1:contents decrypted) (org-glance-headline1:contents original)))))
 
+(ert-deftest org-glance-test:headline-search ()
+  (with-temp-buffer
+    (insert "header\n")
+    (insert "* foo\n")
+    (insert "** bar\n")
+    (insert "*** baz\n")
+    (insert "** qux\n")
+    (insert "*** quux\n")
+    (insert ":PROPERTIES:\n")
+    (insert ":ORG_GLANCE_ID: quux_id\n")
+    (insert ":END:\n")
+
+    (goto-char (point-min))
+
+    (let ((existing-headline (org-glance-headline1:search-forward "quux_id")))
+      (should (string= (org-glance-headline1:id existing-headline) "quux_id")))
+
+    (let ((non-existing-headline (org-glance-headline1:search-forward "bar")))
+      (should (eq non-existing-headline nil)))))
+
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 (provide 'org-glance-test)
