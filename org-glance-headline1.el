@@ -40,7 +40,9 @@
 
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
-    (cl-loop initially (org-glance--back-to-heading)
+    (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
+             if (and (not (org-at-heading-p)) (bobp))
+             return nil
              while t
              for element = (org-element-at-point)
              if (and (listp element) (eq (car element) 'headline))  ;; if (org-element-type-p element 'headline)
@@ -94,6 +96,19 @@
      (goto-char (point-min))
      (org-end-of-meta-data t)
      (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
+
+(cl-defun org-glance-headline1--from-string (contents)
+  (cl-check-type contents string)
+  (with-temp-buffer
+    (insert contents)
+    (goto-char (point-min))
+    (or (org-at-heading-p) (progn (re-search-forward org-heading-regexp)))
+    (org-glance-headline1:at-point)))
+
+(cl-defun org-glance-headline1--from-lines (&rest lines)
+  (declare (indent 0))
+  (cl-check-type lines list)
+  (org-glance-headline1--from-string (apply (lambda (&rest tokens) (s-join "\n" tokens)) lines)))
 
 (cl-defun org-glance-headline1--from-element (element)
   "Create `org-glance-headline1' from `org-element' ELEMENT."

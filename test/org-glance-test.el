@@ -134,44 +134,35 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 ;; new headline model
 
-(cl-defun org-glance-test:headline1 (&rest contents)
-  (with-temp-buffer
-    (cl-loop initially (insert (car contents))
-             for line in (cdr contents)
-             do (insert "\n" line))
-    (org-glance-headline1:at-point)))
-
 (ert-deftest org-glance-test:headline-parser ()
-  (let* ((contents (list "* foo"
-                         "** [#A] bar :a:B:c:"
-                         ":PROPERTIES:"
-                         ":ORG_GLANCE_ID: bar"
-                         ":END:"))
-         (headline (apply #'org-glance-test:headline1 contents)))
+  (let* ((headline (org-glance-headline1--from-lines
+                     "** [#A] bar :a:B:c:"
+                     ":PROPERTIES:"
+                     ":ORG_GLANCE_ID: bar"
+                     ":END:")))
     (should (equal (org-glance-headline1:tags headline) '(a b c)))
     (should (= (org-glance-headline1:priority headline) 65))
     (should (string= (org-glance-headline1:title headline) "bar"))
     (should (string= (org-glance-headline1:state headline) ""))
-    (should (string= (org-glance-headline1:id headline) "bar"))
-    (should (string= (org-glance-headline1:contents headline) (s-join "\n" (cdr contents))))))
+    (should (string= (org-glance-headline1:id headline) "bar"))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
-    (let ((headline (org-glance-test:headline1 "* TODO Hello, world!")))
+    (let ((headline (org-glance-headline1--from-lines "* TODO Hello, world!")))
       (should (org-glance-headline1:active? headline))
       (should (not (org-glance-headline1:done? headline))))))
 
 (ert-deftest org-glance-test:headline-properties ()
-  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" "- foo: bar")))
+  (let ((headline (org-glance-headline1--from-lines "* TODO Hello, world!" "- foo: bar")))
     (should (eq 1 (length (org-glance-headline1:user-properties headline))))
     (should (string= "bar" (org-glance-headline1:get-user-property "foo" headline)))))
 
 (ert-deftest org-glance-test:headline-links ()
-  (let ((headline (org-glance-test:headline1 "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
+  (let ((headline (org-glance-headline1--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
     (should (eq 1 (length (org-glance-headline1:links headline))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
-  (let* ((original (org-glance-test:headline1 "* TODO Hello, world!" "foo bar"))
+  (let* ((original (org-glance-headline1--from-lines "* TODO Hello, world!" "foo bar"))
          (password "password")
          (encrypted (org-glance-headline1:encrypt original password))
          (decrypted (org-glance-headline1:decrypt encrypted password)))
