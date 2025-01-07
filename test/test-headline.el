@@ -1,4 +1,4 @@
-;;; org-glance-test.el --- Tests for org-glance  -*- lexical-binding: t -*-
+;;; test-headline.el --- Tests for `org-glance-headline' model  -*- lexical-binding: t -*-
 
 (require 'ert)
 (require 's)
@@ -201,6 +201,4 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
-(provide 'org-glance-test)
-
-;;; org-glance-test.el ends here
+;;; test-headline.el ends here

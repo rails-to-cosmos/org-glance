@@ -27,5 +27,5 @@
   (setq ert-batch-backtrace-right-margin 1200
         ert-batch-print-length 20
         ert-batch-print-level 10)
-  (load "test/org-glance-test.el")
+  (load "test/test-headline.el")
   (ert-run-tests-batch-and-exit))
