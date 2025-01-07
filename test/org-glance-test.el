@@ -149,6 +149,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
     (let ((headline (org-glance-headline1--from-lines "* TODO Hello, world!")))
+      (should (string= (org-glance-headline1:state headline) "TODO"))
       (should (org-glance-headline1:active? headline))
       (should (not (org-glance-headline1:done? headline))))))
 
@@ -191,6 +192,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
     (let ((non-existing-headline (org-glance-headline1:search-forward "bar")))
       (should (eq non-existing-headline nil)))))
+
+(ert-deftest org-glance-test:headline-copy ()
+  (let* ((orig (org-glance-headline1--from-string "* TODO foo"))
+         (copy (org-glance-headline1--copy orig :state "DONE")))
+    (should (string= (org-glance-headline1:state orig) "TODO"))
+    (should (string= (org-glance-headline1:state copy) "DONE"))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 

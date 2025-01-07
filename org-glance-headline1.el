@@ -27,6 +27,7 @@
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
   (priority nil :read-only t :type number)
+  (indent nil :read-only t :type number)
 
   ;; metadata
   (archived? nil :read-only t :type bool)
@@ -102,6 +103,7 @@
   (cl-check-type contents string)
   (with-temp-buffer
     (insert contents)
+    (org-mode)
     (goto-char (point-min))
     (or (org-at-heading-p) (progn (re-search-forward org-heading-regexp)))
     (org-glance-headline1:at-point)))
@@ -120,6 +122,7 @@
         (closed? (not (null (org-element-property :closed element))))
         (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
         (priority (org-element-property :priority element))
+        (indent (or (org-element-property :level element) 1))
         (title (or (org-element-property :ORG_GLANCE_TITLE element)
                    (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
@@ -141,6 +144,7 @@
                                  :hash hash
                                  :state state
                                  :priority priority
+                                 :indent indent
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?
@@ -149,23 +153,36 @@
                                  :-properties (org-glance-headline1--user-properties-extractor contents)
                                  :-encrypted? (org-glance-headline1--encrypted-property-extractor contents)))))
 
+(cl-defun org-glance-headline1--copy (headline &rest update-plist)
+  (cl-check-type headline org-glance-headline1)
+  (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline1))
+           for slot-name = (car slot-info)
+           for slot-property = (intern (format ":%s" slot-name))
+           for slot-value = (or (plist-get update-plist slot-property)
+                                (cl-struct-slot-value 'org-glance-headline1 slot-name headline))
+           collect slot-property into params
+           collect slot-value into params
+           finally (return (apply #'make-org-glance-headline1 params))))
+
 (cl-defun org-glance-headline1:encrypt (headline password)
   (cl-check-type headline org-glance-headline1)
   (cl-check-type password string)
-  (let ((contents (with-temp-buffer
-                    (insert (org-glance-headline1:contents headline))
-                    (goto-char (point-min))
-                    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                          (end (save-excursion (org-end-of-subtree t) (point))))
-                      (org-glance--encrypt-region beg end password))
-                    (buffer-string))))
+  (if (org-glance-headline1:encrypted? headline)
+      headline
     (make-org-glance-headline1 :id (org-glance-headline1:id headline)
                                :title (org-glance-headline1:title headline)
                                :tags (org-glance-headline1:tags headline)
                                :hash (org-glance-headline1:hash headline)
                                :state (org-glance-headline1:state headline)
-                               :contents contents
+                               :contents (with-temp-buffer
+                                           (insert (org-glance-headline1:contents headline))
+                                           (goto-char (point-min))
+                                           (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                                                 (end (save-excursion (org-end-of-subtree t) (point))))
+                                             (org-glance--encrypt-region beg end password))
+                                           (buffer-string))
                                :priority (org-glance-headline1:priority headline)
+                               :indent (org-glance-headline1:indent headline)
                                :archived? (org-glance-headline1:archived? headline)
                                :commented? (org-glance-headline1:commented? headline)
                                :closed? (org-glance-headline1:closed? headline)
@@ -176,20 +193,22 @@
 (cl-defun org-glance-headline1:decrypt (headline password)
   (cl-check-type headline org-glance-headline1)
   (cl-check-type password string)
-  (let ((contents (with-temp-buffer
-                    (insert (org-glance-headline1:contents headline))
-                    (goto-char (point-min))
-                    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                          (end (save-excursion (org-end-of-subtree t) (point))))
-                      (org-glance--decrypt-region beg end password))
-                    (buffer-string))))
+  (if (not (org-glance-headline1:encrypted? headline))
+      headline
     (make-org-glance-headline1 :id (org-glance-headline1:id headline)
                                :title (org-glance-headline1:title headline)
                                :tags (org-glance-headline1:tags headline)
                                :hash (org-glance-headline1:hash headline)
                                :state (org-glance-headline1:state headline)
                                :priority (org-glance-headline1:priority headline)
-                               :contents contents
+                               :indent (org-glance-headline1:indent headline)
+                               :contents (with-temp-buffer
+                                           (insert (org-glance-headline1:contents headline))
+                                           (goto-char (point-min))
+                                           (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                                                 (end (save-excursion (org-end-of-subtree t) (point))))
+                                             (org-glance--decrypt-region beg end password))
+                                           (buffer-string))
                                :archived? (org-glance-headline1:archived? headline)
                                :commented? (org-glance-headline1:commented? headline)
                                :closed? (org-glance-headline1:closed? headline)
