@@ -41,9 +41,7 @@
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
     (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
-             if (and (not (org-at-heading-p)) (bobp))
-             return nil
-             while t
+             while (org-at-heading-p)
              for element = (org-element-at-point)
              if (and (listp element) (eq (car element) 'headline))  ;; if (org-element-type-p element 'headline)
              return (org-glance-headline1--from-element element)
@@ -78,18 +76,21 @@
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
 (cl-defun org-glance-headline1--links-extractor (contents)
+  (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--parse-links))))
 
 (cl-defun org-glance-headline1--user-properties-extractor (contents)
+  (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--buffer-key-value-pairs))))
 
 (cl-defun org-glance-headline1--encrypted-property-extractor (contents)
+  (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
@@ -133,6 +134,7 @@
               (narrow-to-region begin end)
               (list (buffer-substring-no-properties (point-min) (point-max))
                     (buffer-hash)))))
+
       (make-org-glance-headline1 :id id
                                  :title title
                                  :tags tags
