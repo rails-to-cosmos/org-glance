@@ -207,7 +207,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:headline-title ()
   (let ((headline (org-glance-headline1--from-string "* foo [[https:google.com]]")))
-    (should (string= (org-glance-headline1:plain-title headline) "foo google.com"))))
+    (should (string= (org-glance-headline1:title-clean headline) "foo https:google.com"))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
