@@ -163,15 +163,15 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (eq 1 (length (org-glance-headline1:links headline))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
-  (let* ((original (org-glance-headline1--from-lines "* TODO Hello, world!" "foo bar"))
+  (let* ((orig (org-glance-headline1--from-lines "* TODO Hello, world!" "foo bar"))
          (password "password")
-         (encrypted (org-glance-headline1:encrypt original password))
+         (encrypted (org-glance-headline1:encrypt orig password))
          (decrypted (org-glance-headline1:decrypt encrypted password)))
-    (should (not (org-glance-headline1:encrypted? original)))
+    (should (not (org-glance-headline1:encrypted? orig)))
     (should (org-glance-headline1:encrypted? encrypted))
     (should (not (org-glance-headline1:encrypted? decrypted)))
-    (should (not (string= (org-glance-headline1:contents original) (org-glance-headline1:contents encrypted))))
-    (should (string= (org-glance-headline1:contents decrypted) (org-glance-headline1:contents original)))))
+    (should (not (string= (org-glance-headline1:contents orig) (org-glance-headline1:contents encrypted))))
+    (should (string= (org-glance-headline1:contents decrypted) (org-glance-headline1:contents orig)))))
 
 (ert-deftest org-glance-test:headline-search ()
   (with-temp-buffer
@@ -198,6 +198,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (copy (org-glance-headline1--copy orig :state "DONE")))
     (should (string= (org-glance-headline1:state orig) "TODO"))
     (should (string= (org-glance-headline1:state copy) "DONE"))))
+
+(ert-deftest org-glance-test:headline-indent-hash ()
+  "Headline hash should change after indentation."
+  (let* ((orig (org-glance-headline1--from-string "*** foo"))
+         (copy (org-glance-headline1:reset-indent orig)))
+    (should (not (string= (org-glance-headline1:hash orig) (org-glance-headline1:hash copy))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 

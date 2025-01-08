@@ -21,7 +21,6 @@
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
   (contents nil :read-only t :type string)
-  (hash nil :read-only t :type string)
   (id nil :read-only t :type string)
   (state nil :read-only t :type string)
   (tags nil :read-only t :type list)
@@ -35,6 +34,7 @@
   (commented? nil :read-only t :type bool)
 
   ;; lazy attributes start with "-"
+  (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-links nil :read-only t :type (or list function))
   (-properties nil :read-only t :type (or list function)))
@@ -61,8 +61,11 @@
   (let ((encrypted? (org-glance-headline1:-encrypted? headline)))
     (cl-typecase encrypted?
       (boolean encrypted?)
-      (compiled-function (thunk-force encrypted?))
+      (function (thunk-force encrypted?))
       (otherwise (error "Lazy evaluation failed: encrypted?")))))
+
+(cl-defun org-glance-headline1:hash (headline)
+  (thunk-force (org-glance-headline1:-hash headline)))
 
 (cl-defun org-glance-headline1:links (headline)
   (thunk-force (org-glance-headline1:-links headline)))
@@ -76,23 +79,30 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline1--links-extractor (contents)
+(cl-defun org-glance-headline1--thunk-hash (contents)
+  (cl-check-type contents string)
+  (thunk-delay
+   (with-temp-buffer
+     (insert contents)
+     (buffer-hash))))
+
+(cl-defun org-glance-headline1--thunk-links (contents)
   (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--parse-links))))
 
-(cl-defun org-glance-headline1--user-properties-extractor (contents)
+(cl-defun org-glance-headline1--thunk-properties (contents)
   (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--buffer-key-value-pairs))))
 
-(cl-defun org-glance-headline1--encrypted-property-extractor (contents)
-  (cl-check-type contents string)
+(cl-defun org-glance-headline1--thunk-encrypted (contents)
   (thunk-delay
+   (cl-check-type contents string)
    (with-temp-buffer
      (insert contents)
      (goto-char (point-min))
@@ -141,7 +151,6 @@
       (make-org-glance-headline1 :id id
                                  :title title
                                  :tags tags
-                                 :hash hash
                                  :state state
                                  :priority priority
                                  :indent indent
@@ -149,17 +158,21 @@
                                  :archived? archived?
                                  :commented? commented?
                                  :closed? closed?
-                                 :-links (org-glance-headline1--links-extractor contents)
-                                 :-properties (org-glance-headline1--user-properties-extractor contents)
-                                 :-encrypted? (org-glance-headline1--encrypted-property-extractor contents)))))
+                                 :-hash (org-glance-headline1--thunk-hash contents)
+                                 :-links (org-glance-headline1--thunk-links contents)
+                                 :-properties (org-glance-headline1--thunk-properties contents)
+                                 :-encrypted? (org-glance-headline1--thunk-encrypted contents)))))
 
 (cl-defun org-glance-headline1--copy (headline &rest update-plist)
+  "Copy HEADLINE, replace slot values described in UPDATE-PLIST."
+  (declare (indent 1))
   (cl-check-type headline org-glance-headline1)
   (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline1))
            for slot-name = (car slot-info)
            for slot-property = (intern (format ":%s" slot-name))
-           for slot-value = (or (plist-get update-plist slot-property)
-                                (cl-struct-slot-value 'org-glance-headline1 slot-name headline))
+           for slot-value = (if (plist-member update-plist slot-property)
+                                (plist-get update-plist slot-property)
+                              (cl-struct-slot-value 'org-glance-headline1 slot-name headline))
            collect slot-property into params
            collect slot-value into params
            finally (return (apply #'make-org-glance-headline1 params))))
@@ -169,52 +182,30 @@
   (cl-check-type password string)
   (if (org-glance-headline1:encrypted? headline)
       headline
-    (make-org-glance-headline1 :id (org-glance-headline1:id headline)
-                               :title (org-glance-headline1:title headline)
-                               :tags (org-glance-headline1:tags headline)
-                               :hash (org-glance-headline1:hash headline)
-                               :state (org-glance-headline1:state headline)
-                               :contents (with-temp-buffer
-                                           (insert (org-glance-headline1:contents headline))
-                                           (goto-char (point-min))
-                                           (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                                                 (end (save-excursion (org-end-of-subtree t) (point))))
-                                             (org-glance--encrypt-region beg end password))
-                                           (buffer-string))
-                               :priority (org-glance-headline1:priority headline)
-                               :indent (org-glance-headline1:indent headline)
-                               :archived? (org-glance-headline1:archived? headline)
-                               :commented? (org-glance-headline1:commented? headline)
-                               :closed? (org-glance-headline1:closed? headline)
-                               :-links (org-glance-headline1:-links headline)
-                               :-properties (org-glance-headline1:-properties headline)
-                               :-encrypted? t)))
+    (org-glance-headline1--copy headline
+      :contents (with-temp-buffer
+                  (insert (org-glance-headline1:contents headline))
+                  (goto-char (point-min))
+                  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                        (end (save-excursion (org-end-of-subtree t) (point))))
+                    (org-glance--encrypt-region beg end password))
+                  (buffer-string))
+      :-encrypted? t)))
 
 (cl-defun org-glance-headline1:decrypt (headline password)
   (cl-check-type headline org-glance-headline1)
   (cl-check-type password string)
   (if (not (org-glance-headline1:encrypted? headline))
       headline
-    (make-org-glance-headline1 :id (org-glance-headline1:id headline)
-                               :title (org-glance-headline1:title headline)
-                               :tags (org-glance-headline1:tags headline)
-                               :hash (org-glance-headline1:hash headline)
-                               :state (org-glance-headline1:state headline)
-                               :priority (org-glance-headline1:priority headline)
-                               :indent (org-glance-headline1:indent headline)
-                               :contents (with-temp-buffer
-                                           (insert (org-glance-headline1:contents headline))
-                                           (goto-char (point-min))
-                                           (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                                                 (end (save-excursion (org-end-of-subtree t) (point))))
-                                             (org-glance--decrypt-region beg end password))
-                                           (buffer-string))
-                               :archived? (org-glance-headline1:archived? headline)
-                               :commented? (org-glance-headline1:commented? headline)
-                               :closed? (org-glance-headline1:closed? headline)
-                               :-links (org-glance-headline1:-links headline)
-                               :-properties (org-glance-headline1:-properties headline)
-                               :-encrypted? nil)))
+    (org-glance-headline1--copy headline
+      :contents (with-temp-buffer
+                  (insert (org-glance-headline1:contents headline))
+                  (goto-char (point-min))
+                  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                        (end (save-excursion (org-end-of-subtree t) (point))))
+                    (org-glance--decrypt-region beg end password))
+                  (buffer-string))
+      :-encrypted? nil)))
 
 (cl-defun org-glance-headline1:search-forward (id)
   (cl-check-type id string)
@@ -224,5 +215,23 @@
              when (and (org-glance-headline1? headline)
                        (string= id (org-glance-headline1:id headline)))
              return headline)))
+
+(cl-defun org-glance-headline1:reset-indent (headline)
+  (cl-check-type headline org-glance-headline1)
+  (let ((contents (with-temp-buffer
+                    (org-mode)
+                    (insert (org-glance-headline1:contents headline))
+                    (goto-char (point-min))
+                    (re-search-forward "\\^*")
+                    (while (looking-at "^\\*\\*")
+                      (org-promote-subtree))
+                    (buffer-string))))
+    (org-glance-headline1--copy headline
+      :indent 1
+      :contents contents
+      :-hash (org-glance-headline1--thunk-hash contents))))
+
+;; (org-glance-headline1:hash (org-glance-headline1--from-string "*** foo"))
+;; (org-glance-headline1:hash (org-glance-headline1:reset-indent (org-glance-headline1--from-string "*** foo")))
 
 (provide 'org-glance-headline1)
