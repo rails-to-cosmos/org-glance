@@ -238,4 +238,19 @@
    (lambda (match) (or (match-string 2 match) (match-string 1 match) ""))
    (org-glance-headline1:title headline)))
 
+(cl-defun org-glance-headline1:log (headline message &rest format-args)
+  (cl-check-type headline org-glance-headline1)
+  (cl-check-type message string)
+
+  (let ((contents (org-glance-headline1:contents headline)))
+    (org-glance-headline1--copy headline
+      :contents (with-temp-buffer
+                  (org-mode)
+                  (insert contents)
+                  (goto-char (point-min))
+                  (goto-char (org-log-beginning t))
+                  (insert "- " (apply #'format message format-args) "\n")
+                  (buffer-substring-no-properties (point-min) (point-max)))
+      :-hash (org-glance-headline1--hash-lazy contents))))
+
 (provide 'org-glance-headline1)
