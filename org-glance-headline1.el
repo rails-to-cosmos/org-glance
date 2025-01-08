@@ -79,28 +79,28 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline1--thunk-hash (contents)
+(cl-defun org-glance-headline1--hash-lazy (contents)
   (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (buffer-hash))))
 
-(cl-defun org-glance-headline1--thunk-links (contents)
+(cl-defun org-glance-headline1--links-lazy (contents)
   (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--parse-links))))
 
-(cl-defun org-glance-headline1--thunk-properties (contents)
+(cl-defun org-glance-headline1--properties-lazy (contents)
   (cl-check-type contents string)
   (thunk-delay
    (with-temp-buffer
      (insert contents)
      (org-glance--buffer-key-value-pairs))))
 
-(cl-defun org-glance-headline1--thunk-encrypted (contents)
+(cl-defun org-glance-headline1--encrypted-lazy (contents)
   (thunk-delay
    (cl-check-type contents string)
    (with-temp-buffer
@@ -158,10 +158,10 @@
                                  :archived? archived?
                                  :commented? commented?
                                  :closed? closed?
-                                 :-hash (org-glance-headline1--thunk-hash contents)
-                                 :-links (org-glance-headline1--thunk-links contents)
-                                 :-properties (org-glance-headline1--thunk-properties contents)
-                                 :-encrypted? (org-glance-headline1--thunk-encrypted contents)))))
+                                 :-hash (org-glance-headline1--hash-lazy contents)
+                                 :-links (org-glance-headline1--links-lazy contents)
+                                 :-properties (org-glance-headline1--properties-lazy contents)
+                                 :-encrypted? (org-glance-headline1--encrypted-lazy contents)))))
 
 (cl-defun org-glance-headline1--copy (headline &rest update-plist)
   "Copy HEADLINE, replace slot values described in UPDATE-PLIST."
@@ -229,9 +229,6 @@
     (org-glance-headline1--copy headline
       :indent 1
       :contents contents
-      :-hash (org-glance-headline1--thunk-hash contents))))
-
-;; (org-glance-headline1:hash (org-glance-headline1--from-string "*** foo"))
-;; (org-glance-headline1:hash (org-glance-headline1:reset-indent (org-glance-headline1--from-string "*** foo")))
+      :-hash (org-glance-headline1--hash-lazy contents))))
 
 (provide 'org-glance-headline1)
