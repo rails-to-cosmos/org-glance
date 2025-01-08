@@ -28,12 +28,12 @@
   (priority nil :read-only t :type number)
   (indent nil :read-only t :type number)
 
-  ;; metadata
+  ;; Metadata
   (archived? nil :read-only t :type bool)
   (closed? nil :read-only t :type bool)
   (commented? nil :read-only t :type bool)
 
-  ;; lazy attributes start with "-"
+  ;; Lazy attributes start with "-". Each has a `org-glance-headline1--<slot-name>-lazy' builder
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-links nil :read-only t :type (or list function))
@@ -101,8 +101,8 @@
      (org-glance--buffer-key-value-pairs))))
 
 (cl-defun org-glance-headline1--encrypted-lazy (contents)
+  (cl-check-type contents string)
   (thunk-delay
-   (cl-check-type contents string)
    (with-temp-buffer
      (insert contents)
      (goto-char (point-min))
