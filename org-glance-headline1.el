@@ -231,4 +231,11 @@
       :contents contents
       :-hash (org-glance-headline1--hash-lazy contents))))
 
+(cl-defun org-glance-headline1:plain-title (headline)
+  (cl-check-type headline org-glance-headline1)
+  (with-temp-buffer
+    (org-mode)
+    (insert (org-glance-headline1:title headline))
+    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+
 (provide 'org-glance-headline1)

@@ -41,7 +41,7 @@
     (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
              for link = (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1)
              for type = (intern (car link))
-             when (memq type types)
+             when (or (null types) (memq type types))
              do (delete-region (match-beginning 0) (match-end 0)))))
 
 (cl-defun org-glance--buffer-links ()
