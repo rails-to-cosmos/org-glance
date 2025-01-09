@@ -242,15 +242,15 @@
   (cl-check-type headline org-glance-headline1)
   (cl-check-type message string)
 
-  (let ((contents (org-glance-headline1:contents headline)))
+  (let ((contents (with-temp-buffer
+                    (org-mode)
+                    (insert (org-glance-headline1:contents headline))
+                    (goto-char (point-min))
+                    (goto-char (org-log-beginning t))
+                    (insert "- " (apply #'format message format-args) "\n")
+                    (buffer-substring-no-properties (point-min) (point-max)))))
     (org-glance-headline1--copy headline
-      :contents (with-temp-buffer
-                  (org-mode)
-                  (insert contents)
-                  (goto-char (point-min))
-                  (goto-char (org-log-beginning t))
-                  (insert "- " (apply #'format message format-args) "\n")
-                  (buffer-substring-no-properties (point-min) (point-max)))
+      :contents contents
       :-hash (org-glance-headline1--hash-lazy contents))))
 
 (provide 'org-glance-headline1)
