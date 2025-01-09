@@ -238,7 +238,7 @@
    (lambda (match) (or (match-string 2 match) (match-string 1 match) ""))
    (org-glance-headline1:title headline)))
 
-(cl-defun org-glance-headline1:log (headline message &rest format-args)
+(cl-defun org-glance-headline1:add-note (headline message &rest format-args)
   (cl-check-type headline org-glance-headline1)
   (cl-check-type message string)
 

@@ -211,7 +211,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:headline-log ()
   (let ((contents (-> (org-glance-headline1--from-string "* foo")
-                      (org-glance-headline1:log "Log note")
+                      (org-glance-headline1:add-note "Log note")
                       (org-glance-headline1:contents))))
     (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
 
