@@ -278,85 +278,91 @@
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
 
-;; (cl-defun org-glance-headline1:overview (headline)
-;;   (cl-check-type headline org-glance-headline1)
-;;   (with-temp-buffer
-;;     (insert (org-glance-headline1:contents headline))
-;;     (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
-;;               (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
-;;       (let* ((timestamps (org-glance-headline:timestamps headline))
-;;              (clocks (org-glance-headline:clocks headline))
-;;              ;; (relations (org-glance-headline-relations))
-;;              (tags (org-glance-headline:tag-string headline))
-;;              (state (org-glance-headline:state headline))
-;;              (id (org-glance-headline:id headline))
-;;              (title (org-glance-headline:plain-title headline))
-;;              (priority (org-glance-headline:priority headline))
-;;              (closed (org-element-property :closed headline))
-;;              (schedule (org-glance-headline:schedule headline))
-;;              (deadline (org-glance-headline:deadline headline))
-;;              (encrypted (org-glance-headline:encrypted? headline))
-;;              (linked (org-glance-headline:linked? headline)))
-;;         (with-temp-buffer (insert
-;;                            (concat
-;;                             "* "
-;;                             state
-;;                             (if (string-empty-p state) "" " ")
-;;                             (if priority (concat "[#" (char-to-string priority) "]" " ") "")
-;;                             title
-;;                             (if (string-empty-p tags) "" " ")
-;;                             tags
-;;                             "\n"
+(cl-defun org-glance-headline1:tag-string (headline)
+  (cl-check-type headline org-glance-headline1)
+  (-> (s-join ":" (mapcar #'symbol-name (org-glance-headline1:tags headline)))
+      (s-wrap ":" ":")))
 
-;;                             (if (and closed (listp closed))
-;;                                 (concat "CLOSED: "
-;;                                         (org-element-property :raw-value closed)
-;;                                         (if (or schedule deadline)
-;;                                             " "
-;;                                           ""))
-;;                               "")
+(cl-defun org-glance-headline1:overview (headline)
+  (cl-check-type headline org-glance-headline1)
+  (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
+            (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
+    (with-temp-buffer
+      (insert (org-glance-headline1:contents headline))
+      (let* ((timestamps (org-glance-headline1:timestamps headline))
+             (clocks (org-glance-headline1:clocks headline))
+             ;; (relations (org-glance-headline-relations))
+             (tags (org-glance-headline1:tag-string headline))
+             (state (org-glance-headline1:state headline))
+             (id (org-glance-headline1:id headline))
+             (title (org-glance-headline1:plain-title headline))
+             (priority (org-glance-headline1:priority headline))
+             (closed (org-glance-headline1:closed? headline))
+             (schedule (org-glance-headline1:schedule headline))
+             (deadline (org-glance-headline1:deadline headline))
+             (encrypted (org-glance-headline1:encrypted? headline))
+             (links (org-glance-headline1:links headline)))
+        (with-temp-buffer
+          (org-mode)
+          (insert (concat
+                   "* "
+                   state
+                   (if (string-empty-p state) "" " ")
+                   (if priority (concat "[#" (char-to-string priority) "]" " ") "")
+                   title
+                   (if tags "" " ")
+                   (with-temp-buffer )
+                   tags
+                   "\n"
+                   (if (and closed (listp closed))
+                       (concat "CLOSED: "
+                               (org-element-property :raw-value closed)
+                               (if (or schedule deadline)
+                                   " "
+                                 ""))
+                     "")
 
-;;                             (if schedule
-;;                                 (concat "SCHEDULED: "
-;;                                         (org-element-property :raw-value schedule)
-;;                                         (if deadline
-;;                                             " "
-;;                                           ""))
-;;                               "")
+                   (if schedule
+                       (concat "SCHEDULED: "
+                               (org-element-property :raw-value schedule)
+                               (if deadline
+                                   " "
+                                 ""))
+                     "")
 
-;;                             (if deadline
-;;                                 (concat "DEADLINE: " (org-element-property :raw-value deadline))
-;;                               "")
+                   (if deadline
+                       (concat "DEADLINE: " (org-element-property :raw-value deadline))
+                     "")
 
-;;                             (if (or schedule deadline closed)
-;;                                 "\n"
-;;                               "")
+                   (if (or schedule deadline closed)
+                       "\n"
+                     "")
 
-;;                             ":PROPERTIES:\n"
-;;                             ":ORG_GLANCE_ID: " id "\n"
-;;                             ":DIR: " (abbreviate-file-name default-directory) "\n"
-;;                             ":END:"
+                   ":PROPERTIES:\n"
+                   ":ORG_GLANCE_ID: " id "\n"
+                   ":DIR: " (abbreviate-file-name default-directory) "\n"
+                   ":END:"
 
-;;                             (org-glance--join-leading-separator-but-null "\n\n"
-;;                               (list
+                   (org-glance--join-leading-separator-but-null "\n\n"
+                     (list
 
-;;                                (when (or encrypted linked)
-;;                                  (concat "*Features*"
-;;                                          (org-list
-;;                                           (when encrypted "Encrypted")
-;;                                           (when linked "Linked"))))
+                      (when (or encrypted linked)
+                        (concat "*Features*"
+                                (org-list
+                                 (when encrypted "Encrypted")
+                                 (when linked "Linked"))))
 
-;;                                (when timestamps
-;;                                  (concat "*Timestamps*" (apply #'org-list timestamps)))
+                      (when timestamps
+                        (concat "*Timestamps*" (apply #'org-list timestamps)))
 
-;;                                ;; (when relations
-;;                                ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
+                      ;; (when relations
+                      ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
 
-;;                                (when clocks
-;;                                  (concat "*Time spent*" (apply #'org-newline clocks)))))))
-;;                           (condition-case nil
-;;                               (org-update-checkbox-count-maybe 'all)
-;;                             (error nil)))))
-;;     (s-trim (buffer-string))))
+                      (when clocks
+                        (concat "*Time spent*" (apply #'org-newline clocks)))))))
+          (condition-case nil
+              (org-update-checkbox-count-maybe 'all)
+            (error nil))))
+      (s-trimg (buffer-substring-no-properties (point-min) (point-max))))))
 
 (provide 'org-glance-headline1)

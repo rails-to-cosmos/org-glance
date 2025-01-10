@@ -144,7 +144,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (= (org-glance-headline1:priority headline) 65))
     (should (string= (org-glance-headline1:title headline) "bar"))
     (should (string= (org-glance-headline1:state headline) ""))
-    (should (string= (org-glance-headline1:id headline) "bar"))))
+    (should (string= (org-glance-headline1:id headline) "bar"))
+    (should (string= (org-glance-headline1:tag-string headline) ":a:b:c:"))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
