@@ -1,5 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
+(require 's)
 (require 'dash)
 (require 'org)
 (require 'org-element)
