@@ -216,12 +216,24 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
 
 (ert-deftest org-glance-test:headline-timestamps ()
-  (let* ((headline (org-glance-headline1--from-lines "* foo"
-                                                     "<2025-01-01 Wed>"
-                                                     "[2025-01-01 Wed]"))
-         (timestamps (org-glance-headline1:timestamps headline)))
+  (let ((timestamps (-> (org-glance-headline1--from-lines "* foo"
+                                                          "<2025-01-01 Wed>"
+                                                          "[2025-01-01 Wed]")
+                        (org-glance-headline1:timestamps))))
     (should (= (length timestamps) 1))
     (should (member "<2025-01-01 Wed>" timestamps))))
+
+(ert-deftest org-glance-test:headline-clocks ()
+  (let ((clocks (-> (org-glance-headline1--from-lines "* foo"
+                                                      ":LOGBOOK:"
+                                                      "- State \"STARTED\"    from \"PENDING\"    [2025-01-10 Fri 14:43]"
+                                                      "CLOCK: [2025-01-10 Fri 14:43]"
+                                                      "- State \"PENDING\"    from \"STARTED\"    [2025-01-10 Fri 14:43]"
+                                                      "- State \"STARTED\"    from \"TODO\"       [2025-01-10 Fri 14:15]"
+                                                      "CLOCK: [2025-01-10 Fri 14:15]--[2025-01-10 Fri 14:43] =>  0:28"
+                                                      ":END:")
+                    (org-glance-headline1:clocks))))
+    (should (= (length clocks) 2))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 

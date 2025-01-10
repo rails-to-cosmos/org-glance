@@ -6,6 +6,7 @@
 (require 'cl-lib)
 (require 'cl-macs)
 (require 'thunk)
+(require 'org-clock)
 
 (require 'org-glance-exception)
 (require 'org-glance-utils)
@@ -262,6 +263,14 @@
                                 (org-glance-datetime-filter-active)
                                 (org-glance-datetime-sort-timestamps))
              collect (org-element-property :raw-value timestamp))))
+
+(cl-defun org-glance-headline1:clocks (headline)
+  (cl-check-type headline org-glance-headline1)
+  (with-temp-buffer
+    (insert (org-glance-headline1:contents headline))
+    (goto-char (point-min))
+    (cl-loop while (re-search-forward org-clock-line-re nil t)
+             collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
 
 ;; (cl-defun org-glance-headline1:overview (headline)
 ;;   (cl-check-type headline org-glance-headline1)
