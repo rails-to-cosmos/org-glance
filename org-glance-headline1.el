@@ -34,7 +34,7 @@
 
   ;; Metadata
   (archived? nil :read-only t :type bool)
-  (closed? nil :read-only t :type bool)
+  (closed nil :read-only t :type (or null string))
   (commented? nil :read-only t :type bool)
 
   ;; Lazy attributes start with "-". Each has a `org-glance-headline1--<slot-name>-lazy' builder
@@ -59,7 +59,7 @@
   (and (not (org-glance-headline1:done? headline))
        (not (org-glance-headline1:commented? headline))
        (not (org-glance-headline1:archived? headline))
-       (not (org-glance-headline1:closed? headline))))
+       (not (org-glance-headline1:closed headline))))
 
 (cl-defun org-glance-headline1:encrypted? (headline)
   (let ((encrypted? (org-glance-headline1:-encrypted? headline)))
@@ -133,7 +133,7 @@
         (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
-        (closed? (not (null (org-element-property :closed element))))
+        (closed (org-element-property :closed element))
         (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
         (priority (org-element-property :priority element))
         (indent (or (org-element-property :level element) 1))
@@ -165,7 +165,7 @@
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?
-                                 :closed? closed?
+                                 :closed closed
                                  :-hash (org-glance-headline1--hash-lazy contents)
                                  :-links (org-glance-headline1--links-lazy contents)
                                  :-properties (org-glance-headline1--properties-lazy contents)
@@ -276,93 +276,60 @@
     (insert (org-glance-headline1:contents headline))
     (goto-char (point-min))
     (cl-loop while (re-search-forward org-clock-line-re nil t)
-             collect (buffer-substring-no-properties (pos-bol) (pos-eol)))))
+             when (org-at-clock-log-p)
+             collect (org-element-at-point))))
 
 (cl-defun org-glance-headline1:tag-string (headline)
   (cl-check-type headline org-glance-headline1)
-  (-> (s-join ":" (mapcar #'symbol-name (org-glance-headline1:tags headline)))
-      (s-wrap ":" ":")))
+  (when-let (tags (org-glance-headline1:tags headline))
+    (-> (s-join ":" (mapcar #'symbol-name ))
+        (s-wrap ":" ":"))))
 
 (cl-defun org-glance-headline1:overview (headline)
   (cl-check-type headline org-glance-headline1)
   (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
             (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
-    (with-temp-buffer
-      (insert (org-glance-headline1:contents headline))
-      (let* ((timestamps (org-glance-headline1:timestamps headline))
-             (clocks (org-glance-headline1:clocks headline))
-             ;; (relations (org-glance-headline-relations))
-             (tags (org-glance-headline1:tag-string headline))
-             (state (org-glance-headline1:state headline))
-             (id (org-glance-headline1:id headline))
-             (title (org-glance-headline1:plain-title headline))
-             (priority (org-glance-headline1:priority headline))
-             (closed (org-glance-headline1:closed? headline))
-             (schedule (org-glance-headline1:schedule headline))
-             (deadline (org-glance-headline1:deadline headline))
-             (encrypted (org-glance-headline1:encrypted? headline))
-             (links (org-glance-headline1:links headline)))
-        (with-temp-buffer
-          (org-mode)
-          (insert (concat
-                   "* "
-                   state
-                   (if (string-empty-p state) "" " ")
-                   (if priority (concat "[#" (char-to-string priority) "]" " ") "")
-                   title
-                   (if tags "" " ")
-                   (with-temp-buffer )
-                   tags
-                   "\n"
-                   (if (and closed (listp closed))
-                       (concat "CLOSED: "
-                               (org-element-property :raw-value closed)
-                               (if (or schedule deadline)
-                                   " "
-                                 ""))
-                     "")
+    (let ((timestamps (org-glance-headline1:timestamps headline))
+          (clocks (org-glance-headline1:clocks headline))
+          ;; (relations (org-glance-headline-relations))
+          (tags (org-glance-headline1:tag-string headline))
+          (state (org-glance-headline1:state headline))
+          (id (org-glance-headline1:id headline))
+          (title (org-glance-headline1:title-clean headline))
+          (priority (org-glance-headline1:priority headline))
+          (closed (org-glance-headline1:closed headline))
+          (schedule (org-glance-headline1:schedule headline))
+          (deadline (org-glance-headline1:deadline headline))
+          (encrypted (org-glance-headline1:encrypted? headline))
+          (links (org-glance-headline1:links headline)))
+      (with-temp-buffer
+        (org-mode)
+        (insert (org-glance-headline1:header headline))
 
-                   (if schedule
-                       (concat "SCHEDULED: "
-                               (org-element-property :raw-value schedule)
-                               (if deadline
-                                   " "
-                                 ""))
-                     "")
+        (when timestamps
+          (insert "\n*Timestamps*" (apply #'org-list timestamps)))
 
-                   (if deadline
-                       (concat "DEADLINE: " (org-element-property :raw-value deadline))
-                     "")
+        (when clocks
+          (insert "\n*Time spent*" (apply #'org-newline (mapcar #'org-element-interpret-data
+                                                                (--filter (eql 'closed (org-element-property :status it)) clocks)))))
 
-                   (if (or schedule deadline closed)
-                       "\n"
-                     "")
+        ;; (when relations
+        ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
 
-                   ":PROPERTIES:\n"
-                   ":ORG_GLANCE_ID: " id "\n"
-                   ":DIR: " (abbreviate-file-name default-directory) "\n"
-                   ":END:"
+        (condition-case nil
+            (org-update-checkbox-count-maybe 'all)
+          (error nil))
 
-                   (org-glance--join-leading-separator-but-null "\n\n"
-                     (list
+        (s-trim (buffer-substring-no-properties (point-min) (point-max)))))))
 
-                      (when (or encrypted linked)
-                        (concat "*Features*"
-                                (org-list
-                                 (when encrypted "Encrypted")
-                                 (when linked "Linked"))))
-
-                      (when timestamps
-                        (concat "*Timestamps*" (apply #'org-list timestamps)))
-
-                      ;; (when relations
-                      ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
-
-                      (when clocks
-                        (concat "*Time spent*" (apply #'org-newline clocks)))))))
-          (condition-case nil
-              (org-update-checkbox-count-maybe 'all)
-            (error nil))))
-      (s-trimg (buffer-substring-no-properties (point-min) (point-max))))))
+(cl-defun org-glance-headline1:header (headline)
+  (cl-check-type headline org-glance-headline1)
+  (with-temp-buffer
+    (insert (org-glance-headline1:contents headline))
+    (goto-char (point-min))
+    (org-mode)
+    (buffer-substring-no-properties (point) (save-excursion
+                                              (org-end-of-meta-data)
+                                              (point)))))
 
 (provide 'org-glance-headline1)
