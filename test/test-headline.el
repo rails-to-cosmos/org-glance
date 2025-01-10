@@ -135,16 +135,17 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 ;; new headline model
 
 (ert-deftest org-glance-test:headline-parser ()
-  (let* ((headline (org-glance-headline1--from-lines
-                     "** [#A] bar :a:B:c:"
-                     ":PROPERTIES:"
-                     ":ORG_GLANCE_ID: bar"
-                     ":END:")))
+  (let ((headline (org-glance-headline1--from-lines
+                    "** [#A] bar :a:B:c:"
+                    ":PROPERTIES:"
+                    ":ORG_GLANCE_ID: bar"
+                    ":END:")))
     (should (equal (org-glance-headline1:tags headline) '(a b c)))
     (should (= (org-glance-headline1:priority headline) 65))
     (should (string= (org-glance-headline1:title headline) "bar"))
     (should (string= (org-glance-headline1:state headline) ""))
-    (should (string= (org-glance-headline1:id headline) "bar"))))
+    (should (string= (org-glance-headline1:id headline) "bar"))
+    (should (string= (org-glance-headline1:tag-string headline) ":a:b:c:"))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
@@ -214,6 +215,36 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
                       (org-glance-headline1:add-note "Log note")
                       (org-glance-headline1:contents))))
     (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
+
+(ert-deftest org-glance-test:headline-timestamps ()
+  (let ((timestamps (-> (org-glance-headline1--from-lines "* foo"
+                                                          "<2025-01-01 Wed>"
+                                                          "[2025-01-01 Wed]")
+                        (org-glance-headline1:timestamps))))
+    (should (= (length timestamps) 1))
+    (should (member "<2025-01-01 Wed>" timestamps))))
+
+(ert-deftest org-glance-test:headline-clocks ()
+  (let ((clocks (-> (org-glance-headline1--from-lines "* foo"
+                                                      ":LOGBOOK:"
+                                                      "- State \"STARTED\"    from \"PENDING\"    [2025-01-10 Fri 14:43]"
+                                                      "CLOCK: [2025-01-10 Fri 14:43]"
+                                                      "- State \"PENDING\"    from \"STARTED\"    [2025-01-10 Fri 14:43]"
+                                                      "- State \"STARTED\"    from \"TODO\"       [2025-01-10 Fri 14:15]"
+                                                      "CLOCK: [2025-01-10 Fri 14:15]--[2025-01-10 Fri 14:43] =>  0:28"
+                                                      ":END:")
+                    (org-glance-headline1:clocks))))
+    (should (= (length clocks) 2))))
+
+(ert-deftest org-glance-test:headline-schedule ()
+  (let ((schedule (-> (org-glance-headline1--from-lines "* foo" "SCHEDULED: <2025-01-10 Fri>")
+                      (org-glance-headline1:schedule))))
+    (should (string= (org-element-property :raw-value schedule) "<2025-01-10 Fri>"))))
+
+(ert-deftest org-glance-test:headline-deadline ()
+  (let ((deadline (-> (org-glance-headline1--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
+                      (org-glance-headline1:deadline))))
+    (should (string= (org-element-property :raw-value deadline) "<2025-01-10 Fri>"))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
