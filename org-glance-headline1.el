@@ -282,7 +282,7 @@
 (cl-defun org-glance-headline1:tag-string (headline)
   (cl-check-type headline org-glance-headline1)
   (when-let (tags (org-glance-headline1:tags headline))
-    (-> (s-join ":" (mapcar #'symbol-name ))
+    (-> (s-join ":" (mapcar #'symbol-name tags))
         (s-wrap ":" ":"))))
 
 (cl-defun org-glance-headline1:overview (headline)

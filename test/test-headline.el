@@ -135,11 +135,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 ;; new headline model
 
 (ert-deftest org-glance-test:headline-parser ()
-  (let* ((headline (org-glance-headline1--from-lines
-                     "** [#A] bar :a:B:c:"
-                     ":PROPERTIES:"
-                     ":ORG_GLANCE_ID: bar"
-                     ":END:")))
+  (let ((headline (org-glance-headline1--from-lines
+                    "** [#A] bar :a:B:c:"
+                    ":PROPERTIES:"
+                    ":ORG_GLANCE_ID: bar"
+                    ":END:")))
     (should (equal (org-glance-headline1:tags headline) '(a b c)))
     (should (= (org-glance-headline1:priority headline) 65))
     (should (string= (org-glance-headline1:title headline) "bar"))
