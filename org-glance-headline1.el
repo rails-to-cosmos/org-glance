@@ -17,7 +17,6 @@
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
-(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
@@ -129,7 +128,7 @@
 (cl-defun org-glance-headline1--from-element (element)
   "Create `org-glance-headline1' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
-        (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
+        (tags (mapcar (-compose #'intern #'s-downcase) (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
         (closed (org-element-property :closed element))
