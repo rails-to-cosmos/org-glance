@@ -10,6 +10,7 @@
 (require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
+(require 'org-glance-datetime-mode)
 
 (defvar org-glance:key-value-pair-re)
 
@@ -252,5 +253,95 @@
     (org-glance-headline1--copy headline
       :contents contents
       :-hash (org-glance-headline1--hash-lazy contents))))
+
+(cl-defun org-glance-headline1:timestamps (headline)
+  (cl-check-type headline org-glance-headline1)
+  (with-temp-buffer
+    (insert (org-glance-headline1:contents headline))
+    (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
+                                (org-glance-datetime-filter-active)
+                                (org-glance-datetime-sort-timestamps))
+             collect (org-element-property :raw-value timestamp))))
+
+;; (cl-defun org-glance-headline1:overview (headline)
+;;   (cl-check-type headline org-glance-headline1)
+;;   (with-temp-buffer
+;;     (insert (org-glance-headline1:contents headline))
+;;     (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
+;;               (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
+;;       (let* ((timestamps (org-glance-headline:timestamps headline))
+;;              (clocks (org-glance-headline:clocks headline))
+;;              ;; (relations (org-glance-headline-relations))
+;;              (tags (org-glance-headline:tag-string headline))
+;;              (state (org-glance-headline:state headline))
+;;              (id (org-glance-headline:id headline))
+;;              (title (org-glance-headline:plain-title headline))
+;;              (priority (org-glance-headline:priority headline))
+;;              (closed (org-element-property :closed headline))
+;;              (schedule (org-glance-headline:schedule headline))
+;;              (deadline (org-glance-headline:deadline headline))
+;;              (encrypted (org-glance-headline:encrypted? headline))
+;;              (linked (org-glance-headline:linked? headline)))
+;;         (with-temp-buffer (insert
+;;                            (concat
+;;                             "* "
+;;                             state
+;;                             (if (string-empty-p state) "" " ")
+;;                             (if priority (concat "[#" (char-to-string priority) "]" " ") "")
+;;                             title
+;;                             (if (string-empty-p tags) "" " ")
+;;                             tags
+;;                             "\n"
+
+;;                             (if (and closed (listp closed))
+;;                                 (concat "CLOSED: "
+;;                                         (org-element-property :raw-value closed)
+;;                                         (if (or schedule deadline)
+;;                                             " "
+;;                                           ""))
+;;                               "")
+
+;;                             (if schedule
+;;                                 (concat "SCHEDULED: "
+;;                                         (org-element-property :raw-value schedule)
+;;                                         (if deadline
+;;                                             " "
+;;                                           ""))
+;;                               "")
+
+;;                             (if deadline
+;;                                 (concat "DEADLINE: " (org-element-property :raw-value deadline))
+;;                               "")
+
+;;                             (if (or schedule deadline closed)
+;;                                 "\n"
+;;                               "")
+
+;;                             ":PROPERTIES:\n"
+;;                             ":ORG_GLANCE_ID: " id "\n"
+;;                             ":DIR: " (abbreviate-file-name default-directory) "\n"
+;;                             ":END:"
+
+;;                             (org-glance--join-leading-separator-but-null "\n\n"
+;;                               (list
+
+;;                                (when (or encrypted linked)
+;;                                  (concat "*Features*"
+;;                                          (org-list
+;;                                           (when encrypted "Encrypted")
+;;                                           (when linked "Linked"))))
+
+;;                                (when timestamps
+;;                                  (concat "*Timestamps*" (apply #'org-list timestamps)))
+
+;;                                ;; (when relations
+;;                                ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
+
+;;                                (when clocks
+;;                                  (concat "*Time spent*" (apply #'org-newline clocks)))))))
+;;                           (condition-case nil
+;;                               (org-update-checkbox-count-maybe 'all)
+;;                             (error nil)))))
+;;     (s-trim (buffer-string))))
 
 (provide 'org-glance-headline1)

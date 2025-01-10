@@ -215,6 +215,14 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
                       (org-glance-headline1:contents))))
     (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
 
+(ert-deftest org-glance-test:headline-timestamps ()
+  (let* ((headline (org-glance-headline1--from-lines "* foo"
+                                                     "<2025-01-01 Wed>"
+                                                     "[2025-01-01 Wed]"))
+         (timestamps (org-glance-headline1:timestamps headline)))
+    (should (= (length timestamps) 1))
+    (should (member "<2025-01-01 Wed>" timestamps))))
+
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 ;;; test-headline.el ends here
