@@ -29,6 +29,8 @@
   (title nil :read-only t :type string)
   (priority nil :read-only t :type number)
   (indent nil :read-only t :type number)
+  (schedule nil :read-only t :type string)
+  (deadline nil :read-only t :type string)
 
   ;; Metadata
   (archived? nil :read-only t :type bool)
@@ -135,6 +137,8 @@
         (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
         (priority (org-element-property :priority element))
         (indent (or (org-element-property :level element) 1))
+        (schedule (org-element-property :scheduled element))
+        (deadline (org-element-property :deadline element))
         (title (or (org-element-property :ORG_GLANCE_TITLE element)
                    (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
@@ -156,6 +160,8 @@
                                  :state state
                                  :priority priority
                                  :indent indent
+                                 :schedule schedule
+                                 :deadline deadline
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?

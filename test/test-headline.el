@@ -235,6 +235,16 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
                     (org-glance-headline1:clocks))))
     (should (= (length clocks) 2))))
 
+(ert-deftest org-glance-test:headline-schedule ()
+  (let ((schedule (-> (org-glance-headline1--from-lines "* foo" "SCHEDULED: <2025-01-10 Fri>")
+                      (org-glance-headline1:schedule))))
+    (should (string= (org-element-property :raw-value schedule) "<2025-01-10 Fri>"))))
+
+(ert-deftest org-glance-test:headline-deadline ()
+  (let ((deadline (-> (org-glance-headline1--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
+                      (org-glance-headline1:deadline))))
+    (should (string= (org-element-property :raw-value deadline) "<2025-01-10 Fri>"))))
+
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 ;;; test-headline.el ends here
