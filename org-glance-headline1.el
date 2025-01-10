@@ -14,8 +14,6 @@
 (require 'org-glance-tag)
 (require 'org-glance-datetime-mode)
 
-(defvar org-glance:key-value-pair-re)
-
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
