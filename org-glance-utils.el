@@ -59,11 +59,6 @@
            collect beg into positions
            finally return (-zip links titles positions)))
 
-(cl-defun org-glance--search-optional (needle)
-  (condition-case nil
-      (re-search-forward needle)
-    (search-failed nil)))
-
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
 Run completing read on keys and copy selected values to kill ring.
@@ -71,7 +66,7 @@ Run completing read on keys and copy selected values to kill ring.
 Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
   (save-excursion
     (goto-char (point-min))
-    (cl-loop while (org-glance--search-optional org-glance:key-value-pair-re)
+    (cl-loop while (re-search-forward org-glance:key-value-pair-re nil t)
              for key = (s-trim (substring-no-properties (match-string 1)))
              for value = (s-trim (substring-no-properties (match-string 2)))
              collect (cons key value))))

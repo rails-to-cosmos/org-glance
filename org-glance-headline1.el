@@ -18,6 +18,8 @@
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
+(defconst org-glance-headline1:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
+
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
   (contents nil :read-only t :type string)
@@ -104,7 +106,9 @@
 (cl-defun org-glance-headline1--properties (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
-                 (org-glance--buffer-key-value-pairs))))
+                 (cl-loop while (re-search-forward org-glance-headline1:key-value-pair-re nil t)
+                          collect (cons (s-trim (substring-no-properties (match-string 1)))
+                                        (s-trim (substring-no-properties (match-string 2))))))))
 
 (cl-defun org-glance-headline1--encrypted (contents)
   (cl-check-type contents string)
