@@ -66,10 +66,10 @@
              do (org-up-heading-or-point-min))))
 
 (cl-defun org-glance-headline1:active? (headline)
-  (and (not (org-glance-headline1:done? headline))
-       (not (org-glance-headline1:commented? headline))
-       (not (org-glance-headline1:archived? headline))
-       (not (org-glance-headline1:closed headline))))
+  (not (or (org-glance-headline1:done? headline)
+           (org-glance-headline1:commented? headline)
+           (org-glance-headline1:archived? headline)
+           (org-glance-headline1:closed headline))))
 
 (cl-defun org-glance-headline1:encrypted? (headline)
   (let ((encrypted? (org-glance-headline1:-encrypted? headline)))
