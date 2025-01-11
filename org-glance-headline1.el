@@ -41,12 +41,21 @@
   (-links nil :read-only t :type (or list function))
   (-properties nil :read-only t :type (or list function)))
 
+(cl-defmacro org-glance-headline1:with-contents (contents &rest forms)
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert (cl-typecase ,contents
+               (org-glance-headline1 (org-glance-headline1:contents ,contents))
+               (string ,contents)))
+     (goto-char (point-min))
+     ,@forms))
+
 (cl-defun org-glance-headline1:at-point ()
   (save-excursion
     (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
              while (org-at-heading-p)
              for element = (org-element-at-point)
-             if (and (listp element) (eq (car element) 'headline))  ;; if (org-element-type-p element 'headline)
+             if (and (listp element) (eq (car element) 'headline)) ;; if (org-element-type-p element 'headline)
              return (org-glance-headline1--from-element element)
              else if (or (org-before-first-heading-p) (bobp))
              do (error "Unable to find `org-glance-headline1' at point")
@@ -83,40 +92,29 @@
 
 (cl-defun org-glance-headline1--hash-lazy (contents)
   (cl-check-type contents string)
-  (thunk-delay
-   (with-temp-buffer
-     (insert contents)
-     (buffer-hash))))
+  (thunk-delay (org-glance-headline1:with-contents contents
+                 (buffer-hash))))
 
 (cl-defun org-glance-headline1--links-lazy (contents)
   (cl-check-type contents string)
-  (thunk-delay
-   (with-temp-buffer
-     (insert contents)
-     (org-glance--parse-links))))
+  (thunk-delay (org-glance-headline1:with-contents contents
+                 (org-glance--parse-links))))
 
 (cl-defun org-glance-headline1--properties-lazy (contents)
   (cl-check-type contents string)
-  (thunk-delay
-   (with-temp-buffer
-     (insert contents)
-     (org-glance--buffer-key-value-pairs))))
+  (thunk-delay (org-glance-headline1:with-contents contents
+                 (org-glance--buffer-key-value-pairs))))
 
 (cl-defun org-glance-headline1--encrypted-lazy (contents)
   (cl-check-type contents string)
-  (thunk-delay
-   (with-temp-buffer
-     (insert contents)
-     (goto-char (point-min))
-     (org-end-of-meta-data t)
-     (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
+  (thunk-delay (org-glance-headline1:with-contents contents
+                 (org-end-of-meta-data t)
+                 (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
 
 (cl-defun org-glance-headline1--from-string (contents)
   (cl-check-type contents string)
-  (with-temp-buffer
-    (insert contents)
+  (org-glance-headline1:with-contents contents
     (org-mode)
-    (goto-char (point-min))
     (or (org-at-heading-p) (progn (re-search-forward org-heading-regexp)))
     (org-glance-headline1:at-point)))
 
@@ -189,13 +187,11 @@
   (if (org-glance-headline1:encrypted? headline)
       headline
     (org-glance-headline1--copy headline
-      :contents (with-temp-buffer
-                  (insert (org-glance-headline1:contents headline))
-                  (goto-char (point-min))
+      :contents (org-glance-headline1:with-contents headline
                   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
                         (end (save-excursion (org-end-of-subtree t) (point))))
-                    (org-glance--encrypt-region beg end password))
-                  (buffer-string))
+                    (org-glance--encrypt-region beg end password)
+                    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       :-encrypted? t)))
 
 (cl-defun org-glance-headline1:decrypt (headline password)
@@ -204,13 +200,11 @@
   (if (not (org-glance-headline1:encrypted? headline))
       headline
     (org-glance-headline1--copy headline
-      :contents (with-temp-buffer
-                  (insert (org-glance-headline1:contents headline))
-                  (goto-char (point-min))
+      :contents (org-glance-headline1:with-contents headline
                   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
                         (end (save-excursion (org-end-of-subtree t) (point))))
-                    (org-glance--decrypt-region beg end password))
-                  (buffer-string))
+                    (org-glance--decrypt-region beg end password)
+                    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       :-encrypted? nil)))
 
 (cl-defun org-glance-headline1:search-forward (id)
@@ -224,14 +218,12 @@
 
 (cl-defun org-glance-headline1:reset-indent (headline)
   (cl-check-type headline org-glance-headline1)
-  (let ((contents (with-temp-buffer
+  (let ((contents (org-glance-headline1:with-contents headline
                     (org-mode)
-                    (insert (org-glance-headline1:contents headline))
-                    (goto-char (point-min))
                     (re-search-forward "\\^*")
                     (while (looking-at "^\\*\\*")
                       (org-promote-subtree))
-                    (buffer-string))))
+                    (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
     (org-glance-headline1--copy headline
       :indent 1
       :contents contents
@@ -248,10 +240,7 @@
   (cl-check-type headline org-glance-headline1)
   (cl-check-type message string)
 
-  (let ((contents (with-temp-buffer
-                    (org-mode)
-                    (insert (org-glance-headline1:contents headline))
-                    (goto-char (point-min))
+  (let ((contents (org-glance-headline1:with-contents headline
                     (goto-char (org-log-beginning t))
                     (insert "- " (apply #'format message format-args) "\n")
                     (buffer-substring-no-properties (point-min) (point-max)))))
@@ -261,8 +250,7 @@
 
 (cl-defun org-glance-headline1:timestamps (headline)
   (cl-check-type headline org-glance-headline1)
-  (with-temp-buffer
-    (insert (org-glance-headline1:contents headline))
+  (org-glance-headline1:with-contents headline
     (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
                                 (org-glance-datetime-filter-active)
                                 (org-glance-datetime-sort-timestamps))
@@ -270,9 +258,8 @@
 
 (cl-defun org-glance-headline1:clocks (headline)
   (cl-check-type headline org-glance-headline1)
-  (with-temp-buffer
-    (insert (org-glance-headline1:contents headline))
-    (goto-char (point-min))
+  (org-glance-headline1:with-contents headline
+    (org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
@@ -300,9 +287,8 @@
           (deadline (org-glance-headline1:deadline headline))
           (encrypted (org-glance-headline1:encrypted? headline))
           (links (org-glance-headline1:links headline)))
-      (with-temp-buffer
+      (org-glance-headline1:with-contents (org-glance-headline1:header headline)
         (org-mode)
-        (insert (org-glance-headline1:header headline))
 
         (when timestamps
           (insert "\n*Timestamps*" (apply #'org-list timestamps)))
@@ -322,9 +308,7 @@
 
 (cl-defun org-glance-headline1:header (headline)
   (cl-check-type headline org-glance-headline1)
-  (with-temp-buffer
-    (insert (org-glance-headline1:contents headline))
-    (goto-char (point-min))
+  (org-glance-headline1:with-contents headline
     (org-mode)
     (buffer-substring-no-properties (point) (save-excursion
                                               (org-end-of-meta-data)
