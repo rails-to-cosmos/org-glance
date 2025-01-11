@@ -96,8 +96,12 @@
 (cl-defun org-glance-headline1--hash (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
+                 (org-mode)
                  (org-entry-delete nil "ORG_GLANCE_HASH") ;; hash property itself should not affect headline hash
-                 (buffer-hash))))
+                 (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                   (with-temp-buffer
+                     (insert data)
+                     (buffer-hash))))))
 
 (cl-defun org-glance-headline1--links (contents)
   (cl-check-type contents string)
