@@ -18,6 +18,14 @@
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
+(unless (fboundp 'org-element-type-p)
+  (cl-defun org-element-type-p (node types)
+    (cl-typecase node
+      (list (member (car node) (cl-typecase types
+                                 (list types)
+                                 (symbol (list types)))))
+      (otherwise nil))))
+
 (defconst org-glance-headline1:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 (defconst org-glance-headline1:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
 
@@ -59,7 +67,7 @@
     (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
              while (org-at-heading-p)
              for element = (org-element-at-point)
-             if (and (listp element) (eq (car element) 'headline)) ;; if (org-element-type-p element 'headline)
+             if (org-element-type-p element 'headline) ;; (and (listp element) (eq (car element) 'headline))
              return (org-glance-headline1--from-element element)
              else if (or (org-before-first-heading-p) (bobp))
              do (error "Unable to find `org-glance-headline1' at point")
@@ -127,7 +135,8 @@
   (cl-check-type contents string)
   (org-glance-headline1:with-contents contents
     (org-mode)
-    (or (org-at-heading-p) (progn (re-search-forward org-heading-regexp)))
+    (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
+      (error "Unable to find `org-element' of type `headline' in the provided contents"))
     (org-glance-headline1:at-point)))
 
 (cl-defun org-glance-headline1--from-lines (&rest lines)
@@ -155,7 +164,7 @@
                         (begin (org-element-property :begin element))
                         (end (org-element-property :end element)))
                     (with-current-buffer buffer
-                      (buffer-substring-no-properties (point-min) (point-max))))))
+                      (buffer-substring-no-properties begin end)))))
     (make-org-glance-headline1 :id id
                                :title title
                                :tags tags
@@ -174,7 +183,7 @@
                                :-encrypted? (org-glance-headline1--encrypted contents))))
 
 (cl-defun org-glance-headline1--copy (headline &rest update-plist)
-  "Copy HEADLINE, replace slot values described in UPDATE-PLIST."
+  "Copy HEADLINE but replace slot values described in UPDATE-PLIST."
   (declare (indent 1))
   (cl-check-type headline org-glance-headline1)
   (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline1))
@@ -245,8 +254,8 @@
 (cl-defun org-glance-headline1:add-note (headline message &rest format-args)
   (cl-check-type headline org-glance-headline1)
   (cl-check-type message string)
-
   (let ((contents (org-glance-headline1:with-contents headline
+                    (org-mode)
                     (goto-char (org-log-beginning t))
                     (insert "- " (apply #'format message format-args) "\n")
                     (buffer-substring-no-properties (point-min) (point-max)))))
@@ -254,17 +263,31 @@
       :contents contents
       :-hash (org-glance-headline1--hash contents))))
 
+(cl-defun org-glance--element-timestamps (element)
+  (cl-check-type element list)
+  (cl-case (org-element-type element)
+    (timestamp (list element))
+    ;; (headline (list (org-element-property :scheduled element)
+    ;;                 (org-element-property :deadline element)))
+    ))
+
 (cl-defun org-glance-headline1:timestamps (headline)
   (cl-check-type headline org-glance-headline1)
   (org-glance-headline1:with-contents headline
-    (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
-                                (--filter (org-glance-datetime:active? it))
-                                (org-glance-datetime-sort-timestamps))
-             collect (org-element-property :raw-value timestamp))))
+    (org-mode)
+    (->> #'org-glance--element-timestamps
+         (org-element-map (org-element-parse-buffer) '(timestamp headline))
+         (-flatten-n 1)
+         (-non-nil))))
+
+(cl-defun org-glance-headline1:timestamps-raw (headline)
+  (cl-check-type headline org-glance-headline1)
+  (mapcar (-partial #'org-element-property :raw-value) (org-glance-headline1:timestamps headline)))
 
 (cl-defun org-glance-headline1:clocks (headline)
   (cl-check-type headline org-glance-headline1)
   (org-glance-headline1:with-contents headline
+    (org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
@@ -279,9 +302,9 @@
   (cl-check-type headline org-glance-headline1)
   (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
             (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
-    (let ((timestamps (org-glance-headline1:timestamps headline))
-          (clocks (org-glance-headline1:clocks headline))
-          ;; (relations (org-glance-headline-relations))
+    (let ((timestamps (org-glance-headline1:timestamps-raw headline))
+          (clocks (->> (org-glance-headline1:clocks headline)
+                       (--filter (eql 'closed (org-element-property :status it)))))
           (tags (org-glance-headline1:tag-string headline))
           (hash (org-glance-headline1:hash headline))
           (state (org-glance-headline1:state headline))
@@ -295,17 +318,14 @@
           (links (org-glance-headline1:links headline)))
       (org-glance-headline1:with-contents (org-glance-headline1:header headline)
         (org-mode)
-        (org-set-property "ORG_GLANCE_HASH" hash)
 
-        (when timestamps
-          (insert "\n*Timestamps*" (apply #'org-list timestamps)))
+        (when id (org-entry-put nil "ORG_GLANCE_ID" id))
+        (org-entry-put nil "ORG_GLANCE_HASH" hash)
 
-        (when clocks
-          (insert "\n*Time spent*" (apply #'org-newline (mapcar #'org-element-interpret-data
-                                                                (--filter (eql 'closed (org-element-property :status it)) clocks)))))
+        (goto-char (point-max))
 
-        ;; (when relations
-        ;;   (concat "*Relations*" (apply #'org-list (mapcar #'org-glance-relation-interpreter relations))))
+        (insert (s-join "\n" (-non-nil (list (when timestamps (concat "\n*Timestamps*\n- " (s-join "\n- " timestamps)))
+                                             (when clocks (concat "\n*Time spent*\n" (s-join "\n" (mapcar #'org-element-interpret-data clocks))))))))
 
         (condition-case nil
             (org-update-checkbox-count-maybe 'all)

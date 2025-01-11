@@ -136,6 +136,9 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:headline-parser ()
   (let ((headline (org-glance-headline1--from-lines
+                    ""
+                    ""
+                    ""
                     "** [#A] bar :a:B:c:"
                     ":PROPERTIES:"
                     ":ORG_GLANCE_ID: bar"
@@ -145,7 +148,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (string= (org-glance-headline1:title headline) "bar"))
     (should (string= (org-glance-headline1:state headline) ""))
     (should (string= (org-glance-headline1:id headline) "bar"))
-    (should (string= (org-glance-headline1:tag-string headline) ":a:b:c:"))))
+    (should (string= (org-glance-headline1:tag-string headline) ":a:b:c:"))
+    (should (not (org-glance-headline1:encrypted? headline)))))
 
 (ert-deftest org-glance-test:headline-active ()
   (let ((org-done-keywords (list "DONE")))
@@ -220,8 +224,8 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (let ((timestamps (-> (org-glance-headline1--from-lines "* foo"
                                                           "<2025-01-01 Wed>"
                                                           "[2025-01-01 Wed]")
-                        (org-glance-headline1:timestamps))))
-    (should (= (length timestamps) 1))
+                        (org-glance-headline1:timestamps-raw))))
+    (should (= (length timestamps) 2))
     (should (member "<2025-01-01 Wed>" timestamps))))
 
 (ert-deftest org-glance-test:headline-clocks ()
