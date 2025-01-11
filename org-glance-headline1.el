@@ -76,7 +76,7 @@
     (cl-typecase encrypted?
       (boolean encrypted?)
       (function (thunk-force encrypted?))
-      (otherwise (error "Lazy evaluation failed: encrypted?")))))
+      (otherwise (error "Lazy evaluation failed: `org-glance-headline1:encrypted?'")))))
 
 (cl-defun org-glance-headline1:hash (headline)
   (thunk-force (org-glance-headline1:-hash headline)))
@@ -84,11 +84,11 @@
 (cl-defun org-glance-headline1:links (headline)
   (thunk-force (org-glance-headline1:-links headline)))
 
-(cl-defun org-glance-headline1:user-properties (headline)
+(cl-defun org-glance-headline1:properties (headline)
   (thunk-force (org-glance-headline1:-properties headline)))
 
 (cl-defun org-glance-headline1:get-user-property (property headline)
-  (alist-get property (org-glance-headline1:user-properties headline) nil nil #'string=))
+  (alist-get property (org-glance-headline1:properties headline) nil nil #'string=))
 
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
@@ -277,6 +277,7 @@
           (clocks (org-glance-headline1:clocks headline))
           ;; (relations (org-glance-headline-relations))
           (tags (org-glance-headline1:tag-string headline))
+          (hash (org-glance-headline1:hash headline))
           (state (org-glance-headline1:state headline))
           (id (org-glance-headline1:id headline))
           (title (org-glance-headline1:title-clean headline))
@@ -288,6 +289,8 @@
           (links (org-glance-headline1:links headline)))
       (org-glance-headline1:with-contents (org-glance-headline1:header headline)
         (org-mode)
+
+        (org-set-property "ORG_GLANCE_HASH" hash)
 
         (when timestamps
           (insert "\n*Timestamps*" (apply #'org-list timestamps)))

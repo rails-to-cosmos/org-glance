@@ -156,7 +156,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
 
 (ert-deftest org-glance-test:headline-properties ()
   (let ((headline (org-glance-headline1--from-lines "* TODO Hello, world!" "- foo: bar")))
-    (should (eq 1 (length (org-glance-headline1:user-properties headline))))
+    (should (eq 1 (length (org-glance-headline1:properties headline))))
     (should (string= "bar" (org-glance-headline1:get-user-property "foo" headline)))))
 
 (ert-deftest org-glance-test:headline-links ()
@@ -245,6 +245,12 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (let ((deadline (-> (org-glance-headline1--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
                       (org-glance-headline1:deadline))))
     (should (string= (org-element-property :raw-value deadline) "<2025-01-10 Fri>"))))
+
+;; (ert-deftest org-glance-test:headline-hash-consistency ()
+;;   (let* ((headline (org-glance-headline1--from-string "* foo"))
+;;          (overview (org-glance-headline1:overview headline)))
+;;     (should (string= (org-glance-headline1:hash headline)
+;;                      (org-glance-headline1:hash (org-glance-headline1--from-string overview))))))
 
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
