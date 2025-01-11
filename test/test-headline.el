@@ -252,6 +252,7 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
     (should (string= (org-glance-headline1:hash headline)
                      (org-glance-headline1:hash (org-glance-headline1--from-string overview))))))
 
+
 ;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
 
 ;;; test-headline.el ends here

@@ -19,6 +19,7 @@
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
 
 (defconst org-glance-headline1:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
+(defconst org-glance-headline1:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
 
 (cl-defstruct (org-glance-headline1 (:predicate org-glance-headline1?)
                                     (:conc-name org-glance-headline1:))
@@ -96,12 +97,13 @@
 (cl-defun org-glance-headline1--hash (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
-                 (org-mode)
-                 (org-entry-delete nil "ORG_GLANCE_HASH") ;; hash property itself should not affect headline hash
-                 (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                   (with-temp-buffer
-                     (insert data)
-                     (buffer-hash))))))
+                 (cl-loop initially (org-mode)
+                          for property in org-glance-headline1:hash-ignore-properties
+                          do (org-entry-delete nil property)
+                          finally return (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+                                           (with-temp-buffer
+                                             (insert data)
+                                             (buffer-hash)))))))
 
 (cl-defun org-glance-headline1--links (contents)
   (cl-check-type contents string)
@@ -293,7 +295,6 @@
           (links (org-glance-headline1:links headline)))
       (org-glance-headline1:with-contents (org-glance-headline1:header headline)
         (org-mode)
-
         (org-set-property "ORG_GLANCE_HASH" hash)
 
         (when timestamps
