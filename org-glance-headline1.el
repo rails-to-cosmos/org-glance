@@ -35,7 +35,7 @@
   (closed nil :read-only t :type (or null string))
   (commented? nil :read-only t :type bool)
 
-  ;; Lazy attributes start with "-". Each has a `org-glance-headline1--<slot-name>-lazy' builder
+  ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline1--<slot-name>'
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-links nil :read-only t :type (or list function))
@@ -90,22 +90,23 @@
 (cl-defun org-glance-headline1:done? (headline)
   (not (null (member (org-glance-headline1:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline1--hash-lazy (contents)
+(cl-defun org-glance-headline1--hash (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
+                 (org-entry-delete nil "ORG_GLANCE_HASH") ;; hash property itself should not affect headline hash
                  (buffer-hash))))
 
-(cl-defun org-glance-headline1--links-lazy (contents)
+(cl-defun org-glance-headline1--links (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
                  (org-glance--parse-links))))
 
-(cl-defun org-glance-headline1--properties-lazy (contents)
+(cl-defun org-glance-headline1--properties (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
                  (org-glance--buffer-key-value-pairs))))
 
-(cl-defun org-glance-headline1--encrypted-lazy (contents)
+(cl-defun org-glance-headline1--encrypted (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline1:with-contents contents
                  (org-end-of-meta-data t)
@@ -156,10 +157,10 @@
                                :archived? archived?
                                :commented? commented?
                                :closed closed
-                               :-hash (org-glance-headline1--hash-lazy contents)
-                               :-links (org-glance-headline1--links-lazy contents)
-                               :-properties (org-glance-headline1--properties-lazy contents)
-                               :-encrypted? (org-glance-headline1--encrypted-lazy contents))))
+                               :-hash (org-glance-headline1--hash contents)
+                               :-links (org-glance-headline1--links contents)
+                               :-properties (org-glance-headline1--properties contents)
+                               :-encrypted? (org-glance-headline1--encrypted contents))))
 
 (cl-defun org-glance-headline1--copy (headline &rest update-plist)
   "Copy HEADLINE, replace slot values described in UPDATE-PLIST."
@@ -221,7 +222,7 @@
     (org-glance-headline1--copy headline
       :indent 1
       :contents contents
-      :-hash (org-glance-headline1--hash-lazy contents))))
+      :-hash (org-glance-headline1--hash contents))))
 
 (cl-defun org-glance-headline1:title-clean (headline)
   (cl-check-type headline org-glance-headline1)
@@ -240,7 +241,7 @@
                     (buffer-substring-no-properties (point-min) (point-max)))))
     (org-glance-headline1--copy headline
       :contents contents
-      :-hash (org-glance-headline1--hash-lazy contents))))
+      :-hash (org-glance-headline1--hash contents))))
 
 (cl-defun org-glance-headline1:timestamps (headline)
   (cl-check-type headline org-glance-headline1)
