@@ -48,7 +48,8 @@
   `(with-temp-buffer
      (insert (cl-typecase ,contents
                (org-glance-headline1 (org-glance-headline1:contents ,contents))
-               (string ,contents)))
+               (string ,contents)
+               (otherwise (error "Expected `org-glance-headline1' or string, but got %s" (cl-type-of ,contents)))))
      (goto-char (point-min))
      ,@forms))
 
