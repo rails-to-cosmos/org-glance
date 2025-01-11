@@ -138,34 +138,28 @@
         (title (or (org-element-property :ORG_GLANCE_TITLE element)
                    (org-element-property :TITLE element)
                    (org-element-property :raw-value element)
-                   "")))
-
-    (cl-destructuring-bind (contents hash)
-        (let ((buffer (or (org-element-property :buffer element) (current-buffer)))
-              (begin (org-element-property :begin element))
-              (end (org-element-property :end element)))
-          (with-current-buffer buffer
-            (save-restriction
-              (narrow-to-region begin end)
-              (list (buffer-substring-no-properties (point-min) (point-max))
-                    (buffer-hash)))))
-
-      (make-org-glance-headline1 :id id
-                                 :title title
-                                 :tags tags
-                                 :state state
-                                 :priority priority
-                                 :indent indent
-                                 :schedule schedule
-                                 :deadline deadline
-                                 :contents contents
-                                 :archived? archived?
-                                 :commented? commented?
-                                 :closed closed
-                                 :-hash (org-glance-headline1--hash-lazy contents)
-                                 :-links (org-glance-headline1--links-lazy contents)
-                                 :-properties (org-glance-headline1--properties-lazy contents)
-                                 :-encrypted? (org-glance-headline1--encrypted-lazy contents)))))
+                   ""))
+        (contents (let ((buffer (or (org-element-property :buffer element) (current-buffer)))
+                        (begin (org-element-property :begin element))
+                        (end (org-element-property :end element)))
+                    (with-current-buffer buffer
+                      (buffer-substring-no-properties (point-min) (point-max))))))
+    (make-org-glance-headline1 :id id
+                               :title title
+                               :tags tags
+                               :state state
+                               :priority priority
+                               :indent indent
+                               :schedule schedule
+                               :deadline deadline
+                               :contents contents
+                               :archived? archived?
+                               :commented? commented?
+                               :closed closed
+                               :-hash (org-glance-headline1--hash-lazy contents)
+                               :-links (org-glance-headline1--links-lazy contents)
+                               :-properties (org-glance-headline1--properties-lazy contents)
+                               :-encrypted? (org-glance-headline1--encrypted-lazy contents))))
 
 (cl-defun org-glance-headline1--copy (headline &rest update-plist)
   "Copy HEADLINE, replace slot values described in UPDATE-PLIST."
