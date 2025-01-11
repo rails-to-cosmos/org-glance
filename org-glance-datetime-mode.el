@@ -39,8 +39,11 @@
                                           (org-glance-datetime-buffer-deadlines org-data))))
        collect timestamp)))
 
+(cl-defun org-glance-datetime:active? (ts)
+  (member (org-element-property :type ts) '(active active-range)))
+
 (cl-defun org-glance-datetime-filter-active (tss)
-  (--filter (member (org-element-property :type it) '(active active-range)) tss))
+  (--filter (org-glance-datetime:active? it) tss))
 
 (cl-defun org-glance-datetime-filter-repeated (tss)
   (--filter (and (member (org-element-property :type it) '(active active-range))

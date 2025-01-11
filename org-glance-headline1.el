@@ -210,7 +210,7 @@
 (cl-defun org-glance-headline1:search-forward (id)
   (cl-check-type id string)
   (save-excursion
-    (cl-loop while (search-forward id nil 'no-error)
+    (cl-loop while (re-search-forward (concat ":ORG_GLANCE_ID:[ \t]+" id) nil 'no-error)
              for headline = (org-glance-headline1:at-point)
              when (and (org-glance-headline1? headline)
                        (string= id (org-glance-headline1:id headline)))
@@ -252,14 +252,13 @@
   (cl-check-type headline org-glance-headline1)
   (org-glance-headline1:with-contents headline
     (cl-loop for timestamp in (-some->> (org-glance-datetime-headline-timestamps)
-                                (org-glance-datetime-filter-active)
+                                (--filter (org-glance-datetime:active? it))
                                 (org-glance-datetime-sort-timestamps))
              collect (org-element-property :raw-value timestamp))))
 
 (cl-defun org-glance-headline1:clocks (headline)
   (cl-check-type headline org-glance-headline1)
   (org-glance-headline1:with-contents headline
-    (org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
