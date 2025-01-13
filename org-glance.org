@@ -25,9 +25,9 @@
 
 - [-] Test main scenarios
   - [X] Proper sessions / tag namespaces for testing and distributed dbs
-  - [ ] Headline data model
-    - [ ] Refactor headline data model: `org-glance-headline1`
-    - [ ] Capture `org-glance-headline1`
+  - [-] Headline data model
+    - [X] Refactor headline data model: `org-glance-headline1`.
+    - [ ] Refactor capture method to use `org-glance-headline1`.
 - [ ] Benchmarks
 - [ ] Linters
 - [ ] Look at ht / map for hash table manipulation
