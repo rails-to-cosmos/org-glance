@@ -38,6 +38,8 @@
   (cl-check-type id string)
   )
 
-(org-glance-graph)
+(let ((graph (org-glance-graph)))
+  )
+
 
 (provide 'org-glance-graph)
