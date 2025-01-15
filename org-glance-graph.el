@@ -25,12 +25,24 @@
        (mutex-unlock (org-glance-graph:mutex ,graph)))))
 
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
-  (make-org-glance-graph :directory directory))
+  (cl-check-type directory string)
+  (let ((graph (make-org-glance-graph :directory directory)))
+    (f-mkdir-full-path (org-glance-graph:data-path graph))
+    (f-mkdir-full-path (org-glance-graph:meta-path graph))
+    graph))
 
 (cl-defun org-glance-graph:id-path (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (f-join (org-glance-graph:directory graph) "data" (substring id 0 2) (substring id 2)))
+  (f-join (org-glance-graph:data-path graph) (substring id 0 2) (substring id 2)))
+
+(cl-defun org-glance-graph:data-path (graph)
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:directory graph) "data"))
+
+(cl-defun org-glance-graph:meta-path (graph)
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:directory graph) "meta"))
 
 (cl-defun org-glance-graph:make-id (graph)
   (cl-check-type graph org-glance-graph)
@@ -44,9 +56,10 @@
 (cl-defun org-glance-graph:add-headline (graph headline)
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline1)
-
   (let ((id (org-glance-graph:make-id graph)))
     (with-temp-file (f-join (org-glance-graph:id-path graph id) "headline.org")
+      (f-append-text (concat id "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
+      (f-append-text (concat (org-glance-headline1:title headline) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "title"))
       (insert (org-glance-headline1:contents headline)))
     id))
 
@@ -60,8 +73,8 @@
   (cl-check-type id string)
   )
 
-;; (let ((graph (org-glance-graph "/tmp"))
-;;       (headline (org-glance-headline1--from-lines "* dagster" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]")))
-;;   (org-glance-graph:add-headline graph headline))
+(let ((graph (org-glance-graph "/tmp/glance"))
+      (headline (org-glance-headline1--from-lines "* dagster" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]")))
+  (org-glance-graph:add-headline graph headline))
 
 (provide 'org-glance-graph)
