@@ -57,10 +57,11 @@
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline1)
   (let ((id (org-glance-graph:make-id graph)))
-    (with-temp-file (f-join (org-glance-graph:id-path graph id) "headline.org")
-      (f-append-text (concat id "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
-      (f-append-text (concat (org-glance-headline1:title headline) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "title"))
-      (insert (org-glance-headline1:contents headline)))
+    (org-glance-graph:mutate graph
+      (with-temp-file (f-join (org-glance-graph:id-path graph id) "headline.org")
+        (f-append-text (concat id "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
+        (f-append-text (concat (org-glance-headline1:title headline) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "title"))
+        (insert (org-glance-headline1:contents headline))))
     id))
 
 (cl-defun org-glance-graph:remove-headline (graph id)
