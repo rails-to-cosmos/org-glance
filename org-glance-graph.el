@@ -92,11 +92,13 @@
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
-     (cl-loop with window-size = 1000
+     (cl-loop with chunk-size = 4096
               with file-size = (file-attribute-size (file-attributes ,file))
-              for upper-bound downfrom file-size downto 0 by window-size
-              for lower-bound = (max 0 (- upper-bound window-size))
-              do (progn (goto-char (point-min))
+              with disk-read-count = 0
+              for upper-bound downfrom file-size downto 0 by chunk-size
+              for lower-bound = (max 0 (- upper-bound chunk-size))
+              do (progn (incf disk-read-count)
+                        (goto-char (point-min))
                         (insert-file-contents-literally ,file nil lower-bound upper-bound)
                         (goto-char (point-max))
                         (skip-chars-backward "\n")
@@ -108,7 +110,8 @@
                           (forward-line -1)
                           (beginning-of-line)))
               finally (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
-                        ,@forms))))
+                        ,@forms
+                        (message "Disk read count: %d (chunk size: %d)" disk-read-count chunk-size)))))
 
 ;; (let* ((graph (org-glance-graph "/tmp/glance"))
 ;;        (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
