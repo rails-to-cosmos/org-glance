@@ -92,38 +92,41 @@
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
-     (cl-loop with byte-offset = 4096
-              for i from 1
-              for (_ bytes-read) = (progn
-                                     (goto-char (point-max))
-                                     (insert-file-contents-literally ,file nil (* byte-offset (- i 1)) (* byte-offset i)))
-              if (> bytes-read 0)
-              do (cl-loop initially (goto-char (point-min))
-                          while t
-                          if (not (eq (line-end-position) (point-max)))
-                          do (unwind-protect
-                                 (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
-                                   ,@forms)
-                               (delete-line))
-                          else
-                          return t)
-              else
-              return t)))
+     (cl-loop with window-size = 1000
+              with file-size = (file-attribute-size (file-attributes ,file))
+              for upper-bound downfrom file-size downto 0 by window-size
+              for lower-bound = (max 0 (- upper-bound window-size))
+              do (progn (goto-char (point-min))
+                        (insert-file-contents-literally ,file nil lower-bound upper-bound)
+                        (goto-char (point-max))
+                        (skip-chars-backward "\n")
+                        (beginning-of-line)
+                        (while (not (bobp))
+                          (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
+                            ,@forms)
+                          (delete-line)
+                          (forward-line -1)
+                          (beginning-of-line)))
+              finally (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
+                        ,@forms))))
 
-(let* ((graph (org-glance-graph "/tmp/glance"))
-       (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
-       (bar (org-glance-headline1--from-lines "* bar" "123"))
-       (foo-id (org-glance-graph:add-headline graph foo))
-       (bar-id (org-glance-graph:add-headline graph bar)))
-  (org-glance-graph:add-relation graph "parent" foo-id bar-id))
+;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;;        (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
+;;        (bar (org-glance-headline1--from-lines "* bar" "123"))
+;;        (foo-id (org-glance-graph:add-headline graph foo))
+;;        (bar-id (org-glance-graph:add-headline graph bar)))
+;;   (org-glance-graph:add-relation graph "parent" foo-id bar-id))
 
-(with-temp-buffer
-  (insert-file-contents-literally "/tmp/glance/meta/id" nil 0 1024)
-  ;; (buffer-substring-no-properties (point-min) (point-max))
-  )
+;; (with-temp-buffer
+;;   (insert-file-contents-literally "/tmp/glance/meta/id" nil 0 1024)
+;;   ;; (buffer-substring-no-properties (point-min) (point-max))
+;;   )
 
 (org-glance-jsonl:--iter-lines "/tmp/glance/meta/id"
-  (let ((id (plist-get it :title)))
-    (message id)))
+  (message (prin1-to-string it))
+  ;; (let ((id it ;; (plist-get it :title)
+  ;;           ))
+  ;;   (message id))
+  )
 
 (provide 'org-glance-graph)
