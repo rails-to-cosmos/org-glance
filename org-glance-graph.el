@@ -83,8 +83,11 @@
   (cl-check-type relation string)
   (cl-check-type a string)
   (cl-check-type b string)
-  (org-glance-graph:mutate graph
-    (f-append-text (format "%s\n" (json-serialize (vector relation a b)))  `utf-8 (f-join (org-glance-graph:meta-path graph) "relations"))))
+  (let ((data (json-serialize (vector relation a b)))
+        (encoding 'utf-8)
+        (file (f-join (org-glance-graph:meta-path graph) "relations") ))
+    (org-glance-graph:mutate graph
+      (f-append-text (format "%s\n" data) encoding file))))
 
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
