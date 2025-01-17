@@ -78,58 +78,61 @@
   (cl-check-type id string)
   )
 
-(cl-defun org-glance-graph:add-relation (graph relation a b)
+(cl-defun org-glance-graph:add-relation (graph relation lhs rhs)
   (cl-check-type graph org-glance-graph)
   (cl-check-type relation string)
-  (cl-check-type a string)
-  (cl-check-type b string)
-  (let ((data (json-serialize (vector relation a b)))
-        (encoding 'utf-8)
-        (file (f-join (org-glance-graph:meta-path graph) "relations") ))
+  (cl-check-type lhs string)
+  (cl-check-type rhs string)
+  (let* ((data (list :type relation
+                     :lhs lhs
+                     :rhs rhs))
+         (json (json-serialize data))
+         (encoding 'utf-8)
+         (file (f-join (org-glance-graph:meta-path graph) "relations")))
     (org-glance-graph:mutate graph
-      (f-append-text (format "%s\n" data) encoding file))))
+      (f-append-text (format "%s\n" json) encoding file))))
 
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
-     (cl-loop with chunk-size = 4096
-              with file-size = (file-attribute-size (file-attributes ,file))
-              with disk-read-count = 0
-              for upper-bound downfrom file-size downto 0 by chunk-size
-              for lower-bound = (max 0 (- upper-bound chunk-size))
-              do (progn (incf disk-read-count)
-                        (goto-char (point-min))
-                        (insert-file-contents-literally ,file nil lower-bound upper-bound)
-                        (goto-char (point-max))
-                        (skip-chars-backward "\n")
-                        (beginning-of-line)
-                        (while (not (bobp))
-                          (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
-                            ,@forms)
-                          (delete-line)
-                          (forward-line -1)
-                          (beginning-of-line)))
-              finally (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
-                        ,@forms
-                        (message "Disk read count: %d (chunk size: %d)" disk-read-count chunk-size)))))
+     (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) :object-type 'plist)))
+                                  ,@forms)))
+       (cl-loop with chunk-size = 4096
+                with file-size = (file-attribute-size (file-attributes ,file))
+                with disk-read-count = 0
+                for upper-bound downfrom file-size downto 0 by chunk-size
+                for lower-bound = (max 0 (- upper-bound chunk-size))
+                do (progn (incf disk-read-count)
+                          (goto-char (point-min))
+                          (insert-file-contents-literally ,file nil lower-bound upper-bound)
+                          (goto-char (point-max))
+                          (skip-chars-backward "\n")
+                          (beginning-of-line)
+                          (while (not (bobp))
+                            (process-line)
+                            (delete-line)
+                            (forward-line -1)
+                            (beginning-of-line)))
+                finally (process-line)
+                (message "disk read count: %d, chunk size: %d" disk-read-count chunk-size)))))
 
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
-;;        (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
-;;        (bar (org-glance-headline1--from-lines "* bar" "123"))
-;;        (foo-id (org-glance-graph:add-headline graph foo))
-;;        (bar-id (org-glance-graph:add-headline graph bar)))
-;;   (org-glance-graph:add-relation graph "parent" foo-id bar-id))
+(let* ((graph (org-glance-graph "/tmp/glance"))
+       (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
+       (bar (org-glance-headline1--from-lines "* bar" "123"))
+       (foo-id (org-glance-graph:add-headline graph foo))
+       (bar-id (org-glance-graph:add-headline graph bar)))
+  (org-glance-graph:add-relation graph "parent" foo-id bar-id))
 
 ;; (with-temp-buffer
 ;;   (insert-file-contents-literally "/tmp/glance/meta/id" nil 0 1024)
 ;;   ;; (buffer-substring-no-properties (point-min) (point-max))
 ;;   )
 
-(org-glance-jsonl:--iter-lines "/tmp/glance/meta/id"
-  (message (prin1-to-string it))
-  ;; (let ((id it ;; (plist-get it :title)
-  ;;           ))
-  ;;   (message id))
-  )
+;; (org-glance-jsonl:--iter-lines "/tmp/glance/meta/id"
+;;   (message (prin1-to-string it))
+;;   ;; (let ((id it ;; (plist-get it :title)
+;;   ;;           ))
+;;   ;;   (message id))
+;;   )
 
 (provide 'org-glance-graph)
