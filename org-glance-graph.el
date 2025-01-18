@@ -16,6 +16,18 @@
   (mutex (make-mutex) :read-only t :type mutex)
   (directory org-glance-directory :read-only t :type directory))
 
+(cl-defstruct (org-glance-headline1-metadata (:predicate org-glance-headline1-metadata?)
+                                             (:conc-name org-glance-headline1-metadata:))
+  (id nil :read-only t :type string)
+  (state nil :read-only t :type string)
+  (title nil :read-only t :type string)
+  (tags nil :read-only t :type list)
+  (hash nil :read-only t :type string)
+  (schedule nil :read-only t :type string)
+  (deadline nil :read-only t :type string)
+  (priority nil :read-only t :type number)
+  (relations nil :read-only t :type list))
+
 (cl-defmacro org-glance-graph:mutate (graph &rest forms)
   (declare (indent 1))
   `(progn
@@ -53,44 +65,60 @@
              unless (f-exists? id-path)
              return (progn (f-mkdir-full-path id-path) id))))
 
-(cl-defun org-glance-graph:add-headline (graph headline)
+(cl-defun org-glance-graph:add-headline-metadata (graph metadata)
+  "Add/update headline METADATA in GRAPH."
   (cl-check-type graph org-glance-graph)
-  (cl-check-type headline org-glance-headline1)
-  (let* ((id (org-glance-graph:make-id graph))
-         (data (list :id id
-                     :title (org-glance-headline1:title headline)
-                     :hash (org-glance-headline1:hash headline)
-                     :relations nil))
-         (json (json-serialize data)))
-    (org-glance-graph:mutate graph
-      (f-append-text (format "%s\n" json) `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
-      (with-temp-file (f-join (org-glance-graph:id-path graph id) "data.org")
-        (insert (org-glance-headline1:contents headline))))
-    id))
+  (cl-check-type metadata org-glance-headline1-metadata))
 
-(cl-defun org-glance-graph:remove-headline (graph id)
+;; (cl-defun org-glance-graph:set-headline-metadata (graph &key id title relations hash)
+;;   (declare (indent 2))
+;;   (cl-check-type graph org-glance-graph)
+;;   (cl-check-type headline org-glance-headline1)
+;;   (let ((metadata (cl-typecase id
+;;                     (null (list :id (org-glance-graph:make-id graph)
+;;                                 :title title
+;;                                 :hash hash
+;;                                 :relations relations))
+;;                     (t (org-glance-graph:get-headline-metadata graph id)))))
+;;     )
+
+
+;;   (let ((data (->> (list :id id :title title :hash hash :relations relations)
+;;                    (json-serialize)
+;;                    (format "%s\n"))))
+;;     (org-glance-graph:mutate graph
+;;       (f-append-text data `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
+;;       (with-temp-file (f-join (org-glance-graph:id-path graph id) "data.org")
+;;         (insert (org-glance-headline1:contents headline))))
+;;     id))
+
+(cl-defun org-glance-graph:remove-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   )
 
-(cl-defun org-glance-graph:get-headline (graph id)
+(cl-defun org-glance-graph:get-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   )
 
-(cl-defun org-glance-graph:add-relation (graph relation lhs rhs)
+(cl-defun org-glance-graph:add-relation (graph relation a-id b-id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type relation string)
-  (cl-check-type lhs string)
-  (cl-check-type rhs string)
-  (let* ((data (list :type relation
-                     :lhs lhs
-                     :rhs rhs))
-         (json (json-serialize data))
-         (encoding 'utf-8)
-         (file (f-join (org-glance-graph:meta-path graph) "relations")))
-    (org-glance-graph:mutate graph
-      (f-append-text (format "%s\n" json) encoding file))))
+  (cl-check-type a-id string)
+  (cl-check-type b-id string)
+  (let ((a (org-glance-graph:get-headline-metadata graph a-id))
+        (b (org-glance-graph:get-headline-metadata graph b-id)))
+    (org-glance-graph:set-headline-metadata graph :id a-id :relations ()))
+
+  ;; (let* ((data (list :type relation
+  ;;                    :lhs lhs
+  ;;                    :rhs rhs))
+  ;;        (json (json-serialize data))
+  ;;        (encoding 'utf-8))
+  ;;   (org-glance-graph:mutate graph
+  ;;     (f-append-text (format "%s\n" json) encoding (f-join (org-glance-graph:meta-path graph) "relations"))))
+  )
 
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
@@ -116,23 +144,12 @@
                 finally (process-line)
                 (message "disk read count: %d, chunk size: %d" disk-read-count chunk-size)))))
 
-(let* ((graph (org-glance-graph "/tmp/glance"))
-       (foo (org-glance-headline1--from-lines "* \"foo\"" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
-       (bar (org-glance-headline1--from-lines "* bar" "123"))
-       (foo-id (org-glance-graph:add-headline graph foo))
-       (bar-id (org-glance-graph:add-headline graph bar)))
-  (org-glance-graph:add-relation graph "parent" foo-id bar-id))
-
-;; (with-temp-buffer
-;;   (insert-file-contents-literally "/tmp/glance/meta/id" nil 0 1024)
-;;   ;; (buffer-substring-no-properties (point-min) (point-max))
-;;   )
-
-;; (org-glance-jsonl:--iter-lines "/tmp/glance/meta/id"
-;;   (message (prin1-to-string it))
-;;   ;; (let ((id it ;; (plist-get it :title)
-;;   ;;           ))
-;;   ;;   (message id))
-;;   )
+;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;;        (foo (org-glance-headline1--from-lines "* foo" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
+;;        (bar (org-glance-headline1--from-lines "* bar" "123"))
+;;        (foo-id (org-glance-graph:set-headline graph foo))
+;;        (bar-id (org-glance-graph:set-headline graph bar
+;;                                               :id foo-id)))
+;;   (org-glance-graph:add-relation graph "parent" foo-id bar-id))
 
 (provide 'org-glance-graph)
