@@ -26,15 +26,19 @@
   (schedule nil :read-only t :type string)
   (deadline nil :read-only t :type string)
   (priority nil :read-only t :type number)
-  (relations nil :read-only t :type list))
+  (relations nil :read-only t :type list)
+  (tombstone nil :read-only t :type boolean))
 
-(cl-defmacro org-glance-graph:mutate (graph &rest forms)
-  (declare (indent 1))
-  `(progn
-     (cl-check-type ,graph org-glance-graph)
-     (mutex-lock (org-glance-graph:mutex ,graph))
-     (unwind-protect ,@forms
-       (mutex-unlock (org-glance-graph:mutex ,graph)))))
+(cl-defun org-glance-headline1-metadata:serialize (metadata graph &key (id (org-glance-headline1-metadata:id metadata)))
+  (cl-check-type metadata org-glance-headline1-metadata)
+  (cl-check-type id string)
+  (cl-check-type graph org-glance-graph)
+  (->> (list :id id
+             :title (org-glance-headline1-metadata:title metadata)
+             :hash (org-glance-headline1-metadata:hash metadata)
+             :relations (org-glance-headline1-metadata:relations metadata))
+       (json-serialize)
+       (format "%s\n")))
 
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
@@ -43,54 +47,46 @@
     (f-mkdir-full-path (org-glance-graph:meta-path graph))
     graph))
 
-(cl-defun org-glance-graph:id-path (graph id)
+(cl-defmacro org-glance-graph:modify (graph &rest forms)
+  "Modify GRAPH data with FORMS."
+  (declare (indent 1))
+  `(with-mutex (org-glance-graph:mutex ,graph)
+     ,@forms))
+
+(cl-defun org-glance-graph:headline-data-directory (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (f-join (org-glance-graph:data-path graph) (substring id 0 2) (substring id 2)))
 
-(cl-defun org-glance-graph:data-path (graph)
+(cl-defun org-glance-graph:data-directory (graph)
   (cl-check-type graph org-glance-graph)
   (f-join (org-glance-graph:directory graph) "data"))
 
-(cl-defun org-glance-graph:meta-path (graph)
+(cl-defun org-glance-graph:meta-directory (graph)
   (cl-check-type graph org-glance-graph)
   (f-join (org-glance-graph:directory graph) "meta"))
 
 (cl-defun org-glance-graph:make-id (graph)
   (cl-check-type graph org-glance-graph)
-  (org-glance-graph:mutate graph
+  (org-glance-graph:modify graph
     (cl-loop while t
              for id = (org-id-uuid)
-             for id-path = (org-glance-graph:id-path graph id)
-             unless (f-exists? id-path)
-             return (progn (f-mkdir-full-path id-path) id))))
+             for data-directory = (org-glance-graph:headline-data-directory graph id)
+             unless (f-exists? data-directory)
+             return (prog1 id (f-mkdir-full-path data-directory)))))
 
 (cl-defun org-glance-graph:add-headline-metadata (graph metadata)
-  "Add/update headline METADATA in GRAPH."
+  "Set headline METADATA in GRAPH."
   (cl-check-type graph org-glance-graph)
-  (cl-check-type metadata org-glance-headline1-metadata))
-
-;; (cl-defun org-glance-graph:set-headline-metadata (graph &key id title relations hash)
-;;   (declare (indent 2))
-;;   (cl-check-type graph org-glance-graph)
-;;   (cl-check-type headline org-glance-headline1)
-;;   (let ((metadata (cl-typecase id
-;;                     (null (list :id (org-glance-graph:make-id graph)
-;;                                 :title title
-;;                                 :hash hash
-;;                                 :relations relations))
-;;                     (t (org-glance-graph:get-headline-metadata graph id)))))
-;;     )
-
-
-;;   (let ((data (->> (list :id id :title title :hash hash :relations relations)
-;;                    (json-serialize)
-;;                    (format "%s\n"))))
-;;     (org-glance-graph:mutate graph
-;;       (f-append-text data `utf-8 (f-join (org-glance-graph:meta-path graph) "id"))
-;;       (with-temp-file (f-join (org-glance-graph:id-path graph id) "data.org")
-;;         (insert (org-glance-headline1:contents headline))))
-;;     id))
+  (cl-check-type metadata org-glance-headline1-metadata)
+  (let ((id (or (org-glance-headline1-metadata:id metadata)
+                (org-glance-graph:make-id graph)))
+        (data (org-glance-headline1-metadata:serialize metadata graph :id id)))
+    (org-glance-graph:modify graph
+      (f-append-text data `utf-8 (f-join (org-glance-graph:meta-directory graph) "headlines.jsonl"))
+      (with-temp-file (f-join (org-glance-graph:headline-data-directory graph id) "data.org")
+        (insert (org-glance-headline1:contents headline))))
+    id))
 
 (cl-defun org-glance-graph:remove-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
