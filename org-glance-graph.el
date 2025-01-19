@@ -103,18 +103,12 @@
   (cl-check-type relation string)
   (cl-check-type a-id string)
   (cl-check-type b-id string)
-  (let ((a (org-glance-graph:get-headline-metadata graph a-id))
-        (b (org-glance-graph:get-headline-metadata graph b-id)))
-    (org-glance-graph:set-headline-metadata graph :id a-id :relations ()))
-
-  ;; (let* ((data (list :type relation
-  ;;                    :lhs lhs
-  ;;                    :rhs rhs))
-  ;;        (json (json-serialize data))
-  ;;        (encoding 'utf-8))
-  ;;   (org-glance-graph:mutate graph
-  ;;     (f-append-text (format "%s\n" json) encoding (f-join (org-glance-graph:meta-path graph) "relations"))))
-  )
+  (let* ((a (org-glance-graph:get-headline-metadata graph a-id))
+         (a-relations (org-glance-headline1-metadata:relations a))
+         (b (org-glance-graph:get-headline-metadata graph b-id))
+         (b-relations (org-glance-headline1-metadata:relations b)))
+    (org-glance-graph:set-headline-metadata graph :id a-id :relations (cl-pushnew b-id a-relations))
+    (org-glance-graph:set-headline-metadata graph :id b-id :relations (cl-pushnew a-id b-relations))))
 
 (cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
   (declare (indent 1))
