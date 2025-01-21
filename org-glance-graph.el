@@ -47,12 +47,11 @@
    :relations nil
    :tombstone nil))
 
-(cl-defmacro org-glance-jsonl:--iter-lines (file &rest forms)
+(cl-defmacro org-glance-jsonl:iterate (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
      (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position))
                                                              :object-type 'plist)))
-                                  ;; (message (prin1-to-string it))
                                   ,@forms)))
        (cl-loop with result = nil
                 with chunk-size = 50
@@ -75,11 +74,32 @@
 (cl-defun org-glance-headline1-metadata:serialize (metadata)
   (cl-check-type metadata org-glance-headline1-metadata)
   (->> (list :id (org-glance-headline1-metadata:id metadata)
+             :state (org-glance-headline1-metadata:state metadata)
              :title (org-glance-headline1-metadata:title metadata)
+             :tags (org-glance-headline1-metadata:tags metadata)
              :hash (org-glance-headline1-metadata:hash metadata)
-             :relations (org-glance-headline1-metadata:relations metadata))
+             :schedule (org-glance-headline1-metadata:schedule metadata)
+             :deadline (org-glance-headline1-metadata:deadline metadata)
+             :priority (org-glance-headline1-metadata:priority metadata)
+             :relations (org-glance-headline1-metadata:relations metadata)
+             :tombstone (org-glance-headline1-metadata:tombstone metadata))
        (json-serialize)
        (format "%s\n")))
+
+(cl-defun org-glance-headline1-metadata:deserialize (graph data)
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type data list)
+  (make-org-glance-headline1-metadata :graph graph
+                                      :id (plist-get data :id)
+                                      :state (plist-get data :state)
+                                      :title (plist-get data :title)
+                                      :tags (plist-get data :tags)
+                                      :hash (plist-get data :hash)
+                                      :schedule (plist-get data :schedule)
+                                      :deadline (plist-get data :deadline)
+                                      :priority (plist-get data :priority)
+                                      :relations (plist-get data :relations)
+                                      :tombstone (plist-get data :tombstone)))
 
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
@@ -132,15 +152,19 @@
 (cl-defun org-glance-graph:get-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-
-  (org-glance-jsonl:--iter-lines (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")
+  (org-glance-jsonl:iterate (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")
     (when (string= (plist-get it :id) id)
-      it)))
+      (org-glance-headline1-metadata:deserialize graph it))))
 
 (cl-defun org-glance-graph:remove-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  )
+  (org-glance-graph:modify graph
+    (f-append-text (->> (list :id id :tombstone t)
+                        (json-serialize)
+                        (format "%s\n"))
+                   `utf-8
+                   (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))))
 
 (cl-defun org-glance-graph:add-relation (graph relation a-id b-id)
   (cl-check-type graph org-glance-graph)
@@ -172,7 +196,11 @@
 ;;   ;;                                (org-glance-headline1-metadata:id bar-meta))
 ;;   )
 
-;; (let ((graph (org-glance-graph "/tmp/glance")))
-;;   (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
+;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;;        (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
+;;        (id (org-glance-headline1-metadata:id meta)))
+;;   ;; (org-glance-graph:remove-headline-metadata graph id)
+;;   meta
+;;   )
 
 (provide 'org-glance-graph)
