@@ -208,12 +208,12 @@
 ;;   ;;                                (org-glance-headline1-metadata:id bar-meta))
 ;;   )
 
-(let* ((graph (org-glance-graph "/tmp/glance"))
-       (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
-       ;; (id (org-glance-headline1-metadata:id meta))
-       )
-  ;; (org-glance-graph:remove-headline-metadata graph id)
-  meta
-  )
+;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;;        (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
+;;        ;; (id (org-glance-headline1-metadata:id meta))
+;;        )
+;;   ;; (org-glance-graph:remove-headline-metadata graph id)
+;;   meta
+;;   )
 
 (provide 'org-glance-graph)
