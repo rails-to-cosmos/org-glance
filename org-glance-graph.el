@@ -13,7 +13,7 @@
 
 (define-hash-table-test 'org-glance-graph:test
                         (lambda (a b) (f-equal? (file-truename a) (file-truename b)))
-                        (lambda (a) (secure-hash 'md5 a)))
+                        (lambda (a) (secure-hash 'sha1 a)))
 
 (defvar org-glance-graph:list (make-hash-table :test 'org-glance-graph:test)
   "Registered instances of `org-glance-graph' in current session.")
