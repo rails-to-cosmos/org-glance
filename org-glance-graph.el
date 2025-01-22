@@ -1,4 +1,4 @@
-;; -*- lexical-binding: t -*-
+; -*- lexical-binding: t -*-
 
 (require 'cl-macs)
 (require 'f)
@@ -10,6 +10,13 @@
   "Main location for all Org mode content managed by `org-glance`."
   :group 'org-glance
   :type 'directory)
+
+(define-hash-table-test 'org-glance-graph:test
+                        (lambda (a b) (f-equal? (file-truename a) (file-truename b)))
+                        (lambda (a) (secure-hash 'md5 a)))
+
+(defvar org-glance-graph:list (make-hash-table :test 'org-glance-graph:test)
+  "Registered instances of `org-glance-graph' in current session.")
 
 (cl-defstruct (org-glance-graph (:predicate org-glance-graph?)
                                 (:conc-name org-glance-graph:))
@@ -66,9 +73,9 @@
                           (skip-chars-backward "\n")
                           (beginning-of-line)
                           (while (not (or (bobp) (setq result (process-line))))
-                            (delete-line)
                             (forward-line -1)
-                            (beginning-of-line)))
+                            (beginning-of-line))
+                          (delete-region (line-end-position) (point-max)))
                 finally return (or result (condition-case nil
                                               (process-line)
                                             (json-end-of-file nil)))))))
@@ -105,11 +112,13 @@
 
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
-  (let ((graph (make-org-glance-graph :directory directory)))
+  (if-let (graph (cl-gethash directory org-glance-graph:list))
+      graph
+    (setq graph (make-org-glance-graph :directory directory))
     (f-mkdir-full-path (org-glance-graph:data-path graph))
     (f-mkdir-full-path (org-glance-graph:meta-path graph))
     (f-touch (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))
-    graph))
+    (cl-puthash directory graph org-glance-graph:list)))
 
 (cl-defmacro org-glance-graph:modify (graph &rest forms)
   "Modify GRAPH data with FORMS."
