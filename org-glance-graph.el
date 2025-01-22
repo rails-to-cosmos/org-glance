@@ -80,13 +80,17 @@
                                               (process-line)
                                             (json-end-of-file nil)))))))
 
-(cl-defun org-glance-id (object)
-  "? Converts generic OBJECT to its ID."
-  (cl-typecase object
-    (org-glance-headline1-metadata (org-glance-headline1-metadata:id object))
-    (org-glance-headline1 (org-glance-headline1:id object))
-    (string object)
-    (t (error "Unable to extract object id"))))
+(cl-defun org-glance-headline1-metadata-id (obj)
+  (cl-typecase obj
+    (org-glance-headline1-metadata (org-glance-headline1-metadata:id obj))
+    (string obj)
+    (t (error "Unable to determine object id: %s" (prin1-to-string obj)))))
+
+(cl-defun org-glance-headline1-metadata-spec (obj)
+  (cl-typecase obj
+    (org-glance-headline1-metadata (org-glance-headline1-metadata:serialize obj))
+    (list obj)
+    (t (error "Unable to determine object spec: %s" (prin1-to-string obj)))))
 
 (cl-defun org-glance-headline1-metadata:serialize (metadata)
   (cl-check-type metadata org-glance-headline1-metadata)
@@ -139,9 +143,9 @@
   (cl-check-type (car specs) (or list org-glance-headline1-metadata))
   (org-glance-graph:lock graph
     (cl-loop for spec in specs
-             collect (json-serialize (cl-typecase spec
-                                       (org-glance-headline1-metadata (org-glance-headline1-metadata:serialize spec))
-                                       (t spec)))
+             collect (-> spec
+                         (org-glance-headline1-metadata-spec)
+                         (json-serialize))
              into result
              finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")))))
 
@@ -203,7 +207,7 @@
   (cl-check-type graph org-glance-graph)
   (cl-check-type relation symbol)
   (cl-loop with ids = (->> entities
-                           (mapcar #'org-glance-id)
+                           (mapcar #'org-glance-headline1-metadata-id)
                            (-non-nil))
            for id in ids
            collect (--> (org-glance-graph:get-headline graph id)
