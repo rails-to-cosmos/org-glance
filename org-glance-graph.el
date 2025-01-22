@@ -55,7 +55,7 @@
                                   ,@forms)))
        (cl-loop with result = nil
                 with chunk-size = 50
-                with file-size = (file-attribute-size (file-attributes ,file))
+                with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
                 with disk-read-count = 0
                 for upper-bound downfrom file-size downto 0 by chunk-size
                 for lower-bound = (max 0 (- upper-bound chunk-size))
@@ -69,7 +69,9 @@
                             (delete-line)
                             (forward-line -1)
                             (beginning-of-line)))
-                finally return (or result (process-line))))))
+                finally return (or result (condition-case nil
+                                              (process-line)
+                                            (json-end-of-file nil)))))))
 
 (cl-defun org-glance-headline1-metadata:serialize (metadata)
   (cl-check-type metadata org-glance-headline1-metadata)
@@ -106,6 +108,7 @@
   (let ((graph (make-org-glance-graph :directory directory)))
     (f-mkdir-full-path (org-glance-graph:data-path graph))
     (f-mkdir-full-path (org-glance-graph:meta-path graph))
+    (f-touch (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))
     graph))
 
 (cl-defmacro org-glance-graph:modify (graph &rest forms)
@@ -131,11 +134,11 @@
 (cl-defun org-glance-graph:make-id (graph)
   (cl-check-type graph org-glance-graph)
   (org-glance-graph:modify graph
-    (cl-loop while t
-             for id = (org-id-uuid)
-             for data-path = (org-glance-graph:headline-data-path graph id)
-             unless (f-exists? data-path)
-             return (prog1 id (f-mkdir-full-path data-path)))))
+                           (cl-loop while t
+                                    for id = (org-id-uuid)
+                                    for data-path = (org-glance-graph:headline-data-path graph id)
+                                    unless (f-exists? data-path)
+                                    return (prog1 id (f-mkdir-full-path data-path)))))
 
 (cl-defun org-glance-headline1-metadata:data-path (metadata)
   (cl-check-type metadata org-glance-headline1-metadata)
@@ -147,24 +150,24 @@
   (cl-check-type metadata org-glance-headline1-metadata)
   (cl-assert (equal graph (org-glance-headline1-metadata:graph metadata)))
   (org-glance-graph:modify graph
-    (f-append-text (org-glance-headline1-metadata:serialize metadata) `utf-8 (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))))
+                           (f-append-text (org-glance-headline1-metadata:serialize metadata) `utf-8 (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))))
 
 (cl-defun org-glance-graph:get-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (org-glance-jsonl:iterate (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")
-    (when (string= (plist-get it :id) id)
-      (org-glance-headline1-metadata:deserialize graph it))))
+                            (when (string= (plist-get it :id) id)
+                              (org-glance-headline1-metadata:deserialize graph it))))
 
 (cl-defun org-glance-graph:remove-headline-metadata (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (org-glance-graph:modify graph
-    (f-append-text (->> (list :id id :tombstone t)
-                        (json-serialize)
-                        (format "%s\n"))
-                   `utf-8
-                   (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))))
+                           (f-append-text (->> (list :id id :tombstone t)
+                                               (json-serialize)
+                                               (format "%s\n"))
+                                          `utf-8
+                                          (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))))
 
 (cl-defun org-glance-graph:add-relation (graph relation a-id b-id)
   (cl-check-type graph org-glance-graph)
@@ -198,7 +201,8 @@
 
 ;; (let* ((graph (org-glance-graph "/tmp/glance"))
 ;;        (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
-;;        (id (org-glance-headline1-metadata:id meta)))
+;;        ;; (id (org-glance-headline1-metadata:id meta))
+;;        )
 ;;   ;; (org-glance-graph:remove-headline-metadata graph id)
 ;;   meta
 ;;   )
