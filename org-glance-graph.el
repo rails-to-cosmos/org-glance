@@ -80,6 +80,14 @@
                                               (process-line)
                                             (json-end-of-file nil)))))))
 
+(cl-defun org-glance-id (object)
+  "? Converts generic OBJECT to its ID."
+  (cl-typecase object
+    (org-glance-headline1-metadata (org-glance-headline1-metadata:id object))
+    (org-glance-headline1 (org-glance-headline1:id object))
+    (string object)
+    (t (error "Unable to extract object id"))))
+
 (cl-defun org-glance-headline1-metadata:serialize (metadata)
   (cl-check-type metadata org-glance-headline1-metadata)
   (list :id (org-glance-headline1-metadata:id metadata)
@@ -164,8 +172,8 @@
   (cl-check-type metadata org-glance-headline1-metadata)
   (f-join (org-glance-graph:headline-data-path (org-glance-headline1-metadata:graph metadata) (org-glance-headline1-metadata:id metadata)) "data.org"))
 
-(cl-defun org-glance-graph:add-headline (graph &rest headlines)
-  "Set HEADLINES data in GRAPH. TODO return a new graph."
+(cl-defun org-glance-graph:add (graph &rest headlines)
+  "Add HEADLINES to GRAPH. TODO return a new graph."
   (cl-check-type graph org-glance-graph)
   (cl-loop for headline in headlines
            for data = (cl-typecase headline
@@ -195,10 +203,7 @@
   (cl-check-type graph org-glance-graph)
   (cl-check-type relation symbol)
   (cl-loop with ids = (->> entities
-                           (--map (cl-typecase it
-                                    (org-glance-headline1-metadata (org-glance-headline1-metadata:id it))
-                                    (org-glance-headline1 (org-glance-headline1:id it))
-                                    (string it)))
+                           (mapcar #'org-glance-id)
                            (-non-nil))
            for id in ids
            collect (--> (org-glance-graph:get-headline graph id)
@@ -212,7 +217,7 @@
 ;;        (bar (org-glance-headline1--from-lines "* bar" "123"))
 ;;        (foo* (org-glance-headline1-metadata graph foo))
 ;;        (bar* (org-glance-headline1-metadata graph bar)))
-;;   (org-glance-graph:add-headline graph foo* bar*)
+;;   (org-glance-graph:add graph foo* bar*)
 ;;   (org-glance-graph:add-relation graph 'neighbors foo* bar*))
 
 ;; (let* ((graph (org-glance-graph "/tmp/glance"))
