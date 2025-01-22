@@ -61,7 +61,7 @@
                                                              :object-type 'plist)))
                                   ,@forms)))
        (cl-loop with result = nil
-                with chunk-size = 50
+                with chunk-size = 4096
                 with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
                 with disk-read-count = 0
                 for upper-bound downfrom file-size downto 0 by chunk-size
@@ -208,12 +208,12 @@
 ;;   ;;                                (org-glance-headline1-metadata:id bar-meta))
 ;;   )
 
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
-;;        (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
-;;        ;; (id (org-glance-headline1-metadata:id meta))
-;;        )
-;;   ;; (org-glance-graph:remove-headline-metadata graph id)
-;;   meta
-;;   )
+(let* ((graph (org-glance-graph "/tmp/glance"))
+       (meta (org-glance-graph:get-headline-metadata graph "60be9868-1017-4085-a03e-c83fdaee0cb1"))
+       ;; (id (org-glance-headline1-metadata:id meta))
+       )
+  ;; (org-glance-graph:remove-headline-metadata graph id)
+  meta
+  )
 
 (provide 'org-glance-graph)
