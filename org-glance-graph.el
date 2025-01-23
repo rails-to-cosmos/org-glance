@@ -54,6 +54,12 @@
    :relations nil
    :tombstone nil))
 
+(cl-defun org-glance-headline1:metadata* (graph obj)
+  "Generic variant of `org-glance-headline1:metadata'."
+  (cl-typecase obj
+    (org-glance-headline1-metadata obj)
+    (org-glance-headline1 (org-glance-headline1:metadata graph obj))))
+
 (cl-defmacro org-glance-jsonl:iterate (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
@@ -81,13 +87,14 @@
                                             (json-end-of-file nil)))))))
 
 (cl-defun org-glance-headline1-metadata:id* (obj)
-  "Generic variation of `org-glance-headline1-metadata:id'."
+  "Generic variant of `org-glance-headline1-metadata:id'."
   (cl-typecase obj
     (org-glance-headline1-metadata (org-glance-headline1-metadata:id obj))
     (string obj)
     (t (error "Unable to determine object id: %s" (prin1-to-string obj)))))
 
 (cl-defun org-glance-headline1-metadata:serialize* (obj)
+  "Generic variant of `org-glance-headline1-metadata:serialize'."
   (cl-typecase obj
     (org-glance-headline1-metadata (org-glance-headline1-metadata:serialize obj))
     (list obj)
@@ -128,7 +135,7 @@
       (setq graph (make-org-glance-graph :directory directory))
       (f-mkdir-full-path (org-glance-graph:data-path graph))
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
-      (f-touch (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))
+      (f-touch (org-glance-graph:headline-meta-path graph))
       (cl-puthash directory graph org-glance-graph:list))
     graph))
 
@@ -148,13 +155,7 @@
                          (org-glance-headline1-metadata:serialize*)
                          (json-serialize))
              into result
-             finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")))))
-
-(cl-defun org-glance-graph:headline-data-path (graph id)
-  "TODO move to metadata."
-  (cl-check-type graph org-glance-graph)
-  (cl-check-type id string)
-  (f-join (org-glance-graph:data-path graph) (substring id 0 2) (substring id 2)))
+             finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (org-glance-graph:headline-meta-path graph)))))
 
 (cl-defun org-glance-graph:data-path (graph)
   (cl-check-type graph org-glance-graph)
@@ -163,6 +164,16 @@
 (cl-defun org-glance-graph:meta-path (graph)
   (cl-check-type graph org-glance-graph)
   (f-join (org-glance-graph:directory graph) "meta"))
+
+(cl-defun org-glance-graph:headline-meta-path (graph)
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:meta-path graph) "headlines.jsonl"))
+
+(cl-defun org-glance-graph:headline-data-path (graph id)
+  "TODO move to metadata?"
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type id string)
+  (f-join (org-glance-graph:data-path graph) (substring id 0 2) (substring id 2)))
 
 (cl-defun org-glance-graph:make-id (graph)
   (cl-check-type graph org-glance-graph)
@@ -181,17 +192,15 @@
   "Add HEADLINES to GRAPH. TODO return a new graph."
   (cl-check-type graph org-glance-graph)
   (cl-loop for headline in headlines
-           for data = (cl-typecase headline
-                        (org-glance-headline1-metadata headline)
-                        (org-glance-headline1 (org-glance-headline1:metadata graph headline)))
-           when (equal graph (org-glance-headline1-metadata:graph data))
-           collect data into spec
+           for meta = (org-glance-headline1:metadata* graph headline)
+           when (equal graph (org-glance-headline1-metadata:graph meta))
+           collect meta into spec
            finally (apply #'org-glance-graph:modify graph spec)))
 
 (cl-defun org-glance-graph:get-headline (graph id)
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (org-glance-jsonl:iterate (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")
+  (org-glance-jsonl:iterate (org-glance-graph:headline-meta-path graph)
     (when (string= (plist-get it :id) id)
       (if (plist-get it :tombstone)
           'tombstone
