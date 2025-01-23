@@ -51,13 +51,16 @@
 (require 'org-glance-datetime-mode)
 (require 'org-glance-exception)
 (require 'org-glance-headline)
-(require 'org-glance-headline1)
 (require 'org-glance-material-mode)
 (require 'org-glance-metadata)
 (require 'org-glance-overview)
 (require 'org-glance-tag)
 (require 'org-glance-ui)
 (require 'org-glance-utils)
+
+;; V1 migration
+(require 'org-glance-headline1)
+(require 'org-glance-graph)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")

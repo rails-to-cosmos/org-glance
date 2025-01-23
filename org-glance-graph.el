@@ -132,13 +132,13 @@
 
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
-  (let ((graph (cl-gethash directory org-glance-graph:list)))
+  (let ((graph (gethash directory org-glance-graph:list)))
     (unless graph
       (setq graph (make-org-glance-graph :directory directory))
       (f-mkdir-full-path (org-glance-graph:data-path graph))
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
       (f-touch (org-glance-graph:headline-meta-path graph))
-      (cl-puthash directory graph org-glance-graph:list))
+      (puthash directory graph org-glance-graph:list))
     graph))
 
 (cl-defmacro org-glance-graph:lock (graph &rest forms)
@@ -228,13 +228,13 @@
            into spec
            finally do (apply #'org-glance-graph:modify graph spec)))
 
-(let* ((graph (org-glance-graph "/tmp/glance"))
-       (foo (org-glance-headline1--from-lines "* foo :a:" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
-       (bar (org-glance-headline1--from-lines "* bar :b:" "123"))
-       (foo* (org-glance-headline1-metadata graph foo))
-       (bar* (org-glance-headline1-metadata graph bar)))
-  (org-glance-graph:add graph foo* bar*)
-  (org-glance-graph:add-relation graph 'neighbors foo* bar*))
+;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;;        (foo (org-glance-headline1--from-lines "* foo :a:" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
+;;        (bar (org-glance-headline1--from-lines "* bar :b:" "123"))
+;;        (foo* (org-glance-headline1-metadata graph foo))
+;;        (bar* (org-glance-headline1-metadata graph bar)))
+;;   (org-glance-graph:add graph foo* bar*)
+;;   (org-glance-graph:add-relation graph 'neighbors foo* bar*))
 
 ;; (let* ((graph (org-glance-graph "/tmp/glance"))
 ;;        (meta (org-glance-graph:get-headline graph "575cd2ec-8184-4d75-8f15-526dd9e76c8b"))
