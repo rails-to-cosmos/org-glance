@@ -80,13 +80,14 @@
                                               (process-line)
                                             (json-end-of-file nil)))))))
 
-(cl-defun org-glance-headline1-metadata-id (obj)
+(cl-defun org-glance-headline1-metadata:id* (obj)
+  "Generic variation of `org-glance-headline1-metadata:id'."
   (cl-typecase obj
     (org-glance-headline1-metadata (org-glance-headline1-metadata:id obj))
     (string obj)
     (t (error "Unable to determine object id: %s" (prin1-to-string obj)))))
 
-(cl-defun org-glance-headline1-metadata-spec (obj)
+(cl-defun org-glance-headline1-metadata:serialize* (obj)
   (cl-typecase obj
     (org-glance-headline1-metadata (org-glance-headline1-metadata:serialize obj))
     (list obj)
@@ -144,7 +145,7 @@
   (org-glance-graph:lock graph
     (cl-loop for spec in specs
              collect (-> spec
-                         (org-glance-headline1-metadata-spec)
+                         (org-glance-headline1-metadata:serialize*)
                          (json-serialize))
              into result
              finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")))))
@@ -207,7 +208,7 @@
   (cl-check-type graph org-glance-graph)
   (cl-check-type relation symbol)
   (cl-loop with ids = (->> entities
-                           (mapcar #'org-glance-headline1-metadata-id)
+                           (mapcar #'org-glance-headline1-metadata:id*)
                            (-non-nil))
            for id in ids
            collect (--> (org-glance-graph:get-headline graph id)
@@ -229,7 +230,8 @@
 ;;        ;; (id (org-glance-headline1-metadata:id meta))
 ;;        )
 ;;   ;; (org-glance-graph:remove-headline graph id)
-;;   (org-glance-headline1-metadata:relations meta)
+;;   ;; (org-glance-headline1-metadata:relations meta)
+;;   meta
 ;;   )
 
 (provide 'org-glance-graph)
