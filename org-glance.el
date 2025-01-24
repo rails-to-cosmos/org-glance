@@ -239,7 +239,8 @@ after capture process has been finished."
   (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
 
 (cl-defun org-glance-initialized?-v2 ()
-  (not (null org-glance-graph-v2)))
+  "Return `org-glance-graph' if system is initialized, or else return `nil'."
+  org-glance-graph-v2)
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."

@@ -249,4 +249,8 @@
 ;;   meta
 ;;   )
 
+(cl-defun org-glance-graph-v2:capture-buffer (&optional (buffer (current-buffer)))
+  (interactive)
+  (cl-check-type buffer buffer))
+
 (provide 'org-glance-graph-v2)
