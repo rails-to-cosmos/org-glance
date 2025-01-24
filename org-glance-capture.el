@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
+(require 'cl-macs)
+
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph)
 
@@ -13,6 +15,7 @@
 
   (cl-check-type tag symbol)
   (cl-check-type title string)
+  (cl-assert (org-glance-initialized?-v2))
 
   ;; (let ((id (org-glance-tag:generate-id tag))
   ;;       (file (make-temp-file "org-glance-" nil ".org")))

@@ -1,0 +1,10 @@
+1. All identifiers should be prefixed by the main namespace: =org-glance-=.
+2. Predicates should end with =?= sign, i.e. org-glance-headline-v2?.
+3. CL structures should be named after namespace, i.e. =org-glance-headline=.
+   1. Constructor method should be equal to the struct name, so for =org-glance-headline= the constructor method is =org-glance-headline=.
+   2. Type predicate should be named exactly as corresponding type name with =?= sign at the end: =org-glance-headline-v2?=.
+   3. Struct fields and methods should follow naming convention for {struct-name}:{method-name/var-name}.
+   4. Public field names should begin with letter / digit: =org-glance-headline:hash=.
+   5. Private field names should begin with dash: =org-glance-headline:-hash=.
+   6. Generic methods should end with an asterisk: =org-glance-headline-metadata:id*=.
+4. When refactoring is in progress, preserve implemented functions and name new identifiers with version postfix: =org-glance-headline-v2=.

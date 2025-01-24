@@ -238,6 +238,9 @@ after capture process has been finished."
 
   (setq org-glance-graph (org-glance-graph directory)))
 
+(cl-defun org-glance-initialized?-v2 ()
+  (not (null org-glance-graph)))
+
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."
   (interactive)
