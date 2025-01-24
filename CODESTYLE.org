@@ -7,4 +7,8 @@
    4. Public field names should begin with letter / digit: =org-glance-headline:hash=.
    5. Private field names should begin with dash: =org-glance-headline:-hash=.
    6. Generic methods should end with an asterisk: =org-glance-headline-metadata:id*=.
+   7. Lazy methods should be implemented in several steps:
+      1. Define private attribute that will hold a value: =org-glance-headline:-hash=.
+      2. Define private lazy method that delays computation: =org-glance-headline--hash=.
+      3. Define public accessor method that enforces computation: =org-glance-headline:hash=.
 4. When refactoring is in progress, preserve implemented functions and name new identifiers with version postfix: =org-glance-headline-v2=.
