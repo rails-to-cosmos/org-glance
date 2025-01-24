@@ -3,7 +3,7 @@
 (require 'cl-macs)
 
 (require 'org-glance-headline-v2)
-(require 'org-glance-graph)
+(require 'org-glance-graph-v2)
 
 (cl-defun org-glance-capture-v2 (tag title &key (callback nil) (template nil))
   (declare (indent 2))

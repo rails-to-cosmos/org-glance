@@ -60,7 +60,7 @@
 
 ;; V1 migration
 (require 'org-glance-headline-v2)
-(require 'org-glance-graph)
+(require 'org-glance-graph-v2)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
@@ -86,8 +86,8 @@
   :group 'org-glance
   :type 'boolean)
 
-(defvar org-glance-graph (org-glance-graph org-glance-directory)
-  "Current global instance of `org-glance-graph'.")
+(defvar org-glance-graph-v2 (org-glance-graph-v2 org-glance-directory)
+  "Current global instance of `org-glance-graph-v2'.")
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -234,12 +234,12 @@ after capture process has been finished."
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
 
 (cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
-  "Init global `org-glance-graph' in DIRECTORY."
+  "Init global `org-glance-graph-v2' in DIRECTORY."
 
-  (setq org-glance-graph (org-glance-graph directory)))
+  (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
 
 (cl-defun org-glance-initialized?-v2 ()
-  (not (null org-glance-graph)))
+  (not (null org-glance-graph-v2)))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."

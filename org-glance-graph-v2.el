@@ -11,21 +11,21 @@
   :group 'org-glance
   :type 'directory)
 
-(define-hash-table-test 'org-glance-graph:test
+(define-hash-table-test 'org-glance-graph-v2:test
                         (lambda (a b) (f-equal? (file-truename a) (file-truename b)))
                         (lambda (a) (secure-hash 'sha1 a)))
 
-(defvar org-glance-graph:list (make-hash-table :test 'org-glance-graph:test)
-  "Registered instances of `org-glance-graph' in current session.")
+(defvar org-glance-graph-v2:list (make-hash-table :test 'org-glance-graph-v2:test)
+  "Registered instances of `org-glance-graph-v2' in current session.")
 
-(cl-defstruct (org-glance-graph (:predicate org-glance-graph?)
-                                (:conc-name org-glance-graph:))
+(cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
+                                (:conc-name org-glance-graph-v2:))
   (mutex (make-mutex) :read-only t :type mutex)
   (directory org-glance-directory :read-only t :type directory))
 
 (cl-defstruct (org-glance-headline-metadata-v2 (:predicate org-glance-headline-metadata-v2?)
                                                (:conc-name org-glance-headline-metadata-v2:))
-  (graph nil :read-only t :type org-glance-graph)
+  (graph nil :read-only t :type org-glance-graph-v2)
   (id nil :read-only t :type string)
   (state nil :read-only t :type string)
   (title nil :read-only t :type string)
@@ -38,11 +38,11 @@
   (tombstone nil :read-only t :type boolean))
 
 (cl-defun org-glance-headline-v2:metadata (graph headline)
-  (cl-check-type graph org-glance-graph)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type headline org-glance-headline-v2)
   (make-org-glance-headline-metadata-v2 :graph graph
    :id (or (org-glance-headline-v2:id headline)
-           (org-glance-graph:make-id graph))
+           (org-glance-graph-v2:make-id graph))
    :state (org-glance-headline-v2:state headline)
    :title (org-glance-headline-v2:title headline)
    :tags (org-glance-headline-v2:tags headline)
@@ -115,7 +115,7 @@
         :tombstone (org-glance-headline-metadata-v2:tombstone metadata)))
 
 (cl-defun org-glance-headline-metadata-v2:deserialize (graph data)
-  (cl-check-type graph org-glance-graph)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type data list)
   (make-org-glance-headline-metadata-v2 :graph graph
                                         :id (plist-get data :id)
@@ -129,124 +129,124 @@
                                         :relations (plist-get data :relations)
                                         :tombstone (plist-get data :tombstone)))
 
-(cl-defun org-glance-graph (&optional (directory org-glance-directory))
+(cl-defun org-glance-graph-v2 (&optional (directory org-glance-directory))
   (cl-check-type directory string)
   (let* ((directory (-> directory (file-truename) (f-full)))
-         (graph (gethash directory org-glance-graph:list)))
+         (graph (gethash directory org-glance-graph-v2:list)))
     (unless graph
-      (setq graph (make-org-glance-graph :directory directory))
-      (f-mkdir-full-path (org-glance-graph:data-path graph))
-      (f-mkdir-full-path (org-glance-graph:meta-path graph))
-      (f-touch (org-glance-graph:headline-meta-path graph))
-      (puthash directory graph org-glance-graph:list))
+      (setq graph (make-org-glance-graph-v2 :directory directory))
+      (f-mkdir-full-path (org-glance-graph-v2:data-path graph))
+      (f-mkdir-full-path (org-glance-graph-v2:meta-path graph))
+      (f-touch (org-glance-graph-v2:headline-meta-path graph))
+      (puthash directory graph org-glance-graph-v2:list))
     graph))
 
-(cl-defmacro org-glance-graph:lock (graph &rest forms)
+(cl-defmacro org-glance-graph-v2:lock (graph &rest forms)
   "Modify GRAPH data with FORMS."
   (declare (indent 1))
-  `(with-mutex (org-glance-graph:mutex ,graph)
+  `(with-mutex (org-glance-graph-v2:mutex ,graph)
      ,@forms))
 
-(cl-defun org-glance-graph:modify (graph &rest specs)
+(cl-defun org-glance-graph-v2:modify (graph &rest specs)
   (declare (indent 1))
   (cl-check-type specs list)
   (cl-check-type (car specs) (or list org-glance-headline-metadata-v2))
-  (org-glance-graph:lock graph
+  (org-glance-graph-v2:lock graph
     (cl-loop for spec in specs
              collect (-> spec
                          (org-glance-headline-metadata-v2:serialize*)
                          (json-serialize))
              into result
-             finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (org-glance-graph:headline-meta-path graph)))))
+             finally (f-append-text (concat (s-join "\n" result) "\n") `utf-8 (org-glance-graph-v2:headline-meta-path graph)))))
 
-(cl-defun org-glance-graph:data-path (graph)
-  (cl-check-type graph org-glance-graph)
-  (-> (f-join (org-glance-graph:directory graph) "data")
+(cl-defun org-glance-graph-v2:data-path (graph)
+  (cl-check-type graph org-glance-graph-v2)
+  (-> (f-join (org-glance-graph-v2:directory graph) "data")
       (file-truename)))
 
-(cl-defun org-glance-graph:meta-path (graph)
-  (cl-check-type graph org-glance-graph)
-  (-> (f-join (org-glance-graph:directory graph) "meta")
+(cl-defun org-glance-graph-v2:meta-path (graph)
+  (cl-check-type graph org-glance-graph-v2)
+  (-> (f-join (org-glance-graph-v2:directory graph) "meta")
       (file-truename)))
 
-(cl-defun org-glance-graph:headline-meta-path (graph)
-  (cl-check-type graph org-glance-graph)
-  (-> (f-join (org-glance-graph:meta-path graph) "headlines.jsonl")
+(cl-defun org-glance-graph-v2:headline-meta-path (graph)
+  (cl-check-type graph org-glance-graph-v2)
+  (-> (f-join (org-glance-graph-v2:meta-path graph) "headlines.jsonl")
       (file-truename)))
 
-(cl-defun org-glance-graph:headline-data-path (graph id)
+(cl-defun org-glance-graph-v2:headline-data-path (graph id)
   "TODO move to metadata?"
-  (cl-check-type graph org-glance-graph)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type id string)
-  (-> (f-join (org-glance-graph:data-path graph) (substring id 0 2) (substring id 2))
+  (-> (f-join (org-glance-graph-v2:data-path graph) (substring id 0 2) (substring id 2))
       (file-truename)))
 
-(cl-defun org-glance-graph:make-id (graph)
-  (cl-check-type graph org-glance-graph)
-  (org-glance-graph:lock graph
+(cl-defun org-glance-graph-v2:make-id (graph)
+  (cl-check-type graph org-glance-graph-v2)
+  (org-glance-graph-v2:lock graph
     (cl-loop while t
              for id = (org-id-uuid)
-             for data-path = (org-glance-graph:headline-data-path graph id)
+             for data-path = (org-glance-graph-v2:headline-data-path graph id)
              unless (f-exists? data-path)
              return (prog1 id (f-mkdir-full-path data-path)))))
 
 (cl-defun org-glance-headline-metadata-v2:data-path (metadata)
   (cl-check-type metadata org-glance-headline-metadata-v2)
-  (f-join (org-glance-graph:headline-data-path (org-glance-headline-metadata-v2:graph metadata) (org-glance-headline-metadata-v2:id metadata)) "data.org"))
+  (f-join (org-glance-graph-v2:headline-data-path (org-glance-headline-metadata-v2:graph metadata) (org-glance-headline-metadata-v2:id metadata)) "data.org"))
 
-(cl-defun org-glance-graph:add (graph &rest headlines)
+(cl-defun org-glance-graph-v2:add (graph &rest headlines)
   "Add HEADLINES to GRAPH. TODO return a new graph."
-  (cl-check-type graph org-glance-graph)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-loop for headline in headlines
            for meta = (org-glance-headline-v2:metadata* graph headline)
            when (equal graph (org-glance-headline-metadata-v2:graph meta))
            collect meta into spec
-           finally (apply #'org-glance-graph:modify graph spec)))
+           finally (apply #'org-glance-graph-v2:modify graph spec)))
 
-(cl-defun org-glance-graph:get-headline (graph id)
-  (cl-check-type graph org-glance-graph)
+(cl-defun org-glance-graph-v2:get-headline (graph id)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type id string)
-  (org-glance-jsonl:iterate (org-glance-graph:headline-meta-path graph)
+  (org-glance-jsonl:iterate (org-glance-graph-v2:headline-meta-path graph)
     (when (string= (plist-get it :id) id)
       (if (plist-get it :tombstone)
           'tombstone
         (org-glance-headline-metadata-v2:deserialize graph it)))))
 
-(cl-defun org-glance-graph:remove-headline (graph id)
-  (cl-check-type graph org-glance-graph)
+(cl-defun org-glance-graph-v2:remove-headline (graph id)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type id string)
-  (let ((meta (org-glance-graph:get-headline graph id)))
+  (let ((meta (org-glance-graph-v2:get-headline graph id)))
     (unless (org-glance-headline-metadata-v2:tombstone meta)
-      (org-glance-graph:modify graph (list :id id :tombstone t)))))
+      (org-glance-graph-v2:modify graph (list :id id :tombstone t)))))
 
-(cl-defun org-glance-graph:add-relation (graph relation &rest entities)
-  (cl-check-type graph org-glance-graph)
+(cl-defun org-glance-graph-v2:add-relation (graph relation &rest entities)
+  (cl-check-type graph org-glance-graph-v2)
   (cl-check-type relation symbol)
   (cl-loop with ids = (->> entities
                            (mapcar #'org-glance-headline-metadata-v2:id*)
                            (-non-nil))
            for id in ids
-           collect (--> (org-glance-graph:get-headline graph id)
+           collect (--> (org-glance-graph-v2:get-headline graph id)
                         (org-glance-headline-metadata-v2:serialize it)
                         (plist-put it :relations (list relation (vconcat (plist-get it :relations) (apply #'vector (remove id ids))))))
            into spec
-           finally do (apply #'org-glance-graph:modify graph spec)))
+           finally do (apply #'org-glance-graph-v2:modify graph spec)))
 
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
+;; (let* ((graph (org-glance-graph-v2 "/tmp/glance"))
 ;;        (foo (org-glance-headline-v2--from-lines "* foo :a:" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
 ;;        (bar (org-glance-headline-v2--from-lines "* bar :b:" "123"))
 ;;        (foo* (org-glance-headline-metadata-v2 graph foo))
 ;;        (bar* (org-glance-headline-metadata-v2 graph bar)))
-;;   (org-glance-graph:add graph foo* bar*)
-;;   (org-glance-graph:add-relation graph 'neighbors foo* bar*))
+;;   (org-glance-graph-v2:add graph foo* bar*)
+;;   (org-glance-graph-v2:add-relation graph 'neighbors foo* bar*))
 
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
-;;        (meta (org-glance-graph:get-headline graph "575cd2ec-8184-4d75-8f15-526dd9e76c8b"))
+;; (let* ((graph (org-glance-graph-v2 "/tmp/glance"))
+;;        (meta (org-glance-graph-v2:get-headline graph "575cd2ec-8184-4d75-8f15-526dd9e76c8b"))
 ;;        ;; (id (org-glance-headline-metadata-v2:id meta))
 ;;        )
-;;   ;; (org-glance-graph:remove-headline graph id)
+;;   ;; (org-glance-graph-v2:remove-headline graph id)
 ;;   ;; (org-glance-headline-metadata-v2:relations meta)
 ;;   meta
 ;;   )
 
-(provide 'org-glance-graph)
+(provide 'org-glance-graph-v2)

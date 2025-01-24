@@ -1,1 +1,1 @@
-(require 'org-glance-graph)
+(require 'org-glance-graph-v2)
