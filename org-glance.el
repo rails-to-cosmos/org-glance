@@ -59,7 +59,7 @@
 (require 'org-glance-utils)
 
 ;; V1 migration
-(require 'org-glance-headline1)
+(require 'org-glance-headline-v2)
 (require 'org-glance-graph)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
@@ -81,15 +81,13 @@
   :group 'org-glance
   :type 'directory)
 
-(defcustom org-glance-resource-directory (f-join org-directory "resources")
-  "Directory for non-Org resources associated with `org-glance`."
-  :group 'org-glance
-  :type 'directory)
-
 (defcustom org-glance-clone-on-repeat-p nil
   "Create a new headline copy when repeating rather than modifying in place."
   :group 'org-glance
   :type 'boolean)
+
+(defvar org-glance-graph (org-glance-graph org-glance-directory)
+  "Current global instance of `org-glance-graph'.")
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -234,6 +232,11 @@ after capture process has been finished."
            do (org-glance-tag:remove tag org-glance-tags))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
+
+(cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
+  "Init global `org-glance-graph' in DIRECTORY."
+
+  (setq org-glance-graph (org-glance-graph directory)))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."
