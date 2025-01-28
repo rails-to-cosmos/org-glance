@@ -59,6 +59,7 @@
 (require 'org-glance-utils)
 
 ;; V1 migration
+(require 'org-glance-capture-v2)
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
 
