@@ -23,18 +23,14 @@
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))
          (temp-capture-token "_")
-         ;; (org-capture-templates (list (list temp-capture-token temp-capture-token 'entry (list 'file file) template)))
-         )
+         (org-capture-templates (list (list temp-capture-token temp-capture-token 'entry (list 'file file) template))))
     (find-file file)
     (add-hook 'org-capture-after-finalize-hook
               `(lambda () (unwind-protect
-                         (org-glance-graph-v2:capture-buffer)
+                         (setq org-glance-graph-v2 (org-glance-graph-v2:merge org-glance-graph-v2 (org-glance-graph-v2:capture-buffer)))
                        (kill-buffer (get-file-buffer ,file))
                        (f-delete ,file)))
               0 t)
-    (org-capture nil temp-capture-token)
-    ;; (when finalize (org-capture-finalize))
-    )
-  )
+    (org-capture nil temp-capture-token)))
 
 (provide 'org-glance-capture-v2)

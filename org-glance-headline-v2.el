@@ -58,7 +58,7 @@
      (insert (cl-typecase ,contents
                (org-glance-headline-v2 (org-glance-headline-v2:contents ,contents))
                (string ,contents)
-               (otherwise (error "Expected `org-glance-headline-v2' or string, but got %s" (cl-type-of ,contents)))))
+               (otherwise (error "Expected `org-glance-headline-v2' or string, but got %s" (type-of ,contents)))))
      (goto-char (point-min))
      ,@forms))
 

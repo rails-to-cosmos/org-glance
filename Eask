@@ -27,5 +27,8 @@
   (setq ert-batch-backtrace-right-margin 1200
         ert-batch-print-length 20
         ert-batch-print-level 10)
-  (load "test/test-headline.el")
+  (load "test/test-helpers.el")
+  (load "test/test-graph.el")
+  (load "test/test-capture.el")
+  ;; (load "test/test-headline.el")
   (ert-run-tests-batch-and-exit))
