@@ -214,6 +214,8 @@
 (cl-defun org-glance-graph-v2:capture-buffer (&optional (buffer (current-buffer)))
   (interactive)
   (cl-check-type buffer buffer)
-  )
+  (cl-loop with elements = (org-element-map (org-element-parse-buffer 'headline) 'headline #'identity)
+           for element in elements
+           collect (org-glance-headline-v2--from-element element)))
 
 (provide 'org-glance-graph-v2)
