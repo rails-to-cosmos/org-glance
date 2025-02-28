@@ -4,6 +4,7 @@
 (require 'f)
 (require 'org)
 
+(require 'org-glance-utils)
 (require 'org-glance-headline-v2)
 
 (defcustom org-glance-directory org-directory
@@ -18,72 +19,37 @@
 (defvar org-glance-graph-v2:list (make-hash-table :test 'org-glance-graph-v2:test)
   "Registered instances of `org-glance-graph-v2' in current session.")
 
-(cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
-                                (:conc-name org-glance-graph-v2:))
-  (mutex (make-mutex) :read-only t :type mutex)
-  (directory org-glance-directory :read-only t :type directory))
-
 (cl-defstruct (org-glance-headline-metadata-v2 (:predicate org-glance-headline-metadata-v2?)
                                                (:conc-name org-glance-headline-metadata-v2:))
-  (graph nil :read-only t :type org-glance-graph-v2)
-  (id nil :read-only t :type string)
   (state nil :read-only t :type string)
   (title nil :read-only t :type string)
   (tags nil :read-only t :type list)
   (hash nil :read-only t :type string)
   (schedule nil :read-only t :type string)
   (deadline nil :read-only t :type string)
-  (priority nil :read-only t :type number)
-  (relations nil :read-only t :type list)
-  (tombstone nil :read-only t :type boolean))
+  (priority nil :read-only t :type number))
 
-(cl-defun org-glance-headline-v2:metadata (graph headline)
-  (cl-check-type graph org-glance-graph-v2)
+(cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
+                                   (:conc-name org-glance-graph-v2:))
+  (mutex (make-mutex) :read-only t :type mutex)
+  (directory org-glance-directory :read-only t :type directory))
+
+(cl-defun org-glance-headline-v2:metadata (headline)
   (cl-check-type headline org-glance-headline-v2)
-  (make-org-glance-headline-metadata-v2 :graph graph
-   :id (or (org-glance-headline-v2:id headline)
-           (org-glance-graph-v2:make-id graph))
+  (make-org-glance-headline-metadata-v2
    :state (org-glance-headline-v2:state headline)
    :title (org-glance-headline-v2:title headline)
    :tags (org-glance-headline-v2:tags headline)
    :hash (org-glance-headline-v2:hash headline)
    :schedule (org-glance-headline-v2:schedule headline)
    :deadline (org-glance-headline-v2:deadline headline)
-   :priority (org-glance-headline-v2:priority headline)
-   :relations nil
-   :tombstone nil))
+   :priority (org-glance-headline-v2:priority headline)))
 
-(cl-defun org-glance-headline-v2:metadata* (graph obj)
+(cl-defun org-glance-headline-v2:metadata* (obj)
   "Generic variant of `org-glance-headline-v2:metadata'."
   (cl-typecase obj
     (org-glance-headline-metadata-v2 obj)
-    (org-glance-headline-v2 (org-glance-headline-v2:metadata graph obj))))
-
-(cl-defmacro org-glance-jsonl:iterate (file &rest forms)
-  (declare (indent 1))
-  `(with-temp-buffer
-     (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position))
-                                                             :object-type 'plist)))
-                                  ,@forms)))
-       (cl-loop with result = nil
-                with chunk-size = 4096
-                with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
-                with disk-read-count = 0
-                for upper-bound downfrom file-size downto 0 by chunk-size
-                for lower-bound = (max 0 (- upper-bound chunk-size))
-                do (progn (cl-incf disk-read-count)
-                          (goto-char (point-min))
-                          (insert-file-contents-literally ,file nil lower-bound upper-bound)
-                          (goto-char (point-max))
-                          (skip-chars-backward "\n")
-                          (beginning-of-line)
-                          (while (not (or (bobp) (setq result (process-line))))
-                            (forward-line -1)
-                            (beginning-of-line))
-                          (delete-region (line-end-position) (point-max)))
-                finally return (or result (condition-case nil
-                                              (process-line)
-                                            (json-end-of-file nil)))))))
+    (org-glance-headline-v2 (org-glance-headline-v2:metadata obj))))
 
 (cl-defun org-glance-headline-metadata-v2:id* (obj)
   "Generic variant of `org-glance-headline-metadata-v2:id'."
@@ -101,8 +67,7 @@
 
 (cl-defun org-glance-headline-metadata-v2:serialize (metadata)
   (cl-check-type metadata org-glance-headline-metadata-v2)
-  (list :id (org-glance-headline-metadata-v2:id metadata)
-        :state (org-glance-headline-metadata-v2:state metadata)
+  (list :state (org-glance-headline-metadata-v2:state metadata)
         :title (org-glance-headline-metadata-v2:title metadata)
         :tags (->> (org-glance-headline-metadata-v2:tags metadata)
                    (mapcar (-partial #'format "%s"))
@@ -110,9 +75,7 @@
         :hash (org-glance-headline-metadata-v2:hash metadata)
         :schedule (org-glance-headline-metadata-v2:schedule metadata)
         :deadline (org-glance-headline-metadata-v2:deadline metadata)
-        :priority (org-glance-headline-metadata-v2:priority metadata)
-        :relations (org-glance-headline-metadata-v2:relations metadata)
-        :tombstone (org-glance-headline-metadata-v2:tombstone metadata)))
+        :priority (org-glance-headline-metadata-v2:priority metadata)))
 
 (cl-defun org-glance-headline-metadata-v2:deserialize (graph data)
   (cl-check-type graph org-glance-graph-v2)
@@ -126,8 +89,7 @@
                                         :schedule (plist-get data :schedule)
                                         :deadline (plist-get data :deadline)
                                         :priority (plist-get data :priority)
-                                        :relations (plist-get data :relations)
-                                        :tombstone (plist-get data :tombstone)))
+                                        :relations (plist-get data :relations)))
 
 (cl-defun org-glance-graph-v2 (&optional (directory org-glance-directory))
   (cl-check-type directory string)
@@ -147,7 +109,7 @@
   `(with-mutex (org-glance-graph-v2:mutex ,graph)
      ,@forms))
 
-(cl-defun org-glance-graph-v2:modify (graph &rest specs)
+(cl-defun org-glance-graph-v2:transaction (graph &rest specs)
   (declare (indent 1))
   (cl-check-type specs list)
   (cl-check-type (car specs) (or list org-glance-headline-metadata-v2))
@@ -201,7 +163,7 @@
            for meta = (org-glance-headline-v2:metadata* graph headline)
            when (equal graph (org-glance-headline-metadata-v2:graph meta))
            collect meta into spec
-           finally (apply #'org-glance-graph-v2:modify graph spec)))
+           finally (apply #'org-glance-graph-v2:transaction graph spec)))
 
 (cl-defun org-glance-graph-v2:get-headline (graph id)
   (cl-check-type graph org-glance-graph-v2)
@@ -217,7 +179,7 @@
   (cl-check-type id string)
   (let ((meta (org-glance-graph-v2:get-headline graph id)))
     (unless (org-glance-headline-metadata-v2:tombstone meta)
-      (org-glance-graph-v2:modify graph (list :id id :tombstone t)))))
+      (org-glance-graph-v2:transaction graph (list :id id :tombstone t)))))
 
 (cl-defun org-glance-graph-v2:add-relation (graph relation &rest entities)
   (cl-check-type graph org-glance-graph-v2)
@@ -230,7 +192,7 @@
                         (org-glance-headline-metadata-v2:serialize it)
                         (plist-put it :relations (list relation (vconcat (plist-get it :relations) (apply #'vector (remove id ids))))))
            into spec
-           finally do (apply #'org-glance-graph-v2:modify graph spec)))
+           finally do (apply #'org-glance-graph-v2:transaction graph spec)))
 
 ;; (let* ((graph (org-glance-graph-v2 "/tmp/glance"))
 ;;        (foo (org-glance-headline-v2--from-lines "* foo :a:" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
@@ -251,6 +213,7 @@
 
 (cl-defun org-glance-graph-v2:capture-buffer (&optional (buffer (current-buffer)))
   (interactive)
-  (cl-check-type buffer buffer))
+  (cl-check-type buffer buffer)
+  )
 
 (provide 'org-glance-graph-v2)

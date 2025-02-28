@@ -7,10 +7,40 @@
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
+(cl-defmacro org-glance-typed (form type)
+  `(prog1 ,form
+     (cl-check-type ,form ,type)))
+
 (cl-defmacro org-glance:interactive-lambda (&rest forms)
   "Define interactive lambda function with FORMS in its body."
   (declare (indent 0) (debug t))
   `(lambda () (interactive) ,@forms))
+
+(cl-defmacro org-glance-jsonl:iterate (file &rest forms)
+  (declare (indent 1))
+  `(with-temp-buffer
+     (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position))
+                                                             :object-type 'plist)))
+                                  ,@forms)))
+       (cl-loop with result = nil
+                with chunk-size = 4096
+                with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
+                with disk-read-count = 0
+                for upper-bound downfrom file-size downto 0 by chunk-size
+                for lower-bound = (max 0 (- upper-bound chunk-size))
+                do (progn (cl-incf disk-read-count)
+                          (goto-char (point-min))
+                          (insert-file-contents-literally ,file nil lower-bound upper-bound)
+                          (goto-char (point-max))
+                          (skip-chars-backward "\n")
+                          (beginning-of-line)
+                          (while (not (or (bobp) (setq result (process-line))))
+                            (forward-line -1)
+                            (beginning-of-line))
+                          (delete-region (line-end-position) (point-max)))
+                finally return (or result (condition-case nil
+                                              (process-line)
+                                            (json-end-of-file nil)))))))
 
 (cl-defmacro org-glance--with-file-visited (file &rest forms)
   "Visit FILE, execute FORMS and close it if it was closed before visit."

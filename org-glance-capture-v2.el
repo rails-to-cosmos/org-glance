@@ -22,8 +22,8 @@
   (cl-assert (org-glance-initialized?-v2))
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))
-         (temp-capture-token "_")
-         (org-capture-templates (list (list temp-capture-token temp-capture-token 'entry (list 'file file) template))))
+         (capture-token "_")
+         (org-capture-templates (list (list capture-token capture-token 'entry (list 'file file) template))))
     (find-file file)
     (add-hook 'org-capture-after-finalize-hook
               `(lambda () (unwind-protect
@@ -31,6 +31,6 @@
                        (kill-buffer (get-file-buffer ,file))
                        (f-delete ,file)))
               0 t)
-    (org-capture nil temp-capture-token)))
+    (org-capture nil capture-token)))
 
 (provide 'org-glance-capture-v2)

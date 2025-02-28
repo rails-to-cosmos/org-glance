@@ -1,4 +1,4 @@
-.PHONY: init build test info clean lint
+.PHONY: build test info clean lint
 
 info:
 	eask info
