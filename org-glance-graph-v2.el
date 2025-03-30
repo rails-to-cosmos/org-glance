@@ -80,16 +80,13 @@
 (cl-defun org-glance-headline-metadata-v2:deserialize (graph data)
   (cl-check-type graph org-glance-graph-v2)
   (cl-check-type data list)
-  (make-org-glance-headline-metadata-v2 :graph graph
-                                        :id (plist-get data :id)
-                                        :state (plist-get data :state)
+  (make-org-glance-headline-metadata-v2 :state (plist-get data :state)
                                         :title (plist-get data :title)
                                         :tags (plist-get data :tags)
                                         :hash (plist-get data :hash)
                                         :schedule (plist-get data :schedule)
                                         :deadline (plist-get data :deadline)
-                                        :priority (plist-get data :priority)
-                                        :relations (plist-get data :relations)))
+                                        :priority (plist-get data :priority)))
 
 (cl-defun org-glance-graph-v2 (&optional (directory org-glance-directory))
   (cl-check-type directory string)
@@ -152,10 +149,6 @@
              unless (f-exists? data-path)
              return (prog1 id (f-mkdir-full-path data-path)))))
 
-(cl-defun org-glance-headline-metadata-v2:data-path (metadata)
-  (cl-check-type metadata org-glance-headline-metadata-v2)
-  (f-join (org-glance-graph-v2:headline-data-path (org-glance-headline-metadata-v2:graph metadata) (org-glance-headline-metadata-v2:id metadata)) "data.org"))
-
 (cl-defun org-glance-graph-v2:add (graph &rest headlines)
   "Add HEADLINES to GRAPH. TODO return a new graph."
   (cl-check-type graph org-glance-graph-v2)
@@ -217,5 +210,8 @@
   (cl-loop with elements = (org-element-map (org-element-parse-buffer 'headline) 'headline #'identity)
            for element in elements
            collect (org-glance-headline-v2--from-element element)))
+
+(cl-defun org-glance-graph-v2:merge (&rest graphs)
+  )
 
 (provide 'org-glance-graph-v2)

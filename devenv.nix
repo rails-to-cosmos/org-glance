@@ -1,5 +1,5 @@
 { pkgs, ... }:
 
 {
-  packages = with pkgs; [eask emacs fzf];
+  packages = with pkgs; [eask emacs fzf duckdb];
 }
