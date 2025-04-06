@@ -16,10 +16,10 @@ build:
 	eask reinstall
 
 test:
-	make clean
-	eask recompile
-	eask package ./dist
-	eask reinstall
+	# make clean
+	# eask recompile
+	# eask package ./dist
+	# eask reinstall
 	eask run command test
 
 lint:

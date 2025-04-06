@@ -1,0 +1,9 @@
+services:
+  # emacs-28.2:
+  #   build: .
+  #   working_dir: /workspace
+  #   command: tail -f /dev/null
+
+  test-emacs-28.2:
+    build: .
+    command: make test
