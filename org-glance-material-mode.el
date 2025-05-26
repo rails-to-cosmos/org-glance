@@ -233,7 +233,7 @@
       (org-glance:material-buffer-default-view)
       (goto-char (point-min))
       (org-glance-headline:promote-to-the-first-level)
-
+      (org-content)
       (setq-local default-directory (file-name-directory file))
 
       (setq --org-glance-materialized-headline:id id
