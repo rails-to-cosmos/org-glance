@@ -90,7 +90,7 @@
      ))
 
 (cl-defun org-glance-materialized-headline-apply ()
-  "Synchronized material buffer changes across all headline origins and views."
+  "Sync material buffer changes across all headline origins and views."
   (interactive)
   (save-excursion
 
@@ -152,8 +152,7 @@
                                (insert buffer-contents)
                                (goto-char (point-min))
                                (org-glance-headline:demote indent-level)
-                               (buffer-substring-no-properties (point-min) (point-max)))))))
-
+                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
         ;; FIXME: headline mutation!
         (cond (source-file (with-temp-file source-file
                              (org-mode)
