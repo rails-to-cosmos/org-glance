@@ -584,22 +584,21 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                          :db-init db-init
                                          :scope scope
                                          :filter filter)))
-    (unwind-protect
-        (when-let (choice (or default
-                              (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
-          (if-let (headline (org-glance-headline:select-by-title choice headlines))
-              (condition-case nil
-                  (funcall action headline)
-                (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
-                             (redisplay)
-                             (org-glance :scope scope
-                                         :filter filter
-                                         :action action
-                                         :db db
-                                         :db-init t
-                                         :default choice
-                                         :prompt prompt)))
-            (error "Headline not found"))))))
+    (when-let (choice (or default
+                          (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
+      (if-let (headline (org-glance-headline:select-by-title choice headlines))
+          (condition-case nil
+              (funcall action headline)
+            (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
+                         (redisplay)
+                         (org-glance :scope scope
+                                     :filter filter
+                                     :action action
+                                     :db db
+                                     :db-init t
+                                     :default choice
+                                     :prompt prompt)))
+        (error "Headline not found")))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

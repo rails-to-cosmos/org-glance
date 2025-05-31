@@ -19,6 +19,14 @@
 (defvar org-glance-graph-v2:list (make-hash-table :test 'org-glance-graph-v2:test)
   "Registered instances of `org-glance-graph-v2' in current session.")
 
+(cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
+                                   (:conc-name org-glance-graph-v2:))
+  (mutex (make-mutex) :read-only t :type mutex)
+  (directory org-glance-directory :read-only t :type directory))
+
+(cl-defun org-glance-graph-v2:merge (&rest graphs)
+  )
+
 (cl-defstruct (org-glance-headline-metadata-v2 (:predicate org-glance-headline-metadata-v2?)
                                                (:conc-name org-glance-headline-metadata-v2:))
   (state nil :read-only t :type string)
@@ -28,11 +36,6 @@
   (schedule nil :read-only t :type string)
   (deadline nil :read-only t :type string)
   (priority nil :read-only t :type number))
-
-(cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
-                                   (:conc-name org-glance-graph-v2:))
-  (mutex (make-mutex) :read-only t :type mutex)
-  (directory org-glance-directory :read-only t :type directory))
 
 (cl-defun org-glance-headline-v2:metadata (headline)
   (cl-check-type headline org-glance-headline-v2)

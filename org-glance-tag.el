@@ -55,7 +55,8 @@
   (cl-typecase value
     (symbol (intern (downcase (symbol-name value))))
     (string (org-glance-tag:from-string value))
-    (t (error "Unable to convert value \"%v\" to `org-glance-tag'" value))))
+    (t (error "Unable to convert value \"%s\" to `org-glance-tag'"
+              value))))
 
 (cl-defun org-glance-tag:from-headline-at-point ()
   (mapcar #'org-glance-tag:from-string (org-get-tags)))
