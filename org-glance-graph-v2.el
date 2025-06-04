@@ -73,8 +73,7 @@
         :deadline (org-glance-headline-metadata-v2:deadline metadata)
         :priority (org-glance-headline-metadata-v2:priority metadata)))
 
-(cl-defun org-glance-headline-metadata-v2:deserialize (graph data)
-  (cl-check-type graph org-glance-graph-v2)
+(cl-defun org-glance-headline-metadata-v2:deserialize (data)
   (cl-check-type data list)
   (make-org-glance-headline-metadata-v2 :state (plist-get data :state)
                                         :title (plist-get data :title)
