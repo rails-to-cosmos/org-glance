@@ -58,7 +58,7 @@
 (require 'org-glance-ui)
 (require 'org-glance-utils)
 
-;; V1 migration
+;; Major upgrade
 (require 'org-glance-capture-v2)
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
