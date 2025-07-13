@@ -7,10 +7,40 @@
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
+(cl-defmacro org-glance-typed (form type)
+  `(prog1 ,form
+     (cl-check-type ,form ,type)))
+
 (cl-defmacro org-glance:interactive-lambda (&rest forms)
   "Define interactive lambda function with FORMS in its body."
   (declare (indent 0) (debug t))
   `(lambda () (interactive) ,@forms))
+
+(cl-defmacro org-glance-jsonl:iterate (file &rest forms)
+  (declare (indent 1))
+  `(with-temp-buffer
+     (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position))
+                                                             :object-type 'plist)))
+                                  ,@forms)))
+       (cl-loop with result = nil
+                with chunk-size = 4096
+                with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
+                with disk-read-count = 0
+                for upper-bound downfrom file-size downto 0 by chunk-size
+                for lower-bound = (max 0 (- upper-bound chunk-size))
+                do (progn (cl-incf disk-read-count)
+                          (goto-char (point-min))
+                          (insert-file-contents-literally ,file nil lower-bound upper-bound)
+                          (goto-char (point-max))
+                          (skip-chars-backward "\n")
+                          (beginning-of-line)
+                          (while (not (or (bobp) (setq result (process-line))))
+                            (forward-line -1)
+                            (beginning-of-line))
+                          (delete-region (line-end-position) (point-max)))
+                finally return (or result (condition-case nil
+                                              (process-line)
+                                            (json-end-of-file nil)))))))
 
 (cl-defmacro org-glance--with-file-visited (file &rest forms)
   "Visit FILE, execute FORMS and close it if it was closed before visit."
@@ -41,7 +71,7 @@
     (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
              for link = (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1)
              for type = (intern (car link))
-             when (memq type types)
+             when (or (null types) (memq type types))
              do (delete-region (match-beginning 0) (match-end 0)))))
 
 (cl-defun org-glance--buffer-links ()
@@ -59,11 +89,6 @@
            collect beg into positions
            finally return (-zip links titles positions)))
 
-(cl-defun org-glance--search-optional (needle)
-  (condition-case nil
-      (re-search-forward needle)
-    (search-failed nil)))
-
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
 Run completing read on keys and copy selected values to kill ring.
@@ -71,7 +96,7 @@ Run completing read on keys and copy selected values to kill ring.
 Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
   (save-excursion
     (goto-char (point-min))
-    (cl-loop while (org-glance--search-optional org-glance:key-value-pair-re)
+    (cl-loop while (re-search-forward org-glance:key-value-pair-re nil t)
              for key = (s-trim (substring-no-properties (match-string 1)))
              for value = (s-trim (substring-no-properties (match-string 2)))
              collect (cons key value))))

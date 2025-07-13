@@ -1,4 +1,4 @@
-.PHONY: init build test info clean
+.PHONY: build test info clean lint
 
 info:
 	eask info
@@ -20,7 +20,11 @@ test:
 	eask recompile
 	eask package ./dist
 	eask reinstall
-	eask test ert org-glance-test.el
+	eask run command test
+
+lint:
+	make clean
+	eask lint checkdoc
 
 clean:
 	eask clean elc

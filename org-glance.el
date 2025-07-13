@@ -7,7 +7,7 @@
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht))
+;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
@@ -58,6 +58,11 @@
 (require 'org-glance-ui)
 (require 'org-glance-utils)
 
+;; Major upgrade
+(require 'org-glance-capture-v2)
+(require 'org-glance-headline-v2)
+(require 'org-glance-graph-v2)
+
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
 (declare-function org-glance--join-leading-separator "org-glance-utils.el" (separator strings))
@@ -68,11 +73,6 @@
 (declare-function org-glance--remove-links "org-glance-utils.el" (&rest types))
 (declare-function org-glance--substitute-links "org-glance-utils.el")
 (declare-function org-glance-headline:at-point "org-glance-headline.el")
-(declare-function org-glance-headline:deserialize "org-glance-headline.el" (id value))
-(declare-function org-glance-headline:from-element "org-glance-headline.el" (element))
-(declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
-(declare-function org-glance-headline:search-parents "org-glance-headline.el")
-(declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
 (declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
 (declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
 (declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
@@ -82,15 +82,13 @@
   :group 'org-glance
   :type 'directory)
 
-(defcustom org-glance-resource-directory (f-join org-directory "resources")
-  "Directory for non-Org resources associated with `org-glance`."
-  :group 'org-glance
-  :type 'directory)
-
 (defcustom org-glance-clone-on-repeat-p nil
   "Create a new headline copy when repeating rather than modifying in place."
   :group 'org-glance
   :type 'boolean)
+
+(defvar org-glance-graph-v2 (org-glance-graph-v2 org-glance-directory)
+  "Current global instance of `org-glance-graph-v2'.")
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -235,6 +233,15 @@ after capture process has been finished."
            do (org-glance-tag:remove tag org-glance-tags))
 
   (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
+
+(cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
+  "Init global `org-glance-graph-v2' in DIRECTORY."
+
+  (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
+
+(cl-defun org-glance-initialized?-v2 ()
+  "Return `org-glance-graph' if system is initialized, or else return `nil'."
+  org-glance-graph-v2)
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."
@@ -577,22 +584,21 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
                                          :db-init db-init
                                          :scope scope
                                          :filter filter)))
-    (unwind-protect
-        (when-let (choice (or default
-                              (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
-          (if-let (headline (org-glance-headline:select-by-title choice headlines))
-              (condition-case nil
-                  (funcall action headline)
-                (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
-                             (redisplay)
-                             (org-glance :scope scope
-                                         :filter filter
-                                         :action action
-                                         :db db
-                                         :db-init t
-                                         :default choice
-                                         :prompt prompt)))
-            (error "Headline not found"))))))
+    (when-let (choice (or default
+                          (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
+      (if-let (headline (org-glance-headline:select-by-title choice headlines))
+          (condition-case nil
+              (funcall action headline)
+            (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
+                         (redisplay)
+                         (org-glance :scope scope
+                                     :filter filter
+                                     :action action
+                                     :db db
+                                     :db-init t
+                                     :default choice
+                                     :prompt prompt)))
+        (error "Headline not found")))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

@@ -4,31 +4,30 @@
 (require 'org)
 (require 'org-element)
 (require 'cl-lib)
+(require 'thunk)
 
 (require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
-
-(org-glance-exception:define org-glance-headline:not-found!
-  "Headline not found")
-
-(org-glance-exception:define org-glance-headline:metadata-corrupted!
-  "Headline metadata corrupted, please reread")
-
-(cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
-(cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
-
-(cl-defun org-glance-headline-metadata? (headline-metadata) (and (listp headline-metadata) (eq (car headline-metadata) 'headline-metadata)))
-(cl-deftype org-glance-headline-metadata () '(satisfies org-glance-headline-metadata?))
 
 (defvar org-glance:key-value-pair-re)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
-
-(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 (declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
+(declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
+
+(org-glance-exception:define org-glance-headline:not-found! "Headline not found")
+(org-glance-exception:define org-glance-headline:metadata-corrupted! "Headline metadata corrupted, please reread")
+
+;; Outdated:
+
+(cl-defun org-glance-headline? (headline) (and (listp headline) (eq (car headline) 'headline)))
+(cl-deftype org-glance-headline () '(satisfies org-glance-headline?))
+
+(cl-defun org-glance-headline-metadata? (headline-metadata) (and (listp headline-metadata) (eq (car headline-metadata) 'headline-metadata)))
+(cl-deftype org-glance-headline-metadata () '(satisfies org-glance-headline-metadata?))
 
 (defconst org-glance-headline:spec `((:raw-value   . (:reader org-glance-headline:plain-title  :writer org-glance-headline:plain-title))
                                      (:begin       . (:reader org-glance-headline:begin        :writer org-glance-headline:begin))
@@ -71,13 +70,12 @@
 (cl-defmacro org-glance-headline:with-narrowed-headline (headline &rest forms)
   "Visit HEADLINE, narrow to its subtree and execute FORMS on it."
   (declare (indent 1) (debug t))
-  `(progn
+  `(with-temp-buffer
      (cl-check-type ,headline org-glance-headline)
-     (with-temp-buffer
-       (org-mode)
-       (insert (org-glance-headline:contents ,headline))
-       (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-         ,@forms))))
+     (org-mode)
+     (insert (org-glance-headline:contents ,headline))
+     (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+       ,@forms)))
 
 (cl-defun org-glance-headline:buffer-positions (id)
   (org-element-map (org-element-parse-buffer 'headline) 'headline
@@ -399,9 +397,9 @@
 
                                (when clocks
                                  (concat "*Time spent*" (apply #'org-newline clocks)))))))
-          (condition-case nil
-              (org-update-checkbox-count-maybe 'all)
-            (error nil)))))
+                          (condition-case nil
+                              (org-update-checkbox-count-maybe 'all)
+                            (error nil)))))
     (s-trim (buffer-string))))
 
 (cl-defun org-glance-headline:buffer-headlines (buffer)

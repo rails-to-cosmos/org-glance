@@ -20,3 +20,15 @@
 (depends-on "highlight")
 (depends-on "transient")
 (depends-on "elsa")
+(depends-on "ert-runner" "20231110.1358")
+
+(eask-defcommand test
+  "Run a configured ert test suite."
+  (setq ert-batch-backtrace-right-margin 1200
+        ert-batch-print-length 20
+        ert-batch-print-level 10)
+  (load "test/test-helpers.el")
+  (load "test/test-graph.el")
+  (load "test/test-capture.el")
+  ;; (load "test/test-headline.el")
+  (ert-run-tests-batch-and-exit))

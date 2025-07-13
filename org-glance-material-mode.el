@@ -74,7 +74,7 @@
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
   "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
   (declare (indent 1) (debug t))
-  `(let ((materialized-buffer (org-glance-headline:materialize ,headline nil))
+  `(let ((materialized-buffer (org-glance-headline:materialize ,headline))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
      (unwind-protect
          (with-current-buffer materialized-buffer
@@ -83,13 +83,14 @@
        (when (buffer-live-p materialized-buffer)
          (with-current-buffer materialized-buffer
            (condition-case nil
-               (org-glance-materialized-headline-apply 'without-relations)
+               (org-glance-materialized-headline-apply)
              (error nil)))
          (with-demoted-errors "Unable to kill buffer: %s"
-           (kill-buffer materialized-buffer))))))
+           (kill-buffer materialized-buffer))))
+     ))
 
-(cl-defun org-glance-materialized-headline-apply (&optional without-relations)
-  "Push material buffer changes to all headline origins and views."
+(cl-defun org-glance-materialized-headline-apply ()
+  "Sync material buffer changes across all headline origins and views."
   (interactive)
   (save-excursion
 
@@ -105,9 +106,9 @@
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash headline))
            (source-headline (org-glance-headline:update headline
-                                                        :begin --org-glance-materialized-headline:begin
-                                                        :file --org-glance-materialized-headline:file
-                                                        :buffer --org-glance-materialized-headline:buffer))
+                              :begin --org-glance-materialized-headline:begin
+                              :file --org-glance-materialized-headline:file
+                              :buffer --org-glance-materialized-headline:buffer))
            (source-tags (org-glance-headline:tags source-headline))
            (source-active? (org-glance-headline:active? source-headline)))
 
@@ -119,30 +120,30 @@
 
       (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
-      (unless without-relations
-        (cl-loop
-         with relations = (org-glance-headline-relations)
-         with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
-         for relation in relations
-         for progress from 0
-         for relation-id = (org-element-property :id relation)
-         for headline-ref = (org-glance-headline-reference)
-         for state = (intern (or (org-get-todo-state) ""))
-         for done-kws = (mapcar #'intern org-done-keywords)
-         for relation-headline = (org-glance-metadata:headline-metadata relation-id)
-         do (save-window-excursion
-              (save-excursion
-                (progress-reporter-update progress-reporter progress)
-                (condition-case nil
-                    (org-glance:with-headline-materialized relation-headline
-                      (unless (cl-loop
-                               for rr in (org-glance-headline-relations)
-                               if (eq (org-element-property :id rr) (intern id))
-                               return t)
-                        (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
-                  (org-glance-headline:not-found! (message "Relation not found: %s" relation-id)))
-                (redisplay)))
-         finally (progress-reporter-done progress-reporter)))
+      ;; (unless without-relations
+      ;;   (cl-loop
+      ;;    with relations = (org-glance-headline-relations)
+      ;;    with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
+      ;;    for relation in relations
+      ;;    for progress from 0
+      ;;    for relation-id = (org-element-property :id relation)
+      ;;    for headline-ref = (org-glance-headline-reference)
+      ;;    for state = (intern (or (org-get-todo-state) ""))
+      ;;    for done-kws = (mapcar #'intern org-done-keywords)
+      ;;    for relation-headline = (org-glance-metadata:headline-metadata relation-id)
+      ;;    do (save-window-excursion
+      ;;         (save-excursion
+      ;;           (progress-reporter-update progress-reporter progress)
+      ;;           (condition-case nil
+      ;;               (org-glance:with-headline-materialized relation-headline
+      ;;                 (unless (cl-loop
+      ;;                          for rr in (org-glance-headline-relations)
+      ;;                          if (eq (org-element-property :id rr) (intern id))
+      ;;                          return t)
+      ;;                   (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
+      ;;             (org-glance-headline:not-found! (message "Relation not found: %s" relation-id)))
+      ;;           (redisplay)))
+      ;;    finally (progress-reporter-done progress-reporter)))
 
       (let ((new-contents (org-glance-headline:with-headline-at-point
                            (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
@@ -151,8 +152,8 @@
                                (insert buffer-contents)
                                (goto-char (point-min))
                                (org-glance-headline:demote indent-level)
-                               (buffer-substring-no-properties (point-min) (point-max)))))))
-
+                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
+        ;; FIXME: headline mutation!
         (cond (source-file (with-temp-file source-file
                              (org-mode)
                              (insert-file-contents source-file)
@@ -189,7 +190,7 @@
         (message "Materialized headline successfully synchronized")))))
 
 (defun org-glance-materialized-headline:source-hash ()
-  (-> (org-glance-metadata:headline-metadata --org-glance-materialized-headline:id)
+  (-> (org-glance-metadata:headline --org-glance-materialized-headline:id)
       (org-glance-headline:hash)))
 
 (cl-defun org-glance:material-buffer-default-view ()
@@ -201,86 +202,87 @@
   (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
   (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
 
-(cl-defun org-glance-headline:materialize (headline &optional (update-relations t))
+(cl-defun org-glance-headline:materialize (headline)
   (cl-check-type headline org-glance-headline)
-  (with-current-buffer (org-glance-headline:generate-materialized-buffer headline)
-    (let ((id (org-glance-headline:id headline))
-          (file (org-glance-headline:file-name headline))
-          (buffer (org-glance-headline:buffer headline))
-          (begin (org-glance-headline:begin headline))
-          (contents (org-glance-headline:contents headline)))
+  (let* ((id (org-glance-headline:id headline))
+         (file (org-glance-headline:file-name headline))
+         (buffer (org-glance-headline:buffer headline))
+         (begin (org-glance-headline:begin headline))
+         (tags (org-glance-headline:tags headline))
+         (hash (org-glance-headline:hash headline))
+         (encrypted? (org-glance-headline:encrypted? headline))
+         (indent (1- (org-glance-headline:level headline)))
+         (password (when encrypted?
+                     (read-passwd "Password: ")))
+         (contents (if encrypted?
+                       (org-glance-headline:with-narrowed-headline headline
+                         (org-glance-headline:decrypt password)
+                         (buffer-string))
+                     (org-glance-headline:contents headline)))
 
-      (setq-local default-directory (file-name-directory file))
+         (materialized-buffer (org-glance-headline:generate-materialized-buffer headline)))
+
+    (puthash (intern id) materialized-buffer org-glance-materialized-buffers)
+
+    (with-current-buffer materialized-buffer
+      (insert contents)
 
       (org-mode)
       (org-glance-material-mode +1)
-      (insert contents)
+      (org-glance:material-buffer-default-view)
+      (goto-char (point-min))
+      (org-glance-headline:promote-to-the-first-level)
+      (org-content)
+      (setq-local default-directory (file-name-directory file))
 
       (setq --org-glance-materialized-headline:id id
-            --org-glance-materialized-headline:tags (org-glance-headline:tags headline)
+            --org-glance-materialized-headline:tags tags
             --org-glance-materialized-headline:file file
             --org-glance-materialized-headline:buffer buffer
             --org-glance-materialized-headline:begin begin
-            --org-glance-materialized-headline:hash (org-glance-headline:hash headline))
+            --org-glance-materialized-headline:hash hash
+            --org-glance-materialized-headline:indent indent)
 
-      (goto-char (point-min))
-
-      ;; (when update-relations
-      ;;   (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-      ;;            collect (let* ((standard-output 'ignore)
-      ;;                           (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-      ;;                           (type (intern (car link)))
-      ;;                           (id (cadr link)))
-
-      ;;                      (when (memq type '(org-glance-visit
-      ;;                                         org-glance-open
-      ;;                                         org-glance-overview
-      ;;                                         org-glance-state))
-      ;;                        (delete-region (match-beginning 0) (match-end 0)))
-
-      ;;                      (when (memq type '(org-glance-visit org-glance-open))
-      ;;                        (when-let (headline (org-glance-metadata:headline-metadata id))
-      ;;                          (goto-char (match-beginning 0))
-      ;;                          (insert
-      ;;                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
-      ;;                               ""
-      ;;                             " ")
-      ;;                           (org-glance-headline:with-narrowed-headline headline
-      ;;                             (org-glance-headline-reference type))))))))
-
-      (org-glance:material-buffer-default-view)
-
-      (set (make-local-variable '--org-glance-materialized-headline:indent) (1- (org-glance-headline:level headline)))
-      (org-glance-headline:promote-to-the-first-level)
-      (puthash (intern id) (current-buffer) org-glance-materialized-buffers)
-
-      (when (org-glance-headline:encrypted? headline)
-        (setq-local --org-glance-materialized-headline:password (read-passwd "Password: ")) ;; TODO don't store it unencrypted
-        (org-glance-headline:decrypt --org-glance-materialized-headline:password)
-
+      (when encrypted?
         (add-hook 'org-glance-before-materialize-sync-hook
-                  (lambda ()
-                    (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                    (org-glance-headline:encrypt --org-glance-materialized-headline:password)
-                    (org-glance-headline:promote-to-the-first-level))
+                  `(lambda ()
+                     (org-glance-headline:demote ,indent)
+                     (org-glance-headline:encrypt ,password)
+                     (org-glance-headline:promote-to-the-first-level))
                   0 'local)
 
         (add-hook 'org-glance-after-materialize-sync-hook
-                  (lambda ()
-                    (org-glance-headline:demote --org-glance-materialized-headline:indent)
-                    (org-glance-headline:decrypt --org-glance-materialized-headline:password)
-                    (org-glance-headline:promote-to-the-first-level))
-                  0 'local)))))
+                  `(lambda ()
+                     (org-glance-headline:demote ,indent)
+                     (org-glance-headline:decrypt ,password)
+                     (org-glance-headline:promote-to-the-first-level))
+                  0 'local)))
 
-(cl-defun org-glance-materialized-headline-buffer (headline)
-  (gethash (intern (org-glance-headline:id headline)) org-glance-materialized-buffers))
+    materialized-buffer
 
-(cl-defun org-glance-materialize-headline:refresh ()
-  (interactive)
-  (when-let (headline (org-glance-metadata:headline-metadata --org-glance-materialized-headline:id))
-    (let ((buffer (buffer-name)))
-      (kill-buffer buffer)
-      (org-glance-headline:materialize headline)
-      (switch-to-buffer buffer))))
+    ;; (when update-relations
+    ;;   (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
+    ;;            collect (let* ((standard-output 'ignore)
+    ;;                           (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
+    ;;                           (type (intern (car link)))
+    ;;                           (id (cadr link)))
+
+    ;;                      (when (memq type '(org-glance-visit
+    ;;                                         org-glance-open
+    ;;                                         org-glance-overview
+    ;;                                         org-glance-state))
+    ;;                        (delete-region (match-beginning 0) (match-end 0)))
+
+    ;;                      (when (memq type '(org-glance-visit org-glance-open))
+    ;;                        (when-let (headline (org-glance-metadata:headline-metadata id))
+    ;;                          (goto-char (match-beginning 0))
+    ;;                          (insert
+    ;;                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
+    ;;                               ""
+    ;;                             " ")
+    ;;                           (org-glance-headline:with-narrowed-headline headline
+    ;;                             (org-glance-headline-reference type))))))))
+
+    ))
 
 (provide 'org-glance-material-mode)
