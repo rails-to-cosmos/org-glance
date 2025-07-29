@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
-;;; org-glance.el --- Org-mode mindmap.
+;;; org-glance.el --- Org-mode graph database.
 
 ;; Copyright (C) 2018-2025 Dmitry Akatov
 
@@ -8,7 +8,7 @@
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
 ;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
-;; Keywords: org-mode, graph, mindmap
+;; Keywords: org-mode, graph
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
 ;; License: GPL-3+
