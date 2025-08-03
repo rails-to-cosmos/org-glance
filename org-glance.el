@@ -47,6 +47,7 @@
 (require 's)
 (require 'seq)
 (require 'subr-x)
+(require 'org-macs)
 
 (require 'org-glance-datetime-mode)
 (require 'org-glance-exception)
