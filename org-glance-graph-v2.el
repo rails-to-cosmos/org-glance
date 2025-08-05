@@ -120,12 +120,16 @@
 
 (cl-defun org-glance-graph-v2:meta-path (graph)
   (cl-check-type graph org-glance-graph-v2)
-  (-> (f-join (org-glance-graph-v2:directory graph) "meta")
+  (-> graph
+      (org-glance-graph-v2:directory)
+      (f-join "meta")
       (file-truename)))
 
 (cl-defun org-glance-graph-v2:headline-meta-path (graph)
   (cl-check-type graph org-glance-graph-v2)
-  (-> (f-join (org-glance-graph-v2:meta-path graph) "headlines.jsonl")
+  (-> graph
+      (org-glance-graph-v2:meta-path)
+      (f-join "headlines.jsonl")
       (file-truename)))
 
 (cl-defun org-glance-graph-v2:headline-data-path (graph id)

@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
-;;; org-glance.el --- Org-mode mindmap.
+;;; org-glance.el --- Org-mode graph database.
 
 ;; Copyright (C) 2018-2025 Dmitry Akatov
 
@@ -8,7 +8,7 @@
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
 ;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
-;; Keywords: org-mode, graph, mindmap
+;; Keywords: org-mode, graph
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
 ;; License: GPL-3+
@@ -47,7 +47,6 @@
 (require 's)
 (require 'seq)
 (require 'subr-x)
-(require 'org-macs)
 
 (require 'org-glance-datetime-mode)
 (require 'org-glance-exception)
@@ -64,6 +63,10 @@
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
 
+(eval-when-compile
+  (require 'org-macs)
+  (require 'org-element))
+
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
 (declare-function org-glance--join-leading-separator "org-glance-utils.el" (separator strings))
@@ -77,6 +80,11 @@
 (declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
 (declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
 (declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
+
+(defmacro org-element-with-disabled-cache (&rest body)
+  "Run BODY without active org-element-cache."
+  (declare (debug (form body)) (indent 0))
+  `(progn ,@body))
 
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."
@@ -239,7 +247,9 @@ after capture process has been finished."
 
 (cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
   "Init global `org-glance-graph-v2' in DIRECTORY."
+
   (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
+
   (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
 
 (cl-defun org-glance-initialized?-v2 ()
