@@ -636,11 +636,14 @@ ${todo-order}
       org-glance:open)
     (forward-char offset)))
 
+(cl-defun org-glance-overview:category ()
+  (org-entry-get-with-inheritance "CATEGORY" nil 0))
+
 (cl-defun org-glance-overview:tag ()
   "Return tag name of current overview."
   (save-excursion
     (goto-char (point-min))
-    (let ((tag (org-glance-tag:from-string (org-get-category))))
+    (let ((tag (org-glance-tag:from-string (org-glance-overview:category))))
       (when (gethash tag org-glance-tags)
         tag))))
 
