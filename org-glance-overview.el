@@ -5,6 +5,8 @@
 (require 'org-capture)
 (require 'ol)
 (require 'org-agenda)
+(require 'org-element)
+(require 'org-macs)
 
 (require 'org-glance-headline)
 (require 'org-glance-metadata)
@@ -641,11 +643,9 @@ ${todo-order}
 
 (cl-defun org-glance-overview:tag ()
   "Return tag name of current overview."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((tag (org-glance-tag:from-string (org-glance-overview:category))))
-      (when (gethash tag org-glance-tags)
-        tag))))
+  (let ((tag (org-glance-tag:from-string (org-glance-overview:category))))
+    (when (gethash tag org-glance-tags)
+      tag)))
 
 (cl-defun org-glance-overview:reread ()
   "Completely rebuild current overview file."
