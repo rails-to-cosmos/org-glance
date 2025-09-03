@@ -55,9 +55,10 @@
 (cl-defmacro org-glance-headline-v2:with-contents (contents &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
+     (org-mode)
      (insert (cl-typecase ,contents
-               (org-glance-headline-v2 (org-glance-headline-v2:contents ,contents))
                (string ,contents)
+               (org-glance-headline-v2 (org-glance-headline-v2:contents ,contents))
                (otherwise (error "Expected `org-glance-headline-v2' or string, but got %s" (type-of ,contents)))))
      (goto-char (point-min))
      ,@forms))
@@ -317,8 +318,6 @@
           (encrypted (org-glance-headline-v2:encrypted? headline))
           (links (org-glance-headline-v2:links headline)))
       (org-glance-headline-v2:with-contents (org-glance-headline-v2:header headline)
-        (org-mode)
-
         (when id (org-entry-put nil "ORG_GLANCE_ID" id))
         (org-entry-put nil "ORG_GLANCE_HASH" hash)
 

@@ -15,7 +15,7 @@
       in {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            eask emacs fzf
+            eask emacs fzf fd
             nodePackages.bash-language-server
           ];
 
