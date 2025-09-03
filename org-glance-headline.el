@@ -401,7 +401,8 @@
                           (condition-case nil
                               (org-update-checkbox-count-maybe 'all)
                             (error nil)))))
-    (s-trim (buffer-substring-no-properties (point-min) (save-excursion (goto-char (point-min)) (org-end-of-meta-data) (point))))))
+    (s-trim (buffer-substring-no-properties (point-min) (save-excursion (goto-char (point-min)) (org-end-of-meta-data) (point))))
+    ))
 
 (cl-defun org-glance-headline:buffer-headlines (buffer)
   "Extract headlines from BUFFER."
