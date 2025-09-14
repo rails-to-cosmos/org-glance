@@ -1,4 +1,4 @@
-#+TITLE: Org-glance: walk in the woods with pleasure
+#+TITLE: org-glance
 #+AUTHOR: Dmitry Akatov
 #+EMAIL: akatovda@yandex.com
 

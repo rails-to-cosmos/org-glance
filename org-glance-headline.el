@@ -324,6 +324,7 @@
   "Return HEADLINE high-level usability characteristics."
   (cl-check-type headline org-glance-headline)
   (with-temp-buffer
+    (org-mode)
     (insert (org-glance--decode-string (org-element-property :contents headline)))
     (cl-flet ((org-list (&rest items) (org-glance--join-leading-separator-but-null "\n- " items))
               (org-newline (&rest items) (org-glance--join-leading-separator-but-null "\n" items)))
@@ -400,7 +401,8 @@
                           (condition-case nil
                               (org-update-checkbox-count-maybe 'all)
                             (error nil)))))
-    (s-trim (buffer-string))))
+    (s-trim (buffer-substring-no-properties (point-min) (save-excursion (goto-char (point-min)) (org-end-of-meta-data) (point))))
+    ))
 
 (cl-defun org-glance-headline:buffer-headlines (buffer)
   "Extract headlines from BUFFER."
