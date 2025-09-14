@@ -639,7 +639,7 @@ ${todo-order}
     (forward-char offset)))
 
 (cl-defun org-glance-overview:category ()
-  (org-entry-get-with-inheritance "CATEGORY" nil 0))
+  (org-get-category))
 
 (cl-defun org-glance-overview:tag ()
   "Return tag name of current overview."
