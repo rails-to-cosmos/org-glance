@@ -1,4 +1,4 @@
-.PHONY: build test info clean lint
+.PHONY: build test info clean lint init
 
 info:
 	eask info
@@ -9,21 +9,14 @@ init:
 	eask install
 	eask test activate
 
-build:
-	eask install-deps
-	eask recompile
+build: init
 	eask package ./dist
 	eask reinstall
 
-test:
-	make clean
-	eask recompile
-	eask package ./dist
-	eask reinstall
+test: build
 	eask run command test
 
 lint:
-	make clean
 	eask lint checkdoc
 
 clean:
