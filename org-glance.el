@@ -83,7 +83,7 @@
   :type 'directory)
 
 (defcustom org-glance-clone-on-repeat-p nil
-  "Create a new headline copy when repeating rather than modifying in place."
+  "Create a headline copy after repeat."
   :group 'org-glance
   :type 'boolean)
 
