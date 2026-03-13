@@ -1,0 +1,35 @@
+services:
+  test-emacs-29.1:
+    build:
+      context: .
+      args:
+        EMACS_VERSION: "29.1"
+    image: org-glance:emacs-29.1
+
+  test-emacs-29.2:
+    build:
+      context: .
+      args:
+        EMACS_VERSION: "29.2"
+    image: org-glance:emacs-29.2
+
+  test-emacs-29.3:
+    build:
+      context: .
+      args:
+        EMACS_VERSION: "29.3"
+    image: org-glance:emacs-29.3
+
+  test-emacs-29.4:
+    build:
+      context: .
+      args:
+        EMACS_VERSION: "29.4"
+    image: org-glance:emacs-29.4
+
+  test-emacs-30.1:
+    build:
+      context: .
+      args:
+        EMACS_VERSION: "30.1"
+    image: org-glance:emacs-30.1

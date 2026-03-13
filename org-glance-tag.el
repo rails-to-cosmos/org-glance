@@ -6,7 +6,7 @@
 (require 'cl-lib)
 
 (require 'org-glance-exception)
-(require 'org-glance-namespace)
+(require 'org-glance-utils)
 
 (org-glance-exception:define org-glance-tag:not-found!
   "Tag not found")
@@ -18,6 +18,9 @@
        (string= (symbol-name tag) (downcase (symbol-name tag)))))
 
 (cl-deftype org-glance-tag () '(satisfies org-glance-tag?))
+
+(cl-deftype org-glance-namespace ()
+  '(satisfies org-glance--valid-directory?))
 
 (cl-defstruct (org-glance-tag-info (:type vector))
   (tag nil :read-only t :type org-glance-tag)

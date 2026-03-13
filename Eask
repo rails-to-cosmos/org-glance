@@ -5,8 +5,6 @@
 
 (package-file "org-glance.el")
 
-(script "test" "echo \"Error: no test specified\" && exit 1")
-
 (source "gnu")
 (source "melpa")
 (source "org")
@@ -16,6 +14,7 @@
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
+(depends-on "s")
 (depends-on "ht")
 (depends-on "highlight")
 (depends-on "transient")
@@ -28,7 +27,8 @@
         ert-batch-print-length 20
         ert-batch-print-level 10)
   (load "test/test-helpers.el")
+  (load "test/test-utils.el")
+  (load "test/test-tag.el")
+  (load "test/test-headline.el")
   (load "test/test-graph.el")
-  (load "test/test-capture.el")
-  ;; (load "test/test-headline.el")
   (ert-run-tests-batch-and-exit))

@@ -4,27 +4,12 @@
 (require 'dash)
 (require 'org-glance-utils)
 (require 'org-glance-headline)
-(require 'org-glance-overview)
+(require 'org-glance-graph)
 
-(declare-function org-glance--now "org-glance-utils.el")
-(declare-function org-glance-headline-reference "org-glance-metadata.el" (&optional (type 'org-glance-visit)))
-(declare-function org-glance-headline-relations "org-glance-metadata.el" ())
-(declare-function org-glance-headline:add-log-note "org-glance-headline.el" (string &rest objects))
-(declare-function org-glance-headline:at-point "org-glance-headline.el" ())
-(declare-function org-glance-headline:contents "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:decrypt "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:demote "org-glance-headline.el" (level))
-(declare-function org-glance-headline:encrypt "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:hash "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:plain-title "org-glance-headline.el" (headline))
-(declare-function org-glance-headline:promote-to-the-first-level "org-glance-headline.el" (&optional password))
-(declare-function org-glance-headline:replace-headline-at-point "org-glance-headline.el" (contents))
-(declare-function org-glance-headline:search-buffer-by-id "org-glance-headline.el" (id))
-(declare-function org-glance-headline:search-parents "org-glance-headline.el" ())
-(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
-(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
-(declare-function org-glance-metadata:headline-metadata "org-glance-metadata.el" (id))
-(declare-function s-split-up-to "s.el" (separator s n &optional omit-nulls))
+(declare-function org-glance-overview "org-glance-overview.el")
+(declare-function org-glance-overview:register "org-glance-overview.el")
+(declare-function org-glance-overview:remove "org-glance-overview.el")
+(declare-function org-glance-overview:register-in-archive "org-glance-overview.el")
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Extend `org-mode' map with sync abilities.")
@@ -39,22 +24,19 @@
 (defvar org-glance-materialized-buffers (make-hash-table))
 
 (defvar-local --org-glance-materialized-headline:tags nil)
-(defvar-local --org-glance-materialized-headline:begin nil)
 (defvar-local --org-glance-materialized-headline:file nil)
-(defvar-local --org-glance-materialized-headline:buffer nil)
 (defvar-local --org-glance-materialized-headline:hash nil)
 (defvar-local --org-glance-materialized-headline:id nil)
 (defvar-local --org-glance-materialized-headline:indent nil)
-(defvar-local --org-glance-materialized-headline:password nil)
 
 (defcustom org-glance-after-materialize-sync-hook nil
-  "Runs after a materialized buffer has been synchronized with its source file."
+  "Runs after a materialized buffer has been synchronized with its source."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
 
 (defcustom org-glance-before-materialize-sync-hook nil
-  "Runs before a materialized buffer has been synchronized with its source file."
+  "Runs before a materialized buffer has been synchronized with its source."
   :options '(copyright-update time-stamp)
   :type 'hook
   :group 'org-glance)
@@ -63,22 +45,15 @@
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 (define-key org-glance-material-mode-map (kbd "C-c C-v") #'org-glance-overview)
 
-(define-error 'org-glance-exception:source-corrupted "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-exception:source-corrupted (format &rest args)
-  (signal 'org-glance-exception:source-corrupted (list (apply #'format-message format args))))
-
 (define-error 'org-glance-exception:headline-not-modified "No changes made in materialized view" 'user-error)
-(cl-defun org-glance-exception:headline-not-modified (format &rest args)
-  (signal 'org-glance-exception:headline-not-modified (list (apply #'format-message format args))))
 
 (cl-defmacro org-glance:with-headline-materialized (headline &rest forms)
-  "Materialize HEADLINE and run FORMS on it. Then change all related overviews."
+  "Materialize HEADLINE and run FORMS on it. Then sync changes."
   (declare (indent 1) (debug t))
   `(let ((materialized-buffer (org-glance-headline:materialize ,headline))
          (org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
      (unwind-protect
          (with-current-buffer materialized-buffer
-           (org-glance-headline:search-parents)
            ,@forms)
        (when (buffer-live-p materialized-buffer)
          (with-current-buffer materialized-buffer
@@ -86,203 +61,163 @@
                (org-glance-materialized-headline-apply)
              (error nil)))
          (with-demoted-errors "Unable to kill buffer: %s"
-           (kill-buffer materialized-buffer))))
-     ))
+           (kill-buffer materialized-buffer))))))
 
 (cl-defun org-glance-materialized-headline-apply ()
-  "Sync material buffer changes across all headline origins and views."
+  "Sync material buffer changes back to graph and overview."
   (interactive)
-  (save-excursion
+  (let* ((graph (org-glance-graph))
+         (id --org-glance-materialized-headline:id)
+         (source-file --org-glance-materialized-headline:file)
+         (glance-hash --org-glance-materialized-headline:hash)
+         (indent-level --org-glance-materialized-headline:indent))
 
-    (let* ((headline (org-glance-headline:search-buffer-by-id --org-glance-materialized-headline:id))
-           (id --org-glance-materialized-headline:id)
-           (source-file --org-glance-materialized-headline:file)
-           (source-hash (with-temp-buffer
-                          (org-mode)
-                          (insert-file-contents source-file)
-                          (-> (org-glance-headline:search-buffer-by-id id)
-                              (org-glance-headline:hash))))
-           (indent-level --org-glance-materialized-headline:indent)
-           (glance-hash --org-glance-materialized-headline:hash)
-           (current-hash (org-glance-headline:hash headline))
-           (source-headline (org-glance-headline:update headline
-                              :begin --org-glance-materialized-headline:begin
-                              :file --org-glance-materialized-headline:file
-                              :buffer --org-glance-materialized-headline:buffer))
-           (source-tags (org-glance-headline:tags source-headline))
-           (source-active? (org-glance-headline:active? source-headline)))
+    ;; Get current contents from buffer
+    (save-excursion
+      (goto-char (point-min))
+      (let* ((current-headline (org-glance-headline:at-point))
+             (current-hash (org-glance-headline:hash current-headline)))
 
-      (unless (string= glance-hash source-hash)
-        (error "Source file corrupted, please reread: %s" source-file))
+        (when (string= glance-hash current-hash)
+          (user-error "Headline has not been modified"))
 
-      (when (string= glance-hash current-hash)
-        (user-error "Headline has not been modified: %s" source-file))
+        (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
 
-      (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-before-materialize-sync-hook))
-
-      ;; (unless without-relations
-      ;;   (cl-loop
-      ;;    with relations = (org-glance-headline-relations)
-      ;;    with progress-reporter = (make-progress-reporter "Updating relations... " 0 (length relations))
-      ;;    for relation in relations
-      ;;    for progress from 0
-      ;;    for relation-id = (org-element-property :id relation)
-      ;;    for headline-ref = (org-glance-headline-reference)
-      ;;    for state = (intern (or (org-get-todo-state) ""))
-      ;;    for done-kws = (mapcar #'intern org-done-keywords)
-      ;;    for relation-headline = (org-glance-metadata:headline-metadata relation-id)
-      ;;    do (save-window-excursion
-      ;;         (save-excursion
-      ;;           (progress-reporter-update progress-reporter progress)
-      ;;           (condition-case nil
-      ;;               (org-glance:with-headline-materialized relation-headline
-      ;;                 (unless (cl-loop
-      ;;                          for rr in (org-glance-headline-relations)
-      ;;                          if (eq (org-element-property :id rr) (intern id))
-      ;;                          return t)
-      ;;                   (org-glance-headline:add-log-note "- Mentioned in %s on %s" headline-ref (org-glance--now))))
-      ;;             (org-glance-headline:not-found! (message "Relation not found: %s" relation-id)))
-      ;;           (redisplay)))
-      ;;    finally (progress-reporter-done progress-reporter)))
-
-      (let ((new-contents (org-glance-headline:with-headline-at-point
-                           (let ((buffer-contents (buffer-substring-no-properties (point-min) (point-max))))
-                             (with-temp-buffer
+        ;; Build new contents with proper indentation
+        (let* ((buffer-contents (buffer-substring-no-properties (point-min) (point-max)))
+               (new-contents (with-temp-buffer
                                (org-mode)
                                (insert buffer-contents)
                                (goto-char (point-min))
-                               (org-glance-headline:demote indent-level)
-                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))))
-        ;; FIXME: headline mutation!
-        (cond (source-file (with-temp-file source-file
-                             (org-mode)
-                             (insert-file-contents source-file)
-                             (org-glance-headline:search-buffer-by-id id)
-                             (org-glance-headline:replace-headline-at-point new-contents)))
-              (source-buffer (with-current-buffer source-buffer
-                               (org-glance-headline:search-buffer-by-id id)
-                               (org-glance-headline:replace-headline-at-point new-contents))))
+                               ;; Demote back to original indent
+                               (cl-loop repeat indent-level
+                                        do (org-with-limited-levels
+                                            (org-map-tree 'org-demote)))
+                               (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
 
-        (setq-local --org-glance-materialized-headline:hash (org-glance-materialized-headline:source-hash))
+          ;; Write to source file
+          (when source-file
+            (with-temp-file source-file
+              (org-mode)
+              (insert-file-contents source-file)
+              (goto-char (point-min))
+              (when (org-glance-headline:search-forward id)
+                (let ((beg (org-entry-beginning-position))
+                      (end (save-excursion (org-end-of-subtree t t))))
+                  (delete-region beg end)
+                  (goto-char beg)
+                  (insert new-contents "\n")))))
 
-        (cond ((memq 'archive source-tags)
-               (cl-loop for tag in source-tags
-                        if (eq tag 'archive)
-                        do (progn (org-glance-overview:register-headline-in-overview source-headline tag)
-                                  (org-glance-overview:register-headline-in-metadata source-headline tag))
-                        else
-                        do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
-                                  (org-glance-overview:remove-headline-from-metadata source-headline tag))))
+          ;; Re-read the headline from source and update graph
+          (let ((updated-headline (if source-file
+                                      (org-glance--with-file-visited source-file
+                                        (goto-char (point-min))
+                                        (org-glance-headline:search-forward id)
+                                        (org-glance-headline:at-point))
+                                    (org-glance-headline--from-string new-contents))))
+            (org-glance-graph:add graph updated-headline)
+            (org-glance-graph:store-headline graph updated-headline)
 
-              ((not source-active?) (cl-loop for tag in source-tags
-                                             do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
-                                                       (org-glance-overview:remove-headline-from-metadata source-headline tag)
-                                                       (org-glance-overview:register-headline-in-archive source-headline tag))))
-              (t (cl-loop for tag in source-tags
-                          do (progn (org-glance-overview:register-headline-in-overview source-headline tag)
-                                    (org-glance-overview:register-headline-in-metadata source-headline tag)))
-                 (cl-loop for tag in (seq-difference --org-glance-materialized-headline:tags source-tags)
-                          do (progn (org-glance-overview:remove-headline-from-overview source-headline tag)
-                                    (org-glance-overview:remove-headline-from-metadata source-headline tag)))))
+            ;; Update overview for each tag
+            (let ((tags (org-glance-headline:tags updated-headline)))
+              (dolist (tag tags)
+                (condition-case nil
+                    (if (org-glance-headline:active? updated-headline)
+                        (org-glance-overview:register updated-headline tag)
+                      (progn
+                        (org-glance-overview:remove updated-headline tag)
+                        (org-glance-overview:register-in-archive updated-headline tag)))
+                  (error nil))))
 
-        (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
+            (setq-local --org-glance-materialized-headline:hash
+                        (org-glance-headline:hash updated-headline)))
 
-        (message "Materialized headline successfully synchronized")))))
+          (with-demoted-errors "Hook error: %s" (run-hooks 'org-glance-after-materialize-sync-hook))
 
-(defun org-glance-materialized-headline:source-hash ()
-  (-> (org-glance-metadata:headline --org-glance-materialized-headline:id)
-      (org-glance-headline:hash)))
+          (message "Materialized headline successfully synchronized"))))))
 
 (cl-defun org-glance:material-buffer-default-view ()
   "Default restriction of material buffer."
   (org-display-inline-images)
   (org-cycle-hide-drawers 'all))
 
-(cl-defun org-glance-headline:generate-materialized-buffer (headline)
-  (cl-check-type headline (or org-glance-headline org-glance-headline-metadata))
-  (generate-new-buffer (concat "org-glance:<" (org-glance-headline:plain-title headline) ">")))
-
 (cl-defun org-glance-headline:materialize (headline)
   (cl-check-type headline org-glance-headline)
   (let* ((id (org-glance-headline:id headline))
-         (file (org-glance-headline:file-name headline))
-         (buffer (org-glance-headline:buffer headline))
-         (begin (org-glance-headline:begin headline))
+         (contents (org-glance-headline:contents headline))
          (tags (org-glance-headline:tags headline))
          (hash (org-glance-headline:hash headline))
          (encrypted? (org-glance-headline:encrypted? headline))
-         (indent (1- (org-glance-headline:level headline)))
+         (indent (1- (org-glance-headline:indent headline)))
          (password (when encrypted?
                      (read-passwd "Password: ")))
-         (contents (if encrypted?
-                       (org-glance-headline:with-narrowed-headline headline
-                         (org-glance-headline:decrypt password)
-                         (buffer-string))
-                     (org-glance-headline:contents headline)))
-
-         (materialized-buffer (org-glance-headline:generate-materialized-buffer headline)))
+         (graph (org-glance-graph))
+         (source-file (let ((data-path (org-glance-graph:headline-data-path graph id)))
+                        (f-join data-path "headline.org")))
+         (actual-contents (if encrypted?
+                              (org-glance-headline:contents
+                               (org-glance-headline:decrypt headline password))
+                            contents))
+         (materialized-buffer (generate-new-buffer (concat "org-glance:<" (org-glance-headline:title-clean headline) ">"))))
 
     (puthash (intern id) materialized-buffer org-glance-materialized-buffers)
 
     (with-current-buffer materialized-buffer
-      (insert contents)
+      (add-hook 'kill-buffer-hook
+                (let ((id-sym (intern id)))
+                  (lambda () (remhash id-sym org-glance-materialized-buffers)))
+                nil t)
+      (insert actual-contents)
 
       (org-mode)
       (org-glance-material-mode +1)
       (org-glance:material-buffer-default-view)
       (goto-char (point-min))
-      (org-glance-headline:promote-to-the-first-level)
+
+      ;; Promote to first level
+      (while (looking-at "^\\*\\*")
+        (org-promote-subtree))
+
       (org-content)
-      (setq-local default-directory (file-name-directory file))
+      (setq-local default-directory (file-name-directory source-file))
 
       (setq --org-glance-materialized-headline:id id
             --org-glance-materialized-headline:tags tags
-            --org-glance-materialized-headline:file file
-            --org-glance-materialized-headline:buffer buffer
-            --org-glance-materialized-headline:begin begin
+            --org-glance-materialized-headline:file source-file
             --org-glance-materialized-headline:hash hash
             --org-glance-materialized-headline:indent indent)
 
       (when encrypted?
         (add-hook 'org-glance-before-materialize-sync-hook
                   `(lambda ()
-                     (org-glance-headline:demote ,indent)
-                     (org-glance-headline:encrypt ,password)
-                     (org-glance-headline:promote-to-the-first-level))
+                     (goto-char (point-min))
+                     (cl-loop repeat ,indent
+                              do (org-with-limited-levels
+                                  (org-map-tree 'org-demote)))
+                     (save-excursion
+                       (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                             (end (save-excursion (org-end-of-subtree t) (point))))
+                         (org-glance--encrypt-region beg end ,password)))
+                     (goto-char (point-min))
+                     (while (looking-at "^\\*\\*")
+                       (org-promote-subtree)))
                   0 'local)
 
         (add-hook 'org-glance-after-materialize-sync-hook
                   `(lambda ()
-                     (org-glance-headline:demote ,indent)
-                     (org-glance-headline:decrypt ,password)
-                     (org-glance-headline:promote-to-the-first-level))
+                     (goto-char (point-min))
+                     (cl-loop repeat ,indent
+                              do (org-with-limited-levels
+                                  (org-map-tree 'org-demote)))
+                     (save-excursion
+                       (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+                             (end (save-excursion (org-end-of-subtree t) (point))))
+                         (org-glance--decrypt-region beg end ,password)))
+                     (goto-char (point-min))
+                     (while (looking-at "^\\*\\*")
+                       (org-promote-subtree)))
                   0 'local)))
 
-    materialized-buffer
-
-    ;; (when update-relations
-    ;;   (cl-loop while (re-search-forward (concat "[[:blank:]]?" org-link-any-re) nil t)
-    ;;            collect (let* ((standard-output 'ignore)
-    ;;                           (link (s-split-up-to ":" (substring-no-properties (or (match-string 2) "")) 1))
-    ;;                           (type (intern (car link)))
-    ;;                           (id (cadr link)))
-
-    ;;                      (when (memq type '(org-glance-visit
-    ;;                                         org-glance-open
-    ;;                                         org-glance-overview
-    ;;                                         org-glance-state))
-    ;;                        (delete-region (match-beginning 0) (match-end 0)))
-
-    ;;                      (when (memq type '(org-glance-visit org-glance-open))
-    ;;                        (when-let (headline (org-glance-metadata:headline-metadata id))
-    ;;                          (goto-char (match-beginning 0))
-    ;;                          (insert
-    ;;                           (if (or (bolp) (looking-back "[[:blank:]]" 1))
-    ;;                               ""
-    ;;                             " ")
-    ;;                           (org-glance-headline:with-narrowed-headline headline
-    ;;                             (org-glance-headline-reference type))))))))
-
-    ))
+    materialized-buffer))
 
 (provide 'org-glance-material-mode)

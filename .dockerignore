@@ -1,0 +1,4 @@
+.git
+*.elc
+dist/
+.eask/
