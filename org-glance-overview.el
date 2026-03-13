@@ -492,10 +492,17 @@ ${todo-order}
   (org-glance:open (org-glance-overview--load-original-at-point)))
 
 (cl-defun org-glance-overview:category ()
-  (org-entry-get-with-inheritance "CATEGORY" nil 0))
+  ;; (->> (buffer-file-name)
+  ;;                 (file-name-base)
+  ;;                 (org-glance-tag:from-string))
+  (save-excursion
+    (goto-char 0)
+    (search-forward "#+CATEGORY: ")
+    (buffer-substring-no-properties (point) (progn (end-of-line) (point)))))
 
 (cl-defun org-glance-overview:tag ()
   "Return tag name of current overview."
+
   (let ((tag (org-glance-tag:from-string (org-glance-overview:category))))
     (when (gethash tag org-glance-tags)
       tag)))
