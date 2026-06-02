@@ -2,7 +2,7 @@
 
 ;;; org-glance.el --- Org-mode graph database.
 
-;; Copyright (C) 2018-2025 Dmitry Akatov
+;; Copyright (C) 2018-2026 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
@@ -77,7 +77,8 @@
   :tag "Org Glance"
   :group 'org)
 
-(defvar org-glance-tags (make-hash-table) "Hash table {tag -> `org-glance-tag-info'}")
+(defvar org-glance-tags (make-hash-table)
+  "Hash table {tag -> `org-glance-tag-info'}")
 
 (cl-defun org-glance:tags ()
   (hash-table-keys org-glance-tags))
