@@ -31,5 +31,6 @@
   (load "test/test-graph.el")
   (load "test/test-capture.el")
   (load "test/test-migrate.el")
+  (load "test/test-material.el")
   ;; (load "test/test-headline.el")
   (ert-run-tests-batch-and-exit))

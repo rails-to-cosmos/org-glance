@@ -19,7 +19,11 @@
 (cl-defmacro org-glance-jsonl:iterate (file &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
-     (cl-flet ((process-line () (let ((it (json-parse-string (buffer-substring-no-properties (line-beginning-position) (line-end-position))
+     ;; The byte-offset chunking below requires literal (raw-byte) reads, so the
+     ;; buffer is unibyte; decode each complete line as UTF-8 before parsing --
+     ;; otherwise multibyte content raises `json-utf8-decode-error'.
+     (set-buffer-multibyte nil)
+     (cl-flet ((process-line () (let ((it (json-parse-string (decode-coding-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) 'utf-8)
                                                              :object-type 'plist)))
                                   ,@forms)))
        (cl-loop with result = nil

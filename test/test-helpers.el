@@ -18,5 +18,31 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
      (org-glance-init org-glance-directory)
      ,@body))
 
+(cl-defmacro org-glance-test:with-graph (graph &rest body)
+  "Create a graph in a fresh temp directory, bind it to GRAPH, run BODY."
+  (declare (indent 1))
+  `(with-temp-directory dir
+     (let ((,graph (org-glance-graph-v2 dir)))
+       ,@body)))
+
+(cl-defun org-glance-test:headline (id &rest lines)
+  "Build an `org-glance-headline-v2' carrying ID.
+LINES is the heading, then optional planning (SCHEDULED:/DEADLINE:/CLOSED:)
+lines, then optional body.  The ORG_GLANCE_ID drawer is placed after the
+heading and any planning lines -- where org expects a property drawer --
+so the id parses correctly whether or not a body or planning is present."
+  (let* ((rest (cdr lines))
+         (planning (seq-take-while
+                    (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
+                    rest))
+         (body (seq-drop rest (length planning))))
+    (apply #'org-glance-headline-v2--from-lines
+           (append (list (car lines))
+                   planning
+                   (list ":PROPERTIES:"
+                         (format ":ORG_GLANCE_ID: %s" id)
+                         ":END:")
+                   body))))
+
 (provide 'test-helpers)
 ;;; test-helpers.el ends here

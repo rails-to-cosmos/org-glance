@@ -140,6 +140,13 @@ Long ids (e.g. UUIDs) are sharded by their first two characters."
   (cl-check-type graph org-glance-graph-v2)
   (cl-check-type id string)
   (cl-assert (not (string-empty-p id)))
+  ;; Path-safety: ID feeds straight into `f-join'/`substring', so reject path
+  ;; separators and traversal -- a hand-edited ORG_GLANCE_ID must not escape the
+  ;; store (auto-generated UUIDs and tag-hash ids are already safe). Use `error',
+  ;; not `cl-assert': the latter can be optimized out, and its
+  ;; `cl-assertion-failed' is not a portable `error' subtype across Emacs versions.
+  (when (or (string-match-p "/" id) (string-match-p "\\.\\." id))
+    (error "Unsafe ORG_GLANCE_ID for content-addressable path: %S" id))
   (let ((data (org-glance-graph-v2:data-path graph)))
     (file-truename
      (if (> (length id) 2)
@@ -229,7 +236,9 @@ The latest record per id wins; original insertion order is preserved."
         (path (org-glance-graph-v2:headline-meta-path graph)))
     (when (f-exists? path)
       (with-temp-buffer
-        (insert-file-contents path)
+        ;; Force utf-8 to match the writer, independent of locale autodetection.
+        (let ((coding-system-for-read 'utf-8))
+          (insert-file-contents path))
         (goto-char (point-min))
         (while (not (eobp))
           (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))

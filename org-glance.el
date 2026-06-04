@@ -63,6 +63,7 @@
 (require 'org-glance-capture-v2)
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
+(require 'org-glance-material-v2)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
@@ -293,7 +294,8 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
          (total (length sources))
          (reporter (and (> total 0)
                         (make-progress-reporter "org-glance: migrating sources... " 0 total)))
-         (count 0))
+         (count 0)
+         (skipped nil))
     (cl-loop for file in sources
              for i from 1
              do (unless (org-glance-migrate--overview-file? file)
@@ -304,20 +306,33 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
                   ;; hook into; combined with the temp buffer, undo-tree never
                   ;; activates, no undo is recorded and no `.~undo-tree~' files are
                   ;; written. Also skips per-file `org-mode-hook'.
-                  (with-temp-buffer
-                    (insert-file-contents file)
-                    (delay-mode-hooks (org-mode))
-                    (dolist (headline (org-glance-graph-v2:capture-buffer (current-buffer)))
-                      (when (org-glance-headline-v2:id headline)
-                        (org-glance-graph-v2:add graph headline)
-                        (cl-incf count)))))
+                  ;;
+                  ;; Per-file `condition-case' so one unreadable/mis-decoded file
+                  ;; (e.g. autodetect mis-guesses a non-utf-8 encoding) is logged
+                  ;; and skipped instead of aborting the whole batch.
+                  (condition-case err
+                      (with-temp-buffer
+                        (insert-file-contents file)
+                        (delay-mode-hooks (org-mode))
+                        (dolist (headline (org-glance-graph-v2:capture-buffer (current-buffer)))
+                          (when (org-glance-headline-v2:id headline)
+                            (org-glance-graph-v2:add graph headline)
+                            (cl-incf count))))
+                    (error
+                     (push file skipped)
+                     (display-warning 'org-glance
+                                      (format "Skipped %s during migration: %s"
+                                              file (error-message-string err))
+                                      :warning))))
              (when reporter (progress-reporter-update reporter i)))
     (when reporter (progress-reporter-done reporter))
     (dolist (file legacy)
       (rename-file file (concat file ".bak") t))
     (when (called-interactively-p 'any)
-      (message "org-glance: migrated %d headline(s); backed up %d legacy file(s)."
-               count (length legacy)))
+      (message "org-glance: migrated %d headline(s)%s; backed up %d legacy file(s)."
+               count
+               (if skipped (format ", skipped %d file(s)" (length skipped)) "")
+               (length legacy)))
     count))
 
 (cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
@@ -364,54 +379,77 @@ Return non-nil if a migration was performed."
               (t (keyboard-quit)))
       (quit (self-insert-command 1 64)))))
 
-(cl-defun org-glance:materialize (headline)
-  "Materialize HEADLINE in a new buffer."
-  (interactive (list (org-glance-metadata:completing-read)))
-  (cl-check-type headline org-glance-headline)
-  (switch-to-buffer (org-glance-headline:materialize headline))
-  headline)
+(cl-defun org-glance:materialize (&optional headline)
+  "Materialize HEADLINE in a new buffer.
+Called with NO HEADLINE (interactive selection), route to the v2 graph when
+`org-glance-use-graph-v2' is enabled, else prompt via v1.  Called WITH a
+HEADLINE (programmatically, e.g. link-follow) always uses the v1 path.
+Dispatch keys on the headline arg, not `called-interactively-p', because the
+latter is opaque to transient's advice wrapper."
+  (interactive)
+  (cond ((and org-glance-use-graph-v2 (null headline))
+         (org-glance-materialize-v2))
+        (t
+         (let ((headline (or headline (org-glance-metadata:completing-read))))
+           (cl-check-type headline org-glance-headline)
+           (switch-to-buffer (org-glance-headline:materialize headline))
+           headline))))
 
-(cl-defun org-glance:open (headline)
+(cl-defun org-glance:open (&optional headline)
   "Run `org-open-at-point' on any `org-link' inside HEADLINE's contents.
 If there is only one link, open it.
 If there is more than one link, prompt user to choose which one to open.
-If headline doesn't contain links, role `can-be-opened' should be revoked."
-  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline)
-                                                                    (and
-                                                                     (org-glance-headline:active? headline)
-                                                                     (org-glance-headline:linked? headline))))))
-  (org-glance-headline:with-narrowed-headline headline
-    (cl-loop for (link title pos) in (org-glance--parse-links)
-             unless (s-starts-with-p "[[org-glance-" link)
-             collect (list title pos)
-             into links
-             finally
-             do (goto-char (cond ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
-                                 ((= (length links) 1) (cadar links))
-                                 (t (user-error "Unable to find links in headline"))))
-             (org-open-at-point))))
+Called with NO HEADLINE (interactive selection), route to the v2 graph when
+`org-glance-use-graph-v2' is enabled; called WITH a HEADLINE stays on v1."
+  (interactive)
+  (cond ((and org-glance-use-graph-v2 (null headline))
+         (org-glance-open-v2))
+        (t
+         (let ((headline (or headline
+                             (org-glance-metadata:completing-read
+                              :filter (lambda (headline)
+                                        (and (org-glance-headline:active? headline)
+                                             (org-glance-headline:linked? headline)))))))
+           (org-glance-headline:with-narrowed-headline headline
+             (cl-loop for (link title pos) in (org-glance--parse-links)
+                      unless (s-starts-with-p "[[org-glance-" link)
+                      collect (list title pos)
+                      into links
+                      finally
+                      do (goto-char (cond ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
+                                          ((= (length links) 1) (cadar links))
+                                          (t (user-error "Unable to find links in headline"))))
+                      (org-open-at-point)))))))
 
-(cl-defun org-glance:extract (headline &optional choice)
-  "Materialize HEADLINE and retrieve key-value pairs from its contents."
-  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline) (and (org-glance-headline:active? headline)
-                                                                                     (or (org-glance-headline:propertized? headline)
-                                                                                         (org-glance-headline:encrypted? headline)))))))
-  (cl-check-type headline org-glance-headline)
-  (org-glance-headline:with-narrowed-headline headline
-    (let* ((pairs (org-glance--buffer-key-value-pairs))
-           (interaction (not choice))
-           result)
-      (condition-case nil
-          (if interaction
-              (while t
-                (let ((choice (completing-read "Extract: " pairs nil t)))
-                  (setq result (alist-get choice pairs nil nil #'string=))
-                  (kill-new result)))
-            (setq result (alist-get choice pairs nil nil #'string=))
-            (kill-new result))
-        (quit (setq kill-ring nil)
-              (message "Kill ring has been cleared")))
-      result)))
+(cl-defun org-glance:extract (&optional headline choice)
+  "Retrieve key-value pairs from HEADLINE's contents to the kill ring.
+Called with NO HEADLINE (interactive selection), route to the v2 graph when
+`org-glance-use-graph-v2' is enabled; called WITH a HEADLINE stays on v1."
+  (interactive)
+  (cond ((and org-glance-use-graph-v2 (null headline))
+         (org-glance-extract-v2))
+        (t
+         (let ((headline (or headline
+                             (org-glance-metadata:completing-read
+                              :filter (lambda (headline) (and (org-glance-headline:active? headline)
+                                                         (or (org-glance-headline:propertized? headline)
+                                                             (org-glance-headline:encrypted? headline))))))))
+           (cl-check-type headline org-glance-headline)
+           (org-glance-headline:with-narrowed-headline headline
+             (let* ((pairs (org-glance--buffer-key-value-pairs))
+                    (interaction (not choice))
+                    result)
+               (condition-case nil
+                   (if interaction
+                       (while t
+                         (let ((choice (completing-read "Extract: " pairs nil t)))
+                           (setq result (alist-get choice pairs nil nil #'string=))
+                           (kill-new result)))
+                     (setq result (alist-get choice pairs nil nil #'string=))
+                     (kill-new result))
+                 (quit (setq kill-ring nil)
+                       (message "Kill ring has been cleared")))
+               result))))))
 
 ;; (cl-defun org-glance:prototype ()
 ;;   (interactive)
@@ -616,11 +654,15 @@ If headline doesn't contain links, role `can-be-opened' should be revoked."
 
 (defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
-  (org-glance:materialize (org-glance-metadata:headline-metadata id)))
+  (let ((headline (org-glance-metadata:headline-metadata id)))
+    (unless headline (user-error "org-glance: headline %s not found" id))
+    (org-glance:materialize headline)))
 
 (defun org-glance-link:open (id &optional _)
   "Open org-glance headline identified by ID."
-  (org-glance:open (org-glance-metadata:headline-metadata id)))
+  (let ((headline (org-glance-metadata:headline-metadata id)))
+    (unless headline (user-error "org-glance: headline %s not found" id))
+    (org-glance:open headline)))
 
 (defun org-glance-link:overview (tag &optional _)
   "Open org-glance headline identified by ID."

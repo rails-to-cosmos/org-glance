@@ -2,32 +2,6 @@
 
 (require 'test-helpers)
 
-(cl-defmacro org-glance-test:with-graph (graph &rest body)
-  "Create a graph in a fresh temp directory, bind it to GRAPH, run BODY."
-  (declare (indent 1))
-  `(with-temp-directory dir
-     (let ((,graph (org-glance-graph-v2 dir)))
-       ,@body)))
-
-(cl-defun org-glance-test:headline (id &rest lines)
-  "Build an `org-glance-headline-v2' carrying ID.
-LINES is the heading, then optional planning (SCHEDULED:/DEADLINE:/CLOSED:)
-lines, then optional body.  The ORG_GLANCE_ID drawer is placed after the
-heading and any planning lines -- where org expects a property drawer --
-so the id parses correctly whether or not a body or planning is present."
-  (let* ((rest (cdr lines))
-         (planning (seq-take-while
-                    (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
-                    rest))
-         (body (seq-drop rest (length planning))))
-    (apply #'org-glance-headline-v2--from-lines
-           (append (list (car lines))
-                   planning
-                   (list ":PROPERTIES:"
-                         (format ":ORG_GLANCE_ID: %s" id)
-                         ":END:")
-                   body))))
-
 (ert-deftest org-glance-test:graph-add-get ()
   "A headline added to the graph is retrievable by id with its fields intact."
   (org-glance-test:with-graph graph
@@ -87,6 +61,41 @@ so the id parses correctly whether or not a body or planning is present."
     (org-glance-graph-v2:delete graph "id1")
     (should (eq 'tombstone (org-glance-graph-v2:get-headline graph "id1")))))
 
+(ert-deftest org-glance-test:graph-utf8-roundtrip ()
+  "Non-ASCII titles survive both read paths.
+Regression: `org-glance-jsonl:iterate' (used by `get-headline') read the JSONL
+with `insert-file-contents-literally' and fed undecoded UTF-8 bytes to
+`json-parse-string', which raised `json-utf8-decode-error'."
+  (org-glance-test:with-graph graph
+    (let ((title "Façade — Facebook’s “data” café"))
+      (org-glance-graph-v2:add graph (org-glance-test:headline "u1" (concat "* TODO " title)))
+      ;; reverse chunked literal reader (the previously-broken path)
+      (should (string= title (org-glance-headline-metadata-v2:title
+                              (org-glance-graph-v2:get-headline graph "u1"))))
+      ;; forward reader
+      (should (string= title (org-glance-headline-metadata-v2:title
+                              (car (org-glance-graph-v2:headlines graph)))))
+      ;; full content reconstruct
+      (should (string= title (org-glance-headline-v2:title
+                              (org-glance-graph-v2:headline graph "u1")))))))
+
+(ert-deftest org-glance-test:graph-utf8-chunk-boundary ()
+  "Multibyte content split across the 4096-byte read-chunk boundary still reads
+back correctly (carry logic + per-line decode in `org-glance-jsonl:iterate')."
+  (org-glance-test:with-graph graph
+    (let ((title "café—’“”—naïve—Façade"))
+      (dotimes (i 50)
+        (org-glance-graph-v2:add graph
+                                 (org-glance-test:headline (format "k%d" i)
+                                                           (format "* TODO %s %d" title i))))
+      ;; the jsonl now spans several 4096-byte chunks; every id must resolve and
+      ;; carry its multibyte title intact regardless of where boundaries fall
+      (dotimes (i 50)
+        (let ((meta (org-glance-graph-v2:get-headline graph (format "k%d" i))))
+          (should (org-glance-headline-metadata-v2? meta))
+          (should (string= (format "%s %d" title i)
+                           (org-glance-headline-metadata-v2:title meta))))))))
+
 (ert-deftest org-glance-test:graph-scheduled-roundtrip ()
   "A scheduled headline serializes (regression: schedule/deadline must be coerced
 to raw strings, not org-element timestamp objects, or `json-serialize' crashes)."
@@ -141,6 +150,14 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
         (should (string= "rt1" (org-glance-headline-v2:id restored)))
         (should (string= (org-glance-headline-v2:hash headline)
                          (org-glance-headline-v2:hash restored)))))))
+
+(ert-deftest org-glance-test:graph-unsafe-id-rejected ()
+  "Path-unsafe ids are rejected before touching the filesystem."
+  (org-glance-test:with-graph graph
+    (should-error (org-glance-graph-v2:headline-data-path graph "../escape") :type 'error)
+    (should-error (org-glance-graph-v2:headline-data-path graph "a/b") :type 'error)
+    ;; a normal tag-hash id is fine
+    (should (org-glance-graph-v2:headline-data-path graph "whitepaper-d41d8cd98f00b204"))))
 
 (ert-deftest org-glance-test:graph-content-missing ()
   "Reading content for an unknown id yields nil, not an error."

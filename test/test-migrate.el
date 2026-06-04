@@ -55,6 +55,26 @@ preserved) and backs up the legacy metadata non-destructively."
     (should (= 0 (org-glance-migrate dir)))
     (should (null (org-glance-graph-v2:headlines (org-glance-graph-v2 dir))))))
 
+(ert-deftest org-glance-test:migrate-skips-failing-file ()
+  "One file that errors during ingest is logged and skipped; the rest still
+migrate (no whole-batch abort)."
+  (with-temp-directory dir
+    (org-glance-test:write (f-join dir "good.org")
+                           "* TODO Good\n:PROPERTIES:\n:ORG_GLANCE_ID: good\n:END:\n")
+    (org-glance-test:write (f-join dir "bad.org")
+                           "* TODO Bad\n:PROPERTIES:\n:ORG_GLANCE_ID: bad\n:END:\n")
+    (let ((orig (symbol-function 'org-glance-graph-v2:add)))
+      (cl-letf (((symbol-function 'org-glance-graph-v2:add)
+                 (lambda (graph &rest headlines)
+                   (if (cl-some (lambda (h) (string= "bad" (org-glance-headline-v2:id h))) headlines)
+                       (error "simulated ingest failure")
+                     (apply orig graph headlines)))))
+        ;; must not abort despite bad.org failing
+        (org-glance-migrate dir)))
+    (let ((graph (org-glance-graph-v2 dir)))
+      (should (org-glance-headline-metadata-v2? (org-glance-graph-v2:get-headline graph "good")))
+      (should (null (org-glance-graph-v2:get-headline graph "bad"))))))
+
 (ert-deftest org-glance-test:migrate-maybe-prompts ()
   "When legacy metadata exists and the user confirms, migration runs."
   (with-temp-directory dir
