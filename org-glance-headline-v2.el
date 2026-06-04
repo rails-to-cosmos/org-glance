@@ -38,8 +38,10 @@
   (title nil :read-only t :type string)
   (priority nil :read-only t :type number)
   (indent nil :read-only t :type number)
-  (schedule nil :read-only t :type string)
-  (deadline nil :read-only t :type string)
+  ;; Hold the parsed org-element timestamp object (or nil); the public
+  ;; `org-glance-headline-v2:schedule' / `:deadline' methods expose raw strings.
+  (-schedule nil :read-only t :type (or null list))
+  (-deadline nil :read-only t :type (or null list))
 
   ;; Metadata
   (archived? nil :read-only t :type bool)
@@ -101,6 +103,18 @@
 
 (cl-defun org-glance-headline-v2:done? (headline)
   (not (null (member (org-glance-headline-v2:state headline) org-done-keywords))))
+
+(cl-defun org-glance-headline-v2:schedule (headline)
+  "Scheduled timestamp of HEADLINE as a raw org string, or nil."
+  (cl-check-type headline org-glance-headline-v2)
+  (-some->> (org-glance-headline-v2:-schedule headline)
+    (org-element-property :raw-value)))
+
+(cl-defun org-glance-headline-v2:deadline (headline)
+  "Deadline timestamp of HEADLINE as a raw org string, or nil."
+  (cl-check-type headline org-glance-headline-v2)
+  (-some->> (org-glance-headline-v2:-deadline headline)
+    (org-element-property :raw-value)))
 
 (cl-defun org-glance-headline-v2--hash (contents)
   (cl-check-type contents string)
@@ -171,8 +185,8 @@
                                  :state state
                                  :priority priority
                                  :indent indent
-                                 :schedule schedule
-                                 :deadline deadline
+                                 :-schedule schedule
+                                 :-deadline deadline
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?

@@ -4,10 +4,16 @@
 (require 'cl-macs)
 (require 'org-capture)
 
+(require 'org-glance-tag)
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
 
-(cl-defun org-glance-capture-v2 (tag title &key (template nil))
+(cl-defun org-glance-capture-v2:template (tag &optional (title ""))
+  "Default `org-capture' template for a new TAG headline, pre-filled with TITLE."
+  (cl-check-type title string)
+  (format "* %s%%?  :%s:" title (org-glance-tag:to-string tag)))
+
+(cl-defun org-glance-capture-v2 (tag title &key template finalize)
   (declare (indent 2))
 
   (interactive (list (let ((tag (org-glance-tags:completing-read "Tag: " nil)))
@@ -23,14 +29,19 @@
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))
          (capture-token "_")
+         (template (or template (org-glance-capture-v2:template tag title)))
          (org-capture-templates (list (list capture-token capture-token 'entry (list 'file file) template))))
     (find-file file)
     (add-hook 'org-capture-after-finalize-hook
-              `(lambda () (unwind-protect
-                         (setq org-glance-graph-v2 (org-glance-graph-v2:merge org-glance-graph-v2 (org-glance-graph-v2:capture-buffer)))
-                       (kill-buffer (get-file-buffer ,file))
-                       (f-delete ,file)))
+              `(lambda ()
+                 (unwind-protect
+                     (when-let ((buffer (get-file-buffer ,file)))
+                       (org-glance-graph-v2:capture org-glance-graph-v2 buffer))
+                   (when-let ((buffer (get-file-buffer ,file)))
+                     (kill-buffer buffer))
+                   (f-delete ,file)))
               0 t)
-    (org-capture nil capture-token)))
+    (org-capture nil capture-token)
+    (when finalize (org-capture-finalize))))
 
 (provide 'org-glance-capture-v2)

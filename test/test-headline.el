@@ -226,12 +226,12 @@
 (ert-deftest org-glance-test:headline-schedule ()
   (let ((schedule (-> (org-glance-headline-v2--from-lines "* foo" "SCHEDULED: <2025-01-10 Fri>")
                       (org-glance-headline-v2:schedule))))
-    (should (string= (org-element-property :raw-value schedule) "<2025-01-10 Fri>"))))
+    (should (string= schedule "<2025-01-10 Fri>"))))
 
 (ert-deftest org-glance-test:headline-deadline ()
   (let ((deadline (-> (org-glance-headline-v2--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
                       (org-glance-headline-v2:deadline))))
-    (should (string= (org-element-property :raw-value deadline) "<2025-01-10 Fri>"))))
+    (should (string= deadline "<2025-01-10 Fri>"))))
 
 (ert-deftest org-glance-test:headline-hash-consistency ()
   (let* ((headline (org-glance-headline-v2--from-string "* foo"))

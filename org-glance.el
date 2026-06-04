@@ -88,8 +88,10 @@
   :group 'org-glance
   :type 'boolean)
 
-(defvar org-glance-graph-v2 (org-glance-graph-v2 org-glance-directory)
-  "Current global instance of `org-glance-graph-v2'.")
+(defvar org-glance-graph-v2 nil
+  "Current global instance of `org-glance-graph-v2'.
+Constructed lazily by `org-glance-init-v2' (also called from
+`org-glance-init'); nil until the system is initialized.")
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -221,6 +223,11 @@ after capture process has been finished."
   (unless (f-exists? directory)
     (mkdir directory t))
 
+  ;; Coexistence: the v1 init also brings up the v2 graph store for DIRECTORY,
+  ;; and offers a one-time migration when legacy metadata is detected.
+  (org-glance-init-v2 directory)
+  (org-glance-migrate-maybe directory)
+
   (org-glance-overview-init)
 
   (add-hook 'org-glance-material-mode-hook #'org-glance-datetime-mode)
@@ -245,6 +252,84 @@ after capture process has been finished."
 (cl-defun org-glance-initialized?-v2 ()
   "Return `org-glance-graph' if system is initialized, or else return `nil'."
   org-glance-graph-v2)
+
+;; --- Phase 1: runtime migration of legacy v1 metadata into the v2 graph -------
+;;
+;; The org files are canonical (see MIGRATION-PLAN.md), so migration RE-SCANS the
+;; sources -- it does not trust v1's possibly-stale `begin' pointers and never
+;; reads the v1 positional serialization. Legacy `*.metadata.el' files are merely
+;; the trigger; they are backed up, never deleted.
+
+(cl-defun org-glance-legacy-metadata-files (&optional (directory org-glance-directory))
+  "Return the list of legacy v1 `*.metadata.el' files under DIRECTORY."
+  (when (f-exists? directory)
+    (cl-loop for file in (directory-files-recursively directory "\\.metadata\\.el\\'")
+             unless (string-match-p "/\\.org-glance/" file)
+             collect file)))
+
+(cl-defun org-glance-migrate--source-files (directory)
+  "Canonical org source files under DIRECTORY, excluding the v2 store."
+  (cl-loop for file in (directory-files-recursively directory "\\.org\\(_archive\\)?\\'")
+           unless (string-match-p "/\\.org-glance/" file)
+           collect file))
+
+(cl-defun org-glance-migrate--overview-file? (file)
+  "Non-nil if FILE is a v1 `org-glance-overview' file (a read-only clone store).
+Detected by its prop-line `mode: org-glance-overview' marker."
+  (with-temp-buffer
+    (insert-file-contents file nil 0 256)
+    (goto-char (point-min))
+    (re-search-forward "mode:[ \t]*org-glance-overview" nil t)))
+
+(cl-defun org-glance-migrate (&optional (directory org-glance-directory))
+  "Rebuild the v2 graph in DIRECTORY from legacy v1 content.
+Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID,
+add them to the graph preserving ids, then back up legacy `*.metadata.el' files
+to `*.metadata.el.bak'.  Return the number of headlines ingested."
+  (interactive)
+  (let* ((graph (org-glance-graph-v2 directory))
+         (sources (org-glance-migrate--source-files directory))
+         (legacy (org-glance-legacy-metadata-files directory))
+         (total (length sources))
+         (reporter (and (> total 0)
+                        (make-progress-reporter "org-glance: migrating sources... " 0 total)))
+         (count 0))
+    (cl-loop for file in sources
+             for i from 1
+             do (unless (org-glance-migrate--overview-file? file)
+                  ;; Read-only parse in a temp buffer -- never `find-file' the
+                  ;; source. `delay-mode-hooks' suppresses
+                  ;; `after-change-major-mode-hook', which is what
+                  ;; `global-undo-tree-mode' (and other globalized minor modes)
+                  ;; hook into; combined with the temp buffer, undo-tree never
+                  ;; activates, no undo is recorded and no `.~undo-tree~' files are
+                  ;; written. Also skips per-file `org-mode-hook'.
+                  (with-temp-buffer
+                    (insert-file-contents file)
+                    (delay-mode-hooks (org-mode))
+                    (dolist (headline (org-glance-graph-v2:capture-buffer (current-buffer)))
+                      (when (org-glance-headline-v2:id headline)
+                        (org-glance-graph-v2:add graph headline)
+                        (cl-incf count)))))
+             (when reporter (progress-reporter-update reporter i)))
+    (when reporter (progress-reporter-done reporter))
+    (dolist (file legacy)
+      (rename-file file (concat file ".bak") t))
+    (when (called-interactively-p 'any)
+      (message "org-glance: migrated %d headline(s); backed up %d legacy file(s)."
+               count (length legacy)))
+    count))
+
+(cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
+  "If legacy v1 metadata is present in DIRECTORY, warn and offer to migrate.
+Return non-nil if a migration was performed."
+  (when (org-glance-legacy-metadata-files directory)
+    (display-warning 'org-glance
+                     "Legacy org-glance metadata (.metadata.el) detected; the v2 graph store supersedes it.  Run `M-x org-glance-migrate' to convert."
+                     :warning)
+    (when (yes-or-no-p "org-glance: migrate legacy metadata to the new graph store now? ")
+      (org-glance-migrate directory)
+      t)))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."

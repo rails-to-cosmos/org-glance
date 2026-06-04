@@ -20,3 +20,4 @@ devenv.local.nix
 /.eask/
 /build/
 /ert-profile
+.llm/
