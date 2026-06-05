@@ -113,6 +113,18 @@ it works on records written before any later schema additions."
   (cl-check-type metadata org-glance-headline-metadata-v2)
   (not (org-glance-headline-metadata-v2:done? metadata)))
 
+(cl-defun org-glance--done-keywords ()
+  "The user's \"done\" todo keywords, independent of the current buffer.
+`org-done-keywords' is buffer-local and unset outside Org buffers, so `done?'
+misbehaves when called from a command/minibuffer context.  When it is unset,
+derive the set from the global `org-todo-keywords' in a scratch Org buffer.
+Callers bind `org-done-keywords' to this around a batch of `done?'/`active?'
+checks so the result reflects the user's config deterministically."
+  (or org-done-keywords
+      (with-temp-buffer
+        (delay-mode-hooks (org-mode))
+        org-done-keywords)))
+
 (cl-defun org-glance-graph-v2 (&optional (directory org-glance-directory))
   (cl-check-type directory string)
   (let* ((directory (-> directory (file-truename) (f-full)))
