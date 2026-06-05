@@ -15,20 +15,40 @@
         (should (string= "Alpha" (org-glance-headline-metadata-v2:title meta)))))))
 
 (ert-deftest org-glance-test:material-active-filter ()
-  "The v2 commands filter selection to active headlines (v1 parity); the
-predicate derives from `state', so it works on pre-existing records too."
+  "The v2 commands filter selection to active headlines (v1 parity).
+No `org-done-keywords' binding: `completing-read' resolves the done set itself,
+so the filter is correct even from this non-Org command context."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph
                              (org-glance-test:headline "a" "* TODO Todo")
                              (org-glance-test:headline "b" "* DONE Done"))
-    (let ((org-done-keywords '("DONE")))
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_p coll &rest _)
+                 (should (= 1 (length coll)))   ; DONE excluded
+                 (caar coll))))
+      (let ((meta (org-glance-material-v2:completing-read
+                   graph :filter #'org-glance-headline-metadata-v2:active?)))
+        (should (string= "a" (org-glance-headline-metadata-v2:id meta)))))))
+
+(ert-deftest org-glance-test:material-done-keywords-custom ()
+  "`org-done-keywords' redefines what counts as active for selection."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "a" "* TODO Todo")
+                             (org-glance-test:headline "b" "* DONE Done"))
+    ;; Default: DONE is done, so the active (selectable) headline is the TODO one.
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll))))
+      (should (string= "a" (org-glance-headline-metadata-v2:id
+                            (org-glance-material-v2:completing-read
+                             graph :filter #'org-glance-headline-metadata-v2:active?)))))
+    ;; Declaring TODO done flips it: now the DONE headline is the active one.
+    (let ((org-done-keywords '("TODO")))
       (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _)
-                   (should (= 1 (length coll)))   ; DONE excluded
-                   (caar coll))))
-        (let ((meta (org-glance-material-v2:completing-read
-                     graph :filter #'org-glance-headline-metadata-v2:active?)))
-          (should (string= "a" (org-glance-headline-metadata-v2:id meta))))))))
+                 (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll))))
+        (should (string= "b" (org-glance-headline-metadata-v2:id
+                              (org-glance-material-v2:completing-read
+                               graph :filter #'org-glance-headline-metadata-v2:active?))))))))
 
 (ert-deftest org-glance-test:material-completing-read-filter ()
   "The FILTER predicate narrows the candidate list."

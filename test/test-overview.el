@@ -96,6 +96,31 @@ caught)."
       ;; ... whereas omitting :state keeps everything.
       (should (= 3 (n nil))))))
 
+(ert-deftest org-glance-test:overview-done-keywords-per-overview ()
+  "A `:done-keywords' clause redefines \"done\" for that overview only."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "o1" "* TODO Alpha")
+                             (org-glance-test:headline "o2" "* DONE Beta"))
+    (cl-flet ((ids (filter)
+                (mapcar #'org-glance-headline-metadata-v2:id
+                        (seq-filter (org-glance-overview-v2:spec-predicate filter)
+                                    (org-glance-graph-v2:headlines graph)))))
+      ;; Default: DONE is done.
+      (should (equal '("o2") (ids '(:done t))))
+      (should (equal '("o1") (ids '(:done nil))))
+      ;; This overview declares TODO (not DONE) to be done.
+      (should (equal '("o1") (ids '(:done t :done-keywords ("TODO")))))
+      (should (equal '("o2") (ids '(:done nil :done-keywords ("TODO")))))
+      ;; Per-overview :done-keywords wins over the ambient `org-done-keywords'.
+      (let ((org-done-keywords '("DONE")))
+        (should (equal '("o1") (ids '(:done t :done-keywords ("TODO")))))))
+    ;; :done-keywords participates in the cache key (distinct overviews) ...
+    (should-not (string= (org-glance-overview-v2:spec-key '(:done t))
+                         (org-glance-overview-v2:spec-key '(:done t :done-keywords ("TODO")))))
+    ;; ... but folds to "all" (no-op) without :done.
+    (should (string= "all" (org-glance-overview-v2:spec-key '(:done-keywords ("TODO")))))))
+
 (ert-deftest org-glance-test:overview-filter-by-field ()
   "Arbitrary metadata fields compose with AND (here: priority + linked?)."
   (org-glance-test:with-graph graph

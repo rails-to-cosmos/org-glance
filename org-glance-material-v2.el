@@ -48,9 +48,13 @@ See MIGRATION-PLAN.md Phase 2."
   "Choose a live headline from GRAPH and return its metadata.
 FILTER, if non-nil, is a predicate on the metadata."
   (cl-check-type graph org-glance-graph-v2)
-  (let ((candidates (cl-loop for meta in (org-glance-graph-v2:headlines graph)
-                             when (or (null filter) (funcall filter meta))
-                             collect (cons (org-glance-material-v2:label meta) meta))))
+  ;; FILTER often calls `active?'/`done?', which read the buffer-local
+  ;; `org-done-keywords' -- nil in this command/minibuffer context.  Bind the
+  ;; user's done set so the filter is correct regardless of the current buffer.
+  (let* ((org-done-keywords (org-glance--done-keywords))
+         (candidates (cl-loop for meta in (org-glance-graph-v2:headlines graph)
+                              when (or (null filter) (funcall filter meta))
+                              collect (cons (org-glance-material-v2:label meta) meta))))
     (unless candidates
       (user-error "No matching headlines (run `M-x org-glance-reindex' if you upgraded)"))
     (cdr (assoc (completing-read prompt candidates nil t) candidates))))

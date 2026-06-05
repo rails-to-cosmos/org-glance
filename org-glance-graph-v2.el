@@ -114,12 +114,13 @@ it works on records written before any later schema additions."
   (not (org-glance-headline-metadata-v2:done? metadata)))
 
 (cl-defun org-glance--done-keywords ()
-  "The user's \"done\" todo keywords, independent of the current buffer.
-`org-done-keywords' is buffer-local and unset outside Org buffers, so `done?'
-misbehaves when called from a command/minibuffer context.  When it is unset,
-derive the set from the global `org-todo-keywords' in a scratch Org buffer.
-Callers bind `org-done-keywords' to this around a batch of `done?'/`active?'
-checks so the result reflects the user's config deterministically."
+  "The \"done\" todo keywords to use, reusing Org's own `org-done-keywords'.
+That variable is buffer-local and unset outside Org buffers, so `done?'
+misbehaves when called from a command/minibuffer context: fall back to deriving
+the set from the global `org-todo-keywords' in a scratch Org buffer.  Callers
+bind `org-done-keywords' to this around a batch of `done?'/`active?' checks so
+the result is deterministic.  An overview can still override it per view via a
+`:done-keywords' filter clause."
   (or org-done-keywords
       (with-temp-buffer
         (delay-mode-hooks (org-mode))

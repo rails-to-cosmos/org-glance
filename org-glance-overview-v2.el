@@ -53,10 +53,10 @@
 ;; dumb and just call them.
 
 (defconst org-glance-overview-v2:filter-keys
-  '(:tags :state :done :id :title :hash :priority
+  '(:tags :state :done :done-keywords :id :title :hash :priority
           :linked :propertized :encrypted :schedule :deadline :where)
   "Recognised keys in a normalised overview filter spec (`:tag' folds into
-`:tags').")
+`:tags').  `:done-keywords' is not a filter clause but parameterises `:done'.")
 
 (cl-defun org-glance-overview-v2:--normalize-spec (filter)
   "Coerce FILTER into a canonical plist spec (or nil for \"all\").
@@ -81,6 +81,10 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
                                       (t (list tags)))
                                 (when tag (list tag)))))
           (setq out (plist-put out :tags all))))
+      ;; :done-keywords only parameterises :done; without :done it changes
+      ;; nothing, so drop it (avoids a no-op filter and a fragmented cache).
+      (when (and (plist-member out :done-keywords) (not (plist-member out :done)))
+        (cl-remf out :done-keywords))
       (cl-loop for (k _v) on out by #'cddr
                unless (memq k org-glance-overview-v2:filter-keys)
                do (error "Unrecognised overview filter key: %S" k))
@@ -108,11 +112,12 @@ clause must hold (logical AND).  See `org-glance-overview-v2:filter-keys'."
       (let ((want (or (plist-get spec :state) "")))
         (push (lambda (m) (equal want (or (org-glance-headline-metadata-v2:state m) ""))) clauses)))
     (when (plist-member spec :done)
-      ;; `done?' reads the buffer-local `org-done-keywords', which is nil outside
-      ;; an Org buffer; capture the user's set once so the filter is deterministic
-      ;; regardless of which buffer the render runs in.
+      ;; `done?' reads the buffer-local `org-done-keywords', nil outside an Org
+      ;; buffer; capture a concrete set once so the filter is deterministic.  A
+      ;; per-overview `:done-keywords' wins over the global default chain.
       (let ((want (and (plist-get spec :done) t))
-            (done-keywords (org-glance--done-keywords)))
+            (done-keywords (or (plist-get spec :done-keywords)
+                               (org-glance--done-keywords))))
         (push (lambda (m)
                 (let ((org-done-keywords done-keywords))
                   (eq want (org-glance-headline-metadata-v2:done? m))))
@@ -161,6 +166,7 @@ Used only for the greppable slug; ambiguity here is harmless (a sha1 over an
 unambiguous encoding disambiguates -- see `org-glance-overview-v2:spec-key')."
   (cond
    ((eq key :tags) (s-join "," (mapcar (lambda (x) (downcase (format "%s" x))) value)))
+   ((eq key :done-keywords) (s-join "," (mapcar (lambda (x) (format "%s" x)) value)))
    ((eq value t) "t")
    ((null value) "nil")
    ((keywordp value) (substring (symbol-name value) 1))
@@ -172,9 +178,11 @@ unambiguous encoding disambiguates -- see `org-glance-overview-v2:spec-key')."
 Keys sorted; tag lists sorted and downcased; other values kept as their Lisp
 data so that `prin1' renders them unambiguously."
   (sort (cl-loop for (k v) on spec by #'cddr
-                 collect (cons k (if (eq k :tags)
-                                     (sort (mapcar (lambda (x) (downcase (format "%s" x))) v) #'string<)
-                                   v)))
+                 collect (cons k (cond ((eq k :tags)
+                                        (sort (mapcar (lambda (x) (downcase (format "%s" x))) v) #'string<))
+                                       ((eq k :done-keywords)
+                                        (sort (mapcar (lambda (x) (format "%s" x)) v) #'string<))
+                                       (t v))))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
 (cl-defun org-glance-overview-v2:--fs-safe (readable hash-input)
