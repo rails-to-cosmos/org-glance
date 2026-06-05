@@ -594,14 +594,25 @@ ${todo-order}
           (org-glance-overview:refresh-widgets tag))))
     overview-file-name))
 
-(cl-defun org-glance-overview (tag)
-  (interactive (list (org-glance-tags:completing-read "Overview: " nil)))
-  (cl-check-type tag org-glance-tag)
-  (when-let (location (org-glance-overview:file-name tag))
-    (if (file-exists-p location)
-        (find-file location)
-      (org-glance:create-tag tag)
-      (org-glance-overview:create tag))))
+(declare-function org-glance-overview-v2 "org-glance-overview-v2" (&optional tag))
+(defvar org-glance-use-graph-v2)
+
+(cl-defun org-glance-overview (&optional tag)
+  "Open the overview.
+Called with NO TAG (interactive) and `org-glance-use-graph-v2' enabled, browse
+the v2 graph (`org-glance-overview-v2'); called WITH a TAG (e.g. the
+`org-glance-overview:' link handler) uses the v1 per-tag overview file."
+  (interactive)
+  (cond ((and org-glance-use-graph-v2 (null tag))
+         (org-glance-overview-v2))
+        (t
+         (let ((tag (or tag (org-glance-tags:completing-read "Overview: " nil))))
+           (cl-check-type tag org-glance-tag)
+           (when-let (location (org-glance-overview:file-name tag))
+             (if (file-exists-p location)
+                 (find-file location)
+               (org-glance:create-tag tag)
+               (org-glance-overview:create tag)))))))
 
 (cl-defun org-glance-overview:agenda ()
   (interactive)

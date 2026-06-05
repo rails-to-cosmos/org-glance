@@ -64,6 +64,7 @@
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
 (require 'org-glance-material-v2)
+(require 'org-glance-overview-v2)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
@@ -313,7 +314,7 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
                   (condition-case err
                       (with-temp-buffer
                         (insert-file-contents file)
-                        (delay-mode-hooks (org-mode))
+                        (org-glance--org-mode)
                         (dolist (headline (org-glance-graph-v2:capture-buffer (current-buffer)))
                           (when (org-glance-headline-v2:id headline)
                             (org-glance-graph-v2:add graph headline)
@@ -335,6 +336,18 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
                (length legacy)))
     count))
 
+(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
+  "Re-derive metadata for all headlines in DIRECTORY's v2 graph from their stored
+content.  Run once after upgrading to backfill newly-added projection fields
+(e.g. the `linked?'/`propertized?' flags used to filter `org-glance:open' and
+`org-glance:extract')."
+  (interactive)
+  (let* ((graph (org-glance-graph-v2 directory))
+         (n (org-glance-graph-v2:reindex graph)))
+    (when (called-interactively-p 'any)
+      (message "org-glance: re-indexed %d headline(s)." n))
+    n))
+
 (cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
   "If legacy v1 metadata is present in DIRECTORY, warn and offer to migrate.
 Return non-nil if a migration was performed."
@@ -342,9 +355,10 @@ Return non-nil if a migration was performed."
     (display-warning 'org-glance
                      "Legacy org-glance metadata (.metadata.el) detected; the v2 graph store supersedes it.  Run `M-x org-glance-migrate' to convert."
                      :warning)
-    (when (yes-or-no-p "org-glance: migrate legacy metadata to the new graph store now? ")
-      (org-glance-migrate directory)
-      t)))
+    ;; (when (yes-or-no-p "org-glance: migrate legacy metadata to the new graph store now? ")
+    ;;   (org-glance-migrate directory)
+    ;;   t)
+    ))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."

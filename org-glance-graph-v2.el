@@ -35,7 +35,12 @@
   (hash nil :read-only t :type string)
   (schedule nil :read-only t :type string)
   (deadline nil :read-only t :type string)
-  (priority nil :read-only t :type number))
+  (priority nil :read-only t :type number)
+  ;; Content-derived projection flags (for view filters). Absent (nil) on records
+  ;; written before these fields existed -- `M-x org-glance-reindex' backfills them.
+  (linked? nil :read-only t :type boolean)
+  (propertized? nil :read-only t :type boolean)
+  (encrypted? nil :read-only t :type boolean))
 
 (cl-defun org-glance-headline-v2:metadata (headline)
   (cl-check-type headline org-glance-headline-v2)
@@ -49,7 +54,10 @@
    :hash (org-glance-headline-v2:hash headline)
    :schedule (org-glance-headline-v2:schedule headline)
    :deadline (org-glance-headline-v2:deadline headline)
-   :priority (org-glance-headline-v2:priority headline)))
+   :priority (org-glance-headline-v2:priority headline)
+   :linked? (and (org-glance-headline-v2:links headline) t)
+   :propertized? (and (org-glance-headline-v2:properties headline) t)
+   :encrypted? (and (org-glance-headline-v2:encrypted? headline) t)))
 
 (cl-defun org-glance-headline-v2:metadata* (obj)
   "Generic variant of `org-glance-headline-v2:metadata'."
@@ -75,7 +83,10 @@
         :hash (org-glance-headline-metadata-v2:hash metadata)
         :schedule (org-glance-headline-metadata-v2:schedule metadata)
         :deadline (org-glance-headline-metadata-v2:deadline metadata)
-        :priority (org-glance-headline-metadata-v2:priority metadata)))
+        :priority (org-glance-headline-metadata-v2:priority metadata)
+        :linked (org-glance-headline-metadata-v2:linked? metadata)
+        :propertized (org-glance-headline-metadata-v2:propertized? metadata)
+        :encrypted (org-glance-headline-metadata-v2:encrypted? metadata)))
 
 (cl-defun org-glance-headline-metadata-v2:deserialize (data)
   (cl-check-type data list)
@@ -86,7 +97,21 @@
                                         :hash (plist-get data :hash)
                                         :schedule (plist-get data :schedule)
                                         :deadline (plist-get data :deadline)
-                                        :priority (plist-get data :priority)))
+                                        :priority (plist-get data :priority)
+                                        :linked? (eq t (plist-get data :linked))
+                                        :propertized? (eq t (plist-get data :propertized))
+                                        :encrypted? (eq t (plist-get data :encrypted))))
+
+(cl-defun org-glance-headline-metadata-v2:done? (metadata)
+  "Non-nil if METADATA's state is a done keyword (per `org-done-keywords')."
+  (cl-check-type metadata org-glance-headline-metadata-v2)
+  (not (null (member (org-glance-headline-metadata-v2:state metadata) org-done-keywords))))
+
+(cl-defun org-glance-headline-metadata-v2:active? (metadata)
+  "Non-nil if METADATA is not done.  Derived from `state' (always present), so
+it works on records written before any later schema additions."
+  (cl-check-type metadata org-glance-headline-metadata-v2)
+  (not (org-glance-headline-metadata-v2:done? metadata)))
 
 (cl-defun org-glance-graph-v2 (&optional (directory org-glance-directory))
   (cl-check-type directory string)
@@ -192,10 +217,13 @@ Each element may be an `org-glance-headline-v2' or pre-built metadata.  Full
 headlines also have their contents persisted to the data store."
   (cl-check-type graph org-glance-graph-v2)
   (when headlines
-    (dolist (headline headlines)
-      (when (org-glance-headline-v2? headline)
-        (org-glance-graph-v2:put-content graph headline)))
-    (org-glance-graph-v2:insert graph (mapcar #'org-glance-headline-v2:metadata* headlines)))
+    ;; Compute metadata FIRST: if a projection field errors, nothing is written
+    ;; (no blob-saved-but-metadata-missing half-state).
+    (let ((specs (mapcar #'org-glance-headline-v2:metadata* headlines)))
+      (dolist (headline headlines)
+        (when (org-glance-headline-v2? headline)
+          (org-glance-graph-v2:put-content graph headline)))
+      (org-glance-graph-v2:insert graph specs)))
   graph)
 
 (cl-defun org-glance-graph-v2:get-headline (graph id)
@@ -254,6 +282,25 @@ The latest record per id wins; original insertion order is preserved."
              for record = (gethash id latest)
              unless (plist-get record :tombstone)
              collect (org-glance-headline-metadata-v2:deserialize record))))
+
+(cl-defun org-glance-graph-v2:reindex (graph)
+  "Re-derive metadata for every live headline in GRAPH from its stored content,
+appending fresh records so newly-added projection fields get populated.
+Return the number of headlines re-indexed."
+  (cl-check-type graph org-glance-graph-v2)
+  (let* ((metas (org-glance-graph-v2:headlines graph))
+         (reporter (and metas (make-progress-reporter "org-glance: re-indexing... " 0 (length metas))))
+         (n 0))
+    (cl-loop for meta in metas
+             for i from 1
+             for id = (org-glance-headline-metadata-v2:id meta)
+             for contents = (org-glance-graph-v2:get-content graph id)
+             do (when contents
+                  (org-glance-graph-v2:add graph (org-glance-headline-v2--from-string contents))
+                  (cl-incf n))
+             do (when reporter (progress-reporter-update reporter i)))
+    (when reporter (progress-reporter-done reporter))
+    n))
 
 ;; (cl-defun org-glance-graph-v2:add-relation (graph relation &rest entities)
 ;;   (cl-check-type graph org-glance-graph-v2)

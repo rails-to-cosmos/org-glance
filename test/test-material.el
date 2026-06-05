@@ -14,6 +14,22 @@
         (should (org-glance-headline-metadata-v2? meta))
         (should (string= "Alpha" (org-glance-headline-metadata-v2:title meta)))))))
 
+(ert-deftest org-glance-test:material-active-filter ()
+  "The v2 commands filter selection to active headlines (v1 parity); the
+predicate derives from `state', so it works on pre-existing records too."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "a" "* TODO Todo")
+                             (org-glance-test:headline "b" "* DONE Done"))
+    (let ((org-done-keywords '("DONE")))
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (_p coll &rest _)
+                   (should (= 1 (length coll)))   ; DONE excluded
+                   (caar coll))))
+        (let ((meta (org-glance-material-v2:completing-read
+                     graph :filter #'org-glance-headline-metadata-v2:active?)))
+          (should (string= "a" (org-glance-headline-metadata-v2:id meta))))))))
+
 (ert-deftest org-glance-test:material-completing-read-filter ()
   "The FILTER predicate narrows the candidate list."
   (org-glance-test:with-graph graph
@@ -46,27 +62,96 @@
       (should (string= "DONE" (org-glance-headline-metadata-v2:state
                                (org-glance-graph-v2:get-headline graph "m1")))))))
 
-(ert-deftest org-glance-test:material-apply-conflict ()
-  "A concurrent graph change prompts before overwrite; declining aborts."
+(ert-deftest org-glance-test:material-save-affordance ()
+  "A materialized buffer visits its content-blob FILE, runs the v2 minor mode,
+and is editable; saving persists to the graph and survives re-materialize.
+This guards the interactive save path users actually hit."
   (org-glance-test:with-graph graph
-    (org-glance-graph-v2:add graph (org-glance-test:headline "m1" "* TODO foo"))
-    (let ((buffer (org-glance-material-v2:open graph "m1")))
+    (org-glance-graph-v2:add graph (org-glance-test:headline "s1" "* TODO foo"))
+    (let ((buffer (org-glance-material-v2:open graph "s1")))
       (unwind-protect
-          (progn
-            ;; concurrent external change -> stored hash diverges from base-hash
-            (org-glance-graph-v2:add graph (org-glance-test:headline "m1" "* DONE foo elsewhere"))
-            (with-current-buffer buffer
-              (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) nil)))
-                (should-error (org-glance-material-v2:apply) :type 'user-error))
-              (cl-letf (((symbol-function 'yes-or-no-p) (lambda (&rest _) t)))
-                (org-glance-material-v2:apply))))
+          (with-current-buffer buffer
+            (should org-glance-material-v2-mode)
+            (should-not buffer-read-only)
+            (should buffer-file-name)            ; a real file -> the standard save works
+            (goto-char (point-min))
+            (re-search-forward "TODO")
+            (replace-match "DONE")
+            (org-glance-material-v2:apply))
         (kill-buffer buffer))
-      ;; after accepting overwrite, the buffer's version (TODO foo) wins
-      (should (string= "TODO" (org-glance-headline-metadata-v2:state
-                               (org-glance-graph-v2:get-headline graph "m1")))))))
+      ;; persisted: re-materializing shows the edited state
+      (let ((buffer2 (org-glance-material-v2:open graph "s1")))
+        (unwind-protect
+            (with-current-buffer buffer2
+              (should (s-contains? "DONE foo" (buffer-string))))
+          (kill-buffer buffer2))))))
 
-(ert-deftest org-glance-test:material-apply-id-guard ()
-  "Apply refuses if the ORG_GLANCE_ID was edited away."
+(ert-deftest org-glance-test:material-edit-updates-metadata ()
+  "Editing the heading and saving updates the stored metadata, not just the blob."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "u1" "* TODO foo"))
+    (let ((buffer (org-glance-material-v2:open graph "u1")))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (re-search-forward "TODO foo")
+            (replace-match "DONE bar")
+            (org-glance-material-v2:apply))
+        (kill-buffer buffer)))
+    (let ((meta (org-glance-graph-v2:get-headline graph "u1")))
+      (should (string= "DONE" (org-glance-headline-metadata-v2:state meta)))
+      (should (string= "bar" (org-glance-headline-metadata-v2:title meta))))))
+
+(ert-deftest org-glance-test:material-save-e2e ()
+  "End-to-end interactive save: `org-glance:materialize' (flag on, no arg) opens
+the buffer; editing and invoking `C-x C-s' (the standard save command) persists
+to the graph.  Drives the real command + the real keybinding."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "e2e1" "* TODO foo" "body"))
+    (let ((org-glance-use-graph-v2 t)
+          (org-glance-graph-v2 graph))
+      (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll))))
+        (save-window-excursion
+          (org-glance:materialize)
+          (unwind-protect
+              (progn
+                (should (string-prefix-p "*org-glance: " (buffer-name)))
+                (should org-glance-material-v2-mode)
+                (should-not buffer-read-only)
+                (should buffer-file-name)
+                (goto-char (point-min))
+                (re-search-forward "TODO")
+                (replace-match "DONE")
+                (let ((inhibit-message t))
+                  (call-interactively (key-binding (kbd "C-x C-s")))))
+            (when (string-prefix-p "*org-glance: " (buffer-name))
+              (set-buffer-modified-p nil)
+              (kill-buffer))))))
+    (should (string= "DONE" (org-glance-headline-metadata-v2:state
+                             (org-glance-graph-v2:get-headline graph "e2e1"))))))
+
+(ert-deftest org-glance-test:material-save-via-save-buffer ()
+  "`save-buffer' (the standard save mechanism, whatever key invokes it) syncs the
+materialized buffer through `write-contents-functions' -- robust to configs that
+rebind/shadow C-x C-s, and no \"not visiting a file\" prompt on this non-file buffer."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "sb1" "* TODO foo"))
+    (let ((buffer (org-glance-material-v2:open graph "sb1")))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (re-search-forward "TODO")
+            (replace-match "DONE")
+            (set-buffer-modified-p t)
+            (let ((inhibit-message t)) (save-buffer)))
+        (set-buffer-modified-p nil)
+        (kill-buffer buffer)))
+    (should (string= "DONE" (org-glance-headline-metadata-v2:state
+                             (org-glance-graph-v2:get-headline graph "sb1"))))))
+
+(ert-deftest org-glance-test:material-id-change-skips-metadata ()
+  "If the ORG_GLANCE_ID is edited, saving does not corrupt the metadata index
+for the original id (the sync hook skips a mismatched id)."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph (org-glance-test:headline "m1" "* TODO foo"))
     (let ((buffer (org-glance-material-v2:open graph "m1")))
@@ -74,9 +159,12 @@
           (with-current-buffer buffer
             (goto-char (point-min))
             (re-search-forward "^:ORG_GLANCE_ID:.*$")
-            (replace-match "")
-            (should-error (org-glance-material-v2:apply) :type 'user-error))
-        (kill-buffer buffer)))))
+            (replace-match ":ORG_GLANCE_ID: changed")
+            (let ((inhibit-message t)) (org-glance-material-v2:apply)))
+        (kill-buffer buffer)))
+    ;; the original id's metadata is left untouched
+    (should (string= "foo" (org-glance-headline-metadata-v2:title
+                            (org-glance-graph-v2:get-headline graph "m1"))))))
 
 (ert-deftest org-glance-test:material-open-missing ()
   "Materializing an unknown id errors."
@@ -178,6 +266,32 @@
       (cl-letf (((symbol-function 'completing-read)
                  (lambda (_p coll &rest _) (if (assoc "key" coll) "key" (caar coll)))))
         (should (string= "val" (org-glance:extract)))))))
+
+(ert-deftest org-glance-test:open-filters-nonlinked ()
+  "open-v2 offers only linked headlines."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "L" "* foo" "[[https://x.example][x]]")
+                             (org-glance-test:headline "P" "* bar" "no link here"))
+    (let ((org-glance-use-graph-v2 t) (org-glance-graph-v2 graph) (called nil))
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll)))
+                ((symbol-function 'org-open-at-point) (lambda (&rest _) (setq called t))))
+        (org-glance:open))
+      (should called))))
+
+(ert-deftest org-glance-test:extract-filters-nonpropertized ()
+  "extract-v2 offers only headlines with key-value pairs."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "K" "* foo" "- k: v")
+                             (org-glance-test:headline "N" "* bar" "no pairs"))
+    (let ((org-glance-use-graph-v2 t) (org-glance-graph-v2 graph))
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (_p coll &rest _)
+                   (if (assoc "k" coll) "k"
+                     (progn (should (= 1 (length coll))) (caar coll))))))
+        (should (string= "v" (org-glance:extract)))))))
 
 (ert-deftest org-glance-test:link-materialize-stale-id-errors ()
   "Following a stale org-glance link errors loudly, not popping a picker."

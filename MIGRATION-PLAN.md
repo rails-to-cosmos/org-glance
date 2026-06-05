@@ -217,13 +217,16 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
 - **Flag:** `org-glance-use-graph-v2` (default nil).
 - **Selection:** `org-glance-material-v2:completing-read` lists *live* graph
   headlines (`[tags] title`, optional FILTER) and returns the chosen metadata.
-- **Materialize:** `org-glance-material-v2:open` reconstructs the content blob
-  into an editable buffer under `org-glance-material-v2-mode` (`C-x C-s` = apply).
-  The store *is* the source (JSONL prototype), so it edits the blob — not an
-  external org file.
-- **Sync (`:apply`):** append-only — a fresh version wins. A **hash guard** (base
-  hash at materialize vs current stored hash) prompts before overwriting a
-  concurrent change. Refuses if the `ORG_GLANCE_ID` was edited away.
+- **Materialize:** `org-glance-material-v2:open` opens the content blob
+  (`…/data/<id>/data.org`) as a **real file** under `org-glance-material-v2-mode`.
+  Because it's a genuine file buffer, **saving is an ordinary `save-buffer`** —
+  `C-x C-s` (or evil `:w`, super-save, …) just works, no custom keybinding or
+  `write-contents-functions` needed. (Earlier non-file-buffer designs made save
+  config-fragile and produced spurious "changed in the graph" prompts.)
+- **Sync:** a buffer-local `after-save-hook` (`org-glance-material-v2:sync`)
+  appends a fresh metadata record from the saved content (append-only). Emacs's
+  own "file changed on disk" handling covers concurrent edits, so there is **no
+  custom conflict prompt**. A mismatched/edited `ORG_GLANCE_ID` is a no-op (warns).
 - **Command + dispatch:** `M-x org-glance-materialize-v2`; `org-glance:materialize`
   routes here when the flag is on **and** no headline arg was passed — so
   programmatic/link-follow calls stay on v1. Coexistence-safe.
@@ -250,14 +253,35 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   transient regression, proven to fail on the bug), and stale-link erroring.
   42/42 green local (30.2) + container (29.1).
 
-### Phase 2.2b — remaining (flip-default prerequisites)
+### Phase 2.2b-i — active? filter ✅ DONE
 
-- **Candidate pre-filtering.** v2 `:completing-read` lists ALL live headlines; v1
-  pre-filters (open → active?+linked?; extract → active?+propertized?/encrypted?).
-  Before flipping the default, restore at least `active?` (from metadata `state`)
-  and persist lightweight `linked?` / `propertized?` flags into the JSONL
-  metadata projection so the filters work without reconstructing every blob.
-- overview build + agenda → read from the graph (`:headlines`).
+- `org-glance-headline-metadata-v2:active?` / `:done?` derive from the `state`
+  field (present in **every** record, including pre-existing ones), so they are
+  backward-compatible. The three v2 commands now filter selection to active
+  headlines (v1 parity). 43/43 green local + container.
+
+### Phase 2.2b-ii — `linked?` / `propertized?` filter flags ✅ DONE
+
+- Added `linked?` / `propertized?` / `encrypted?` to the metadata projection
+  (`graph-v2.el`): computed from the headline's content at add time, serialized
+  (`:linked`/`:propertized`/`:encrypted` JSON keys) and deserialized. New
+  captures/migrations populate them automatically.
+- **Backfill for existing graphs:** `org-glance-graph-v2:reindex` (+ interactive
+  `M-x org-glance-reindex`, progress-reported) re-derives metadata for every live
+  headline from its stored content, appending fresh flag-bearing records. Needed
+  once after upgrading, since pre-existing records lack the flags. ⚠️ **Action:
+  run `M-x org-glance-reindex` on your graph** to enable the open/extract filters
+  on existing data.
+- Filters wired: `open` → active?+linked?, `extract` → active?+(propertized? or
+  encrypted?). `:completing-read` now errors helpfully ("No matching headlines —
+  run M-x org-glance-reindex…") instead of an empty picker.
+- 47/47 green local + container.
+
+### Phase 2.2b — remaining
+
+- **overview build + agenda → read from the graph** (`:headlines`). The large
+  remaining piece (`org-glance-overview.el` is ~800 lines with dead edit-mode
+  landmines); needs its own scoped increment + review.
 - Then flip `org-glance-use-graph-v2` default on and re-point the v1 entrypoints;
   the v1 `consistency`/`links`/`properties` integration tests become the
   acceptance gate.

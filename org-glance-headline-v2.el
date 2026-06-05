@@ -54,6 +54,15 @@
   (-links nil :read-only t :type (or list function))
   (-properties nil :read-only t :type (or list function)))
 
+(cl-defun org-glance--org-mode ()
+  "Enter `org-mode' for parsing org-glance content in the current buffer.
+Skips mode hooks (faster; avoids globalized minor modes like undo-tree) and
+forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
+(inheriting the user's default, often 4) lacks; `org-mode' itself resets it via
+`kill-all-local-variables', so it is set here, after.  Tabs are disabled."
+  (delay-mode-hooks (org-mode))
+  (setq tab-width 8 indent-tabs-mode nil))
+
 (cl-defmacro org-glance-headline-v2:with-contents (contents &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
@@ -61,6 +70,8 @@
                (org-glance-headline-v2 (org-glance-headline-v2:contents ,contents))
                (string ,contents)
                (otherwise (error "Expected `org-glance-headline-v2' or string, but got %s" (type-of ,contents)))))
+     ;; org's parser requires tab-width 8; ensure it before any form parses.
+     (org-glance--org-mode)
      (goto-char (point-min))
      ,@forms))
 
@@ -119,7 +130,7 @@
 (cl-defun org-glance-headline-v2--hash (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline-v2:with-contents contents
-                 (cl-loop initially (org-mode)
+                 (cl-loop initially (org-glance--org-mode)
                           for property in org-glance-headline-v2:hash-ignore-properties
                           do (org-entry-delete nil property)
                           finally return (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
@@ -148,7 +159,7 @@
 (cl-defun org-glance-headline-v2--from-string (contents)
   (cl-check-type contents string)
   (org-glance-headline-v2:with-contents contents
-    (org-mode)
+    (org-glance--org-mode)
     (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
       (error "Unable to find `org-element' of type `headline' in the provided contents"))
     (org-glance-headline-v2:at-point)))
@@ -248,7 +259,7 @@
 (cl-defun org-glance-headline-v2:reset-indent (headline)
   (cl-check-type headline org-glance-headline-v2)
   (let ((contents (org-glance-headline-v2:with-contents headline
-                    (org-mode)
+                    (org-glance--org-mode)
                     (re-search-forward "\\^*")
                     (while (looking-at "^\\*\\*")
                       (org-promote-subtree))
@@ -269,7 +280,7 @@
   (cl-check-type headline org-glance-headline-v2)
   (cl-check-type message string)
   (let ((contents (org-glance-headline-v2:with-contents headline
-                    (org-mode)
+                    (org-glance--org-mode)
                     (goto-char (org-log-beginning t))
                     (insert "- " (apply #'format message format-args) "\n")
                     (buffer-substring-no-properties (point-min) (point-max)))))
@@ -288,7 +299,7 @@
 (cl-defun org-glance-headline-v2:timestamps (headline)
   (cl-check-type headline org-glance-headline-v2)
   (org-glance-headline-v2:with-contents headline
-    (org-mode)
+    (org-glance--org-mode)
     (->> #'org-glance--element-timestamps
          (org-element-map (org-element-parse-buffer) '(timestamp headline))
          (-flatten-n 1)
@@ -301,7 +312,7 @@
 (cl-defun org-glance-headline-v2:clocks (headline)
   (cl-check-type headline org-glance-headline-v2)
   (org-glance-headline-v2:with-contents headline
-    (org-mode)
+    (org-glance--org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
@@ -331,7 +342,7 @@
           (encrypted (org-glance-headline-v2:encrypted? headline))
           (links (org-glance-headline-v2:links headline)))
       (org-glance-headline-v2:with-contents (org-glance-headline-v2:header headline)
-        (org-mode)
+        (org-glance--org-mode)
 
         (when id (org-entry-put nil "ORG_GLANCE_ID" id))
         (org-entry-put nil "ORG_GLANCE_HASH" hash)
@@ -350,7 +361,7 @@
 (cl-defun org-glance-headline-v2:header (headline)
   (cl-check-type headline org-glance-headline-v2)
   (org-glance-headline-v2:with-contents headline
-    (org-mode)
+    (org-glance--org-mode)
     (buffer-substring-no-properties (point) (save-excursion
                                               (org-end-of-meta-data)
                                               (point)))))

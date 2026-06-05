@@ -159,6 +159,47 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
     ;; a normal tag-hash id is fine
     (should (org-glance-graph-v2:headline-data-path graph "whitepaper-d41d8cd98f00b204"))))
 
+(ert-deftest org-glance-test:graph-flags-roundtrip ()
+  "linked?/propertized? projection flags are computed at add time and round-trip."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "f1" "* foo" "[[https://x.example][x]]" "- k: v")
+                             (org-glance-test:headline "f2" "* bar" "plain text, no link"))
+    (let ((m1 (org-glance-graph-v2:get-headline graph "f1"))
+          (m2 (org-glance-graph-v2:get-headline graph "f2")))
+      (should (org-glance-headline-metadata-v2:linked? m1))
+      (should (org-glance-headline-metadata-v2:propertized? m1))
+      (should (not (org-glance-headline-metadata-v2:linked? m2)))
+      (should (not (org-glance-headline-metadata-v2:propertized? m2))))))
+
+(ert-deftest org-glance-test:graph-reindex-populates-flags ()
+  "Re-index backfills projection flags onto records written without them."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "r1" "* foo" "[[https://x.example][x]]"))
+    ;; simulate an old record lacking the linked flag (latest wins)
+    (org-glance-graph-v2:insert graph (list (list :id "r1" :state "" :title "foo")))
+    (should (not (org-glance-headline-metadata-v2:linked? (org-glance-graph-v2:get-headline graph "r1"))))
+    (org-glance-graph-v2:reindex graph)
+    (should (org-glance-headline-metadata-v2:linked? (org-glance-graph-v2:get-headline graph "r1")))))
+
+(ert-deftest org-glance-test:org-mode-forces-tab-width-8 ()
+  "Parsing setup forces tab-width 8 (org requires it) and disables tabs, even
+when the user's default tab-width is 4 -- and metadata still computes.
+Regression for `org-glance-headline-v2:metadata' failing with \"Tab width in Org
+files must be 8\" in Emacsen whose default tab-width is not 8."
+  (let ((orig (default-value 'tab-width)))
+    (unwind-protect
+        (progn
+          (setq-default tab-width 4)
+          (with-temp-buffer
+            (org-glance--org-mode)
+            (should (= tab-width 8))
+            (should-not indent-tabs-mode))
+          (let ((h (org-glance-headline-v2--from-lines
+                    "* TODO foo" ":PROPERTIES:" ":ORG_GLANCE_ID: t1" ":END:" "body")))
+            (should (org-glance-headline-metadata-v2? (org-glance-headline-v2:metadata h)))))
+      (setq-default tab-width orig))))
+
 (ert-deftest org-glance-test:graph-content-missing ()
   "Reading content for an unknown id yields nil, not an error."
   (org-glance-test:with-graph graph
