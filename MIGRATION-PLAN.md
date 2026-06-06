@@ -288,6 +288,12 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   Interactively (the `C-x j o` transient action), the overview **prompts for a
   tag** (candidates = the graph's live tags; empty input = all) and filters by
   it — each tag gets its own cache, served while the graph is unchanged.
+  Inside an overview buffer, **`/` opens a refinement transient**: narrow the
+  current view further by todo state (`s`) or case-insensitive title substring
+  (`/`, the new `:title-contains` spec key), or clear all filters (`c`).  Each
+  refinement AND-composes onto the buffer's filter (re-filtering a dimension
+  replaces it), visits the result non-destructively, and gets/re-uses its own
+  cache like any other filter.
 - **Filtering**: every entry point takes an optional FILTER — nil (all), a bare
   tag, or a plist spec with keys `:tag`/`:tags`, `:state`, `:done`,
   `:done-keywords`, `:id`/`:title`/`:hash`, `:priority`, `:linked`/`:propertized`/
@@ -299,8 +305,13 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   filter at `<store>/overviews/<key>/overview.org`; an uncacheable `:where` at
   `overviews/transient.org`; the agenda at `overviews/agenda.org`. A fresh cache
   is served via an O(1) mtime check against `headlines.jsonl` — no JSONL read, no
-  render. Cache key = greppable slug + sha1 over an **unambiguous** `prin1` of the
-  canonical (sorted) spec pairs (so delimiter-bearing values can't collide).
+  render. Cache dirs have **human-readable names** (`tags=task`,
+  `state=TODO&tags=work`, `title-contains=приготовить_ужин`) — only
+  slashes/whitespace/control chars are replaced and overlong names truncate.
+  The name is lossy; the filter's **identity** (the canonical `prin1` form)
+  lives in a `SPEC` sidecar inside each dir, checked on every cache hit — a
+  rare name collision between distinct filters rebuilds the overview instead of
+  ever serving the wrong one.
 - **Done-keywords** are resolved by `org-glance--done-keywords` (reuses Org's own
   `org-done-keywords`, else derives from `org-todo-keywords`); a per-overview
   `:done-keywords` clause overrides it. This also fixed a latent bug: the v2

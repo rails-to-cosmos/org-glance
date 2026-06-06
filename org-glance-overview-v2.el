@@ -35,6 +35,7 @@
 (require 's)
 (require 'org)
 (require 'org-agenda)
+(require 'transient)
 
 (require 'org-glance-graph-v2)
 (require 'org-glance-material-v2)
@@ -53,10 +54,11 @@
 ;; dumb and just call them.
 
 (defconst org-glance-overview-v2:filter-keys
-  '(:tags :state :done :done-keywords :id :title :hash :priority
+  '(:tags :state :done :done-keywords :id :title :title-contains :hash :priority
           :linked :propertized :encrypted :schedule :deadline :where)
   "Recognised keys in a normalised overview filter spec (`:tag' folds into
-`:tags').  `:done-keywords' is not a filter clause but parameterises `:done'.")
+`:tags').  `:done-keywords' is not a filter clause but parameterises `:done'.
+`:title' is exact; `:title-contains' is a case-insensitive substring.")
 
 (cl-defun org-glance-overview-v2:--normalize-spec (filter)
   "Coerce FILTER into a canonical plist spec (or nil for \"all\").
@@ -128,6 +130,12 @@ clause must hold (logical AND).  See `org-glance-overview-v2:filter-keys'."
     (when (plist-member spec :title)
       (let ((want (plist-get spec :title)))
         (push (lambda (m) (equal want (org-glance-headline-metadata-v2:title m))) clauses)))
+    (when (plist-member spec :title-contains)
+      ;; Case-insensitive title substring (the interactive `/' refinement).
+      (let ((needle (downcase (format "%s" (plist-get spec :title-contains)))))
+        (push (lambda (m)
+                (s-contains? needle (downcase (or (org-glance-headline-metadata-v2:title m) ""))))
+              clauses)))
     (when (plist-member spec :hash)
       (let ((want (plist-get spec :hash)))
         (push (lambda (m) (equal want (org-glance-headline-metadata-v2:hash m))) clauses)))
@@ -167,6 +175,7 @@ unambiguous encoding disambiguates -- see `org-glance-overview-v2:spec-key')."
   (cond
    ((eq key :tags) (s-join "," (mapcar (lambda (x) (downcase (format "%s" x))) value)))
    ((eq key :done-keywords) (s-join "," (mapcar (lambda (x) (format "%s" x)) value)))
+   ((eq key :title-contains) (downcase (format "%s" value))) ; matching is case-insensitive
    ((eq value t) "t")
    ((null value) "nil")
    ((keywordp value) (substring (symbol-name value) 1))
@@ -182,22 +191,20 @@ data so that `prin1' renders them unambiguously."
                                         (sort (mapcar (lambda (x) (downcase (format "%s" x))) v) #'string<))
                                        ((eq k :done-keywords)
                                         (sort (mapcar (lambda (x) (format "%s" x)) v) #'string<))
+                                       ((eq k :title-contains)
+                                        (downcase (format "%s" v))) ; case-insensitive match
                                        (t v))))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
-(cl-defun org-glance-overview-v2:--fs-safe (readable hash-input)
-  "One filesystem-safe path segment: a greppable slug from READABLE + a sha1.
-READABLE is lossy/cosmetic; HASH-INPUT must be an unambiguous encoding of the
-filter, so two distinct filters can never map to the same segment."
-  (concat (s-truncate 64 (replace-regexp-in-string "[^[:alnum:]_.=&,-]" "_" readable) "")
-          "-"
-          (secure-hash 'sha1 hash-input)))
-
 (cl-defun org-glance-overview-v2:spec-key (filter)
-  "Return a stable, filesystem-safe cache key for FILTER.
+  "Return a readable, filesystem-safe cache key for FILTER.
 \"all\" for the empty filter; nil when FILTER is uncacheable (carries `:where').
-Two specs that differ only in key order or tag order map to the same key; two
-specs that differ in any value never do (the sha1 is over an unambiguous form)."
+Specs differing only in key order or tag order map to the same key.  The key is
+the canonical readable form -- e.g. \"tags=task\", \"state=TODO&tags=work\" --
+with only what the filesystem demands replaced (slashes, whitespace, control
+chars -> `_') and overlong names truncated.  The name is therefore LOSSY:
+distinct specs can rarely share a key; the SPEC sidecar check in `cached-file'
+turns such a collision into a rebuild, never into serving the wrong overview."
   (let ((spec (org-glance-overview-v2:--normalize-spec filter)))
     (cond
      ((null spec) "all")
@@ -205,11 +212,30 @@ specs that differ in any value never do (the sha1 is over an unambiguous form)."
      (t (let ((pairs (org-glance-overview-v2:--canonical-pairs spec)))
           (if (null pairs)
               "all"
-            (org-glance-overview-v2:--fs-safe
-             (s-join "&" (cl-loop for (k . v) in pairs
-                                  collect (concat (substring (symbol-name k) 1) "="
-                                                  (org-glance-overview-v2:--key-value k v))))
-             (prin1-to-string pairs))))))))
+            (s-truncate 60
+                        (replace-regexp-in-string
+                         "[/[:cntrl:][:space:]]" "_"
+                         (s-join "&" (cl-loop for (k . v) in pairs
+                                              collect (concat (substring (symbol-name k) 1) "="
+                                                              (org-glance-overview-v2:--key-value k v)))))
+                        "")))))))
+
+(cl-defun org-glance-overview-v2:--spec-identity (filter)
+  "Unambiguous printed identity of FILTER's canonical form.
+This -- not the lossy directory name -- is what makes two filters \"the same\"."
+  (prin1-to-string (org-glance-overview-v2:--canonical-pairs
+                    (org-glance-overview-v2:--normalize-spec filter))))
+
+(cl-defun org-glance-overview-v2:--spec-sidecar (file)
+  "Path of the SPEC identity sidecar stored next to cache FILE."
+  (f-join (f-dirname file) "SPEC"))
+
+(cl-defun org-glance-overview-v2:--spec-owns-cache? (filter file)
+  "Non-nil when FILE's SPEC sidecar records exactly FILTER's identity."
+  (let ((sidecar (org-glance-overview-v2:--spec-sidecar file)))
+    (and (f-exists? sidecar)
+         (string= (org-glance-overview-v2:--spec-identity filter)
+                  (s-trim (f-read-text sidecar 'utf-8))))))
 
 ;;; Rendering (from metadata, not content)
 
@@ -284,22 +310,35 @@ cost.  A future-dated source (clock skew / restored backup) also rebuilds."
 
 (cl-defun org-glance-overview-v2:write (graph &optional filter)
   "Unconditionally (re)generate FILTER's overview file for GRAPH; return its path.
-Used by the agenda and by `g' (refresh), which must always rebuild."
-  (let ((file (org-glance-overview-v2:spec-cache-file graph filter)))
+Used by the agenda and by `g' (refresh), which must always rebuild.  A keyed
+cache directory also gets its SPEC identity sidecar, claiming the (lossy,
+human-readable) directory name for exactly this filter."
+  (let ((key (org-glance-overview-v2:spec-key filter))
+        (file (org-glance-overview-v2:spec-cache-file graph filter)))
     (f-mkdir-full-path (f-dirname file))
+    (unless (member key '(nil "all"))
+      (f-write-text (concat (org-glance-overview-v2:--spec-identity filter) "\n") 'utf-8
+                    (org-glance-overview-v2:--spec-sidecar file)))
     (f-write-text (org-glance-overview-v2:render graph filter) 'utf-8 file)
     file))
 
 (cl-defun org-glance-overview-v2:cached-file (graph &optional filter)
   "Path to FILTER's overview file for GRAPH, rebuilding only when stale.
-On a cache hit the file is returned without reading `headlines.jsonl' or
-rendering.  An uncacheable `:where' filter always re-renders."
+A hit requires the file to be fresh AND, for keyed directories, the SPEC
+sidecar to record exactly FILTER's identity -- directory names are readable but
+lossy, so a name collision between distinct filters rebuilds instead of serving
+the other filter's overview.  On a hit the file is returned without reading
+`headlines.jsonl' or rendering.  An uncacheable `:where' filter always
+re-renders."
   (let ((key (org-glance-overview-v2:spec-key filter))
         (file (org-glance-overview-v2:spec-cache-file graph filter)))
     (cond
      ((null key)                                       ; :where -- never cache
       (org-glance-overview-v2:write graph filter))
-     ((org-glance-overview-v2:fresh? graph file) file) ; hit -- no read, no render
+     ((and (org-glance-overview-v2:fresh? graph file)
+           (or (string= key "all")                     ; "all" never collides
+               (org-glance-overview-v2:--spec-owns-cache? filter file)))
+      file)                                            ; hit -- no read, no render
      (t (org-glance-overview-v2:write graph filter)))))
 
 ;;; Browser
@@ -404,6 +443,16 @@ nil into the material layer."
          :test #'string=)
         #'string<))
 
+(cl-defun org-glance-overview-v2:states (graph)
+  "Distinct non-empty todo states across GRAPH's live headlines, sorted."
+  (sort (cl-remove-duplicates
+         (cl-loop for meta in (org-glance-graph-v2:headlines graph)
+                  for state = (org-glance-headline-metadata-v2:state meta)
+                  when (and (stringp state) (not (string-empty-p state)))
+                  collect state)
+         :test #'string=)
+        #'string<))
+
 (cl-defun org-glance-overview-v2:completing-read-tag ()
   "Prompt for a tag from the graph's headlines; empty input means \"all\"."
   (cl-assert (org-glance-initialized?-v2))
@@ -420,6 +469,52 @@ unchanged.  TAG may be a bare tag (symbol/string) or a full filter plist -- see
   (interactive (list (org-glance-overview-v2:completing-read-tag)))
   (cl-assert (org-glance-initialized?-v2))
   (org-glance-overview-v2:visit org-glance-graph-v2 tag))
+
+;;; Interactive filter refinement (the `/' transient)
+;;
+;; Each command composes one clause onto the CURRENT buffer's filter spec
+;; (re-applying a dimension replaces its previous clause) and visits the
+;; resulting overview -- which gets, or re-uses, its own cache like any other
+;; filter.  The previous (less filtered) overview buffer stays around, so
+;; narrowing is non-destructive.
+
+(cl-defun org-glance-overview-v2:--refine (key value)
+  "Re-visit the current overview with KEY VALUE composed onto its filter."
+  (cl-assert (org-glance-initialized?-v2))
+  (org-glance-overview-v2:visit
+   org-glance-graph-v2
+   (plist-put (copy-sequence org-glance-overview-v2--spec) key value)))
+
+(cl-defun org-glance-overview-v2:filter-by-state ()
+  "Narrow the current overview to headlines in a given todo state."
+  (interactive)
+  (cl-assert (org-glance-initialized?-v2))
+  (let ((state (completing-read "Todo state: "
+                                (org-glance-overview-v2:states org-glance-graph-v2))))
+    (when (string-empty-p state) (user-error "No state given"))
+    (org-glance-overview-v2:--refine :state state)))
+
+(cl-defun org-glance-overview-v2:filter-by-substring ()
+  "Narrow the current overview to headlines whose title contains a substring."
+  (interactive)
+  (let ((needle (read-string "Title contains: ")))
+    (when (string-empty-p needle) (user-error "No substring given"))
+    (org-glance-overview-v2:--refine :title-contains needle)))
+
+(cl-defun org-glance-overview-v2:filter-clear ()
+  "Drop all filters: visit the unfiltered overview."
+  (interactive)
+  (cl-assert (org-glance-initialized?-v2))
+  (org-glance-overview-v2:visit org-glance-graph-v2 nil))
+
+(transient-define-prefix org-glance-overview-v2-filter ()
+  "Narrow the current overview by an additional criterion."
+  ["Filter overview by"
+   ("s" "Todo state" org-glance-overview-v2:filter-by-state)
+   ("/" "Title substring" org-glance-overview-v2:filter-by-substring)
+   ("c" "Clear (show all)" org-glance-overview-v2:filter-clear)])
+
+(define-key org-glance-overview-v2-mode-map (kbd "/") #'org-glance-overview-v2-filter)
 
 ;;; Agenda
 

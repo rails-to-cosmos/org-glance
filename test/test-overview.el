@@ -168,14 +168,56 @@ caught)."
   (should-not (org-glance-overview-v2:spec-key (list :where #'ignore)))
   ;; a path-hostile value never escapes its segment
   (let ((key (org-glance-overview-v2:spec-key '(:id "a/../b"))))
-    (should-not (s-contains? "/" key))
-    (should (string-match-p "-[0-9a-f]\\{40\\}$" key)))
-  ;; distinct specs must NOT collide even when values contain the k=v / & / ,
-  ;; delimiters used to build the readable slug
-  (should-not (string= (org-glance-overview-v2:spec-key '(:id "a" :title "b"))
-                       (org-glance-overview-v2:spec-key '(:id "a&title=b"))))
-  (should-not (string= (org-glance-overview-v2:spec-key '(:tags ("a" "b")))
-                       (org-glance-overview-v2:spec-key '(:tags ("a,b"))))))
+    (should-not (s-contains? "/" key)))
+  ;; distinct specs MAY share a (lossy, readable) key -- correctness is enforced
+  ;; by the SPEC sidecar (see overview-cache-collision-rebuilds), but their
+  ;; identities must always differ
+  (should-not (string= (org-glance-overview-v2:--spec-identity '(:id "a" :title "b"))
+                       (org-glance-overview-v2:--spec-identity '(:id "a&title=b"))))
+  (should-not (string= (org-glance-overview-v2:--spec-identity '(:tags ("a" "b")))
+                       (org-glance-overview-v2:--spec-identity '(:tags ("a,b"))))))
+
+(ert-deftest org-glance-test:overview-spec-key-readable ()
+  "Cache directory names are always human-readable: only what the filesystem
+demands is replaced (slashes/whitespace -> _) and overlong names truncate.
+Identity lives in the SPEC sidecar, not in the name."
+  (should (string= "tags=task" (org-glance-overview-v2:spec-key '(:tags ("task")))))
+  (should (string= "tags=task" (org-glance-overview-v2:spec-key 'task)))
+  (should (string= "state=TODO&tags=work"
+                   (org-glance-overview-v2:spec-key '(:tags ("work") :state "TODO"))))
+  (should (string= "tags=work&title-contains=bill"
+                   (org-glance-overview-v2:spec-key '(:tags ("work") :title-contains "Bill"))))
+  (should (string= "tags=a,b" (org-glance-overview-v2:spec-key '(:tags ("b" "a")))))
+  ;; non-ASCII stays readable; whitespace becomes _
+  (should (string= "title-contains=приготовить_ужин"
+                   (org-glance-overview-v2:spec-key '(:title-contains "Приготовить ужин"))))
+  ;; overlong names truncate (the sidecar disambiguates)
+  (should (<= (length (org-glance-overview-v2:spec-key (list :title (make-string 200 ?x))))
+              60)))
+
+(ert-deftest org-glance-test:overview-cache-collision-rebuilds ()
+  "Two distinct specs that share a readable key never serve each other's
+content: the SPEC sidecar mismatch forces a rebuild, and re-requesting the
+owning spec hits its cache again."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "a" "* Alpha"))
+    (let ((s1 '(:id "a" :title "b"))
+          (s2 '(:id "a&title=b")))
+      ;; same (lossy) directory name, different identities
+      (should (string= (org-glance-overview-v2:spec-key s1)
+                       (org-glance-overview-v2:spec-key s2)))
+      (org-glance-overview-v2:cached-file graph s1)               ; s1 owns the dir
+      (set-file-times (org-glance-graph-v2:headline-meta-path graph)
+                      (time-subtract (current-time) 100))         ; cache is fresh
+      (let ((renders 0))
+        (cl-letf (((symbol-function 'org-glance-overview-v2:render)
+                   (lambda (&rest _) (cl-incf renders) "")))
+          (org-glance-overview-v2:cached-file graph s1)           ; owner -> hit
+          (should (= 0 renders))
+          (org-glance-overview-v2:cached-file graph s2)           ; intruder -> rebuild
+          (should (= 1 renders))
+          (org-glance-overview-v2:cached-file graph s2)           ; now s2 owns -> hit
+          (should (= 1 renders)))))))
 
 ;;; Cache freshness + invalidation
 
@@ -263,6 +305,56 @@ caught)."
         (should-error (org-glance-overview-v2:open) :type 'user-error)
         (should-error (org-glance-overview-v2:extract) :type 'user-error)))))
 
+(ert-deftest org-glance-test:overview-filter-title-contains ()
+  "`:title-contains' matches case-insensitively and composes with other clauses;
+spellings differing only in case share one cache key, distinct from `:title'."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "o1" "* TODO Pay electricity bill :home:")
+                             (org-glance-test:headline "o2" "* TODO Read a Bill of materials :work:")
+                             (org-glance-test:headline "o3" "* Walk :home:"))
+    (cl-flet ((ids (filter)
+                (mapcar #'org-glance-headline-metadata-v2:id
+                        (seq-filter (org-glance-overview-v2:spec-predicate filter)
+                                    (org-glance-graph-v2:headlines graph)))))
+      (should (equal '("o1" "o2") (ids '(:title-contains "BILL"))))
+      (should (equal '("o1") (ids '(:title-contains "bill" :tags ("home")))))))
+  (should (string= (org-glance-overview-v2:spec-key '(:title-contains "Bill"))
+                   (org-glance-overview-v2:spec-key '(:title-contains "bill"))))
+  (should-not (string= (org-glance-overview-v2:spec-key '(:title-contains "bill"))
+                       (org-glance-overview-v2:spec-key '(:title "bill")))))
+
+(ert-deftest org-glance-test:overview-filter-refinement ()
+  "The `/' refinement commands compose a clause onto the CURRENT buffer's
+filter (same dimension replaces), and `clear' returns to the unfiltered view."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "o1" "* TODO Alpha :work:"))
+    (let ((org-glance-graph-v2 graph)
+          (visited 'unset))
+      (cl-letf (((symbol-function 'org-glance-overview-v2:visit)
+                 (lambda (_graph filter) (setq visited filter))))
+        (with-temp-buffer
+          (setq-local org-glance-overview-v2--spec '(:tags ("work")))
+          ;; narrow by state: composes onto the tag filter
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "TODO")))
+            (org-glance-overview-v2:filter-by-state))
+          (should (equal '(:tags ("work") :state "TODO") visited))
+          ;; narrow by substring
+          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "alp")))
+            (org-glance-overview-v2:filter-by-substring))
+          (should (equal '(:tags ("work") :title-contains "alp") visited))
+          ;; re-filtering the same dimension REPLACES it
+          (setq-local org-glance-overview-v2--spec '(:state "TODO"))
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+            (org-glance-overview-v2:filter-by-state))
+          (should (equal '(:state "DONE") visited))
+          ;; empty input aborts instead of filtering
+          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
+            (should-error (org-glance-overview-v2:filter-by-substring) :type 'user-error))
+          ;; clear -> unfiltered
+          (org-glance-overview-v2:filter-clear)
+          (should (null visited)))))))
+
 (ert-deftest org-glance-test:overview-v2-tags ()
   "Tag candidates are the distinct, sorted tags of the graph's live headlines."
   (org-glance-test:with-graph graph
@@ -317,6 +409,7 @@ the unfiltered overview."
     (should (eq (lookup-key map (kbd "e")) #'org-glance-overview-v2:extract))
     (should (eq (lookup-key map (kbd "a")) #'org-glance-agenda-v2))
     (should (eq (lookup-key map (kbd "g")) #'org-glance-overview-v2:refresh))
+    (should (eq (lookup-key map (kbd "/")) #'org-glance-overview-v2-filter))
     (should (eq (lookup-key map (kbd "q")) #'quit-window))))
 
 (provide 'test-overview)
