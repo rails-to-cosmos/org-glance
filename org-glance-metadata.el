@@ -6,6 +6,10 @@
 
 (declare-function org-glance-headline:deserialize "org-glance-headline.el" (id value))
 (declare-function org-glance-headline:serialize "org-glance-headline.el" (headline))
+;; Defined in org-glance.el, which requires this file (cycle) -- runtime-only refs.
+(declare-function org-glance-metadata:completing-read-options "org-glance")
+(declare-function org-glance:headline-alias "org-glance")
+(defvar org-glance-tags)
 
 (org-glance-exception:define org-glance-metadata:outdated!
   "Headline metadata is outdated")

@@ -1,6 +1,5 @@
 ;; -*- lexical-binding: t -*-
 
-(require 'highlight)
 (require 'org-attach)
 (require 'org-capture)
 (require 'ol)
@@ -10,22 +9,30 @@
 (require 'org-glance-metadata)
 (require 'org-glance-tag)
 (require 'org-glance-utils)
+;; Provides `org-glance:with-headline-materialized' (a macro -- needed at
+;; compile time) and `org-glance-headline:materialize'.
+(require 'org-glance-material-mode)
+
+;; Defined in org-glance.el, which requires this file (cycle) -- runtime-only refs.
+(declare-function org-glance-capture "org-glance" (tag &rest args))
+(declare-function org-glance-tags:completing-read "org-glance" (&optional prompt require-match))
+(declare-function org-glance:create-tag "org-glance" (tag))
+(declare-function org-glance:make-tag-directory "org-glance" (&optional tag))
+(declare-function org-glance:tag-file-name "org-glance" (&optional tag))
+(declare-function org-glance:tags-sorted "org-glance")
+(declare-function org-glance:open "org-glance" (&optional headline))
+(declare-function org-glance-headline:make-directory "org-glance" (location title))
+
+;; Defined in org-glance.el (cycle) -- the registry of known tags.
+(defvar org-glance-tags)
 
 (defcustom org-glance-clocktable-properties
   (list :maxlevel 2
         :properties '("CLOSED" "SCHEDULED")
         :link t)
-  "Default clocktable properties for glance overview")
-
-(defface org-glance-headline-changed-face
-  '((((background dark)) (:background "#013220"))
-    (((background light)) (:background "honeydew")))
-  "Face used to highlight evaluated paragraph."
-  :group 'org-glance :group 'faces)
-
-(cl-defun org-glance-overview-init ()
-  "Init overview mode."
-  (set-face-extend 'org-glance-headline-changed-face t))
+  "Default clocktable properties for glance overview."
+  :group 'org-glance
+  :type 'plist)
 
 (defconst org-glance-overview:header
   "#    -*- mode: org; mode: org-glance-overview -*-
@@ -38,15 +45,6 @@ ${todo-order}
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Manipulate `org-mode' entries in `org-glance-overview-mode'.")
-
-(defvar org-glance-overview-deferred-import-timer nil)
-(defvar org-glance-overview-deferred-import-hash-table (make-hash-table))
-
-;;; heavy methods applied to all headlines from current view's scope
-;;; convention is to bind such methods to UPPERCASE KEYS
-
-;; rebuild view and reread all files from view's scope
-(define-key org-glance-overview-mode-map (kbd "G") 'org-glance-overview:reread)
 
 ;;; medium methods applied for all first-level headlines in current file
 
@@ -61,7 +59,8 @@ ${todo-order}
     (org-glance-headline:search-buffer-by-id id)))
 
 (cl-defmacro org-glance-overview:apply-on-headline (&rest forms)
-  "Eval FORMS on headline at point. If point is not at the headline, prompt user to choose headline and eval forms on it."
+  "Eval FORMS on headline at point.
+If point is not at a headline, prompt the user to choose one first."
   (declare (indent 0) (debug t))
   `(org-glance:interactive-lambda
      (when (org-before-first-heading-p)
@@ -133,7 +132,6 @@ ${todo-order}
             (org-glance-overview:apply-on-headline
               (org-glance-overview:move)))
 
-(define-key org-glance-overview-mode-map (kbd "r") #'org-glance-overview:move-headline)
 ;; (define-key org-glance-overview-mode-map (kbd "z") #'org-glance-overview:vizualize)
 
 (define-key org-glance-overview-mode-map (kbd "+")
@@ -150,7 +148,9 @@ ${todo-order}
    ""
    "done"
    "cancelled")
-  "State-related ordering.")
+  "State-related ordering."
+  :group 'org-glance
+  :type '(repeat string))
 
 (cl-defun org-glance-overview:state-ordering (tag)
   (cl-check-type tag org-glance-tag)
@@ -298,7 +298,7 @@ ${todo-order}
                            (find-file output-file)
                            (save-restriction
                              (widen)
-                             (end-of-buffer)
+                             (goto-char (point-max))
                              (save-excursion
                                (insert contents))
                              (org-glance-headline:promote-to-the-first-level)
@@ -345,132 +345,6 @@ ${todo-order}
       ;; (org-overview)
       ;; (org-glance-headline:search-buffer-by-id id)
       )))
-
-(cl-defun org-glance-overview:import-headlines-from-files (tag files &optional (initial-progress 0))
-  "Read each org-file from PATH, visit each headline of current overview tag and add it to overview."
-  (let* ((metadata-location (org-glance-metadata:location tag))
-         (metadata (org-glance-metadata:read metadata-location))
-         (overviews '())
-         (archives '()))
-    (cl-labels ((-register (headline) (let ((tags (mapcar #'downcase (org-element-property :tags headline))))
-                                        (when (and (member tag tags) (not (member 'archive tags)))
-                                          (cond ((org-glance-headline:active? headline)
-                                                 (org-glance-metadata:add-headline headline metadata)
-                                                 (push (org-glance-headline:overview headline) overviews))
-                                                (t
-                                                 (push (org-glance-headline:overview headline) archives)))))))
-      (cl-loop with progress-label = (format "Collecting %s... " tag)
-               with progress-reporter = (make-progress-reporter progress-label 0 (length files))
-               for file in (-take-last (- (length files) initial-progress) files)
-               for progress from initial-progress
-               if (sit-for 0)
-               do (progn
-                    (progress-reporter-update progress-reporter progress)
-                    (org-glance--with-file-visited file
-                      (when-let (headline (org-glance-headline:at-point))
-                        (-register headline))
-
-                      (while-let ((headline (org-glance-headline:search-forward)))
-                        (-register headline))))
-               else do (progn
-                         (org-glance-metadata:save metadata metadata-location)
-
-                         (org-glance--with-file-visited (org-glance-overview:file-name tag)
-                           (goto-char (point-max))
-                           (let ((inhibit-read-only t))
-                             (cl-loop for overview in overviews
-                                      do (insert overview "\n"))
-                             (org-overview)))
-
-                         (org-glance--with-file-visited (org-glance-overview:archive-location tag)
-                           (goto-char (point-max))
-                           (let ((inhibit-read-only t))
-                             (cl-loop for archive in archives
-                                      do (insert archive "\n"))
-                             (org-overview)))
-
-                         (puthash tag (list :progress progress :files files) org-glance-overview-deferred-import-hash-table)
-                         (when (or (null org-glance-overview-deferred-import-timer)
-                                   (not (memq org-glance-overview-deferred-import-timer timer-idle-list)))
-                           (setq org-glance-overview-deferred-import-timer
-                                 (run-with-idle-timer 1 t #'org-glance-overview:deferred-import-daemon)))
-
-                         (message (format "%s import has been deferred: %d files processed of %d"
-                                          tag progress (length files)))
-                         (cl-return nil))
-
-               finally do (progn
-                            (org-glance-metadata:save metadata metadata-location)
-
-                            (org-glance--with-file-visited (org-glance-overview:file-name tag)
-                              (goto-char (point-max))
-                              (let ((inhibit-read-only t))
-                                (cl-loop for overview in overviews
-                                         do (insert overview "\n"))
-                                (org-glance-overview:order)
-                                (org-overview)
-                                (org-align-tags 'all)))
-
-                            (org-glance--with-file-visited (org-glance-overview:archive-location tag)
-                              (goto-char (point-max))
-                              (let ((inhibit-read-only t))
-                                (cl-loop for archive in archives
-                                         do (insert archive "\n"))
-                                (org-glance-overview:order)
-                                (org-overview)
-                                (org-align-tags 'all)
-                                (save-buffer)))
-
-                            (remhash tag org-glance-overview-deferred-import-hash-table)
-                            (progress-reporter-done progress-reporter))))))
-
-(cl-defun org-glance-overview:deferred-import-daemon ()
-  (if (hash-table-empty-p org-glance-overview-deferred-import-hash-table)
-      (cancel-timer org-glance-overview-deferred-import-timer)
-    (let* ((tag (cl-first (hash-table-keys org-glance-overview-deferred-import-hash-table)))
-           (config (gethash tag org-glance-overview-deferred-import-hash-table))
-           (files (plist-get config :files))
-           (progress (plist-get config :progress)))
-      (org-glance-overview:import-headlines-from-files tag files progress))))
-
-(cl-defun org-glance-overview:sync-headlines ()
-  (when (and org-glance-overview:changed-headlines
-             (y-or-n-p (format "%d headline%s has been changed. Syncronize with origins?"
-                               (length org-glance-overview:changed-headlines)
-                               (if (> (length org-glance-overview:changed-headlines) 1) "s" ""))))
-
-    (cl-loop
-     for id in org-glance-overview:changed-headlines
-     do (save-excursion
-          (org-glance-headline:search-buffer-by-id id)
-          (let ((contents (buffer-substring-no-properties (point) (save-excursion (org-end-of-subtree t)))))
-            (save-window-excursion
-              (save-excursion
-                (->> (org-glance-headline:at-point)
-                     org-glance-headline:id
-                     org-glance-metadata:headline-metadata
-                     org-glance-headline:visit)
-                (save-restriction
-                  (org-narrow-to-subtree)
-                  (unless (string= (buffer-substring-no-properties (point-min) (point-max)) contents)
-                    (delete-region (point-min) (point-max))
-                    (insert contents)
-                    (save-buffer)
-                    (kill-buffer))))
-              (hlt-unhighlight-region (point) (save-excursion (org-end-of-subtree t t))))))))
-
-  (setq-local org-glance-overview:changed-headlines '()))
-
-(cl-defun org-glance-overview:track-changes (start end old-len)
-  (save-match-data
-    (let ((diff (buffer-substring-no-properties start end)))
-      (when (and (not (org-before-first-heading-p))
-                 (not (and (eobp) (string= diff "\n"))))
-        (when-let (id (org-glance-headline:id (org-glance-headline:at-point)))
-          (cl-pushnew id org-glance-overview:changed-headlines :test #'string=)
-          (hlt-highlight-region (org-glance-headline:begin)
-                                (save-excursion (org-end-of-subtree t t))
-                                'org-glance-headline-changed-face))))))
 
 (define-minor-mode org-glance-overview-mode
   "A minor read-only mode to use in overview files."
@@ -600,11 +474,12 @@ ${todo-order}
 (cl-defun org-glance-overview (&optional tag)
   "Open the overview.
 Called with NO TAG (interactive) and `org-glance-use-graph-v2' enabled, browse
-the v2 graph (`org-glance-overview-v2'); called WITH a TAG (e.g. the
-`org-glance-overview:' link handler) uses the v1 per-tag overview file."
+the v2 graph: prompt for a tag (empty input = all) and show the overview
+filtered by it, cached per tag.  Called WITH a TAG (e.g. the
+`org-glance-overview:' link handler), use the v1 per-tag overview file."
   (interactive)
   (cond ((and org-glance-use-graph-v2 (null tag))
-         (org-glance-overview-v2))
+         (call-interactively #'org-glance-overview-v2))
         (t
          (let ((tag (or tag (org-glance-tags:completing-read "Overview: " nil))))
            (cl-check-type tag org-glance-tag)
@@ -657,30 +532,6 @@ the v2 graph (`org-glance-overview-v2'); called WITH a TAG (e.g. the
     (let ((tag (org-glance-tag:from-string (org-glance-overview:category))))
       (when (gethash tag org-glance-tags)
         tag))))
-
-(cl-defun org-glance-overview:reread ()
-  "Completely rebuild current overview file."
-  (interactive)
-  (let ((tag (org-glance-overview:tag)))
-    (when (gethash tag org-glance-overview-deferred-import-hash-table)
-      (if (not (memq org-glance-overview-deferred-import-timer timer-idle-list))
-          (timer-activate org-glance-overview-deferred-import-timer)
-        ;; timer is already running
-        (when (y-or-n-p (format "%s is being rebuilt. Stop it?" tag))
-          (remhash tag org-glance-overview-deferred-import-hash-table))))
-
-    (when (y-or-n-p (format "Clear %s metadata?" tag))
-      (progn
-        (save-buffer)
-        (kill-buffer)
-        (org-glance-overview:create tag)
-        (when (y-or-n-p (format "Import headlines from %s?" (f-parent (org-glance-metadata:location tag))))
-          (let ((files (--filter (not (s-contains? "sync-conflict" it))
-                                 (org-glance-scope (f-parent (org-glance-metadata:location tag))))))
-            (org-glance-overview:import-headlines-from-files tag files)
-            (org-glance-overview:order)
-            (let ((inhibit-read-only t))
-              (org-align-all-tags))))))))
 
 (cl-defun org-glance-overview:kill-headline (&key (force nil))
   "Remove `org-glance-headline' from overview, don't ask to confirm if FORCE is t."
@@ -781,7 +632,7 @@ the v2 graph (`org-glance-overview-v2'); called WITH a TAG (e.g. the
           (end-of-headlines (point-max)))
 
       (cl-loop for buffer in (org-glance-overview:partition
-                               :using (-partial org-glance-overview:partition-mapper tag)
+                               :using (-partial #'org-glance-overview:partition-mapper tag)
                                :comparator #'org-glance-overview:partition-comparator)
                do
                (goto-char (point-max))

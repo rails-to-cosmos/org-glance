@@ -63,13 +63,12 @@
 
 (ert-deftest org-glance-test:graph-utf8-roundtrip ()
   "Non-ASCII titles survive both read paths.
-Regression: `org-glance-jsonl:iterate' (used by `get-headline') read the JSONL
-with `insert-file-contents-literally' and fed undecoded UTF-8 bytes to
+Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
 `json-parse-string', which raised `json-utf8-decode-error'."
   (org-glance-test:with-graph graph
     (let ((title "Façade — Facebook’s “data” café"))
       (org-glance-graph-v2:add graph (org-glance-test:headline "u1" (concat "* TODO " title)))
-      ;; reverse chunked literal reader (the previously-broken path)
+      ;; point lookup (the previously-broken path)
       (should (string= title (org-glance-headline-metadata-v2:title
                               (org-glance-graph-v2:get-headline graph "u1"))))
       ;; forward reader
@@ -80,8 +79,8 @@ with `insert-file-contents-literally' and fed undecoded UTF-8 bytes to
                               (org-glance-graph-v2:headline graph "u1")))))))
 
 (ert-deftest org-glance-test:graph-utf8-chunk-boundary ()
-  "Multibyte content split across the 4096-byte read-chunk boundary still reads
-back correctly (carry logic + per-line decode in `org-glance-jsonl:iterate')."
+  "Multibyte content spanning a 4096-byte boundary still reads back correctly
+(per-line UTF-8 decode, independent of any read chunking)."
   (org-glance-test:with-graph graph
     (let ((title "café—’“”—naïve—Façade"))
       (dotimes (i 50)

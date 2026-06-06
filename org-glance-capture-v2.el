@@ -8,6 +8,11 @@
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
 
+;; Defined in org-glance.el, which requires this file (cycle) -- runtime-only refs.
+(declare-function org-glance-tags:completing-read "org-glance")
+(declare-function org-glance:create-tag "org-glance")
+(declare-function org-glance-initialized?-v2 "org-glance")
+
 (cl-defun org-glance-capture-v2:template (tag &optional (title ""))
   "Default `org-capture' template for a new TAG headline, pre-filled with TITLE."
   (cl-check-type title string)

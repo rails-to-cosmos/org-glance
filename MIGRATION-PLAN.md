@@ -69,19 +69,22 @@ both unfinished and buggy. The store models differ fundamentally:
 
 ---
 
-## Status — 2026-06-04
+## Status — 2026-06-05
 
 - ✅ **Phase 0 (graph core)** — done & green.
 - ✅ **Phase 0.5 (capture-v2 + content persistence)** — done & green.
 - ✅ **Phase 1 (runtime migration)** — done & green.
-- ✅ **Phase 2.1 (selection + materialize/sync, behind flag)** — done & green.
-- ✅ **Phase 2.2a (graph-backed open/extract + dispatch)** — done & green.
-- ▶️ **Phase 2.2b (overview/agenda onto graph; flip default)** — next.
+- ✅ **Phase 2 (wire v2 into commands; flip default)** — **COMPLETE.** Selection /
+  materialize / open / extract / overview / agenda all read the v2 graph;
+  `org-glance-use-graph-v2` now defaults **on**. Overview adds filtering (plist
+  spec), per-filter caching, v1-parity keymap, and per-overview done-keywords.
 - ✅ **Phase 5 (Podman dev-env)** — done; `make podman-test [EMACS_VERSION=…]`.
-- ✅ **Wired suite:** 38/38 (`eask run command test`), green local (30.2) **and**
+- ✅ **Wired suite:** **71/71** (`eask run command test`), green local (30.2) **and**
   in-container (Emacs 29.1).
-- ✅ **v2 headline unit tests** — 15/15 green (run separately; not yet wired into
+- ✅ **v2 headline unit tests** — green (run separately; not yet wired into
   `Eask`, see Phase 4).
+- ▶️ **Next:** Phase 3 (delete v1) or Phase 4 (stabilize: CI, GC, harden sync) —
+  see those sections.
 
 Tooling: `eask` via `mise` (`npm:@emacs-eask/cli`); run with
 `mise exec -- eask run command test`, or `make podman-test` for pinned Emacs.
@@ -277,14 +280,40 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   run M-x org-glance-reindex…") instead of an empty picker.
 - 47/47 green local + container.
 
-### Phase 2.2b — remaining
+### Phase 2.2b — overview / agenda onto the graph ✅ DONE (`org-glance-overview-v2.el`)
 
-- **overview build + agenda → read from the graph** (`:headlines`). The large
-  remaining piece (`org-glance-overview.el` is ~800 lines with dead edit-mode
-  landmines); needs its own scoped increment + review.
-- Then flip `org-glance-use-graph-v2` default on and re-point the v1 entrypoints;
-  the v1 `consistency`/`links`/`properties` integration tests become the
-  acceptance gate.
+- **Graph-backed read-only overview**: one org file under the store, rendered
+  from headline *metadata* (no per-headline content parse), one heading per
+  matching headline. `org-glance-overview` / `org-glance-agenda-v2` dispatch here.
+  Interactively (the `C-x j o` transient action), the overview **prompts for a
+  tag** (candidates = the graph's live tags; empty input = all) and filters by
+  it — each tag gets its own cache, served while the graph is unchanged.
+- **Filtering**: every entry point takes an optional FILTER — nil (all), a bare
+  tag, or a plist spec with keys `:tag`/`:tags`, `:state`, `:done`,
+  `:done-keywords`, `:id`/`:title`/`:hash`, `:priority`, `:linked`/`:propertized`/
+  `:encrypted`, `:schedule`/`:deadline` (`:present`/`:absent`), plus a `:where`
+  predicate escape hatch. `plist-member` gates each clause, so `(:state nil)`
+  ("stateless") ≠ omitting `:state`. Unknown keys error. Three pure helpers:
+  `:spec-predicate`, `:spec-key`, `:fresh?`.
+- **Caching**: unfiltered overview at `<store>/overview.org`; each cacheable
+  filter at `<store>/overviews/<key>/overview.org`; an uncacheable `:where` at
+  `overviews/transient.org`; the agenda at `overviews/agenda.org`. A fresh cache
+  is served via an O(1) mtime check against `headlines.jsonl` — no JSONL read, no
+  render. Cache key = greppable slug + sha1 over an **unambiguous** `prin1` of the
+  canonical (sorted) spec pairs (so delimiter-bearing values can't collide).
+- **Done-keywords** are resolved by `org-glance--done-keywords` (reuses Org's own
+  `org-done-keywords`, else derives from `org-todo-keywords`); a per-overview
+  `:done-keywords` clause overrides it. This also fixed a latent bug: the v2
+  material commands' `active?` filter is now correct outside an Org buffer.
+- **Keymap (v1 parity)**: `n`/`p` headings, `f`/`b` siblings, `,`/`<`/`.`/`>`
+  ends, `TAB` cycle, `RET`/`m` materialize, `o` open, `e` extract, `a` agenda,
+  `g` refresh, `q` quit.
+- **Reviewed** by an adversarial panel: 8 confirmed issues fixed (cache-key
+  collision, tag case-sensitivity, `:done` buffer-locality, stale-buffer reuse on
+  re-visit, agenda clobbering the browsed file, `(:tags nil)` cache fragmentation,
+  raw error on a deleted headline).
+- `org-glance-use-graph-v2` default flipped **on**. `org-glance-migrate-maybe`
+  prompt re-enabled. Suite **71/71** local + container.
 
 ---
 
@@ -316,16 +345,42 @@ Once v2 carries production (flag flipped on by default), remove the dead weight:
   `org-glance-materialized-headline-apply`; distinguish "source changed" from
   "corrupted"; stop swallowing sync-hook errors via `with-demoted-errors`.
 - **Namespace / de-stack advice** on `org-auto-repeat-maybe` (re-adds on reload).
-- **Storage maintenance — GC / compaction** (append-only store grows forever):
-  - **Metadata compaction:** rewrite `headlines.jsonl` to one latest record per
-    id, dropping superseded records and dropped tombstones (rename-temp-then-swap;
-    safe because it's derivable from itself).
-  - **Content GC:** delete `data/<id…>/` blobs for ids whose latest metadata is a
-    tombstone (and that no live relation references). `delete` currently keeps the
-    blob by design — GC is where it's reclaimed.
-  - Trigger: explicit `M-x org-glance-graph-compact`, and/or a threshold heuristic
-    (e.g. when superseded-record ratio crosses N×). Must be crash-safe and a no-op
-    on an already-compact store.
+- ✅ **Storage maintenance — segmented (LSM-lite) store + GC / compaction** —
+  DONE (2026-06-05). The metadata store is no longer one ever-growing file:
+  - **Segments:** `meta/headlines.jsonl` is the OPEN append segment; crossing
+    `org-glance-graph-v2-segment-max-bytes` (soft cap, default 256 KiB, checked
+    after each whole-batch append so records never split) seals it via atomic
+    rename into immutable `seg-NNNNNNNNNN.jsonl`. A one-line JSON **MANIFEST**
+    (`{version,next-gen,next-seq,segments[oldest-first],open}`) lists the live
+    sealed set and is swapped atomically (temp+rename = the sole commit point).
+    Records carry a store-global monotonic `seq` (storage ordinal only — never
+    metadata; ignored by `deserialize`). Readers merge segments: `get-headline`
+    newest-first first-hit; `headlines` oldest→newest, latest-per-id,
+    first-sighting order (the insertion-order contract holds across files).
+  - **Signal:** `headline-meta-path` still returns `meta/headlines.jsonl`, and
+    every mutation (insert/delete/seal/compact) bumps its mtime — the overview
+    cache (`overview-v2:fresh?`) needed zero changes.
+  - **Compaction** (`M-x org-glance-graph-compact` + auto at
+    `org-glance-graph-v2-compact-segment-count` sealed segments, default 4):
+    folds ALL segments (sealed + open) into one, drops superseded records and
+    dropped tombstones, **content-GCs** `data/<id…>/` blobs of fully-deleted
+    ids, commits via one MANIFEST swap **before** truncating the open segment
+    (ordering is load-bearing: truncate-first let a crash destroy a tombstone's
+    only copy and resurrect a deleted headline — caught by adversarial review,
+    regression-tested). No-op on an already-compact store.
+  - **Crash recovery:** `--heal` at open adopts an interrupted seal (unlisted
+    high-gen segment + empty open) but refuses compaction debris via a
+    `seq`-overlap check (compaction copies ordinals; a genuine seal never
+    does); torn trailing lines are truncated; orphans (`*.tmp.*`, unlisted
+    `seg-*`) reaped. `seq` re-derived from disk (max+1) each open.
+  - **Migration:** transparent + idempotent — a legacy single `headlines.jsonl`
+    is adopted in place as the open segment by just writing the initial
+    MANIFEST (no bytes moved); no-op on empty/converted stores.
+  - Tests: `test/test-segments.el` (16) — seal-at-threshold, never-split,
+    multi-segment read/order/UTF-8, torn-line + interrupted-seal + crashed-
+    compaction recovery (incl. the tombstone-resurrection regression),
+    legacy migration, compaction + content GC + no-op + auto-trigger +
+    order-preservation, freshness signal. Suite: **87/87** local + container.
 
 ---
 
@@ -362,14 +417,26 @@ Once v2 carries production (flag flipped on by default), remove the dead weight:
 **v2 store** lives under a hidden `<dir>/.org-glance/` root (kept out of the v1
 tag namespace and org-agenda):
 
-- **`<dir>/.org-glance/meta/headlines.jsonl`** — one JSON object per line,
-  append-only, last-write-wins by reverse scan (`org-glance-jsonl:iterate`). Live
-  record: `{"id","state","title","tags":[…],"hash","schedule","deadline","priority"}`.
-  Tombstone: `{"id","tombstone":true}`. **Encoding: always UTF-8.** Written via
-  `f-append-text … 'utf-8`; the reverse chunked reader reads raw bytes (unibyte)
-  and `decode-coding-string … 'utf-8` per complete line; the forward reader
-  (`:headlines`) binds `coding-system-for-read 'utf-8`. (Regression-guarded —
-  multibyte titles previously raised `json-utf8-decode-error`.)
+- **`<dir>/.org-glance/meta/`** — the segmented (LSM-lite) metadata store:
+  - **`MANIFEST`** — one UTF-8 JSON line:
+    `{"version":2,"next-gen":N,"next-seq":M,"segments":["seg-…jsonl",…],"open":"headlines.jsonl"}`.
+    `segments` lists the live sealed segments oldest-first; swapped atomically
+    (temp+rename) — the sole commit point. `next-gen`/`next-seq` are hints; the
+    authorities are max `seg-NNN` on disk and max `seq` in live records.
+  - **`headlines.jsonl`** — the OPEN append segment (always this name; its mtime
+    is the store-change signal). One JSON object per line, appended per batch.
+    Live record: `{"id","state","title","tags":[…],"hash","schedule","deadline",
+    "priority","linked","propertized","encrypted","seq"}`. Tombstone:
+    `{"id","tombstone":true,"seq":…}`. `seq` is a store-global monotonic storage
+    ordinal (ignored by `deserialize`; legacy records lack it = ordered by
+    position). Sealed into `seg-NNNNNNNNNN.jsonl` (atomic rename) when its size
+    crosses `org-glance-graph-v2-segment-max-bytes`.
+  - **`seg-NNNNNNNNNN.jsonl`** — immutable sealed segments, append-order,
+    10-digit zero-padded generation (lexical = numeric = age order). Unlisted
+    seg-* files and `*.tmp.*` are orphans: invisible to readers, reaped at open.
+  - **Encoding: always UTF-8** everywhere (writer `f-append-text … 'utf-8`;
+    readers bind `coding-system-for-read 'utf-8`). Regression-guarded —
+    multibyte titles previously raised `json-utf8-decode-error`.
 - **`<dir>/.org-glance/data/<id[0:2]>/<id[2:]>/data.org`** — the headline content
   blob (full subtree text). Ids ≤ 2 chars are stored flat (no shard). Written by
   `:put-content`; read by `:get-content` / reconstructed by `:headline`.

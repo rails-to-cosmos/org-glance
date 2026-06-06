@@ -14,9 +14,11 @@
   :group 'org-glance
   :type 'directory)
 
+;; NB: the hash must canonicalize exactly like the equality does -- hashing the
+;; raw string would make equal keys ("foo" vs "foo/") land in different buckets.
 (define-hash-table-test 'org-glance-graph-v2:test
                         (lambda (a b) (f-equal? (file-truename a) (file-truename b)))
-                        (lambda (a) (secure-hash 'sha1 a)))
+                        (lambda (a) (secure-hash 'sha1 (file-truename a))))
 
 (defvar org-glance-graph-v2:list (make-hash-table :test 'org-glance-graph-v2:test)
   "Registered instances of `org-glance-graph-v2' in current session.")
@@ -24,7 +26,26 @@
 ;; Single-user assumption: no mutex / locking (see MIGRATION-PLAN.md, decision 3).
 (cl-defstruct (org-glance-graph-v2 (:predicate org-glance-graph-v2?)
                                    (:conc-name org-glance-graph-v2:))
-  (directory org-glance-directory :read-only t :type directory))
+  (directory org-glance-directory :read-only t :type directory)
+  ;; Cached store-global monotonic record ordinal; re-derived from disk at open
+  ;; (`--max-seq'), `cl-incf'-ed per appended record.  Storage ordinal only --
+  ;; never part of headline metadata.
+  (seq 0 :type integer))
+
+(defcustom org-glance-graph-v2-segment-max-bytes (* 256 1024)
+  "Soft maximum size, in bytes, of the open v2 metadata segment before it is
+sealed into an immutable segment.  Checked after each insert's whole batch is
+appended, so a record/batch is never split; a single oversized batch may push a
+segment past this bound (the cap is soft)."
+  :group 'org-glance
+  :type 'integer)
+
+(defcustom org-glance-graph-v2-compact-segment-count 4
+  "Compact the v2 metadata store automatically once this many sealed segments
+accumulate.  Set to a very large value to effectively disable auto-compaction
+\(then use \\[org-glance-graph-compact])."
+  :group 'org-glance
+  :type 'integer)
 
 (cl-defstruct (org-glance-headline-metadata-v2 (:predicate org-glance-headline-metadata-v2?)
                                                (:conc-name org-glance-headline-metadata-v2:))
@@ -135,6 +156,8 @@ the result is deterministic.  An overview can still override it per view via a
       (f-mkdir-full-path (org-glance-graph-v2:data-path graph))
       (f-mkdir-full-path (org-glance-graph-v2:meta-path graph))
       (f-touch (org-glance-graph-v2:headline-meta-path graph))
+      (org-glance-graph-v2:--migrate-maybe graph) ; bootstrap MANIFEST / adopt legacy file
+      (org-glance-graph-v2:--heal graph)           ; recover seal, derive seq, reap orphans
       (puthash directory graph org-glance-graph-v2:list))
     graph))
 
@@ -142,12 +165,198 @@ the result is deterministic.  An overview can still override it per view via a
   (declare (indent 1))
   (cl-check-type meta list)
   (cl-check-type (car meta) (or list org-glance-headline-metadata-v2))
-  (cl-loop for spec in meta
-           collect (-> spec
-                       (org-glance-headline-metadata-v2:serialize*)
-                       (json-serialize))
-           into result
-           finally (f-append-text (concat (s-join "\n" result) "\n") 'utf-8 (org-glance-graph-v2:headline-meta-path graph))))
+  (org-glance-graph-v2:--append graph meta))
+
+;;; Segmented (LSM-lite) metadata store
+;;
+;; `meta/headlines.jsonl' is the OPEN append segment; once it crosses
+;; `org-glance-graph-v2-segment-max-bytes' it is sealed (atomic rename) into an
+;; immutable `seg-NNNNNNNNNN.jsonl' and a fresh open segment takes over.  A
+;; one-line JSON MANIFEST lists the live sealed segments (oldest-first); readers
+;; merge segments, latest-per-id wins.  Each record carries a store-global
+;; monotonic `seq' ordinal.  Every mutation is crash-safe via temp-then-rename;
+;; the MANIFEST rename is the sole commit point.  See MIGRATION-PLAN.md Phase 4.
+
+(cl-defun org-glance-graph-v2:--open-segment-path (graph)
+  "The open append segment -- identical to `headline-meta-path' (the store-change
+signal for the overview cache, and the migration-adoption target)."
+  (org-glance-graph-v2:headline-meta-path graph))
+
+(cl-defun org-glance-graph-v2:--manifest-path (graph)
+  (-> (f-join (org-glance-graph-v2:meta-path graph) "MANIFEST") (file-truename)))
+
+(cl-defun org-glance-graph-v2:--segment-path (graph gen)
+  (-> (f-join (org-glance-graph-v2:meta-path graph) (format "seg-%010d.jsonl" gen))
+      (file-truename)))
+
+(cl-defun org-glance-graph-v2:--tmp-path (graph base)
+  (make-temp-name (f-join (org-glance-graph-v2:meta-path graph) (concat base ".tmp."))))
+
+(defconst org-glance-graph-v2:--segment-name-re "\\`seg-\\([0-9]+\\)\\.jsonl\\'"
+  "Matches a sealed segment basename; group 1 is its generation number.")
+
+(cl-defun org-glance-graph-v2:--segment-generation (name)
+  "Generation number of sealed segment basename NAME, or nil if not a segment."
+  (when (string-match org-glance-graph-v2:--segment-name-re name)
+    (string-to-number (match-string 1 name))))
+
+(cl-defun org-glance-graph-v2:--sealed-segments (graph)
+  "Basenames of the live sealed segments, oldest-first, per the MANIFEST.
+An absent or unparseable MANIFEST (impossible after construction -- the swap is
+an atomic rename) reads as the empty set."
+  (let ((path (org-glance-graph-v2:--manifest-path graph)))
+    (when (f-exists? path)
+      (condition-case nil
+          (append (plist-get (json-parse-string (f-read-text path 'utf-8) :object-type 'plist)
+                             :segments)
+                  nil)
+        (error nil)))))
+
+(cl-defun org-glance-graph-v2:--write-manifest (graph segments)
+  "Atomically persist SEGMENTS (sealed basenames, oldest-first) as the MANIFEST.
+The temp-then-rename is the sole commit/swap point for the live segment set."
+  (let ((tmp (org-glance-graph-v2:--tmp-path graph "MANIFEST"))
+        (path (org-glance-graph-v2:--manifest-path graph)))
+    (f-write-text (concat (json-serialize (list :version 2 :segments (apply #'vector segments)))
+                          "\n")
+                  'utf-8 tmp)
+    (rename-file tmp path t)))
+
+(cl-defun org-glance-graph-v2:--live-segments (graph &optional newest-first)
+  "Existing absolute paths of the live segments, oldest->newest (open last);
+reversed (open first) when NEWEST-FIRST.  Orphans (on disk, not in the MANIFEST)
+are invisible."
+  (let* ((meta (org-glance-graph-v2:meta-path graph))
+         (sealed (cl-loop for name in (org-glance-graph-v2:--sealed-segments graph)
+                          for p = (file-truename (f-join meta name))
+                          when (f-exists? p) collect p))
+         (open (org-glance-graph-v2:--open-segment-path graph))
+         (all (append sealed (when (f-exists? open) (list open)))))
+    (if newest-first (reverse all) all)))
+
+(cl-defun org-glance-graph-v2:--next-generation (graph)
+  "1 + the highest seg-NNN generation on disk (filenames are the authority)."
+  (1+ (or (cl-loop for f in (directory-files (org-glance-graph-v2:meta-path graph) nil
+                                             org-glance-graph-v2:--segment-name-re)
+                   maximize (org-glance-graph-v2:--segment-generation f))
+          0)))
+
+(cl-defun org-glance-graph-v2:--scan-file (graph path fn)
+  "Call FN on each non-empty UTF-8 JSON record in GRAPH's segment PATH, top-down.
+The scanner owns the torn-line policy: only the OPEN segment can legitimately
+have a torn (newline-less) final line -- a crash can only tear the last append
+-- so a parse error there is ignored; elsewhere it re-signals (corruption)."
+  (when (f-exists? path)
+    (let ((tolerate-torn (string= path (org-glance-graph-v2:--open-segment-path graph))))
+      (with-temp-buffer
+        (let ((coding-system-for-read 'utf-8))
+          (insert-file-contents path))
+        (goto-char (point-min))
+        (while (not (eobp))
+          (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
+            (unless (string-empty-p line)
+              (condition-case err
+                  (funcall fn (json-parse-string line :object-type 'plist))
+                (json-error
+                 (unless (and tolerate-torn (= (line-end-position) (point-max)))
+                   (signal (car err) (cdr err)))))))
+          (forward-line 1))))))
+
+(cl-defun org-glance-graph-v2:--scan-forward (graph fn)
+  "Call FN on every record across live segments, oldest->newest (open last)."
+  (dolist (seg (org-glance-graph-v2:--live-segments graph))
+    (org-glance-graph-v2:--scan-file graph seg fn)))
+
+(cl-defun org-glance-graph-v2:--latest-records (graph)
+  "Cons of (RECORDS . TOTAL): the latest record per id, tombstones included, in
+original insertion (first-sighting) order across all live segments; TOTAL is the
+raw record count before the latest-per-id fold."
+  (let ((latest (make-hash-table :test 'equal))
+        (order nil)
+        (total 0))
+    (org-glance-graph-v2:--scan-forward
+     graph (lambda (record)
+             (cl-incf total)
+             (let ((id (plist-get record :id)))
+               (unless (gethash id latest) (push id order))
+               (puthash id record latest))))
+    (cons (cl-loop for id in (nreverse order) collect (gethash id latest))
+          total)))
+
+(cl-defun org-glance-graph-v2:--max-seq (graph)
+  "Highest `seq' ordinal across live records, or 0 (legacy records lack `seq')."
+  (let ((mx 0))
+    (org-glance-graph-v2:--scan-forward
+     graph (lambda (r) (let ((s (plist-get r :seq)))
+                         (when (and (integerp s) (> s mx)) (setq mx s)))))
+    mx))
+
+(cl-defun org-glance-graph-v2:--ensure-newline-terminated (path)
+  "Drop a trailing partial line in PATH (crash mid-append) so future appends stay
+clean.  Cheap: only rewrites when PATH's final byte is not a newline."
+  (let ((size (or (f-size path) 0)))
+    (when (> size 0)
+      (let ((last-byte (with-temp-buffer
+                         (set-buffer-multibyte nil)
+                         (insert-file-contents-literally path nil (1- size) size)
+                         (char-after (point-min)))))
+        (unless (eql last-byte ?\n)
+          (with-temp-buffer
+            (set-buffer-multibyte nil)
+            (insert-file-contents-literally path)
+            (goto-char (point-max))
+            (if (search-backward "\n" nil t)
+                (delete-region (1+ (point)) (point-max))
+              (erase-buffer))
+            (let ((coding-system-for-write 'no-conversion))
+              (write-region (point-min) (point-max) path nil 'silent))))))))
+
+(cl-defun org-glance-graph-v2:--append (graph specs)
+  "Append SPECS (metadata structs or bare plists) to the open segment, stamping a
+fresh monotonic `seq' on each, then maybe seal and compact."
+  (let ((open (org-glance-graph-v2:--open-segment-path graph)))
+    (org-glance-graph-v2:--ensure-newline-terminated open)
+    (cl-loop for spec in specs
+             for record = (plist-put (copy-sequence (org-glance-headline-metadata-v2:serialize* spec))
+                                     :seq (cl-incf (org-glance-graph-v2:seq graph)))
+             collect (json-serialize record) into jsons
+             finally (f-append-text (concat (s-join "\n" jsons) "\n") 'utf-8 open)))
+  (org-glance-graph-v2:--maybe-seal graph)
+  (org-glance-graph-v2:--maybe-compact graph))
+
+(cl-defun org-glance-graph-v2:--maybe-seal (graph)
+  (let ((open (org-glance-graph-v2:--open-segment-path graph)))
+    (when (> (or (f-size open) 0) org-glance-graph-v2-segment-max-bytes)
+      (org-glance-graph-v2:--seal graph))))
+
+(cl-defun org-glance-graph-v2:--seal (graph)
+  "Seal the full open segment into an immutable seg-<gen>.
+Commit = the MANIFEST swap.  A crash before it leaves seg-<gen> durable but
+unlisted with an empty open -- `--heal' adopts it on the next open."
+  (let* ((open (org-glance-graph-v2:--open-segment-path graph))
+         (sealed (org-glance-graph-v2:--segment-path graph (org-glance-graph-v2:--next-generation graph))))
+    (rename-file open sealed)           ; atomic: a complete file becomes immutable
+    (f-touch open)                      ; fresh empty open segment (bumps the signal mtime)
+    (org-glance-graph-v2:--write-manifest
+     graph (append (org-glance-graph-v2:--sealed-segments graph)
+                   (list (file-name-nondirectory sealed))))))
+
+(cl-defun org-glance-graph-v2:--maybe-compact (graph)
+  (when (>= (length (org-glance-graph-v2:--sealed-segments graph))
+            org-glance-graph-v2-compact-segment-count)
+    (org-glance-graph-v2:compact graph)))
+
+(cl-defun org-glance-graph-v2:--find-latest (graph id)
+  "Newest record for ID across segments (newest-first); `tombstone'/nil aware."
+  (cl-loop for seg in (org-glance-graph-v2:--live-segments graph t)
+           for hit = (let (found)
+                       (org-glance-graph-v2:--scan-file
+                        graph seg
+                        (lambda (r) (when (string= (plist-get r :id) id) (setq found r))))
+                       found)
+           when hit return (if (plist-get hit :tombstone)
+                               'tombstone
+                             (org-glance-headline-metadata-v2:deserialize hit))))
 
 (cl-defun org-glance-graph-v2:store-path (graph)
   "Hidden per-directory store root for the graph.
@@ -244,11 +453,7 @@ headlines also have their contents persisted to the data store."
 Return the symbol `tombstone' if ID was deleted, or nil if unknown."
   (cl-check-type graph org-glance-graph-v2)
   (cl-check-type id string)
-  (org-glance-jsonl:iterate (org-glance-graph-v2:headline-meta-path graph)
-    (when (string= (plist-get it :id) id)
-      (if (plist-get it :tombstone)
-          'tombstone
-        (org-glance-headline-metadata-v2:deserialize it)))))
+  (org-glance-graph-v2:--find-latest graph id))
 
 (cl-defun org-glance-graph-v2:headline (graph id)
   "Return the full live `org-glance-headline-v2' stored for ID, or nil.
@@ -270,31 +475,14 @@ unknown or tombstoned ids."
 
 (cl-defun org-glance-graph-v2:headlines (graph)
   "Return all live (non-tombstoned) headline metadata in GRAPH.
-The latest record per id wins; original insertion order is preserved."
+The latest record per id wins; original insertion order is preserved across all
+segments (first-sighting in the oldest->newest scan == earliest insertion)."
   (cl-check-type graph org-glance-graph-v2)
-  (let ((latest (make-hash-table :test 'equal))
-        (order nil)
-        (path (org-glance-graph-v2:headline-meta-path graph)))
-    (when (f-exists? path)
-      (with-temp-buffer
-        ;; Force utf-8 to match the writer, independent of locale autodetection.
-        (let ((coding-system-for-read 'utf-8))
-          (insert-file-contents path))
-        (goto-char (point-min))
-        (while (not (eobp))
-          (let ((line (buffer-substring-no-properties (line-beginning-position) (line-end-position))))
-            (unless (string-empty-p line)
-              (let* ((it (json-parse-string line :object-type 'plist))
-                     (id (plist-get it :id)))
-                (unless (gethash id latest) (push id order))
-                (puthash id it latest))))
-          (forward-line 1))))
-    ;; NB: do not name this loop variable `it' -- `cl-loop' binds `it'
-    ;; anaphorically to the `unless' condition value, shadowing it.
-    (cl-loop for id in (nreverse order)
-             for record = (gethash id latest)
-             unless (plist-get record :tombstone)
-             collect (org-glance-headline-metadata-v2:deserialize record))))
+  ;; NB: do not name this loop variable `it' -- `cl-loop' binds `it'
+  ;; anaphorically to the `unless' condition value, shadowing it.
+  (cl-loop for record in (car (org-glance-graph-v2:--latest-records graph))
+           unless (plist-get record :tombstone)
+           collect (org-glance-headline-metadata-v2:deserialize record)))
 
 (cl-defun org-glance-graph-v2:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,
@@ -314,6 +502,121 @@ Return the number of headlines re-indexed."
              do (when reporter (progress-reporter-update reporter i)))
     (when reporter (progress-reporter-done reporter))
     n))
+
+;;; Store bootstrap / recovery / compaction
+
+(cl-defun org-glance-graph-v2:--migrate-maybe (graph)
+  "Bootstrap the segmented layout.  If no MANIFEST exists, adopt the present
+`headlines.jsonl' in place as the open segment by writing an initial MANIFEST --
+no bytes moved.  Idempotent; a no-op once a MANIFEST is present (also covers the
+brand-new empty store, whose open segment the constructor just touched)."
+  (unless (f-exists? (org-glance-graph-v2:--manifest-path graph))
+    (org-glance-graph-v2:--write-manifest graph nil)))
+
+(cl-defun org-glance-graph-v2:--gc-orphans (graph)
+  "Delete stale *.tmp.* files and any seg-*.jsonl not referenced by the MANIFEST."
+  (let ((meta (org-glance-graph-v2:meta-path graph))
+        (live (org-glance-graph-v2:--sealed-segments graph)))
+    (dolist (f (directory-files meta nil nil t))
+      (when (or (string-match-p "\\.tmp\\." f)
+                (and (org-glance-graph-v2:--segment-generation f) (not (member f live))))
+        (ignore-errors (f-delete (f-join meta f)))))))
+
+(cl-defun org-glance-graph-v2:--heal (graph)
+  "Recover from an interrupted seal and re-derive session state.  Idempotent.
+An unlisted seg-* whose generation exceeds every listed one, alongside an EMPTY
+open segment, is a seal whose MANIFEST commit was lost -- adopt it.  Crashed
+COMPACTION debris must NOT be adopted: it is told apart because compaction
+copies records (it never re-stamps `seq'), so its output shares `seq' ordinals
+with the listed segments, whereas a genuinely sealed open segment only holds
+ordinals no listed segment has.  Non-adopted orphans are reaped."
+  (let* ((meta (org-glance-graph-v2:meta-path graph))
+         (listed (org-glance-graph-v2:--sealed-segments graph))
+         (open (org-glance-graph-v2:--open-segment-path graph))
+         (listed-max (or (cl-loop for n in listed
+                                  maximize (org-glance-graph-v2:--segment-generation n))
+                         0))
+         (open-empty (= 0 (or (f-size open) 0)))
+         (adopt (and open-empty
+                     (cl-loop for f in (directory-files meta nil org-glance-graph-v2:--segment-name-re)
+                              when (and (not (member f listed))
+                                        (> (org-glance-graph-v2:--segment-generation f) listed-max))
+                              collect f))))
+    (when adopt
+      ;; Disqualify compaction debris: any candidate sharing a `seq' with a
+      ;; listed segment is a copy, not a seal.
+      (let ((listed-seqs (make-hash-table :test 'eql)))
+        (dolist (name listed)
+          (org-glance-graph-v2:--scan-file
+           graph (file-truename (f-join meta name))
+           (lambda (r) (when-let ((s (plist-get r :seq))) (puthash s t listed-seqs)))))
+        (setq adopt (cl-loop for f in adopt
+                             for overlap = nil
+                             do (org-glance-graph-v2:--scan-file
+                                 graph (file-truename (f-join meta f))
+                                 (lambda (r) (when-let ((s (plist-get r :seq)))
+                                               (when (gethash s listed-seqs) (setq overlap t)))))
+                             unless overlap collect f))))
+    (when adopt
+      (org-glance-graph-v2:--write-manifest graph (append listed (sort adopt #'string<)))))
+  (org-glance-graph-v2:--ensure-newline-terminated (org-glance-graph-v2:--open-segment-path graph))
+  (setf (org-glance-graph-v2:seq graph) (org-glance-graph-v2:--max-seq graph))
+  (org-glance-graph-v2:--gc-orphans graph))
+
+(cl-defun org-glance-graph-v2:compact (graph)
+  "Merge all segments (sealed + open) into one, dropping superseded and dead
+records, and GC the content blobs of fully-deleted ids.  Folding the open
+segment in keeps the `:headlines' insertion-order contract intact (an id whose
+older record lived in a sealed segment must not be \"re-sighted\" later), and
+replacing it bumps the store-change signal -- compaction changes observable
+reads (a dropped tombstone turns `tombstone' into nil), so caches must
+invalidate.  Commit = the MANIFEST swap.  A no-op on an already-compact store.
+Return the live record count.  See MIGRATION-PLAN.md Phase 4."
+  (cl-check-type graph org-glance-graph-v2)
+  (let* ((sealed-names (org-glance-graph-v2:--sealed-segments graph))
+         (open (org-glance-graph-v2:--open-segment-path graph))
+         (open-empty (= 0 (or (f-size open) 0)))
+         (fold (org-glance-graph-v2:--latest-records graph))
+         (total (cdr fold)))
+    (let (emit dead-ids)
+      (dolist (record (car fold))
+        (if (plist-get record :tombstone)
+            (push (plist-get record :id) dead-ids) ; globally dead -> drop the id, GC its blob
+          (push record emit)))
+      (setq emit (nreverse emit))
+      ;; No-op guard: a single sealed segment of exactly the live records and an
+      ;; empty open segment is already compact -- write nothing.
+      (unless (and (<= (length sealed-names) 1) open-empty
+                   (null dead-ids) (= total (length emit)))
+        ;; 1. New compacted segment (orphan until the MANIFEST lists it).
+        (let (new-names)
+          (when emit
+            (let* ((gen (org-glance-graph-v2:--next-generation graph))
+                   (newseg (org-glance-graph-v2:--segment-path graph gen))
+                   (tmp (org-glance-graph-v2:--tmp-path graph (format "seg-%010d.jsonl" gen))))
+              (f-write-text (concat (s-join "\n" (mapcar #'json-serialize emit)) "\n") 'utf-8 tmp)
+              (rename-file tmp newseg)
+              (setq new-names (list (file-name-nondirectory newseg)))))
+          ;; 2. Commit BEFORE touching the open segment: a crash before this swap
+          ;;    leaves the old MANIFEST, old segments AND the intact open (with
+          ;;    any tombstones whose only copy lives there) fully live -- the
+          ;;    merged segment is a reapable orphan.  Truncating the open first
+          ;;    would let a crash destroy a tombstone's only copy while an old
+          ;;    listed segment still holds the headline live (resurrection).
+          (org-glance-graph-v2:--write-manifest graph new-names)
+          ;; 3. Fresh empty open segment (its content was folded in; the new
+          ;;    mtime is the store-change signal for this compaction).  A crash
+          ;;    between the swap and this point leaves duplicate-but-identical
+          ;;    records in the open, which the next scan/compaction absorbs.
+          (let ((tmp (org-glance-graph-v2:--tmp-path graph "headlines.jsonl")))
+            (f-write-text "" 'utf-8 tmp)
+            (rename-file tmp open t))))
+      ;; Content GC for fully-dead ids (idempotent), then reclaim orphan files.
+      (dolist (id dead-ids)
+        (let ((dir (ignore-errors (org-glance-graph-v2:headline-data-path graph id))))
+          (when (and dir (f-exists? dir)) (ignore-errors (f-delete dir t)))))
+      (org-glance-graph-v2:--gc-orphans graph)
+      (length emit))))
 
 ;; (cl-defun org-glance-graph-v2:add-relation (graph relation &rest entities)
 ;;   (cl-check-type graph org-glance-graph-v2)

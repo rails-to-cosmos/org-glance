@@ -9,13 +9,13 @@
 (require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
+(require 'org-glance-datetime-mode)
 
 (defvar org-glance:key-value-pair-re)
 
 (declare-function org-glance--back-to-heading "org-glance-utils.el")
 (declare-function org-glance--parse-links "org-glance-utils.el")
 (declare-function org-glance--with-file-visited "org-glance-utils.el")
-(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
 (declare-function org-glance-tag:from-string "org-glance-tag.el" (value))
 
 (org-glance-exception:define org-glance-headline:not-found! "Headline not found")
@@ -52,9 +52,11 @@
 
 (cl-defmacro org-glance-headline:with-element-narrowing (element &rest forms)
   (declare (indent 1) (debug t))
+  ;; NB: splice ELEMENT -- emitting the literal symbol only worked because every
+  ;; caller happened to name its variable `element'.
   `(save-excursion
      (save-restriction
-       (goto-char (org-element-property :begin element))
+       (goto-char (org-element-property :begin ,element))
        (org-narrow-to-element)
        ,@forms)))
 

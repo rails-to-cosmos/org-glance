@@ -1,6 +1,9 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'dash)
+(require 'cl-macs)
+(require 'org)
+(require 'org-element)
 
 (defvar-local -org-glance-datetime:local-timestamps '())
 
@@ -50,13 +53,13 @@
                  (> (or (org-element-property :repeater-value it) 0) 0))
             tss))
 
-(cl-defun org-glance-datetime-capture (&rest args)
+(cl-defun org-glance-datetime-capture (&rest _args)
   (setq-local -org-glance-datetime:local-timestamps (-some->> (org-glance-datetime-headline-timestamps)
                                           (org-glance-datetime-filter-active)
                                           (org-glance-datetime-filter-repeated)
                                           (org-glance-datetime-sort-timestamps))))
 
-(cl-defun org-glance-datetime-restore (&rest args)
+(cl-defun org-glance-datetime-restore (&rest _args)
   (let ((standard-output 'ignore)
         (tss* (-some->> (org-glance-datetime-headline-timestamps)
                 (org-glance-datetime-filter-active)

@@ -263,6 +263,43 @@ caught)."
         (should-error (org-glance-overview-v2:open) :type 'user-error)
         (should-error (org-glance-overview-v2:extract) :type 'user-error)))))
 
+(ert-deftest org-glance-test:overview-v2-tags ()
+  "Tag candidates are the distinct, sorted tags of the graph's live headlines."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "o1" "* Alpha :work:")
+                             (org-glance-test:headline "o2" "* Beta :home:work:")
+                             (org-glance-test:headline "o3" "* Gamma"))
+    (should (equal '("home" "work") (org-glance-overview-v2:tags graph)))))
+
+(ert-deftest org-glance-test:overview-interactive-tag-filter ()
+  "Invoking the overview interactively prompts for a tag and FILTERS by it
+\(regression: the prompted tag never reached the v2 visit); empty input means
+the unfiltered overview."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
+    (let ((org-glance-graph-v2 graph)
+          (org-glance-use-graph-v2 t)
+          (visited 'unset))
+      (cl-letf (((symbol-function 'org-glance-overview-v2:visit)
+                 (lambda (_graph filter) (setq visited filter)))
+                ((symbol-function 'completing-read)
+                 (lambda (&rest _) "work")))
+        (call-interactively #'org-glance-overview-v2)
+        (should (equal "work" visited))
+        ;; the v1 entry point (the C-x j o transient action) dispatches into
+        ;; the same prompting path
+        (setq visited 'unset)
+        (org-glance-overview)
+        (should (equal "work" visited)))
+      ;; empty input -> unfiltered
+      (cl-letf (((symbol-function 'org-glance-overview-v2:visit)
+                 (lambda (_graph filter) (setq visited filter)))
+                ((symbol-function 'completing-read)
+                 (lambda (&rest _) "")))
+        (call-interactively #'org-glance-overview-v2)
+        (should (null visited))))))
+
 ;;; Keymap
 
 (ert-deftest org-glance-test:overview-keymap-bindings ()

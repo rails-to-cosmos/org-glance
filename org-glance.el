@@ -7,7 +7,7 @@
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
+;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
@@ -230,8 +230,6 @@ after capture process has been finished."
   (org-glance-init-v2 directory)
   (org-glance-migrate-maybe directory)
 
-  (org-glance-overview-init)
-
   (add-hook 'org-glance-material-mode-hook #'org-glance-datetime-mode)
   (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:preserve-history-before-auto-repeat (list :depth -90))
   (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
@@ -348,17 +346,33 @@ content.  Run once after upgrading to backfill newly-added projection fields
       (message "org-glance: re-indexed %d headline(s)." n))
     n))
 
+(cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
+  "Compact DIRECTORY's v2 metadata store: merge sealed segments into one, drop
+superseded records and tombstones, and reclaim the content of deleted headlines.
+Safe to run anytime; a no-op on an already-compact store."
+  (interactive)
+  (let* ((graph (org-glance-graph-v2 directory))
+         (n (org-glance-graph-v2:compact graph)))
+    (when (called-interactively-p 'any)
+      (message "org-glance: compacted; %d live headline(s)." n))
+    n))
+
+(defvar org-glance-migrate--postponed nil
+  "Non-nil after the user declined the legacy-metadata migration prompt.
+Suppresses re-prompting for the rest of the session; `M-x org-glance-migrate'
+remains available at any time.")
+
 (cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
-  "If legacy v1 metadata is present in DIRECTORY, warn and offer to migrate.
-Return non-nil if a migration was performed."
-  (when (org-glance-legacy-metadata-files directory)
-    (display-warning 'org-glance
-                     "Legacy org-glance metadata (.metadata.el) detected; the v2 graph store supersedes it.  Run `M-x org-glance-migrate' to convert."
-                     :warning)
-    ;; (when (yes-or-no-p "org-glance: migrate legacy metadata to the new graph store now? ")
-    ;;   (org-glance-migrate directory)
-    ;;   t)
-    ))
+  "If legacy v1 metadata is present in DIRECTORY, offer to migrate it.
+Ask at most once per session; declining leaves a quiet `message' hint, not a
+warning.  Return non-nil if a migration was performed."
+  (when (and (not org-glance-migrate--postponed)
+             (org-glance-legacy-metadata-files directory))
+    (if (yes-or-no-p "org-glance: legacy .metadata.el detected; migrate to the v2 graph store now? ")
+        (progn (org-glance-migrate directory) t)
+      (setq org-glance-migrate--postponed t)
+      (message "org-glance: keeping legacy metadata for now; run `M-x org-glance-migrate' anytime to convert.")
+      nil)))
 
 (cl-defun org-glance:@ ()
   "Choose headline to refer. Insert link to it at point."

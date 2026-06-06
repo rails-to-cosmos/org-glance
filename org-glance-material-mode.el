@@ -4,7 +4,16 @@
 (require 'dash)
 (require 'org-glance-utils)
 (require 'org-glance-headline)
-(require 'org-glance-overview)
+
+;; Defined in org-glance-overview.el, which requires THIS file (it needs the
+;; `org-glance:with-headline-materialized' macro at compile time, so the
+;; require points that way) -- these are runtime-only function refs.
+(declare-function org-glance-overview "org-glance-overview" (&optional tag))
+(declare-function org-glance-overview:register-headline-in-overview "org-glance-overview" (headline tag))
+(declare-function org-glance-overview:register-headline-in-metadata "org-glance-overview" (headline tag))
+(declare-function org-glance-overview:register-headline-in-archive "org-glance-overview" (headline tag))
+(declare-function org-glance-overview:remove-headline-from-overview "org-glance-overview" (headline tag))
+(declare-function org-glance-overview:remove-headline-from-metadata "org-glance-overview" (headline tag))
 
 (declare-function org-glance--now "org-glance-utils.el")
 (declare-function org-glance-headline-reference "org-glance-metadata.el" (&optional (type 'org-glance-visit)))
@@ -105,6 +114,7 @@
            (indent-level --org-glance-materialized-headline:indent)
            (glance-hash --org-glance-materialized-headline:hash)
            (current-hash (org-glance-headline:hash headline))
+           (source-buffer --org-glance-materialized-headline:buffer)
            (source-headline (org-glance-headline:update headline
                               :begin --org-glance-materialized-headline:begin
                               :file --org-glance-materialized-headline:file

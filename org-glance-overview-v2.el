@@ -395,11 +395,29 @@ nil into the material layer."
   (let ((inhibit-read-only t))
     (revert-buffer t t t)))
 
+(cl-defun org-glance-overview-v2:tags (graph)
+  "Distinct tags across GRAPH's live headlines, sorted."
+  (sort (cl-remove-duplicates
+         (cl-loop for meta in (org-glance-graph-v2:headlines graph)
+                  append (mapcar (lambda (x) (format "%s" x))
+                                 (append (org-glance-headline-metadata-v2:tags meta) nil)))
+         :test #'string=)
+        #'string<))
+
+(cl-defun org-glance-overview-v2:completing-read-tag ()
+  "Prompt for a tag from the graph's headlines; empty input means \"all\"."
+  (cl-assert (org-glance-initialized?-v2))
+  (let ((choice (completing-read "Overview tag (empty for all): "
+                                 (org-glance-overview-v2:tags org-glance-graph-v2))))
+    (unless (string-empty-p choice) choice)))
+
 (cl-defun org-glance-overview-v2 (&optional tag)
   "Browse the v2 graph, optionally filtered.
-TAG may be a bare tag (symbol/string) or a full filter plist -- see
+Interactively, prompt for a tag (empty input = all headlines); the rendered
+overview is cached per filter and served from the cache while the graph is
+unchanged.  TAG may be a bare tag (symbol/string) or a full filter plist -- see
 `org-glance-overview-v2:spec-predicate'."
-  (interactive)
+  (interactive (list (org-glance-overview-v2:completing-read-tag)))
   (cl-assert (org-glance-initialized?-v2))
   (org-glance-overview-v2:visit org-glance-graph-v2 tag))
 

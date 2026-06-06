@@ -87,6 +87,25 @@ migrate (no whole-batch abort)."
     (should (org-glance-headline-metadata-v2?
              (org-glance-graph-v2:get-headline (org-glance-graph-v2 dir) "h1")))))
 
+(ert-deftest org-glance-test:migrate-maybe-decline-postpones ()
+  "Declining the migration prompt postpones it for the session: no warning, no
+re-prompt on the next init, and the legacy metadata is left untouched."
+  (with-temp-directory dir
+    (org-glance-test:write (f-join dir "foo" "foo.org")
+                           "* TODO Hello\n:PROPERTIES:\n:ORG_GLANCE_ID: h1\n:END:\n")
+    (org-glance-test:write (f-join dir "foo" "foo.metadata.el") "#s(hash-table)")
+    (let ((org-glance-migrate--postponed nil)
+          (prompts 0))
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (&rest _) (cl-incf prompts) nil)))
+        (should (null (org-glance-migrate-maybe dir)))
+        ;; second init: postponed -> no second prompt
+        (should (null (org-glance-migrate-maybe dir)))
+        (should (= 1 prompts))))
+    ;; nothing was migrated or renamed
+    (should (f-exists? (f-join dir "foo" "foo.metadata.el")))
+    (should-not (f-exists? (f-join dir "foo" "foo.metadata.el.bak")))))
+
 (ert-deftest org-glance-test:migrate-maybe-no-legacy-noop ()
   "With no legacy metadata present, `migrate-maybe' must not prompt or error.
 This guards `org-glance-init' from hanging in the common (already-migrated) case."

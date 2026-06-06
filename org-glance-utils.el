@@ -16,36 +16,6 @@
   (declare (indent 0) (debug t))
   `(lambda () (interactive) ,@forms))
 
-(cl-defmacro org-glance-jsonl:iterate (file &rest forms)
-  (declare (indent 1))
-  `(with-temp-buffer
-     ;; The byte-offset chunking below requires literal (raw-byte) reads, so the
-     ;; buffer is unibyte; decode each complete line as UTF-8 before parsing --
-     ;; otherwise multibyte content raises `json-utf8-decode-error'.
-     (set-buffer-multibyte nil)
-     (cl-flet ((process-line () (let ((it (json-parse-string (decode-coding-string (buffer-substring-no-properties (line-beginning-position) (line-end-position)) 'utf-8)
-                                                             :object-type 'plist)))
-                                  ,@forms)))
-       (cl-loop with result = nil
-                with chunk-size = 4096
-                with file-size = (or (file-attribute-size (file-attributes ,file)) 0)
-                with disk-read-count = 0
-                for upper-bound downfrom file-size downto 0 by chunk-size
-                for lower-bound = (max 0 (- upper-bound chunk-size))
-                do (progn (cl-incf disk-read-count)
-                          (goto-char (point-min))
-                          (insert-file-contents-literally ,file nil lower-bound upper-bound)
-                          (goto-char (point-max))
-                          (skip-chars-backward "\n")
-                          (beginning-of-line)
-                          (while (not (or (bobp) (setq result (process-line))))
-                            (forward-line -1)
-                            (beginning-of-line))
-                          (delete-region (line-end-position) (point-max)))
-                finally return (or result (condition-case nil
-                                              (process-line)
-                                            (json-end-of-file nil)))))))
-
 (cl-defmacro org-glance--with-file-visited (file &rest forms)
   "Visit FILE, execute FORMS and close it if it was closed before visit."
   (declare (indent 1) (debug t))
