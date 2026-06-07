@@ -3,11 +3,10 @@
 ;;; org-glance-material-v2.el --- v2 graph-backed selection + materialize/sync
 
 ;;; Commentary:
-;; Phase 2 (coexistence) command layer over the v2 graph.  Selection lists live
-;; headlines from the graph; materialize opens a headline's content blob in an
-;; editable buffer; apply writes it back as a NEW version (the store is
-;; append-only, last-write-wins), guarded by a hash check against concurrent
-;; changes.  Gated by `org-glance-use-graph-v2'; see MIGRATION-PLAN.md Phase 2.
+;; Command layer over the graph.  Selection lists live headlines from the
+;; graph; materialize opens a headline's content blob in an editable buffer;
+;; apply writes it back as a NEW version (the store is append-only,
+;; last-write-wins), guarded by a hash check against concurrent changes.
 
 ;;; Code:
 
@@ -20,20 +19,11 @@
 (require 'org-glance-utils)
 (require 'org-glance-headline-v2)
 (require 'org-glance-graph-v2)
+(require 'org-glance-datetime-mode)
 
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
 (defvar org-glance-graph-v2)
 (declare-function org-glance-initialized?-v2 "org-glance")
-
-(defcustom org-glance-use-graph-v2 t
-  "When non-nil, route interactive commands onto the v2 graph store.
-Default since Phase 2: `org-glance:materialize' / `:open' / `:extract' and
-`org-glance-overview' use the v2 graph for interactive (no-argument)
-invocations.  Set to nil to fall back to the v1 store.  Programmatic /
-link-follow calls (which pass an explicit headline or tag) always use v1.
-See MIGRATION-PLAN.md Phase 2."
-  :group 'org-glance
-  :type 'boolean)
 
 ;;; Selection
 
@@ -79,7 +69,9 @@ FILTER, if non-nil, is a predicate on the metadata."
   :keymap org-glance-material-v2-mode-map
   (when org-glance-material-v2-mode
     ;; org requires tab-width 8; no tabs.
-    (setq tab-width 8 indent-tabs-mode nil)))
+    (setq tab-width 8 indent-tabs-mode nil)
+    ;; Advance only the earliest of multiple repeatable timestamps on repeat.
+    (org-glance-datetime-mode 1)))
 
 (define-key org-glance-material-v2-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 
@@ -109,6 +101,67 @@ was changed."
             (org-glance-graph-v2:insert graph (list metadata))
             (run-hook-with-args 'org-glance-material-v2:sync-functions graph metadata))
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
+
+;;; Repeated headlines: clone-on-repeat
+;;
+;; When a repeated headline is completed, optionally preserve the finished
+;; repetition as a NEW graph headline (fresh id, repeater disarmed) before org
+;; bumps the timestamps, then trim the live headline back to its header and
+;; pinned blocks -- the accumulated history lives on in the clone.
+
+(defcustom org-glance-clone-on-repeat-p nil
+  "Create a new headline copy when repeating rather than modifying in place."
+  :group 'org-glance
+  :type 'boolean)
+
+(cl-defun org-glance-material-v2:clone-on-repeat (&rest _)
+  "Preserve the completed repetition of the materialized headline.
+Runs `:before' `org-auto-repeat-maybe' (the headline is still in its done
+state): snapshot the subtree, disarm its repeaters, strip its ORG_GLANCE_ID and
+capture it into the graph as a new headline."
+  (when (and org-glance-clone-on-repeat-p
+             org-glance-material-v2-mode
+             org-glance-material-v2--graph
+             (member (org-get-todo-state) org-done-keywords)
+             (org-glance-datetime-headline-repeated-p))
+    (let ((graph org-glance-material-v2--graph)
+          (contents (buffer-substring-no-properties (point-min) (point-max))))
+      (with-temp-buffer
+        (insert contents)
+        (org-glance--org-mode)
+        (goto-char (point-min))
+        (org-glance-datetime-reset-buffer-timestamps-except-earliest)
+        (goto-char (point-min))
+        (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
+        (org-glance-graph-v2:capture graph (current-buffer))))))
+
+(cl-defun org-glance-material-v2:cleanup-after-repeat (&rest _)
+  "Trim the repeated materialized headline to its header and pinned blocks.
+Runs `:after' `org-auto-repeat-maybe'; only meaningful when
+`org-glance-material-v2:clone-on-repeat' preserved the previous repetition."
+  (when (and org-glance-clone-on-repeat-p
+             org-glance-material-v2-mode
+             (org-glance-datetime-headline-repeated-p))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((header (s-trim (buffer-substring-no-properties
+                             (point)
+                             (save-excursion (org-end-of-meta-data) (point)))))
+            (pinned (cl-loop while (search-forward "#+begin_pin" nil t)
+                             collect (save-excursion
+                                       (beginning-of-line)
+                                       (buffer-substring-no-properties
+                                        (point)
+                                        (progn (search-forward "#+end_pin" nil t)
+                                               (point)))))))
+        (delete-region (point-min) (point-max))
+        (insert (s-join "\n\n" (cons header pinned)) "\n")
+        (goto-char (point-min))
+        (org-delete-property "LAST_REPEAT")))))
+
+;; Idempotent on reload: `advice-add' is a no-op for an already-added function.
+(advice-add 'org-auto-repeat-maybe :before #'org-glance-material-v2:clone-on-repeat '((depth . -90)))
+(advice-add 'org-auto-repeat-maybe :after #'org-glance-material-v2:cleanup-after-repeat)
 
 (cl-defun org-glance-material-v2:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.

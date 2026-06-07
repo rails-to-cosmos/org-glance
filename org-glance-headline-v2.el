@@ -9,14 +9,8 @@
 (require 'thunk)
 (require 'org-clock)
 
-(require 'org-glance-exception)
 (require 'org-glance-utils)
 (require 'org-glance-tag)
-(require 'org-glance-datetime-mode)
-
-(declare-function org-glance--back-to-heading "org-glance-utils.el")
-(declare-function org-glance--parse-links "org-glance-utils.el")
-(declare-function org-glance--with-file-visited "org-glance-utils.el")
 
 (unless (fboundp 'org-element-type-p)
   (cl-defun org-element-type-p (node types)

@@ -169,7 +169,7 @@ caught)."
   ;; a path-hostile value never escapes its segment
   (let ((key (org-glance-overview-v2:spec-key '(:id "a/../b"))))
     (should-not (s-contains? "/" key)))
-  ;; distinct specs MAY share a (lossy, readable) key -- correctness is enforced
+  ;; distinct specs MAY share a (lossy, hashed) key -- correctness is enforced
   ;; by the SPEC sidecar (see overview-cache-collision-rebuilds), but their
   ;; identities must always differ
   (should-not (string= (org-glance-overview-v2:--spec-identity '(:id "a" :title "b"))
@@ -177,47 +177,55 @@ caught)."
   (should-not (string= (org-glance-overview-v2:--spec-identity '(:tags ("a" "b")))
                        (org-glance-overview-v2:--spec-identity '(:tags ("a,b"))))))
 
-(ert-deftest org-glance-test:overview-spec-key-readable ()
-  "Cache directory names are always human-readable: only what the filesystem
-demands is replaced (slashes/whitespace -> _) and overlong names truncate.
-Identity lives in the SPEC sidecar, not in the name."
-  (should (string= "tags=task" (org-glance-overview-v2:spec-key '(:tags ("task")))))
-  (should (string= "tags=task" (org-glance-overview-v2:spec-key 'task)))
-  (should (string= "state=TODO&tags=work"
-                   (org-glance-overview-v2:spec-key '(:tags ("work") :state "TODO"))))
-  (should (string= "tags=work&title-contains=bill"
-                   (org-glance-overview-v2:spec-key '(:tags ("work") :title-contains "Bill"))))
-  (should (string= "tags=a,b" (org-glance-overview-v2:spec-key '(:tags ("b" "a")))))
-  ;; non-ASCII stays readable; whitespace becomes _
-  (should (string= "title-contains=приготовить_ужин"
-                   (org-glance-overview-v2:spec-key '(:title-contains "Приготовить ужин"))))
-  ;; overlong names truncate (the sidecar disambiguates)
-  (should (<= (length (org-glance-overview-v2:spec-key (list :title (make-string 200 ?x))))
-              60)))
+(ert-deftest org-glance-test:overview-spec-key-compact ()
+  "Cache directory names are short hashes of the canonical identity: fixed
+width, lowercase hex, whatever the filter carries.  The readable filter lives
+in the SPEC sidecar, not in the name."
+  ;; canonical: the bare-tag shorthand and the full form share a key
+  (should (string= (org-glance-overview-v2:spec-key 'task)
+                   (org-glance-overview-v2:spec-key '(:tags ("task")))))
+  ;; fixed-width lowercase hex -- non-ASCII, whitespace, overlong values and
+  ;; path-hostile characters all hash away
+  (dolist (filter (list '(:tags ("task"))
+                        '(:tags ("work") :state "TODO")
+                        '(:title-contains "Приготовить ужин")
+                        (list :title (make-string 200 ?x))
+                        '(:id "a/../b")))
+    (should (string-match-p "\\`[0-9a-f]\\{12\\}\\'"
+                            (org-glance-overview-v2:spec-key filter))))
+  ;; the hash is of the IDENTITY, so value boundaries survive: specs the old
+  ;; readable slug conflated get distinct keys
+  (should-not (string= (org-glance-overview-v2:spec-key '(:tags ("a" "b")))
+                       (org-glance-overview-v2:spec-key '(:tags ("a,b")))))
+  (should-not (string= (org-glance-overview-v2:spec-key '(:id "a" :title "b"))
+                       (org-glance-overview-v2:spec-key '(:id "a&title=b")))))
 
 (ert-deftest org-glance-test:overview-cache-collision-rebuilds ()
-  "Two distinct specs that share a readable key never serve each other's
+  "Two distinct specs that share a directory name never serve each other's
 content: the SPEC sidecar mismatch forces a rebuild, and re-requesting the
-owning spec hits its cache again."
+owning spec hits its cache again.  Hash keys make a real collision
+astronomically rare, so one is forced here by pinning `spec-key'."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph (org-glance-test:headline "a" "* Alpha"))
     (let ((s1 '(:id "a" :title "b"))
           (s2 '(:id "a&title=b")))
-      ;; same (lossy) directory name, different identities
-      (should (string= (org-glance-overview-v2:spec-key s1)
-                       (org-glance-overview-v2:spec-key s2)))
-      (org-glance-overview-v2:cached-file graph s1)               ; s1 owns the dir
-      (set-file-times (org-glance-graph-v2:headline-meta-path graph)
-                      (time-subtract (current-time) 100))         ; cache is fresh
-      (let ((renders 0))
-        (cl-letf (((symbol-function 'org-glance-overview-v2:render)
-                   (lambda (&rest _) (cl-incf renders) "")))
-          (org-glance-overview-v2:cached-file graph s1)           ; owner -> hit
-          (should (= 0 renders))
-          (org-glance-overview-v2:cached-file graph s2)           ; intruder -> rebuild
-          (should (= 1 renders))
-          (org-glance-overview-v2:cached-file graph s2)           ; now s2 owns -> hit
-          (should (= 1 renders)))))))
+      (cl-letf (((symbol-function 'org-glance-overview-v2:spec-key)
+                 (lambda (_filter) "deadbeef0000")))
+        ;; same directory name, different identities
+        (should (string= (org-glance-overview-v2:spec-key s1)
+                         (org-glance-overview-v2:spec-key s2)))
+        (org-glance-overview-v2:cached-file graph s1)             ; s1 owns the dir
+        (set-file-times (org-glance-graph-v2:headline-meta-path graph)
+                        (time-subtract (current-time) 100))       ; cache is fresh
+        (let ((renders 0))
+          (cl-letf (((symbol-function 'org-glance-overview-v2:render)
+                     (lambda (&rest _) (cl-incf renders) "")))
+            (org-glance-overview-v2:cached-file graph s1)         ; owner -> hit
+            (should (= 0 renders))
+            (org-glance-overview-v2:cached-file graph s2)         ; intruder -> rebuild
+            (should (= 1 renders))
+            (org-glance-overview-v2:cached-file graph s2)         ; now s2 owns -> hit
+            (should (= 1 renders))))))))
 
 ;;; Cache freshness + invalidation
 
@@ -371,18 +379,12 @@ the unfiltered overview."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
     (let ((org-glance-graph-v2 graph)
-          (org-glance-use-graph-v2 t)
           (visited 'unset))
       (cl-letf (((symbol-function 'org-glance-overview-v2:visit)
                  (lambda (_graph filter) (setq visited filter)))
                 ((symbol-function 'completing-read)
                  (lambda (&rest _) "work")))
         (call-interactively #'org-glance-overview-v2)
-        (should (equal "work" visited))
-        ;; the v1 entry point (the C-x j o transient action) dispatches into
-        ;; the same prompting path
-        (setq visited 'unset)
-        (org-glance-overview)
         (should (equal "work" visited)))
       ;; empty input -> unfiltered
       (cl-letf (((symbol-function 'org-glance-overview-v2:visit)

@@ -16,10 +16,7 @@
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
-(depends-on "ht")
 (depends-on "transient")
-(depends-on "elsa")
-(depends-on "ert-runner" "20231110.1358")
 
 (eask-defcommand test
   "Run a configured ert test suite."
@@ -27,11 +24,11 @@
         ert-batch-print-length 20
         ert-batch-print-level 10)
   (load "test/test-helpers.el")
+  (load "test/test-headline.el")
   (load "test/test-graph.el")
   (load "test/test-segments.el")
   (load "test/test-capture.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
   (load "test/test-overview.el")
-  ;; (load "test/test-headline.el")
   (ert-run-tests-batch-and-exit))

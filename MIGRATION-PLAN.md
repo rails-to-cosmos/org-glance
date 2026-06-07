@@ -316,13 +316,15 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   filter at `<store>/overviews/<key>/overview.org`; an uncacheable `:where` at
   `overviews/transient.org`; the agenda at `overviews/agenda.org`. A fresh cache
   is served via an O(1) mtime check against `headlines.jsonl` — no JSONL read, no
-  render. Cache dirs have **human-readable names** (`tags=task`,
-  `state=TODO&tags=work`, `title-contains=приготовить_ужин`) — only
-  slashes/whitespace/control chars are replaced and overlong names truncate.
-  The name is lossy; the filter's **identity** (the canonical `prin1` form)
-  lives in a `SPEC` sidecar inside each dir, checked on every cache hit — a
-  rare name collision between distinct filters rebuilds the overview instead of
-  ever serving the wrong one.
+  render. Cache dirs have **compact deterministic names**: the first 12 hex
+  chars of the SHA-1 of the canonical filter identity — order-independent,
+  filesystem-safe by construction, and identical across machines (no central
+  index needed; the name is a pure function of the filter). The prefix is
+  lossy; the filter's **identity** (the canonical `prin1` form) lives in a
+  `SPEC` sidecar inside each dir — the human-readable record of what the dir
+  holds, checked on every cache hit — so an astronomically rare name collision
+  between distinct filters rebuilds the overview instead of ever serving the
+  wrong one.
 - **Done-keywords** are resolved by `org-glance--done-keywords` (reuses Org's own
   `org-done-keywords`, else derives from `org-todo-keywords`); a per-overview
   `:done-keywords` clause overrides it. This also fixed a latent bug: the v2
@@ -341,21 +343,53 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
 
 ## Phase 3 — Delete / simplify
 
-Once v2 carries production (flag flipped on by default), remove the dead weight:
+### Phase 3.1 — v1 deletion ✅ DONE (2026-06-07; −2551/+254 lines)
 
-- **Dead code (immediate, low-risk):** `org-glance-link:state` ("Not
-  implemented"), the `org-glance:@` region branch, commented man-page
-  `org-glance-link:*` handlers, `org-glance:prototype`, `org-glance-typed` macro,
-  unused v1 accessors. *(Correction to earlier audit: `org-glance-namespace.el`
-  is NOT dead — `org-glance-tag.el` uses the `org-glance-namespace` type.)*
-- **God-functions:** delete / hard-deprecate `org-glance` and
-  `org-glance-headlines`; remove the never-raised `DB-OUTDATED` recursive path.
-- **Broken overview edit-mode:** remove `:sync-headlines`, `:track-changes`, the
-  `r` keybinding to the undefined `:move-headline`.
-- **v1 stack:** delete `org-glance-headline.el`, `org-glance-metadata.el`, v1
-  `org-glance-capture`, and drop `-v2` suffixes (this is where the `refactor`
-  branch's rename + `src/data/` reorg gets adopted — *after* the bugs are gone).
-- **Replace positional serialization** entirely (v2 JSON already does this).
+- **Deleted whole files (6):** `org-glance-headline.el`, `org-glance-metadata.el`,
+  `org-glance-overview.el`, `org-glance-material-mode.el`,
+  `org-glance-exception.el` (no live expander left),
+  `org-glance-namespace.el` (sole consumer was the v1 tag-info struct).
+- **Deleted from `org-glance.el`:** the `org-glance`/`org-glance-headlines`
+  god-functions + `DB-OUTDATED`, the scope-scan stack, v1 `org-glance-capture`
+  + capture-template machinery, the `org-glance-tags` hash family
+  (`:tags`/`:tags-sorted`/`tags:completing-read`/`create-tag`/tag dirs),
+  `org-glance:@` + `choose-and-apply`, `headline-alias`,
+  `org-glance-link:state` + face + registration, the v1 auto-repeat advices,
+  and the `org-glance:materialize`/`:open`/`:extract` dispatchers (the v2
+  commands are invoked directly now; the `org-glance-use-graph-v2` flag is
+  gone — there is nothing to fall back to). `org-glance-init` reduced to
+  mkdir + graph init + `migrate-maybe`.
+- **Rewired onto v2:** capture's interactive tag prompt (graph-derived
+  candidates via new `org-glance-graph-v2:tags`, new tags allowed, no
+  registration step); the org link `:follow`/`:complete` handlers
+  (`org-glance-visit:`/`org-glance-open:`/`org-glance-overview:` resolve through
+  the graph; stale ids/uninitialized state → `user-error`); the `C-x j`
+  transient (`org-glance-ui.el`) binds the v2 commands directly and gained a
+  `+` capture action.
+- **Ported (user-requested), not deleted:** clone-on-repeat + datetime-mode.
+  `org-glance-material-v2-mode` enables `org-glance-datetime-mode`;
+  `org-glance-clone-on-repeat-p` (now in material-v2) archives the completed
+  repetition of a repeated headline as a NEW graph headline (fresh id, repeater
+  disarmed, done state preserved) `:before org-auto-repeat-maybe`, then trims
+  the live headline to header + `#+begin_pin` blocks `:after`. 4 new tests,
+  including an end-to-end `org-todo` repeat round-trip.
+- **Support files pruned:** `utils.el` → 5 live helpers (links/key-value
+  parsing, encrypt/decrypt region); `tag.el` → predicate + deftype +
+  `to-string`. Unused deps dropped (`ht`, `elsa`, `ert-runner`);
+  `Package-Requires` now `emacs 29.1, org, aes, dash, f, transient`.
+- **Tests:** v1 tests deleted with the stack; `test-headline.el` rewritten to
+  the 15 v2 model tests and **enabled in `Eask`** (closing the Phase 4
+  "re-enable test-headline" item). Suite **114/114** local (30.2) + container
+  (29.1), zero compile warnings.
+
+### Phase 3.2 — drop `-v2` suffixes + `src/` layout ▶️ NEXT
+
+- Drop the `-v2` suffix from every surviving identifier/file (CODESTYLE rule 4:
+  the suffix only exists while both versions coexist) and adopt the `src/`
+  tree the `refactor` branch started (data layer under `src/data/`) — without
+  its `load-relative` dependency if Eask load-path config suffices.
+- On-disk formats must not change (JSON keys, cache dir names, SPEC sidecars
+  are symbol-independent — pinned by tests).
 
 ---
 

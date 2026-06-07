@@ -18,14 +18,15 @@
 ;; `:state' (no constraint).
 ;;
 ;; CACHING.  The unfiltered overview lives at `<store>/overview.org'; each
-;; cacheable filter gets its own directory `<store>/overviews/<key>/overview.org'.
+;; cacheable filter gets its own directory `<store>/overviews/<key>/overview.org'
+;; (<key> = a short hash of the canonical filter; the SPEC sidecar inside
+;; records the filter readably).
 ;; A cached file is served untouched -- no JSONL read, no render -- while it is
 ;; newer than the append-only `headlines.jsonl' (`:fresh?'), and rebuilt
 ;; otherwise.  An uncacheable `:where' filter renders every time to a transient
 ;; file so it never clobbers a real cache.
 ;;
-;; Browse with `org-glance-overview-v2'; act on the headline at point.  Gated by
-;; `org-glance-use-graph-v2'; see MIGRATION-PLAN.md Phase 2.
+;; Browse with `org-glance-overview-v2'; act on the headline at point.
 
 ;;; Code:
 
@@ -60,8 +61,8 @@
   ;;             parameterised by :done-keywords; :where is a raw predicate;
   ;;             :done-keywords contributes no clause of its own)
   ;;   :accessor metadata accessor the clause tests
-  ;;   :canon    canonicalisation kind shared by the SPEC identity, the cache
-  ;;             key and the readable slug (see `--canon-value'; nil = as-is)
+  ;;   :canon    canonicalisation kind shared by the SPEC identity and the
+  ;;             cache key (see `--canon-value'; nil = as-is)
   `((:tags           :match member-all     :canon tags
                      :accessor ,#'org-glance-headline-metadata-v2:tags)
     (:state          :match state-equal
@@ -81,8 +82,8 @@
     (:deadline       :match present-absent :accessor ,#'org-glance-headline-metadata-v2:deadline)
     (:where))
   "The single source of truth for the overview filter language.
-Drives `filter-keys', `spec-predicate', `--canonical-pairs' and `--key-value'
-together -- previously each new key meant four lockstep edits, two of them
+Drives `filter-keys', `spec-predicate' and `--canonical-pairs' together --
+previously each new key meant four lockstep edits, two of them
 silently forgettable (a missing predicate clause made the filter match
 EVERYTHING; a missing canonicalisation case fragmented the cache).  Adding a
 plain value-key = one row here.  `:title' is exact; `:title-contains' is a
@@ -191,26 +192,12 @@ clause must hold (logical AND).  See `org-glance-overview-v2:filter-table'."
 
 (cl-defun org-glance-overview-v2:--canon-value (key value)
   "Canonical form of VALUE under KEY, per the table's :canon kind.
-Shared by the SPEC identity, the cache key and the readable slug -- previously
-duplicated between `--canonical-pairs' and `--key-value'."
+Shared by the SPEC identity and the cache key (a hash of that identity)."
   (pcase (plist-get (alist-get key org-glance-overview-v2:filter-table) :canon)
     ('tags (sort (mapcar (lambda (x) (downcase (format "%s" x))) value) #'string<))
     ('string-list (sort (mapcar (lambda (x) (format "%s" x)) value) #'string<))
     ('downcase (downcase (format "%s" value)))
     (_ value)))
-
-(cl-defun org-glance-overview-v2:--key-value (key value)
-  "Human-readable printed form of one CANONICAL filter VALUE under KEY.
-Used only for the readable directory name; identity lives in the SPEC sidecar."
-  (cond
-   ((memq (plist-get (alist-get key org-glance-overview-v2:filter-table) :canon)
-          '(tags string-list))
-    (s-join "," (mapcar (lambda (x) (format "%s" x)) value)))
-   ((eq value t) "t")
-   ((null value) "nil")
-   ((keywordp value) (substring (symbol-name value) 1))
-   ((numberp value) (number-to-string value))
-   (t (format "%s" value))))
 
 (cl-defun org-glance-overview-v2:--canonical-pairs (spec)
   "Order-independent (KEY . VALUE) alist for normalised SPEC.
@@ -221,28 +208,22 @@ unambiguously."
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
 (cl-defun org-glance-overview-v2:spec-key (filter)
-  "Return a readable, filesystem-safe cache key for FILTER.
+  "Return a compact, deterministic cache key for FILTER.
 \"all\" for the empty filter; nil when FILTER is uncacheable (carries `:where').
-Specs differing only in key order or tag order map to the same key.  The key is
-the canonical readable form -- e.g. \"tags=task\", \"state=TODO&tags=work\" --
-with only what the filesystem demands replaced (slashes, whitespace, control
-chars -> `_') and overlong names truncated.  The name is therefore LOSSY:
-distinct specs can rarely share a key; the SPEC sidecar check in `cached-file'
-turns such a collision into a rebuild, never into serving the wrong overview."
+The key is the first 12 hex chars of the SHA-1 of the canonical spec identity
+(`org-glance-overview-v2:--spec-identity'), so specs differing only in key
+order or tag order map to the same key, every machine derives the same name
+for the same filter, and the name is filesystem-safe by construction.  The
+prefix is still LOSSY: distinct specs can (astronomically rarely) share a key;
+the SPEC sidecar check in `cached-file' turns such a collision into a rebuild,
+never into serving the wrong overview.  The sidecar, not the name, is the
+human-readable record of which filter a cache directory holds."
   (let ((spec (org-glance-overview-v2:--normalize-spec filter)))
     (cond
      ((null spec) "all")
      ((plist-member spec :where) nil)
-     (t (let ((pairs (org-glance-overview-v2:--canonical-pairs spec)))
-          (if (null pairs)
-              "all"
-            (s-truncate 60
-                        (replace-regexp-in-string
-                         "[/[:cntrl:][:space:]]" "_"
-                         (s-join "&" (cl-loop for (k . v) in pairs
-                                              collect (concat (substring (symbol-name k) 1) "="
-                                                              (org-glance-overview-v2:--key-value k v)))))
-                        "")))))))
+     (t (substring (secure-hash 'sha1 (org-glance-overview-v2:--spec-identity spec))
+                   0 12)))))
 
 (cl-defun org-glance-overview-v2:--spec-identity (filter)
   "Unambiguous printed identity of FILTER's canonical form.
@@ -335,8 +316,9 @@ cost.  A future-dated source (clock skew / restored backup) also rebuilds."
 (cl-defun org-glance-overview-v2:write (graph &optional filter)
   "Unconditionally (re)generate FILTER's overview file for GRAPH; return its path.
 Used by the agenda and by `g' (refresh), which must always rebuild.  A keyed
-cache directory also gets its SPEC identity sidecar, claiming the (lossy,
-human-readable) directory name for exactly this filter."
+cache directory also gets its SPEC identity sidecar, claiming the (hashed,
+lossy) directory name for exactly this filter and recording the filter
+readably."
   (let ((key (org-glance-overview-v2:spec-key filter))
         (file (org-glance-overview-v2:spec-cache-file graph filter)))
     (f-mkdir-full-path (f-dirname file))
@@ -349,9 +331,10 @@ human-readable) directory name for exactly this filter."
 (cl-defun org-glance-overview-v2:cached-file (graph &optional filter)
   "Path to FILTER's overview file for GRAPH, rebuilding only when stale.
 A hit requires the file to be fresh AND, for keyed directories, the SPEC
-sidecar to record exactly FILTER's identity -- directory names are readable but
-lossy, so a name collision between distinct filters rebuilds instead of serving
-the other filter's overview.  On a hit the file is returned without reading
+sidecar to record exactly FILTER's identity -- directory names are truncated
+hashes, so a (rare) name collision between distinct filters rebuilds instead
+of serving the other filter's overview.  On a hit the file is returned without
+reading
 `headlines.jsonl' or rendering.  An uncacheable `:where' filter always
 re-renders."
   (let ((key (org-glance-overview-v2:spec-key filter))
@@ -464,12 +447,7 @@ nil into the material layer."
 
 (cl-defun org-glance-overview-v2:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."
-  (sort (cl-remove-duplicates
-         (cl-loop for meta in (org-glance-graph-v2:headlines graph)
-                  append (mapcar (lambda (x) (format "%s" x))
-                                 (append (org-glance-headline-metadata-v2:tags meta) nil)))
-         :test #'string=)
-        #'string<))
+  (org-glance-graph-v2:tags graph))
 
 (cl-defun org-glance-overview-v2:states (graph)
   "Distinct non-empty todo states across GRAPH's live headlines, sorted."

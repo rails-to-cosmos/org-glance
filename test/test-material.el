@@ -123,16 +123,15 @@ This guards the interactive save path users actually hit."
       (should (string= "bar" (org-glance-headline-metadata-v2:title meta))))))
 
 (ert-deftest org-glance-test:material-save-e2e ()
-  "End-to-end interactive save: `org-glance:materialize' (flag on, no arg) opens
-the buffer; editing and invoking `C-x C-s' (the standard save command) persists
-to the graph.  Drives the real command + the real keybinding."
+  "End-to-end interactive save: `org-glance-materialize-v2' opens the buffer;
+editing and invoking `C-x C-s' (the standard save command) persists to the
+graph.  Drives the real command + the real keybinding."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph (org-glance-test:headline "e2e1" "* TODO foo" "body"))
-    (let ((org-glance-use-graph-v2 t)
-          (org-glance-graph-v2 graph))
+    (let ((org-glance-graph-v2 graph))
       (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll))))
         (save-window-excursion
-          (org-glance:materialize)
+          (org-glance-materialize-v2)
           (unwind-protect
               (progn
                 (should (string-prefix-p "*org-glance: " (buffer-name)))
@@ -244,60 +243,17 @@ for the original id (the sync hook skips a mismatched id)."
       (let ((org-glance-graph-v2 graph))
         (should (string= "val" (org-glance-extract-v2)))))))
 
-;;; dispatch: no-arg (interactive) invocation must route to v2, not crash
-
-;; Regression: the menu-invoked `org-glance:materialize' crashed with
-;; (wrong-type-argument org-glance-headline nil) because dispatch keyed on
-;; `called-interactively-p', which is nil under transient's advice wrapper.
-;; Dispatch must key on the absence of a headline arg instead. A plain no-arg
-;; funcall reproduces the transient path (caller is `apply', not
-;; `funcall-interactively'), so `called-interactively-p' is nil here too.
-
-(ert-deftest org-glance-test:materialize-dispatch-noarg ()
-  "No-arg `org-glance:materialize' with the flag on routes to the v2 graph."
-  (org-glance-test:with-graph graph
-    (org-glance-graph-v2:add graph (org-glance-test:headline "d1" "* TODO foo"))
-    (let ((org-glance-use-graph-v2 t)
-          (org-glance-graph-v2 graph)
-          (opened nil))
-      (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                ((symbol-function 'switch-to-buffer) (lambda (buf &rest _) (setq opened buf) buf)))
-        (org-glance:materialize))
-      (should (bufferp opened)))))
-
-(ert-deftest org-glance-test:open-dispatch-noarg ()
-  "No-arg `org-glance:open' with the flag on routes to the v2 graph."
-  (org-glance-test:with-graph graph
-    (org-glance-graph-v2:add graph (org-glance-test:headline "d2" "* foo" "[[https://example.com][ex]]"))
-    (let ((org-glance-use-graph-v2 t)
-          (org-glance-graph-v2 graph)
-          (called nil))
-      (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                ((symbol-function 'org-open-at-point) (lambda (&rest _) (setq called t))))
-        (org-glance:open))
-      (should called))))
-
-(ert-deftest org-glance-test:extract-dispatch-noarg ()
-  "No-arg `org-glance:extract' with the flag on routes to the v2 graph."
-  (org-glance-test:with-graph graph
-    (org-glance-graph-v2:add graph (org-glance-test:headline "d3" "* foo" "- key: val"))
-    (let ((org-glance-use-graph-v2 t)
-          (org-glance-graph-v2 graph))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (if (assoc "key" coll) "key" (caar coll)))))
-        (should (string= "val" (org-glance:extract)))))))
-
 (ert-deftest org-glance-test:open-filters-nonlinked ()
   "open-v2 offers only linked headlines."
   (org-glance-test:with-graph graph
     (org-glance-graph-v2:add graph
                              (org-glance-test:headline "L" "* foo" "[[https://x.example][x]]")
                              (org-glance-test:headline "P" "* bar" "no link here"))
-    (let ((org-glance-use-graph-v2 t) (org-glance-graph-v2 graph) (called nil))
+    (let ((org-glance-graph-v2 graph) (called nil))
       (cl-letf (((symbol-function 'completing-read)
                  (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll)))
                 ((symbol-function 'org-open-at-point) (lambda (&rest _) (setq called t))))
-        (org-glance:open))
+        (org-glance-open-v2))
       (should called))))
 
 (ert-deftest org-glance-test:extract-filters-nonpropertized ()
@@ -306,18 +262,102 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-graph-v2:add graph
                              (org-glance-test:headline "K" "* foo" "- k: v")
                              (org-glance-test:headline "N" "* bar" "no pairs"))
-    (let ((org-glance-use-graph-v2 t) (org-glance-graph-v2 graph))
+    (let ((org-glance-graph-v2 graph))
       (cl-letf (((symbol-function 'completing-read)
                  (lambda (_p coll &rest _)
                    (if (assoc "k" coll) "k"
                      (progn (should (= 1 (length coll))) (caar coll))))))
-        (should (string= "v" (org-glance:extract)))))))
+        (should (string= "v" (org-glance-extract-v2)))))))
 
 (ert-deftest org-glance-test:link-materialize-stale-id-errors ()
   "Following a stale org-glance link errors loudly, not popping a picker."
-  (let ((org-glance-tags (make-hash-table)))
+  ;; Uninitialized: still a loud user-error, no picker.
+  (let ((org-glance-graph-v2 nil))
     (should-error (org-glance-link:materialize "no-such-id") :type 'user-error)
-    (should-error (org-glance-link:open "no-such-id") :type 'user-error)))
+    (should-error (org-glance-link:open "no-such-id") :type 'user-error))
+  ;; Initialized but the id is unknown: not-found user-error.
+  (org-glance-test:with-graph graph
+    (let ((org-glance-graph-v2 graph))
+      (should-error (org-glance-link:materialize "no-such-id") :type 'user-error)
+      (should-error (org-glance-link:open "no-such-id") :type 'user-error))))
+
+(ert-deftest org-glance-test:material-datetime-mode-enabled ()
+  "Materialized buffers enable `org-glance-datetime-mode'."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "R" "* TODO water"))
+    (let ((buffer (org-glance-material-v2:open graph "R")))
+      (unwind-protect
+          (with-current-buffer buffer
+            (should org-glance-datetime-mode))
+        (kill-buffer buffer)))))
+
+(ert-deftest org-glance-test:material-clone-on-repeat ()
+  "Completing a repeated headline preserves the done state as a new headline."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "R" "* TODO water flowers :house:"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (let ((buffer (org-glance-material-v2:open graph "R"))
+          (org-glance-clone-on-repeat-p t)
+          (org-log-repeat nil)
+          (org-log-done nil))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (org-todo "DONE")
+            (let* ((headlines (org-glance-graph-v2:headlines graph))
+                   (clone (cl-find-if (lambda (m) (not (string= "R" (org-glance-headline-metadata-v2:id m))))
+                                      headlines)))
+              (should (= 2 (length headlines)))
+              (should clone)
+              ;; The clone preserves the completed state...
+              (should (string= "DONE" (org-glance-headline-metadata-v2:state clone)))
+              (should (member "house" (append (org-glance-headline-metadata-v2:tags clone) nil)))
+              ;; ...with its repeater disarmed, so it never repeats again.
+              (should (s-contains? "+0d" (org-glance-graph-v2:get-content
+                                          graph (org-glance-headline-metadata-v2:id clone))))
+              ;; The live headline repeated forward.
+              (should (string= "TODO" (org-get-todo-state)))))
+        (kill-buffer buffer)))))
+
+(ert-deftest org-glance-test:material-cleanup-after-repeat ()
+  "After repeating, the live headline is trimmed to header + pinned blocks."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "R" "* TODO routine"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"
+                                                             "#+begin_pin"
+                                                             "keep me"
+                                                             "#+end_pin"
+                                                             "transient note"))
+    (let ((buffer (org-glance-material-v2:open graph "R"))
+          (org-glance-clone-on-repeat-p t)
+          (org-log-repeat nil)
+          (org-log-done nil))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (org-todo "DONE")
+            (should (s-contains? "keep me" (buffer-string)))
+            (should-not (s-contains? "transient note" (buffer-string)))
+            (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string))))
+        (kill-buffer buffer)))))
+
+(ert-deftest org-glance-test:material-no-clone-when-disabled ()
+  "Without `org-glance-clone-on-repeat-p', repeating leaves the graph alone."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "R" "* TODO water"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"
+                                                             "transient note"))
+    (let ((buffer (org-glance-material-v2:open graph "R"))
+          (org-glance-clone-on-repeat-p nil)
+          (org-log-repeat nil)
+          (org-log-done nil))
+      (unwind-protect
+          (with-current-buffer buffer
+            (goto-char (point-min))
+            (org-todo "DONE")
+            (should (= 1 (length (org-glance-graph-v2:headlines graph))))
+            (should (s-contains? "transient note" (buffer-string))))
+        (kill-buffer buffer)))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

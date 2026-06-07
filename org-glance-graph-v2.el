@@ -375,8 +375,8 @@ unlisted with an empty open -- `--heal' adopts it on the next open."
 
 (cl-defun org-glance-graph-v2:store-path (graph)
   "Hidden per-directory store root for the graph.
-Dot-prefixed so v1 tag discovery (`org-glance--list-directories', which
-matches `^[[:word:]]+') and `org-agenda' ignore it during coexistence."
+Dot-prefixed so `org-agenda' (and legacy v1 tag discovery, which matched
+`^[[:word:]]+') ignore it."
   (cl-check-type graph org-glance-graph-v2)
   (-> (f-join (org-glance-graph-v2:directory graph) ".org-glance")
       (file-truename)))
@@ -498,6 +498,16 @@ segments (first-sighting in the oldest->newest scan == earliest insertion)."
   (cl-loop for record in (car (org-glance-graph-v2:--latest-records graph))
            unless (plist-get record :tombstone)
            collect (org-glance-headline-metadata-v2:deserialize record)))
+
+(cl-defun org-glance-graph-v2:tags (graph)
+  "Distinct tags across GRAPH's live headlines, sorted."
+  (cl-check-type graph org-glance-graph-v2)
+  (sort (cl-remove-duplicates
+         (cl-loop for meta in (org-glance-graph-v2:headlines graph)
+                  append (mapcar (lambda (x) (format "%s" x))
+                                 (append (org-glance-headline-metadata-v2:tags meta) nil)))
+         :test #'string=)
+        #'string<))
 
 (cl-defun org-glance-graph-v2:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,
