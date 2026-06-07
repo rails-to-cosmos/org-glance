@@ -22,11 +22,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   "Create a graph in a fresh temp directory, bind it to GRAPH, run BODY."
   (declare (indent 1))
   `(with-temp-directory dir
-     (let ((,graph (org-glance-graph-v2 dir)))
+     (let ((,graph (org-glance-graph dir)))
        ,@body)))
 
 (cl-defun org-glance-test:headline (id &rest lines)
-  "Build an `org-glance-headline-v2' carrying ID.
+  "Build an `org-glance-headline' carrying ID.
 LINES is the heading, then optional planning (SCHEDULED:/DEADLINE:/CLOSED:)
 lines, then optional body.  The ORG_GLANCE_ID drawer is placed after the
 heading and any planning lines -- where org expects a property drawer --
@@ -36,7 +36,7 @@ so the id parses correctly whether or not a body or planning is present."
                     (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
                     rest))
          (body (seq-drop rest (length planning))))
-    (apply #'org-glance-headline-v2--from-lines
+    (apply #'org-glance-headline--from-lines
            (append (list (car lines))
                    planning
                    (list ":PROPERTIES:"

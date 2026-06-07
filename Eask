@@ -4,6 +4,8 @@
 (keywords "org-mode" "graph" "mindmap")
 
 (package-file "org-glance.el")
+(files "*.el" "src/data/*.el" "src/view/*.el")
+(load-paths "./src/data" "./src/view")
 
 (script "test" "echo \"Error: no test specified\" && exit 1")
 

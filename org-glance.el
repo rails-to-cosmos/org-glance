@@ -42,21 +42,20 @@
 
 (require 'org-glance-ui)
 (require 'org-glance-utils)
-(require 'org-glance-capture-v2)
-(require 'org-glance-headline-v2)
-(require 'org-glance-graph-v2)
-(require 'org-glance-material-v2)
-(require 'org-glance-overview-v2)
+(require 'org-glance-capture)
+(require 'org-glance-headline)
+(require 'org-glance-graph)
+(require 'org-glance-material)
+(require 'org-glance-overview)
 
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."
   :group 'org-glance
   :type 'directory)
 
-(defvar org-glance-graph-v2 nil
-  "Current global instance of `org-glance-graph-v2'.
-Constructed lazily by `org-glance-init-v2' (also called from
-`org-glance-init'); nil until the system is initialized.")
+(defvar org-glance-graph nil
+  "Current global graph instance.
+Constructed by `org-glance-init'; nil until the system is initialized.")
 
 (defgroup org-glance nil "Org-mode mindmap explorer."
   :tag "Org Glance"
@@ -65,21 +64,17 @@ Constructed lazily by `org-glance-init-v2' (also called from
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Initialize org-glance in DIRECTORY: bring up the graph store and offer a
 one-time migration when legacy metadata is detected."
+  (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
   (unless (f-exists? directory)
     (mkdir directory t))
-  (org-glance-init-v2 directory)
+  (setq org-glance-graph (org-glance-graph directory))
   (org-glance-migrate-maybe directory))
 
-(cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
-  "Init global `org-glance-graph-v2' in DIRECTORY."
-  (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
-  (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
+(cl-defun org-glance-initialized? ()
+  "Return the global graph if the system is initialized, else nil."
+  org-glance-graph)
 
-(cl-defun org-glance-initialized?-v2 ()
-  "Return `org-glance-graph' if system is initialized, or else return `nil'."
-  org-glance-graph-v2)
-
-;; --- Phase 1: runtime migration of legacy v1 metadata into the v2 graph -------
+;; --- Runtime migration of legacy v1 metadata into the graph -----------------
 ;;
 ;; The org files are canonical (see MIGRATION-PLAN.md), so migration RE-SCANS the
 ;; sources -- it does not trust v1's possibly-stale `begin' pointers and never
@@ -94,7 +89,7 @@ one-time migration when legacy metadata is detected."
              collect file)))
 
 (cl-defun org-glance-migrate--source-files (directory)
-  "Canonical org source files under DIRECTORY, excluding the v2 store."
+  "Canonical org source files under DIRECTORY, excluding the store."
   (cl-loop for file in (directory-files-recursively directory "\\.org\\(_archive\\)?\\'")
            unless (string-match-p "/\\.org-glance/" file)
            collect file))
@@ -108,12 +103,12 @@ Detected by its prop-line `mode: org-glance-overview' marker."
     (re-search-forward "mode:[ \t]*org-glance-overview" nil t)))
 
 (cl-defun org-glance-migrate (&optional (directory org-glance-directory))
-  "Rebuild the v2 graph in DIRECTORY from legacy v1 content.
+  "Rebuild the graph in DIRECTORY from legacy v1 content.
 Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID,
 add them to the graph preserving ids, then back up legacy `*.metadata.el' files
 to `*.metadata.el.bak'.  Return the number of headlines ingested."
   (interactive)
-  (let* ((graph (org-glance-graph-v2 directory))
+  (let* ((graph (org-glance-graph directory))
          (sources (org-glance-migrate--source-files directory))
          (legacy (org-glance-legacy-metadata-files directory))
          (total (length sources))
@@ -139,9 +134,9 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
                       (with-temp-buffer
                         (insert-file-contents file)
                         (org-glance--org-mode)
-                        (dolist (headline (org-glance-graph-v2:capture-buffer (current-buffer)))
-                          (when (org-glance-headline-v2:id headline)
-                            (org-glance-graph-v2:add graph headline)
+                        (dolist (headline (org-glance-graph:capture-buffer (current-buffer)))
+                          (when (org-glance-headline:id headline)
+                            (org-glance-graph:add graph headline)
                             (cl-incf count))))
                     (error
                      (push file skipped)
@@ -161,24 +156,24 @@ to `*.metadata.el.bak'.  Return the number of headlines ingested."
     count))
 
 (cl-defun org-glance-reindex (&optional (directory org-glance-directory))
-  "Re-derive metadata for all headlines in DIRECTORY's v2 graph from their stored
+  "Re-derive metadata for all headlines in DIRECTORY's graph from their stored
 content.  Run once after upgrading to backfill newly-added projection fields
-(e.g. the `linked?'/`propertized?' flags used to filter `org-glance-open-v2'
-and `org-glance-extract-v2')."
+(e.g. the `linked?'/`propertized?' flags used to filter `org-glance-open'
+and `org-glance-extract')."
   (interactive)
-  (let* ((graph (org-glance-graph-v2 directory))
-         (n (org-glance-graph-v2:reindex graph)))
+  (let* ((graph (org-glance-graph directory))
+         (n (org-glance-graph:reindex graph)))
     (when (called-interactively-p 'any)
       (message "org-glance: re-indexed %d headline(s)." n))
     n))
 
 (cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
-  "Compact DIRECTORY's v2 metadata store: merge sealed segments into one, drop
+  "Compact DIRECTORY's metadata store: merge sealed segments into one, drop
 superseded records and tombstones, and reclaim the content of deleted headlines.
 Safe to run anytime; a no-op on an already-compact store."
   (interactive)
-  (let* ((graph (org-glance-graph-v2 directory))
-         (n (org-glance-graph-v2:compact graph)))
+  (let* ((graph (org-glance-graph directory))
+         (n (org-glance-graph:compact graph)))
     (when (called-interactively-p 'any)
       (message "org-glance: compacted; %d live headline(s)." n))
     n))
@@ -194,7 +189,7 @@ Ask at most once per session; declining leaves a quiet `message' hint, not a
 warning.  Return non-nil if a migration was performed."
   (when (and (not org-glance-migrate--postponed)
              (org-glance-legacy-metadata-files directory))
-    (if (yes-or-no-p "org-glance: legacy .metadata.el detected; migrate to the v2 graph store now? ")
+    (if (yes-or-no-p "org-glance: legacy .metadata.el detected; migrate to the graph store now? ")
         (progn (org-glance-migrate directory) t)
       (setq org-glance-migrate--postponed t)
       (message "org-glance: keeping legacy metadata for now; run `M-x org-glance-migrate' anytime to convert.")
@@ -220,22 +215,22 @@ warning.  Return non-nil if a migration was performed."
   :group 'faces)
 
 (cl-defun org-glance-link:choose-thing-for-materialization ()
-  (unless (org-glance-initialized?-v2)
+  (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
   (concat "org-glance-visit:"
-          (org-glance-headline-metadata-v2:id
-           (org-glance-material-v2:completing-read org-glance-graph-v2))))
+          (org-glance-headline-metadata:id
+           (org-glance-material:completing-read org-glance-graph))))
 
 (cl-defun org-glance-link:choose-thing-for-opening ()
-  (unless (org-glance-initialized?-v2)
+  (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
   (concat "org-glance-open:"
-          (org-glance-headline-metadata-v2:id
-           (org-glance-material-v2:completing-read
-            org-glance-graph-v2
+          (org-glance-headline-metadata:id
+           (org-glance-material:completing-read
+            org-glance-graph
             :prompt "Open: "
-            :filter (lambda (m) (and (org-glance-headline-metadata-v2:active? m)
-                                (org-glance-headline-metadata-v2:linked? m)))))))
+            :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                                (org-glance-headline-metadata:linked? m)))))))
 
 
 (org-link-set-parameters
@@ -256,21 +251,21 @@ warning.  Return non-nil if a migration was performed."
 
 (defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
-  (unless (org-glance-initialized?-v2)
+  (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
-  (switch-to-buffer (org-glance-material-v2:open org-glance-graph-v2 id)))
+  (switch-to-buffer (org-glance-material:open org-glance-graph id)))
 
 (defun org-glance-link:open (id &optional _)
   "Open a link inside the org-glance headline identified by ID."
-  (unless (org-glance-initialized?-v2)
+  (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
-  (let ((headline (org-glance-graph-v2:headline org-glance-graph-v2 id)))
+  (let ((headline (org-glance-graph:headline org-glance-graph id)))
     (unless headline (user-error "org-glance: headline %s not found" id))
-    (org-glance-material-v2:open-link headline)))
+    (org-glance-material:open-link headline)))
 
 (defun org-glance-link:overview (tag &optional _)
   "Open the overview filtered by TAG."
-  (org-glance-overview-v2 (downcase tag)))
+  (org-glance-overview (downcase tag)))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

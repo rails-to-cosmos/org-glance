@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
-;;; org-glance-material-v2.el --- v2 graph-backed selection + materialize/sync
+;;; org-glance-material.el --- graph-backed selection + materialize/sync
 
 ;;; Commentary:
 ;; Command layer over the graph.  Selection lists live headlines from the
@@ -17,34 +17,34 @@
 (require 's)
 
 (require 'org-glance-utils)
-(require 'org-glance-headline-v2)
-(require 'org-glance-graph-v2)
+(require 'org-glance-headline)
+(require 'org-glance-graph)
 (require 'org-glance-datetime-mode)
 
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
-(defvar org-glance-graph-v2)
-(declare-function org-glance-initialized?-v2 "org-glance")
+(defvar org-glance-graph)
+(declare-function org-glance-initialized? "org-glance")
 
 ;;; Selection
 
-(cl-defun org-glance-material-v2:label (metadata)
+(cl-defun org-glance-material:label (metadata)
   "Completing-read label for headline METADATA: \"[tags] title\"."
-  (cl-check-type metadata org-glance-headline-metadata-v2)
-  (let ((tags (append (org-glance-headline-metadata-v2:tags metadata) nil)))
+  (cl-check-type metadata org-glance-headline-metadata)
+  (let ((tags (append (org-glance-headline-metadata:tags metadata) nil)))
     (concat (if tags (format "[%s] " (s-join "," tags)) "")
-            (org-glance-headline-metadata-v2:title metadata))))
+            (org-glance-headline-metadata:title metadata))))
 
-(cl-defun org-glance-material-v2:completing-read (graph &key (prompt "Headline: ") filter)
+(cl-defun org-glance-material:completing-read (graph &key (prompt "Headline: ") filter)
   "Choose a live headline from GRAPH and return its metadata.
 FILTER, if non-nil, is a predicate on the metadata."
-  (cl-check-type graph org-glance-graph-v2)
+  (cl-check-type graph org-glance-graph)
   ;; FILTER often calls `active?'/`done?', which read the buffer-local
   ;; `org-done-keywords' -- nil in this command/minibuffer context.  Bind the
   ;; user's done set so the filter is correct regardless of the current buffer.
   (let* ((org-done-keywords (org-glance--done-keywords))
-         (candidates (cl-loop for meta in (org-glance-graph-v2:headlines graph)
+         (candidates (cl-loop for meta in (org-glance-graph:headlines graph)
                               when (or (null filter) (funcall filter meta))
-                              collect (cons (org-glance-material-v2:label meta) meta))))
+                              collect (cons (org-glance-material:label meta) meta))))
     (unless candidates
       (user-error "No matching headlines (run `M-x org-glance-reindex' if you upgraded)"))
     (cdr (assoc (completing-read prompt candidates nil t) candidates))))
@@ -58,48 +58,48 @@ FILTER, if non-nil, is a predicate on the metadata."
 ;; saved content.  Emacs's own "file changed on disk" handling covers concurrent
 ;; edits, so there is no custom conflict prompt.
 
-(defvar org-glance-material-v2-mode-map (make-sparse-keymap)
-  "Keymap for `org-glance-material-v2-mode'.")
+(defvar org-glance-material-mode-map (make-sparse-keymap)
+  "Keymap for `org-glance-material-mode'.")
 
-(define-minor-mode org-glance-material-v2-mode
-  "Minor mode for a v2-graph materialized headline buffer."
-  :lighter " glance-v2"
+(define-minor-mode org-glance-material-mode
+  "Minor mode for a materialized headline buffer."
+  :lighter " glance"
   :global nil
   :group 'org-glance
-  :keymap org-glance-material-v2-mode-map
-  (when org-glance-material-v2-mode
+  :keymap org-glance-material-mode-map
+  (when org-glance-material-mode
     ;; org requires tab-width 8; no tabs.
     (setq tab-width 8 indent-tabs-mode nil)
     ;; Advance only the earliest of multiple repeatable timestamps on repeat.
     (org-glance-datetime-mode 1)))
 
-(define-key org-glance-material-v2-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
 
-(defvar-local org-glance-material-v2--graph nil
+(defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
-(defvar-local org-glance-material-v2--id nil
+(defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 
-(defvar org-glance-material-v2:sync-functions nil
+(defvar org-glance-material:sync-functions nil
   "Abnormal hook run after a materialized save refreshed the metadata index.
 Each function is called with GRAPH and the fresh METADATA record; views (e.g.
 open overview buffers) subscribe here to stay coherent with the store.")
 
-(cl-defun org-glance-material-v2:sync ()
+(cl-defun org-glance-material:sync ()
   "Refresh the graph metadata index from the just-saved materialized blob.
 Buffer-local `after-save-hook': the file save already persisted the content, so
 this appends a fresh metadata record (append-only) and announces it via
-`org-glance-material-v2:sync-functions'.  No-op if the buffer's ORG_GLANCE_ID
+`org-glance-material:sync-functions'.  No-op if the buffer's ORG_GLANCE_ID
 was changed."
-  (when (and org-glance-material-v2--graph org-glance-material-v2--id)
-    (let* ((graph org-glance-material-v2--graph)
-           (id org-glance-material-v2--id)
-           (headline (org-glance-headline-v2--from-string
+  (when (and org-glance-material--graph org-glance-material--id)
+    (let* ((graph org-glance-material--graph)
+           (id org-glance-material--id)
+           (headline (org-glance-headline--from-string
                       (buffer-substring-no-properties (point-min) (point-max)))))
-      (if (equal (org-glance-headline-v2:id headline) id)
-          (let ((metadata (org-glance-headline-v2:metadata headline)))
-            (org-glance-graph-v2:insert graph (list metadata))
-            (run-hook-with-args 'org-glance-material-v2:sync-functions graph metadata))
+      (if (equal (org-glance-headline:id headline) id)
+          (let ((metadata (org-glance-headline:metadata headline)))
+            (org-glance-graph:insert graph (list metadata))
+            (run-hook-with-args 'org-glance-material:sync-functions graph metadata))
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
 
 ;;; Repeated headlines: clone-on-repeat
@@ -114,17 +114,17 @@ was changed."
   :group 'org-glance
   :type 'boolean)
 
-(cl-defun org-glance-material-v2:clone-on-repeat (&rest _)
+(cl-defun org-glance-material:clone-on-repeat (&rest _)
   "Preserve the completed repetition of the materialized headline.
 Runs `:before' `org-auto-repeat-maybe' (the headline is still in its done
 state): snapshot the subtree, disarm its repeaters, strip its ORG_GLANCE_ID and
 capture it into the graph as a new headline."
   (when (and org-glance-clone-on-repeat-p
-             org-glance-material-v2-mode
-             org-glance-material-v2--graph
+             org-glance-material-mode
+             org-glance-material--graph
              (member (org-get-todo-state) org-done-keywords)
              (org-glance-datetime-headline-repeated-p))
-    (let ((graph org-glance-material-v2--graph)
+    (let ((graph org-glance-material--graph)
           (contents (buffer-substring-no-properties (point-min) (point-max))))
       (with-temp-buffer
         (insert contents)
@@ -133,14 +133,14 @@ capture it into the graph as a new headline."
         (org-glance-datetime-reset-buffer-timestamps-except-earliest)
         (goto-char (point-min))
         (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
-        (org-glance-graph-v2:capture graph (current-buffer))))))
+        (org-glance-graph:capture graph (current-buffer))))))
 
-(cl-defun org-glance-material-v2:cleanup-after-repeat (&rest _)
+(cl-defun org-glance-material:cleanup-after-repeat (&rest _)
   "Trim the repeated materialized headline to its header and pinned blocks.
 Runs `:after' `org-auto-repeat-maybe'; only meaningful when
-`org-glance-material-v2:clone-on-repeat' preserved the previous repetition."
+`org-glance-material:clone-on-repeat' preserved the previous repetition."
   (when (and org-glance-clone-on-repeat-p
-             org-glance-material-v2-mode
+             org-glance-material-mode
              (org-glance-datetime-headline-repeated-p))
     (save-excursion
       (goto-char (point-min))
@@ -160,56 +160,56 @@ Runs `:after' `org-auto-repeat-maybe'; only meaningful when
         (org-delete-property "LAST_REPEAT")))))
 
 ;; Idempotent on reload: `advice-add' is a no-op for an already-added function.
-(advice-add 'org-auto-repeat-maybe :before #'org-glance-material-v2:clone-on-repeat '((depth . -90)))
-(advice-add 'org-auto-repeat-maybe :after #'org-glance-material-v2:cleanup-after-repeat)
+(advice-add 'org-auto-repeat-maybe :before #'org-glance-material:clone-on-repeat '((depth . -90)))
+(advice-add 'org-auto-repeat-maybe :after #'org-glance-material:cleanup-after-repeat)
 
-(cl-defun org-glance-material-v2:open (graph id)
+(cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.
 Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
-  (cl-check-type graph org-glance-graph-v2)
+  (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((meta (org-glance-graph-v2:get-headline graph id)))
-    (unless (org-glance-headline-metadata-v2? meta)
+  (let ((meta (org-glance-graph:get-headline graph id)))
+    (unless (org-glance-headline-metadata? meta)
       (user-error "No live headline with id %s" id))
-    (let ((path (f-join (org-glance-graph-v2:headline-data-path graph id) "data.org")))
+    (let ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org")))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
       (let ((buffer (find-file-noselect path)))
         (with-current-buffer buffer
-          (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata-v2:title meta)) t)
-          (setq-local org-glance-material-v2--graph graph
-                      org-glance-material-v2--id id)
-          (add-hook 'after-save-hook #'org-glance-material-v2:sync nil t)
-          (org-glance-material-v2-mode 1))
+          (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
+          (setq-local org-glance-material--graph graph
+                      org-glance-material--id id)
+          (add-hook 'after-save-hook #'org-glance-material:sync nil t)
+          (org-glance-material-mode 1))
         buffer))))
 
-(cl-defun org-glance-material-v2:apply ()
+(cl-defun org-glance-material:apply ()
   "Save the materialized buffer: write the blob and sync its metadata."
   (interactive)
-  (unless org-glance-material-v2--graph
-    (user-error "Not in an org-glance v2 materialized buffer"))
+  (unless org-glance-material--graph
+    (user-error "Not in an org-glance materialized buffer"))
   (save-buffer))
 
 ;;; Command
 
-(cl-defun org-glance-materialize-v2 ()
-  "Choose a headline from the v2 graph and materialize it."
+(cl-defun org-glance-materialize ()
+  "Choose a headline from the graph and materialize it."
   (interactive)
-  (cl-assert (org-glance-initialized?-v2))
-  (let* ((graph org-glance-graph-v2)
-         (metadata (org-glance-material-v2:completing-read
-                    graph :filter #'org-glance-headline-metadata-v2:active?))
-         (id (org-glance-headline-metadata-v2:id metadata)))
-    (switch-to-buffer (org-glance-material-v2:open graph id))))
+  (cl-assert (org-glance-initialized?))
+  (let* ((graph org-glance-graph)
+         (metadata (org-glance-material:completing-read
+                    graph :filter #'org-glance-headline-metadata:active?))
+         (id (org-glance-headline-metadata:id metadata)))
+    (switch-to-buffer (org-glance-material:open graph id))))
 
 ;;; Read commands: open / extract (operate on the stored blob, read-only)
 
-(cl-defun org-glance-material-v2:open-link (headline)
+(cl-defun org-glance-material:open-link (headline)
   "Open a non-org-glance link from HEADLINE's contents, prompting if several.
 Reconstructs the content in a temp buffer and runs `org-open-at-point' at the
 chosen link, mirroring the v1 behaviour."
-  (cl-check-type headline org-glance-headline-v2)
-  (org-glance-headline-v2:with-contents headline
+  (cl-check-type headline org-glance-headline)
+  (org-glance-headline:with-contents headline
     (cl-loop for (link title pos) in (org-glance--parse-links)
              unless (s-starts-with-p "[[org-glance-" link)
              collect (list title pos) into links
@@ -222,23 +222,23 @@ chosen link, mirroring the v1 behaviour."
              (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
                (org-open-at-point)))))
 
-(cl-defun org-glance-open-v2 ()
-  "Choose a headline from the v2 graph and open a link inside it."
+(cl-defun org-glance-open ()
+  "Choose a headline from the graph and open a link inside it."
   (interactive)
-  (cl-assert (org-glance-initialized?-v2))
-  (let* ((graph org-glance-graph-v2)
-         (metadata (org-glance-material-v2:completing-read
+  (cl-assert (org-glance-initialized?))
+  (let* ((graph org-glance-graph)
+         (metadata (org-glance-material:completing-read
                     graph :prompt "Open: "
-                    :filter (lambda (m) (and (org-glance-headline-metadata-v2:active? m)
-                                        (org-glance-headline-metadata-v2:linked? m)))))
-         (headline (org-glance-graph-v2:headline graph (org-glance-headline-metadata-v2:id metadata))))
-    (org-glance-material-v2:open-link headline)))
+                    :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                                        (org-glance-headline-metadata:linked? m)))))
+         (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
+    (org-glance-material:open-link headline)))
 
-(cl-defun org-glance-material-v2:extract (headline &optional key)
+(cl-defun org-glance-material:extract (headline &optional key)
   "Copy a key-value pair from HEADLINE's contents to the kill ring; return value.
 With KEY, extract it non-interactively; otherwise prompt."
-  (cl-check-type headline org-glance-headline-v2)
-  (let ((pairs (org-glance-headline-v2:properties headline)))
+  (cl-check-type headline org-glance-headline)
+  (let ((pairs (org-glance-headline:properties headline)))
     (unless pairs (user-error "No key-value pairs in headline"))
     (let* ((key (or key (completing-read "Extract: " pairs nil t)))
            (value (alist-get key pairs nil nil #'string=)))
@@ -246,18 +246,18 @@ With KEY, extract it non-interactively; otherwise prompt."
       (when (called-interactively-p 'any) (message "Copied: %s" value))
       value)))
 
-(cl-defun org-glance-extract-v2 ()
-  "Choose a headline from the v2 graph and extract a key-value pair from it."
+(cl-defun org-glance-extract ()
+  "Choose a headline from the graph and extract a key-value pair from it."
   (interactive)
-  (cl-assert (org-glance-initialized?-v2))
-  (let* ((graph org-glance-graph-v2)
-         (metadata (org-glance-material-v2:completing-read
+  (cl-assert (org-glance-initialized?))
+  (let* ((graph org-glance-graph)
+         (metadata (org-glance-material:completing-read
                     graph :prompt "Extract from: "
-                    :filter (lambda (m) (and (org-glance-headline-metadata-v2:active? m)
-                                        (or (org-glance-headline-metadata-v2:propertized? m)
-                                            (org-glance-headline-metadata-v2:encrypted? m))))))
-         (headline (org-glance-graph-v2:headline graph (org-glance-headline-metadata-v2:id metadata))))
-    (org-glance-material-v2:extract headline)))
+                    :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                                        (or (org-glance-headline-metadata:propertized? m)
+                                            (org-glance-headline-metadata:encrypted? m))))))
+         (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
+    (org-glance-material:extract headline)))
 
-(provide 'org-glance-material-v2)
-;;; org-glance-material-v2.el ends here
+(provide 'org-glance-material)
+;;; org-glance-material.el ends here

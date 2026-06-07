@@ -382,29 +382,46 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   "re-enable test-headline" item). Suite **114/114** local (30.2) + container
   (29.1), zero compile warnings.
 
-### Phase 3.2 — drop `-v2` suffixes + `src/` layout ▶️ NEXT
+### Phase 3.2 — drop `-v2` suffixes + `src/` layout ✅ DONE (2026-06-07)
 
-- Drop the `-v2` suffix from every surviving identifier/file (CODESTYLE rule 4:
-  the suffix only exists while both versions coexist) and adopt the `src/`
-  tree the `refactor` branch started (data layer under `src/data/`) — without
-  its `load-relative` dependency if Eask load-path config suffices.
-- On-disk formats must not change (JSON keys, cache dir names, SPEC sidecars
-  are symbol-independent — pinned by tests).
+- **Every `-v2` identifier renamed** (1,316 token replacements, ordered
+  longest-first): `org-glance-graph[-v2]` (struct/ctor/accessors/global var/
+  defcustoms), `org-glance-headline[-v2]`, `org-glance-headline-metadata[-v2]`,
+  `org-glance-material[-v2]` (mode is now `org-glance-material-mode`),
+  `org-glance-overview[-v2]`, `org-glance-capture[-v2]`, and the commands
+  `org-glance-{materialize,open,extract,agenda}`. `org-glance-init-v2` folded
+  into `org-glance-init`; `org-glance-initialized?-v2` →
+  `org-glance-initialized?`.
+- **`src/` tree adopted** (no `load-relative` dependency — Eask's
+  `(load-paths "./src/data" "./src/view")` + `(files …)` suffice for compile,
+  tests and the container build): `src/data/` = graph, headline, tag, utils;
+  `src/view/` = overview, material, capture, ui, datetime-mode;
+  `org-glance.el` stays at the root as the package entry point.
+  Non-Eask users must add both dirs to `load-path` (or use a `:files` recipe).
+- **On-disk formats unchanged** (JSON keys, seq, MANIFEST, SPEC identities —
+  all symbol-independent, pinned by tests). One compat shim added: overview
+  caches written before the rename carry a `mode: org-glance-overview-v2`
+  prop-line that would enable a no-longer-existing mode — `cached-file` now
+  also requires the cache header to match the current
+  `org-glance-overview:header`, so stale-header caches rebuild instead of
+  being served (regression-tested).
+- Suite **115/115** local (30.2) + container (29.1), zero compile warnings.
 
 ---
 
 ## Phase 4 — Stabilize & test
 
-- **Re-enable `test/test-headline.el`** in `Eask` (currently commented at l.33);
-  make it green. Single highest-value stability move.
-- **Harden sync against data loss:** atomic write (temp-then-rename) in
-  `org-glance-materialized-headline-apply`; distinguish "source changed" from
-  "corrupted"; stop swallowing sync-hook errors via `with-demoted-errors`.
-- **Namespace / de-stack advice** on `org-auto-repeat-maybe` (re-adds on reload).
+- ✅ **Re-enable `test/test-headline.el`** in `Eask` — DONE with Phase 3.1: the
+  file was split (its 3 v1 tests died with the v1 stack), its 15 headline-model
+  tests are loaded and green.
+- **Harden sync against data loss:** atomic write (temp-then-rename) for the
+  material-save path; consider surfacing (not demoting) overview-update errors.
+- **Overview cache GC:** filter caches accumulate under `<store>/overviews/`
+  (safe to `rm -rf`; no auto-eviction yet).
 - ✅ **Storage maintenance — segmented (LSM-lite) store + GC / compaction** —
   DONE (2026-06-05). The metadata store is no longer one ever-growing file:
   - **Segments:** `meta/headlines.jsonl` is the OPEN append segment; crossing
-    `org-glance-graph-v2-segment-max-bytes` (soft cap, default 256 KiB, checked
+    `org-glance-graph-segment-max-bytes` (soft cap, default 256 KiB, checked
     after each whole-batch append so records never split) seals it via atomic
     rename into immutable `seg-NNNNNNNNNN.jsonl`. A one-line JSON **MANIFEST**
     (`{version,next-gen,next-seq,segments[oldest-first],open}`) lists the live
@@ -415,9 +432,9 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
     first-sighting order (the insertion-order contract holds across files).
   - **Signal:** `headline-meta-path` still returns `meta/headlines.jsonl`, and
     every mutation (insert/delete/seal/compact) bumps its mtime — the overview
-    cache (`overview-v2:fresh?`) needed zero changes.
+    cache (`overview:fresh?`) needed zero changes.
   - **Compaction** (`M-x org-glance-graph-compact` + auto at
-    `org-glance-graph-v2-compact-segment-count` sealed segments, default 4):
+    `org-glance-graph-compact-segment-count` sealed segments, default 4):
     folds ALL segments (sealed + open) into one, drops superseded records and
     dropped tombstones, **content-GCs** `data/<id…>/` blobs of fully-deleted
     ids, commits via one MANIFEST swap **before** truncating the open segment
@@ -486,7 +503,7 @@ tag namespace and org-agenda):
     `{"id","tombstone":true,"seq":…}`. `seq` is a store-global monotonic storage
     ordinal (ignored by `deserialize`; legacy records lack it = ordered by
     position). Sealed into `seg-NNNNNNNNNN.jsonl` (atomic rename) when its size
-    crosses `org-glance-graph-v2-segment-max-bytes`.
+    crosses `org-glance-graph-segment-max-bytes`.
   - **`seg-NNNNNNNNNN.jsonl`** — immutable sealed segments, append-order,
     10-digit zero-padded generation (lexical = numeric = age order). Unlisted
     seg-* files and `*.tmp.*` are orphans: invisible to readers, reaped at open.

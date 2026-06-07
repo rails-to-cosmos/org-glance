@@ -20,11 +20,11 @@
                                  (symbol (list types)))))
       (otherwise nil))))
 
-(defconst org-glance-headline-v2:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
-(defconst org-glance-headline-v2:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
+(defconst org-glance-headline:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
+(defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
 
-(cl-defstruct (org-glance-headline-v2 (:predicate org-glance-headline-v2?)
-                                      (:conc-name org-glance-headline-v2:))
+(cl-defstruct (org-glance-headline (:predicate org-glance-headline?)
+                                      (:conc-name org-glance-headline:))
   (contents nil :read-only t :type string)
   (id nil :read-only t :type string)
   (state nil :read-only t :type string)
@@ -33,7 +33,7 @@
   (priority nil :read-only t :type number)
   (indent nil :read-only t :type number)
   ;; Hold the parsed org-element timestamp object (or nil); the public
-  ;; `org-glance-headline-v2:schedule' / `:deadline' methods expose raw strings.
+  ;; `org-glance-headline:schedule' / `:deadline' methods expose raw strings.
   (-schedule nil :read-only t :type (or null list))
   (-deadline nil :read-only t :type (or null list))
 
@@ -42,7 +42,7 @@
   (closed nil :read-only t :type (or null string))
   (commented? nil :read-only t :type bool)
 
-  ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline-v2--<slot-name>'
+  ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline--<slot-name>'
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-links nil :read-only t :type (or list function))
@@ -57,114 +57,114 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
   (delay-mode-hooks (org-mode))
   (setq tab-width 8 indent-tabs-mode nil))
 
-(cl-defmacro org-glance-headline-v2:with-contents (contents &rest forms)
+(cl-defmacro org-glance-headline:with-contents (contents &rest forms)
   (declare (indent 1))
   `(with-temp-buffer
      (insert (cl-typecase ,contents
-               (org-glance-headline-v2 (org-glance-headline-v2:contents ,contents))
+               (org-glance-headline (org-glance-headline:contents ,contents))
                (string ,contents)
-               (otherwise (error "Expected `org-glance-headline-v2' or string, but got %s" (type-of ,contents)))))
+               (otherwise (error "Expected `org-glance-headline' or string, but got %s" (type-of ,contents)))))
      ;; org's parser requires tab-width 8; ensure it before any form parses.
      (org-glance--org-mode)
      (goto-char (point-min))
      ,@forms))
 
-(cl-defun org-glance-headline-v2:at-point ()
+(cl-defun org-glance-headline:at-point ()
   (save-excursion
     (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
              while (org-at-heading-p)
              for element = (org-element-at-point)
              if (org-element-type-p element 'headline) ;; (and (listp element) (eq (car element) 'headline))
-             return (org-glance-headline-v2--from-element element)
+             return (org-glance-headline--from-element element)
              else if (or (org-before-first-heading-p) (bobp))
-             do (error "Unable to find `org-glance-headline-v2' at point")
+             do (error "Unable to find `org-glance-headline' at point")
              else
              do (org-up-heading-or-point-min))))
 
-(cl-defun org-glance-headline-v2:active? (headline)
-  (not (or (org-glance-headline-v2:done? headline)
-           (org-glance-headline-v2:commented? headline)
-           (org-glance-headline-v2:archived? headline)
-           (org-glance-headline-v2:closed headline))))
+(cl-defun org-glance-headline:active? (headline)
+  (not (or (org-glance-headline:done? headline)
+           (org-glance-headline:commented? headline)
+           (org-glance-headline:archived? headline)
+           (org-glance-headline:closed headline))))
 
-(cl-defun org-glance-headline-v2:encrypted? (headline)
-  (let ((encrypted? (org-glance-headline-v2:-encrypted? headline)))
+(cl-defun org-glance-headline:encrypted? (headline)
+  (let ((encrypted? (org-glance-headline:-encrypted? headline)))
     (cl-typecase encrypted?
       (boolean encrypted?)
       (function (thunk-force encrypted?))
-      (otherwise (error "Lazy evaluation failed: `org-glance-headline-v2:encrypted?'")))))
+      (otherwise (error "Lazy evaluation failed: `org-glance-headline:encrypted?'")))))
 
-(cl-defun org-glance-headline-v2:hash (headline)
-  (thunk-force (org-glance-headline-v2:-hash headline)))
+(cl-defun org-glance-headline:hash (headline)
+  (thunk-force (org-glance-headline:-hash headline)))
 
-(cl-defun org-glance-headline-v2:links (headline)
-  (thunk-force (org-glance-headline-v2:-links headline)))
+(cl-defun org-glance-headline:links (headline)
+  (thunk-force (org-glance-headline:-links headline)))
 
-(cl-defun org-glance-headline-v2:properties (headline)
-  (thunk-force (org-glance-headline-v2:-properties headline)))
+(cl-defun org-glance-headline:properties (headline)
+  (thunk-force (org-glance-headline:-properties headline)))
 
-(cl-defun org-glance-headline-v2:get-user-property (property headline)
-  (alist-get property (org-glance-headline-v2:properties headline) nil nil #'string=))
+(cl-defun org-glance-headline:get-user-property (property headline)
+  (alist-get property (org-glance-headline:properties headline) nil nil #'string=))
 
-(cl-defun org-glance-headline-v2:done? (headline)
-  (not (null (member (org-glance-headline-v2:state headline) org-done-keywords))))
+(cl-defun org-glance-headline:done? (headline)
+  (not (null (member (org-glance-headline:state headline) org-done-keywords))))
 
-(cl-defun org-glance-headline-v2:schedule (headline)
+(cl-defun org-glance-headline:schedule (headline)
   "Scheduled timestamp of HEADLINE as a raw org string, or nil."
-  (cl-check-type headline org-glance-headline-v2)
-  (-some->> (org-glance-headline-v2:-schedule headline)
+  (cl-check-type headline org-glance-headline)
+  (-some->> (org-glance-headline:-schedule headline)
     (org-element-property :raw-value)))
 
-(cl-defun org-glance-headline-v2:deadline (headline)
+(cl-defun org-glance-headline:deadline (headline)
   "Deadline timestamp of HEADLINE as a raw org string, or nil."
-  (cl-check-type headline org-glance-headline-v2)
-  (-some->> (org-glance-headline-v2:-deadline headline)
+  (cl-check-type headline org-glance-headline)
+  (-some->> (org-glance-headline:-deadline headline)
     (org-element-property :raw-value)))
 
-(cl-defun org-glance-headline-v2--hash (contents)
+(cl-defun org-glance-headline--hash (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline-v2:with-contents contents
+  (thunk-delay (org-glance-headline:with-contents contents
                  (cl-loop initially (org-glance--org-mode)
-                          for property in org-glance-headline-v2:hash-ignore-properties
+                          for property in org-glance-headline:hash-ignore-properties
                           do (org-entry-delete nil property)
                           finally return (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
                                            (with-temp-buffer
                                              (insert data)
                                              (buffer-hash)))))))
 
-(cl-defun org-glance-headline-v2--links (contents)
+(cl-defun org-glance-headline--links (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline-v2:with-contents contents
+  (thunk-delay (org-glance-headline:with-contents contents
                  (org-glance--parse-links))))
 
-(cl-defun org-glance-headline-v2--properties (contents)
+(cl-defun org-glance-headline--properties (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline-v2:with-contents contents
-                 (cl-loop while (re-search-forward org-glance-headline-v2:key-value-pair-re nil t)
+  (thunk-delay (org-glance-headline:with-contents contents
+                 (cl-loop while (re-search-forward org-glance-headline:key-value-pair-re nil t)
                           collect (cons (s-trim (substring-no-properties (match-string 1)))
                                         (s-trim (substring-no-properties (match-string 2))))))))
 
-(cl-defun org-glance-headline-v2--encrypted (contents)
+(cl-defun org-glance-headline--encrypted (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline-v2:with-contents contents
+  (thunk-delay (org-glance-headline:with-contents contents
                  (org-end-of-meta-data t)
                  (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
 
-(cl-defun org-glance-headline-v2--from-string (contents)
+(cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)
-  (org-glance-headline-v2:with-contents contents
+  (org-glance-headline:with-contents contents
     (org-glance--org-mode)
     (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
       (error "Unable to find `org-element' of type `headline' in the provided contents"))
-    (org-glance-headline-v2:at-point)))
+    (org-glance-headline:at-point)))
 
-(cl-defun org-glance-headline-v2--from-lines (&rest lines)
+(cl-defun org-glance-headline--from-lines (&rest lines)
   (declare (indent 0))
   (cl-check-type lines list)
-  (org-glance-headline-v2--from-string (apply (lambda (&rest tokens) (s-join "\n" tokens)) lines)))
+  (org-glance-headline--from-string (apply (lambda (&rest tokens) (s-join "\n" tokens)) lines)))
 
-(cl-defun org-glance-headline-v2--from-element (element)
-  "Create `org-glance-headline-v2' from `org-element' ELEMENT."
+(cl-defun org-glance-headline--from-element (element)
+  "Create `org-glance-headline' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
         (tags (mapcar (-compose #'intern #'s-downcase) (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
@@ -184,7 +184,7 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
                         (end (org-element-property :end element)))
                     (with-current-buffer buffer
                       (buffer-substring-no-properties begin end)))))
-    (make-org-glance-headline-v2 :id id
+    (make-org-glance-headline :id id
                                  :title title
                                  :tags tags
                                  :state state
@@ -196,91 +196,91 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
                                  :archived? archived?
                                  :commented? commented?
                                  :closed closed
-                                 :-hash (org-glance-headline-v2--hash contents)
-                                 :-links (org-glance-headline-v2--links contents)
-                                 :-properties (org-glance-headline-v2--properties contents)
-                                 :-encrypted? (org-glance-headline-v2--encrypted contents))))
+                                 :-hash (org-glance-headline--hash contents)
+                                 :-links (org-glance-headline--links contents)
+                                 :-properties (org-glance-headline--properties contents)
+                                 :-encrypted? (org-glance-headline--encrypted contents))))
 
-(cl-defun org-glance-headline-v2--copy (headline &rest update-plist)
+(cl-defun org-glance-headline--copy (headline &rest update-plist)
   "Copy HEADLINE but replace slot values described in UPDATE-PLIST."
   (declare (indent 1))
-  (cl-check-type headline org-glance-headline-v2)
-  (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline-v2))
+  (cl-check-type headline org-glance-headline)
+  (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline))
            for slot-name = (car slot-info)
            for slot-property = (intern (format ":%s" slot-name))
            for slot-value = (if (plist-member update-plist slot-property)
                                 (plist-get update-plist slot-property)
-                              (cl-struct-slot-value 'org-glance-headline-v2 slot-name headline))
+                              (cl-struct-slot-value 'org-glance-headline slot-name headline))
            collect slot-property into params
            collect slot-value into params
-           finally (return (apply #'make-org-glance-headline-v2 params))))
+           finally (return (apply #'make-org-glance-headline params))))
 
-(cl-defun org-glance-headline-v2:encrypt (headline password)
-  (cl-check-type headline org-glance-headline-v2)
+(cl-defun org-glance-headline:encrypt (headline password)
+  (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
-  (if (org-glance-headline-v2:encrypted? headline)
+  (if (org-glance-headline:encrypted? headline)
       headline
-    (org-glance-headline-v2--copy headline
-      :contents (org-glance-headline-v2:with-contents headline
+    (org-glance-headline--copy headline
+      :contents (org-glance-headline:with-contents headline
                   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
                         (end (save-excursion (org-end-of-subtree t) (point))))
                     (org-glance--encrypt-region beg end password)
                     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       :-encrypted? t)))
 
-(cl-defun org-glance-headline-v2:decrypt (headline password)
-  (cl-check-type headline org-glance-headline-v2)
+(cl-defun org-glance-headline:decrypt (headline password)
+  (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
-  (if (not (org-glance-headline-v2:encrypted? headline))
+  (if (not (org-glance-headline:encrypted? headline))
       headline
-    (org-glance-headline-v2--copy headline
-      :contents (org-glance-headline-v2:with-contents headline
+    (org-glance-headline--copy headline
+      :contents (org-glance-headline:with-contents headline
                   (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
                         (end (save-excursion (org-end-of-subtree t) (point))))
                     (org-glance--decrypt-region beg end password)
                     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
       :-encrypted? nil)))
 
-(cl-defun org-glance-headline-v2:search-forward (id)
+(cl-defun org-glance-headline:search-forward (id)
   (cl-check-type id string)
   (save-excursion
     (cl-loop while (re-search-forward (concat ":ORG_GLANCE_ID:[ \t]+" id) nil 'no-error)
-             for headline = (org-glance-headline-v2:at-point)
-             when (and (org-glance-headline-v2? headline)
-                       (string= id (org-glance-headline-v2:id headline)))
+             for headline = (org-glance-headline:at-point)
+             when (and (org-glance-headline? headline)
+                       (string= id (org-glance-headline:id headline)))
              return headline)))
 
-(cl-defun org-glance-headline-v2:reset-indent (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (let ((contents (org-glance-headline-v2:with-contents headline
+(cl-defun org-glance-headline:reset-indent (headline)
+  (cl-check-type headline org-glance-headline)
+  (let ((contents (org-glance-headline:with-contents headline
                     (org-glance--org-mode)
                     (re-search-forward "\\^*")
                     (while (looking-at "^\\*\\*")
                       (org-promote-subtree))
                     (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
-    (org-glance-headline-v2--copy headline
+    (org-glance-headline--copy headline
       :indent 1
       :contents contents
-      :-hash (org-glance-headline-v2--hash contents))))
+      :-hash (org-glance-headline--hash contents))))
 
-(cl-defun org-glance-headline-v2:title-clean (headline)
-  (cl-check-type headline org-glance-headline-v2)
+(cl-defun org-glance-headline:title-clean (headline)
+  (cl-check-type headline org-glance-headline)
   (replace-regexp-in-string
    org-link-bracket-re
    (lambda (match) (or (match-string 2 match) (match-string 1 match) ""))
-   (org-glance-headline-v2:title headline)))
+   (org-glance-headline:title headline)))
 
-(cl-defun org-glance-headline-v2:add-note (headline message &rest format-args)
-  (cl-check-type headline org-glance-headline-v2)
+(cl-defun org-glance-headline:add-note (headline message &rest format-args)
+  (cl-check-type headline org-glance-headline)
   (cl-check-type message string)
-  (let ((contents (org-glance-headline-v2:with-contents headline
+  (let ((contents (org-glance-headline:with-contents headline
                     (org-glance--org-mode)
                     (goto-char (org-log-beginning t))
                     (insert "- " (apply #'format message format-args) "\n")
                     (buffer-substring-no-properties (point-min) (point-max)))))
-    (org-glance-headline-v2--copy headline
+    (org-glance-headline--copy headline
       :contents contents
-      :-hash (org-glance-headline-v2--hash contents))))
+      :-hash (org-glance-headline--hash contents))))
 
 (cl-defun org-glance--element-timestamps (element)
   (cl-check-type element list)
@@ -290,41 +290,41 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
     ;;                 (org-element-property :deadline element)))
     ))
 
-(cl-defun org-glance-headline-v2:timestamps (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (org-glance-headline-v2:with-contents headline
+(cl-defun org-glance-headline:timestamps (headline)
+  (cl-check-type headline org-glance-headline)
+  (org-glance-headline:with-contents headline
     (org-glance--org-mode)
     (->> #'org-glance--element-timestamps
          (org-element-map (org-element-parse-buffer) '(timestamp headline))
          (-flatten-n 1)
          (-non-nil))))
 
-(cl-defun org-glance-headline-v2:timestamps-raw (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (mapcar (-partial #'org-element-property :raw-value) (org-glance-headline-v2:timestamps headline)))
+(cl-defun org-glance-headline:timestamps-raw (headline)
+  (cl-check-type headline org-glance-headline)
+  (mapcar (-partial #'org-element-property :raw-value) (org-glance-headline:timestamps headline)))
 
-(cl-defun org-glance-headline-v2:clocks (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (org-glance-headline-v2:with-contents headline
+(cl-defun org-glance-headline:clocks (headline)
+  (cl-check-type headline org-glance-headline)
+  (org-glance-headline:with-contents headline
     (org-glance--org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
 
-(cl-defun org-glance-headline-v2:tag-string (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (when-let (tags (org-glance-headline-v2:tags headline))
+(cl-defun org-glance-headline:tag-string (headline)
+  (cl-check-type headline org-glance-headline)
+  (when-let (tags (org-glance-headline:tags headline))
     (-> (s-join ":" (mapcar #'symbol-name tags))
         (s-wrap ":" ":"))))
 
-(cl-defun org-glance-headline-v2:overview (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (let ((timestamps (org-glance-headline-v2:timestamps-raw headline))
-        (clocks (->> (org-glance-headline-v2:clocks headline)
+(cl-defun org-glance-headline:overview (headline)
+  (cl-check-type headline org-glance-headline)
+  (let ((timestamps (org-glance-headline:timestamps-raw headline))
+        (clocks (->> (org-glance-headline:clocks headline)
                      (--filter (eql 'closed (org-element-property :status it)))))
-        (hash (org-glance-headline-v2:hash headline))
-        (id (org-glance-headline-v2:id headline)))
-    (org-glance-headline-v2:with-contents (org-glance-headline-v2:header headline)
+        (hash (org-glance-headline:hash headline))
+        (id (org-glance-headline:id headline)))
+    (org-glance-headline:with-contents (org-glance-headline:header headline)
       (org-glance--org-mode)
 
       (when id (org-entry-put nil "ORG_GLANCE_ID" id))
@@ -341,12 +341,12 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
 
       (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
 
-(cl-defun org-glance-headline-v2:header (headline)
-  (cl-check-type headline org-glance-headline-v2)
-  (org-glance-headline-v2:with-contents headline
+(cl-defun org-glance-headline:header (headline)
+  (cl-check-type headline org-glance-headline)
+  (org-glance-headline:with-contents headline
     (org-glance--org-mode)
     (buffer-substring-no-properties (point) (save-excursion
                                               (org-end-of-meta-data)
                                               (point)))))
 
-(provide 'org-glance-headline-v2)
+(provide 'org-glance-headline)
