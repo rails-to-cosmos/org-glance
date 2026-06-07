@@ -88,18 +88,26 @@ FILTER, if non-nil, is a predicate on the metadata."
 (defvar-local org-glance-material-v2--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 
+(defvar org-glance-material-v2:sync-functions nil
+  "Abnormal hook run after a materialized save refreshed the metadata index.
+Each function is called with GRAPH and the fresh METADATA record; views (e.g.
+open overview buffers) subscribe here to stay coherent with the store.")
+
 (cl-defun org-glance-material-v2:sync ()
   "Refresh the graph metadata index from the just-saved materialized blob.
 Buffer-local `after-save-hook': the file save already persisted the content, so
-this appends a fresh metadata record (append-only).  No-op if the buffer's
-ORG_GLANCE_ID was changed."
+this appends a fresh metadata record (append-only) and announces it via
+`org-glance-material-v2:sync-functions'.  No-op if the buffer's ORG_GLANCE_ID
+was changed."
   (when (and org-glance-material-v2--graph org-glance-material-v2--id)
     (let* ((graph org-glance-material-v2--graph)
            (id org-glance-material-v2--id)
            (headline (org-glance-headline-v2--from-string
                       (buffer-substring-no-properties (point-min) (point-max)))))
       (if (equal (org-glance-headline-v2:id headline) id)
-          (org-glance-graph-v2:insert graph (list (org-glance-headline-v2:metadata headline)))
+          (let ((metadata (org-glance-headline-v2:metadata headline)))
+            (org-glance-graph-v2:insert graph (list metadata))
+            (run-hook-with-args 'org-glance-material-v2:sync-functions graph metadata))
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
 
 (cl-defun org-glance-material-v2:open (graph id)

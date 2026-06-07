@@ -294,6 +294,17 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   refinement AND-composes onto the buffer's filter (re-filtering a dimension
   replaces it), visits the result non-destructively, and gets/re-uses its own
   cache like any other filter.
+- **View coherence — invariant: an overview must never show outdated results.**
+  Two mechanisms: (1) *eager surgical push* — a materialized save announces the
+  fresh metadata (`org-glance-material-v2:sync-functions`); every open overview
+  buffer patches just the affected heading in place (replace / drop /
+  full-rebuild-if-newly-matching) and persists the patch to its cache file,
+  keeping buffer == cache == render(store); (2) *lazy pull at the display
+  boundary* — overview buffers re-check freshness whenever (re)shown or their
+  window selected (`window-buffer-change-functions` +
+  `window-selection-change-functions`, buffer-local) and rebuild if any other
+  mutation (capture/delete/reindex/compact/another Emacs) made them stale.
+  Opening a new overview was already coherent via mtime staleness.
 - **Filtering**: every entry point takes an optional FILTER — nil (all), a bare
   tag, or a plist spec with keys `:tag`/`:tags`, `:state`, `:done`,
   `:done-keywords`, `:id`/`:title`/`:hash`, `:priority`, `:linked`/`:propertized`/

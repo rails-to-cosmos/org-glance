@@ -63,22 +63,54 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   (propertized? nil :read-only t :type boolean)
   (encrypted? nil :read-only t :type boolean))
 
+(defconst org-glance-headline-metadata-v2:fields
+  ;; SLOT          JSON-KEY      FROM-HEADLINE                                                ENCODE       DECODE
+  `((id            :id           ,#'org-glance-headline-v2:id                                 nil          nil)
+    (state         :state        ,#'org-glance-headline-v2:state                              nil          nil)
+    (title         :title        ,#'org-glance-headline-v2:title                              nil          nil)
+    (tags          :tags         ,#'org-glance-headline-v2:tags                               tags-vector  nil)
+    (hash          :hash         ,#'org-glance-headline-v2:hash                               nil          nil)
+    (schedule      :schedule     ,#'org-glance-headline-v2:schedule                           nil          nil)
+    (deadline      :deadline     ,#'org-glance-headline-v2:deadline                           nil          nil)
+    (priority      :priority     ,#'org-glance-headline-v2:priority                           nil          nil)
+    (linked?       :linked       ,(lambda (h) (and (org-glance-headline-v2:links h) t))       nil          bool)
+    (propertized?  :propertized  ,(lambda (h) (and (org-glance-headline-v2:properties h) t))  nil          bool)
+    (encrypted?    :encrypted    ,(lambda (h) (and (org-glance-headline-v2:encrypted? h) t))  nil          bool))
+  "The single source of truth for the metadata projection's shape.
+Drives the `org-glance-headline-v2:metadata' constructor, `serialize' and
+`deserialize' together, so the four can never drift (a hand-written
+`deserialize' line was silently forgettable -- the field then read as
+always-nil).  Adding a projection field = one row here + one struct slot
+\(checked against this table at load).  Row order IS the serialized JSON key
+order -- a byte-stability contract with the on-disk store; append new fields
+at the end.  SCHEDULE/DEADLINE come back as raw strings (or nil) from the
+headline methods, so they are JSON-serializable as-is.")
+
+;; Load-time guard: the struct and the table must list the same slots, in order.
+(let ((struct-slots (mapcar #'car (cdr (cl-struct-slot-info 'org-glance-headline-metadata-v2))))
+      (table-slots (mapcar #'car org-glance-headline-metadata-v2:fields)))
+  (unless (equal struct-slots table-slots)
+    (error "org-glance: metadata field table out of sync with the struct: %S vs %S"
+           table-slots struct-slots)))
+
+(cl-defun org-glance-headline-metadata-v2:--encode (kind value)
+  "Serialize-side coercion for a field of ENCODE kind KIND."
+  (pcase kind
+    ('tags-vector (->> value (mapcar (-partial #'format "%s")) (apply #'vector)))
+    (_ value)))
+
+(cl-defun org-glance-headline-metadata-v2:--decode (kind value)
+  "Deserialize-side coercion for a field of DECODE kind KIND."
+  (pcase kind
+    ('bool (eq t value))                ; JSON false/null both read as nil
+    (_ value)))
+
 (cl-defun org-glance-headline-v2:metadata (headline)
   (cl-check-type headline org-glance-headline-v2)
-  ;; SCHEDULE/DEADLINE come back as raw strings (or nil) from the headline
-  ;; methods, so they are JSON-serializable as-is.
-  (make-org-glance-headline-metadata-v2
-   :id (org-glance-headline-v2:id headline)
-   :state (org-glance-headline-v2:state headline)
-   :title (org-glance-headline-v2:title headline)
-   :tags (org-glance-headline-v2:tags headline)
-   :hash (org-glance-headline-v2:hash headline)
-   :schedule (org-glance-headline-v2:schedule headline)
-   :deadline (org-glance-headline-v2:deadline headline)
-   :priority (org-glance-headline-v2:priority headline)
-   :linked? (and (org-glance-headline-v2:links headline) t)
-   :propertized? (and (org-glance-headline-v2:properties headline) t)
-   :encrypted? (and (org-glance-headline-v2:encrypted? headline) t)))
+  (apply #'make-org-glance-headline-metadata-v2
+         (cl-loop for (slot _json from) in org-glance-headline-metadata-v2:fields
+                  append (list (intern (concat ":" (symbol-name slot)))
+                               (funcall from headline)))))
 
 (cl-defun org-glance-headline-v2:metadata* (obj)
   "Generic variant of `org-glance-headline-v2:metadata'."
@@ -95,33 +127,16 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
 
 (cl-defun org-glance-headline-metadata-v2:serialize (metadata)
   (cl-check-type metadata org-glance-headline-metadata-v2)
-  (list :id (org-glance-headline-metadata-v2:id metadata)
-        :state (org-glance-headline-metadata-v2:state metadata)
-        :title (org-glance-headline-metadata-v2:title metadata)
-        :tags (->> (org-glance-headline-metadata-v2:tags metadata)
-                   (mapcar (-partial #'format "%s"))
-                   (apply #'vector))
-        :hash (org-glance-headline-metadata-v2:hash metadata)
-        :schedule (org-glance-headline-metadata-v2:schedule metadata)
-        :deadline (org-glance-headline-metadata-v2:deadline metadata)
-        :priority (org-glance-headline-metadata-v2:priority metadata)
-        :linked (org-glance-headline-metadata-v2:linked? metadata)
-        :propertized (org-glance-headline-metadata-v2:propertized? metadata)
-        :encrypted (org-glance-headline-metadata-v2:encrypted? metadata)))
+  (cl-loop for (slot json _from encode) in org-glance-headline-metadata-v2:fields
+           for value = (cl-struct-slot-value 'org-glance-headline-metadata-v2 slot metadata)
+           append (list json (org-glance-headline-metadata-v2:--encode encode value))))
 
 (cl-defun org-glance-headline-metadata-v2:deserialize (data)
   (cl-check-type data list)
-  (make-org-glance-headline-metadata-v2 :id (plist-get data :id)
-                                        :state (plist-get data :state)
-                                        :title (plist-get data :title)
-                                        :tags (plist-get data :tags)
-                                        :hash (plist-get data :hash)
-                                        :schedule (plist-get data :schedule)
-                                        :deadline (plist-get data :deadline)
-                                        :priority (plist-get data :priority)
-                                        :linked? (eq t (plist-get data :linked))
-                                        :propertized? (eq t (plist-get data :propertized))
-                                        :encrypted? (eq t (plist-get data :encrypted))))
+  (apply #'make-org-glance-headline-metadata-v2
+         (cl-loop for (slot json _from _encode decode) in org-glance-headline-metadata-v2:fields
+                  append (list (intern (concat ":" (symbol-name slot)))
+                               (org-glance-headline-metadata-v2:--decode decode (plist-get data json))))))
 
 (cl-defun org-glance-headline-metadata-v2:done? (metadata)
   "Non-nil if METADATA's state is a done keyword (per `org-done-keywords')."

@@ -392,6 +392,78 @@ the unfiltered overview."
         (call-interactively #'org-glance-overview-v2)
         (should (null visited))))))
 
+;;; View coherence: no overview may show outdated results
+
+(ert-deftest org-glance-test:overview-live-update-on-save ()
+  "A materialized save patches every open overview buffer: in place when the
+headline still matches the buffer's filter, dropping it when it no longer does."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph
+                             (org-glance-test:headline "a1" "* TODO Alpha :work:")
+                             (org-glance-test:headline "b1" "* TODO Beta :work:"))
+    (let* ((org-glance-graph-v2 graph)
+           (all (org-glance-overview-v2:visit graph nil))
+           (todo (org-glance-overview-v2:visit graph '(:state "TODO"))))
+      (unwind-protect
+          (progn
+            (should (s-contains? "TODO Alpha" (with-current-buffer all (buffer-string))))
+            (should (s-contains? "TODO Alpha" (with-current-buffer todo (buffer-string))))
+            ;; simulate editing Alpha via materialization + save
+            (with-temp-buffer
+              (insert "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
+              (setq-local org-glance-material-v2--graph graph
+                          org-glance-material-v2--id "a1")
+              (org-glance-material-v2:sync))
+            ;; "all": patched in place, persisted, not left modified
+            (with-current-buffer all
+              (should (s-contains? "DONE Alpha" (buffer-string)))
+              (should-not (s-contains? "TODO Alpha" (buffer-string)))
+              (should-not (buffer-modified-p))
+              (should (s-contains? "DONE Alpha" (f-read-text buffer-file-name 'utf-8))))
+            ;; state=TODO: Alpha no longer matches -> dropped; Beta untouched
+            (with-current-buffer todo
+              (should-not (s-contains? "Alpha" (buffer-string)))
+              (should (s-contains? "TODO Beta" (buffer-string)))))
+        (kill-buffer all)
+        (kill-buffer todo)))))
+
+(ert-deftest org-glance-test:overview-live-update-newly-matching ()
+  "A save that makes a headline newly match a filtered overview rebuilds it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
+    (let* ((org-glance-graph-v2 graph)
+           (done (org-glance-overview-v2:visit graph '(:state "DONE"))))
+      (unwind-protect
+          (progn
+            (should-not (s-contains? "Alpha" (with-current-buffer done (buffer-string))))
+            (with-temp-buffer
+              (insert "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
+              (setq-local org-glance-material-v2--graph graph
+                          org-glance-material-v2--id "a1")
+              (org-glance-material-v2:sync))
+            (with-current-buffer done
+              (should (s-contains? "DONE Alpha" (buffer-string)))))
+        (kill-buffer done)))))
+
+(ert-deftest org-glance-test:overview-stale-buffer-refreshes-on-display ()
+  "The lazy net: an overview made stale by any other store mutation rebuilds
+when it is (re)displayed or selected."
+  (org-glance-test:with-graph graph
+    (org-glance-graph-v2:add graph (org-glance-test:headline "a1" "* Alpha"))
+    (let* ((org-glance-graph-v2 graph)
+           (all (org-glance-overview-v2:visit graph nil)))
+      (unwind-protect
+          (progn
+            ;; mutate the store BEHIND the views (no materialized save involved)
+            (org-glance-graph-v2:add graph (org-glance-test:headline "b1" "* Beta"))
+            (set-file-times (org-glance-graph-v2:headline-meta-path graph)
+                            (time-add (current-time) 100)) ; guarantee staleness
+            (should-not (s-contains? "Beta" (with-current-buffer all (buffer-string))))
+            (with-current-buffer all
+              (org-glance-overview-v2:--refresh-when-stale))
+            (should (s-contains? "Beta" (with-current-buffer all (buffer-string)))))
+        (kill-buffer all)))))
+
 ;;; Keymap
 
 (ert-deftest org-glance-test:overview-keymap-bindings ()
