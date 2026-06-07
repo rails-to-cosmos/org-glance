@@ -21,3 +21,4 @@ devenv.local.nix
 /build/
 /ert-profile
 .llm/
+/.claude/
