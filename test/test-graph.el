@@ -215,5 +215,15 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
     ;; the low-level blob is still present (append-only store)
     (should (s-contains? "body" (org-glance-graph:get-content graph "id1")))))
 
+(ert-deftest org-glance-test:graph-states ()
+  "`states' returns distinct non-empty todo states, sorted; stateless excluded."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "s1" "* TODO Alpha")
+                             (org-glance-test:headline "s2" "* DONE Beta")
+                             (org-glance-test:headline "s3" "* TODO Gamma")
+                             (org-glance-test:headline "s4" "* Delta"))
+    (should (equal '("DONE" "TODO") (org-glance-graph:states graph)))))
+
 (provide 'test-graph)
 ;;; test-graph.el ends here

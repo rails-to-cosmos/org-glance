@@ -86,7 +86,7 @@ caught)."
                              (org-glance-test:headline "o2" "* DONE Beta")
                              (org-glance-test:headline "o3" "* Gamma"))
     (cl-flet ((n (filter)
-                (length (seq-filter (org-glance-overview:spec-predicate filter)
+                (length (seq-filter (org-glance-filter:predicate filter)
                                     (org-glance-graph:headlines graph)))))
       (should (= 1 (n '(:state "TODO"))))
       (should (= 1 (n '(:done t))))
@@ -104,7 +104,7 @@ caught)."
                              (org-glance-test:headline "o2" "* DONE Beta"))
     (cl-flet ((ids (filter)
                 (mapcar #'org-glance-headline-metadata:id
-                        (seq-filter (org-glance-overview:spec-predicate filter)
+                        (seq-filter (org-glance-filter:predicate filter)
                                     (org-glance-graph:headlines graph)))))
       ;; Default: DONE is done.
       (should (equal '("o2") (ids '(:done t))))
@@ -127,7 +127,7 @@ caught)."
     (org-glance-graph:add graph
                              (org-glance-test:headline "o1" "* [#A] Alpha" "- [[https://example.com][L]]")
                              (org-glance-test:headline "o2" "* [#B] Beta"))
-    (let ((kept (seq-filter (org-glance-overview:spec-predicate '(:priority 65 :linked t))
+    (let ((kept (seq-filter (org-glance-filter:predicate '(:priority 65 :linked t))
                             (org-glance-graph:headlines graph))))
       (should (= 1 (length kept)))
       (should (string= "o1" (org-glance-headline-metadata:id (car kept)))))))
@@ -140,16 +140,16 @@ caught)."
                              (org-glance-test:headline "o2" "* Beta :work:")
                              (org-glance-test:headline "o3" "* Gamma :home:"))
     (let ((only-o1 (list :where (lambda (m) (string= "o1" (org-glance-headline-metadata:id m))))))
-      (should (= 1 (length (seq-filter (org-glance-overview:spec-predicate only-o1)
+      (should (= 1 (length (seq-filter (org-glance-filter:predicate only-o1)
                                        (org-glance-graph:headlines graph)))))
       ;; :where ANDed with :tags -- o1 matches both, o3 fails the tag, o2 fails :where
       (let ((spec (append only-o1 '(:tags ("work")))))
-        (should (= 1 (length (seq-filter (org-glance-overview:spec-predicate spec)
+        (should (= 1 (length (seq-filter (org-glance-filter:predicate spec)
                                          (org-glance-graph:headlines graph)))))))))
 
 (ert-deftest org-glance-test:overview-filter-rejects-unknown-key ()
   "An unrecognised filter key errors loudly rather than silently matching all."
-  (should-error (org-glance-overview:spec-predicate '(:bogus 1)))
+  (should-error (org-glance-filter:predicate '(:bogus 1)))
   (should-error (org-glance-overview:spec-key '(:bogus 1))))
 
 ;;; Cache keys
@@ -172,10 +172,10 @@ caught)."
   ;; distinct specs MAY share a (lossy, hashed) key -- correctness is enforced
   ;; by the SPEC sidecar (see overview-cache-collision-rebuilds), but their
   ;; identities must always differ
-  (should-not (string= (org-glance-overview:--spec-identity '(:id "a" :title "b"))
-                       (org-glance-overview:--spec-identity '(:id "a&title=b"))))
-  (should-not (string= (org-glance-overview:--spec-identity '(:tags ("a" "b")))
-                       (org-glance-overview:--spec-identity '(:tags ("a,b"))))))
+  (should-not (string= (org-glance-filter:identity '(:id "a" :title "b"))
+                       (org-glance-filter:identity '(:id "a&title=b"))))
+  (should-not (string= (org-glance-filter:identity '(:tags ("a" "b")))
+                       (org-glance-filter:identity '(:tags ("a,b"))))))
 
 (ert-deftest org-glance-test:overview-spec-key-compact ()
   "Cache directory names are short hashes of the canonical identity: fixed
@@ -344,7 +344,7 @@ spellings differing only in case share one cache key, distinct from `:title'."
                              (org-glance-test:headline "o3" "* Walk :home:"))
     (cl-flet ((ids (filter)
                 (mapcar #'org-glance-headline-metadata:id
-                        (seq-filter (org-glance-overview:spec-predicate filter)
+                        (seq-filter (org-glance-filter:predicate filter)
                                     (org-glance-graph:headlines graph)))))
       (should (equal '("o1" "o2") (ids '(:title-contains "BILL"))))
       (should (equal '("o1") (ids '(:title-contains "bill" :tags ("home")))))))
@@ -394,26 +394,36 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
     (should (equal '("home" "work") (org-glance-overview:tags graph)))))
 
 (ert-deftest org-glance-test:overview-interactive-tag-filter ()
-  "Invoking the overview interactively prompts for a tag and FILTERS by it
-\(regression: the prompted tag never reached the visit); empty input means
-the unfiltered overview."
+  "Invoking the overview interactively prompts for a tag and overlays it on the
+ambient `org-glance-filter-spec' (so the overview honours the global filter);
+empty input means just the ambient filter."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
     (let ((org-glance-graph graph)
+          (org-glance-filter-spec '(:done nil))   ; the active default
           (visited 'unset))
       (cl-letf (((symbol-function 'org-glance-overview:visit)
                  (lambda (_graph filter) (setq visited filter)))
                 ((symbol-function 'completing-read)
                  (lambda (&rest _) "work")))
         (call-interactively #'org-glance-overview)
-        (should (equal "work" visited)))
-      ;; empty input -> unfiltered
+        ;; tag overlaid on the ambient (active) filter
+        (should (equal '(:done nil :tags ("work")) visited)))
+      ;; empty input -> just the ambient filter
       (cl-letf (((symbol-function 'org-glance-overview:visit)
                  (lambda (_graph filter) (setq visited filter)))
                 ((symbol-function 'completing-read)
                  (lambda (&rest _) "")))
         (call-interactively #'org-glance-overview)
-        (should (null visited))))))
+        (should (equal '(:done nil) visited)))
+      ;; a cleared ambient filter falls back to the bare tag / nil
+      (let ((org-glance-filter-spec nil))
+        (cl-letf (((symbol-function 'org-glance-overview:visit)
+                   (lambda (_graph filter) (setq visited filter)))
+                  ((symbol-function 'completing-read)
+                   (lambda (&rest _) "work")))
+          (call-interactively #'org-glance-overview)
+          (should (equal '(:tags ("work")) visited)))))))
 
 ;;; View coherence: no overview may show outdated results
 

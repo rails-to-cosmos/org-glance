@@ -509,6 +509,17 @@ segments (first-sighting in the oldest->newest scan == earliest insertion)."
          :test #'string=)
         #'string<))
 
+(cl-defun org-glance-graph:states (graph)
+  "Distinct non-empty todo states across GRAPH's live headlines, sorted."
+  (cl-check-type graph org-glance-graph)
+  (sort (cl-remove-duplicates
+         (cl-loop for meta in (org-glance-graph:headlines graph)
+                  for state = (org-glance-headline-metadata:state meta)
+                  when (and (stringp state) (not (string-empty-p state)))
+                  collect state)
+         :test #'string=)
+        #'string<))
+
 (cl-defun org-glance-graph:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,
 appending fresh records so newly-added projection fields get populated.

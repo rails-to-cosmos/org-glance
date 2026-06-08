@@ -19,6 +19,7 @@
 (require 'org-glance-utils)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-filter)
 (require 'org-glance-datetime-mode)
 
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
@@ -190,7 +191,14 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
     (user-error "Not in an org-glance materialized buffer"))
   (save-buffer))
 
-;;; Command
+;;; Commands
+;;
+;; The picker commands -- materialize / open / extract -- gate their candidate
+;; list by the ambient `org-glance-filter-spec' (default: active headlines),
+;; composed with each command's own intrinsic constraint (open needs a link,
+;; extract needs a property/encryption).  The same filter is overlaid onto the
+;; overview and agenda (see `org-glance-overview'); capture creates a new
+;; headline, so a state filter does not apply there.
 
 (cl-defun org-glance-materialize ()
   "Choose a headline from the graph and materialize it."
@@ -198,7 +206,7 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
   (cl-assert (org-glance-initialized?))
   (let* ((graph org-glance-graph)
          (metadata (org-glance-material:completing-read
-                    graph :filter #'org-glance-headline-metadata:active?))
+                    graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
          (id (org-glance-headline-metadata:id metadata)))
     (switch-to-buffer (org-glance-material:open graph id))))
 
@@ -227,9 +235,10 @@ chosen link, mirroring the v1 behaviour."
   (interactive)
   (cl-assert (org-glance-initialized?))
   (let* ((graph org-glance-graph)
+         (keep? (org-glance-filter:predicate org-glance-filter-spec))
          (metadata (org-glance-material:completing-read
                     graph :prompt "Open: "
-                    :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                    :filter (lambda (m) (and (funcall keep? m)
                                         (org-glance-headline-metadata:linked? m)))))
          (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
     (org-glance-material:open-link headline)))
@@ -251,9 +260,10 @@ With KEY, extract it non-interactively; otherwise prompt."
   (interactive)
   (cl-assert (org-glance-initialized?))
   (let* ((graph org-glance-graph)
+         (keep? (org-glance-filter:predicate org-glance-filter-spec))
          (metadata (org-glance-material:completing-read
                     graph :prompt "Extract from: "
-                    :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                    :filter (lambda (m) (and (funcall keep? m)
                                         (or (org-glance-headline-metadata:propertized? m)
                                             (org-glance-headline-metadata:encrypted? m))))))
          (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))

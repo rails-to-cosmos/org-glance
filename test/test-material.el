@@ -359,5 +359,92 @@ for the original id (the sync hook skips a mismatched id)."
             (should (s-contains? "transient note" (buffer-string))))
         (kill-buffer buffer)))))
 
+(cl-defmacro org-glance-test:--seen-ids (&rest body)
+  "Stub `completing-read' to capture the offered headline ids (sorted) in `seen',
+returning the first candidate, then run BODY.  `seen' is bound around BODY."
+  (declare (indent 0))
+  `(let ((seen nil))
+     (cl-letf (((symbol-function 'completing-read)
+                (lambda (_p coll &rest _)
+                  (setq seen (sort (mapcar (lambda (c) (org-glance-headline-metadata:id (cdr c))) coll)
+                                   #'string<))
+                  (caar coll))))
+       ,@body)))
+
+(ert-deftest org-glance-test:materialize-honors-filter ()
+  "`org-glance-materialize' restricts its candidate list to `org-glance-filter-spec'.
+Drives the real command; the chosen-headline `open' is stubbed so no file IO
+runs and only the offered candidate set is observed."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "mt" "* TODO Todo" "body")
+                             (org-glance-test:headline "md" "* DONE Done" "body"))
+    (let ((org-glance-graph graph))
+      (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
+                ((symbol-function 'switch-to-buffer) #'ignore))
+        (org-glance-test:--seen-ids
+          (let ((org-glance-filter-spec '(:done nil)))     ; active
+            (org-glance-materialize) (should (equal '("mt") seen)))
+          (let ((org-glance-filter-spec '(:done t)))       ; done
+            (org-glance-materialize) (should (equal '("md") seen)))
+          (let ((org-glance-filter-spec nil))              ; all
+            (org-glance-materialize) (should (equal '("md" "mt") seen)))
+          (let ((org-glance-filter-spec '(:state "DONE"))) ; exact state
+            (org-glance-materialize) (should (equal '("md") seen))))))))
+
+(ert-deftest org-glance-test:materialize-default-filter-is-active ()
+  "With NO binding, `org-glance-filter-spec' defaults to active: DONE excluded.
+Pins the design default so an accidental change to the defvar fails loudly."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "dt" "* TODO Todo" "body")
+                             (org-glance-test:headline "dd" "* DONE Done" "body"))
+    (let ((org-glance-graph graph))
+      (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
+                ((symbol-function 'switch-to-buffer) #'ignore))
+        (org-glance-test:--seen-ids
+          (org-glance-materialize)            ; no `org-glance-filter-spec' binding
+          (should (equal '("dt") seen)))))))
+
+(ert-deftest org-glance-test:open-honors-filter ()
+  "`org-glance-open' composes `org-glance-filter-spec' with its linked? constraint."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "ta" "* TODO A" "[[https://a.example][a]]")
+                             (org-glance-test:headline "da" "* DONE B" "[[https://b.example][b]]")
+                             (org-glance-test:headline "tn" "* TODO C" "no link"))
+    (let ((org-glance-graph graph))
+      (cl-letf (((symbol-function 'org-glance-material:open-link) #'ignore))
+        (org-glance-test:--seen-ids
+          ;; active + linked -> "ta" (DONE filtered out; "tn" lacks a link)
+          (let ((org-glance-filter-spec '(:done nil)))
+            (org-glance-open) (should (equal '("ta") seen)))
+          ;; done + linked -> "da"
+          (let ((org-glance-filter-spec '(:done t)))
+            (org-glance-open) (should (equal '("da") seen)))
+          ;; all + linked -> "ta","da" (still not "tn")
+          (let ((org-glance-filter-spec nil))
+            (org-glance-open) (should (equal '("da" "ta") seen))))))))
+
+(ert-deftest org-glance-test:extract-honors-filter ()
+  "`org-glance-extract' composes `org-glance-filter-spec' with its propertized? constraint."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "tk" "* TODO A" "- k: v")
+                             (org-glance-test:headline "dk" "* DONE B" "- k: v")
+                             (org-glance-test:headline "tn" "* TODO C" "no pairs"))
+    (let ((org-glance-graph graph))
+      (cl-letf (((symbol-function 'org-glance-material:extract) #'ignore))
+        (org-glance-test:--seen-ids
+          ;; active + propertized -> "tk" (DONE filtered; "tn" lacks pairs)
+          (let ((org-glance-filter-spec '(:done nil)))
+            (org-glance-extract) (should (equal '("tk") seen)))
+          ;; done + propertized -> "dk"
+          (let ((org-glance-filter-spec '(:done t)))
+            (org-glance-extract) (should (equal '("dk") seen)))
+          ;; all + propertized -> "tk","dk" (still not "tn")
+          (let ((org-glance-filter-spec nil))
+            (org-glance-extract) (should (equal '("dk" "tk") seen))))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here
