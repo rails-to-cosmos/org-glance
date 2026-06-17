@@ -43,7 +43,6 @@
 (require 'org-glance-material)
 
 (defvar org-glance-graph)
-(defvar org-glance-filter-spec)
 (declare-function org-glance-initialized? "org-glance")
 
 (defconst org-glance-overview:header

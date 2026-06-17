@@ -33,7 +33,7 @@
   (cl-check-type metadata org-glance-headline-metadata)
   (let ((tags (append (org-glance-headline-metadata:tags metadata) nil)))
     (concat (if tags (format "[%s] " (s-join "," tags)) "")
-            (org-glance-headline-metadata:title metadata))))
+            (org-glance--title-clean (org-glance-headline-metadata:title metadata)))))
 
 (cl-defun org-glance-material:completing-read (graph &key (prompt "Headline: ") filter)
   "Choose a live headline from GRAPH and return its metadata.

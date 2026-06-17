@@ -232,7 +232,6 @@ warning.  Return non-nil if a migration was performed."
             :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
                                 (org-glance-headline-metadata:linked? m)))))))
 
-
 (org-link-set-parameters
  "org-glance-visit"
  :follow #'org-glance-link:materialize

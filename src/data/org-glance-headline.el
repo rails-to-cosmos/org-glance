@@ -263,12 +263,18 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
       :contents contents
       :-hash (org-glance-headline--hash contents))))
 
-(cl-defun org-glance-headline:title-clean (headline)
-  (cl-check-type headline org-glance-headline)
+(cl-defun org-glance--title-clean (title)
+  "Render org link markup in TITLE as plain text.
+\"[[target][desc]]\" becomes \"desc\"; a bare \"[[target]]\" becomes \"target\"."
+  (cl-check-type title string)
   (replace-regexp-in-string
    org-link-bracket-re
    (lambda (match) (or (match-string 2 match) (match-string 1 match) ""))
-   (org-glance-headline:title headline)))
+   title))
+
+(cl-defun org-glance-headline:title-clean (headline)
+  (cl-check-type headline org-glance-headline)
+  (org-glance--title-clean (org-glance-headline:title headline)))
 
 (cl-defun org-glance-headline:add-note (headline message &rest format-args)
   (cl-check-type headline org-glance-headline)

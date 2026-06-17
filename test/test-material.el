@@ -14,6 +14,19 @@
         (should (org-glance-headline-metadata? meta))
         (should (string= "Alpha" (org-glance-headline-metadata:title meta)))))))
 
+(ert-deftest org-glance-test:material-label-cleans-links ()
+  "The completing-read label renders link markup as its description (or target)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "a" "* TODO [[id:x][Alpha]] :w:")
+                             (org-glance-test:headline "b" "* TODO [[https:example.com]]"))
+    (let* ((metas (org-glance-graph:headlines graph))
+           (labels (mapcar #'org-glance-material:label metas)))
+      (should (member "[w] Alpha" labels))
+      (should (member "https:example.com" labels))
+      ;; raw link markup never leaks into a label
+      (should-not (cl-some (lambda (l) (s-contains? "[[" l)) labels)))))
+
 (ert-deftest org-glance-test:material-active-filter ()
   "The commands filter selection to active headlines.
 No `org-done-keywords' binding: `completing-read' resolves the done set itself,
