@@ -188,10 +188,12 @@ positional serialization nor trust its possibly-stale `begin` pointers):
 3. `org-glance-migrate` (also `M-x`-able) scans the canonical org files under the
    directory — **skipping the `.org-glance/` store and v1 overview clones** (the
    `mode: org-glance-overview` prop-line marker) so a read-only clone can't
-   override its source — ingests only `ORG_GLANCE_ID`-bearing headlines
-   (preserving ids), then renames `.metadata.el` → `.metadata.el.bak` (never
-   deletes). Returns the count ingested.
-4. On no: keep using v1; re-prompt next session, or run `M-x org-glance-migrate`.
+   override its source — and ingests only `ORG_GLANCE_ID`-bearing headlines
+   (preserving ids). It is **idempotent and resumable** (see below). Only on a
+   fully clean pass does it rename the legacy `.metadata.el` → `.metadata.el.bak`
+   (never deletes); a partial/interrupted run keeps them so it stays detectable.
+   Returns the count ingested this run.
+4. On no: keep using v1; re-warn next session, or run `M-x org-glance-migrate`.
 
 **Read strategy:** sources are parsed in a `with-temp-buffer` under
 `delay-mode-hooks` — never `find-file`. This suppresses
@@ -199,14 +201,21 @@ positional serialization nor trust its possibly-stale `begin` pointers):
 `global-undo-tree-mode`) never activate: no undo recording, no `.~undo-tree~`
 files, and no per-file `org-mode-hook` overhead.
 
-**Known follow-up:** re-running `migrate` on an already-migrated dir re-appends
-duplicate records (harmless — last-wins keeps reads correct, but grows the log).
-`migrate-maybe` self-disables after the first run; the Phase 4 compaction pass
-reclaims the growth.
+**Idempotent + resumable:** progress is journaled to an append-only
+`<store>/migration.jsonl` (one `{"source":"<relpath>"}` per fully-ingested source
+file). A re-run — after a crash mid-batch or a normal second invocation — skips
+every recorded source, so no headline is ingested twice; appending after each
+clean file makes it durable across an Emacs restart with at most the in-flight
+file to redo. Even that redo can't duplicate: a headline whose id+hash already
+match the store is not re-added. The legacy-index backup is deferred to a clean
+pass, so the journal + the surviving `.metadata.el` together make an interrupted
+migration safe to resume.
 
-Tests: `test/test-migrate.el` (6) — detection, full migrate (id/title/tags/content
+Tests: `test/test-migrate.el` (9) — detection, full migrate (id/title/tags/content
 preserved + non-destructive `.bak`), overview clones skipped, id-less headlines
-ignored, prompt-confirmed migrate, and the no-legacy no-prompt guard.
+ignored, idempotent re-run (no duplicate records), journaled progress surviving a
+restart, index kept until a clean pass, warn-never-migrate, and the no-legacy
+no-warn guard.
 
 ---
 

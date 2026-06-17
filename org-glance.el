@@ -62,8 +62,8 @@ Constructed by `org-glance-init'; nil until the system is initialized.")
   :group 'org)
 
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
-  "Initialize org-glance in DIRECTORY: bring up the graph store and offer a
-one-time migration when legacy metadata is detected."
+  "Initialize org-glance in DIRECTORY: bring up the graph store and, when legacy
+metadata is detected, warn that `M-x org-glance-migrate' can convert it."
   (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
   (unless (f-exists? directory)
     (mkdir directory t))
@@ -102,57 +102,128 @@ Detected by its prop-line `mode: org-glance-overview' marker."
     (goto-char (point-min))
     (re-search-forward "mode:[ \t]*org-glance-overview" nil t)))
 
+;; --- Persistent migration progress ------------------------------------------
+;;
+;; Migration is journaled so it is idempotent and resumable: each canonical
+;; source file is recorded (by its path relative to the directory) the moment it
+;; is fully ingested.  A re-run -- whether after a crash mid-batch or a normal
+;; second invocation -- skips every already-recorded source, so no headline is
+;; ingested twice.  The journal is an append-only JSONL file at the store root
+;; (one `{"source": "<relpath>"}' per line); appending after each clean file
+;; keeps the record durable across an Emacs restart with at most the in-flight
+;; file to redo.  Even that file cannot duplicate: a headline whose id+hash
+;; already match the store is not re-added (see the ingest loop).
+
+(cl-defun org-glance-migrate--journal-path (graph)
+  "Path of GRAPH's persistent migration-progress journal."
+  (f-join (org-glance-graph:store-path graph) "migration.jsonl"))
+
+(cl-defun org-glance-migrate--migrated-sources (graph)
+  "Hash-table set of source files already migrated into GRAPH's store.
+Keys are paths relative to the graph directory, read from the journal; an empty
+table when nothing has been migrated yet."
+  (let ((path (org-glance-migrate--journal-path graph))
+        (done (make-hash-table :test 'equal)))
+    (when (f-exists? path)
+      (dolist (line (split-string (f-read-text path 'utf-8) "\n" t))
+        (ignore-errors
+          (puthash (plist-get (json-parse-string line :object-type 'plist) :source)
+                   t done))))
+    done))
+
+(cl-defun org-glance-migrate--record-source (graph relpath)
+  "Durably append RELPATH to GRAPH's migration journal.
+The file is created on first append; its directory (the store root) already
+exists, having been created when the graph was constructed."
+  (f-append-text (concat (json-serialize (list :source relpath)) "\n")
+                 'utf-8 (org-glance-migrate--journal-path graph)))
+
+(cl-defun org-glance-migrate--ingest-file (graph file seen)
+  "Ingest ORG_GLANCE_ID-bearing headlines from source FILE into GRAPH.
+SEEN is an id->content-hash table of records already in the store; a headline
+whose id+hash is already present is skipped (so a re-run, or a redo of a file
+interrupted mid-ingest, never appends a duplicate record), and SEEN is updated
+in place as headlines are added.  Return the number of headlines actually added.
+
+Read-only parse in a temp buffer -- never `find-file' the source.
+`delay-mode-hooks' (via `org-glance--org-mode') suppresses
+`after-change-major-mode-hook', which is what `global-undo-tree-mode' (and other
+globalized minor modes) hook into; combined with the temp buffer, undo-tree
+never activates, no undo is recorded and no `.~undo-tree~' files are written.
+Also skips per-file `org-mode-hook'."
+  (let ((added 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (org-glance--org-mode)
+      (dolist (headline (org-glance-graph:capture-buffer (current-buffer)))
+        (when-let ((id (org-glance-headline:id headline)))
+          (let ((hash (org-glance-headline:hash headline)))
+            (unless (equal (gethash id seen) hash)
+              (org-glance-graph:add graph headline)
+              (puthash id hash seen)
+              (cl-incf added))))))
+    added))
+
 (cl-defun org-glance-migrate (&optional (directory org-glance-directory))
   "Rebuild the graph in DIRECTORY from legacy v1 content.
-Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID,
-add them to the graph preserving ids, then back up legacy `*.metadata.el' files
-to `*.metadata.el.bak'.  Return the number of headlines ingested."
+Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID and
+add them to the graph preserving ids.  Idempotent and resumable: progress is
+journaled per source file, so already-migrated sources are skipped and no
+headline is ever ingested twice (see `org-glance-migrate--migrated-sources').
+Only on a fully clean pass (no source skipped) are the legacy `*.metadata.el'
+indices backed up to `*.metadata.el.bak' (never deleted); a partial or
+interrupted run leaves them in place so it stays detectable and resumable.
+Return the number of headlines ingested this run."
   (interactive)
   (let* ((graph (org-glance-graph directory))
-         (sources (org-glance-migrate--source-files directory))
-         (legacy (org-glance-legacy-metadata-files directory))
-         (total (length sources))
+         (done (org-glance-migrate--migrated-sources graph))
+         (pending (cl-remove-if (lambda (f) (gethash (f-relative f directory) done))
+                                (org-glance-migrate--source-files directory)))
+         ;; One id->hash snapshot of the store, built once and updated as we add,
+         ;; so dedup is an O(1) lookup instead of a per-headline segment scan.
+         (seen (and pending
+                    (let ((h (make-hash-table :test 'equal)))
+                      (dolist (meta (org-glance-graph:headlines graph) h)
+                        (puthash (org-glance-headline-metadata:id meta)
+                                 (org-glance-headline-metadata:hash meta) h)))))
+         (total (length pending))
          (reporter (and (> total 0)
                         (make-progress-reporter "org-glance: migrating sources... " 0 total)))
          (count 0)
          (skipped nil))
-    (cl-loop for file in sources
+    (cl-loop for file in pending
              for i from 1
-             do (unless (org-glance-migrate--overview-file? file)
-                  ;; Read-only parse in a temp buffer -- never `find-file' the
-                  ;; source. `delay-mode-hooks' suppresses
-                  ;; `after-change-major-mode-hook', which is what
-                  ;; `global-undo-tree-mode' (and other globalized minor modes)
-                  ;; hook into; combined with the temp buffer, undo-tree never
-                  ;; activates, no undo is recorded and no `.~undo-tree~' files are
-                  ;; written. Also skips per-file `org-mode-hook'.
-                  ;;
-                  ;; Per-file `condition-case' so one unreadable/mis-decoded file
-                  ;; (e.g. autodetect mis-guesses a non-utf-8 encoding) is logged
-                  ;; and skipped instead of aborting the whole batch.
-                  (condition-case err
-                      (with-temp-buffer
-                        (insert-file-contents file)
-                        (org-glance--org-mode)
-                        (dolist (headline (org-glance-graph:capture-buffer (current-buffer)))
-                          (when (org-glance-headline:id headline)
-                            (org-glance-graph:add graph headline)
-                            (cl-incf count))))
-                    (error
-                     (push file skipped)
-                     (display-warning 'org-glance
-                                      (format "Skipped %s during migration: %s"
-                                              file (error-message-string err))
-                                      :warning))))
+             for relpath = (f-relative file directory)
+             ;; Per-file `condition-case' so one unreadable/mis-decoded file
+             ;; (e.g. autodetect mis-guesses a non-utf-8 encoding) is logged and
+             ;; skipped instead of aborting the whole batch.  A skipped file is
+             ;; NOT journaled, so a later run retries it.  Overview clones are
+             ;; journaled but never ingested, so a clone can't override its
+             ;; source and is also skipped on resume.
+             do (condition-case err
+                    (progn
+                      (unless (org-glance-migrate--overview-file? file)
+                        (cl-incf count (org-glance-migrate--ingest-file graph file seen)))
+                      (org-glance-migrate--record-source graph relpath))
+                  (error
+                   (push file skipped)
+                   (display-warning 'org-glance
+                                    (format "Skipped %s during migration: %s"
+                                            file (error-message-string err))
+                                    :warning)))
              (when reporter (progress-reporter-update reporter i)))
     (when reporter (progress-reporter-done reporter))
-    (dolist (file legacy)
-      (rename-file file (concat file ".bak") t))
-    (when (called-interactively-p 'any)
-      (message "org-glance: migrated %d headline(s)%s; backed up %d legacy file(s)."
-               count
-               (if skipped (format ", skipped %d file(s)" (length skipped)) "")
-               (length legacy)))
+    (let ((legacy (org-glance-legacy-metadata-files directory)))
+      ;; Back up legacy indices only on a clean pass.
+      (unless skipped
+        (dolist (file legacy)
+          (rename-file file (concat file ".bak") t)))
+      (when (called-interactively-p 'any)
+        (message "org-glance: migrated %d headline(s)%s; %s %d legacy file(s)."
+                 count
+                 (if skipped (format ", skipped %d file(s)" (length skipped)) "")
+                 (if skipped "kept" "backed up")
+                 (length legacy))))
     count))
 
 (cl-defun org-glance-reindex (&optional (directory org-glance-directory))
@@ -178,22 +249,22 @@ Safe to run anytime; a no-op on an already-compact store."
       (message "org-glance: compacted; %d live headline(s)." n))
     n))
 
-(defvar org-glance-migrate--postponed nil
-  "Non-nil after the user declined the legacy-metadata migration prompt.
-Suppresses re-prompting for the rest of the session; `M-x org-glance-migrate'
-remains available at any time.")
+(defvar org-glance-migrate--warned nil
+  "Non-nil once the legacy-metadata warning has fired this session.
+Keeps `org-glance-migrate-maybe' from re-warning on a repeated init.")
 
 (cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
-  "If legacy v1 metadata is present in DIRECTORY, offer to migrate it.
-Ask at most once per session; declining leaves a quiet `message' hint, not a
-warning.  Return non-nil if a migration was performed."
-  (when (and (not org-glance-migrate--postponed)
+  "If legacy v1 metadata is present in DIRECTORY, warn that it can be converted.
+Never migrates automatically and never prompts -- the legacy store is left
+untouched.  Emits the warning at most once per session; `M-x org-glance-migrate'
+performs the conversion whenever the user chooses.  Always returns nil."
+  (when (and (not org-glance-migrate--warned)
              (org-glance-legacy-metadata-files directory))
-    (if (yes-or-no-p "org-glance: legacy .metadata.el detected; migrate to the graph store now? ")
-        (progn (org-glance-migrate directory) t)
-      (setq org-glance-migrate--postponed t)
-      (message "org-glance: keeping legacy metadata for now; run `M-x org-glance-migrate' anytime to convert.")
-      nil)))
+    (setq org-glance-migrate--warned t)
+    (display-warning 'org-glance
+                     "Legacy .metadata.el detected; run `M-x org-glance-migrate' to convert it to the graph store."
+                     :warning))
+  nil)
 
 (cl-defun org-glance:insert-pin-block ()
   (interactive)
