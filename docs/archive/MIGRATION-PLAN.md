@@ -560,11 +560,22 @@ here so the archived plan matches the shipped architecture.
   correctness risk.
 - **Performance roadmap** — the successor effort. Profiling (2026-06-18) found the
   dominant cost is that every uncached read re-parses every record in every live
-  segment with no in-memory metadata cache. Highest-leverage fix: an in-memory
-  latest-records cache on the graph struct, keyed by open-segment mtime + MANIFEST
-  identity (turns `:get-headline` O(1), collapses the picker / table / `:tags` /
-  `:states` re-scans). Lower-tier: path/MANIFEST memoization, surgical single-row
-  table patch, open-link reusing the `:-links` thunk, the `:done`-clause rebind.
+  segment with no in-memory metadata cache.
+  - ✅ **In-memory metadata cache + path memoization** — DONE (2026-06-18).
+    `org-glance-graph` carries a `-meta-cache` (latest-record-per-id, deserialized
+    live list, id->record hash) rebuilt only when the store SNAPSHOT changes, and a
+    `-paths` memo for resolved store paths. The snapshot is `(open-mtime, open-size,
+    SEALED-SEGMENT-NAMES)` -- names, not MANIFEST mtime, so cross-process detection is
+    filesystem-clock-independent (an adversarial review caught a coarse-mtime
+    compaction-resurrection hole the mtime version had; regression-tested with teeth).
+    In-process mutations clear the cache directly. `:get-headline` is now an O(1) hash
+    lookup (the old `--find-latest` scan deleted); `:headlines`/`:tags`/`:states` ride
+    the cache. Bench: repeated reads doing ~120x more work yet 3.6x faster than the old
+    per-call fold. Suite 153/153.
+  - Lower-tier (not yet done): surgical single-row table patch (avoid a whole-buffer
+    re-render on one row), open-link reusing the `:-links` thunk (extract/open path),
+    the `:done`-clause per-candidate rebind in `org-glance-filter` (picker path), and
+    the table-open scan/render collapse (mostly absorbed by the cache already).
 
 ## Appendix A — data formats
 

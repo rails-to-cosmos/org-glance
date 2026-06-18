@@ -240,5 +240,114 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
                              (org-glance-test:headline "s4" "* Delta"))
     (should (equal '("DONE" "TODO") (org-glance-graph:states graph)))))
 
+;;; In-memory read cache coherence
+;;
+;; The hot read APIs (`headlines'/`get-headline'/`tags'/`states') serve from a
+;; snapshot-keyed in-memory cache.  These guard the cases a naive memo gets
+;; wrong: an in-process write in the same filesystem-mtime second, an external
+;; (another-Emacs) write the in-process invalidation never sees, tombstone
+;; liveness through the O(1) lookup, compaction changing an observable read, and
+;; insertion order surviving a cache rebuild.
+
+(ert-deftest org-glance-test:graph-cache-same-second-add ()
+  "An add right after a warmed read is visible even if mtime did not advance.
+Guards that an in-process write invalidates the cache directly (never relies on
+filesystem mtime granularity)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO A"))
+    (should (= 1 (length (org-glance-graph:headlines graph)))) ; warms the cache
+    (org-glance-graph:add graph (org-glance-test:headline "c2" "* TODO B"))
+    (should (= 2 (length (org-glance-graph:headlines graph))))
+    (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "c2")))))
+
+(ert-deftest org-glance-test:graph-cache-external-write ()
+  "A write to the open segment behind the graph's back is still observed.
+Simulates another Emacs: append a record directly (bypassing the mutation API,
+so no in-process invalidation fires); the snapshot check (open mtime+size) must
+trigger a rebuild on the next read."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "e1" "* TODO A"))
+    (should (= 1 (length (org-glance-graph:headlines graph)))) ; warms the cache
+    (let ((open (org-glance-graph:headline-meta-path graph)))
+      (f-append-text (concat (json-serialize (list :id "e2" :state "TODO" :title "B" :seq 9999))
+                             "\n")
+                     'utf-8 open))
+    ;; cache was warm and no mutation method ran, yet the new record is seen
+    (should (= 2 (length (org-glance-graph:headlines graph))))
+    (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "e2")))))
+
+(ert-deftest org-glance-test:graph-cache-delete-then-tombstone ()
+  "After warming the cache, a delete is reflected as a tombstone, not the live row."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO A"))
+    (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "d1"))) ; warm
+    (org-glance-graph:delete graph "d1")
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "d1")))
+    (should (= 0 (length (org-glance-graph:headlines graph))))))
+
+(ert-deftest org-glance-test:graph-cache-compaction-visibility ()
+  "Compaction drops a tombstone, turning `get-headline' from `tombstone' to nil.
+The cache must invalidate on compaction so this observable change is seen."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "k1" "* TODO A"))
+    (org-glance-graph:delete graph "k1")
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "k1"))) ; warm: tombstone
+    (org-glance-graph:compact graph)
+    ;; the only record for k1 was a tombstone -> compaction drops the id entirely
+    (should (null (org-glance-graph:get-headline graph "k1")))))
+
+(ert-deftest org-glance-test:graph-cache-insertion-order-after-update ()
+  "Insertion (first-sighting) order survives a cache rebuild after an in-place update."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "o1" "* TODO A")
+                             (org-glance-test:headline "o2" "* TODO B")
+                             (org-glance-test:headline "o3" "* TODO C"))
+    (should (equal '("o1" "o2" "o3")
+                   (mapcar #'org-glance-headline-metadata:id (org-glance-graph:headlines graph))))
+    ;; re-add o2 with a new title: order is unchanged, content is the latest
+    (org-glance-graph:add graph (org-glance-test:headline "o2" "* DONE B2"))
+    (let ((metas (org-glance-graph:headlines graph)))
+      (should (equal '("o1" "o2" "o3") (mapcar #'org-glance-headline-metadata:id metas)))
+      (should (equal "DONE" (org-glance-headline-metadata:state (cadr metas)))))))
+
+(ert-deftest org-glance-test:graph-cache-external-compaction-mtime-independent ()
+  "An external compaction is detected via the snapshot's segment-NAME dimension,
+even when the open segment's mtime and size are unchanged.  This is the coarse-
+filesystem resurrection hole the adversarial review found: a compaction rewrites
+the open empty (size back to 0) and swaps the live set, so a purely mtime-based
+snapshot could repeat on a 1s-granularity clock and serve a deleted headline.
+A SEPARATE graph struct is the external writer (so the reader's in-process
+invalidation never fires); the open + MANIFEST mtimes are pinned so ONLY the
+sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
+  (org-glance-test:with-graph reader
+    (let* ((writer (make-org-glance-graph :directory (org-glance-graph:directory reader)))
+           (open (org-glance-graph:headline-meta-path reader))
+           (manifest (org-glance-graph:--manifest-path reader))
+           (pinned 1500000000))
+      ;; Writer builds a sealed segment of A,B,C with an empty open segment.
+      (org-glance-graph:add writer
+                            (org-glance-test:headline "A" "* TODO A")
+                            (org-glance-test:headline "B" "* TODO B")
+                            (org-glance-test:headline "C" "* TODO C"))
+      (org-glance-graph:--seal writer)
+      ;; Pin times, then warm the READER's cache: live={A,B,C}, sealed=[seg-01].
+      (set-file-times open pinned)
+      (set-file-times manifest pinned)
+      (should (= 3 (length (org-glance-graph:headlines reader))))
+      (should (org-glance-headline-metadata? (org-glance-graph:get-headline reader "A")))
+      ;; External writer deletes A and compacts: A's tombstone is dropped, B,C are
+      ;; folded into seg-02, the open is rewritten empty.  The reader's cache is
+      ;; untouched (separate struct -> no in-process invalidation).
+      (org-glance-graph:delete writer "A")
+      (org-glance-graph:compact writer)
+      ;; Pin the open + MANIFEST mtimes back so (mtime,size) match the warm
+      ;; snapshot; only the sealed-segment NAMES differ.
+      (set-file-times open pinned)
+      (set-file-times manifest pinned)
+      ;; The reader must rebuild and see the post-compaction state (no resurrection).
+      (should (= 2 (length (org-glance-graph:headlines reader))))
+      (should (null (org-glance-graph:get-headline reader "A"))))))
+
 (provide 'test-graph)
 ;;; test-graph.el ends here
