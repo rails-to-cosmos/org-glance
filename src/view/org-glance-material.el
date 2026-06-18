@@ -180,6 +180,10 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
           (setq-local org-glance-material--graph graph
                       org-glance-material--id id)
+          ;; Save atomically: write a temp file then rename it over data.org, so a
+          ;; crash mid-save can never truncate the blob (the canonical materialized
+          ;; file).  Mirrors the temp-then-rename in `org-glance-graph:put-content'.
+          (setq-local file-precious-flag t)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
           (org-glance-material-mode 1))
         buffer))))

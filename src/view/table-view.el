@@ -237,7 +237,6 @@ same line number."
     (define-key map "p" #'previous-line)
     (define-key map "g" #'table-view-sort)
     (define-key map "^" #'table-view-cycle-sort)
-    (define-key map "~" #'table-view-toggle-sort-direction)
     (define-key map "q" #'quit-window)
     map)
   "Base keymap for `table-view-mode'; action keys overlay it per buffer.")
@@ -281,25 +280,48 @@ actions leave rows in place until `g' is pressed."
            (or table-view--sort-key "-")
            (if table-view--sort-asc "asc" "desc")))
 
-(defun table-view-cycle-sort ()
-  "Cycle the sort column among sortable columns."
-  (interactive)
-  (let* ((keys (table-view--sortable-keys))
-         (idx (cl-position table-view--sort-key keys :test #'equal))
-         (next (and keys (nth (mod (1+ (or idx -1)) (length keys)) keys))))
-    (when next
-      (setq table-view--sort-key next table-view--sort-asc t)
-      (table-view--sort-rows)
-      (table-view--render)
-      (message "Sort: %s asc" next))))
+(defun table-view--column-at-point ()
+  "Return the column key at point, or nil if point is not on a table line."
+  (let ((col (current-column))
+        (line (buffer-substring-no-properties
+               (line-beginning-position) (line-end-position))))
+    (when (string-prefix-p "|" line)
+      (let ((widths (table-view--widths table-view--spec table-view--rows))
+            (pos 2)
+            (result nil))
+        (dolist (c (table-view--columns table-view--spec))
+          (let* ((key (alist-get 'key c))
+                 (w (alist-get key widths nil nil #'equal)))
+            (when (and (>= col pos) (< col (+ pos w)))
+              (setq result key))
+            (setq pos (+ pos w 3))))
+        result))))
 
-(defun table-view-toggle-sort-direction ()
-  "Toggle ascending/descending of the current sort."
+(defun table-view-cycle-sort ()
+  "Context-aware sort.
+On a table column: sort by that column, toggling direction if already active.
+Before the table: cycle through all sortable columns."
   (interactive)
-  (setq table-view--sort-asc (not table-view--sort-asc))
-  (table-view--sort-rows)
-  (table-view--render)
-  (message "Sort: %s %s" table-view--sort-key (if table-view--sort-asc "asc" "desc")))
+  (let ((col-key (table-view--column-at-point)))
+    (if col-key
+        (let ((c (table-view--column table-view--spec col-key)))
+          (when (and c (eq t (alist-get 'sortable c)))
+            (if (equal table-view--sort-key col-key)
+                (setq table-view--sort-asc (not table-view--sort-asc))
+              (setq table-view--sort-key col-key
+                    table-view--sort-asc t))
+            (table-view--sort-rows)
+            (table-view--render)
+            (message "Sort: %s %s" col-key
+                     (if table-view--sort-asc "asc" "desc"))))
+      (let* ((keys (table-view--sortable-keys))
+             (idx (cl-position table-view--sort-key keys :test #'equal))
+             (next (and keys (nth (mod (1+ (or idx -1)) (length keys)) keys))))
+        (when next
+          (setq table-view--sort-key next table-view--sort-asc t)
+          (table-view--sort-rows)
+          (table-view--render)
+          (message "Sort: %s asc" next))))))
 
 ;;; Public API
 
@@ -375,7 +397,7 @@ of one argument (BUFFER) that populates rows via `table-view-set-rows' /
                                      t)))
       (table-view--install-action-keys spec)
       (table-view--render))
-    (pop-to-buffer buf)
+    (switch-to-buffer buf)
     (when fill-fn (funcall fill-fn buf))
     buf))
 

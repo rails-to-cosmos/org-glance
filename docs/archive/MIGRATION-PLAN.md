@@ -1,6 +1,14 @@
 # org-glance — Migration & Stabilization Plan
 
-Status: **active** · Started 2026-06-03 · Branch: `master`
+Status: **complete — archived 2026-06-18** · Started 2026-06-03 · Branches:
+`master` (Phases 0–3, 5) → `metadata-migration` (Phase 4 close-out + post-plan
+filter/table modules)
+
+> **Archived.** The migration is complete: all phases are done and the suite is
+> green (147/147). The one remaining item — overview cache GC — is a non-blocking
+> projection-cleanup nicety, tracked under "Outstanding follow-ups" below. Active
+> work has moved on to the **performance roadmap** (graph read-path caching for
+> view / search / extract). This document is kept for historical record.
 
 This document is the agreed plan for simplifying org-glance and bringing it to a
 stable state. It supersedes the scattered TODOs in `org-glance.org` for the
@@ -423,10 +431,33 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
 - ✅ **Re-enable `test/test-headline.el`** in `Eask` — DONE with Phase 3.1: the
   file was split (its 3 v1 tests died with the v1 stack), its 15 headline-model
   tests are loaded and green.
-- **Harden sync against data loss:** atomic write (temp-then-rename) for the
-  material-save path; consider surfacing (not demoting) overview-update errors.
-- **Overview cache GC:** filter caches accumulate under `<store>/overviews/`
-  (safe to `rm -rf`; no auto-eviction yet).
+- ✅ **Harden sync against data loss** — DONE (2026-06-18). Three sub-points,
+  resolved as follows:
+  - **Content blob = atomic.** `org-glance-graph:put-content` now writes the blob
+    to a temp file in the same dir and `rename-file`s it over `data.org` (the same
+    temp-then-rename commit the MANIFEST / seal / compaction paths already use), so
+    a crash or ENOSPC mid-write can never truncate an existing blob. The
+    materialized buffer's own `save-buffer` is made atomic too via a buffer-local
+    `file-precious-flag` set in `org-glance-material:open`. Regression-guarded
+    (`graph-content-atomic-write`: latest-wins in place + no stray `.tmp.`).
+  - **Metadata append = append-with-recovery, by decision (not temp-rename).** The
+    per-save metadata append (`graph:--append` → `f-append-text`) stays an O(1)
+    in-place append; a torn trailing line is *recovered*, not prevented, by
+    `--ensure-newline-terminated` (run at append head + `--heal`) plus the open
+    segment's torn-last-line tolerance in `--scan-file`. A temp-then-rename here
+    would turn every save into an O(file) rewrite for no real gain on an
+    append-only LWW log, so it is deliberately **not** adopted.
+  - **Overview/table update errors = demoted, by decision.** The
+    `sync-functions`-driven view patches are wrapped in `with-demoted-errors`
+    (overview.el / table.el) on purpose: a view refresh must never break the save
+    that triggered it. The "consider surfacing" was weighed and answered with
+    demotion (a `%S` message, not a signalled error).
+- ▶️ **Overview cache GC** — OPEN (sole remaining follow-up; tracked separately,
+  see "Outstanding follow-ups" below). Per-filter caches accumulate under
+  `<store>/overviews/<key>/`, one dir per distinct filter ever opened; staleness
+  triggers a rebuild-in-place, never an eviction. Safe to `rm -rf` by hand; no
+  auto-GC yet. Not a correctness risk (caches are pure projections), so it does
+  not block archiving this plan.
 - ✅ **Storage maintenance — segmented (LSM-lite) store + GC / compaction** —
   DONE (2026-06-05). The metadata store is no longer one ever-growing file:
   - **Segments:** `meta/headlines.jsonl` is the OPEN append segment; crossing
@@ -488,6 +519,52 @@ Re-point the interactive commands off v1 onto the v2 graph, behind the
   `mise exec -- eask run command test`.
 
 ---
+
+## Phase 6 — Post-plan modules (filter + table view) ✅ DONE
+
+Landed on `metadata-migration` after the plan's main body was written; recorded
+here so the archived plan matches the shipped architecture.
+
+- **`src/data/org-glance-filter.el`** — the filter language, lifted out of the
+  overview into its own module. A filter spec (nil / bare tag / plist) is the
+  single source of truth, interpreted by pure helpers: `:normalize-spec` (the one
+  coercion point — folds `:tag`→`:tags`), `:predicate` (spec → closure over
+  metadata), `:identity` (canonical form for cache keys), `:describe` (human
+  label), and the spec mutators `:set-state` / `:set-substring` / `:merge` /
+  `:tags`. The overview's old internal `:spec-predicate` / `:spec-key` machinery
+  (Phase 2.2b) now delegates here, so the overview, agenda, table, and the ambient
+  `org-glance-filter-spec` (the `C-x j` transient + the in-view `/` refinement) all
+  share **one** filter implementation. Tested: `test/test-filter.el` (7).
+- **`src/view/org-glance-table.el` over `src/view/table-view.el`** — a sortable,
+  badge-coloured **table view** of the graph, sister to the org-text overview.
+  `table-view.el` is a vendored, backend-agnostic table core (declarative
+  spec → aligned read-only buffer, badge colours, client-side sort, id-keyed
+  action dispatch); `org-glance-table.el` is the consumer that builds the spec in
+  pure elisp from `org-glance-graph:headlines` + `org-glance-filter:predicate` (the
+  exact headless pair the overview renders from — no org buffer, no backend
+  process). Same id-keyed actions (materialize / open / extract) and the same
+  two-part coherence as the overview: eager `sync-functions` row-patch + lazy
+  `headlines.jsonl`-mtime refresh at the display boundary. Wired into the `C-x j`
+  transient (`t`) and reachable from the overview (`T`); `+` captures with the
+  view's tags in both. Tested: `test/test-table.el` (13).
+- Suite **147/147** green (local, Emacs 30.2).
+
+## Outstanding follow-ups (non-blocking)
+
+- **Overview cache GC** (carried from Phase 4). `<store>/overviews/<key>/` dirs
+  accumulate one-per-filter with no eviction. Proposed: `M-x
+  org-glance-overview-gc` (stale-first prune + LRU cap via a
+  `org-glance-overview-cache-max` defcustom), optionally auto-triggered from
+  `org-glance-overview:write` like segment compaction; never touch the top-level
+  `overview.org` / `agenda.org`; add a test. Pure-projection cleanup, not a
+  correctness risk.
+- **Performance roadmap** — the successor effort. Profiling (2026-06-18) found the
+  dominant cost is that every uncached read re-parses every record in every live
+  segment with no in-memory metadata cache. Highest-leverage fix: an in-memory
+  latest-records cache on the graph struct, keyed by open-segment mtime + MANIFEST
+  identity (turns `:get-headline` O(1), collapses the picker / table / `:tags` /
+  `:states` re-scans). Lower-tier: path/MANIFEST memoization, surgical single-row
+  table patch, open-link reusing the `:-links` thunk, the `:done`-clause rebind.
 
 ## Appendix A — data formats
 

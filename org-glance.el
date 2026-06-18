@@ -77,7 +77,7 @@ metadata is detected, warn that `M-x org-glance-migrate' can convert it."
 
 ;; --- Runtime migration of legacy v1 metadata into the graph -----------------
 ;;
-;; The org files are canonical (see MIGRATION-PLAN.md), so migration RE-SCANS the
+;; The org files are canonical (see docs/archive/MIGRATION-PLAN.md), so migration RE-SCANS the
 ;; sources -- it does not trust v1's possibly-stale `begin' pointers and never
 ;; reads the v1 positional serialization. Legacy `*.metadata.el' files are merely
 ;; the trigger; they are backed up, never deleted.

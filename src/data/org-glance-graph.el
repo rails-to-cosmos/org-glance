@@ -23,7 +23,7 @@
 (defvar org-glance-graph:list (make-hash-table :test 'org-glance-graph:test)
   "Registered instances of `org-glance-graph' in current session.")
 
-;; Single-user assumption: no mutex / locking (see MIGRATION-PLAN.md, decision 3).
+;; Single-user assumption: no mutex / locking (see docs/archive/MIGRATION-PLAN.md, decision 3).
 (cl-defstruct (org-glance-graph (:predicate org-glance-graph?)
                                    (:conc-name org-glance-graph:))
   (directory org-glance-directory :read-only t :type directory)
@@ -190,7 +190,7 @@ the result is deterministic.  An overview can still override it per view via a
 ;; one-line JSON MANIFEST lists the live sealed segments (oldest-first); readers
 ;; merge segments, latest-per-id wins.  Each record carries a store-global
 ;; monotonic `seq' ordinal.  Every mutation is crash-safe via temp-then-rename;
-;; the MANIFEST rename is the sole commit point.  See MIGRATION-PLAN.md Phase 4.
+;; the MANIFEST rename is the sole commit point.  See docs/archive/MIGRATION-PLAN.md Phase 4.
 
 (cl-defun org-glance-graph:--open-segment-path (graph)
   "The open append segment -- identical to `headline-meta-path' (the store-change
@@ -417,14 +417,20 @@ Long ids (e.g. UUIDs) are sharded by their first two characters."
 
 (cl-defun org-glance-graph:put-content (graph headline)
   "Persist HEADLINE's contents under GRAPH's data store, keyed by its id.
-Return the file path, or nil if HEADLINE has no id."
+Return the file path, or nil if HEADLINE has no id.
+The blob is written atomically -- to a temp file in the same dir, then renamed
+over `data.org' -- so a crash or ENOSPC mid-write can never truncate or corrupt
+an existing blob (the same temp-then-rename commit the MANIFEST/seal/compact
+paths use)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline)
   (when-let ((id (org-glance-headline:id headline)))
     (let* ((dir (org-glance-graph:headline-data-path graph id))
-           (path (f-join dir "data.org")))
+           (path (f-join dir "data.org"))
+           (tmp (make-temp-name (f-join dir "data.org.tmp."))))
       (f-mkdir-full-path dir)
-      (f-write-text (org-glance-headline:contents headline) 'utf-8 path)
+      (f-write-text (org-glance-headline:contents headline) 'utf-8 tmp)
+      (rename-file tmp path t)
       path)))
 
 (cl-defun org-glance-graph:get-content (graph id)
@@ -607,7 +613,7 @@ older record lived in a sealed segment must not be \"re-sighted\" later), and
 replacing it bumps the store-change signal -- compaction changes observable
 reads (a dropped tombstone turns `tombstone' into nil), so caches must
 invalidate.  Commit = the MANIFEST swap.  A no-op on an already-compact store.
-Return the live record count.  See MIGRATION-PLAN.md Phase 4."
+Return the live record count.  See docs/archive/MIGRATION-PLAN.md Phase 4."
   (cl-check-type graph org-glance-graph)
   (let* ((sealed-names (org-glance-graph:--sealed-segments graph))
          (open (org-glance-graph:--open-segment-path graph))

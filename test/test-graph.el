@@ -150,6 +150,21 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
         (should (string= (org-glance-headline:hash headline)
                          (org-glance-headline:hash restored)))))))
 
+(ert-deftest org-glance-test:graph-content-atomic-write ()
+  "`put-content' overwrites the blob in place and leaves no temp file behind.
+Regression guard for the atomic temp-then-rename write (a torn write must never
+truncate an existing data.org)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "first body"))
+    (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "second body"))
+    ;; latest content wins, in place
+    (should (s-contains? "second body" (org-glance-graph:get-content graph "aw1")))
+    (should-not (s-contains? "first body" (org-glance-graph:get-content graph "aw1")))
+    ;; the temp file was renamed away, not left in the data dir
+    (let ((dir (org-glance-graph:headline-data-path graph "aw1")))
+      (should-not (cl-find-if (lambda (f) (s-contains? "data.org.tmp." f))
+                              (directory-files dir))))))
+
 (ert-deftest org-glance-test:graph-unsafe-id-rejected ()
   "Path-unsafe ids are rejected before touching the filesystem."
   (org-glance-test:with-graph graph

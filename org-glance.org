@@ -127,7 +127,10 @@ perform quick insert instead of tail insert
 ** TODO save checkboxes history when :RESET_CHECK_BOXES: t
 ** text props magic
 https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
-** TODO proper table view
+** DONE proper table view
+CLOSED: [2026-06-18]
+=org-glance-table= renders the graph as a sortable, badge-coloured table over the
+vendored generic =table-view= core (sister to the org-text overview).
 ** TODO mentions in capture
 ** TODO material mode: proper tags removal (update local buffer variables)
 ** TODO class overview
