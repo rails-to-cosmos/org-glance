@@ -263,5 +263,10 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
                                  (:where "where")
                                  (_ (format "%s=%s" (substring (symbol-name k) 1) v))))))))
 
+(cl-defun org-glance-filter:tags (filter)
+  "Return the :tags from FILTER as a list of symbols, or nil."
+  (let ((tags (plist-get (org-glance-filter:normalize-spec filter) :tags)))
+    (mapcar #'intern tags)))
+
 (provide 'org-glance-filter)
 ;;; org-glance-filter.el ends here

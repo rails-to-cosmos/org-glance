@@ -44,6 +44,9 @@
 
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
+(declare-function org-glance-table:visit "org-glance-table")
+(declare-function org-glance-capture "org-glance-capture")
+(declare-function org-glance-capture:completing-read-tag "org-glance-capture")
 
 (defconst org-glance-overview:header
   "#    -*- mode: org; mode: org-glance-overview -*-\n#+TITLE: org-glance overview\n\n"
@@ -240,6 +243,8 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "e") #'org-glance-overview:extract)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
+(define-key org-glance-overview-mode-map (kbd "T") #'org-glance-overview:table)
+(define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "q") #'quit-window)
 
 (defvar-local org-glance-overview--spec nil
@@ -300,6 +305,18 @@ nil into the material layer."
   (org-glance-overview:write org-glance-graph org-glance-overview--spec)
   (let ((inhibit-read-only t))
     (revert-buffer t t t)))
+
+(cl-defun org-glance-overview:table ()
+  "Open the table view with the same filter as the current overview."
+  (interactive)
+  (org-glance-table:visit org-glance-graph org-glance-overview--spec))
+
+(cl-defun org-glance-overview:capture ()
+  "Capture a headline pre-tagged with this overview's tags."
+  (interactive)
+  (org-glance-capture (or (org-glance-filter:tags org-glance-overview--spec)
+                          (org-glance-capture:completing-read-tag))
+                      ""))
 
 (cl-defun org-glance-overview:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."

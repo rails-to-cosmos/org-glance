@@ -42,6 +42,9 @@
 
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
+(declare-function org-glance-overview:visit "org-glance-overview")
+(declare-function org-glance-capture "org-glance-capture")
+(declare-function org-glance-capture:completing-read-tag "org-glance-capture")
 
 ;;; State colour palette
 ;;
@@ -105,7 +108,9 @@ all sortable.  Default sort is the state column ascending (active first)."
                 ((key . "m")   (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
                 ((key . "e")   (command . "extract")     (label . "Extract"))
-                ((key . "g")   (command . "refresh")     (label . "Refresh"))))
+                ((key . "g")   (command . "refresh")     (label . "Refresh"))
+                ((key . "T")   (command . "overview")    (label . "Overview"))
+                ((key . "+")   (command . "capture")     (label . "Capture"))))
     (sort . ((column . "state") (ascending . t)))))
 
 (cl-defun org-glance-table:--row (metadata)
@@ -233,7 +238,12 @@ Honours the same filter language as the overview (see
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table:--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table:--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table:--act-extract graph id row)))
-                         (cons "refresh"     (lambda (_id _row) (org-glance-table:--reload (current-buffer))))))
+                         (cons "refresh"     (lambda (_id _row) (org-glance-table:--reload (current-buffer))))
+                         (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
+                         (cons "capture"     (lambda (_id _row)
+                                               (org-glance-capture (or (org-glance-filter:tags spec)
+                                                                       (org-glance-capture:completing-read-tag))
+                                                                   "")))))
          (buf (table-view-display buffer-name (org-glance-table:--spec graph spec) handlers fill-fn)))
     (with-current-buffer buf
       (setq org-glance-table--graph graph
