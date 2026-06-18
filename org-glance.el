@@ -47,6 +47,7 @@
 (require 'org-glance-graph)
 (require 'org-glance-material)
 (require 'org-glance-overview)
+(require 'org-glance-table)
 
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."

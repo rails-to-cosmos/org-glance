@@ -8,6 +8,7 @@
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
+(declare-function org-glance-table "org-glance-table")
 
 ;;; Ambient filter controls
 ;;
@@ -48,7 +49,8 @@
    ("c" "Clear (all)" org-glance-form-action:filter-clear)]
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
-    ("o" "Overview" org-glance-overview)]]
+    ("o" "Overview" org-glance-overview)
+    ("t" "Table" org-glance-table)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)
