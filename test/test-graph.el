@@ -323,14 +323,14 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
   (org-glance-test:with-graph reader
     (let* ((writer (make-org-glance-graph :directory (org-glance-graph:directory reader)))
            (open (org-glance-graph:headline-meta-path reader))
-           (manifest (org-glance-graph:--manifest-path reader))
+           (manifest (org-glance-graph--manifest-path reader))
            (pinned 1500000000))
       ;; Writer builds a sealed segment of A,B,C with an empty open segment.
       (org-glance-graph:add writer
                             (org-glance-test:headline "A" "* TODO A")
                             (org-glance-test:headline "B" "* TODO B")
                             (org-glance-test:headline "C" "* TODO C"))
-      (org-glance-graph:--seal writer)
+      (org-glance-graph--seal writer)
       ;; Pin times, then warm the READER's cache: live={A,B,C}, sealed=[seg-01].
       (set-file-times open pinned)
       (set-file-times manifest pinned)

@@ -6,8 +6,13 @@
    3. Struct fields and methods should follow naming convention for {struct-name}:{method-name/var-name}.
    4. Public field names should begin with letter / digit: =org-glance-headline:hash=.
    5. Private field names should begin with dash: =org-glance-headline:-hash=.
-   6. Generic methods should end with an asterisk: =org-glance-headline-metadata:id*=.
-   7. Lazy methods should be implemented in several steps:
+   6. Method separator: a PUBLIC method keeps the namespace colon
+      (=org-glance-headline:hash=); a PRIVATE method drops the colon and uses a
+      double dash (=org-glance-headline--hash=). Never =:--= — that wrongly combines
+      the public colon with the private marker. (Private FIELDS are the lone
+      exception: =:-field=, per the rule above.)
+   7. Generic methods should end with an asterisk: =org-glance-headline-metadata:id*=.
+   8. Lazy methods should be implemented in several steps:
       1. Define private attribute that will hold a value: =org-glance-headline:-hash=.
       2. Define private lazy method that delays computation: =org-glance-headline--hash=.
       3. Define public accessor method that enforces computation: =org-glance-headline:hash=.

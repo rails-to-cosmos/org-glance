@@ -67,7 +67,7 @@ See `org-glance-filter:predicate' for the spec language.")
     (:deadline       :match present-absent :accessor ,#'org-glance-headline-metadata:deadline)
     (:where))
   "The single source of truth for the headline filter language.
-Drives `org-glance-filter:keys', `:predicate' and `:--canonical-pairs'
+Drives `org-glance-filter:keys', `:predicate' and `--canonical-pairs'
 together -- previously each new key meant four lockstep edits, two of them
 silently forgettable (a missing predicate clause made the filter match
 EVERYTHING; a missing canonicalisation case fragmented the cache).  Adding a
@@ -112,7 +112,7 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
       out))
    (t (error "Invalid filter: %S" filter))))
 
-(cl-defun org-glance-filter:--match-clause (kind accessor want)
+(cl-defun org-glance-filter--match-clause (kind accessor want)
   "Build one predicate clause testing ACCESSOR's value against WANT, per KIND."
   (pcase kind
     ;; Tags are stored interned + downcased, so compare case-insensitively
@@ -150,15 +150,17 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
         (clauses nil))
     ;; Structural specials the table cannot express:
     (when (plist-member spec :done)
-      ;; `done?' reads the buffer-local `org-done-keywords', nil outside an Org
-      ;; buffer; capture a concrete set once so the filter is deterministic.  A
-      ;; per-overview `:done-keywords' wins over the global default chain.
+      ;; `done?' reads the buffer-local `org-done-keywords' (nil outside an Org
+      ;; buffer), so resolve a concrete done-set ONCE here -- a per-overview
+      ;; `:done-keywords' wins over the global default chain -- and test membership
+      ;; directly against it.  This mirrors `org-glance-headline-metadata:done?' (a
+      ;; plain `member') but avoids a per-candidate dynamic `let' + function call on
+      ;; the picker's hot path: `(and (member ...) t)' == `(not (null (member ...)))'.
       (let ((want (and (plist-get spec :done) t))
             (done-keywords (or (plist-get spec :done-keywords)
                                (org-glance--done-keywords))))
         (push (lambda (m)
-                (let ((org-done-keywords done-keywords))
-                  (eq want (org-glance-headline-metadata:done? m))))
+                (eq want (and (member (org-glance-headline-metadata:state m) done-keywords) t)))
               clauses)))
     (when (plist-member spec :where)
       (let ((fn (plist-get spec :where)))
@@ -168,14 +170,14 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
     (cl-loop for (key . props) in org-glance-filter:table
              for kind = (plist-get props :match)
              when (and kind (plist-member spec key))
-             do (push (org-glance-filter:--match-clause
+             do (push (org-glance-filter--match-clause
                        kind (plist-get props :accessor) (plist-get spec key))
                       clauses))
     (if clauses
         (lambda (m) (cl-every (lambda (clause) (funcall clause m)) clauses))
       (lambda (_m) t))))
 
-(cl-defun org-glance-filter:--canon-value (key value)
+(cl-defun org-glance-filter--canon-value (key value)
   "Canonical form of VALUE under KEY, per the table's :canon kind.
 Shared by the spec identity and the cache key (a hash of that identity)."
   (pcase (plist-get (alist-get key org-glance-filter:table) :canon)
@@ -184,18 +186,18 @@ Shared by the spec identity and the cache key (a hash of that identity)."
     ('downcase (downcase (format "%s" value)))
     (_ value)))
 
-(cl-defun org-glance-filter:--canonical-pairs (spec)
+(cl-defun org-glance-filter--canonical-pairs (spec)
   "Order-independent (KEY . VALUE) alist for normalised SPEC.
 Keys sorted; values canonicalised per the table so that `prin1' renders them
 unambiguously."
   (sort (cl-loop for (k v) on spec by #'cddr
-                 collect (cons k (org-glance-filter:--canon-value k v)))
+                 collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
 (cl-defun org-glance-filter:identity (filter)
   "Unambiguous printed identity of FILTER's canonical form.
 This -- not the lossy directory name -- is what makes two filters \"the same\"."
-  (prin1-to-string (org-glance-filter:--canonical-pairs
+  (prin1-to-string (org-glance-filter--canonical-pairs
                     (org-glance-filter:normalize-spec filter))))
 
 ;;; Generalized refinement: build a new spec from a dimension choice

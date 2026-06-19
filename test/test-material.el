@@ -372,7 +372,7 @@ for the original id (the sync hook skips a mismatched id)."
             (should (s-contains? "transient note" (buffer-string))))
         (kill-buffer buffer)))))
 
-(cl-defmacro org-glance-test:--seen-ids (&rest body)
+(cl-defmacro org-glance-test--seen-ids (&rest body)
   "Stub `completing-read' to capture the offered headline ids (sorted) in `seen',
 returning the first candidate, then run BODY.  `seen' is bound around BODY."
   (declare (indent 0))
@@ -395,7 +395,7 @@ runs and only the offered candidate set is observed."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
                 ((symbol-function 'switch-to-buffer) #'ignore))
-        (org-glance-test:--seen-ids
+        (org-glance-test--seen-ids
           (let ((org-glance-filter-spec '(:done nil)))     ; active
             (org-glance-materialize) (should (equal '("mt") seen)))
           (let ((org-glance-filter-spec '(:done t)))       ; done
@@ -415,7 +415,7 @@ Pins the design default so an accidental change to the defvar fails loudly."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
                 ((symbol-function 'switch-to-buffer) #'ignore))
-        (org-glance-test:--seen-ids
+        (org-glance-test--seen-ids
           (org-glance-materialize)            ; no `org-glance-filter-spec' binding
           (should (equal '("dt") seen)))))))
 
@@ -428,7 +428,7 @@ Pins the design default so an accidental change to the defvar fails loudly."
                              (org-glance-test:headline "tn" "* TODO C" "no link"))
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open-link) #'ignore))
-        (org-glance-test:--seen-ids
+        (org-glance-test--seen-ids
           ;; active + linked -> "ta" (DONE filtered out; "tn" lacks a link)
           (let ((org-glance-filter-spec '(:done nil)))
             (org-glance-open) (should (equal '("ta") seen)))
@@ -448,7 +448,7 @@ Pins the design default so an accidental change to the defvar fails loudly."
                              (org-glance-test:headline "tn" "* TODO C" "no pairs"))
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:extract) #'ignore))
-        (org-glance-test:--seen-ids
+        (org-glance-test--seen-ids
           ;; active + propertized -> "tk" (DONE filtered; "tn" lacks pairs)
           (let ((org-glance-filter-spec '(:done nil)))
             (org-glance-extract) (should (equal '("tk") seen)))

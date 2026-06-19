@@ -78,13 +78,13 @@ which filter a cache directory holds."
      (t (substring (secure-hash 'sha1 (org-glance-filter:identity spec))
                    0 12)))))
 
-(cl-defun org-glance-overview:--spec-sidecar (file)
+(cl-defun org-glance-overview--spec-sidecar (file)
   "Path of the SPEC identity sidecar stored next to cache FILE."
   (f-join (f-dirname file) "SPEC"))
 
-(cl-defun org-glance-overview:--spec-owns-cache? (filter file)
+(cl-defun org-glance-overview--spec-owns-cache? (filter file)
   "Non-nil when FILE's SPEC sidecar records exactly FILTER's identity."
-  (let ((sidecar (org-glance-overview:--spec-sidecar file)))
+  (let ((sidecar (org-glance-overview--spec-sidecar file)))
     (and (f-exists? sidecar)
          (string= (org-glance-filter:identity filter)
                   (s-trim (f-read-text sidecar 'utf-8))))))
@@ -145,7 +145,7 @@ filter gets `<cache-path>/<key>/overview.org'."
      ((string= key "all") (org-glance-overview:file graph))
      (t (f-join (org-glance-overview:cache-path graph) key "overview.org")))))
 
-(cl-defun org-glance-overview:--mtime (path)
+(cl-defun org-glance-overview--mtime (path)
   (file-attribute-modification-time (file-attributes path)))
 
 (cl-defun org-glance-overview:fresh? (graph file)
@@ -157,10 +157,10 @@ cost.  A future-dated source (clock skew / restored backup) also rebuilds."
   (let ((src (org-glance-graph:headline-meta-path graph)))
     (and (f-exists? file)
          (or (not (f-exists? src))
-             (time-less-p (org-glance-overview:--mtime src)
-                          (org-glance-overview:--mtime file))))))
+             (time-less-p (org-glance-overview--mtime src)
+                          (org-glance-overview--mtime file))))))
 
-(cl-defun org-glance-overview:--header-current? (file)
+(cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE starts with the current `org-glance-overview:header'.
 A cache rendered by an older org-glance (e.g. with the pre-rename
 `org-glance-overview-v2' prop-line mode) must be rebuilt, not served --
@@ -182,7 +182,7 @@ readably."
     (f-mkdir-full-path (f-dirname file))
     (unless (member key '(nil "all"))
       (f-write-text (concat (org-glance-filter:identity filter) "\n") 'utf-8
-                    (org-glance-overview:--spec-sidecar file)))
+                    (org-glance-overview--spec-sidecar file)))
     (f-write-text (org-glance-overview:render graph filter) 'utf-8 file)
     file))
 
@@ -201,9 +201,9 @@ re-renders."
      ((null key)                                       ; :where -- never cache
       (org-glance-overview:write graph filter))
      ((and (org-glance-overview:fresh? graph file)
-           (org-glance-overview:--header-current? file)
+           (org-glance-overview--header-current? file)
            (or (string= key "all")                     ; "all" never collides
-               (org-glance-overview:--spec-owns-cache? filter file)))
+               (org-glance-overview--spec-owns-cache? filter file)))
       file)                                            ; hit -- no read, no render
      (t (org-glance-overview:write graph filter)))))
 
@@ -223,8 +223,8 @@ re-renders."
     (setq tab-width 8 indent-tabs-mode nil)
     ;; The lazy half of the no-outdated-results invariant: re-check freshness
     ;; whenever this buffer is (re)displayed or its window gets selected.
-    (add-hook 'window-buffer-change-functions #'org-glance-overview:--refresh-when-stale nil t)
-    (add-hook 'window-selection-change-functions #'org-glance-overview:--refresh-when-stale nil t)))
+    (add-hook 'window-buffer-change-functions #'org-glance-overview--refresh-when-stale nil t)
+    (add-hook 'window-selection-change-functions #'org-glance-overview--refresh-when-stale nil t)))
 
 ;; Movement mirrors the v1 overview (n/p between headings) plus f/b across
 ;; same-level siblings; actions act on the headline at point.
@@ -263,7 +263,7 @@ re-renders."
   (interactive)
   (switch-to-buffer (org-glance-material:open org-glance-graph (org-glance-overview:id-at-point))))
 
-(cl-defun org-glance-overview:--headline-at-point ()
+(cl-defun org-glance-overview--headline-at-point ()
   "The live `org-glance-headline' for the heading at point.
 The overview is a cached snapshot that can outlive the graph, so a heading may
 name a headline that has since been deleted; error clearly rather than passing
@@ -274,12 +274,12 @@ nil into the material layer."
 (cl-defun org-glance-overview:open ()
   "Open a link inside the headline at point."
   (interactive)
-  (org-glance-material:open-link (org-glance-overview:--headline-at-point)))
+  (org-glance-material:open-link (org-glance-overview--headline-at-point)))
 
 (cl-defun org-glance-overview:extract ()
   "Extract a key-value pair from the headline at point."
   (interactive)
-  (org-glance-material:extract (org-glance-overview:--headline-at-point)))
+  (org-glance-material:extract (org-glance-overview--headline-at-point)))
 
 (cl-defun org-glance-overview:visit (graph &optional filter)
   "Open GRAPH's overview for FILTER read-only, serving the cache when fresh."
@@ -355,7 +355,7 @@ plist -- see `org-glance-filter:predicate'."
 ;; are shared with the `org-glance-form-action' transient so the two filter UIs
 ;; stay consistent.
 
-(cl-defun org-glance-overview:--revisit (spec)
+(cl-defun org-glance-overview--revisit (spec)
   "Re-visit the current overview with the (already composed) filter SPEC."
   (cl-assert (org-glance-initialized?))
   (org-glance-overview:visit org-glance-graph spec))
@@ -364,7 +364,7 @@ plist -- see `org-glance-filter:predicate'."
   "Narrow the current overview by todo state (active / done / all / a state)."
   (interactive)
   (cl-assert (org-glance-initialized?))
-  (org-glance-overview:--revisit
+  (org-glance-overview--revisit
    (org-glance-filter:set-state org-glance-overview--spec
                                 (org-glance-filter:read-state org-glance-graph))))
 
@@ -373,7 +373,7 @@ plist -- see `org-glance-filter:predicate'."
   (interactive)
   (let ((needle (read-string "Title contains: ")))
     (when (string-empty-p needle) (user-error "No substring given"))
-    (org-glance-overview:--revisit
+    (org-glance-overview--revisit
      (org-glance-filter:set-substring org-glance-overview--spec needle))))
 
 (cl-defun org-glance-overview:filter-clear ()
@@ -408,7 +408,7 @@ plist -- see `org-glance-filter:predicate'."
 ;;    and rebuilds if anything else mutated the graph meanwhile (capture,
 ;;    delete, reindex, compaction, another Emacs).
 
-(cl-defun org-glance-overview:--heading-region (id)
+(cl-defun org-glance-overview--heading-region (id)
   "Start/end cons of ID's heading in the current overview buffer, or nil."
   (org-with-wide-buffer
    (goto-char (point-min))
@@ -416,7 +416,7 @@ plist -- see `org-glance-filter:predicate'."
      (org-back-to-heading t)
      (cons (point) (progn (org-end-of-subtree t t) (point))))))
 
-(cl-defun org-glance-overview:--save-quietly ()
+(cl-defun org-glance-overview--save-quietly ()
   "Persist the current (patched) overview buffer to its cache file.
 Bypasses `save-buffer' and its hooks; the cache file ends up newer than the
 store, i.e. fresh."
@@ -424,14 +424,14 @@ store, i.e. fresh."
   (set-visited-file-modtime)
   (set-buffer-modified-p nil))
 
-(cl-defun org-glance-overview:--patch-headline (metadata)
+(cl-defun org-glance-overview--patch-headline (metadata)
   "Update METADATA's heading in the current overview buffer, in place.
 Replace it when it still matches the buffer's filter, drop it when it no longer
 does, or rebuild the whole view when it newly enters it."
   (let* ((id (org-glance-headline-metadata:id metadata))
          (matches? (funcall (org-glance-filter:predicate org-glance-overview--spec)
                             metadata))
-         (region (org-glance-overview:--heading-region id))
+         (region (org-glance-overview--heading-region id))
          (inhibit-read-only t))
     (cond
      ((and region matches?)             ; still visible -> replace in place
@@ -439,10 +439,10 @@ does, or rebuild the whole view when it newly enters it."
         (delete-region (car region) (cdr region))
         (goto-char (car region))
         (insert (org-glance-overview:render-headline metadata)))
-      (org-glance-overview:--save-quietly))
+      (org-glance-overview--save-quietly))
      (region                            ; filtered out now -> drop the heading
       (save-excursion (delete-region (car region) (cdr region)))
-      (org-glance-overview:--save-quietly))
+      (org-glance-overview--save-quietly))
      (matches?                          ; newly visible -> exact position needs
       (org-glance-overview:refresh))))) ; the full stream: rebuild this view
 
@@ -457,16 +457,16 @@ break the save that triggered it, so per-buffer errors are demoted."
                    buffer-file-name
                    (f-ancestor-of? store buffer-file-name))
           (with-demoted-errors "org-glance: overview update failed: %S"
-            (org-glance-overview:--patch-headline metadata)))))))
+            (org-glance-overview--patch-headline metadata)))))))
 
 (add-hook 'org-glance-material:sync-functions #'org-glance-overview:on-headline-update)
 
-(cl-defun org-glance-overview:--stale? ()
+(cl-defun org-glance-overview--stale? ()
   "Non-nil when the current overview buffer may show outdated results."
   (or (not (verify-visited-file-modtime (current-buffer))) ; file changed under us
       (not (org-glance-overview:fresh? org-glance-graph buffer-file-name))))
 
-(cl-defun org-glance-overview:--refresh-when-stale (&optional window)
+(cl-defun org-glance-overview--refresh-when-stale (&optional window)
   "Rebuild WINDOW's (or the current) overview iff it no longer reflects the store.
 The lazy half of the no-outdated-results invariant: runs whenever the buffer is
 (re)displayed or its window selected."
@@ -474,7 +474,7 @@ The lazy half of the no-outdated-results invariant: runs whenever the buffer is
     (when (and (bound-and-true-p org-glance-overview-mode)
                org-glance-graph
                buffer-file-name
-               (org-glance-overview:--stale?))
+               (org-glance-overview--stale?))
       (with-demoted-errors "org-glance: overview refresh failed: %S"
         (org-glance-overview:refresh)))))
 

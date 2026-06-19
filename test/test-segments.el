@@ -4,7 +4,7 @@
 
 (defun org-glance-test:sealed-segments (graph)
   "Names of the sealed segments listed in GRAPH's MANIFEST."
-  (org-glance-graph:--sealed-segments graph))
+  (org-glance-graph--sealed-segments graph))
 
 (defun org-glance-test:reopen-graph (graph)
   "Drop GRAPH from the instance cache and re-open it (running heal/migration)."
@@ -15,14 +15,14 @@
 (ert-deftest org-glance-test:segments-manifest-bootstrap ()
   "A fresh store gets a MANIFEST with no sealed segments; reopening is a no-op."
   (org-glance-test:with-graph graph
-    (should (f-exists? (org-glance-graph:--manifest-path graph)))
+    (should (f-exists? (org-glance-graph--manifest-path graph)))
     (should (null (org-glance-test:sealed-segments graph)))
     (should (null (org-glance-graph:headlines graph)))
     ;; reopen (bypass the instance cache) -> same manifest, still empty
-    (let ((manifest-before (f-read-text (org-glance-graph:--manifest-path graph) 'utf-8)))
+    (let ((manifest-before (f-read-text (org-glance-graph--manifest-path graph) 'utf-8)))
       (org-glance-test:reopen-graph graph)
       (should (string= manifest-before
-                       (f-read-text (org-glance-graph:--manifest-path graph) 'utf-8))))))
+                       (f-read-text (org-glance-graph--manifest-path graph) 'utf-8))))))
 
 (ert-deftest org-glance-test:segments-seal-at-threshold ()
   "The open segment seals into seg-* once it crosses the byte cap."
@@ -37,7 +37,7 @@
         ;; every sealed segment exists, parses line-by-line, and the open file is small
         (dolist (name sealed)
           (let ((lines 0))
-            (org-glance-graph:--scan-file
+            (org-glance-graph--scan-file
              graph (f-join (org-glance-graph:meta-path graph) name)
              (lambda (_r) (cl-incf lines)))
             (should (> lines 0))))
@@ -114,7 +114,7 @@ the next append; intact records are unaffected."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "x" "* Sealed data"))
     (let ((open (org-glance-graph:headline-meta-path graph))
-          (sealed (org-glance-graph:--segment-path graph 1)))
+          (sealed (org-glance-graph--segment-path graph 1)))
       ;; simulate --seal dying between rename and manifest swap
       (rename-file open sealed)
       (f-touch open)
@@ -128,7 +128,7 @@ the next append; intact records are unaffected."
 reaped, not adopted; pre-crash data stays intact."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "keep" "* Keep me"))
-    (let ((orphan (org-glance-graph:--segment-path graph 9)))
+    (let ((orphan (org-glance-graph--segment-path graph 9)))
       (f-write-text "{\"id\":\"ghost\",\"title\":\"ghost\",\"seq\":999}\n" 'utf-8 orphan)
       (let ((graph (org-glance-test:reopen-graph graph)))
         (should-not (f-exists? orphan))               ; reaped
@@ -147,7 +147,7 @@ in place: same reads, order preserved, next insert continues cleanly."
                             "{\"id\":\"l3\",\"tombstone\":true}\n")
                     'utf-8 (f-join meta "headlines.jsonl")))
     (let ((graph (org-glance-graph dir)))
-      (should (f-exists? (org-glance-graph:--manifest-path graph)))
+      (should (f-exists? (org-glance-graph--manifest-path graph)))
       (should (null (org-glance-test:sealed-segments graph)))
       ;; single-file semantics preserved
       (let ((metas (org-glance-graph:headlines graph)))
@@ -170,14 +170,14 @@ tombstones, GCs dead blobs, and keeps live data intact."
       (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE Alpha" "alpha body v2"))
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta" "beta body"))
       (org-glance-graph:delete graph "b")
-      (org-glance-graph:--seal graph)              ; push the tombstone out of the open segment
+      (org-glance-graph--seal graph)              ; push the tombstone out of the open segment
       (should (>= (length (org-glance-test:sealed-segments graph)) 3))
       (should (f-exists? (org-glance-graph:headline-data-path graph "b")))
       (org-glance-graph:compact graph)
       ;; one sealed segment; superseded + tombstoned records gone
       (should (= 1 (length (org-glance-test:sealed-segments graph))))
       (let ((records nil))
-        (org-glance-graph:--scan-forward graph (lambda (r) (push r records)))
+        (org-glance-graph--scan-forward graph (lambda (r) (push r records)))
         (should (= 1 (length records)))
         (should (string= "a" (plist-get (car records) :id)))
         (should (string= "DONE" (plist-get (car records) :state))))
@@ -217,7 +217,7 @@ such ids after everything else)."
           (org-glance-graph-compact-segment-count 1000))
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
       (org-glance-graph:compact graph))
-    (let* ((manifest-path (org-glance-graph:--manifest-path graph))
+    (let* ((manifest-path (org-glance-graph--manifest-path graph))
            (before (f-read-text manifest-path 'utf-8)))
       (org-glance-graph:compact graph)
       (should (string= before (f-read-text manifest-path 'utf-8))))))
@@ -247,7 +247,7 @@ listed segment still held the headline live)."
     (org-glance-graph:delete graph "x")
     (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
     ;; crash compact at its commit point
-    (cl-letf (((symbol-function 'org-glance-graph:--write-manifest)
+    (cl-letf (((symbol-function 'org-glance-graph--write-manifest)
                (lambda (&rest _) (error "simulated crash at commit"))))
       (should-error (org-glance-graph:compact graph)))
     ;; recover: x must STILL be dead, y alive, and the orphan merged seg reaped
@@ -272,10 +272,10 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
     (let ((segments-before (org-glance-test:sealed-segments graph))
           (count-records (lambda (graph)
                            (let ((n 0))
-                             (org-glance-graph:--scan-forward graph (lambda (_r) (cl-incf n)))
+                             (org-glance-graph--scan-forward graph (lambda (_r) (cl-incf n)))
                              n))))
       (should (= 2 (funcall count-records graph)))
-      (cl-letf (((symbol-function 'org-glance-graph:--write-manifest)
+      (cl-letf (((symbol-function 'org-glance-graph--write-manifest)
                  (lambda (&rest _) (error "simulated crash at commit"))))
         (should-error (org-glance-graph:compact graph)))
       (let ((graph (org-glance-test:reopen-graph graph)))
@@ -307,7 +307,7 @@ the overview cache invalidates on every kind of store write."
         ;; seal recreates the open segment fresh
         (backdate)
         (let ((before (mtime)))
-          (org-glance-graph:--seal graph)
+          (org-glance-graph--seal graph)
           (should (time-less-p before (mtime))))
         ;; compaction changes observable reads (tombstone -> nil), so it must
         ;; bump the signal too (it replaces the open segment)

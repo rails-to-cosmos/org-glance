@@ -41,13 +41,13 @@
 ;;; Row builder
 
 (ert-deftest org-glance-test:table-row-from-metadata ()
-  "org-glance-table:--row produces a well-formed row from headline metadata."
+  "org-glance-table--row produces a well-formed row from headline metadata."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "t1" "* TODO Alpha :work:"
                                                        "SCHEDULED: <2025-01-10 Fri> DEADLINE: <2025-02-01 Sat>"))
     (let* ((meta (car (org-glance-graph:headlines graph)))
-           (row (org-glance-table:--row meta))
+           (row (org-glance-table--row meta))
            (cells (alist-get 'cells row)))
       (should (equal "t1" (alist-get 'id row)))
       (should (equal "TODO" (alist-get 'state cells)))
@@ -61,7 +61,7 @@
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "t2" "* Plain"))
     (let* ((meta (car (org-glance-graph:headlines graph)))
-           (cells (alist-get 'cells (org-glance-table:--row meta))))
+           (cells (alist-get 'cells (org-glance-table--row meta))))
       (should (equal "" (alist-get 'state cells)))
       (should (equal "" (alist-get 'tags cells)))
       (should (equal "" (alist-get 'schedule cells)))
@@ -76,7 +76,7 @@
     (org-glance-graph:add graph
                              (org-glance-test:headline "b1" "* TODO Active")
                              (org-glance-test:headline "b2" "* DONE Finished"))
-    (let* ((badges (org-glance-table:--state-badges graph))
+    (let* ((badges (org-glance-table--state-badges graph))
            (values (mapcar (lambda (b) (alist-get 'value b)) badges)))
       (should (member "TODO" values))
       (should (member "DONE" values))
@@ -89,7 +89,7 @@
   "The spec has the required top-level keys and six columns."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO X"))
-    (let ((spec (org-glance-table:--spec graph nil)))
+    (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
       (should (= 6 (length (alist-get 'columns spec))))
       (should (alist-get 'actions spec))
@@ -104,7 +104,7 @@
                              (org-glance-test:headline "f1" "* Alpha :work:")
                              (org-glance-test:headline "f2" "* Beta :home:"))
     (let* ((keep? (org-glance-filter:predicate '(:tags ("work"))))
-           (rows (org-glance-table:--rows graph keep?))
+           (rows (org-glance-table--rows graph keep?))
            (ids (mapcar (lambda (r) (alist-get 'id r)) rows)))
       (should (equal '("f1") ids)))))
 
@@ -118,13 +118,13 @@
       (unwind-protect
           (progn
             (table-view-display buf
-                               (org-glance-table:--spec graph nil)
+                               (org-glance-table--spec graph nil)
                                nil)
             (with-current-buffer buf
               (setq org-glance-table--graph graph
                     org-glance-table--spec nil)
               (let ((meta (car (org-glance-graph:headlines graph))))
-                (org-glance-table:--patch meta)
+                (org-glance-table--patch meta)
                 (should (= 1 (length table-view--rows)))
                 (should (equal "p1" (alist-get 'id (car table-view--rows)))))))
         (kill-buffer buf)))))
@@ -136,12 +136,12 @@
                              (org-glance-test:headline "r1" "* TODO Foo :work:")
                              (org-glance-test:headline "r2" "* TODO Bar :home:"))
     (let* ((keep? (org-glance-filter:predicate '(:tags ("work"))))
-           (rows (org-glance-table:--rows graph keep?))
+           (rows (org-glance-table--rows graph keep?))
            (buf (get-buffer-create "*tv-patch-rm*")))
       (unwind-protect
           (progn
             (table-view-display buf
-                               (org-glance-table:--spec graph '(:tags ("work")))
+                               (org-glance-table--spec graph '(:tags ("work")))
                                nil)
             (table-view-set-rows buf rows)
             (with-current-buffer buf
@@ -149,7 +149,7 @@
                     org-glance-table--spec '(:tags ("work")))
               (should (= 1 (length table-view--rows)))
               (let ((home-meta (cadr (org-glance-graph:headlines graph))))
-                (org-glance-table:--patch home-meta)
+                (org-glance-table--patch home-meta)
                 (should (= 1 (length table-view--rows)))
                 (should (equal "r1" (alist-get 'id (car table-view--rows)))))))
         (kill-buffer buf)))))
@@ -166,10 +166,10 @@
           (with-current-buffer buf
             (table-view-mode)
             (setq org-glance-table--graph graph)
-            (setq org-glance-table--mtime (org-glance-table:--mtime src))
-            (should-not (org-glance-table:--stale?))
+            (setq org-glance-table--mtime (org-glance-table--mtime src))
+            (should-not (org-glance-table--stale?))
             (setq org-glance-table--mtime '(0 0 0 0))
-            (should (org-glance-table:--stale?)))
+            (should (org-glance-table--stale?)))
         (kill-buffer buf)))))
 
 ;;; Visit + actions
@@ -212,9 +212,115 @@
     (let ((opened nil))
       (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq opened b) b))
                 ((symbol-function 'org-glance-material:open) (lambda (_g id) (get-buffer-create (format "*mat-%s*" id)))))
-        (org-glance-table:--act-materialize graph "am1" nil)
+        (org-glance-table--act-materialize graph "am1" nil)
         (should (bufferp opened))
         (kill-buffer opened)))))
+
+;;; Surgical single-row updates (buffer-text level)
+
+(defun org-glance-test:table-1col-buffer (name rows)
+  "Display a 1-column table NAME with ROWS and return the buffer."
+  (let ((buf (get-buffer-create name)))
+    (table-view-display buf
+                        '((title . "T")
+                          (columns . (((key . "n") (header . "N") (type . "text")
+                                       (sortable . t) (align . "left")))))
+                        nil)
+    (table-view-set-rows buf rows)
+    buf))
+
+(ert-deftest org-glance-test:table-view-upsert-patch-same-width ()
+  "Replacing a row with a same-width cell patches in place, keeping siblings."
+  (let ((buf (org-glance-test:table-1col-buffer
+              "*tv-patch-sw*"
+              '(((id . "a") (cells . ((n . "one"))))
+                ((id . "b") (cells . ((n . "two"))))
+                ((id . "c") (cells . ((n . "six"))))))))
+    (unwind-protect
+        (progn
+          (table-view-upsert-row buf '((id . "b") (cells . ((n . "TWO")))))
+          (with-current-buffer buf
+            (should (s-contains? "TWO" (buffer-string)))
+            (should-not (s-contains? "two" (buffer-string)))
+            (should (s-contains? "one" (buffer-string)))
+            (should (s-contains? "six" (buffer-string)))
+            ;; all three rows still locatable; b's row prop reflects the new cell
+            (should (table-view--goto-id "a"))
+            (should (table-view--goto-id "c"))
+            (should (table-view--goto-id "b"))
+            (should (equal "TWO" (alist-get 'n (alist-get 'cells
+                                  (get-text-property (point) 'table-view-row)))))))
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:table-view-upsert-widens-column ()
+  "Replacing a row with a wider cell re-renders (full path) and keeps siblings."
+  (let ((buf (org-glance-test:table-1col-buffer
+              "*tv-widen*"
+              '(((id . "a") (cells . ((n . "x"))))
+                ((id . "b") (cells . ((n . "y"))))))))
+    (unwind-protect
+        (progn
+          (table-view-upsert-row buf '((id . "a") (cells . ((n . "a-much-longer-value")))))
+          (with-current-buffer buf
+            (should (s-contains? "a-much-longer-value" (buffer-string)))
+            (should (table-view--goto-id "b"))
+            (should (equal "y" (alist-get 'n (alist-get 'cells
+                                (get-text-property (point) 'table-view-row)))))))
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:table-view-remove-patch-same-width ()
+  "Removing a non-widest row deletes just its line, keeping siblings."
+  (let ((buf (org-glance-test:table-1col-buffer
+              "*tv-rm-sw*"
+              '(((id . "a") (cells . ((n . "one"))))
+                ((id . "b") (cells . ((n . "two"))))
+                ((id . "c") (cells . ((n . "six"))))))))
+    (unwind-protect
+        (progn
+          (table-view-remove-row buf "b")
+          (with-current-buffer buf
+            (should-not (s-contains? "two" (buffer-string)))
+            (should (s-contains? "one" (buffer-string)))
+            (should (s-contains? "six" (buffer-string)))
+            (should-not (table-view--goto-id "b"))
+            (should (table-view--goto-id "a"))
+            (should (table-view--goto-id "c"))))
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:table-view-remove-last-row-shows-placeholder ()
+  "Removing the final row re-renders to the (no rows) placeholder (full path)."
+  (let ((buf (org-glance-test:table-1col-buffer
+              "*tv-rm-last*"
+              '(((id . "a") (cells . ((n . "one"))))))))
+    (unwind-protect
+        (progn
+          (table-view-remove-row buf "a")
+          (with-current-buffer buf
+            (should (s-contains? "(no rows)" (buffer-string)))
+            (should-not (table-view--goto-id "a"))))
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:table-view-surgical-equals-full-render ()
+  "A surgically-patched buffer is byte-identical to a full render of the same
+final rows -- the equivalence the in-place fast path relies on."
+  (let* ((final '(((id . "a") (cells . ((n . "one"))))
+                  ((id . "b") (cells . ((n . "TWO"))))   ; b edited in place
+                  ((id . "c") (cells . ((n . "six"))))))
+         (surgical (org-glance-test:table-1col-buffer
+                    "*tv-eq-surgical*"
+                    '(((id . "a") (cells . ((n . "one"))))
+                      ((id . "b") (cells . ((n . "two"))))
+                      ((id . "c") (cells . ((n . "six")))))))
+         (full (org-glance-test:table-1col-buffer "*tv-eq-full*" final)))
+    (unwind-protect
+        (progn
+          ;; `surgical' reaches `final' via an in-place same-width edit; `full' is
+          ;; one full render of `final'.  The visible text must be identical.
+          (table-view-upsert-row surgical '((id . "b") (cells . ((n . "TWO")))))
+          (should (string= (with-current-buffer surgical (buffer-string))
+                           (with-current-buffer full (buffer-string)))))
+      (kill-buffer surgical)
+      (kill-buffer full))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

@@ -243,7 +243,7 @@ longer exists."
                     'utf-8 file)
       (set-file-times (org-glance-graph:headline-meta-path graph)
                       (time-subtract (current-time) 100))      ; cache is fresh
-      (should-not (org-glance-overview:--header-current? file))
+      (should-not (org-glance-overview--header-current? file))
       (should (s-contains? "mode: org-glance-overview -*-"
                            (f-read-text (org-glance-overview:cached-file graph '(:tags ("work")))
                                         'utf-8))))))
@@ -493,7 +493,7 @@ when it is (re)displayed or selected."
                             (time-add (current-time) 100)) ; guarantee staleness
             (should-not (s-contains? "Beta" (with-current-buffer all (buffer-string))))
             (with-current-buffer all
-              (org-glance-overview:--refresh-when-stale))
+              (org-glance-overview--refresh-when-stale))
             (should (s-contains? "Beta" (with-current-buffer all (buffer-string)))))
         (kill-buffer all)))))
 

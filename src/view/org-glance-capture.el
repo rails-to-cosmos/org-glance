@@ -14,7 +14,7 @@
 
 (defvar org-glance-graph)
 
-(cl-defun org-glance-capture:--format-tags (tags)
+(cl-defun org-glance-capture--format-tags (tags)
   "Format TAGS (a symbol or list of symbols) as an org tag string `:a:b:'."
   (let ((tags (if (listp tags) tags (list tags))))
     (mapconcat #'org-glance-tag:to-string tags ":")))
@@ -23,7 +23,7 @@
   "Default `org-capture' template for a new headline with TAGS, pre-filled with TITLE.
 TAGS is a tag symbol or a list of tag symbols."
   (cl-check-type title string)
-  (format "* %s%%?  :%s:" title (org-glance-capture:--format-tags tags)))
+  (format "* %s%%?  :%s:" title (org-glance-capture--format-tags tags)))
 
 (cl-defun org-glance-capture:completing-read-tag ()
   "Prompt for a tag; candidates come from the graph's live headlines.

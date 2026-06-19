@@ -188,6 +188,16 @@ render in load order and only reorder on `g'/`^'/`~'."
         (setq pos (next-single-property-change pos 'table-view-id))))
     found))
 
+(defun table-view--insert-row (spec row widths)
+  "Insert ROW's line (with trailing newline) at point and tag it with ROW's id.
+Shared by `table-view--render' and `table-view--patch-line' so a row renders
+identically however it lands in the buffer -- the equivalence the surgical patch
+relies on (guarded by `table-view-surgical-equals-full-render')."
+  (let ((start (point)))
+    (insert (table-view--row-string spec row widths #'table-view--cell-string) "\n")
+    (put-text-property start (point) 'table-view-id (alist-get 'id row))
+    (put-text-property start (point) 'table-view-row row)))
+
 (defun table-view--render ()
   "Re-render the current buffer from spec + rows.
 Renders rows in their current order; sorting is explicit (see
@@ -210,13 +220,40 @@ same line number."
     (if (null rows)
         (insert (propertize "  (no rows)\n" 'face 'shadow))
       (dolist (row rows)
-        (let ((start (point)))
-          (insert (table-view--row-string spec row widths #'table-view--cell-string) "\n")
-          (put-text-property start (point) 'table-view-id (alist-get 'id row))
-          (put-text-property start (point) 'table-view-row row))))
+        (table-view--insert-row spec row widths)))
     (unless (and id (table-view--goto-id id))
       (goto-char (point-min))
       (forward-line (1- line)))))
+
+;;; Surgical single-row updates
+;;
+;; A consumer that touches one row (e.g. a live coherence patch on a save) does
+;; not need the whole buffer re-rendered.  When the change leaves every column's
+;; width unchanged, the affected line is patched/deleted in place -- O(1) instead
+;; of re-inserting every row.  The callers (`upsert-row'/`remove-row') fall back
+;; to a full `table-view--render' on any width change (so padding stays aligned)
+;; or an append / empty-table transition (which a single-line edit can't express).
+
+(defun table-view--patch-line (id row widths)
+  "Replace ID's already-rendered line in place with ROW, padded to WIDTHS.
+Returns non-nil on success, or nil without patching if ID's line is not found
+\(so the caller can fall back to a full render).  Moves point; wrap in
+`save-excursion' to preserve the user's position."
+  (when (table-view--goto-id id)
+    (let ((inhibit-read-only t)
+          (start (line-beginning-position)))
+      (delete-region start (min (point-max) (1+ (line-end-position))))
+      (goto-char start)
+      (table-view--insert-row table-view--spec row widths)
+      t)))
+
+(defun table-view--delete-line (id)
+  "Delete ID's already-rendered line in place.  Returns non-nil on success.
+Moves point; wrap in `save-excursion' to preserve the user's position."
+  (when (table-view--goto-id id)
+    (let ((inhibit-read-only t))
+      (delete-region (line-beginning-position) (min (point-max) (1+ (line-end-position))))
+      t)))
 
 ;;; Dispatch
 
@@ -341,33 +378,53 @@ Before the table: cycle through all sortable columns."
         (table-view--render)))))
 
 (defun table-view-upsert-row (buffer row)
-  "Add ROW to table-view BUFFER (a buffer or name), or replace its id-match."
+  "Add ROW to table-view BUFFER (a buffer or name), or replace its id-match.
+Replacing an existing row whose column widths are unchanged patches just that
+row's line in place; an append, or any width change, triggers a full re-render."
   (let ((buf (get-buffer buffer)))
     (when (buffer-live-p buf)
       (with-current-buffer buf
-        (let ((id (alist-get 'id row)) (found nil))
+        (let* ((id (alist-get 'id row))
+               (old-widths (table-view--widths table-view--spec table-view--rows))
+               (found nil))
           (setq table-view--rows
                 (mapcar (lambda (r)
                           (if (equal (alist-get 'id r) id)
                               (progn (setq found t) row)
                             r))
                         table-view--rows))
-          (unless found
-            (setq table-view--rows (nconc table-view--rows (list row))))
-          (table-view--render))))))
+          (if (not found)
+              ;; New id: append.  Row count / widths may change -> full render.
+              (progn
+                (setq table-view--rows (nconc table-view--rows (list row)))
+                (table-view--render))
+            ;; Replaced in place: patch just the line when widths are stable.
+            (let ((new-widths (table-view--widths table-view--spec table-view--rows)))
+              (unless (and (equal old-widths new-widths)
+                           (save-excursion (table-view--patch-line id row new-widths)))
+                (table-view--render)))))))))
 
 (defun table-view-remove-row (buffer id)
   "Drop the row whose id is ID from table-view BUFFER (a buffer or name).
 A no-op when no row has that id.  The mirror of `table-view-upsert-row' for a
-consumer whose backing record left the view (e.g. a row that no longer matches a
-live filter); like upsert it leaves the surviving rows in place and re-renders."
+consumer whose backing record left the view (e.g. a row that no longer matches
+a live filter); like upsert it leaves the surviving rows in place.  Deletes just
+that row's line when the remaining widths are unchanged and rows remain; a width
+change or an emptied table triggers a full re-render."
   (let ((buf (get-buffer buffer)))
     (when (buffer-live-p buf)
       (with-current-buffer buf
-        (setq table-view--rows
-              (cl-remove id table-view--rows
-                         :key (lambda (r) (alist-get 'id r)) :test #'equal))
-        (table-view--render)))))
+        (when (cl-find id table-view--rows
+                       :key (lambda (r) (alist-get 'id r)) :test #'equal)
+          (let ((old-widths (table-view--widths table-view--spec table-view--rows)))
+            (setq table-view--rows
+                  (cl-remove id table-view--rows
+                             :key (lambda (r) (alist-get 'id r)) :test #'equal))
+            (let ((new-widths (table-view--widths table-view--spec table-view--rows)))
+              (unless (and table-view--rows
+                           (equal old-widths new-widths)
+                           (save-excursion (table-view--delete-line id)))
+                (table-view--render)))))))))
 
 (defun table-view-refresh (buffer)
   "Re-invoke the registered `fill-fn' for table-view BUFFER (a buffer or name)."

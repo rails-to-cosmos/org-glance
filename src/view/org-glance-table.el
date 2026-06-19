@@ -71,12 +71,12 @@ States not listed here render in `org-glance-table-default-state-color'."
   :group 'org-glance
   :type 'color)
 
-(cl-defun org-glance-table:--state-color (state)
+(cl-defun org-glance-table--state-color (state)
   "Badge colour for todo STATE."
   (or (cdr (assoc state org-glance-table-state-colors))
       org-glance-table-default-state-color))
 
-(cl-defun org-glance-table:--state-badges (graph)
+(cl-defun org-glance-table--state-badges (graph)
   "Badge palette (a list of `((value . S) (color . C))') for GRAPH's states.
 Active states first then done states, each group in the sorted order
 `org-glance-graph:states' returns, so the palette doubles as an active-first sort
@@ -87,18 +87,18 @@ unset outside an Org buffer."
          (done (cl-remove-if-not (lambda (s) (member s org-done-keywords)) states))
          (active (cl-remove-if (lambda (s) (member s org-done-keywords)) states)))
     (cl-loop for state in (append active done)
-             collect `((value . ,state) (color . ,(org-glance-table:--state-color state))))))
+             collect `((value . ,state) (color . ,(org-glance-table--state-color state))))))
 
 ;;; Spec + rows (built in pure elisp -- no backend process)
 
-(cl-defun org-glance-table:--spec (graph filter)
+(cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
 FILTER is only used for the human-readable title; rows are produced by the
 fill-fn.  Columns: state (badge), title, tags, scheduled, deadline, priority --
 all sortable.  Default sort is the state column ascending (active first)."
   `((title . ,(format "org-glance table: %s" (org-glance-filter:describe filter)))
     (columns . (((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
-                 (badges . ,(org-glance-table:--state-badges graph)))
+                 (badges . ,(org-glance-table--state-badges graph)))
                 ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
                 ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
                 ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
@@ -113,7 +113,7 @@ all sortable.  Default sort is the state column ascending (active first)."
                 ((key . "+")   (command . "capture")     (label . "Capture"))))
     (sort . ((column . "state") (ascending . t)))))
 
-(cl-defun org-glance-table:--row (metadata)
+(cl-defun org-glance-table--row (metadata)
   "Build a `table-view' row alist for headline METADATA.
 The id is the ORG_GLANCE_ID (passed to the action handlers); cells are display
 strings: tags are joined with `:' (they are interned symbols, never a raw list),
@@ -138,18 +138,18 @@ priority is its letter, absent values are the empty string."
 (defvar-local org-glance-table--mtime nil
   "Mtime of `headlines.jsonl' at the current table buffer's last fill.")
 
-(cl-defun org-glance-table:--mtime (path)
+(cl-defun org-glance-table--mtime (path)
   "Modification time of PATH, or nil when it does not exist."
   (and (f-exists? path)
        (file-attribute-modification-time (file-attributes path))))
 
-(cl-defun org-glance-table:--rows (graph keep?)
+(cl-defun org-glance-table--rows (graph keep?)
   "Rows for GRAPH's live headlines satisfying predicate KEEP?, in graph order."
   (cl-loop for meta in (org-glance-graph:headlines graph)
            when (funcall keep? meta)
-           collect (org-glance-table:--row meta)))
+           collect (org-glance-table--row meta)))
 
-(cl-defun org-glance-table:--reload (buffer)
+(cl-defun org-glance-table--reload (buffer)
   "Re-fill BUFFER from the live graph, then re-apply its current/default sort.
 Used by `g' (refresh) and the lazy display-boundary check.  `table-view-refresh'
 re-runs the fill-fn (which resets the sort), so re-apply it to keep the view
@@ -160,7 +160,7 @@ ordered the way the user left it (or the spec default on first sort)."
 
 ;;; Live coherence
 
-(cl-defun org-glance-table:--patch (metadata)
+(cl-defun org-glance-table--patch (metadata)
   "Reflect METADATA in the CURRENT table buffer: upsert it when it still matches
 this buffer's filter, drop it when it no longer does.
 Unlike the overview's org-text patch, a newly-matching headline is simply
@@ -169,7 +169,7 @@ needed."
   (let ((id (org-glance-headline-metadata:id metadata))
         (keep? (org-glance-filter:predicate org-glance-table--spec)))
     (if (funcall keep? metadata)
-        (table-view-upsert-row (current-buffer) (org-glance-table:--row metadata))
+        (table-view-upsert-row (current-buffer) (org-glance-table--row metadata))
       (table-view-remove-row (current-buffer) id))))
 
 (cl-defun org-glance-table:on-headline-update (graph metadata)
@@ -182,18 +182,18 @@ break the save that triggered it, so per-buffer errors are demoted."
                  org-glance-table--graph
                  (eq org-glance-table--graph graph))
         (with-demoted-errors "org-glance: table update failed: %S"
-          (org-glance-table:--patch metadata))))))
+          (org-glance-table--patch metadata))))))
 
 (add-hook 'org-glance-material:sync-functions #'org-glance-table:on-headline-update)
 
-(cl-defun org-glance-table:--stale? ()
+(cl-defun org-glance-table--stale? ()
   "Non-nil when the CURRENT table buffer's fill predates the store's last change."
   (let ((src (org-glance-graph:headline-meta-path org-glance-table--graph)))
     (and (f-exists? src)
          (or (null org-glance-table--mtime)
-             (time-less-p org-glance-table--mtime (org-glance-table:--mtime src))))))
+             (time-less-p org-glance-table--mtime (org-glance-table--mtime src))))))
 
-(cl-defun org-glance-table:--refresh-when-stale (&optional window)
+(cl-defun org-glance-table--refresh-when-stale (&optional window)
   "Reload WINDOW's (or the current) table iff the store changed since its fill.
 The lazy half of coherence: runs when the buffer is (re)displayed or selected,
 catching mutations the sync hook never fires for (capture, delete, reindex,
@@ -201,25 +201,25 @@ compaction, another Emacs)."
   (with-current-buffer (if (windowp window) (window-buffer window) (current-buffer))
     (when (and (derived-mode-p 'table-view-mode)
                org-glance-table--graph
-               (org-glance-table:--stale?))
+               (org-glance-table--stale?))
       (with-demoted-errors "org-glance: table refresh failed: %S"
-        (org-glance-table:--reload (current-buffer))))))
+        (org-glance-table--reload (current-buffer))))))
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
-(cl-defun org-glance-table:--act-materialize (graph id _row)
+(cl-defun org-glance-table--act-materialize (graph id _row)
   (when id (switch-to-buffer (org-glance-material:open graph id))))
 
-(cl-defun org-glance-table:--headline (graph id)
+(cl-defun org-glance-table--headline (graph id)
   "The live headline for ID, or a `user-error' (the table can outlive the graph)."
   (or (org-glance-graph:headline graph id)
       (user-error "Headline no longer in graph (table is stale; press `g' to refresh)")))
 
-(cl-defun org-glance-table:--act-open (graph id _row)
-  (when id (org-glance-material:open-link (org-glance-table:--headline graph id))))
+(cl-defun org-glance-table--act-open (graph id _row)
+  (when id (org-glance-material:open-link (org-glance-table--headline graph id))))
 
-(cl-defun org-glance-table:--act-extract (graph id _row)
-  (when id (org-glance-material:extract (org-glance-table:--headline graph id))))
+(cl-defun org-glance-table--act-extract (graph id _row)
+  (when id (org-glance-material:extract (org-glance-table--headline graph id))))
 
 ;;; Browser
 
@@ -233,24 +233,24 @@ Honours the same filter language as the overview (see
          (src (org-glance-graph:headline-meta-path graph))
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
-                      (table-view-set-rows buf (org-glance-table:--rows graph keep?))
-                      (setq org-glance-table--mtime (org-glance-table:--mtime src)))))
-         (handlers (list (cons "materialize" (lambda (id row) (org-glance-table:--act-materialize graph id row)))
-                         (cons "open"        (lambda (id row) (org-glance-table:--act-open graph id row)))
-                         (cons "extract"     (lambda (id row) (org-glance-table:--act-extract graph id row)))
-                         (cons "refresh"     (lambda (_id _row) (org-glance-table:--reload (current-buffer))))
+                      (table-view-set-rows buf (org-glance-table--rows graph keep?))
+                      (setq org-glance-table--mtime (org-glance-table--mtime src)))))
+         (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
+                         (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
+                         (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))
+                         (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
                          (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
                          (cons "capture"     (lambda (_id _row)
                                                (org-glance-capture (or (org-glance-filter:tags spec)
                                                                        (org-glance-capture:completing-read-tag))
                                                                    "")))))
-         (buf (table-view-display buffer-name (org-glance-table:--spec graph spec) handlers fill-fn)))
+         (buf (table-view-display buffer-name (org-glance-table--spec graph spec) handlers fill-fn)))
     (with-current-buffer buf
       (setq org-glance-table--graph graph
             org-glance-table--spec spec)
       (table-view-sort)                 ; honour the spec's default sort on open
-      (add-hook 'window-buffer-change-functions #'org-glance-table:--refresh-when-stale nil t)
-      (add-hook 'window-selection-change-functions #'org-glance-table:--refresh-when-stale nil t))
+      (add-hook 'window-buffer-change-functions #'org-glance-table--refresh-when-stale nil t)
+      (add-hook 'window-selection-change-functions #'org-glance-table--refresh-when-stale nil t))
     buf))
 
 (cl-defun org-glance-table:completing-read-tag ()
