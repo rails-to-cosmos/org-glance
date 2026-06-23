@@ -6,6 +6,7 @@
 (require 's)
 
 (require 'org-glance-tag)
+(require 'org-glance-tag-config)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 
@@ -20,10 +21,24 @@
     (mapconcat #'org-glance-tag:to-string tags ":")))
 
 (cl-defun org-glance-capture:template (tags &optional (title ""))
-  "Default `org-capture' template for a new headline with TAGS, pre-filled with TITLE.
-TAGS is a tag symbol or a list of tag symbols."
+  "`org-capture' template for a new headline with TAGS, pre-filled with TITLE.
+TAGS is a tag symbol or a list of tag symbols.  When TAGS is a SINGLE tag with a
+configuration (see `org-glance-tag-config'), the template is rendered from that
+config's skeleton, and -- if the config declares a `:TODO_KEYWORDS:' cycle -- a
+`#+TODO:' file keyword is prepended so the capture buffer cycles the tag states.
+Otherwise the default `* TITLE%?  :tags:' is used, so an unconfigured tag is
+byte-identical to before.  Multi-tag composition is deferred to Phase 2."
   (cl-check-type title string)
-  (format "* %s%%?  :%s:" title (org-glance-capture--format-tags tags)))
+  (let* ((tags (if (listp tags) tags (list tags)))
+         (config (when (= 1 (length tags))
+                   (org-glance-tag-config:resolve org-glance-graph (car tags)))))
+    (if config
+        (let ((body (org-glance-tag-config:render config title tags))
+              (todo (org-glance-tag-config:todo config)))
+          (if (and todo (not (s-contains? "#+TODO:" body)))
+              (concat "#+TODO: " todo "\n" body)
+            body))
+      (format "* %s%%?  :%s:" title (org-glance-capture--format-tags tags)))))
 
 (cl-defun org-glance-capture:completing-read-tag ()
   "Prompt for a tag; candidates come from the graph's live headlines.
@@ -33,7 +48,7 @@ registration step is needed.  Errors on empty input."
   (let ((choice (s-trim (completing-read "Tag: " (org-glance-graph:tags org-glance-graph)))))
     (when (string-empty-p choice)
       (user-error "Tag must not be empty"))
-    (intern (downcase choice))))
+    (org-glance-tag:from-string choice)))
 
 (cl-defun org-glance-capture (tags title &key template finalize)
   "Capture a headline tagged with TAGS (a symbol or list of symbols)."

@@ -31,6 +31,7 @@
   (load "test/test-filter.el")
   (load "test/test-segments.el")
   (load "test/test-capture.el")
+  (load "test/test-tag-config.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
   (load "test/test-overview.el")

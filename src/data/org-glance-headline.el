@@ -166,7 +166,7 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
 (cl-defun org-glance-headline--from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
-        (tags (mapcar (-compose #'intern #'s-downcase) (org-element-property :tags element)))
+        (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
         (closed (org-element-property :closed element))

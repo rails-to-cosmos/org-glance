@@ -25,7 +25,9 @@
 (require 'cl-lib)
 (require 'cl-macs)
 (require 's)
+(require 'dash)
 
+(require 'org-glance-tag)
 (require 'org-glance-graph)
 
 ;;; The ambient filter
@@ -197,8 +199,10 @@ unambiguously."
 (cl-defun org-glance-filter:identity (filter)
   "Unambiguous printed identity of FILTER's canonical form.
 This -- not the lossy directory name -- is what makes two filters \"the same\"."
-  (prin1-to-string (org-glance-filter--canonical-pairs
-                    (org-glance-filter:normalize-spec filter))))
+  (->> filter
+       org-glance-filter:normalize-spec
+       org-glance-filter--canonical-pairs
+       prin1-to-string))
 
 ;;; Generalized refinement: build a new spec from a dimension choice
 ;;
@@ -252,23 +256,25 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
 
 (cl-defun org-glance-filter:describe (filter)
   "Short human label for FILTER, for transient/menu display."
-  (let ((s (org-glance-filter:normalize-spec filter)))
-    (if (null s)
-        "all"
-      (s-join ", "
-              (cl-loop for (k v) on s by #'cddr
-                       collect (pcase k
-                                 (:done (if v "done" "active"))
-                                 (:state (format "state=%s" v))
-                                 (:tags (format "tags=%s" (s-join "+" (mapcar (lambda (x) (format "%s" x)) v))))
-                                 (:title-contains (format "title~%s" v))
-                                 (:where "where")
-                                 (_ (format "%s=%s" (substring (symbol-name k) 1) v))))))))
+  (cl-loop with spec = (org-glance-filter:normalize-spec filter)
+           for (k v) on spec by #'cddr
+           collect (pcase k
+                     (:done (if v "done" "active"))
+                     (:state (format "state=%s" v))
+                     (:tags (format "tags=%s" (mapconcat (-partial #'format "%s") v "+")))
+                     (:title-contains (format "title~%s" v))
+                     (:where "where")
+                     (_ (format "%s=%s" (substring (symbol-name k) 1) v)))
+           into parts
+           finally return (if parts (s-join ", " parts) "all")))
 
 (cl-defun org-glance-filter:tags (filter)
-  "Return the :tags from FILTER as a list of symbols, or nil."
+  "Return the :tags from FILTER as a list of downcased symbols, or nil.
+Tags are canonically downcased (`org-glance-tag?'); downcasing here means a
+mixed-case filter value yields a valid tag for capture / config lookup rather
+than a spurious symbol."
   (let ((tags (plist-get (org-glance-filter:normalize-spec filter) :tags)))
-    (mapcar #'intern tags)))
+    (mapcar #'org-glance-tag:from-string tags)))
 
 (provide 'org-glance-filter)
 ;;; org-glance-filter.el ends here

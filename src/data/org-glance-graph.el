@@ -245,9 +245,10 @@ an atomic rename) reads as the empty set."
   (let ((path (org-glance-graph--manifest-path graph)))
     (when (f-exists? path)
       (condition-case nil
-          (append (plist-get (json-parse-string (f-read-text path 'utf-8) :object-type 'plist)
-                             :segments)
-                  nil)
+          (-> (f-read-text path 'utf-8)
+              (json-parse-string :object-type 'plist)
+              (plist-get :segments)
+              (append nil))
         (error nil)))))
 
 (cl-defun org-glance-graph--write-manifest (graph segments)

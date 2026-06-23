@@ -40,6 +40,7 @@
 
 (require 'org-glance-graph)
 (require 'org-glance-filter)
+(require 'org-glance-tag-config)
 (require 'org-glance-material)
 
 (defvar org-glance-graph)
@@ -114,10 +115,22 @@ which filter a cache directory holds."
 (cl-defun org-glance-overview:render (graph &optional filter)
   "Render GRAPH's live headlines matching FILTER as org text.
 FILTER is nil (all), a bare tag, or a filter plist -- see
-`org-glance-filter:predicate'."
+`org-glance-filter:predicate'.
+
+When FILTER resolves to a single tag with a configured `:TODO_KEYWORDS:' cycle
+(see `org-glance-tag-config'), a `#+TODO:' file keyword for it is emitted in the
+header -- so org, on opening the cached file (overview OR agenda, both of which
+read this text), cycles and faces those states natively -- and the cycle's
+done-set is bound while the `:done'/`active?' predicate is built, so selection
+is correct for the tag's keywords without any spec/cache-key change."
   (cl-check-type graph org-glance-graph)
-  (let ((keep? (org-glance-filter:predicate filter)))
+  (let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter))
+         (org-done-keywords (if cycle
+                                (org-glance-tag-config:done-keywords cycle)
+                              org-done-keywords))
+         (keep? (org-glance-filter:predicate filter)))
     (concat org-glance-overview:header
+            (if cycle (concat "#+TODO: " cycle "\n") "")
             (cl-loop for meta in (org-glance-graph:headlines graph)
                      when (funcall keep? meta)
                      concat (org-glance-overview:render-headline meta)))))
@@ -148,17 +161,24 @@ filter gets `<cache-path>/<key>/overview.org'."
 (cl-defun org-glance-overview--mtime (path)
   (file-attribute-modification-time (file-attributes path)))
 
+(cl-defun org-glance-overview--fresher-than? (file src)
+  "Non-nil if SRC is absent or FILE is STRICTLY newer than SRC.
+Strict, so a same-second source treats the cache as stale and rebuilds: serving
+stale content is the only real bug, a rebuild is just a perf cost.  A future
+source (clock skew / restored backup) also rebuilds."
+  (or (not (f-exists? src))
+      (time-less-p (org-glance-overview--mtime src)
+                   (org-glance-overview--mtime file))))
+
 (cl-defun org-glance-overview:fresh? (graph file)
-  "Non-nil if FILE exists and is newer than GRAPH's `headlines.jsonl'.
-The comparison is strict, so a same-second cache is treated as stale and
-rebuilt: serving stale content is the only real bug, a rebuild is just a perf
-cost.  A future-dated source (clock skew / restored backup) also rebuilds."
+  "Non-nil if FILE exists and is newer than every source it is rendered from.
+The sources: GRAPH's `headlines.jsonl' (content) and the tag-config `tags.org'
+(the `#+TODO:' header + per-tag done-set render depends on), so editing a tag's
+cycle invalidates existing overview caches like a content change."
   (cl-check-type graph org-glance-graph)
-  (let ((src (org-glance-graph:headline-meta-path graph)))
-    (and (f-exists? file)
-         (or (not (f-exists? src))
-             (time-less-p (org-glance-overview--mtime src)
-                          (org-glance-overview--mtime file))))))
+  (and (f-exists? file)
+       (org-glance-overview--fresher-than? file (org-glance-graph:headline-meta-path graph))
+       (org-glance-overview--fresher-than? file (org-glance-tag-config:file graph))))
 
 (cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE starts with the current `org-glance-overview:header'.

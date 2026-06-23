@@ -36,6 +36,7 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'dash)
 (require 'f)
 (require 'ol)
 (require 'org)
@@ -289,20 +290,20 @@ performs the conversion whenever the user chooses.  Always returns nil."
 (cl-defun org-glance-link:choose-thing-for-materialization ()
   (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
-  (concat "org-glance-visit:"
-          (org-glance-headline-metadata:id
-           (org-glance-material:completing-read org-glance-graph))))
+  (->> (org-glance-material:completing-read org-glance-graph)
+       org-glance-headline-metadata:id
+       (concat "org-glance-visit:")))
 
 (cl-defun org-glance-link:choose-thing-for-opening ()
   (unless (org-glance-initialized?)
     (user-error "org-glance: not initialized"))
-  (concat "org-glance-open:"
-          (org-glance-headline-metadata:id
-           (org-glance-material:completing-read
-            org-glance-graph
-            :prompt "Open: "
-            :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
-                                (org-glance-headline-metadata:linked? m)))))))
+  (->> (org-glance-material:completing-read
+        org-glance-graph
+        :prompt "Open: "
+        :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                            (org-glance-headline-metadata:linked? m))))
+       org-glance-headline-metadata:id
+       (concat "org-glance-open:")))
 
 (org-link-set-parameters
  "org-glance-visit"
