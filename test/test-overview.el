@@ -60,6 +60,27 @@
       (should (string= file (org-glance-overview:file graph)))
       (should (s-contains? ":ORG_GLANCE_ID: o1" (f-read-text file 'utf-8))))))
 
+(ert-deftest org-glance-test:overview-default-view-dispatch ()
+  "`org-glance-overview' lands in `org-glance-overview-default-view': the table
+dashboard by default, the org-text overview when set to `org'."
+  (org-glance-test:session
+    (org-glance-graph:add org-glance-graph (org-glance-test:headline "d1" "* TODO Alpha :work:"))
+    (let ((org-glance-filter-spec nil))
+      (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) b))
+                ((symbol-function 'pop-to-buffer)     (lambda (b &rest _) b)))
+        ;; default -> table dashboard
+        (let* ((org-glance-overview-default-view 'table)
+               (buf (org-glance-overview "work")))
+          (unwind-protect
+              (with-current-buffer buf (should (derived-mode-p 'table-view-mode)))
+            (when (buffer-live-p buf) (kill-buffer buf))))
+        ;; 'org -> org-text overview
+        (let* ((org-glance-overview-default-view 'org)
+               (buf (org-glance-overview "work")))
+          (unwind-protect
+              (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode)))
+            (when (buffer-live-p buf) (kill-buffer buf))))))))
+
 ;;; Filtering
 
 (ert-deftest org-glance-test:overview-filter-by-tag ()
@@ -396,40 +417,76 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
 (ert-deftest org-glance-test:overview-interactive-tag-filter ()
   "Invoking the overview interactively prompts for a tag and overlays it on the
 ambient `org-glance-filter-spec' (so the overview honours the global filter);
-empty input means just the ambient filter."
+empty input means just the ambient filter.  The overlay is the same whichever
+view `org-glance-overview-default-view' selects, so both view-openers are stubbed."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha :work:"))
-    (let ((org-glance-graph graph)
-          (org-glance-filter-spec '(:done nil))   ; the active default
-          (visited 'unset))
-      (cl-letf (((symbol-function 'org-glance-overview:visit)
-                 (lambda (_graph filter) (setq visited filter)))
-                ((symbol-function 'completing-read)
-                 (lambda (&rest _) "work")))
+    (let* ((org-glance-graph graph)
+           (org-glance-filter-spec '(:done nil))   ; the active default
+           (visited 'unset)
+           (capture (lambda (_graph filter) (setq visited filter))))
+      (cl-letf (((symbol-function 'org-glance-overview:visit) capture)
+                ((symbol-function 'org-glance-table:visit) capture)
+                ((symbol-function 'completing-read) (lambda (&rest _) "work")))
         (call-interactively #'org-glance-overview)
         ;; tag overlaid on the ambient (active) filter
         (should (equal '(:done nil :tags ("work")) visited)))
       ;; empty input -> just the ambient filter
-      (cl-letf (((symbol-function 'org-glance-overview:visit)
-                 (lambda (_graph filter) (setq visited filter)))
-                ((symbol-function 'completing-read)
-                 (lambda (&rest _) "")))
+      (cl-letf (((symbol-function 'org-glance-overview:visit) capture)
+                ((symbol-function 'org-glance-table:visit) capture)
+                ((symbol-function 'completing-read) (lambda (&rest _) "")))
         (call-interactively #'org-glance-overview)
         (should (equal '(:done nil) visited)))
       ;; a cleared ambient filter falls back to the bare tag / nil
       (let ((org-glance-filter-spec nil))
-        (cl-letf (((symbol-function 'org-glance-overview:visit)
-                   (lambda (_graph filter) (setq visited filter)))
-                  ((symbol-function 'completing-read)
-                   (lambda (&rest _) "work")))
+        (cl-letf (((symbol-function 'org-glance-overview:visit) capture)
+                  ((symbol-function 'org-glance-table:visit) capture)
+                  ((symbol-function 'completing-read) (lambda (&rest _) "work")))
           (call-interactively #'org-glance-overview)
           (should (equal '(:tags ("work")) visited)))))))
 
 ;;; View coherence: no overview may show outdated results
+;;
+;; Pull model: a materialized save does NOT rewrite open overviews on the hot
+;; path -- it only flags them stale (the `glance:stale' lighter); each rebuilds
+;; itself lazily at its next display boundary (`--refresh-when-stale').
 
-(ert-deftest org-glance-test:overview-live-update-on-save ()
-  "A materialized save patches every open overview buffer: in place when the
-headline still matches the buffer's filter, dropping it when it no longer does."
+(cl-defun org-glance-test:overview--simulate-save (graph id contents)
+  "Run `org-glance-material:sync' as if ID's blob were saved as CONTENTS."
+  (with-temp-buffer
+    (insert contents)
+    (setq-local org-glance-material--graph graph
+                org-glance-material--id id)
+    (org-glance-material:sync)))
+
+(ert-deftest org-glance-test:overview-stale-flag-on-save ()
+  "A materialized save FLAGS open overviews stale without rewriting them on the
+hot path: post-sync the buffer carries the stale flag, its content is unchanged,
+and its on-disk cache still holds the OLD render (no eager write)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "a1" "* TODO Alpha :work:")
+                             (org-glance-test:headline "b1" "* TODO Beta :work:"))
+    (let* ((org-glance-graph graph)
+           (all (org-glance-overview:visit graph nil)))
+      (unwind-protect
+          (progn
+            (should (s-contains? "TODO Alpha" (with-current-buffer all (buffer-string))))
+            (should-not (with-current-buffer all org-glance-view--stale))
+            (org-glance-test:overview--simulate-save
+             graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
+            (with-current-buffer all
+              ;; flagged stale, but neither buffer NOR cache file rewritten by sync
+              (should org-glance-view--stale)
+              (should (s-contains? "TODO Alpha" (buffer-string)))
+              (should-not (s-contains? "DONE Alpha" (buffer-string)))
+              (should (s-contains? "TODO Alpha" (f-read-text buffer-file-name 'utf-8)))
+              (should-not (s-contains? "DONE Alpha" (f-read-text buffer-file-name 'utf-8)))))
+        (kill-buffer all)))))
+
+(ert-deftest org-glance-test:overview-refreshes-on-display-after-save ()
+  "After a save, an overview rebuilds at its display boundary: the change lands,
+filtered-out headlines drop, and the stale flag clears."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                              (org-glance-test:headline "a1" "* TODO Alpha :work:")
@@ -439,29 +496,26 @@ headline still matches the buffer's filter, dropping it when it no longer does."
            (todo (org-glance-overview:visit graph '(:state "TODO"))))
       (unwind-protect
           (progn
-            (should (s-contains? "TODO Alpha" (with-current-buffer all (buffer-string))))
-            (should (s-contains? "TODO Alpha" (with-current-buffer todo (buffer-string))))
-            ;; simulate editing Alpha via materialization + save
-            (with-temp-buffer
-              (insert "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
-              (setq-local org-glance-material--graph graph
-                          org-glance-material--id "a1")
-              (org-glance-material:sync))
-            ;; "all": patched in place, persisted, not left modified
+            (org-glance-test:overview--simulate-save
+             graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
+            ;; "all": display boundary rebuilds in place, flag clears, not modified
             (with-current-buffer all
+              (org-glance-view--refresh-when-stale)
               (should (s-contains? "DONE Alpha" (buffer-string)))
               (should-not (s-contains? "TODO Alpha" (buffer-string)))
-              (should-not (buffer-modified-p))
-              (should (s-contains? "DONE Alpha" (f-read-text buffer-file-name 'utf-8))))
+              (should-not org-glance-view--stale)
+              (should-not (buffer-modified-p)))
             ;; state=TODO: Alpha no longer matches -> dropped; Beta untouched
             (with-current-buffer todo
+              (org-glance-view--refresh-when-stale)
               (should-not (s-contains? "Alpha" (buffer-string)))
               (should (s-contains? "TODO Beta" (buffer-string)))))
         (kill-buffer all)
         (kill-buffer todo)))))
 
-(ert-deftest org-glance-test:overview-live-update-newly-matching ()
-  "A save that makes a headline newly match a filtered overview rebuilds it."
+(ert-deftest org-glance-test:overview-newly-matching-on-display ()
+  "A save that makes a headline newly match a filtered overview surfaces it at
+the next display boundary."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
     (let* ((org-glance-graph graph)
@@ -469,14 +523,37 @@ headline still matches the buffer's filter, dropping it when it no longer does."
       (unwind-protect
           (progn
             (should-not (s-contains? "Alpha" (with-current-buffer done (buffer-string))))
-            (with-temp-buffer
-              (insert "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
-              (setq-local org-glance-material--graph graph
-                          org-glance-material--id "a1")
-              (org-glance-material:sync))
+            (org-glance-test:overview--simulate-save
+             graph "a1" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
             (with-current-buffer done
+              (org-glance-view--refresh-when-stale)
               (should (s-contains? "DONE Alpha" (buffer-string)))))
         (kill-buffer done)))))
+
+(ert-deftest org-glance-test:overview-modified-buffer-not-reverted ()
+  "The data-loss guard: `--refresh-when-stale' never reverts a buffer with unsaved
+edits -- it leaves the edits intact and only flags the view stale."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
+    (let* ((org-glance-graph graph)
+           (all (org-glance-overview:visit graph nil)))
+      (unwind-protect
+          (progn
+            ;; advance the store so the view is genuinely stale
+            (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Beta"))
+            (set-file-times (org-glance-graph:headline-meta-path graph)
+                            (time-add (current-time) 100))
+            (with-current-buffer all
+              (let ((inhibit-read-only t))
+                (goto-char (point-max))
+                (insert "\n* UNSAVED local edit\n"))
+              (should (buffer-modified-p))
+              (org-glance-view--refresh-when-stale)
+              ;; edit survived (no revert); view flagged stale instead
+              (should (s-contains? "UNSAVED local edit" (buffer-string)))
+              (should org-glance-view--stale)))
+        (with-current-buffer all (set-buffer-modified-p nil))
+        (kill-buffer all)))))
 
 (ert-deftest org-glance-test:overview-stale-buffer-refreshes-on-display ()
   "The lazy net: an overview made stale by any other store mutation rebuilds
@@ -493,7 +570,7 @@ when it is (re)displayed or selected."
                             (time-add (current-time) 100)) ; guarantee staleness
             (should-not (s-contains? "Beta" (with-current-buffer all (buffer-string))))
             (with-current-buffer all
-              (org-glance-overview--refresh-when-stale))
+              (org-glance-view--refresh-when-stale))
             (should (s-contains? "Beta" (with-current-buffer all (buffer-string)))))
         (kill-buffer all)))))
 

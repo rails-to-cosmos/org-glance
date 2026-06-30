@@ -46,6 +46,7 @@
 (require 'org-glance-capture)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-view)
 (require 'org-glance-material)
 (require 'org-glance-overview)
 (require 'org-glance-table)

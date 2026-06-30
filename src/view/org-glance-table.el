@@ -15,16 +15,12 @@
 ;; exact pair the overview renders from), and the spec is built in pure elisp --
 ;; the generic `table-view' core needs no backend process.
 ;;
-;; COHERENCE.  Two mechanisms keep a live table from showing stale rows, mirroring
-;; the overview but lighter (no disk cache to keep byte-fresh):
-;;   1. EAGER push on the edit path: every metadata refresh
-;;      (`org-glance-material:sync-functions') upserts JUST the affected row when
-;;      it still matches the buffer's filter, or removes it when it no longer
-;;      does.
-;;   2. LAZY pull at the display boundary: when the buffer is (re)displayed or its
-;;      window selected, it re-fills from the graph iff `headlines.jsonl' advanced
-;;      since the last fill -- catching capture / delete / reindex / compaction /
-;;      another Emacs, which the sync hook never fires for.
+;; COHERENCE.  PULL at the display boundary: a materialized save only appends to
+;; the WAL and FLAGS open views stale (`org-glance-view:mark-graph-stale' -- a
+;; boolean + the `glance:stale' lighter), never patching a row here.  When the
+;; buffer is (re)displayed or its window selected, it re-fills from the graph iff
+;; `headlines.jsonl' advanced since its last fill -- catching its own saves AND
+;; capture / delete / reindex / compaction / another Emacs by the same check.
 ;;
 ;; Browse with `org-glance-table'; act on the row at point.
 
@@ -40,6 +36,7 @@
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
 (require 'org-glance-material)
+(require 'org-glance-view)
 
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
@@ -132,16 +129,10 @@ priority is its letter, absent values are the empty string."
 
 ;;; Per-buffer state
 
-(defvar-local org-glance-table--graph nil
-  "Graph backing the current table buffer (also the org-glance-table marker).")
 (defvar-local org-glance-table--spec nil
   "Normalised filter spec the current table buffer was generated with.")
 (defvar-local org-glance-table--mtime nil
   "Mtime of `headlines.jsonl' at the current table buffer's last fill.")
-(defvar-local org-glance-table--done-keywords nil
-  "Resolved done keywords for this buffer's filter (the tag's cycle, else global).
-Bound while live `--patch' rebuilds the predicate, so its `:done' split matches
-the one the table was rendered with.")
 
 (cl-defun org-glance-table--mtime (path)
   "Modification time of PATH, or nil when it does not exist."
@@ -161,55 +152,26 @@ re-runs the fill-fn (which resets the sort), so re-apply it to keep the view
 ordered the way the user left it (or the spec default on first sort)."
   (table-view-refresh buffer)
   (when-let ((buf (get-buffer buffer)))
-    (with-current-buffer buf (table-view-sort))))
+    (with-current-buffer buf
+      (table-view-sort)
+      (org-glance-view:mark-fresh))))
 
-;;; Live coherence
+;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
+;;
+;; This file supplies only the two view-specific pieces `org-glance-view:register'
+;; takes -- the STALE-FN (`--stale?') and the RELOAD-FN (`--reload') -- in
+;; `org-glance-table:visit'.  A table is a NON-FILE projection rebuilt from the
+;; graph, so the shared driver always reloads it at the display boundary (it
+;; discards no user data, unlike the overview's file-backed buffer).
 
-(cl-defun org-glance-table--patch (metadata)
-  "Reflect METADATA in the CURRENT table buffer: upsert it when it still matches
-this buffer's filter, drop it when it no longer does.
-Unlike the overview's org-text patch, a newly-matching headline is simply
-appended by `table-view-upsert-row' (the user re-sorts), so no full rebuild is
-needed."
-  (let ((id (org-glance-headline-metadata:id metadata))
-        (keep? (let ((org-done-keywords (or org-glance-table--done-keywords org-done-keywords)))
-                 (org-glance-filter:predicate org-glance-table--spec))))
-    (if (funcall keep? metadata)
-        (table-view-upsert-row (current-buffer) (org-glance-table--row metadata))
-      (table-view-remove-row (current-buffer) id))))
-
-(cl-defun org-glance-table:on-headline-update (graph metadata)
-  "Patch METADATA into every open table buffer of GRAPH.
-Registered on `org-glance-material:sync-functions'; a view update must never
-break the save that triggered it, so per-buffer errors are demoted."
-  (dolist (buffer (buffer-list))
-    (with-current-buffer buffer
-      (when (and (derived-mode-p 'table-view-mode)
-                 org-glance-table--graph
-                 (eq org-glance-table--graph graph))
-        (with-demoted-errors "org-glance: table update failed: %S"
-          (org-glance-table--patch metadata))))))
-
-(add-hook 'org-glance-material:sync-functions #'org-glance-table:on-headline-update)
-
-(cl-defun org-glance-table--stale? ()
-  "Non-nil when the CURRENT table buffer's fill predates the store's last change."
-  (let ((src (org-glance-graph:headline-meta-path org-glance-table--graph)))
+(cl-defun org-glance-table--stale? (graph)
+  "Non-nil when the CURRENT table buffer's fill predates GRAPH's last change.
+The view's STALE-FN (see `org-glance-view:register'), closed over GRAPH at visit
+so the buffer needs no graph of its own."
+  (let ((src (org-glance-graph:headline-meta-path graph)))
     (and (f-exists? src)
          (or (null org-glance-table--mtime)
              (time-less-p org-glance-table--mtime (org-glance-table--mtime src))))))
-
-(cl-defun org-glance-table--refresh-when-stale (&optional window)
-  "Reload WINDOW's (or the current) table iff the store changed since its fill.
-The lazy half of coherence: runs when the buffer is (re)displayed or selected,
-catching mutations the sync hook never fires for (capture, delete, reindex,
-compaction, another Emacs)."
-  (with-current-buffer (if (windowp window) (window-buffer window) (current-buffer))
-    (when (and (derived-mode-p 'table-view-mode)
-               org-glance-table--graph
-               (org-glance-table--stale?))
-      (with-demoted-errors "org-glance: table refresh failed: %S"
-        (org-glance-table--reload (current-buffer))))))
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
@@ -237,7 +199,8 @@ Honours the same filter language as the overview (see
          ;; Resolve the active/done split ONCE -- the single configured tag's todo
          ;; cycle, else the global keywords -- and bind it while the `:done'
          ;; predicate AND the badge split are built, so the table agrees with the
-         ;; overview (W2).  Stored buffer-local so live `--patch' reuses it.
+         ;; overview (W2).  The predicate is captured in `fill-fn', so a reload
+         ;; reuses this exact split with no further bookkeeping.
          (cycle (org-glance-tag-config:cycle-for-filter graph spec))
          (done-keywords (if cycle (org-glance-tag-config:done-keywords cycle)
                           (org-glance--done-keywords)))
@@ -260,12 +223,11 @@ Honours the same filter language as the overview (see
                                                                    "")))))
          (buf (table-view-display buffer-name (org-glance-table--spec graph spec) handlers fill-fn)))
     (with-current-buffer buf
-      (setq org-glance-table--graph graph
-            org-glance-table--spec spec
-            org-glance-table--done-keywords done-keywords)
-      (table-view-sort)                 ; honour the spec's default sort on open
-      (add-hook 'window-buffer-change-functions #'org-glance-table--refresh-when-stale nil t)
-      (add-hook 'window-selection-change-functions #'org-glance-table--refresh-when-stale nil t))
+      (setq org-glance-table--spec spec)
+      (org-glance-view:register graph
+                                :stale-fn  (lambda () (org-glance-table--stale? graph))
+                                :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
+      (table-view-sort))                ; honour the spec's default sort on open
     buf))
 
 (cl-defun org-glance-table:completing-read-tag ()

@@ -42,6 +42,7 @@
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
 (require 'org-glance-material)
+(require 'org-glance-view)
 
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
@@ -240,11 +241,9 @@ re-renders."
   :after-hook (read-only-mode +1)
   (when org-glance-overview-mode
     ;; org requires tab-width 8 to parse (`id-at-point' reads node properties).
-    (setq tab-width 8 indent-tabs-mode nil)
-    ;; The lazy half of the no-outdated-results invariant: re-check freshness
-    ;; whenever this buffer is (re)displayed or its window gets selected.
-    (add-hook 'window-buffer-change-functions #'org-glance-overview--refresh-when-stale nil t)
-    (add-hook 'window-selection-change-functions #'org-glance-overview--refresh-when-stale nil t)))
+    ;; Coherence (the display-boundary refresh) is wired by `org-glance-view:register'
+    ;; in `org-glance-overview:visit'.
+    (setq tab-width 8 indent-tabs-mode nil)))
 
 ;; Movement mirrors the v1 overview (n/p between headings) plus f/b across
 ;; same-level siblings; actions act on the headline at point.
@@ -317,6 +316,11 @@ nil into the material layer."
         (find-file file)))
     (setq-local org-glance-overview--spec spec)
     (org-glance-overview-mode +1)
+    (org-glance-view:register
+     graph
+     ;; STALE-FN: guard the global graph + visited file the cache freshness needs.
+     :stale-fn  (lambda () (and org-glance-graph buffer-file-name (org-glance-overview--stale?)))
+     :reload-fn #'org-glance-overview:refresh)
     (current-buffer)))
 
 (cl-defun org-glance-overview:refresh ()
@@ -324,7 +328,8 @@ nil into the material layer."
   (interactive)
   (org-glance-overview:write org-glance-graph org-glance-overview--spec)
   (let ((inhibit-read-only t))
-    (revert-buffer t t t)))
+    (revert-buffer t t t))
+  (org-glance-view:mark-fresh))
 
 (cl-defun org-glance-overview:table ()
   "Open the table view with the same filter as the current overview."
@@ -353,17 +358,28 @@ nil into the material layer."
                                  (org-glance-overview:tags org-glance-graph))))
     (unless (string-empty-p choice) choice)))
 
+(defcustom org-glance-overview-default-view 'table
+  "Which view `org-glance-overview' opens by default.
+`table' is the sortable `org-glance-table' dashboard; `org' is the org-text
+overview file.  Either view toggles to the other with `T', so this only sets the
+landing view for `org-glance-overview' (and the `org-glance-overview:' link)."
+  :group 'org-glance
+  :type '(choice (const :tag "Table dashboard" table)
+                 (const :tag "Org-text overview" org)))
+
 (cl-defun org-glance-overview (&optional tag)
-  "Browse the graph, optionally filtered.
-Interactively, prompt for a tag (empty input = no tag constraint) and overlay
-it on the ambient `org-glance-filter-spec' (default: active headlines); the
-rendered overview is cached per resulting filter and served from the cache while
-the graph is unchanged.  TAG may be a bare tag (symbol/string) or a full filter
-plist -- see `org-glance-filter:predicate'."
+  "Browse the graph, optionally filtered, in the default view.
+Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
+on the ambient `org-glance-filter-spec' (default: active headlines).
+The landing view is `org-glance-overview-default-view' (the table dashboard by
+default); press `T' there to toggle to the other view.  TAG may be a bare tag
+(symbol/string) or a full filter plist -- see `org-glance-filter:predicate'."
   (interactive (list (org-glance-overview:completing-read-tag)))
   (cl-assert (org-glance-initialized?))
-  (org-glance-overview:visit org-glance-graph
-                             (org-glance-filter:merge org-glance-filter-spec tag)))
+  (let ((filter (org-glance-filter:merge org-glance-filter-spec tag)))
+    (if (eq org-glance-overview-default-view 'table)
+        (org-glance-table:visit org-glance-graph filter)
+      (org-glance-overview:visit org-glance-graph filter))))
 
 ;;; Interactive filter refinement (the `/' transient)
 ;;
@@ -413,90 +429,24 @@ plist -- see `org-glance-filter:predicate'."
 
 ;;; View coherence: an overview buffer must never show outdated results
 ;;
-;; Two complementary mechanisms enforce the invariant:
-;;
-;; 1. EAGER, SURGICAL push on the edit path: the material layer announces every
-;;    metadata refresh (`org-glance-material:sync-functions'); every open
-;;    overview buffer of the graph patches JUST the affected headline in place
-;;    and persists the patch to its cache file -- which thereby stays fresh and
-;;    byte-identical to a full re-render.  A headline newly entering a filtered
-;;    view falls back to a full rebuild of that buffer (its position depends on
-;;    the whole record stream, so an in-place patch cannot be exact).
-;;
-;; 2. LAZY pull at the display boundary: whenever an overview buffer is (re)
-;;    shown or its window selected, it re-checks freshness against the store
-;;    and rebuilds if anything else mutated the graph meanwhile (capture,
-;;    delete, reindex, compaction, another Emacs).
-
-(cl-defun org-glance-overview--heading-region (id)
-  "Start/end cons of ID's heading in the current overview buffer, or nil."
-  (org-with-wide-buffer
-   (goto-char (point-min))
-   (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
-     (org-back-to-heading t)
-     (cons (point) (progn (org-end-of-subtree t t) (point))))))
-
-(cl-defun org-glance-overview--save-quietly ()
-  "Persist the current (patched) overview buffer to its cache file.
-Bypasses `save-buffer' and its hooks; the cache file ends up newer than the
-store, i.e. fresh."
-  (write-region (point-min) (point-max) buffer-file-name nil 'silent)
-  (set-visited-file-modtime)
-  (set-buffer-modified-p nil))
-
-(cl-defun org-glance-overview--patch-headline (metadata)
-  "Update METADATA's heading in the current overview buffer, in place.
-Replace it when it still matches the buffer's filter, drop it when it no longer
-does, or rebuild the whole view when it newly enters it."
-  (let* ((id (org-glance-headline-metadata:id metadata))
-         (matches? (funcall (org-glance-filter:predicate org-glance-overview--spec)
-                            metadata))
-         (region (org-glance-overview--heading-region id))
-         (inhibit-read-only t))
-    (cond
-     ((and region matches?)             ; still visible -> replace in place
-      (save-excursion
-        (delete-region (car region) (cdr region))
-        (goto-char (car region))
-        (insert (org-glance-overview:render-headline metadata)))
-      (org-glance-overview--save-quietly))
-     (region                            ; filtered out now -> drop the heading
-      (save-excursion (delete-region (car region) (cdr region)))
-      (org-glance-overview--save-quietly))
-     (matches?                          ; newly visible -> exact position needs
-      (org-glance-overview:refresh))))) ; the full stream: rebuild this view
-
-(cl-defun org-glance-overview:on-headline-update (graph metadata)
-  "Patch METADATA's heading into every open overview buffer of GRAPH.
-Registered on `org-glance-material:sync-functions'; a view update must never
-break the save that triggered it, so per-buffer errors are demoted."
-  (let ((store (org-glance-graph:store-path graph)))
-    (dolist (buffer (buffer-list))
-      (with-current-buffer buffer
-        (when (and (bound-and-true-p org-glance-overview-mode)
-                   buffer-file-name
-                   (f-ancestor-of? store buffer-file-name))
-          (with-demoted-errors "org-glance: overview update failed: %S"
-            (org-glance-overview--patch-headline metadata)))))))
-
-(add-hook 'org-glance-material:sync-functions #'org-glance-overview:on-headline-update)
+;; PULL, at a SAFE boundary, driven by `org-glance-view' (which owns the shared
+;; window-hook wiring + the modified-buffer guard for every view type).  A
+;; materialized save only appends to the WAL (which makes every overview cache
+;; `stale?') and FLAGS open views via `org-glance-view:mark-graph-stale' (a cheap
+;; boolean + the `glance:stale' lighter) -- it does NOT rewrite any overview.
+;; Each overview rebuilds itself lazily when its window is (re)displayed or
+;; selected -- where point is being re-established anyway -- catching its own saves
+;; AND every other mutation (capture, delete, reindex, compaction, another Emacs)
+;; by the same freshness check.  This file supplies only the two view-specific
+;; pieces `org-glance-view:register' takes: the STALE-FN (`--stale?', below) and
+;; the RELOAD-FN (`:refresh').
 
 (cl-defun org-glance-overview--stale? ()
-  "Non-nil when the current overview buffer may show outdated results."
+  "Non-nil when the current overview buffer may show outdated results.
+The view's STALE-FN (see `org-glance-view:register'): the cache file changed
+under us, or predates a source it renders from (`org-glance-overview:fresh?')."
   (or (not (verify-visited-file-modtime (current-buffer))) ; file changed under us
       (not (org-glance-overview:fresh? org-glance-graph buffer-file-name))))
-
-(cl-defun org-glance-overview--refresh-when-stale (&optional window)
-  "Rebuild WINDOW's (or the current) overview iff it no longer reflects the store.
-The lazy half of the no-outdated-results invariant: runs whenever the buffer is
-(re)displayed or its window selected."
-  (with-current-buffer (if (windowp window) (window-buffer window) (current-buffer))
-    (when (and (bound-and-true-p org-glance-overview-mode)
-               org-glance-graph
-               buffer-file-name
-               (org-glance-overview--stale?))
-      (with-demoted-errors "org-glance: overview refresh failed: %S"
-        (org-glance-overview:refresh)))))
 
 ;;; Agenda
 

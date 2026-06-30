@@ -108,51 +108,34 @@
            (ids (mapcar (lambda (r) (alist-get 'id r)) rows)))
       (should (equal '("f1") ids)))))
 
-;;; Coherence: patch (eager)
+;;; Coherence: pull model (stale flag + display-boundary reload)
 
-(ert-deftest org-glance-test:table-patch-upserts-matching ()
-  "A metadata that still matches the filter is upserted into the table."
+(ert-deftest org-glance-test:table-stale-flag-on-save ()
+  "A materialized save FLAGS an open table stale without re-filling it on the hot
+path; a display-boundary refresh re-fills it and clears the flag."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Foo :work:"))
-    (let ((buf (get-buffer-create "*tv-patch-up*")))
+    (let ((buf nil))
       (unwind-protect
-          (progn
-            (table-view-display buf
-                               (org-glance-table--spec graph nil)
-                               nil)
+          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
+                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
+            (setq buf (org-glance-table:visit graph))
             (with-current-buffer buf
-              (setq org-glance-table--graph graph
-                    org-glance-table--spec nil)
-              (let ((meta (car (org-glance-graph:headlines graph))))
-                (org-glance-table--patch meta)
-                (should (= 1 (length table-view--rows)))
-                (should (equal "p1" (alist-get 'id (car table-view--rows)))))))
-        (kill-buffer buf)))))
-
-(ert-deftest org-glance-test:table-patch-removes-non-matching ()
-  "A metadata that no longer matches the filter is removed from the table."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-                             (org-glance-test:headline "r1" "* TODO Foo :work:")
-                             (org-glance-test:headline "r2" "* TODO Bar :home:"))
-    (let* ((keep? (org-glance-filter:predicate '(:tags ("work"))))
-           (rows (org-glance-table--rows graph keep?))
-           (buf (get-buffer-create "*tv-patch-rm*")))
-      (unwind-protect
-          (progn
-            (table-view-display buf
-                               (org-glance-table--spec graph '(:tags ("work")))
-                               nil)
-            (table-view-set-rows buf rows)
-            (with-current-buffer buf
-              (setq org-glance-table--graph graph
-                    org-glance-table--spec '(:tags ("work")))
               (should (= 1 (length table-view--rows)))
-              (let ((home-meta (cadr (org-glance-graph:headlines graph))))
-                (org-glance-table--patch home-meta)
-                (should (= 1 (length table-view--rows)))
-                (should (equal "r1" (alist-get 'id (car table-view--rows)))))))
-        (kill-buffer buf)))))
+              (should-not org-glance-view--stale)
+              ;; the store advances (a new headline) and views are flagged
+              (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
+              (set-file-times (org-glance-graph:headline-meta-path graph)
+                              (time-add (current-time) 100))
+              (org-glance-view:mark-graph-stale graph)
+              ;; flagged stale, but NOT re-filled on the hot path (still 1 row)
+              (should org-glance-view--stale)
+              (should (= 1 (length table-view--rows)))
+              ;; display boundary re-fills and clears the flag
+              (org-glance-view--refresh-when-stale)
+              (should (= 2 (length table-view--rows)))
+              (should-not org-glance-view--stale)))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
 
 ;;; Coherence: staleness
 
@@ -165,11 +148,10 @@
       (unwind-protect
           (with-current-buffer buf
             (table-view-mode)
-            (setq org-glance-table--graph graph)
             (setq org-glance-table--mtime (org-glance-table--mtime src))
-            (should-not (org-glance-table--stale?))
+            (should-not (org-glance-table--stale? graph))
             (setq org-glance-table--mtime '(0 0 0 0))
-            (should (org-glance-table--stale?)))
+            (should (org-glance-table--stale? graph)))
         (kill-buffer buf)))))
 
 ;;; Visit + actions

@@ -22,6 +22,7 @@
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
 (require 'org-glance-datetime-mode)
+(require 'org-glance-view)
 
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
 (defvar org-glance-graph)
@@ -86,17 +87,16 @@ FILTER, if non-nil, is a predicate on the metadata."
 Used by `org-glance-material:sync' to re-parse the saved buffer with the tag's
 own keywords in scope (so a state like READING is not folded into the title).")
 
-(defvar org-glance-material:sync-functions nil
-  "Abnormal hook run after a materialized save refreshed the metadata index.
-Each function is called with GRAPH and the fresh METADATA record; views (e.g.
-open overview buffers) subscribe here to stay coherent with the store.")
-
 (cl-defun org-glance-material:sync ()
   "Refresh the graph metadata index from the just-saved materialized blob.
-Buffer-local `after-save-hook': the file save already persisted the content, so
-this appends a fresh metadata record (append-only) and announces it via
-`org-glance-material:sync-functions'.  No-op if the buffer's ORG_GLANCE_ID
-was changed."
+Buffer-local `after-save-hook': the file save already persisted the content
+(the durable commit), so this only re-parses the headline and appends a fresh
+metadata record to the append-only WAL (`headlines.jsonl').  That is the whole
+hot path -- open views are NOT rewritten here; the WAL append makes them stale,
+and they re-render lazily when next displayed (see `org-glance-view').  Each
+open view of the graph is merely FLAGGED stale (a cheap boolean) so its
+`glance:stale' lighter shows until it refreshes.  No-op if the buffer's
+ORG_GLANCE_ID was changed."
   (when (and org-glance-material--graph org-glance-material--id)
     (let* ((graph org-glance-material--graph)
            (id org-glance-material--id)
@@ -112,9 +112,9 @@ was changed."
                        (org-glance-headline--from-string
                         (buffer-substring-no-properties (point-min) (point-max))))))
       (if (equal (org-glance-headline:id headline) id)
-          (let ((metadata (org-glance-headline:metadata headline)))
-            (org-glance-graph:insert graph (list metadata))
-            (run-hook-with-args 'org-glance-material:sync-functions graph metadata))
+          (progn
+            (org-glance-graph:insert graph (list (org-glance-headline:metadata headline)))
+            (org-glance-view:mark-graph-stale graph))
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
 
 ;;; Repeated headlines: clone-on-repeat
