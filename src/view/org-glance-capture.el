@@ -50,6 +50,21 @@ registration step is needed.  Errors on empty input."
       (user-error "Tag must not be empty"))
     (org-glance-tag:from-string choice)))
 
+(cl-defun org-glance-capture--split-preamble (template)
+  "Split TEMPLATE into (PREAMBLE . ENTRY).
+PREAMBLE is file-level keywords (`#+TODO:' etc.) that precede the first heading;
+ENTRY is the org entry starting at the first `*'.  org-capture type `entry'
+requires a valid heading, so file keywords must be written to the target file
+separately."
+  (if (string-prefix-p "*" template)
+      (cons nil template)
+    (let ((lines (s-lines template)))
+      (cl-loop for tail on lines
+               when (string-prefix-p "*" (car tail))
+               return (cons (s-join "\n" (cl-subseq lines 0 (- (length lines) (length tail))))
+                            (s-join "\n" tail))
+               finally return (cons template nil)))))
+
 (cl-defun org-glance-capture (tags title &key template finalize)
   "Capture a headline tagged with TAGS (a symbol or list of symbols)."
   (declare (indent 2))
@@ -63,8 +78,13 @@ registration step is needed.  Errors on empty input."
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))
          (capture-token "_")
-         (template (or template (org-glance-capture:template tags title)))
-         (org-capture-templates (list (list capture-token capture-token 'entry (list 'file file) template))))
+         (full-template (or template (org-glance-capture:template tags title)))
+         (split (org-glance-capture--split-preamble full-template))
+         (preamble (car split))
+         (entry (cdr split))
+         (org-capture-templates (list (list capture-token capture-token 'entry (list 'file file) entry))))
+    (when preamble
+      (f-write-text (concat preamble "\n") 'utf-8 file))
     (find-file file)
     (add-hook 'org-capture-after-finalize-hook
               `(lambda ()

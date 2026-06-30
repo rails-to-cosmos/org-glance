@@ -1,6 +1,10 @@
 # Composable tag templates: tags as Haskell-style type classes
 
-**Status:** proposed · design exploration 2026-06-19 (5 approaches → 3 adversarial judges → synthesis)
+**Status:** Phase 1 **SHIPPED** — implemented 2026-06-22 as a *separate tag-config store*
+(not §1's reserved `:class:` tag), capture path verified end-to-end 2026-06-30 (see the
+implementation-update note below and "Implementation status" at the end) · Phases 2–3 still
+**proposed** · original design exploration 2026-06-19 (5 approaches → 3 adversarial judges
+→ synthesis)
 
 > **Implementation update (2026-06-22) — supersedes §1's `:class:`-tag mechanism.**
 > The original Phase-1 design marked a class prototype with a RESERVED `:class:`
@@ -204,3 +208,88 @@ is the guardrail). The real risk is in the renderer meeting org-capture's single
 template grammar (constraint #2) and is contained to `org-glance-tag-class:render`.
 Phase 2's merge laws want property-based tests (associativity/commutativity/idempotence
 of `:merge`, identity of `:empty`).
+
+## Implementation status (2026-06-23)
+
+**Phase 1 — DONE**, but built as a *separate, optional tag-config store* rather than
+the reserved `:class:` tag of §1 (the implementation-update note at the top has the full
+rationale: the `:class:` tag reserved a common word and polluted tag discovery). The
+algebra (§3) and conflict lattice (§4) are unchanged as the design of record for Phase 2.
+
+- **Definition surface** — `<dir>/.org-glance/config/tags.org`: one `:TAG:`-keyed
+  level-1 headline per tag (carrying NO org tags, so it stays out of discovery), holding
+  the capture skeleton + `:REQUIRES:` / `:VERSION:` / `:TODO_KEYWORDS:`. Authored via
+  `M-x org-glance-tag-config-edit`. Discovered + cached (mtime+size) like the graph;
+  absent file / `:TAG:` / dimension degrades to the default — `test-capture.el` unmodified.
+
+- **As-built API** (`src/data/org-glance-tag-config.el`) vs. the §"Elisp API sketch":
+
+  | proposed (`org-glance-tag-class:`)        | as built (`org-glance-tag-config:`)                         |
+  |-------------------------------------------|-------------------------------------------------------------|
+  | `:prototype` (latest `:class:` headline)  | `:resolve` (graph + tag → config from `tags.org`)           |
+  | `:empty` / `:empty?` (struct identity)    | a nil `:resolve` IS the identity (no struct needed in P1)   |
+  | `:render` (class title)                   | `:render` (config title tags)                               |
+  | `:compose` / `:merge` / `--closure`       | **deferred to Phase 2** — no config keys are parsed for it yet (the `:requires`/`:version` scaffolding was removed; re-add when the algebra is built) |
+
+- **Beyond the original scope — per-tag TODO keywords** (added during implementation):
+  a `:TODO_KEYWORDS:` drawer property holds a verbatim `#+TODO:` cycle (e.g.
+  `TODO READING | READ ABANDONED`). It is emitted as a `#+TODO:` *file keyword* in the
+  rendered overview/agenda (so org cycles + faces those states natively, surviving
+  reopen-from-cache) and prepended to the capture template; the cycle's done-set drives
+  the `:done`/`active?` filter at render. The **table view** binds the same done-set for
+  its active/done badge split, and **materialize→save** installs the cycle so an edited
+  state like `READING` round-trips instead of folding into the title (regression-tested).
+  NB the property is `TODO_KEYWORDS`, **not** `TODO` — org reserves `TODO` as the special
+  todo-STATE property. Editing `tags.org` invalidates overview caches (its mtime joins the
+  overview freshness check).
+
+- **Capture path verified end-to-end (2026-06-30).** Prepending the `#+TODO:` cycle to the
+  rendered template broke `org-capture`: type `entry` requires the template to *start* with a
+  heading, so a leading file keyword raised "Template is not a valid Org entry or tree".
+  `org-glance-capture` now splits the template into (preamble · entry) — the `#+TODO:`
+  preamble is written to the capture target file first, and only the bare entry becomes the
+  org-capture template. (The splitter keys on `string-prefix-p "*"`, NOT a `^\\*` regexp:
+  Emacs `^` matches every line start, which had silently mis-detected the split point.) A
+  latent bug surfaced alongside: metadata `:tags` were serialized to JSON as a vector but
+  never decoded back to a list, so `member`/list ops on `org-glance-headline-metadata:tags`
+  failed for any cache-loaded headline — now decoded to a list of strings. Both are covered
+  by new end-to-end capture tests (`org-glance-test:tag-config-capture-book`,
+  `…-capture-unconfigured`, `…-split-preamble` in `test-tag-config.el`): a real
+  `org-glance-capture → org-capture → finalize → ingest` round-trip, not just `:render`.
+
+**Phases 2–3 — still proposed** (§3–§5 stand as the algebra of record), but a 2026-06-23
+adversarial review reframed the scope:
+
+- **Reframe: "the inference gap", not "type classes".** There is exactly ONE fact the
+  system cannot infer — a per-tag cycle's *order* and its active|done partition (the `|`).
+  `org-glance-graph:states` already derives the *set* of used states from content, but a
+  set has no order and no done-boundary, so it cannot drive cycling/faces or `:done`. That
+  single un-inferable fact is what legitimately justifies an opt-in declaration. The honest
+  framing of "discovered, not registered" (§Motivation): a tag's *existence* stays
+  discovered; its TODO *semantics* require a small opt-in because they cannot be inferred.
+  Inference of the partition (states ending in a marker, etc.) was considered and rejected
+  — `DELEGATED`/`ABANDONED` are genuinely ambiguous and silent-misfiltering is the failure
+  mode the overview-freshness machinery exists to avoid.
+
+- **Decision gate for the merge algebra.** Do NOT implement `:merge` / the conflict lattice
+  until there are real multi-tag headlines that actually need contributions from more than
+  one config (say, >5). Every consumer is degenerate-to-single-key today (`capture` fires
+  on `(= 1 (length tags))`; `cycle-for-filter` returns a cycle only when exactly one
+  distinct cycle exists), so the composability the algebra provides is currently unexercised.
+
+- **Caveat (W6): the capture skeleton is a render format, not canonical data.** The skeleton
+  is stored as a verbatim org-capture template string (`%?`/`%^{…}` inside drawer values),
+  and `:render` is string surgery. The §3 algebra needs *structured* fields/prompts to
+  union-merge and take a least-upper-bound — you cannot LUB over opaque template strings. So
+  the field/prompt channel must be lifted out of the template grammar (one drawer prop per
+  field, or a `:FIELDS:` block, with `:render` *producing* the string) BEFORE `:merge` is
+  built; Phase 1's `:render` must not be silently treated as a Phase-2 foundation.
+
+- **Drift policy (advisory).** A tag's cycle changing in `tags.org` can silently re-bucket
+  the active/done split of *old* headlines whose stored state is no longer in the new cycle.
+  This is left advisory (no reconciliation); a future `:VERSION:` is the natural hook if a
+  migration story is ever wanted.
+
+Still deferred regardless: per-keyword distinct faces (org's generic todo/done faces apply
+today), config-driven validation, and classes governing overview / on-edit / agenda
+projection (Phase 3).

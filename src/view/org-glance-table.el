@@ -38,6 +38,7 @@
 (require 'table-view)
 (require 'org-glance-graph)
 (require 'org-glance-filter)
+(require 'org-glance-tag-config)
 (require 'org-glance-material)
 
 (defvar org-glance-graph)
@@ -79,13 +80,13 @@ States not listed here render in `org-glance-table-default-state-color'."
 (cl-defun org-glance-table--state-badges (graph)
   "Badge palette (a list of `((value . S) (color . C))') for GRAPH's states.
 Active states first then done states, each group in the sorted order
-`org-glance-graph:states' returns, so the palette doubles as an active-first sort
-priority.  `org-done-keywords' is bound for the active/done split, since it is
-unset outside an Org buffer."
+`org-glance-graph:states' returns, so the palette is also an active-first sort
+priority.  The active/done split uses the ambient `org-done-keywords' (bound by
+`org-glance-table:visit' to the tag's cycle), falling back to the global set."
   (let* ((states (org-glance-graph:states graph))
-         (org-done-keywords (org-glance--done-keywords))
-         (done (cl-remove-if-not (lambda (s) (member s org-done-keywords)) states))
-         (active (cl-remove-if (lambda (s) (member s org-done-keywords)) states)))
+         (done-kw (or org-done-keywords (org-glance--done-keywords)))
+         (done (cl-remove-if-not (lambda (s) (member s done-kw)) states))
+         (active (cl-remove-if (lambda (s) (member s done-kw)) states)))
     (cl-loop for state in (append active done)
              collect `((value . ,state) (color . ,(org-glance-table--state-color state))))))
 
@@ -137,6 +138,10 @@ priority is its letter, absent values are the empty string."
   "Normalised filter spec the current table buffer was generated with.")
 (defvar-local org-glance-table--mtime nil
   "Mtime of `headlines.jsonl' at the current table buffer's last fill.")
+(defvar-local org-glance-table--done-keywords nil
+  "Resolved done keywords for this buffer's filter (the tag's cycle, else global).
+Bound while live `--patch' rebuilds the predicate, so its `:done' split matches
+the one the table was rendered with.")
 
 (cl-defun org-glance-table--mtime (path)
   "Modification time of PATH, or nil when it does not exist."
@@ -167,7 +172,8 @@ Unlike the overview's org-text patch, a newly-matching headline is simply
 appended by `table-view-upsert-row' (the user re-sorts), so no full rebuild is
 needed."
   (let ((id (org-glance-headline-metadata:id metadata))
-        (keep? (org-glance-filter:predicate org-glance-table--spec)))
+        (keep? (let ((org-done-keywords (or org-glance-table--done-keywords org-done-keywords)))
+                 (org-glance-filter:predicate org-glance-table--spec))))
     (if (funcall keep? metadata)
         (table-view-upsert-row (current-buffer) (org-glance-table--row metadata))
       (table-view-remove-row (current-buffer) id))))
@@ -228,6 +234,14 @@ compaction, another Emacs)."
 Honours the same filter language as the overview (see
 `org-glance-filter:predicate')."
   (let* ((spec (org-glance-filter:normalize-spec filter))
+         ;; Resolve the active/done split ONCE -- the single configured tag's todo
+         ;; cycle, else the global keywords -- and bind it while the `:done'
+         ;; predicate AND the badge split are built, so the table agrees with the
+         ;; overview (W2).  Stored buffer-local so live `--patch' reuses it.
+         (cycle (org-glance-tag-config:cycle-for-filter graph spec))
+         (done-keywords (if cycle (org-glance-tag-config:done-keywords cycle)
+                          (org-glance--done-keywords)))
+         (org-done-keywords done-keywords)
          (keep? (org-glance-filter:predicate spec))
          (buffer-name (format "*org-glance-table: %s*" (org-glance-filter:describe spec)))
          (src (org-glance-graph:headline-meta-path graph))
@@ -247,7 +261,8 @@ Honours the same filter language as the overview (see
          (buf (table-view-display buffer-name (org-glance-table--spec graph spec) handlers fill-fn)))
     (with-current-buffer buf
       (setq org-glance-table--graph graph
-            org-glance-table--spec spec)
+            org-glance-table--spec spec
+            org-glance-table--done-keywords done-keywords)
       (table-view-sort)                 ; honour the spec's default sort on open
       (add-hook 'window-buffer-change-functions #'org-glance-table--refresh-when-stale nil t)
       (add-hook 'window-selection-change-functions #'org-glance-table--refresh-when-stale nil t))

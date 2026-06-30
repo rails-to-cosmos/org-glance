@@ -19,8 +19,6 @@ Resets the module cache around BODY so reads see exactly CONTENTS."
 :PROPERTIES:
 :TAG:            book
 :TODO_KEYWORDS:  TODO READING | READ ABANDONED
-:REQUIRES:       author
-:VERSION:        1
 :LOCATION:       %^{Where}
 :END:
 *** Notes
@@ -45,8 +43,6 @@ Resets the module cache around BODY so reads see exactly CONTENTS."
       (should (org-glance-tag-config? config))
       (should (eq 'book (org-glance-tag-config:tag config)))
       (should (equal "TODO READING | READ ABANDONED" (org-glance-tag-config:todo config)))
-      (should (equal '(author) (org-glance-tag-config:requires config)))
-      (should (= 1 (org-glance-tag-config:version config)))
       (should (org-glance-headline? (org-glance-tag-config:headline config))))
     (should (null (org-glance-tag-config:resolve nil 'nonexistent)))))
 
@@ -74,7 +70,6 @@ Resets the module cache around BODY so reads see exactly CONTENTS."
       (should-not (s-contains? ":TODO_KEYWORDS:" template))
       ;; config metadata stripped from the instance
       (should-not (s-contains? ":TAG:" template))
-      (should-not (s-contains? "REQUIRES" template))
       ;; skeleton + property default/prompt preserved
       (should (s-contains? "Notes" template))
       (should (s-contains? "%^{Where}" template))
@@ -148,6 +143,105 @@ body
         (should (s-contains? "Dune" text)))
       (let ((text (org-glance-overview:render graph nil)))
         (should-not (s-contains? "#+TODO:" text))))))
+
+;;; Materialize round-trip preserves a per-tag state (W1 regression)
+
+(ert-deftest org-glance-test:tag-config-materialize-state-roundtrip ()
+  "A per-tag todo state survives materialize -> edit -> save: it must NOT fold into
+the title via a keyword-naive reparse (the blob has no #+TODO; the cycle is bound
+per-tag at sync)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Dune :book:"))
+    (org-glance-test:with-tag-config
+        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
+      (let ((buf (org-glance-material:open graph "d1")))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (goto-char (point-min))
+                (re-search-forward "TODO")
+                (replace-match "READING")
+                (org-glance-material:sync))
+              (let ((m (org-glance-graph:get-headline graph "d1")))
+                (should (equal "READING" (org-glance-headline-metadata:state m)))
+                (should (equal "Dune" (org-glance-headline-metadata:title m)))))
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+;;; On-save lint (advisory)
+
+(ert-deftest org-glance-test:tag-config-lint ()
+  "The lint flags a duplicate :TAG: and the :TODO:-not-:TODO_KEYWORDS: gotcha,
+and is silent on a clean file."
+  (with-temp-buffer
+    (insert "#+TITLE: t\n\n"
+            "* A\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO | DONE\n:END:\n"
+            "* B\n:PROPERTIES:\n:TAG: book\n:END:\n"
+            "* C\n:PROPERTIES:\n:TAG: film\n:TODO: TODO | DONE\n:END:\n")
+    (delay-mode-hooks (org-mode))
+    (let ((issues (org-glance-tag-config--lint)))
+      (should (cl-some (lambda (s) (s-contains? "duplicate :TAG: book" s)) issues))
+      (should (cl-some (lambda (s) (and (s-contains? "film" s) (s-contains? "TODO_KEYWORDS" s))) issues))
+      ;; the clean book headline (A) raises nothing on its own account
+      (should-not (cl-some (lambda (s) (s-contains? "tag book:" s)) issues))))
+  (with-temp-buffer
+    (insert "#+TITLE: t\n\n* A\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO | DONE\n:END:\n")
+    (delay-mode-hooks (org-mode))
+    (should-not (org-glance-tag-config--lint))))
+
+;;; Capture: the full flow (template + org-capture + graph ingest)
+
+(defconst org-glance-test:book-config-no-prompts
+  "#+TITLE: tags
+
+* Book
+:PROPERTIES:
+:TAG:            book
+:TODO_KEYWORDS:  TODO READING | READ ABANDONED
+:END:
+%?
+"
+  "Book config without `%^{...}' prompts and without sub-headings --
+safe for batch-mode capture tests (no interactive prompts, single headline).")
+
+(ert-deftest org-glance-test:tag-config-capture-book ()
+  "Capturing a book with a configured tag produces a valid headline in the graph.
+Exercises the real `org-glance-capture' -> `org-capture' -> finalize -> ingest
+pipeline end-to-end: the `#+TODO:' preamble must be split from the entry so
+org-capture accepts the template, and the finalized headline must carry the tag,
+the skeleton body, and no config-internal drawer keys."
+  (org-glance-test:session
+    (org-glance-test:with-tag-config org-glance-test:book-config-no-prompts
+      (org-glance-capture 'book "Dune" :finalize t)
+      (let* ((headlines (org-glance-graph:headlines org-glance-graph))
+             (meta (car headlines)))
+        (should (= 1 (length headlines)))
+        (should (equal "Dune" (org-glance-headline-metadata:title meta)))
+        (should (member "book" (org-glance-headline-metadata:tags meta)))
+        (let* ((id (org-glance-headline-metadata:id meta))
+               (headline (org-glance-graph:headline org-glance-graph id))
+               (contents (org-glance-headline:contents headline)))
+          (should-not (s-contains? ":TAG:" contents))
+          (should-not (s-contains? ":TODO_KEYWORDS:" contents)))))))
+
+(ert-deftest org-glance-test:tag-config-capture-unconfigured ()
+  "Capturing an unconfigured tag still works (the degradation path)."
+  (org-glance-test:session
+    (org-glance-capture 'task "Buy milk" :finalize t)
+    (let* ((headlines (org-glance-graph:headlines org-glance-graph))
+           (meta (car headlines)))
+      (should (= 1 (length headlines)))
+      (should (equal "Buy milk" (org-glance-headline-metadata:title meta)))
+      (should (member "task" (org-glance-headline-metadata:tags meta))))))
+
+(ert-deftest org-glance-test:capture-split-preamble ()
+  "The preamble splitter separates `#+TODO:' from the org entry."
+  (let ((split (org-glance-capture--split-preamble
+                "#+TODO: A B | C\n* heading :t:")))
+    (should (equal "#+TODO: A B | C" (car split)))
+    (should (equal "* heading :t:" (cdr split))))
+  (let ((split (org-glance-capture--split-preamble "* plain :t:")))
+    (should (null (car split)))
+    (should (equal "* plain :t:" (cdr split)))))
 
 (provide 'test-tag-config)
 ;;; test-tag-config.el ends here

@@ -46,7 +46,8 @@
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-links nil :read-only t :type (or list function))
-  (-properties nil :read-only t :type (or list function)))
+  (-properties nil :read-only t :type (or list function))
+  (-node-properties nil :read-only t :type (or list function)))
 
 (cl-defun org-glance--org-mode ()
   "Enter `org-mode' for parsing org-glance content in the current buffer.
@@ -106,6 +107,18 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
 (cl-defun org-glance-headline:get-user-property (property headline)
   (alist-get property (org-glance-headline:properties headline) nil nil #'string=))
 
+(cl-defun org-glance-headline:node-properties (headline)
+  "Alist of HEADLINE's org `:PROPERTIES:' drawer properties (keys uppercased).
+Distinct from `org-glance-headline:properties', which parses body `KEY: value'
+lines for the extract feature; this reads the property drawer."
+  (thunk-force (org-glance-headline:-node-properties headline)))
+
+(cl-defun org-glance-headline:node-property (property headline)
+  "Value of HEADLINE's drawer PROPERTY (an org `:PROPERTIES:' key), or nil.
+PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
+  (alist-get (upcase property) (org-glance-headline:node-properties headline)
+             nil nil #'string=))
+
 (cl-defun org-glance-headline:done? (headline)
   (not (null (member (org-glance-headline:state headline) org-done-keywords))))
 
@@ -143,6 +156,11 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
                  (cl-loop while (re-search-forward org-glance-headline:key-value-pair-re nil t)
                           collect (cons (s-trim (substring-no-properties (match-string 1)))
                                         (s-trim (substring-no-properties (match-string 2))))))))
+
+(cl-defun org-glance-headline--node-properties (contents)
+  (cl-check-type contents string)
+  (thunk-delay (org-glance-headline:with-contents contents
+                 (org-entry-properties nil 'standard))))
 
 (cl-defun org-glance-headline--encrypted (contents)
   (cl-check-type contents string)
@@ -199,6 +217,7 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
                                  :-hash (org-glance-headline--hash contents)
                                  :-links (org-glance-headline--links contents)
                                  :-properties (org-glance-headline--properties contents)
+                                 :-node-properties (org-glance-headline--node-properties contents)
                                  :-encrypted? (org-glance-headline--encrypted contents))))
 
 (cl-defun org-glance-headline--copy (headline &rest update-plist)

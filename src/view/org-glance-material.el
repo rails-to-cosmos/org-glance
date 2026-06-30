@@ -20,6 +20,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 (require 'org-glance-filter)
+(require 'org-glance-tag-config)
 (require 'org-glance-datetime-mode)
 
 ;; Defined in org-glance.el (which requires this file); referenced only at runtime.
@@ -80,6 +81,10 @@ FILTER, if non-nil, is a predicate on the metadata."
   "Graph backing the current materialized buffer.")
 (defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
+(defvar-local org-glance-material--cycle nil
+  "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.
+Used by `org-glance-material:sync' to re-parse the saved buffer with the tag's
+own keywords in scope (so a state like READING is not folded into the title).")
 
 (defvar org-glance-material:sync-functions nil
   "Abnormal hook run after a materialized save refreshed the metadata index.
@@ -95,8 +100,17 @@ was changed."
   (when (and org-glance-material--graph org-glance-material--id)
     (let* ((graph org-glance-material--graph)
            (id org-glance-material--id)
-           (headline (org-glance-headline--from-string
-                      (buffer-substring-no-properties (point-min) (point-max)))))
+           ;; Re-parse with the tag's todo cycle GLOBALLY bound, so it reaches
+           ;; `--from-string's internal temp buffer and a state like READING is
+           ;; recognised instead of folding into the title.  `org-todo-keywords' is
+           ;; not buffer-local here (see `material:open'), so this `let' binds the
+           ;; global value the temp buffer's `org-mode' reads.
+           (headline (let ((org-todo-keywords
+                            (if org-glance-material--cycle
+                                (list (cons 'sequence (split-string org-glance-material--cycle)))
+                              org-todo-keywords)))
+                       (org-glance-headline--from-string
+                        (buffer-substring-no-properties (point-min) (point-max))))))
       (if (equal (org-glance-headline:id headline) id)
           (let ((metadata (org-glance-headline:metadata headline)))
             (org-glance-graph:insert graph (list metadata))
@@ -172,7 +186,9 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
   (let ((meta (org-glance-graph:get-headline graph id)))
     (unless (org-glance-headline-metadata? meta)
       (user-error "No live headline with id %s" id))
-    (let ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org")))
+    (let ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+          (cycle (org-glance-tag-config:cycle-for-filter
+                  graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
       (let ((buffer (find-file-noselect path)))
@@ -184,6 +200,13 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
           ;; crash mid-save can never truncate the blob (the canonical materialized
           ;; file).  Mirrors the temp-then-rename in `org-glance-graph:put-content'.
           (setq-local file-precious-flag t)
+          ;; A configured tag's todo cycle is NOT stored in the blob (kept clean);
+          ;; stash it so `org-glance-material:sync' can re-parse the save with the
+          ;; tag's own keywords in scope (else a state like READING folds into the
+          ;; title).  NB do NOT `setq-local' `org-todo-keywords' here -- that would
+          ;; make it buffer-local, and sync's dynamic `let' must bind it GLOBALLY to
+          ;; reach `--from-string's internal temp buffer.
+          (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
           (org-glance-material-mode 1))
         buffer))))

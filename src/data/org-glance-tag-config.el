@@ -3,11 +3,11 @@
 ;;
 ;; Tags are DISCOVERED from captured headlines (`org-glance-tag'); they need no
 ;; declaration.  A tag's CONFIG, by contrast, is optional metadata that bounds /
-;; describes a tag: its capture skeleton, its todo-keyword cycle, superclass
-;; `requires', a version.  This config lives OUTSIDE the content graph, in one
-;; hand-editable Org file at `<dir>/.org-glance/config/tags.org', so it never
-;; reaches tag discovery, overviews or the capture picker (the reserved `:class:'
-;; tag this replaces did all three).
+;; describes a tag: its capture skeleton and its todo-keyword cycle.  This config
+;; lives OUTSIDE the content graph, in one hand-editable Org file at
+;; `<dir>/.org-glance/config/tags.org', so it never reaches tag discovery,
+;; overviews or the capture picker (the reserved `:class:' tag this replaces did
+;; all three).
 ;;
 ;; Each config is ONE level-1 headline keyed by a `:TAG:' drawer property (NOT an
 ;; org tag -- the headline carries no tags, so a stray scan surfaces nothing):
@@ -16,11 +16,12 @@
 ;;   :PROPERTIES:
 ;;   :TAG:            book
 ;;   :TODO_KEYWORDS:  TODO READING | READ ABANDONED
-;;   :REQUIRES:       author
-;;   :VERSION:        1
 ;;   :END:
 ;;   *** Notes
 ;;       %?
+;;
+;; (Phase-2 class-composition keys -- e.g. superclass `requires' -- are not parsed
+;; yet; they are re-added when the merge algebra is built.  See the proposal.)
 ;;
 ;; Resolution is an O(1) lookup into a cache rebuilt only when the file's
 ;; mtime+size change (the graph's snapshot cache, in single-file form).  Absent
@@ -55,8 +56,6 @@ sets an explicit path (used for tests and non-standard layouts)."
   "A tag's optional configuration, projected from its `tags.org' headline."
   (tag nil :read-only t :type symbol)                       ; the configured tag
   (todo nil :read-only t :type (or null string))            ; `#+TODO:'-style cycle, or nil
-  (requires nil :read-only t :type list)                    ; superclass tags (Phase 2)
-  (version nil :read-only t :type (or null integer))
   (headline nil :read-only t :type org-glance-headline))    ; source config headline
 
 ;;; Config file location
@@ -85,27 +84,19 @@ separate configs."
              collect (org-glance-headline--from-element element))))
 
 (cl-defun org-glance-tag-config--from-headline (headline)
-  "Build a config from HEADLINE if it declares a `:TAG:' property, else nil.
-All drawer keys are read in a single parse pass."
-  (org-glance-headline:with-contents headline
-    (let ((tag-raw (org-entry-get nil "TAG")))
-      (when tag-raw
-        (let ((tag (org-glance-tag:from-string tag-raw)))
-          (when (org-glance-tag? tag)
-            (cl-flet ((prop (key)
-                        (when-let ((v (org-entry-get nil key)))
-                          (let ((s (s-trim v))) (unless (string-empty-p s) s)))))
-              (org-glance-tag-config
-               :tag tag
-               ;; NOT "TODO": org reserves it as the special todo-STATE property,
-               ;; so `org-entry-get nil "TODO"' returns the heading's keyword, not
-               ;; a drawer value.  `TODO_KEYWORDS' is an ordinary drawer property.
-               :todo (prop "TODO_KEYWORDS")
-               :requires (when-let ((r (prop "REQUIRES")))
-                           (org-glance-tags:from-string r))
-               :version (when-let ((v (prop "VERSION")))
-                          (when (string-match-p "\\`[0-9]+\\'" v) (string-to-number v)))
-               :headline headline))))))))
+  "Build a config from HEADLINE if it declares a valid `:TAG:' property, else nil.
+Drawer properties are read via `org-glance-headline:node-property' (cached on
+the headline), not a fresh re-parse."
+  (when-let* ((tag-raw (org-glance-headline:node-property "TAG" headline))
+              (tag (org-glance-tag:from-string tag-raw))
+              ((org-glance-tag? tag)))
+    (org-glance-tag-config
+     :tag tag
+     ;; NB the drawer key is `TODO_KEYWORDS', not `TODO': org reserves `TODO' as
+     ;; the special todo-STATE property.
+     :todo (when-let ((v (org-glance-headline:node-property "TODO_KEYWORDS" headline)))
+             (let ((s (s-trim v))) (unless (string-empty-p s) s)))
+     :headline headline)))
 
 (cl-defun org-glance-tag-config--parse (path)
   "Parse PATH into a tag-symbol -> `org-glance-tag-config' hash (empty if absent).
@@ -188,7 +179,7 @@ active/done split, so 0 or >1 distinct cycles fall back to the global keywords."
 ;;; Render: a config -> an `org-capture' entry template string
 
 (defconst org-glance-tag-config--render-strip
-  '("TAG" "TODO_KEYWORDS" "REQUIRES" "VERSION" "ORG_GLANCE_ID" "ORG_GLANCE_HASH")
+  '("TAG" "TODO_KEYWORDS" "ORG_GLANCE_ID" "ORG_GLANCE_HASH")
   "Config drawer keys stripped from a rendered capture instance.
 The todo cycle is applied as a `#+TODO:' FILE keyword (capture/overview), not as
 an instance drawer property.")
@@ -197,7 +188,7 @@ an instance drawer property.")
   "Render an `org-capture' entry template for an instance of CONFIG.
 TITLE pre-fills the heading; TAGS are the instance org tags.  The config
 headline's body skeleton, property defaults and `%^{...}' prompts are preserved
-verbatim; config metadata (TAG/TODO_KEYWORDS/REQUIRES/VERSION, ids) is stripped.
+verbatim; config metadata (TAG / TODO_KEYWORDS / org-glance ids) is stripped.
 A `%?' capture point is appended to the heading only when the skeleton carries
 none of its own (in its body OR a kept drawer property); a well-formed skeleton
 therefore yields exactly one (org-capture honours only the first)."
@@ -222,6 +213,65 @@ therefore yields exactly one (org-capture honours only the first)."
 
 ;;; Authoring
 
+(defconst org-glance-tag-config--stub
+  "#+TITLE: org-glance tag configuration
+
+# One level-1 headline per tag, keyed by a :TAG: drawer property (NOT an org tag).
+# :TODO_KEYWORDS: is an ordinary #+TODO cycle (NB the key is TODO_KEYWORDS, not
+# TODO -- org reserves TODO as the special state property).  The body below the
+# drawer is the org-capture skeleton (use %^{...} prompts and one %?).  Adapt or
+# delete this example; a tag with no config behaves exactly as before.
+
+* Book
+:PROPERTIES:
+:TAG:            book
+:TODO_KEYWORDS:  TODO READING | READ ABANDONED
+:END:
+*** Notes
+    %?
+"
+  "Worked-example contents written into a freshly-created `tags.org'.
+A copy-ready config headline turns the schema (and the TODO_KEYWORDS gotcha)
+into an example, rather than dropping the user onto a blank page.")
+
+(cl-defun org-glance-tag-config--drawer-has-key? (key)
+  "Non-nil if the current entry's property drawer has a literal `:KEY:' line."
+  (when-let ((block (org-get-property-block)))
+    (save-excursion
+      (goto-char (car block))
+      (re-search-forward (format "^[ \t]*:%s:" (regexp-quote key)) (cdr block) t))))
+
+(cl-defun org-glance-tag-config--lint ()
+  "Advisory lint of the current tag-config buffer; never blocks the save.
+Flags a duplicate `:TAG:' (silently first-wins at read) and the
+`:TODO:'-for-`:TODO_KEYWORDS:' gotcha (org reserves `TODO').  Shows them via
+`display-warning' and returns the issues as a list of strings."
+  (let ((seen (make-hash-table :test 'eq))
+        (issues nil))
+    (org-map-entries
+     (lambda ()
+       (when-let (((= 1 (org-current-level)))
+                  (raw (org-entry-get nil "TAG"))
+                  (tag (org-glance-tag:from-string raw)))
+         (if (gethash tag seen)
+             (push (format "duplicate :TAG: %s (only the first headline is used)" tag) issues)
+           (puthash tag t seen))
+         (when (and (org-glance-tag-config--drawer-has-key? "TODO")
+                    (not (org-entry-get nil "TODO_KEYWORDS")))
+           (push (format "tag %s: a `:TODO:' drawer key is ignored -- use `:TODO_KEYWORDS:'" tag)
+                 issues)))))
+    (setq issues (nreverse issues))
+    (when issues
+      (display-warning 'org-glance
+                       (concat "tags.org config issues:\n- " (mapconcat #'identity issues "\n- "))
+                       :warning))
+    issues))
+
+(cl-defun org-glance-tag-config--on-save ()
+  "After-save hook for the config buffer: invalidate the read cache, then lint."
+  (org-glance-tag-config--invalidate)
+  (org-glance-tag-config--lint))
+
 ;;;###autoload
 (cl-defun org-glance-tag-config-edit ()
   "Open the tag-configuration file for editing, creating a stub if absent."
@@ -230,8 +280,8 @@ therefore yields exactly one (org-capture honours only the first)."
                   (user-error "org-glance: not initialised and no `org-glance-tag-config-file' set"))))
     (unless (f-exists? path)
       (f-mkdir-full-path (f-dirname path))
-      (f-write-text "#+TITLE: org-glance tag configuration\n\n" 'utf-8 path))
+      (f-write-text org-glance-tag-config--stub 'utf-8 path))
     (find-file path)
-    (add-hook 'after-save-hook #'org-glance-tag-config--invalidate nil t)))
+    (add-hook 'after-save-hook #'org-glance-tag-config--on-save nil t)))
 
 (provide 'org-glance-tag-config)

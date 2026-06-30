@@ -9,6 +9,7 @@
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
 (declare-function org-glance-table "org-glance-table")
+(declare-function org-glance-tag-config-edit "org-glance-tag-config")
 
 ;;; Ambient filter controls
 ;;
@@ -55,7 +56,8 @@
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)
     ("j" "Open link" org-glance-open)
-    ("m" "Materialize headline" org-glance-materialize)]]
+    ("m" "Materialize headline" org-glance-materialize)
+    ("C" "Configure tags" org-glance-tag-config-edit)]]
   (interactive)
   (transient-setup 'org-glance-form-action))
 

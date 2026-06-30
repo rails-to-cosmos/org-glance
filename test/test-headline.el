@@ -31,6 +31,28 @@
     (should (eq 1 (length (org-glance-headline:properties headline))))
     (should (string= "bar" (org-glance-headline:get-user-property "foo" headline)))))
 
+(ert-deftest org-glance-test:headline-node-properties ()
+  "`node-property' reads the `:PROPERTIES:' drawer (case-insensitively); a body
+`KEY: value' pair is NOT a node property (that is `get-user-property')."
+  (let ((headline (org-glance-headline--from-lines
+                    "* TODO Book :read:"
+                    ":PROPERTIES:"
+                    ":ORG_GLANCE_ID: book-1"
+                    ":TODO_KEYWORDS: TODO READING | READ"
+                    ":END:"
+                    "- author: Tolkien")))
+    ;; drawer properties, matched case-insensitively
+    (should (string= "book-1" (org-glance-headline:node-property "ORG_GLANCE_ID" headline)))
+    (should (string= "TODO READING | READ" (org-glance-headline:node-property "todo_keywords" headline)))
+    ;; absent -> nil
+    (should (null (org-glance-headline:node-property "NOPE" headline)))
+    ;; a body `KEY: value' is NOT a drawer/node property ...
+    (should (null (org-glance-headline:node-property "author" headline)))
+    ;; ... it is a user (body) property instead
+    (should (string= "Tolkien" (org-glance-headline:get-user-property "author" headline)))
+    ;; the drawer alist carries the keys, uppercased
+    (should (assoc "TODO_KEYWORDS" (org-glance-headline:node-properties headline)))))
+
 (ert-deftest org-glance-test:headline-links ()
   (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
     (should (eq 1 (length (org-glance-headline:links headline))))))

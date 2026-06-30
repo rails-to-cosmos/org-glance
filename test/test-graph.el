@@ -14,7 +14,7 @@
         (should (string= "foo"  (org-glance-headline-metadata:title meta)))
         (should (string= (org-glance-headline:hash headline)
                          (org-glance-headline-metadata:hash meta)))
-        (should (equal ["a" "b"] (org-glance-headline-metadata:tags meta)))))))
+        (should (equal '("a" "b") (org-glance-headline-metadata:tags meta)))))))
 
 (ert-deftest org-glance-test:graph-get-missing ()
   "Unknown ids return nil."

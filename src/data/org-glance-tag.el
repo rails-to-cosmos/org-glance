@@ -27,11 +27,4 @@ The inverse of `org-glance-tag:to-string'; used wherever a tag enters from text
 \(filter specs, captured/parsed headlines, the picker, tag-config)."
   (->> value (format "%s") s-trim downcase intern))
 
-(cl-defun org-glance-tags:from-string (value)
-  "Parse VALUE -- tags separated by spaces or commas -- into DISTINCT canonical
-tag symbols, in first-seen order.  Each token is coerced by
-`org-glance-tag:from-string'; empty tokens are dropped and duplicates collapsed."
-  (delete-dups
-   (mapcar #'org-glance-tag:from-string (split-string (format "%s" value) "[ ,]+" t))))
-
 (provide 'org-glance-tag)

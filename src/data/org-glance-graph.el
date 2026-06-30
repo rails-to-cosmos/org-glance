@@ -76,7 +76,7 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   `((id            :id           ,#'org-glance-headline:id                                 nil          nil)
     (state         :state        ,#'org-glance-headline:state                              nil          nil)
     (title         :title        ,#'org-glance-headline:title                              nil          nil)
-    (tags          :tags         ,#'org-glance-headline:tags                               tags-vector  nil)
+    (tags          :tags         ,#'org-glance-headline:tags                               tags-vector  tags-list)
     (hash          :hash         ,#'org-glance-headline:hash                               nil          nil)
     (schedule      :schedule     ,#'org-glance-headline:schedule                           nil          nil)
     (deadline      :deadline     ,#'org-glance-headline:deadline                           nil          nil)
@@ -111,6 +111,7 @@ headline methods, so they are JSON-serializable as-is.")
   "Deserialize-side coercion for a field of DECODE kind KIND."
   (pcase kind
     ('bool (eq t value))                ; JSON false/null both read as nil
+    ('tags-list (append value nil))
     (_ value)))
 
 (cl-defun org-glance-headline:metadata (headline)
