@@ -50,8 +50,7 @@
    ("c" "Clear (all)" org-glance-form-action:filter-clear)]
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
-    ("o" "Overview" org-glance-overview)
-    ("t" "Table" org-glance-table)]]
+    ("o" "Overview" org-glance-overview)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)
