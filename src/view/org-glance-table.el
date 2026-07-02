@@ -105,10 +105,11 @@ all sortable.  Default sort is the state column ascending (active first)."
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
                 ((key . "m")   (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
-                ((key . "e")   (command . "extract")     (label . "Extract"))
-                ((key . "g")   (command . "refresh")     (label . "Refresh"))
-                ((key . "T")   (command . "overview")    (label . "Overview"))
-                ((key . "+")   (command . "capture")     (label . "Capture"))))
+                ((key . "e")     (command . "extract")   (label . "Extract"))
+                ((key . "g")     (command . "refresh")   (label . "Refresh"))
+                ((key . "T")     (command . "overview")  (label . "Overview"))
+                ((key . "+")     (command . "capture")   (label . "Capture"))
+                ((key . "C-c C-t") (command . "todo")    (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
 
 (cl-defun org-glance-table--row (metadata)
@@ -198,6 +199,19 @@ so the buffer needs no graph of its own."
 (cl-defun org-glance-table--act-extract (graph id _row)
   (when id (org-glance-material:extract (org-glance-table--headline graph id))))
 
+(cl-defun org-glance-table--act-todo (graph id _row)
+  "Advance ID's TODO state exactly like `C-c C-t' (via
+`org-glance-material:change-todo-live'), then reload the table and return to the
+row once the change (and any note) is committed."
+  (when id
+    (let ((arg current-prefix-arg))     ; the dispatch lambda is a bare `interactive'
+      (org-glance-material:change-todo-live
+       graph id arg
+       (lambda (state)
+         (org-glance-table--reload (current-buffer))
+         (table-view--goto-id id)
+         (message "State: %s" (if (s-present? state) state "(none)")))))))
+
 ;;; Browser
 
 (cl-defun org-glance-table:visit (graph &optional filter)
@@ -224,6 +238,7 @@ Honours the same filter language as the overview (see
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))
+                         (cons "todo"        (lambda (id row) (org-glance-table--act-todo graph id row)))
                          (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
                          (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
                          (cons "capture"     (lambda (_id _row)

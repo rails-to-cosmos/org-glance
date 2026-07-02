@@ -44,5 +44,19 @@ so the id parses correctly whether or not a body or planning is present."
                          ":END:")
                    body))))
 
+(cl-defun org-glance-test:change-todo-live (graph id &optional arg)
+  "Run `org-glance-material:change-todo-live' (the no-note path) in a live origin
+buffer and return the finalized state string.  The no-note commit is synchronous,
+so no timer pumping is needed."
+  (let ((origin (generate-new-buffer " *ctl-origin*"))
+        (result 'unset))
+    (unwind-protect
+        (progn
+          (with-current-buffer origin
+            (org-glance-material:change-todo-live
+             graph id arg (lambda (state) (setq result state))))
+          (unless (eq result 'unset) result))
+      (kill-buffer origin))))
+
 (provide 'test-helpers)
 ;;; test-helpers.el ends here

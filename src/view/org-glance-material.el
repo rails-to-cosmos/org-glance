@@ -191,7 +191,17 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
                   graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
-      (let ((buffer (find-file-noselect path)))
+      (let ((buffer
+             ;; Initialize the buffer's `org-mode' with the tag's TODO cycle bound
+             ;; GLOBALLY: `org-set-regexps-and-options' (run inside `find-file-noselect')
+             ;; reads the DEFAULT value of `org-todo-keywords', not a buffer-local one
+             ;; (the W1 finding), so this is what makes the buffer's derived keyword vars
+             ;; -- and hence native rendering, cycling and `org-todo' -- know the tag's
+             ;; states (e.g. READING), WITHOUT a `#+TODO:' in the kept-clean blob.
+             (let ((org-todo-keywords
+                    (if cycle (list (cons 'sequence (split-string cycle)))
+                      org-todo-keywords)))
+               (find-file-noselect path))))
         (with-current-buffer buffer
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
           (setq-local org-glance-material--graph graph
@@ -217,6 +227,95 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
   (unless org-glance-material--graph
     (user-error "Not in an org-glance materialized buffer"))
   (save-buffer))
+
+;;; TODO state change: exactly `C-c C-t' on the headline (materialize -> sync)
+;;
+;; A read-only view (overview / table) advances a headline's state with byte-exact
+;; org fidelity by MATERIALIZING it and running `org-todo' in the real blob buffer:
+;; per-tag keywords are live (see `org-glance-material:open'), so state cycling, the
+;; CLOSED timestamp, `org-after-todo-state-change-hook', dependency blocking,
+;; repeaters (clone-on-repeat) and the interactive LOGBOOK note all happen natively.
+;; Persistence reuses the ordinary save -> `after-save-hook' -> `:sync' path (atomic
+;; blob + WAL + mark-stale); there is no separate write.
+;;
+;; The wrinkle is the note.  `org-todo' applies the state + CLOSED synchronously but
+;; DEFERS an interactive note (`org-log-done' `note', repeat-notes, `C-u' force-log)
+;; to `*Org Note*'.  So we save immediately when no note is queued (signalled by
+;; `org-log-setup', read in the same stack frame), else save from a one-shot `:after'
+;; advice on `org-store-log-note' -- which fires on BOTH commit (`C-c C-c') and abort
+;; (`C-c C-k'); on abort the state + CLOSED are kept, matching native `C-c C-t'.  A
+;; FRESH background buffer is killed and the origin view refreshed once committed; a
+;; PRE-EXISTING materialized buffer is edited in place and left for the user to save
+;; (we never flush their unsaved edits).
+
+(defvar org-log-setup)      ; org.el: non-nil while an interactive note is queued
+
+(cl-defun org-glance-material--goto-first-heading ()
+  "Move point to the first heading of the current buffer."
+  (goto-char (point-min))
+  (unless (org-at-heading-p) (outline-next-heading)))
+
+(cl-defun org-glance-material:change-todo-live (graph id arg finalize)
+  "Advance ID's TODO state exactly like `C-c C-t' on the headline, then persist.
+Materialize ID (its real blob buffer, per-tag keywords live), run `org-todo'
+with ARG as the prefix, and let org apply the state + CLOSED + repeater + any
+note natively.  When the change commits (immediately, or after an interactive
+note settles), save the buffer -- its `after-save-hook' (`:sync') persists
+(atomic blob + WAL) and flags views -- then, for a buffer we opened,
+kill it and run FINALIZE (a one-arg thunk of the new state) in the ORIGIN view.
+A pre-existing materialized buffer is edited in place; the user saves it."
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type id string)
+  (let* ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+         (fresh (null (get-file-buffer path)))
+         (origin (current-buffer))
+         (buf (org-glance-material:open graph id)))  ; user-errors if not live
+    (if (not fresh)
+        ;; Already materialized: act in place, the user drives the save.
+        (progn
+          (switch-to-buffer buf)
+          (org-glance-material--goto-first-heading)
+          (let ((current-prefix-arg arg)) (call-interactively #'org-todo)))
+      ;; Fresh background buffer: run org-todo, then commit (now or after the note).
+      (let ((owned nil) (commit-now nil))
+        (cl-labels
+            ((finish (state)
+               (when (buffer-live-p buf) (kill-buffer buf))
+               (when (buffer-live-p origin)
+                 (with-current-buffer origin (funcall finalize state))))
+             ;; Save persists via the buffer's `after-save-hook' (`:sync'); return
+             ;; the new state string.
+             (persist ()
+               (with-current-buffer buf
+                 (save-buffer)
+                 (substring-no-properties (or (org-get-todo-state) "")))))
+          (unwind-protect
+              (progn
+                (with-current-buffer buf
+                  (org-glance-material--goto-first-heading)
+                  (let ((current-prefix-arg arg) (org-log-setup nil))
+                    ;; State + CLOSED + hooks + repeater are applied here; only an
+                    ;; interactive note is deferred (signalled by `org-log-setup').
+                    (call-interactively #'org-todo)
+                    (cond
+                     (org-log-setup
+                      ;; Note pending -> persist + finish after it settles (commit OR
+                      ;; abort), via a one-shot self-removing advice on
+                      ;; `org-store-log-note'; DEFER the kill/refresh off org's extent.
+                      (letrec ((adv (lambda (&rest _)
+                                      (advice-remove 'org-store-log-note adv)
+                                      (let ((state (persist)))
+                                        (run-at-time 0 nil (lambda () (finish state)))))))
+                        (advice-add 'org-store-log-note :after adv))
+                      (setq owned t))
+                     ((buffer-modified-p)
+                      (setq owned t commit-now t)))))
+                ;; No note: commit synchronously, now OUTSIDE the buffer edit (so
+                ;; killing it is safe).
+                (when commit-now (finish (persist))))
+            ;; org-todo threw (e.g. a dependency block) before ownership passed to
+            ;; the note advice / commit -> don't leak the background buffer.
+            (when (and (not owned) (buffer-live-p buf)) (kill-buffer buf))))))))
 
 ;;; Commands
 ;;

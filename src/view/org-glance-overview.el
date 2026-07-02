@@ -264,6 +264,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
 (define-key org-glance-overview-mode-map (kbd "T") #'org-glance-overview:table)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
+(define-key org-glance-overview-mode-map (kbd "C-c C-t") #'org-glance-overview:todo)
 (define-key org-glance-overview-mode-map (kbd "q") #'quit-window)
 
 (defvar-local org-glance-overview--spec nil
@@ -299,6 +300,23 @@ nil into the material layer."
   "Extract a key-value pair from the headline at point."
   (interactive)
   (org-glance-material:extract (org-glance-overview--headline-at-point)))
+
+(cl-defun org-glance-overview:todo (&optional arg)
+  "Advance the TODO state of the headline at point exactly like `C-c C-t'.
+Runs org's own `org-todo' (ARG passed through) in the headline's materialized
+blob buffer -- interactive LOGBOOK notes and all (see
+`org-glance-material:change-todo-live') -- then refreshes this overview and
+returns point to the headline once the change (and any note) is committed."
+  (interactive "P")
+  (let ((id (org-glance-overview:id-at-point)))
+    (org-glance-material:change-todo-live
+     org-glance-graph id arg
+     (lambda (state)
+       (org-glance-overview:refresh)
+       (goto-char (point-min))
+       (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
+         (org-back-to-heading t))
+       (message "State: %s" (if (s-present? state) state "(none)"))))))
 
 (cl-defun org-glance-overview:visit (graph &optional filter)
   "Open GRAPH's overview for FILTER read-only, serving the cache when fresh."

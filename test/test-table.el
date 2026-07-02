@@ -181,6 +181,28 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
         (should (bufferp opened))
         (kill-buffer opened)))))
 
+(ert-deftest org-glance-test:table-action-todo ()
+  "The `todo' action advances the row's state (`C-c C-t' via change-todo-live);
+after the (no-note) commit the reloaded table shows the new state on the row."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
+      (let ((buf nil))
+        (unwind-protect
+            (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
+                      ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
+              (setq buf (org-glance-table:visit graph))
+              (with-current-buffer buf
+                (org-glance-table--act-todo graph "td1" nil)   ; no-note -> synchronous finalize
+                ;; persisted in the graph
+                (should (equal "DONE" (org-glance-headline-metadata:state
+                                       (org-glance-graph:get-headline graph "td1"))))
+                ;; reloaded row reflects the new state
+                (let ((row (car table-view--rows)))
+                  (should (equal "td1" (alist-get 'id row)))
+                  (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
 ;;; Surgical single-row updates (buffer-text level)
 
 (defun org-glance-test:table-1col-buffer (name rows)

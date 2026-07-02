@@ -459,5 +459,75 @@ Pins the design default so an accidental change to the defvar fails loudly."
           (let ((org-glance-filter-spec nil))
             (org-glance-extract) (should (equal '("dk" "tk") seen))))))))
 
+;;; TODO state change: materialize -> org-todo -> sync (exactly C-c C-t)
+
+(ert-deftest org-glance-test:material-change-todo-live-global ()
+  "`change-todo-live' advances the state via org's own algorithm, persists it
+through the save->sync path, and finalizes with the new state (Tier A, no note)."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha"))
+      ;; TODO -> DONE
+      (should (equal "DONE" (org-glance-test:change-todo-live graph "c1")))
+      (should (equal "DONE" (org-glance-headline-metadata:state
+                             (org-glance-graph:get-headline graph "c1"))))
+      (should (s-contains? "* DONE Alpha" (org-glance-graph:get-content graph "c1")))
+      ;; DONE -> (none)
+      (should (equal "" (org-glance-test:change-todo-live graph "c1")))
+      (should (equal "" (org-glance-headline-metadata:state
+                         (org-glance-graph:get-headline graph "c1"))))
+      ;; the fresh background material buffer is not leaked
+      (should-not (get-file-buffer
+                   (f-join (org-glance-graph:headline-data-path graph "c1") "data.org"))))))
+
+(ert-deftest org-glance-test:material-change-todo-live-closed ()
+  "Completing to DONE with time-logging adds a CLOSED timestamp, exactly like org."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done 'time))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha"))
+      (should (equal "DONE" (org-glance-test:change-todo-live graph "c1")))
+      (should (s-contains? "CLOSED:" (org-glance-graph:get-content graph "c1"))))))
+
+(ert-deftest org-glance-test:material-change-todo-live-unknown-id ()
+  "`change-todo-live' on an unknown id signals rather than corrupting the store."
+  (org-glance-test:with-graph graph
+    (should-error (org-glance-test:change-todo-live graph "nope") :type 'user-error)))
+
+(ert-deftest org-glance-test:material-change-todo-live-note ()
+  "Tier B: an interactive LOGBOOK note is honoured -- committing (`C-c C-c') stores
+the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
+(native `C-c C-t' semantics).  Drives the deferred note flow synchronously."
+  (dolist (case '((:label "commit" :abort nil :note t)
+                  (:label "abort"  :abort t   :note nil)))
+    (let ((org-todo-keywords '((sequence "TODO" "DONE")))
+          (org-log-done 'note) (org-log-into-drawer t)
+          (this-command 'org-glance-test-cct)
+          (origin (generate-new-buffer " *ctl-origin*"))
+          (finalized 'unset))
+      (unwind-protect
+          (org-glance-test:with-graph graph
+            (org-glance-graph:add graph (org-glance-test:headline "n1" "* TODO Alpha"))
+            (with-current-buffer origin
+              (org-glance-material:change-todo-live
+               graph "n1" nil (lambda (s) (setq finalized s))))
+            ;; deliver + finish the note (C-c C-c commit, or C-c C-k abort)
+            (ignore-errors (run-hooks 'post-command-hook))
+            (let ((nb (get-buffer "*Org Note*")))
+              (should nb)
+              (with-current-buffer nb
+                (unless (plist-get case :abort) (insert "the reason"))
+                (let ((org-note-abort (plist-get case :abort)))
+                  (ignore-errors (funcall org-finish-function)))))
+            (with-timeout (3) (while (eq finalized 'unset) (sit-for 0.02)))
+            (let ((blob (org-glance-graph:get-content graph "n1")))
+              (should (equal "DONE" finalized))
+              (should (equal "DONE" (org-glance-headline-metadata:state
+                                     (org-glance-graph:get-headline graph "n1"))))
+              (should (s-contains? "CLOSED:" blob))            ; state+CLOSED always kept
+              (should (eq (plist-get case :note)               ; note only on commit
+                          (and (s-contains? "the reason" blob) t)))))
+        (when (buffer-live-p origin) (kill-buffer origin))
+        (when (get-buffer "*Org Note*") (kill-buffer "*Org Note*"))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

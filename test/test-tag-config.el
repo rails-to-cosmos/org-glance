@@ -243,5 +243,37 @@ the skeleton body, and no config-internal drawer keys."
     (should (null (car split)))
     (should (equal "* plain :t:" (cdr split)))))
 
+;;; TODO state change cycles the tag's own keywords (C-c C-t)
+
+(ert-deftest org-glance-test:tag-config-materialize-knows-keywords ()
+  "Materializing a configured-tag headline makes the blob buffer natively recognise
+the tag's states (READING is a state, not folded into the title) -- so `org-todo'
+and faces work in place, with no `#+TODO:' in the kept-clean blob."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
+    (org-glance-test:with-tag-config
+        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
+      (let ((buf (org-glance-material:open graph "b1")))
+        (unwind-protect
+            (with-current-buffer buf
+              (goto-char (point-min))
+              (should (equal "READING" (org-get-todo-state)))
+              (should (member "READ" org-done-keywords))
+              (should (member "READING" org-not-done-keywords)))
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:tag-config-change-todo-live-cycle ()
+  "`change-todo-live' cycles a configured tag's OWN states (TODO -> READING ->
+READ), persisting each -- not the global TODO/DONE."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Dune :book:"))
+    (org-glance-test:with-tag-config
+        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
+      (should (equal "READING" (org-glance-test:change-todo-live graph "b1")))
+      (should (equal "READING" (org-glance-headline-metadata:state
+                                (org-glance-graph:get-headline graph "b1"))))
+      (should (equal "READ" (org-glance-test:change-todo-live graph "b1")))
+      (should (s-contains? "* READ Dune" (org-glance-graph:get-content graph "b1"))))))
+
 (provide 'test-tag-config)
 ;;; test-tag-config.el ends here
