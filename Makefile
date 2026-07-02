@@ -29,6 +29,30 @@ lint:
 clean:
 	eask clean elc
 
+# --- Version bumping ---------------------------------------------------------
+# `make patch|minor|major' bumps org-glance's semantic version (resetting the
+# lower components) in both the Eask package spec and the org-glance.el header.
+.PHONY: patch minor major bump-version
+patch: BUMP := patch
+minor: BUMP := minor
+major: BUMP := major
+patch minor major: bump-version
+
+bump-version:
+	@cur=`sed -n 's/^(package "org-glance" "\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/p' Eask`; \
+	test -n "$$cur" || { echo "error: could not read version from Eask"; exit 1; }; \
+	maj=$${cur%%.*}; rest=$${cur#*.}; min=$${rest%%.*}; pat=$${rest##*.}; \
+	case "$(BUMP)" in \
+	  major) maj=$$((maj + 1)); min=0; pat=0 ;; \
+	  minor) min=$$((min + 1)); pat=0 ;; \
+	  patch) pat=$$((pat + 1)) ;; \
+	  *) echo "usage: make patch|minor|major"; exit 1 ;; \
+	esac; \
+	new="$$maj.$$min.$$pat"; \
+	sed -i "s/^(package \"org-glance\" \"$$cur\"/(package \"org-glance\" \"$$new\"/" Eask; \
+	sed -i "s/^;; Version: [0-9][0-9.]*/;; Version: $$new/" org-glance.el; \
+	echo "org-glance: $$cur -> $$new  (bumped Eask + org-glance.el)"
+
 # --- Podman: reproducible Emacs on a pinned version --------------------------
 # Override the Emacs version with: make podman-test EMACS_VERSION=30.1
 PODMAN ?= podman

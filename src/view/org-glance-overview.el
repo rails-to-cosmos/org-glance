@@ -314,7 +314,11 @@ nil into the material layer."
         (let ((inhibit-read-only t)) (revert-buffer t t t))))
      (t (when existing (kill-buffer existing))
         (find-file file)))
-    (setq-local org-glance-overview--spec spec)
+    (setq-local org-glance-overview--spec spec
+                ;; Run directory-relative actions (capture, dired, shell, relative
+                ;; links) from the graph's ROOT, not the hidden `.org-glance' cache
+                ;; subdir this buffer's file happens to live in.
+                default-directory (file-name-as-directory (org-glance-graph:directory graph)))
     (org-glance-overview-mode +1)
     (org-glance-view:register
      graph

@@ -81,6 +81,21 @@ dashboard by default, the org-text overview when set to `org'."
               (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode)))
             (when (buffer-live-p buf) (kill-buffer buf))))))))
 
+(ert-deftest org-glance-test:overview-default-directory ()
+  "The overview buffer's `default-directory' is the graph ROOT, not the hidden
+`.org-glance' cache subdir its file lives in -- so directory-relative actions run
+where the user's content is."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
+    (let* ((org-glance-graph graph)
+           (buf (org-glance-overview:visit graph nil)))
+      (unwind-protect
+          (with-current-buffer buf
+            (should (file-equal-p default-directory (org-glance-graph:directory graph)))
+            ;; and NOT the cache file's own directory (under the store)
+            (should-not (file-equal-p default-directory (f-dirname buffer-file-name))))
+        (kill-buffer buf)))))
+
 ;;; Filtering
 
 (ert-deftest org-glance-test:overview-filter-by-tag ()
