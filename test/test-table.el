@@ -2,42 +2,6 @@
 
 (require 'test-helpers)
 
-;;; table-view core: remove-row primitive
-
-(ert-deftest org-glance-test:table-view-remove-row ()
-  "table-view-remove-row drops the matching row by id and re-renders."
-  (let ((buf (get-buffer-create "*tv-remove-test*")))
-    (unwind-protect
-        (progn
-          (table-view-display buf
-                             '((title . "T")
-                               (columns . (((key . "n") (header . "N") (type . "text") (sortable . t) (align . "left")))))
-                             nil)
-          (table-view-set-rows buf '(((id . "a") (cells . ((n . "one"))))
-                                     ((id . "b") (cells . ((n . "two"))))))
-          (with-current-buffer buf
-            (should (= 2 (length table-view--rows))))
-          (table-view-remove-row buf "a")
-          (with-current-buffer buf
-            (should (= 1 (length table-view--rows)))
-            (should (equal "b" (alist-get 'id (car table-view--rows))))))
-      (kill-buffer buf))))
-
-(ert-deftest org-glance-test:table-view-remove-row-noop ()
-  "table-view-remove-row is a no-op when the id is absent."
-  (let ((buf (get-buffer-create "*tv-remove-noop*")))
-    (unwind-protect
-        (progn
-          (table-view-display buf
-                             '((title . "T")
-                               (columns . (((key . "n") (header . "N") (type . "text") (sortable . t) (align . "left")))))
-                             nil)
-          (table-view-set-rows buf '(((id . "a") (cells . ((n . "one"))))))
-          (table-view-remove-row buf "nonexistent")
-          (with-current-buffer buf
-            (should (= 1 (length table-view--rows)))))
-      (kill-buffer buf))))
-
 ;;; Row builder
 
 (ert-deftest org-glance-test:table-row-from-metadata ()
@@ -172,6 +136,25 @@ path; a display-boundary refresh re-fills it and clears the flag."
               (should (= 2 (length table-view--rows)))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
 
+(ert-deftest org-glance-test:table-visit-default-sort ()
+  "The table opens sorted by the spec default (state, active-first) regardless of
+graph insertion order -- guards `org-glance-table--apply-default-sort' against
+`table-view''s seed-but-don't-apply default-sort semantics."
+  (org-glance-test:with-graph graph
+    ;; add DONE first, so load order (d, t) differs from the sorted order (t, d)
+    (org-glance-graph:add graph
+                             (org-glance-test:headline "d" "* DONE Zeta")
+                             (org-glance-test:headline "t" "* TODO Alpha"))
+    (let ((buf nil))
+      (unwind-protect
+          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
+                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
+            (setq buf (org-glance-table:visit graph))
+            (with-current-buffer buf
+              (should (equal '("t" "d")
+                             (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
 (ert-deftest org-glance-test:table-visit-tag-filter ()
   "org-glance-table:visit with a tag filter shows only matching headlines."
   (org-glance-test:with-graph graph
@@ -248,38 +231,6 @@ path; a display-boundary refresh re-fills it and clears the flag."
             (should (table-view--goto-id "b"))
             (should (equal "y" (alist-get 'n (alist-get 'cells
                                 (get-text-property (point) 'table-view-row)))))))
-      (kill-buffer buf))))
-
-(ert-deftest org-glance-test:table-view-remove-patch-same-width ()
-  "Removing a non-widest row deletes just its line, keeping siblings."
-  (let ((buf (org-glance-test:table-1col-buffer
-              "*tv-rm-sw*"
-              '(((id . "a") (cells . ((n . "one"))))
-                ((id . "b") (cells . ((n . "two"))))
-                ((id . "c") (cells . ((n . "six"))))))))
-    (unwind-protect
-        (progn
-          (table-view-remove-row buf "b")
-          (with-current-buffer buf
-            (should-not (s-contains? "two" (buffer-string)))
-            (should (s-contains? "one" (buffer-string)))
-            (should (s-contains? "six" (buffer-string)))
-            (should-not (table-view--goto-id "b"))
-            (should (table-view--goto-id "a"))
-            (should (table-view--goto-id "c"))))
-      (kill-buffer buf))))
-
-(ert-deftest org-glance-test:table-view-remove-last-row-shows-placeholder ()
-  "Removing the final row re-renders to the (no rows) placeholder (full path)."
-  (let ((buf (org-glance-test:table-1col-buffer
-              "*tv-rm-last*"
-              '(((id . "a") (cells . ((n . "one"))))))))
-    (unwind-protect
-        (progn
-          (table-view-remove-row buf "a")
-          (with-current-buffer buf
-            (should (s-contains? "(no rows)" (buffer-string)))
-            (should-not (table-view--goto-id "a"))))
       (kill-buffer buf))))
 
 (ert-deftest org-glance-test:table-view-surgical-equals-full-render ()

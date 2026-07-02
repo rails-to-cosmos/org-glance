@@ -145,15 +145,24 @@ priority is its letter, absent values are the empty string."
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
 
+(cl-defun org-glance-table--apply-default-sort ()
+  "Sort the CURRENT table by its spec's default column (state, active-first).
+The `table-view' core seeds the default sort key from the spec at display time
+but applies it only from a sort command; `table-view-sort-cycle' invoked with
+point at `point-min' (the first -- state -- column) applies it.  NB this couples
+the default to the FIRST spec column, which is org-glance's declared sort key."
+  (goto-char (point-min))
+  (table-view-sort-cycle))
+
 (cl-defun org-glance-table--reload (buffer)
-  "Re-fill BUFFER from the live graph, then re-apply its current/default sort.
+  "Re-fill BUFFER from the live graph, then re-apply the spec's default sort.
 Used by `g' (refresh) and the lazy display-boundary check.  `table-view-refresh'
-re-runs the fill-fn (which resets the sort), so re-apply it to keep the view
-ordered the way the user left it (or the spec default on first sort)."
+re-runs the fill-fn (which resets rows to load order), so re-apply the default
+so the reloaded view opens state-active-first like a fresh visit."
   (table-view-refresh buffer)
   (when-let ((buf (get-buffer buffer)))
     (with-current-buffer buf
-      (table-view-sort)
+      (org-glance-table--apply-default-sort)
       (org-glance-view:mark-fresh))))
 
 ;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
@@ -227,7 +236,7 @@ Honours the same filter language as the overview (see
       (org-glance-view:register graph
                                 :stale-fn  (lambda () (org-glance-table--stale? graph))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
-      (table-view-sort))                ; honour the spec's default sort on open
+      (org-glance-table--apply-default-sort))   ; open state-active-first (spec default)
     buf))
 
 (cl-defun org-glance-table:completing-read-tag ()
@@ -242,8 +251,9 @@ Honours the same filter language as the overview (see
   "Browse the graph as a sortable, badge-coloured table, optionally filtered.
 Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
 on the ambient `org-glance-filter-spec' (default: active headlines) -- exactly
-like `org-glance-overview', but rendered as a flat table.  Sort with `^' (cycle
-column) and `~' (toggle direction); act on the row at point with RET/m, o, e."
+like `org-glance-overview', but rendered as a flat table.  Sort with `^' (sorts
+by the column at point; repeat toggles direction, `C-u ^' adds a tie-breaker);
+act on the row at point with RET/m, o, e."
   (interactive (list (org-glance-table:completing-read-tag)))
   (cl-assert (org-glance-initialized?))
   (org-glance-table:visit org-glance-graph

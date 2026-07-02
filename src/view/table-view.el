@@ -1,18 +1,39 @@
-;;; table-view.el --- Generic declarative table view -*- lexical-binding: t; -*-
+;;; table-view.el --- Declarative, backend-agnostic table view -*- lexical-binding: t; -*-
 
-;; VENDORED into org-glance from the standalone `table-view' project (the
-;; `repos' dashboard's table core).  org-glance consumes it from
-;; `org-glance-table.el', building the spec in pure elisp (no Haskell backend).
-;; Kept namespaced and backend-agnostic so it can still graduate into its own
-;; package; the ONLY org-glance-local change is the `table-view-remove-row'
-;; primitive below (a consumer needs to drop a row whose backing record left the
-;; view's filter) -- upstream it if this graduates.
+;; Copyright (C) 2025-2026 Dmitry Akatov
+
+;; Author: Dmitry Akatov <akatovda@gmail.com>
+;; Maintainer: Dmitry Akatov <akatovda@gmail.com>
+;; URL: https://github.com/rails-to-cosmos/table-view
+;; Version: 0.1.0
+;; Package-Requires: ((emacs "28.1"))
+;; Keywords: convenience, data, tools
+;; SPDX-License-Identifier: MIT
+
+;; This file is not part of GNU Emacs.
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
 ;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+;;; Commentary:
 ;; A tiny, backend-agnostic core that renders a declarative table
 ;; description -- columns, actions, default sort -- and dispatches keys to
-;; consumer-registered command handlers.  The schema is produced by a
-;; backend (see Repos.Table on the Haskell side); the rows are supplied by
-;; a consumer `fill-fn'.  The core knows nothing about what a row means.
+;; consumer-registered command handlers.
 ;;
 ;; Responsibilities:
 ;;   * render a spec as an aligned, org-table-styled read-only view
@@ -20,9 +41,28 @@
 ;;   * build a keymap from the declared actions, dispatch by command name
 ;;   * own a row store keyed by id: set-rows / upsert-row (streaming fill)
 ;;   * client-side sort on sortable columns
+;;   * interactive substring filter (/)
 ;;
 ;; A consumer provides: a parsed spec, a `fill-fn' (BUFFER -> populates via
 ;; the mutators below), and a handler alist (command-name -> FN of ID ROW).
+;;
+;; See examples/ for runnable demos:
+;;   minimal.el       — inline rows from a JSON spec
+;;   fill-function.el — populate via a fill function (Emacs subprocesses)
+;;   upsert.el        — streaming row updates via a timer
+;;   multi-sort.el    — column navigation + multi-column (C-u ^) sorting
+;;
+;; Keybindings in table-view-mode:
+;;   g   — clear filter & refresh, preserving the current sort order
+;;   ^   — sort by the column at point, repeat toggles asc/desc;
+;;         off a column, cycle through every column and direction
+;;   C-u ^ — add the column at point as a secondary (tie-breaker) sort key;
+;;           a following run of `^' then toggles that key's direction
+;;   /   — filter rows by substring
+;;   n/p — next/previous line
+;;   f/b — forward/backward: by column on a table line (header or row),
+;;         by char elsewhere
+;;   q   — quit
 
 ;;; Code:
 
@@ -38,14 +78,17 @@
   "Alist of command-name (string) -> function called as (FN ID ROW).")
 (defvar-local table-view--fill-fn nil
   "Function of one arg (this BUFFER) that (re)populates the rows, or nil.")
-(defvar-local table-view--sort-key nil
-  "Column key (string) currently sorted by, or nil.")
-(defvar-local table-view--sort-asc t
-  "Non-nil when the current sort is ascending.")
+(defvar-local table-view--sort-keys nil
+  "Sort chain: list of (KEY . ASC) conses, highest priority first.
+KEY is a column key (string); ASC is non-nil for ascending.  Rows equal
+on one key are ordered by the next; an empty list renders load order.")
 (defvar-local table-view--sorted nil
   "Non-nil once an explicit sort has been applied to the current row set.
 Reset whenever the full row set is replaced (`table-view-set-rows'), so
 the hint line never claims a sort the displayed rows are not actually in.")
+(defvar-local table-view--filter nil
+  "Current filter string, or nil.  When set, only rows with at least one
+cell matching the string (case-insensitive substring) are rendered.")
 
 ;;; Spec accessors
 
@@ -93,22 +136,56 @@ the hint line never claims a sort the displayed rows are not actually in.")
      (lambda (a b) (string< (table-view--str a) (table-view--str b))))))
 
 (defun table-view--sort-rows ()
-  "Sort `table-view--rows' in place by the current sort column.
-No-op when no sort column is selected.  Sorting is explicit: it runs
-only from the sort commands (`g', `^', `~'), never from row updates,
-so operating on a row updates it in place without moving it."
-  (let ((key table-view--sort-key))
-    (when key
-      (let* ((col (table-view--column table-view--spec key))
-             (less (table-view--comparator col))
-             (sorted (sort (copy-sequence table-view--rows)
-                           (lambda (a b)
-                             (funcall less
-                                      (table-view--cell a key)
-                                      (table-view--cell b key))))))
-        (setq table-view--rows
-              (if table-view--sort-asc sorted (nreverse sorted)))
-        (setq table-view--sorted t)))))
+  "Sort `table-view--rows' in place by the current sort chain.
+No-op when the chain is empty.  Rows equal on every key keep their
+relative order (the sort is stable).  Sorting is explicit: it runs only
+from the sort commands (`^' and `g' when a sort is already active),
+never from row updates, so operating on a row updates it in place
+without moving it."
+  (when table-view--sort-keys
+    (let ((tests (mapcar
+                  (lambda (ka)
+                    (list (table-view--comparator
+                           (table-view--column table-view--spec (car ka)))
+                          (car ka)          ; column key
+                          (cdr ka)))        ; ascending?
+                  table-view--sort-keys)))
+      (setq table-view--rows
+            (sort (copy-sequence table-view--rows)
+                  (lambda (a b)
+                    (cl-loop for (less key asc) in tests
+                             for va = (table-view--cell a key)
+                             for vb = (table-view--cell b key)
+                             do (cond ((funcall less va vb) (cl-return asc))
+                                      ((funcall less vb va) (cl-return (not asc))))
+                             finally return nil))))
+      (setq table-view--sorted t))))
+
+(defun table-view--sort-description ()
+  "Render the sort chain as e.g. \"name asc -> pid desc\"."
+  (mapconcat (lambda (ka)
+               (format "%s %s" (car ka) (if (cdr ka) "asc" "desc")))
+             table-view--sort-keys " -> "))
+
+;;; Filtering
+
+(defun table-view--row-matches-p (row filter)
+  "Non-nil if any cell in ROW contains FILTER (case-insensitive substring)."
+  (let ((pat (downcase filter)))
+    (cl-some (lambda (col)
+               (string-match-p
+                (regexp-quote pat)
+                (downcase (table-view--str
+                           (table-view--cell row (alist-get 'key col))))))
+             (table-view--columns table-view--spec))))
+
+(defun table-view--visible-rows ()
+  "Rows to render: all if no filter, otherwise only matching ones."
+  (if (and table-view--filter (not (string-empty-p table-view--filter)))
+      (cl-remove-if-not
+       (lambda (row) (table-view--row-matches-p row table-view--filter))
+       table-view--rows)
+    table-view--rows))
 
 ;;; Rendering
 
@@ -131,7 +208,9 @@ so operating on a row updates it in place without moving it."
       (concat s (make-string gap ?\s)))))
 
 (defun table-view--cell-string (col row widths)
-  "Return the padded, possibly coloured cell string for COL in ROW."
+  "Return the padded, possibly coloured cell string for COL in ROW.
+The whole cell carries the `table-view-col' text property (its column
+key) so column navigation can locate cell boundaries."
   (let* ((key (alist-get 'key col))
          (val (table-view--cell row key))
          (s (table-view--str val)))
@@ -139,7 +218,9 @@ so operating on a row updates it in place without moving it."
       (let ((color (table-view--badge-color col s)))
         (when color
           (setq s (propertize s 'face (list :foreground color :weight 'bold))))))
-    (table-view--pad s (alist-get key widths nil nil #'equal) (alist-get 'align col))))
+    (propertize
+     (table-view--pad s (alist-get key widths nil nil #'equal) (alist-get 'align col))
+     'table-view-col key)))
 
 (defun table-view--row-string (spec row widths cell-fn)
   "Build one \"| ... |\" line for ROW, each cell via CELL-FN."
@@ -151,10 +232,12 @@ so operating on a row updates it in place without moving it."
 (defun table-view--header-string (spec widths)
   (concat "| "
           (mapconcat (lambda (col)
-                       (table-view--pad
-                        (propertize (alist-get 'header col) 'face 'bold)
-                        (alist-get (alist-get 'key col) widths nil nil #'equal)
-                        (alist-get 'align col)))
+                       (propertize
+                        (table-view--pad
+                         (propertize (alist-get 'header col) 'face 'bold)
+                         (alist-get (alist-get 'key col) widths nil nil #'equal)
+                         (alist-get 'align col))
+                        'table-view-col (alist-get 'key col)))
                      (table-view--columns spec) " | ")
           " |"))
 
@@ -169,12 +252,17 @@ so operating on a row updates it in place without moving it."
 (defun table-view--hint-string ()
   "A one-line status/help string: current sort + declared action keys.
 Shows \"unsorted\" until an explicit sort has been applied, since rows
-render in load order and only reorder on `g'/`^'/`~'."
-  (format "sort: %s    %s"
-          (if (and table-view--sorted table-view--sort-key)
-              (format "%s %s" table-view--sort-key
-                      (if table-view--sort-asc "asc" "desc"))
-            "unsorted (g)")
+render in load order and only reorder on `^'."
+  (format "sort: %s%s    %s"
+          (if (and table-view--sorted table-view--sort-keys)
+              (table-view--sort-description)
+            "unsorted (^)")
+          (if table-view--filter
+              (format "    filter: %s (%d/%d)"
+                      table-view--filter
+                      (length (table-view--visible-rows))
+                      (length table-view--rows))
+            "")
           (mapconcat (lambda (a) (format "%s:%s"
                                          (alist-get 'key a) (alist-get 'label a)))
                      (table-view--actions table-view--spec) "  ")))
@@ -188,16 +276,6 @@ render in load order and only reorder on `g'/`^'/`~'."
         (setq pos (next-single-property-change pos 'table-view-id))))
     found))
 
-(defun table-view--insert-row (spec row widths)
-  "Insert ROW's line (with trailing newline) at point and tag it with ROW's id.
-Shared by `table-view--render' and `table-view--patch-line' so a row renders
-identically however it lands in the buffer -- the equivalence the surgical patch
-relies on (guarded by `table-view-surgical-equals-full-render')."
-  (let ((start (point)))
-    (insert (table-view--row-string spec row widths #'table-view--cell-string) "\n")
-    (put-text-property start (point) 'table-view-id (alist-get 'id row))
-    (put-text-property start (point) 'table-view-row row)))
-
 (defun table-view--render ()
   "Re-render the current buffer from spec + rows.
 Renders rows in their current order; sorting is explicit (see
@@ -205,7 +283,7 @@ Renders rows in their current order; sorting is explicit (see
 Keeps point on the same row id when possible, else falls back to the
 same line number."
   (let* ((spec table-view--spec)
-         (rows table-view--rows)
+         (rows (table-view--visible-rows))
          (widths (table-view--widths spec rows))
          (inhibit-read-only t)
          (line (line-number-at-pos))
@@ -220,40 +298,13 @@ same line number."
     (if (null rows)
         (insert (propertize "  (no rows)\n" 'face 'shadow))
       (dolist (row rows)
-        (table-view--insert-row spec row widths)))
+        (let ((start (point)))
+          (insert (table-view--row-string spec row widths #'table-view--cell-string) "\n")
+          (put-text-property start (point) 'table-view-id (alist-get 'id row))
+          (put-text-property start (point) 'table-view-row row))))
     (unless (and id (table-view--goto-id id))
       (goto-char (point-min))
       (forward-line (1- line)))))
-
-;;; Surgical single-row updates
-;;
-;; A consumer that touches one row (e.g. a live coherence patch on a save) does
-;; not need the whole buffer re-rendered.  When the change leaves every column's
-;; width unchanged, the affected line is patched/deleted in place -- O(1) instead
-;; of re-inserting every row.  The callers (`upsert-row'/`remove-row') fall back
-;; to a full `table-view--render' on any width change (so padding stays aligned)
-;; or an append / empty-table transition (which a single-line edit can't express).
-
-(defun table-view--patch-line (id row widths)
-  "Replace ID's already-rendered line in place with ROW, padded to WIDTHS.
-Returns non-nil on success, or nil without patching if ID's line is not found
-\(so the caller can fall back to a full render).  Moves point; wrap in
-`save-excursion' to preserve the user's position."
-  (when (table-view--goto-id id)
-    (let ((inhibit-read-only t)
-          (start (line-beginning-position)))
-      (delete-region start (min (point-max) (1+ (line-end-position))))
-      (goto-char start)
-      (table-view--insert-row table-view--spec row widths)
-      t)))
-
-(defun table-view--delete-line (id)
-  "Delete ID's already-rendered line in place.  Returns non-nil on success.
-Moves point; wrap in `save-excursion' to preserve the user's position."
-  (when (table-view--goto-id id)
-    (let ((inhibit-read-only t))
-      (delete-region (line-beginning-position) (min (point-max) (1+ (line-end-position))))
-      t)))
 
 ;;; Dispatch
 
@@ -266,14 +317,86 @@ Moves point; wrap in `save-excursion' to preserve the user's position."
         (funcall handler id row)
       (message "table-view: no handler for %s" command))))
 
+;;; Navigation
+
+(defun table-view--cell-starts ()
+  "Buffer positions where each cell begins on the current line, left to right.
+Cells are the regions the renderer tags with the `table-view-col' text
+property; the bordering \"|\" separators are not tagged.  Both the header
+row and data rows carry these tags."
+  (let* ((eol (line-end-position))
+         (pos (line-beginning-position))
+         (starts '()))
+    (while (< pos eol)
+      (let ((next (or (next-single-property-change pos 'table-view-col nil eol) eol)))
+        (when (get-text-property pos 'table-view-col)
+          (push pos starts))
+        (setq pos next)))
+    (nreverse starts)))
+
+(defun table-view--on-cells-p ()
+  "Non-nil when the current line has table cells to move between.
+True on the header row and on data rows (both carry `table-view-col');
+nil on the title, hint, rule, and blank lines."
+  (and (table-view--cell-starts) t))
+
+(defun table-view--goto-column (dir)
+  "Move to the start of the adjacent cell in DIR (1 forward, -1 backward).
+Return non-nil when point actually moves."
+  (let* ((starts (table-view--cell-starts))
+         (pt (point))
+         (target (if (> dir 0)
+                     (seq-find (lambda (s) (> s pt)) starts)
+                   (seq-find (lambda (s) (< s pt)) (reverse starts)))))
+    (when target
+      (goto-char target)
+      t)))
+
+(defun table-view-forward-column (&optional n)
+  "Move to the start of the Nth following cell on the current line (default 1).
+With a negative N move backward.  Works on the header row and data rows,
+stops at the line's first or last cell instead of leaving it, and never
+signals."
+  (interactive "p")
+  (let ((dir (if (< (or n 1) 0) -1 1)))
+    (dotimes (_ (abs (or n 1)))
+      (table-view--goto-column dir))))
+
+(defun table-view-backward-column (&optional n)
+  "Move to the start of the Nth preceding cell on the current line (default 1).
+See `table-view-forward-column'."
+  (interactive "p")
+  (table-view-forward-column (- (or n 1))))
+
+(defun table-view-forward (&optional n)
+  "Move forward N times, by column on a table line and by character elsewhere.
+On the header row or a data row this steps between cells; off the table
+it falls back to `forward-char'."
+  (interactive "p")
+  (if (table-view--on-cells-p)
+      (table-view-forward-column n)
+    (forward-char n)))
+
+(defun table-view-backward (&optional n)
+  "Move backward N times, by column on a table line and by character elsewhere.
+On the header row or a data row this steps between cells; off the table
+it falls back to `backward-char'."
+  (interactive "p")
+  (if (table-view--on-cells-p)
+      (table-view-backward-column n)
+    (backward-char n)))
+
 ;;; Keymap
 
 (defvar table-view-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "n" #'next-line)
     (define-key map "p" #'previous-line)
+    (define-key map "f" #'table-view-forward)
+    (define-key map "b" #'table-view-backward)
     (define-key map "g" #'table-view-sort)
-    (define-key map "^" #'table-view-cycle-sort)
+    (define-key map "/" #'table-view-filter)
+    (define-key map "^" #'table-view-sort-cycle)
     (define-key map "q" #'quit-window)
     map)
   "Base keymap for `table-view-mode'; action keys overlay it per buffer.")
@@ -297,68 +420,145 @@ Moves point; wrap in `save-excursion' to preserve the user's position."
 
 ;;; Interactive sort commands
 
+(defmacro table-view--save-point-location (&rest body)
+  "Run BODY, then restore point to the line and column it is on now.
+Unlike saving raw point, this survives the header/hint text changing
+width during the re-render BODY performs, so the cursor stays put on
+screen instead of drifting or following its row."
+  (declare (indent 0) (debug t))
+  (let ((line (make-symbol "line"))
+        (col (make-symbol "col")))
+    `(let ((,line (line-number-at-pos))
+           (,col (current-column)))
+       ,@body
+       (goto-char (point-min))
+       (forward-line (1- ,line))
+       (move-to-column ,col))))
+
 (defun table-view--sortable-keys ()
   (delq nil (mapcar (lambda (c)
                       (when (eq t (alist-get 'sortable c)) (alist-get 'key c)))
                     (table-view--columns table-view--spec))))
 
+(defun table-view-filter (pattern)
+  "Filter rows to those with any cell matching PATTERN.
+Empty PATTERN clears the filter.  Point keeps its on-screen location
+(line and column) across the re-render."
+  (interactive "sFilter: ")
+  (table-view--save-point-location
+    (setq table-view--filter (if (string-empty-p pattern) nil pattern))
+    (table-view--render))
+  (if table-view--filter
+      (message "Filter: %s (%d/%d rows)"
+               table-view--filter
+               (length (table-view--visible-rows))
+               (length table-view--rows))
+    (message "Filter cleared")))
+
 (defun table-view-sort ()
-  "Sort the table by the current sort column and re-render.
-With no active sort column, fall back to the spec's default sort
-column.  This is the primary key that reorders rows; updates from row
-actions leave rows in place until `g' is pressed."
+  "Clear any filter and refresh the view, preserving the current ordering.
+An unsorted table stays in load order; a sorted table keeps its sort.
+Point keeps its on-screen location (line and column) across the refresh.
+Begin sorting with `^'."
   (interactive)
-  (unless table-view--sort-key
-    (setq table-view--sort-key
-          (alist-get 'column (alist-get 'sort table-view--spec))))
-  (table-view--sort-rows)
-  (table-view--render)
-  (message "Sort: %s %s"
-           (or table-view--sort-key "-")
-           (if table-view--sort-asc "asc" "desc")))
+  (table-view--save-point-location
+    (setq table-view--filter nil)
+    (when table-view--sorted
+      (table-view--sort-rows))
+    (table-view--render))
+  (message (if table-view--sorted
+               (format "Sort: %s" (table-view--sort-description))
+             "Unsorted")))
 
-(defun table-view--column-at-point ()
-  "Return the column key at point, or nil if point is not on a table line."
-  (let ((col (current-column))
-        (line (buffer-substring-no-properties
-               (line-beginning-position) (line-end-position))))
-    (when (string-prefix-p "|" line)
-      (let ((widths (table-view--widths table-view--spec table-view--rows))
-            (pos 2)
-            (result nil))
-        (dolist (c (table-view--columns table-view--spec))
-          (let* ((key (alist-get 'key c))
-                 (w (alist-get key widths nil nil #'equal)))
-            (when (and (>= col pos) (< col (+ pos w)))
-              (setq result key))
-            (setq pos (+ pos w 3))))
-        result))))
+(defun table-view--sort-advance ()
+  "Collapse to a single column and advance it through the walk-through.
+The cycle visits every sortable column ascending then descending,
+wrapping around; it continues from the current column when the sort is
+already a single column, else it starts at the first column ascending."
+  (let ((keys (table-view--sortable-keys)))
+    (when keys
+      (let* ((states (mapcan (lambda (k) (list (cons k t) (cons k nil))) keys))
+             (cur (and table-view--sorted
+                       (= 1 (length table-view--sort-keys))
+                       (car table-view--sort-keys)))
+             (idx (and cur (cl-position cur states :test #'equal)))
+             (next (nth (mod (1+ (or idx -1)) (length states)) states)))
+        (setq table-view--sort-keys (list next))))))
 
-(defun table-view-cycle-sort ()
-  "Context-aware sort.
-On a table column: sort by that column, toggling direction if already active.
-Before the table: cycle through all sortable columns."
-  (interactive)
-  (let ((col-key (table-view--column-at-point)))
-    (if col-key
-        (let ((c (table-view--column table-view--spec col-key)))
-          (when (and c (eq t (alist-get 'sortable c)))
-            (if (equal table-view--sort-key col-key)
-                (setq table-view--sort-asc (not table-view--sort-asc))
-              (setq table-view--sort-key col-key
-                    table-view--sort-asc t))
-            (table-view--sort-rows)
-            (table-view--render)
-            (message "Sort: %s %s" col-key
-                     (if table-view--sort-asc "asc" "desc"))))
-      (let* ((keys (table-view--sortable-keys))
-             (idx (cl-position table-view--sort-key keys :test #'equal))
-             (next (and keys (nth (mod (1+ (or idx -1)) (length keys)) keys))))
-        (when next
-          (setq table-view--sort-key next table-view--sort-asc t)
-          (table-view--sort-rows)
-          (table-view--render)
-          (message "Sort: %s asc" next))))))
+(defun table-view--toggle-sort-key (col)
+  "Flip COL's direction in the sort chain, re-sort, and re-render."
+  (table-view--save-point-location
+    (setq table-view--sort-keys
+          (mapcar (lambda (ka)
+                    (if (equal (car ka) col) (cons col (not (cdr ka))) ka))
+                  table-view--sort-keys))
+    (table-view--sort-rows)
+    (table-view--render))
+  (message "Sort: %s" (table-view--sort-description)))
+
+(defun table-view--secondary-toggle-map (col)
+  "A one-key transient map: `^' flips COL's direction in the sort chain."
+  (let ((map (make-sparse-keymap)))
+    (define-key map "^" (lambda () (interactive) (table-view--toggle-sort-key col)))
+    map))
+
+(defun table-view--arm-secondary-toggle (col)
+  "Arm the transient `^'-toggles-COL map after `C-u \\[table-view-sort-cycle]'.
+It stays active while `^' is pressed and ends on any other key, so a run
+of `^' keeps flipping the just-added secondary key COL's direction."
+  (set-transient-map (table-view--secondary-toggle-map col) t))
+
+(defun table-view-sort-cycle (&optional secondary)
+  "Sort the table via `^'.
+With point on a sortable column (a data cell or its header), sort by that
+column, collapsing any multi-column chain to it; pressing `^' again on
+that already-sorted column toggles ascending/descending.  With point off
+any column, walk through every sortable column ascending then descending,
+one per press.
+
+With a prefix argument (\\[universal-argument]) and point on a sortable
+column, instead ADD that column to the sort chain as the next
+lower-priority tie-breaker (so rows equal on the earlier keys are ordered
+by it); if it is already in the chain, flip its direction in place.  A run
+of plain `^' right after such a `C-u ^' keeps toggling that key.  Point
+keeps its on-screen location across the re-sort."
+  (interactive "P")
+  (let ((col (get-text-property (point) 'table-view-col))
+        (sortable (table-view--sortable-keys)))
+    (cond
+     ((null sortable)
+      (message "No sortable columns"))
+     ((and col (not (member col sortable)))
+      (message "Column %s is not sortable" col))
+     ((and secondary (not col))
+      (message "Point is not on a column"))
+     (t
+      (table-view--save-point-location
+        (cond
+         ;; C-u ^ on a column -> add it as a tie-breaker, or flip it in place.
+         (secondary
+          (setq table-view--sort-keys
+                (if (assoc col table-view--sort-keys)
+                    (mapcar (lambda (ka)
+                              (if (equal (car ka) col) (cons col (not (cdr ka))) ka))
+                            table-view--sort-keys)
+                  (append table-view--sort-keys (list (cons col t))))))
+         ;; ^ on a column -> single-column sort (toggle if already the sole key).
+         (col
+          (setq table-view--sort-keys
+                (if (and table-view--sorted
+                         (= 1 (length table-view--sort-keys))
+                         (equal (caar table-view--sort-keys) col))
+                    (list (cons col (not (cdar table-view--sort-keys))))
+                  (list (cons col t)))))
+         ;; ^ off any column -> step the single-column walk-through.
+         (t
+          (table-view--sort-advance)))
+        (table-view--sort-rows)
+        (table-view--render))
+      (message "Sort: %s" (table-view--sort-description))
+      ;; C-u ^ arms a run of plain `^' to keep flipping this key.
+      (when secondary (table-view--arm-secondary-toggle col))))))
 
 ;;; Public API
 
@@ -378,53 +578,20 @@ Before the table: cycle through all sortable columns."
         (table-view--render)))))
 
 (defun table-view-upsert-row (buffer row)
-  "Add ROW to table-view BUFFER (a buffer or name), or replace its id-match.
-Replacing an existing row whose column widths are unchanged patches just that
-row's line in place; an append, or any width change, triggers a full re-render."
+  "Add ROW to table-view BUFFER (a buffer or name), or replace its id-match."
   (let ((buf (get-buffer buffer)))
     (when (buffer-live-p buf)
       (with-current-buffer buf
-        (let* ((id (alist-get 'id row))
-               (old-widths (table-view--widths table-view--spec table-view--rows))
-               (found nil))
+        (let ((id (alist-get 'id row)) (found nil))
           (setq table-view--rows
                 (mapcar (lambda (r)
                           (if (equal (alist-get 'id r) id)
                               (progn (setq found t) row)
                             r))
                         table-view--rows))
-          (if (not found)
-              ;; New id: append.  Row count / widths may change -> full render.
-              (progn
-                (setq table-view--rows (nconc table-view--rows (list row)))
-                (table-view--render))
-            ;; Replaced in place: patch just the line when widths are stable.
-            (let ((new-widths (table-view--widths table-view--spec table-view--rows)))
-              (unless (and (equal old-widths new-widths)
-                           (save-excursion (table-view--patch-line id row new-widths)))
-                (table-view--render)))))))))
-
-(defun table-view-remove-row (buffer id)
-  "Drop the row whose id is ID from table-view BUFFER (a buffer or name).
-A no-op when no row has that id.  The mirror of `table-view-upsert-row' for a
-consumer whose backing record left the view (e.g. a row that no longer matches
-a live filter); like upsert it leaves the surviving rows in place.  Deletes just
-that row's line when the remaining widths are unchanged and rows remain; a width
-change or an emptied table triggers a full re-render."
-  (let ((buf (get-buffer buffer)))
-    (when (buffer-live-p buf)
-      (with-current-buffer buf
-        (when (cl-find id table-view--rows
-                       :key (lambda (r) (alist-get 'id r)) :test #'equal)
-          (let ((old-widths (table-view--widths table-view--spec table-view--rows)))
-            (setq table-view--rows
-                  (cl-remove id table-view--rows
-                             :key (lambda (r) (alist-get 'id r)) :test #'equal))
-            (let ((new-widths (table-view--widths table-view--spec table-view--rows)))
-              (unless (and table-view--rows
-                           (equal old-widths new-widths)
-                           (save-excursion (table-view--delete-line id)))
-                (table-view--render)))))))))
+          (unless found
+            (setq table-view--rows (nconc table-view--rows (list row))))
+          (table-view--render))))))
 
 (defun table-view-refresh (buffer)
   "Re-invoke the registered `fill-fn' for table-view BUFFER (a buffer or name)."
@@ -447,11 +614,14 @@ of one argument (BUFFER) that populates rows via `table-view-set-rows' /
             table-view--rows (alist-get 'rows spec)
             table-view--handlers handlers
             table-view--fill-fn fill-fn)
-      (let ((sort (alist-get 'sort spec)))
-        (setq table-view--sort-key (alist-get 'column sort)
-              table-view--sort-asc (if (assq 'ascending sort)
-                                       (and (alist-get 'ascending sort) t)
-                                     t)))
+      (let* ((sort (alist-get 'sort spec))
+             (column (alist-get 'column sort)))
+        (setq table-view--sort-keys
+              (when column
+                (list (cons column
+                            (if (assq 'ascending sort)
+                                (and (alist-get 'ascending sort) t)
+                              t))))))
       (table-view--install-action-keys spec)
       (table-view--render))
     (switch-to-buffer buf)
