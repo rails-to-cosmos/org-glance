@@ -529,5 +529,94 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
         (when (buffer-live-p origin) (kill-buffer origin))
         (when (get-buffer "*Org Note*") (kill-buffer "*Org Note*"))))))
 
+;;; Bulk TODO state change: materialize -> org-todo -> sync, per row, no note
+
+(ert-deftest org-glance-test:material-set-todo-bulk ()
+  "`set-todo-bulk' sets each id to STATE, persists it, and reports changed/skipped."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "m1" "* TODO A")
+                            (org-glance-test:headline "m2" "* TODO B")
+                            (org-glance-test:headline "m3" "* TODO C"))
+      (let ((result 'unset))
+        (org-glance-material:set-todo-bulk
+         graph '("m1" "m2") "DONE"
+         (lambda (changed skipped) (setq result (list changed skipped))))
+        (should (equal '("m1" "m2") (car result)))      ; both set
+        (should (null (cadr result)))                    ; none skipped
+        (should (equal "DONE" (org-glance-headline-metadata:state
+                               (org-glance-graph:get-headline graph "m1"))))
+        (should (equal "DONE" (org-glance-headline-metadata:state
+                               (org-glance-graph:get-headline graph "m2"))))
+        (should (equal "TODO" (org-glance-headline-metadata:state  ; untouched
+                               (org-glance-graph:get-headline graph "m3"))))))))
+
+(ert-deftest org-glance-test:material-set-todo-bulk-logs-timestamp-no-note ()
+  "Bulk keeps automatic timestamps (CLOSED) but never prompts for/records a note,
+even under `org-log-done' `note'."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE")))
+        (org-log-done 'note) (org-log-into-drawer t))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "t1" "* TODO A"))
+      (org-glance-material:set-todo-bulk graph '("t1") "DONE" #'ignore)
+      (let ((blob (org-glance-graph:get-content graph "t1")))
+        (should (equal "DONE" (org-glance-headline-metadata:state
+                               (org-glance-graph:get-headline graph "t1"))))
+        (should (s-contains? "CLOSED:" blob))))))       ; timestamp kept, no note prompt hung
+
+(ert-deftest org-glance-test:material-set-todo-bulk-skips-unsaved ()
+  "Bulk leaves a materialized buffer with unsaved edits untouched (skipped)."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO A"))
+      (let ((buf (org-glance-material:open graph "u1")))
+        (unwind-protect
+            (let ((result 'unset))
+              (with-current-buffer buf (goto-char (point-max)) (insert "dirty\n"))
+              (org-glance-material:set-todo-bulk
+               graph '("u1") "DONE" (lambda (c s) (setq result (list c s))))
+              (should (null (car result)))                       ; not changed
+              (should (equal '("u1" . "unsaved changes") (car (cadr result))))
+              (should (equal "TODO" (org-glance-headline-metadata:state
+                                     (org-glance-graph:get-headline graph "u1"))))
+              (should (buffer-modified-p buf)))                  ; edits preserved
+          (when (buffer-live-p buf)
+            (with-current-buffer buf (set-buffer-modified-p nil))
+            (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:material-set-todo-bulk-no-dangling-note ()
+  "Regression: under note logging, bulk leaves no `org-add-log-note' deferred to
+`post-command-hook' with a marker into a killed buffer -- the interactive
+\"Marker does not point anywhere\" after \"Set N headline(s) to DONE\"."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE")))
+        (org-log-done 'note) (org-log-into-drawer t)
+        (this-command 'org-glance-test-bulk))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "d1" "* TODO A")
+                            (org-glance-test:headline "d2" "* TODO B"))
+      (org-glance-material:set-todo-bulk graph '("d1" "d2") "DONE" #'ignore)
+      (should-not org-log-setup)                                ; nothing left queued
+      (should-not (memq #'org-add-log-note post-command-hook))  ; hook is clean
+      (run-hooks 'post-command-hook)                            ; must NOT error
+      (should (equal "DONE" (org-glance-headline-metadata:state
+                             (org-glance-graph:get-headline graph "d1"))))
+      (should (equal "DONE" (org-glance-headline-metadata:state
+                             (org-glance-graph:get-headline graph "d2")))))))
+
+(ert-deftest org-glance-test:material-set-todo-bulk-repeater-no-dangling ()
+  "A repeating task set DONE in bulk reschedules and leaves no dangling log note."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-repeat 'time)
+        (this-command 'org-glance-test-bulk))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "rp1" "* TODO A"
+                                                      "SCHEDULED: <2026-07-03 Fri +1w>"))
+      (org-glance-material:set-todo-bulk graph '("rp1") "DONE" #'ignore)
+      (should-not org-log-setup)
+      (run-hooks 'post-command-hook)                            ; must NOT error
+      (should (s-contains? "+1w" (org-glance-graph:get-content graph "rp1"))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

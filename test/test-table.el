@@ -265,6 +265,27 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
         (should (bufferp opened))
         (kill-buffer opened)))))
 
+(ert-deftest org-glance-test:table-m-marks-not-materializes ()
+  "In the table `m' toggles the row mark (`table-view-mark-toggle'), not
+materialize (which stays on RET) -- org-glance no longer binds `m'."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "a" "* TODO Alpha")
+                          (org-glance-test:headline "b" "* TODO Beta"))
+    (let ((buf nil))
+      (unwind-protect
+          (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq buf b) b))
+                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
+            (setq buf (org-glance-table:visit graph))
+            (with-current-buffer buf
+              (should (eq (key-binding (kbd "m")) #'table-view-mark-toggle))
+              (should (eq (key-binding (kbd "U")) #'table-view-unmark-all))
+              (should (functionp (key-binding (kbd "RET"))))   ; RET still materializes
+              (table-view--goto-id "a")
+              (call-interactively (key-binding (kbd "m")))
+              (should (member "a" table-view--marks))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
 (ert-deftest org-glance-test:table-todo-preserves-point ()
   "Changing state keeps point where it was instead of jumping to the top: when the
 row leaves the view (DONE under an active filter) point stays on the same line."
@@ -309,6 +330,75 @@ after the (no-note) commit the reloaded table shows the new state on the row."
                   (should (equal "td1" (alist-get 'id row)))
                   (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))
           (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:table-todo-candidates-fallback ()
+  "Without a configured cycle, bulk candidates are the states in use."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "c1" "* TODO A")
+                            (org-glance-test:headline "c2" "* DONE B"))
+      (should (equal '("DONE" "TODO")           ; `org-glance-graph:states' sorts
+                     (org-glance-table--todo-candidates graph nil))))))
+
+(ert-deftest org-glance-test:table-bulk-todo-marked ()
+  "`C-c C-t' with marked rows sets them all to a chosen state, then clears marks."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "b1" "* TODO A")
+                            (org-glance-test:headline "b2" "* TODO B")
+                            (org-glance-test:headline "b3" "* TODO C"))
+      (org-glance-test:with-table-buffer graph buf
+        (with-current-buffer buf
+          (table-view--goto-id "b1") (call-interactively #'table-view-mark-toggle)
+          (table-view--goto-id "b3") (call-interactively #'table-view-mark-toggle)
+          (should (= 2 (length (table-view-marked-rows))))
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+            (funcall (key-binding (kbd "C-c C-t"))))          ; bulk (marks present)
+          (should (equal "DONE" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "b1"))))
+          (should (equal "DONE" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "b3"))))
+          (should (equal "TODO" (org-glance-headline-metadata:state  ; unmarked, untouched
+                                 (org-glance-graph:get-headline graph "b2"))))
+          (should (null (table-view-marked-rows))))))))       ; marks cleared
+
+(ert-deftest org-glance-test:table-bulk-todo-preserves-point ()
+  "After a bulk change, point stays on the row it was on, not jumping to the top."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "p1" "* TODO A")
+                            (org-glance-test:headline "p2" "* TODO B")
+                            (org-glance-test:headline "p3" "* TODO C")
+                            (org-glance-test:headline "p4" "* TODO D"))
+      (org-glance-test:with-table-buffer graph buf
+        (with-current-buffer buf
+          (table-view--goto-id "p1") (call-interactively #'table-view-mark-toggle)
+          (table-view--goto-id "p2") (call-interactively #'table-view-mark-toggle)
+          (should (table-view--goto-id "p4"))            ; park point on an UNMARKED row
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+            (funcall (key-binding (kbd "C-c C-t"))))     ; bulk-sets p1,p2 (not p4)
+          ;; point followed its row (p4), which survived the change
+          (should (equal "p4" (get-text-property (point) 'table-view-id)))
+          (should (equal "DONE" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "p1"))))
+          (should (equal "TODO" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "p4")))))))))
+
+(ert-deftest org-glance-test:table-todo-single-when-unmarked ()
+  "With no marks, `C-c C-t' takes the single-row path (advances the point row)."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO A"))
+      (org-glance-test:with-table-buffer graph buf
+        (with-current-buffer buf
+          (should (table-view--goto-id "s1"))
+          (should (null (table-view-marked-rows)))
+          (funcall (key-binding (kbd "C-c C-t")))             ; single (no marks)
+          (should (equal "DONE" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "s1")))))))))
 
 ;;; Surgical single-row updates (buffer-text level)
 
@@ -383,6 +473,127 @@ final rows -- the equivalence the in-place fast path relies on."
                            (with-current-buffer full (buffer-string)))))
       (kill-buffer surgical)
       (kill-buffer full))))
+
+;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
+
+(cl-defmacro org-glance-test:with-table-filter (graph filter var &rest body)
+  "Visit GRAPH's table for FILTER, bind the buffer to VAR, run BODY, kill it."
+  (declare (indent 3))
+  `(let ((,var nil))
+     (unwind-protect
+         (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq ,var b) b))
+                   ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq ,var b) b)))
+           (setq ,var (org-glance-table:visit ,graph ,filter))
+           ,@body)
+       (when (buffer-live-p ,var) (kill-buffer ,var)))))
+
+(defun org-glance-test:table-col-keys (buf)
+  "Display-order column keys of table BUF."
+  (with-current-buffer buf
+    (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
+
+(defun org-glance-test:table-cell (buf id key)
+  "Cell KEY of row ID in table BUF."
+  (with-current-buffer buf
+    (table-view--cell (cl-find id table-view--rows
+                               :key (lambda (r) (alist-get 'id r)) :test #'equal)
+                      key)))
+
+(ert-deftest org-glance-test:table-schema-key-by-tags ()
+  "The schema key is the filter's tags, sorted and joined; none -> \":none:\"."
+  (should (equal "book" (org-glance-table--schema-key '(:tags ("book")))))
+  (should (equal "article+book" (org-glance-table--schema-key '(:tags ("book" "article")))))
+  (should (equal ":none:" (org-glance-table--schema-key nil))))
+
+(ert-deftest org-glance-test:table-add-property-column-shows-drawer-value ()
+  "An added property column displays each headline's drawer property."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:")
+      (org-glance-headline--from-lines
+       "* TODO Dune :book:"       ":PROPERTIES:" ":ORG_GLANCE_ID: bk2" ":AUTHOR: Herbert" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
+      (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
+      (should (equal "Tolkien" (org-glance-test:table-cell buf "bk1" "AUTHOR")))
+      (should (equal "Herbert" (org-glance-test:table-cell buf "bk2" "AUTHOR")))
+      (with-current-buffer buf
+        (should (string-match-p "Author"  (buffer-string)))
+        (should (string-match-p "Tolkien" (buffer-string)))))))
+
+(ert-deftest org-glance-test:table-property-column-persists-per-tag ()
+  "An added property column is saved per tag and restored (with values) on re-visit."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))))
+    ;; re-visit :book -> the AUTHOR column comes back, still reading the drawer
+    (org-glance-test:with-table-filter graph 'book buf
+      (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
+      (should (equal "Tolkien" (org-glance-test:table-cell buf "bk1" "AUTHOR"))))))
+
+(ert-deftest org-glance-test:table-property-column-per-tag-isolation ()
+  "A column added under one tag does not appear under another."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:")
+      (org-glance-headline--from-lines
+       "* TODO Ship it :work:"    ":PROPERTIES:" ":ORG_GLANCE_ID: wk1" ":AUTHOR: Me" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))))
+    (org-glance-test:with-table-filter graph 'work buf
+      (should-not (member "AUTHOR" (org-glance-test:table-col-keys buf))))))
+
+(ert-deftest org-glance-test:table-remove-property-column ()
+  "Removing an added column drops it, and the removal persists across a re-visit."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))
+        (should (equal '(("AUTHOR" . "Author")) (org-glance-table--schema-get graph 'book)))
+        (table-view-remove-column "AUTHOR")
+        (should-not (org-glance-table--schema-get graph 'book))))
+    (org-glance-test:with-table-filter graph 'book buf
+      (should-not (member "AUTHOR" (org-glance-test:table-col-keys buf))))))
+
+(ert-deftest org-glance-test:table-add-column-function-wired ()
+  "The visited buffer wires `C-u +' to the drawer-property prompt."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":AUTHOR: A" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "author")))
+          (let ((col (org-glance-table--add-column-prompt)))
+            (should (equal "AUTHOR" (alist-get 'key col)))
+            (should (equal "Author" (alist-get 'header col)))
+            (should (functionp (alist-get 'value-fn col)))))))))
+
+(ert-deftest org-glance-test:table-cu-plus-adds-column ()
+  "Pressing `C-u +' (prefix arg + the capture key) adds a property column."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":AUTHOR: Ann" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "AUTHOR")))
+          (let ((current-prefix-arg '(4)))
+            (funcall (key-binding (kbd "+")))))     ; the `+' action reads current-prefix-arg
+        (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
+        (should (equal "Ann" (org-glance-test:table-cell buf "x1" "AUTHOR")))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

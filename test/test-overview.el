@@ -601,7 +601,9 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd ",")) #'beginning-of-buffer))
     (should (eq (lookup-key map (kbd ".")) #'end-of-buffer))
     (should (eq (lookup-key map (kbd "RET")) #'org-glance-overview:materialize))
-    (should (eq (lookup-key map (kbd "m")) #'org-glance-overview:materialize))
+    ;; `m' is NOT a materialize key -- it was dropped, and in the table view `m'
+    ;; marks (`table-view-mark-toggle'); the org-text overview leaves it unbound.
+    (should-not (lookup-key map (kbd "m")))
     (should (eq (lookup-key map (kbd "o")) #'org-glance-overview:open))
     (should (eq (lookup-key map (kbd "e")) #'org-glance-overview:extract))
     (should (eq (lookup-key map (kbd "a")) #'org-glance-agenda))

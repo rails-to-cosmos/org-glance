@@ -248,7 +248,8 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
 ;; PRE-EXISTING materialized buffer is edited in place and left for the user to save
 ;; (we never flush their unsaved edits).
 
-(defvar org-log-setup)      ; org.el: non-nil while an interactive note is queued
+(defvar org-log-setup)         ; org.el: non-nil while an interactive note is queued
+(defvar org-log-note-marker)   ; org.el: marker `org-add-log-note' will return to
 
 (cl-defun org-glance-material--goto-first-heading ()
   "Move point to the first heading of the current buffer."
@@ -316,6 +317,63 @@ A pre-existing materialized buffer is edited in place; the user saves it."
             ;; org-todo threw (e.g. a dependency block) before ownership passed to
             ;; the note advice / commit -> don't leak the background buffer.
             (when (and (not owned) (buffer-live-p buf)) (kill-buffer buf))))))))
+
+(cl-defun org-glance-material--discard-pending-log ()
+  "Drop any LOGBOOK note `org-todo' just deferred to `post-command-hook'.
+`org-add-log-setup' queues `org-add-log-note' with a single GLOBAL marker into
+the current buffer.  A bulk loop that saves + kills each buffer would otherwise
+leave that marker dangling -- \"Marker does not point anywhere\" when the hook
+runs after the command -- and, because each row overwrites the marker, only the
+last row would ever be logged anyway.  The inline CLOSED and repeater edits are
+already applied; bulk deliberately records no per-row note.  Call while the
+buffer is still live, before saving/killing it."
+  (when (bound-and-true-p org-log-setup)
+    (remove-hook 'post-command-hook #'org-add-log-note)
+    (setq org-log-setup nil)
+    (when (markerp org-log-note-marker)
+      (set-marker org-log-note-marker nil))))
+
+(cl-defun org-glance-material:set-todo-bulk (graph ids state finalize)
+  "Set every id in IDS to TODO STATE, then run FINALIZE in the origin buffer.
+For each id: materialize it (per-tag keywords live), set the state to STATE with
+`org-todo' non-interactively, discard any LOGBOOK note org defers
+\(`org-glance-material--discard-pending-log' -- CLOSED and repeater edits stay
+inline; bulk records no per-row note), then save (`after-save-hook'/`:sync'
+persists + flags views) and kill the buffer we opened.  A pre-existing buffer
+with unsaved edits is left untouched, so bulk never clobbers live work; a row
+whose cycle rejects STATE, or is no longer live, is skipped.  FINALIZE gets
+\(CHANGED SKIPPED): the ids set and (id . reason) pairs skipped."
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type state string)
+  (let ((origin (current-buffer)) changed skipped)
+    (dolist (id ids)
+      (let* ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+             (existing (get-file-buffer path)))
+        (cond
+         ((and existing (buffer-modified-p existing))
+          (push (cons id "unsaved changes") skipped))
+         (t
+          (let ((buf (ignore-errors (org-glance-material:open graph id))))
+            (if (not (buffer-live-p buf))
+                (push (cons id "not live") skipped)
+              (unwind-protect
+                  (condition-case err
+                      (with-current-buffer buf
+                        (org-glance-material--goto-first-heading)
+                        (let ((org-inhibit-logging 'note))
+                          (org-todo state))
+                        ;; `org-todo' may defer a LOGBOOK note to `post-command-hook'
+                        ;; (`org-log-done'/`org-todo-log-states'/a repeater); cancel it
+                        ;; before we kill this buffer so nothing dangles on a dead marker.
+                        (org-glance-material--discard-pending-log)
+                        (when (buffer-modified-p) (save-buffer))
+                        (push id changed))
+                    (error (push (cons id (error-message-string err)) skipped)))
+                (unless existing
+                  (when (buffer-live-p buf) (kill-buffer buf))))))))))
+    (when (buffer-live-p origin)
+      (with-current-buffer origin
+        (funcall finalize (nreverse changed) (nreverse skipped))))))
 
 ;;; Commands
 ;;

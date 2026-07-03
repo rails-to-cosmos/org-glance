@@ -91,24 +91,29 @@ priority.  The active/done split uses the ambient `org-done-keywords' (bound by
 
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
-FILTER is only used for the human-readable title; rows are produced by the
-fill-fn.  Columns: state (badge), title, tags, scheduled, deadline, priority --
-all sortable.  Default sort is the state column ascending (active first)."
+FILTER titles the view and keys the per-tag custom-column schema; rows are
+produced by the fill-fn.  Built-in columns: state (badge), title, tags,
+scheduled, deadline, priority -- all sortable -- followed by any custom
+property columns saved for its tags (see `org-glance-table--apply-schema').
+Default sort is the state column ascending (active first)."
   `((title . ,(format "org-glance table: %s" (org-glance-filter:describe filter)))
-    (columns . (((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
-                 (badges . ,(org-glance-table--state-badges graph)))
-                ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
-                ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
-                ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
-                ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
-                ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))))
+    (columns . ,(org-glance-table--apply-schema
+                 graph filter
+                 `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
+                    (badges . ,(org-glance-table--state-badges graph)))
+                   ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
+                   ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
+                   ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
+                   ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
+                   ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left")))))
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))
                 ((key . "T")     (command . "overview")  (label . "Overview"))
                 ((key . "+")     (command . "capture")   (label . "Capture"))
-                ((key . "C-c C-t") (command . "todo")    (label . "Todo"))))
+                ((key . "-")     (command . "delcolumn") (label . "Del col"))
+                ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
 
 (cl-defun org-glance-table--row (metadata)
@@ -222,6 +227,45 @@ row once the change (and any note) is committed."
            (forward-line (1- line)))
          (message "State: %s" (if (s-present? state) state "(none)")))))))
 
+(cl-defun org-glance-table--todo-candidates (graph filter)
+  "Candidate target states for a bulk change under FILTER.
+FILTER's single todo cycle (active + done keywords) when it has one, else the
+states currently in use across GRAPH -- so the prompt always offers something."
+  (let ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
+    (delete-dups
+     (append (when cycle (remove "|" (split-string cycle)))
+             (org-glance-graph:states graph)))))
+
+(cl-defun org-glance-table--act-todo-bulk (graph rows)
+  "Set the marked ROWS to one chosen TODO state, prompted once (org-agenda `B t').
+Delegates to `org-glance-material:set-todo-bulk': materialize + set + sync each
+row (timestamps, no note), then reload the table and clear the marks.
+Bound to `C-c C-t' with rows marked; with none, a bare `C-c C-t' stays the
+single-row `org-glance-table--act-todo' (cycle + note)."
+  (let ((ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows))))
+    (when ids
+      (let ((at-id (get-text-property (point) 'table-view-id))   ; row under point now
+            (line (line-number-at-pos))                          ; fallback anchor
+            (state (completing-read
+                    (format "Set %d headline(s) to state: " (length ids))
+                    (org-glance-table--todo-candidates graph org-glance-table--spec)
+                    nil t)))
+        (unless (string-empty-p state)
+          (org-glance-material:set-todo-bulk
+           graph ids state
+           (lambda (changed skipped)
+             (org-glance-table--reload (current-buffer))
+             (table-view-unmark-all)
+             ;; Keep point where it was: on the same row if it survived (a bulk-DONE
+             ;; row can leave an active-only view), else the same screen line --
+             ;; rather than the top the reload + unmark would otherwise leave it at.
+             (unless (and at-id (table-view--goto-id at-id))
+               (goto-char (point-min))
+               (forward-line (1- line)))
+             (message "Set %d headline(s) to %s%s"
+                      (length changed) state
+                      (if skipped (format " (%d skipped)" (length skipped)) "")))))))))
+
 ;;; Per-view persistence: column order + sort, keyed by filter identity
 ;;
 ;; The user's column reordering (`table-view' column-move) and sort choice live in
@@ -288,6 +332,132 @@ may be nil -- the \"all\" filter -- so guard only on being a registered view.)"
         (with-demoted-errors "org-glance: table config save failed: %S"
           (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur))))))
 
+;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
+;;
+;; `C-u +' prompts for an org drawer property (e.g. AUTHOR) and appends a column
+;; showing that property for each row.  The value is read lazily via a
+;; `table-view' `value-fn'; because the metadata projection the table renders from
+;; does not carry arbitrary drawer properties, the cell is pulled from the full
+;; headline -- cached per id and keyed by the content hash, so a reload only
+;; re-parses the rows that actually changed.  The set of custom columns (a schema)
+;; is persisted PER TAG (the filter's tags) at `<store>/config/table-columns.eld',
+;; so every view of a tag inherits its columns.  Only these added columns are
+;; removable (`-' on one); the built-in columns are fixed.
+
+(defvar-local org-glance-table--prop-cache nil
+  "Per-buffer cache for custom-column values: id -> (HASH . NODE-PROPERTIES).
+The cell for a property column is the headline's drawer property, which lives in
+the content blob, not the cheap metadata.  Caching the parsed drawer per id and
+invalidating on the content HASH keeps a reload from re-parsing unchanged rows.")
+
+(cl-defun org-glance-table--headline-property (graph id property)
+  "Value of ID's headline drawer PROPERTY in GRAPH, via the per-buffer cache.
+Reuses the cached parse while the headline's content hash is unchanged; only a
+new or modified row pays the blob read + parse.  Returns nil when ID is gone."
+  (let* ((cache (or org-glance-table--prop-cache
+                    (setq org-glance-table--prop-cache (make-hash-table :test #'equal))))
+         (meta (org-glance-graph:get-headline graph id))
+         (hash (and (org-glance-headline-metadata? meta)
+                    (org-glance-headline-metadata:hash meta)))
+         (entry (gethash id cache)))
+    (unless (and entry (equal (car entry) hash))
+      (setq entry (cons hash (ignore-errors
+                               (org-glance-headline:node-properties
+                                (org-glance-graph:headline graph id)))))
+      (puthash id entry cache))
+    (alist-get (upcase property) (cdr entry) nil nil #'string=)))
+
+(cl-defun org-glance-table--property-column (graph property &optional header)
+  "A `table-view' column displaying drawer PROPERTY for each row's headline.
+PROPERTY is upcased for the drawer lookup; HEADER defaults to its capitalised
+form.  Carries a `prop' marker so the per-tag schema can round-trip the column
+without persisting its (unreadable) `value-fn' closure."
+  (let ((prop (upcase (string-trim property))))
+    `((key . ,prop)
+      (header . ,(or header (capitalize prop)))
+      (type . "text")
+      (sortable . t)
+      (align . "left")
+      (prop . ,prop)
+      (value-fn . ,(lambda (id _row)
+                     (or (org-glance-table--headline-property graph id prop) ""))))))
+
+(cl-defun org-glance-table--add-column-prompt ()
+  "Prompt for a drawer property and return a `table-view' column showing it.
+Bound buffer-locally as `table-view-add-column-function' so `C-u +' adds a
+column for that property; empty input cancels the add."
+  (let ((property (string-trim (read-string "Property column (drawer key): "))))
+    (unless (string-empty-p property)
+      (org-glance-table--property-column org-glance-view--graph property))))
+
+;;; Per-tag column schema store (`<store>/config/table-columns.eld')
+
+(cl-defun org-glance-table--schema-file (graph)
+  "Path of GRAPH's per-tag custom-column schema store (may not exist)."
+  (f-join (org-glance-graph:store-path graph) "config" "table-columns.eld"))
+
+(cl-defun org-glance-table--schema-all (graph)
+  "Saved per-tag schemas: alist of (tag-key . (:columns ((PROP . HEADER) ...)))."
+  (let ((path (org-glance-table--schema-file graph)))
+    (when (f-exists? path)
+      (ignore-errors (car (read-from-string (f-read-text path 'utf-8)))))))
+
+(cl-defun org-glance-table--schema-key (filter)
+  "Canonical per-tag key for FILTER: its tags sorted and `+'-joined, or
+\":none:\" when the filter carries no tag constraint.  Keying on the tags (not
+the full filter identity) is what shares a tag's columns across its views."
+  (let ((tags (sort (mapcar #'symbol-name (org-glance-filter:tags filter)) #'string<)))
+    (if tags (s-join "+" tags) ":none:")))
+
+(cl-defun org-glance-table--schema-get (graph filter)
+  "Ordered custom columns saved for FILTER's tags.
+A list of (PROP . HEADER), or nil."
+  (plist-get (alist-get (org-glance-table--schema-key filter)
+                        (org-glance-table--schema-all graph) nil nil #'equal)
+             :columns))
+
+(cl-defun org-glance-table--schema-put (graph filter columns)
+  "Persist COLUMNS (a list of (PROP . HEADER)) for FILTER's tags in GRAPH's store.
+An empty COLUMNS drops the entry so the store does not accrete empties."
+  (let* ((path (org-glance-table--schema-file graph))
+         (key (org-glance-table--schema-key filter))
+         (all (cl-remove key (org-glance-table--schema-all graph)
+                         :key #'car :test #'equal)))
+    (when columns
+      (setq all (cons (cons key (list :columns columns)) all)))
+    (f-mkdir-full-path (f-dirname path))
+    (f-write-text (prin1-to-string all) 'utf-8 path)))
+
+(cl-defun org-glance-table--apply-schema (graph filter columns)
+  "COLUMNS with GRAPH's saved custom property columns for FILTER appended.
+Each saved (PROP . HEADER) becomes a `value-fn' column reading that drawer
+property.  Absent a saved schema, COLUMNS is returned unchanged."
+  (append columns
+          (mapcar (lambda (pair)
+                    (org-glance-table--property-column graph (car pair) (cdr pair)))
+                  (org-glance-table--schema-get graph filter))))
+
+(cl-defun org-glance-table--persist-schema ()
+  "Buffer-local `table-view-schema-changed-hook': save this filter's custom
+columns (the `prop'-marked columns of the live spec, in display order) per tag."
+  (when org-glance-view--graph
+    (let ((columns (cl-loop for c in (table-view--columns table-view--spec)
+                            when (alist-get 'prop c)
+                            collect (cons (alist-get 'prop c) (alist-get 'header c)))))
+      (with-demoted-errors "org-glance: table schema save failed: %S"
+        (org-glance-table--schema-put org-glance-view--graph
+                                      org-glance-table--spec columns)))))
+
+(cl-defun org-glance-table--act-delcolumn ()
+  "`-' handler: remove the custom property column at point (built-ins are fixed)."
+  (let* ((key (get-text-property (point) 'table-view-col))
+         (col (and key (table-view--column table-view--spec key))))
+    (cond
+     ((null col) (message "Point is not on a column"))
+     ((not (alist-get 'prop col))
+      (message "Only added property columns are removable (%s is built-in)" key))
+     (t (table-view-remove-column key)))))
+
 ;;; Browser
 
 (cl-defun org-glance-table:visit (graph &optional filter)
@@ -315,13 +485,24 @@ Honours the same filter language as the overview (see
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))
-                         (cons "todo"        (lambda (id row) (org-glance-table--act-todo graph id row)))
+                         (cons "todo"        (lambda (rows)
+                                               ;; `bulk' handler: a row LIST.  With marks -> bulk
+                                               ;; (one prompt, all marked); else the row at point
+                                               ;; gets the full single-row `C-c C-t' (cycle + note).
+                                               (if (table-view-marked-rows)
+                                                   (org-glance-table--act-todo-bulk graph rows)
+                                                 (let ((row (car rows)))
+                                                   (org-glance-table--act-todo graph (alist-get 'id row) row)))))
                          (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
                          (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
+                         (cons "delcolumn"   (lambda (_id _row) (org-glance-table--act-delcolumn)))
                          (cons "capture"     (lambda (_id _row)
-                                               (org-glance-capture (or (org-glance-filter:tags spec)
-                                                                       (org-glance-capture:completing-read-tag))
-                                                                   "")))))
+                                               ;; `C-u +' adds a custom property column; a bare `+' captures.
+                                               (if current-prefix-arg
+                                                   (call-interactively #'table-view-add-column)
+                                                 (org-glance-capture (or (org-glance-filter:tags spec)
+                                                                         (org-glance-capture:completing-read-tag))
+                                                                     ""))))))
          ;; Build the spec, restoring the saved column order (if any) before display.
          (tspec (let ((s (org-glance-table--spec graph spec)))
                   (when-let ((order (plist-get saved :columns)))
@@ -338,6 +519,10 @@ Honours the same filter language as the overview (see
       (org-glance-view:register graph
                                 :stale-fn  (lambda () (org-glance-table--stale? graph))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
+      ;; Custom property columns: `C-u +' builds one via the prompt below, and any
+      ;; add/remove is persisted per tag through the schema-changed hook.
+      (setq-local table-view-add-column-function #'org-glance-table--add-column-prompt)
+      (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.
       (when-let ((sort (plist-get saved :sort)))
