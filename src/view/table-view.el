@@ -51,6 +51,7 @@
 ;;   fill-function.el — populate via a fill function (Emacs subprocesses)
 ;;   upsert.el        — streaming row updates via a timer
 ;;   multi-sort.el    — column navigation + multi-column (C-u ^) sorting
+;;   sort-methods.el  — per-column sort methods (values / compare) + default sort
 ;;
 ;; Keybindings in table-view-mode:
 ;;   g   — clear filter & refresh, preserving the current sort order
@@ -62,6 +63,7 @@
 ;;   n/p — next/previous line
 ;;   f/b — forward/backward: by column on a table line (header or row),
 ;;         by char elsewhere
+;;   M-left/M-right — move the column at point left/right (org-table style)
 ;;   q   — quit
 
 ;;; Code:
@@ -100,6 +102,13 @@ cell matching the string (case-insensitive substring) are rendered.")
   (seq-find (lambda (c) (equal (alist-get 'key c) key))
             (table-view--columns spec)))
 
+(defun table-view--own-spec (spec)
+  "Return SPEC with a private, reorderable copy of its `columns' list.
+Column moves reorder the buffer's own copy, never a spec shared between
+buffers."
+  (cons (cons 'columns (copy-sequence (alist-get 'columns spec)))
+        spec))
+
 (defun table-view--cell (row key)
   "Raw value of cell KEY (a string column key) in ROW."
   (alist-get (intern key) (alist-get 'cells row)))
@@ -119,21 +128,71 @@ cell matching the string (case-insensitive substring) are rendered.")
 
 ;;; Sorting
 
+(defvar table-view-comparators nil
+  "Alist of NAME (string) -> less-than predicate for a column's `compare'.
+Each predicate takes two raw cell values and returns non-nil when the
+first sorts before the second.  A column's `compare' may name one of
+these, name a built-in (\"number\", \"string\", \"natural\"), or hold a
+predicate function directly.  Consumers extend this with `push'.")
+
+(defun table-view--as-number (val)
+  "VAL as a number: numbers as-is, strings via `string-to-number', else 0."
+  (cond ((numberp val) val)
+        ((stringp val) (string-to-number val))
+        (t 0)))
+
+(defun table-view--number-lessp (a b)
+  "Numeric order of A and B, coercing number-strings and nil."
+  (< (table-view--as-number a) (table-view--as-number b)))
+
+(defun table-view--natural-lessp (a b)
+  "Number-aware string order of A and B, so \"2\" < \"10\" and \"x2\" < \"x10\"."
+  (string-version-lessp (table-view--str a) (table-view--str b)))
+
+(defun table-view--string-lessp (a b)
+  "Lexicographic order of A and B as display strings."
+  (string< (table-view--str a) (table-view--str b)))
+
+(defun table-view--value-order (col)
+  "Ordered list of column COL's declared values, or nil.
+Taken from `values' when present, else the badge palette order (so
+badge columns keep sorting by palette order).  `values' is a plain
+ordered list of expected values; colours stay in `badges'."
+  (or (alist-get 'values col)
+      (and (equal (alist-get 'type col) "badge")
+           (mapcar (lambda (b) (alist-get 'value b)) (alist-get 'badges col)))))
+
+(defun table-view--categorical-lessp (order)
+  "Return a predicate ordering values by position in ORDER, unlisted last.
+Values are matched as display strings, so numeric cells compare against
+string entries in ORDER."
+  (let* ((keys (mapcar #'table-view--str order))
+         (n (length keys)))
+    (lambda (a b)
+      (< (or (cl-position (table-view--str a) keys :test #'equal) n)
+         (or (cl-position (table-view--str b) keys :test #'equal) n)))))
+
 (defun table-view--comparator (col)
-  "Return a less-than predicate over raw cell values for column COL."
-  (pcase (alist-get 'type col)
-    ("number"
-     (lambda (a b) (< (or a 0) (or b 0))))
-    ("badge"
-     ;; Sort by declared palette order (which doubles as priority).
-     (let ((order (mapcar (lambda (b) (alist-get 'value b))
-                          (alist-get 'badges col)))
-           (n (length (alist-get 'badges col))))
-       (lambda (a b)
-         (< (or (cl-position a order :test #'equal) n)
-            (or (cl-position b order :test #'equal) n)))))
-    (_
-     (lambda (a b) (string< (table-view--str a) (table-view--str b))))))
+  "Return a less-than predicate over raw cell values for column COL.
+Resolution order:
+  1. an explicit `compare' -- a predicate function, a built-in name
+     (\"number\"/\"numeric\", \"string\"/\"lexicographic\",
+     \"natural\"/\"version\"), or a name in `table-view-comparators';
+  2. else an ordered `values'/badge domain (categorical, unlisted last);
+  3. else `type' \"number\" (numeric);
+  4. else lexicographic."
+  (let ((compare (alist-get 'compare col))
+        (order (table-view--value-order col)))
+    (cond
+     ((functionp compare) compare)
+     ((member compare '("number" "numeric")) #'table-view--number-lessp)
+     ((member compare '("string" "lexicographic")) #'table-view--string-lessp)
+     ((member compare '("natural" "version")) #'table-view--natural-lessp)
+     ((and (stringp compare) (cdr (assoc compare table-view-comparators)))
+      (cdr (assoc compare table-view-comparators)))
+     (order (table-view--categorical-lessp order))
+     ((equal (alist-get 'type col) "number") #'table-view--number-lessp)
+     (t #'table-view--string-lessp))))
 
 (defun table-view--sort-rows ()
   "Sort `table-view--rows' in place by the current sort chain.
@@ -166,6 +225,23 @@ without moving it."
   (mapconcat (lambda (ka)
                (format "%s %s" (car ka) (if (cdr ka) "asc" "desc")))
              table-view--sort-keys " -> "))
+
+(defun table-view--parse-sort (sort)
+  "Return the default sort chain declared by a spec's SORT value.
+SORT is either a single {column, ascending} alist or a list of them for
+a multi-column default; the result is a list of (KEY . ASC), highest
+priority first.  A missing `ascending' defaults to ascending."
+  (let ((specs (if (alist-get 'column sort)
+                   (list sort)          ; single {column, ascending}
+                 sort)))                ; list of them, or nil
+    (delq nil
+          (mapcar (lambda (s)
+                    (let ((col (alist-get 'column s)))
+                      (when col
+                        (cons col (if (assq 'ascending s)
+                                      (and (alist-get 'ascending s) t)
+                                    t)))))
+                  specs))))
 
 ;;; Filtering
 
@@ -386,6 +462,64 @@ it falls back to `backward-char'."
       (table-view-backward-column n)
     (backward-char n)))
 
+;;; Column reordering
+
+(defun table-view--goto-cell (col)
+  "Move point to the start of COL's cell on the current line.
+Return non-nil when the cell is found."
+  (let ((eol (line-end-position)) (found nil))
+    (goto-char (line-beginning-position))
+    (while (and (not found) (< (point) eol))
+      (if (equal (get-text-property (point) 'table-view-col) col)
+          (setq found t)
+        (goto-char (or (next-single-property-change (point) 'table-view-col nil eol)
+                       eol))))
+    found))
+
+(defun table-view--move-column (dir)
+  "Swap the column at point with its neighbour in DIR (-1 left, 1 right).
+Point follows the moved column.  Return non-nil on success, nil at an
+edge or off any column."
+  (let* ((col (get-text-property (point) 'table-view-col))
+         (cols (table-view--columns table-view--spec))
+         (keys (mapcar (lambda (c) (alist-get 'key c)) cols))
+         (idx (and col (cl-position col keys :test #'equal)))
+         (dest (and idx (+ idx dir))))
+    (cond
+     ((not idx)
+      (message "Point is not on a column")
+      nil)
+     ((or (< dest 0) (>= dest (length cols)))
+      (message "Column %s is already at the %s edge"
+               col (if (< dir 0) "left" "right"))
+      nil)
+     (t
+      (let ((new (copy-sequence cols))
+            (line (line-number-at-pos)))
+        (cl-rotatef (nth idx new) (nth dest new))
+        (setf (alist-get 'columns table-view--spec) new)
+        (table-view--render)
+        (goto-char (point-min))
+        (forward-line (1- line))
+        (table-view--goto-cell col)
+        t)))))
+
+(defun table-view-move-column-right (&optional n)
+  "Move the column at point one position to the right, org-table style.
+Point follows the column.  With a numeric prefix N repeat N times (a
+negative N moves left).  Works on the header row and on data rows."
+  (interactive "p")
+  (let ((dir (if (< (or n 1) 0) -1 1)))
+    (catch 'edge
+      (dotimes (_ (abs (or n 1)))
+        (unless (table-view--move-column dir) (throw 'edge nil))))))
+
+(defun table-view-move-column-left (&optional n)
+  "Move the column at point one position to the left, org-table style.
+See `table-view-move-column-right'."
+  (interactive "p")
+  (table-view-move-column-right (- (or n 1))))
+
 ;;; Keymap
 
 (defvar table-view-mode-map
@@ -397,6 +531,8 @@ it falls back to `backward-char'."
     (define-key map "g" #'table-view-sort)
     (define-key map "/" #'table-view-filter)
     (define-key map "^" #'table-view-sort-cycle)
+    (define-key map (kbd "M-<right>") #'table-view-move-column-right)
+    (define-key map (kbd "M-<left>")  #'table-view-move-column-left)
     (define-key map "q" #'quit-window)
     map)
   "Base keymap for `table-view-mode'; action keys overlay it per buffer.")
@@ -606,22 +742,22 @@ keeps its on-screen location across the re-sort."
 SPEC is a parsed alist (see `table-view-parse').  HANDLERS is an alist of
 command-name (string) -> (FN ID ROW).  FILL-FN, if non-nil, is a function
 of one argument (BUFFER) that populates rows via `table-view-set-rows' /
-`table-view-upsert-row'.  Returns the buffer."
+`table-view-upsert-row'.  Returns the buffer.
+
+SPEC's `sort' (a single {column, ascending}, or a list of them for a
+multi-column default) is applied as the default sort when SPEC itself
+supplies rows.  Rows arriving later via FILL-FN / `table-view-set-rows'
+start unsorted."
   (let ((buf (get-buffer-create buffer)))
     (with-current-buffer buf
       (table-view-mode)
-      (setq table-view--spec spec
+      (setq table-view--spec (table-view--own-spec spec)
             table-view--rows (alist-get 'rows spec)
             table-view--handlers handlers
             table-view--fill-fn fill-fn)
-      (let* ((sort (alist-get 'sort spec))
-             (column (alist-get 'column sort)))
-        (setq table-view--sort-keys
-              (when column
-                (list (cons column
-                            (if (assq 'ascending sort)
-                                (and (alist-get 'ascending sort) t)
-                              t))))))
+      (setq table-view--sort-keys (table-view--parse-sort (alist-get 'sort spec)))
+      (when (and table-view--sort-keys table-view--rows)
+        (table-view--sort-rows))          ; apply the declared default sort
       (table-view--install-action-keys spec)
       (table-view--render))
     (switch-to-buffer buf)

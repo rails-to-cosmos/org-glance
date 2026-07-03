@@ -146,24 +146,28 @@ priority is its letter, absent values are the empty string."
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
 
-(cl-defun org-glance-table--apply-default-sort ()
-  "Sort the CURRENT table by its spec's default column (state, active-first).
-The `table-view' core seeds the default sort key from the spec at display time
-but applies it only from a sort command; `table-view-sort-cycle' invoked with
-point at `point-min' (the first -- state -- column) applies it.  NB this couples
-the default to the FIRST spec column, which is org-glance's declared sort key."
-  (goto-char (point-min))
-  (table-view-sort-cycle))
+(cl-defun org-glance-table--apply-sort ()
+  "Apply the sort currently in `table-view--sort-keys' -- the spec's declared
+default (seeded by `table-view-display'), a restored per-view config, or the
+sort the user left before a reload.
+NB reaches into `table-view' internals (`--sort-keys'/`--sorted'): the core
+seeds the keys but applies them only when rows arrive with the spec, whereas
+org-glance fills rows via `fill-fn' AFTER display.  A public \"apply seeded
+sort\" entry point in `table-view' would remove this coupling (matters when
+de-vendoring to MELPA)."
+  (when table-view--sort-keys
+    (setq table-view--sorted t)
+    (table-view-sort)))
 
 (cl-defun org-glance-table--reload (buffer)
-  "Re-fill BUFFER from the live graph, then re-apply the spec's default sort.
+  "Re-fill BUFFER from the live graph, then re-apply its current sort.
 Used by `g' (refresh) and the lazy display-boundary check.  `table-view-refresh'
-re-runs the fill-fn (which resets rows to load order), so re-apply the default
-so the reloaded view opens state-active-first like a fresh visit."
+re-runs the fill-fn (which resets rows to load order but keeps `--sort-keys'),
+so re-apply the sort -- preserving whatever ordering the user left."
   (table-view-refresh buffer)
   (when-let ((buf (get-buffer buffer)))
     (with-current-buffer buf
-      (org-glance-table--apply-default-sort)
+      (org-glance-table--apply-sort)
       (org-glance-view:mark-fresh))))
 
 ;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
@@ -204,13 +208,86 @@ so the buffer needs no graph of its own."
 `org-glance-material:change-todo-live'), then reload the table and return to the
 row once the change (and any note) is committed."
   (when id
-    (let ((arg current-prefix-arg))     ; the dispatch lambda is a bare `interactive'
+    (let ((arg current-prefix-arg)          ; the dispatch lambda is a bare `interactive'
+          (line (line-number-at-pos)))       ; the reload re-renders from the top
       (org-glance-material:change-todo-live
        graph id arg
        (lambda (state)
          (org-glance-table--reload (current-buffer))
-         (table-view--goto-id id)
+         ;; Preserve point: follow the row if it is still visible, else keep the
+         ;; screen line (the row may have left the filter -- e.g. now DONE under an
+         ;; active filter -- and the next row shifts into it, org-agenda-style)
+         ;; rather than jumping to the beginning of the buffer.
+         (unless (table-view--goto-id id)
+           (goto-char (point-min))
+           (forward-line (1- line)))
          (message "State: %s" (if (s-present? state) state "(none)")))))))
+
+;;; Per-view persistence: column order + sort, keyed by filter identity
+;;
+;; The user's column reordering (`table-view' column-move) and sort choice live in
+;; the table buffer (`table-view--spec' columns + `table-view--sort-keys').  Persist
+;; them PER FILTER so reopening the same view restores the layout across sessions.
+;; Stored as one `read'-able alist at `<store>/config/table-views.eld', keyed by the
+;; canonical filter identity (the same key basis the overview cache uses).  A change
+;; is saved from a buffer-local `post-command-hook' that only writes when the layout
+;; actually differs from the last snapshot (column moves / sorts are rare).
+
+(cl-defun org-glance-table--config-file (graph)
+  "Path of GRAPH's table-view config store (may not exist)."
+  (f-join (org-glance-graph:store-path graph) "config" "table-views.eld"))
+
+(cl-defun org-glance-table--config-all (graph)
+  "Saved per-filter table configs: alist of (identity-string . config-plist)."
+  (let ((path (org-glance-table--config-file graph)))
+    (when (f-exists? path)
+      (ignore-errors (car (read-from-string (f-read-text path 'utf-8)))))))
+
+(cl-defun org-glance-table--config-get (graph spec)
+  "Saved view-config plist for SPEC (`:columns' KEYS `:sort' SORT-KEYS), or nil."
+  (alist-get (org-glance-filter:identity spec)
+             (org-glance-table--config-all graph) nil nil #'equal))
+
+(cl-defun org-glance-table--config-put (graph spec config)
+  "Persist CONFIG (a plist) for SPEC, merged into GRAPH's config store."
+  (let ((path (org-glance-table--config-file graph))
+        (all (org-glance-table--config-all graph))
+        (id (org-glance-filter:identity spec)))
+    (setf (alist-get id all nil nil #'equal) config)
+    (f-mkdir-full-path (f-dirname path))
+    (f-write-text (prin1-to-string all) 'utf-8 path)))
+
+(cl-defun org-glance-table--reorder-columns (columns order)
+  "COLUMNS reordered so their `key's follow ORDER (a list of keys).
+Columns whose key is absent from ORDER keep their relative position at the end,
+so a schema change (a new column) degrades gracefully."
+  (append
+   (delq nil (mapcar (lambda (k)
+                       (cl-find k columns :test #'equal
+                                :key (lambda (c) (alist-get 'key c))))
+                     order))
+   (cl-remove-if (lambda (c) (member (alist-get 'key c) order)) columns)))
+
+(defvar-local org-glance-table--config-snapshot nil
+  "Last persisted view config for this buffer (the change-detection baseline).")
+
+(cl-defun org-glance-table--current-config ()
+  "This buffer's current view config: (:columns KEYS :sort SORT-KEYS)."
+  (list :columns (mapcar (lambda (c) (alist-get 'key c))
+                         (alist-get 'columns table-view--spec))
+        :sort (copy-tree table-view--sort-keys)))
+
+(cl-defun org-glance-table--persist-config ()
+  "Buffer-local `post-command-hook': persist the view config iff it changed.
+Cheap on the common path -- compares the (column-order, sort) tuple to the last
+snapshot and writes only on an actual layout change.  (`org-glance-table--spec'
+may be nil -- the \"all\" filter -- so guard only on being a registered view.)"
+  (when org-glance-view--graph
+    (let ((cur (org-glance-table--current-config)))
+      (unless (equal cur org-glance-table--config-snapshot)
+        (setq org-glance-table--config-snapshot cur)
+        (with-demoted-errors "org-glance: table config save failed: %S"
+          (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur))))))
 
 ;;; Browser
 
@@ -219,6 +296,7 @@ row once the change (and any note) is committed."
 Honours the same filter language as the overview (see
 `org-glance-filter:predicate')."
   (let* ((spec (org-glance-filter:normalize-spec filter))
+         (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
          ;; Resolve the active/done split ONCE -- the single configured tag's todo
          ;; cycle, else the global keywords -- and bind it while the `:done'
          ;; predicate AND the badge split are built, so the table agrees with the
@@ -245,13 +323,29 @@ Honours the same filter language as the overview (see
                                                (org-glance-capture (or (org-glance-filter:tags spec)
                                                                        (org-glance-capture:completing-read-tag))
                                                                    "")))))
-         (buf (table-view-display buffer-name (org-glance-table--spec graph spec) handlers fill-fn)))
+         ;; Build the spec, restoring the saved column order (if any) before display.
+         (tspec (let ((s (org-glance-table--spec graph spec)))
+                  (when-let ((order (plist-get saved :columns)))
+                    (setf (alist-get 'columns s)
+                          (org-glance-table--reorder-columns (alist-get 'columns s) order)))
+                  s))
+         (buf (table-view-display buffer-name tspec handlers fill-fn)))
     (with-current-buffer buf
-      (setq org-glance-table--spec spec)
+      (setq org-glance-table--spec spec
+            ;; Match the corresponding overview (`org-glance-overview:visit'): run
+            ;; directory-relative actions (dired, shell, relative links) from the
+            ;; graph's ROOT, not wherever this non-file buffer happened to spawn.
+            default-directory (file-name-as-directory (org-glance-graph:directory graph)))
       (org-glance-view:register graph
                                 :stale-fn  (lambda () (org-glance-table--stale? graph))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
-      (org-glance-table--apply-default-sort))   ; open state-active-first (spec default)
+      ;; Restore the saved sort (else the spec default seeded by display), apply it,
+      ;; then persist any subsequent layout change (column move / sort) for this filter.
+      (when-let ((sort (plist-get saved :sort)))
+        (setq-local table-view--sort-keys sort))
+      (org-glance-table--apply-sort)
+      (setq org-glance-table--config-snapshot (org-glance-table--current-config))
+      (add-hook 'post-command-hook #'org-glance-table--persist-config nil t))
     buf))
 
 (cl-defun org-glance-table:completing-read-tag ()
