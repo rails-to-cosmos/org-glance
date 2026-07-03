@@ -67,7 +67,7 @@
 ;;         off a column, cycle through every column and direction
 ;;   C-u ^ — add the column at point as a secondary (tie-breaker) sort key;
 ;;           a following run of `^' then toggles that key's direction
-;;   m   — toggle mark on the current row;  U — unmark all
+;;   m   — toggle mark on the current row;  u — unmark it;  U — unmark all
 ;;   /   — narrow to the marked rows, or filter by substring when none marked
 ;;   n/p — next/previous data row (stops on the last / first row)
 ;;   f/b — forward/backward: by column on a table line (header or row),
@@ -886,6 +886,7 @@ KEY when a column was actually removed."
     (define-key map "g" #'table-view-sort)
     (define-key map "/" #'table-view-filter-or-narrow)
     (define-key map "m" #'table-view-mark-toggle)
+    (define-key map "u" #'table-view-unmark)
     (define-key map "U" #'table-view-unmark-all)
     (define-key map "^" #'table-view-sort-cycle)
     (define-key map (kbd "M-<right>") #'table-view-move-column-right)
@@ -1012,6 +1013,22 @@ Marked rows show a `*' in a gutter column and are the operand of a
         (setq table-view--marks (cons id table-view--marks))
         (when row (push (cons id row) table-view--mark-cache)))
       (table-view--prune-marks)         ; widen if that was the last mark
+      (table-view--render)
+      (forward-line 1))))
+
+(defun table-view-unmark ()
+  "Unmark the row at point (a no-op when it is not marked), then move down.
+Complements `m' (mark/unmark toggle) and `U' (unmark all); mirrors dired's
+`u'."
+  (interactive)
+  (let ((id (get-text-property (point) 'table-view-id)))
+    (if (null id)
+        (message "Point is not on a row")
+      (when (member id table-view--marks)
+        (setq table-view--marks (delete id table-view--marks)
+              table-view--mark-cache
+              (cl-remove id table-view--mark-cache :key #'car :test #'equal))
+        (table-view--prune-marks))      ; widen if that was the last mark
       (table-view--render)
       (forward-line 1))))
 

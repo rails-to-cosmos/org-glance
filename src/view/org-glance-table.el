@@ -164,15 +164,22 @@ de-vendoring to MELPA)."
     (table-view-sort)))
 
 (cl-defun org-glance-table--reload (buffer)
-  "Re-fill BUFFER from the live graph, then re-apply its current sort.
+  "Re-fill BUFFER from the live graph, re-apply its sort, and keep point in place.
 Used by `g' (refresh) and the lazy display-boundary check.  `table-view-refresh'
-re-runs the fill-fn (which resets rows to load order but keeps `--sort-keys'),
-so re-apply the sort -- preserving whatever ordering the user left."
-  (table-view-refresh buffer)
+re-runs the fill-fn (rows back to load order, `--sort-keys' kept) and
+`--apply-sort' restores the ordering; capture the row under point up front and
+return to it afterwards, since the intermediate render + sort restore point by
+LINE, which drifts to another row once the sort reorders them."
   (when-let ((buf (get-buffer buffer)))
     (with-current-buffer buf
-      (org-glance-table--apply-sort)
-      (org-glance-view:mark-fresh))))
+      (let ((id (get-text-property (point) 'table-view-id))
+            (line (line-number-at-pos)))
+        (table-view-refresh buf)
+        (org-glance-table--apply-sort)
+        (org-glance-view:mark-fresh)
+        (unless (and id (table-view--goto-id id))
+          (goto-char (point-min))
+          (forward-line (1- line)))))))
 
 ;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
 ;;

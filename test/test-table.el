@@ -309,6 +309,22 @@ row leaves the view (DONE under an active filter) point stays on the same line."
                   (should-not (table-view--goto-id "r2"))))) ; r2 indeed gone
           (when (buffer-live-p buf) (kill-buffer buf)))))))
 
+(ert-deftest org-glance-test:table-refresh-preserves-point ()
+  "`g' (refresh) keeps point on the same row even when the sort reorders it -- the
+re-fill + re-sort restore by line, so without re-anchoring point drifts."
+  (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "z1" "* TODO Zeta")
+                            (org-glance-test:headline "a1" "* TODO Alpha"))
+      (org-glance-test:with-table-buffer graph buf
+        (with-current-buffer buf
+          (setq table-view--sort-keys '(("title" . t)))   ; sort by title ascending
+          (org-glance-table--apply-sort)                   ; order: Alpha (a1), Zeta (z1)
+          (should (table-view--goto-id "z1"))              ; z1 last sorted, first in load order
+          (funcall (key-binding (kbd "g")))                ; refresh
+          (should (equal "z1" (get-text-property (point) 'table-view-id))))))))  ; still on z1
+
 (ert-deftest org-glance-test:table-action-todo ()
   "The `todo' action advances the row's state (`C-c C-t' via change-todo-live);
 after the (no-note) commit the reloaded table shows the new state on the row."
@@ -386,6 +402,40 @@ after the (no-note) commit the reloaded table shows the new state on the row."
                                  (org-glance-graph:get-headline graph "p1"))))
           (should (equal "TODO" (org-glance-headline-metadata:state
                                  (org-glance-graph:get-headline graph "p4")))))))))
+
+(ert-deftest org-glance-test:table-bulk-todo-logs-and-keeps-point ()
+  "The reported scenario end-to-end: bulk `C-c C-t' under timestamp logging sets
+every marked row WITH its LOGBOOK entry, clears the marks, keeps point on the row
+it was on -- and never errors on a dangling log marker.  (`org-glance-table:visit'
+is used directly, without stubbing `pop-to-buffer', so `org-add-log-note's own
+buffer switching -- which the flush relies on -- runs for real.)"
+  (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))   ; `!' logs a timestamp
+        (org-log-into-drawer nil) (this-command 'org-glance-test-bulk) (buf nil))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "g1" "* TODO A")
+                            (org-glance-test:headline "g2" "* TODO B")
+                            (org-glance-test:headline "g3" "* TODO C"))
+      (unwind-protect
+          (progn
+            (setq buf (org-glance-table:visit graph))
+            (with-current-buffer buf
+              (table-view--goto-id "g1") (call-interactively #'table-view-mark-toggle)
+              (table-view--goto-id "g2") (call-interactively #'table-view-mark-toggle)
+              (table-view--goto-id "g3")                     ; point on the UNMARKED row
+              (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+                (funcall (key-binding (kbd "C-c C-t"))))
+              (run-hooks 'post-command-hook)                 ; must NOT dead-marker
+              (should (equal "g3" (get-text-property (point) 'table-view-id)))  ; point kept
+              (should (null (table-view-marked-rows)))       ; marks cleared
+              (dolist (id '("g1" "g2"))                      ; both marked: DONE + logged
+                (should (equal "DONE" (org-glance-headline-metadata:state
+                                       (org-glance-graph:get-headline graph id))))
+                (should (s-contains? "State \"DONE\""
+                                     (org-glance-graph:get-content graph id))))
+              (should (equal "TODO" (org-glance-headline-metadata:state  ; unmarked untouched
+                                     (org-glance-graph:get-headline graph "g3"))))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
 
 (ert-deftest org-glance-test:table-todo-single-when-unmarked ()
   "With no marks, `C-c C-t' takes the single-row path (advances the point row)."
