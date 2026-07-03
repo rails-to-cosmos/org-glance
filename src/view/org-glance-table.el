@@ -103,7 +103,6 @@ all sortable.  Default sort is the state column ascending (active first)."
                 ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
                 ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))))
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
-                ((key . "m")   (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))

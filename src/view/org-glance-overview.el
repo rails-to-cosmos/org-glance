@@ -257,7 +257,6 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "TAB") #'org-cycle)
 (define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:materialize)
-(define-key org-glance-overview-mode-map (kbd "m") #'org-glance-overview:materialize)
 (define-key org-glance-overview-mode-map (kbd "o") #'org-glance-overview:open)
 (define-key org-glance-overview-mode-map (kbd "e") #'org-glance-overview:extract)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
