@@ -610,7 +610,10 @@ tags with `table-view-id'."
   "Move point one data row in DIR (1 down, -1 up), preserving the column.
 Point never leaves the data rows: on the last row a further `n' stays put,
 on the first row a further `p' stays just below the header separator.  From
-above the rows `n' enters the first row (and from below, `p' the last)."
+above the rows `n' enters the first row (and from below, `p' the last).
+When the preserved column falls on the leading \"|\" (e.g. entering the table
+from the title line at column 0), point snaps to the first cell rather than
+the separator."
   (let ((region (table-view--rows-region)))
     (when region
       (let ((col (current-column))
@@ -625,7 +628,10 @@ above the rows `n' enters the first row (and from below, `p' the last)."
            ((and (> dir 0) (< start-bol first)) (goto-char first)) ; enter from above
            ((and (< dir 0) (> start-bol last)) (goto-char last))   ; enter from below
            (t (goto-char start))))                            ; at a boundary: stay
-        (move-to-column col)))))
+        (move-to-column col)
+        (unless (get-text-property (point) 'table-view-col)
+          (let ((starts (table-view--cell-starts)))
+            (when starts (goto-char (car starts)))))))))
 
 (defun table-view-next-line (&optional n)
   "Move down among the table's data rows, stopping on the last row.
