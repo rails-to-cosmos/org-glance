@@ -60,6 +60,7 @@
 ;;   delete.el        — row deletion gated on a custom pre-delete step
 ;;   bulk.el          — marking (m), narrowing (/), and bulk actions (bulk: t)
 ;;   paginate.el      — server-side pagination over a fake backend (page-fn)
+;;   org-links.el     — Org links in cells, followed by C-c C-o or mouse
 ;;
 ;; Keybindings in table-view-mode:
 ;;   g   — clear filter/narrow & refresh, preserving the sort order
@@ -72,6 +73,8 @@
 ;;   n/p — next/previous data row (stops on the last / first row)
 ;;   f/b — forward/backward: by column on a table line (header or row),
 ;;         by char elsewhere
+;;   C-c C-o — follow the Org link at point (cells may hold [[TARGET][DESC]]);
+;;             links are also mouse-clickable
 ;;   M-left/M-right — move the column at point left/right (org-table style)
 ;;   > / . — next page, < / , — previous page (paged buffers)
 ;;   M-> / M-< — last / first page;  M-g — go to page (offset paging)
@@ -80,6 +83,8 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'subr-x)                        ; when-let, string-empty-p
+(require 'org)                           ; org-link-bracket-re, org-link-open-from-string
 
 ;;; Buffer-local state
 
@@ -193,6 +198,105 @@ buffers."
   (alist-get 'color
              (seq-find (lambda (b) (equal (alist-get 'value b) value))
                        (alist-get 'badges col))))
+
+;;; Org links
+;;
+;; A cell whose display string contains Org bracket links -- [[TARGET][DESC]]
+;; or [[TARGET]] -- renders each link as its DESC (or TARGET), followable by
+;; mouse or `C-c C-o'.  Parsing and following reuse Org's own `ol.el' (the
+;; `org-link-bracket-re' regexp and `org-link-open-from-string'), rather than
+;; redefining them.  Width, filtering, and sorting see the DESC, so a link
+;; column lines up and searches by what is on screen, not the raw markup.
+
+(defface table-view-link '((t :inherit link))
+  "Face for Org links rendered in table cells.")
+
+(defvar table-view-render-links t
+  "When non-nil, cells render Org bracket links ([[TARGET][DESC]]) as
+followable links showing DESC.  Set to nil to show cells verbatim.")
+
+(defvar table-view-open-link-function #'table-view-open-link-default
+  "Function of one argument, an Org-link TARGET string, that opens it.
+Rebind to control what following a link does.")
+
+(defun table-view-open-link-default (target)
+  "Open Org-link TARGET.
+Web and mail links go through `browse-url'; every other kind is handed to
+Org (`org-link-open-from-string'), so `file:', `id:', and custom
+`org-link-parameters' links open correctly."
+  (if (string-match-p "\\`\\(?:https?\\|ftp\\|mailto\\):" target)
+      (browse-url target)
+    (org-link-open-from-string (format "[[%s]]" target))))
+
+(defun table-view-open-link (&optional event)
+  "Follow the table-view link at point, or the one clicked (EVENT).
+Bound to `C-c C-o' and to mouse clicks on rendered link text."
+  (interactive (list last-nonmenu-event))
+  (if-let ((pos (if (mouse-event-p event) (posn-point (event-end event)) (point)))
+           (target (get-text-property pos 'table-view-link)))
+      (funcall table-view-open-link-function target)
+    (message "No link at point")))
+
+(defvar table-view--link-keymap
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-1] #'table-view-open-link)
+    (define-key map [mouse-2] #'table-view-open-link)
+    map)
+  "Keymap on rendered link text; a mouse click follows the link.")
+
+(defun table-view--map-links (s fn)
+  "Return S with each Org bracket link replaced by (FN TARGET DESC).
+Matches with Org's own `org-link-bracket-re'; DESC falls back to TARGET for a
+link written without one ([[t]]).  Returns S unchanged when link rendering is
+off or S has no link."
+  (if (or (not table-view-render-links) (not (string-search "[[" s)))
+      s
+    (replace-regexp-in-string
+     org-link-bracket-re
+     (lambda (m)
+       (funcall fn (match-string 1 m) (or (match-string 2 m) (match-string 1 m))))
+     s t t)))                            ; FIXEDCASE + LITERAL: keep target/props verbatim
+
+(defun table-view--link-string (target desc)
+  "Propertize DESC as a followable link to TARGET."
+  (propertize desc
+              'face 'table-view-link
+              'mouse-face 'highlight
+              'help-echo (concat "mouse-1, C-c C-o: open " target)
+              'table-view-link target
+              'keymap table-view--link-keymap
+              'follow-link t))
+
+(defun table-view--linkify (s)
+  "Return S with Org links rendered as propertized, followable descriptions."
+  (table-view--map-links s #'table-view--link-string))
+
+(defun table-view--delink (s)
+  "Return S with Org links reduced to plain descriptions (no properties).
+Used for width, filtering, and sorting, so they see the displayed text."
+  (table-view--map-links s (lambda (_target desc) desc)))
+
+(defun table-view--links-p (col)
+  "Non-nil when column COL renders Org links.
+Badge columns show their values verbatim (a badge is a categorical label,
+not a link), so links are handled for every OTHER column type."
+  (not (equal (alist-get 'type col) "badge")))
+
+(defun table-view--cell-text (col val)
+  "Plain displayed text of VAL in column COL.
+Org links are reduced to their descriptions for link-rendering columns, so
+that width and filtering see exactly what is on screen; badge values are
+returned verbatim.  This keeps measurement, filtering, and display aligned."
+  (let ((s (table-view--str val)))
+    (if (table-view--links-p col) (table-view--delink s) s)))
+
+(defun table-view--sort-value (col val)
+  "VAL prepared for comparison in column COL.
+A string uses its displayed text (`table-view--cell-text', so an Org-link
+column sorts by its descriptions); numbers and other non-strings pass through
+unchanged for numeric/custom comparators.  Applied once, before the
+comparator, so every comparator kind agrees with the display."
+  (if (stringp val) (table-view--cell-text col val) val))
 
 (defun table-view--compute-cells (rows spec)
   "Return ROWS with SPEC's computed columns' cells materialised.
@@ -336,17 +440,18 @@ without moving it."
     (unless (table-view--paged-p)
       (let ((tests (mapcar
                     (lambda (ka)
-                      (list (table-view--comparator
-                             (table-view--column table-view--spec (car ka)))
-                            (car ka)          ; column key
-                            (cdr ka)))        ; ascending?
+                      (let ((col (table-view--column table-view--spec (car ka))))
+                        (list (table-view--comparator col)
+                              (car ka)          ; column key
+                              (cdr ka)          ; ascending?
+                              col)))            ; column (for link-aware value prep)
                     table-view--sort-keys)))
         (setq table-view--rows
               (sort (copy-sequence table-view--rows)
                     (lambda (a b)
-                      (cl-loop for (less key asc) in tests
-                               for va = (table-view--cell a key)
-                               for vb = (table-view--cell b key)
+                      (cl-loop for (less key asc col) in tests
+                               for va = (table-view--sort-value col (table-view--cell a key))
+                               for vb = (table-view--sort-value col (table-view--cell b key))
                                do (cond ((funcall less va vb) (cl-return asc))
                                         ((funcall less vb va) (cl-return (not asc))))
                                finally return nil))))))
@@ -368,11 +473,10 @@ priority first.  A missing `ascending' defaults to ascending."
                  sort)))                ; list of them, or nil
     (delq nil
           (mapcar (lambda (s)
-                    (let ((col (alist-get 'column s)))
-                      (when col
-                        (cons col (if (assq 'ascending s)
-                                      (and (alist-get 'ascending s) t)
-                                    t)))))
+                    (when-let ((col (alist-get 'column s)))
+                      (cons col (if (assq 'ascending s)
+                                    (and (alist-get 'ascending s) t)
+                                  t))))
                   specs))))
 
 ;;; Filtering
@@ -383,8 +487,8 @@ priority first.  A missing `ascending' defaults to ascending."
     (cl-some (lambda (col)
                (string-match-p
                 (regexp-quote pat)
-                (downcase (table-view--str
-                           (table-view--cell row (alist-get 'key col))))))
+                (downcase (table-view--cell-text
+                           col (table-view--cell row (alist-get 'key col))))))
              (table-view--columns table-view--spec))))
 
 (defun table-view--marked-p (id)
@@ -427,15 +531,18 @@ narrowed), then restricted to the current filter."
 
 ;;; Rendering
 
+(defun table-view--cell-width (col row)
+  "Screen width of COL's cell in ROW (its displayed text, links reduced)."
+  (string-width (table-view--cell-text col (table-view--cell row (alist-get 'key col)))))
+
 (defun table-view--widths (spec rows)
   "Return alist of column-key -> display width for SPEC over ROWS."
   (mapcar
    (lambda (col)
-     (let* ((key (alist-get 'key col))
-            (w (string-width (alist-get 'header col))))
+     (let ((w (string-width (alist-get 'header col))))
        (dolist (row rows)
-         (setq w (max w (string-width (table-view--str (table-view--cell row key))))))
-       (cons key w)))
+         (setq w (max w (table-view--cell-width col row))))
+       (cons (alist-get 'key col) w)))
    (table-view--columns spec)))
 
 (defun table-view--pad (s width align)
@@ -445,19 +552,26 @@ narrowed), then restricted to the current filter."
         (concat (make-string gap ?\s) s)
       (concat s (make-string gap ?\s)))))
 
+(defun table-view--badge-string (col s)
+  "Return S coloured per badge column COL's palette.
+S is returned unchanged when its value has no declared colour."
+  (if-let ((color (table-view--badge-color col s)))
+      (propertize s 'face (list :foreground color :weight 'bold))
+    s))
+
 (defun table-view--cell-string (col row widths)
-  "Return the padded, possibly coloured cell string for COL in ROW.
-The whole cell carries the `table-view-col' text property (its column
-key) so column navigation can locate cell boundaries."
+  "Return the padded, styled cell string for COL in ROW.
+Badge columns are coloured; other cells have their Org links rendered.  The
+whole cell carries the `table-view-col' text property (its column key) so
+column navigation can locate cell boundaries."
   (let* ((key (alist-get 'key col))
-         (val (table-view--cell row key))
-         (s (table-view--str val)))
-    (when (equal (alist-get 'type col) "badge")
-      (let ((color (table-view--badge-color col s)))
-        (when color
-          (setq s (propertize s 'face (list :foreground color :weight 'bold))))))
+         (s (table-view--str (table-view--cell row key)))
+         (styled (if (table-view--links-p col)
+                     (table-view--linkify s)
+                   (table-view--badge-string col s))))
     (propertize
-     (table-view--pad s (alist-get key widths nil nil #'equal) (alist-get 'align col))
+     (table-view--pad styled (alist-get key widths nil nil #'equal)
+                      (alist-get 'align col))
      'table-view-col key)))
 
 (defun table-view--row-string (spec row widths cell-fn)
@@ -598,13 +712,12 @@ it is called with the id and row at point."
   "Return (FIRST . LAST), the line-start positions of the first and last
 data rows, or nil when there are no rows.  Rows are the lines the renderer
 tags with `table-view-id'."
-  (let ((first (text-property-not-all (point-min) (point-max) 'table-view-id nil)))
-    (when first
-      (let ((last first) (pos first))
-        (while (setq pos (next-single-property-change pos 'table-view-id))
-          (when (get-text-property pos 'table-view-id)
-            (setq last pos)))
-        (cons first last)))))
+  (when-let ((first (text-property-not-all (point-min) (point-max) 'table-view-id nil)))
+    (let ((last first) (pos first))
+      (while (setq pos (next-single-property-change pos 'table-view-id))
+        (when (get-text-property pos 'table-view-id)
+          (setq last pos)))
+      (cons first last))))
 
 (defun table-view--move-row (dir)
   "Move point one data row in DIR (1 down, -1 up), preserving the column.
@@ -614,24 +727,23 @@ above the rows `n' enters the first row (and from below, `p' the last).
 When the preserved column falls on the leading \"|\" (e.g. entering the table
 from the title line at column 0), point snaps to the first cell rather than
 the separator."
-  (let ((region (table-view--rows-region)))
-    (when region
-      (let ((col (current-column))
-            (start (point))
-            (start-bol (line-beginning-position))
-            (first (car region))
-            (last (cdr region)))
-        (forward-line dir)
-        (let ((bol (line-beginning-position)))
-          (cond
-           ((get-text-property bol 'table-view-id))          ; landed on a row: keep
-           ((and (> dir 0) (< start-bol first)) (goto-char first)) ; enter from above
-           ((and (< dir 0) (> start-bol last)) (goto-char last))   ; enter from below
-           (t (goto-char start))))                            ; at a boundary: stay
-        (move-to-column col)
-        (unless (get-text-property (point) 'table-view-col)
-          (let ((starts (table-view--cell-starts)))
-            (when starts (goto-char (car starts)))))))))
+  (when-let ((region (table-view--rows-region)))
+    (let ((col (current-column))
+          (start (point))
+          (start-bol (line-beginning-position))
+          (first (car region))
+          (last (cdr region)))
+      (forward-line dir)
+      (let ((bol (line-beginning-position)))
+        (cond
+         ((get-text-property bol 'table-view-id))            ; landed on a row: keep
+         ((and (> dir 0) (< start-bol first)) (goto-char first)) ; enter from above
+         ((and (< dir 0) (> start-bol last)) (goto-char last))   ; enter from below
+         (t (goto-char start))))                              ; at a boundary: stay
+      (move-to-column col)
+      (unless (get-text-property (point) 'table-view-col)
+        (when-let ((starts (table-view--cell-starts)))
+          (goto-char (car starts)))))))
 
 (defun table-view-next-line (&optional n)
   "Move down among the table's data rows, stopping on the last row.
@@ -895,6 +1007,7 @@ KEY when a column was actually removed."
     (define-key map "u" #'table-view-unmark)
     (define-key map "U" #'table-view-unmark-all)
     (define-key map "^" #'table-view-sort-cycle)
+    (define-key map (kbd "C-c C-o") #'table-view-open-link)
     (define-key map (kbd "M-<right>") #'table-view-move-column-right)
     (define-key map (kbd "M-<left>")  #'table-view-move-column-left)
     (define-key map "q" #'quit-window)

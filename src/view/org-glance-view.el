@@ -41,6 +41,36 @@ lighter.")
 (defvar-local org-glance-view--reload-fn nil
   "Nullary thunk of the current view: re-fill it from the graph.")
 
+;;; Display
+
+(defcustom org-glance-view-fill-frame t
+  "When non-nil, opening an overview or table view fills the frame.
+The view's window becomes the sole one (via `delete-other-windows'), so a graph
+view takes over the frame instead of sharing it with whatever windows were open.
+Set to nil to leave the existing window layout untouched."
+  :group 'org-glance
+  :type 'boolean)
+
+(cl-defun org-glance-view:fill-frame (&optional already-in-view)
+  "Delete the other windows when `org-glance-view-fill-frame' is non-nil.
+Call right after a view buffer has been displayed.  Acts only on a FRESH open:
+  - the buffer must be the one shown in the selected window (a no-op otherwise:
+    a view opened programmatically or in a stubbed test -- so it never deletes
+    windows around an unrelated buffer);
+  - ALREADY-IN-VIEW must be nil.  Pass it non-nil when the visit is a
+    re-navigation from WITHIN a graph view (a filter change, or the `T' toggle),
+    so re-filtering or switching views leaves a deliberate split alone.
+Filling the frame is cosmetic, so a `delete-other-windows' signal (a quirky
+side/atomic window arrangement) is caught -- it must never break opening a view,
+even under `debug-on-error' (hence a plain `condition-case', not
+`with-demoted-errors', which re-raises while debugging)."
+  (when (and org-glance-view-fill-frame
+             (not already-in-view)
+             (eq (window-buffer) (current-buffer)))
+    (condition-case err
+        (delete-other-windows)
+      (error (message "org-glance: fill-frame skipped: %S" err)))))
+
 (cl-defun org-glance-view:register (graph &key stale-fn reload-fn)
   "Mark the current buffer a (fresh) view of GRAPH and wire its coherence.
 :STALE-FN is a nullary predicate (non-nil = behind the store); :RELOAD-FN

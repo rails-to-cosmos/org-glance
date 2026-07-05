@@ -220,6 +220,101 @@ corresponding overview), not wherever the non-file buffer was spawned."
               (should (file-equal-p default-directory (org-glance-graph:directory graph)))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
 
+(ert-deftest org-glance-test:table-renders-org-link-in-title ()
+  "A headline title carrying an Org link renders as a followable description in
+the table (vendored `table-view' link support), not as raw `[[...]]' markup."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines "* TODO Read [[https://example.com][The Book]]"
+                                       ":PROPERTIES:" ":ORG_GLANCE_ID: k1" ":END:"))
+    (let ((buf (org-glance-table:visit graph)))
+      (unwind-protect
+          (with-current-buffer buf
+            (let ((txt (buffer-string)))
+              (should (string-match-p "The Book" txt))            ; description shown
+              (should-not (string-match-p "\\[\\[https" txt)))    ; raw markup hidden
+            (goto-char (point-min))
+            (should (re-search-forward "The Book" nil t))
+            (should (equal "https://example.com"                   ; followable link property
+                           (get-text-property (match-beginning 0) 'table-view-link)))
+            (should (key-binding (kbd "C-c C-o"))))                ; follow key is bound
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest org-glance-test:table-fill-frame ()
+  "With `org-glance-view-fill-frame' non-nil, visiting a table fills the frame
+\(deletes the other windows); nil leaves the layout untouched."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "f1" "* TODO A"))
+    (save-window-excursion
+      (dolist (case '((t . 1) (nil . 2)))
+        (delete-other-windows) (split-window)          ; two windows before the visit
+        (let* ((org-glance-view-fill-frame (car case))
+               (buf (org-glance-table:visit graph)))   ; real switch-to-buffer displays it
+          (unwind-protect
+              (progn
+                (should (eq (window-buffer) buf))       ; the table is what's shown
+                (should (= (cdr case) (length (window-list)))))
+            (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:view-fill-frame-guards-undisplayed ()
+  "`org-glance-view:fill-frame' is a no-op when the current buffer is not the one
+shown in the selected window -- so it never deletes windows around an unrelated
+buffer (a view opened programmatically, or a test that stubs the buffer switch)."
+  (let ((org-glance-view-fill-frame t))
+    (save-window-excursion
+      (delete-other-windows) (split-window)             ; two windows
+      (with-temp-buffer                                 ; current, but shown in NO window
+        (org-glance-view:fill-frame)
+        (should (= 2 (length (window-list))))))))        ; untouched
+
+(ert-deftest org-glance-test:view-fill-frame-skips-when-in-view ()
+  "`fill-frame' fills a fresh open but is a no-op when ALREADY-IN-VIEW, so
+re-filtering / toggling from within a view keeps a deliberate split."
+  (let ((org-glance-view-fill-frame t) (buf (generate-new-buffer " *ff-test*")))
+    (unwind-protect
+        (save-window-excursion
+          (delete-other-windows)
+          (switch-to-buffer buf)                        ; buf shown in the selected window
+          (split-window)
+          (should (eq (window-buffer) buf))             ; guard precondition holds
+          (let ((n (length (window-list))))
+            (should (> n 1))                             ; the split produced >1 window
+            (org-glance-view:fill-frame t)              ; re-navigation from a view -> no-op
+            (should (= n (length (window-list))))        ; window count unchanged
+            (org-glance-view:fill-frame nil)            ; a fresh open -> fills
+            (should (= 1 (length (window-list))))))       ; down to one
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:table-revisit-from-view-keeps-layout ()
+  "Re-visiting the table from WITHIN a graph view keeps a deliberate split -- only
+the first open (from outside a view) fills the frame."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "f1" "* TODO A"))
+    (let ((org-glance-view-fill-frame t) (buf nil))
+      (save-window-excursion
+        (delete-other-windows)
+        (setq buf (org-glance-table:visit graph))       ; fresh open from non-view -> fills
+        (unwind-protect
+            (progn
+              (should (= 1 (length (window-list))))
+              (split-window)                              ; user splits: 2 windows
+              (with-current-buffer buf                    ; re-visit FROM within the view
+                (org-glance-table:visit graph))           ; -> must NOT fill
+              (should (= 2 (length (window-list)))))       ; split preserved
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:view-fill-frame-survives-delete-error ()
+  "A `delete-other-windows' signal never breaks opening the view -- caught even
+under `debug-on-error' (so a quirky side/atomic window arrangement is harmless)."
+  (let ((org-glance-view-fill-frame t) (debug-on-error t))
+    (save-window-excursion
+      (with-temp-buffer
+        (switch-to-buffer (current-buffer))              ; buffer IS the selected window's
+        (cl-letf (((symbol-function 'delete-other-windows)
+                   (lambda (&rest _) (error "boom"))))
+          (org-glance-view:fill-frame)                   ; must return, not signal
+          (should t))))))
+
 (ert-deftest org-glance-test:table-visit-default-sort ()
   "The table opens sorted by the spec default (state, active-first) regardless of
 graph insertion order -- guards `org-glance-table--apply-default-sort' against

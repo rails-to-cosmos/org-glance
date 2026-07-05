@@ -471,7 +471,8 @@ columns (the `prop'-marked columns of the live spec, in display order) per tag."
   "Open GRAPH's table for FILTER, one buffer per filter description.
 Honours the same filter language as the overview (see
 `org-glance-filter:predicate')."
-  (let* ((spec (org-glance-filter:normalize-spec filter))
+  (let* ((from-view (and org-glance-view--graph t))   ; re-navigation from within a view?
+         (spec (org-glance-filter:normalize-spec filter))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
          ;; Resolve the active/done split ONCE -- the single configured tag's todo
          ;; cycle, else the global keywords -- and bind it while the `:done'
@@ -536,7 +537,8 @@ Honours the same filter language as the overview (see
         (setq-local table-view--sort-keys sort))
       (org-glance-table--apply-sort)
       (setq org-glance-table--config-snapshot (org-glance-table--current-config))
-      (add-hook 'post-command-hook #'org-glance-table--persist-config nil t))
+      (add-hook 'post-command-hook #'org-glance-table--persist-config nil t)
+      (org-glance-view:fill-frame from-view))
     buf))
 
 (cl-defun org-glance-table:completing-read-tag ()

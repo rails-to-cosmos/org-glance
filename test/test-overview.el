@@ -96,6 +96,23 @@ where the user's content is."
             (should-not (file-equal-p default-directory (f-dirname buffer-file-name))))
         (kill-buffer buf)))))
 
+(ert-deftest org-glance-test:overview-fill-frame ()
+  "Visiting an overview fills the frame when `org-glance-view-fill-frame' is
+non-nil, and leaves the window layout alone when nil."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "o1" "* Alpha"))
+    (let ((org-glance-graph graph))
+      (save-window-excursion
+        (dolist (case '((t . 1) (nil . 2)))
+          (delete-other-windows) (split-window)         ; two windows before the visit
+          (let* ((org-glance-view-fill-frame (car case))
+                 (buf (org-glance-overview:visit graph nil)))
+            (unwind-protect
+                (progn
+                  (should (eq (window-buffer) buf))       ; overview is what's shown
+                  (should (= (cdr case) (length (window-list)))))
+              (when (buffer-live-p buf) (kill-buffer buf)))))))))
+
 ;;; Filtering
 
 (ert-deftest org-glance-test:overview-filter-by-tag ()

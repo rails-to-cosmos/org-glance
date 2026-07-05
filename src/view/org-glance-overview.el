@@ -319,7 +319,8 @@ returns point to the headline once the change (and any note) is committed."
 
 (cl-defun org-glance-overview:visit (graph &optional filter)
   "Open GRAPH's overview for FILTER read-only, serving the cache when fresh."
-  (let* ((spec (org-glance-filter:normalize-spec filter))
+  (let* ((from-view (and org-glance-view--graph t))   ; re-navigation from within a view?
+         (spec (org-glance-filter:normalize-spec filter))
          (file (org-glance-overview:cached-file graph spec))
          (existing (get-file-buffer file)))
     (cond
@@ -342,6 +343,7 @@ returns point to the headline once the change (and any note) is committed."
      ;; STALE-FN: guard the global graph + visited file the cache freshness needs.
      :stale-fn  (lambda () (and org-glance-graph buffer-file-name (org-glance-overview--stale?)))
      :reload-fn #'org-glance-overview:refresh)
+    (org-glance-view:fill-frame from-view)
     (current-buffer)))
 
 (cl-defun org-glance-overview:refresh ()
