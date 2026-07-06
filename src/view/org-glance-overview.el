@@ -130,11 +130,15 @@ is correct for the tag's keywords without any spec/cache-key change."
                                 (org-glance-tag-config:done-keywords cycle)
                               org-done-keywords))
          (keep? (org-glance-filter:predicate filter)))
-    (concat org-glance-overview:header
-            (if cycle (concat "#+TODO: " cycle "\n") "")
-            (cl-loop for meta in (org-glance-graph:headlines graph)
-                     when (funcall keep? meta)
-                     concat (org-glance-overview:render-headline meta)))))
+    ;; Collect the per-headline strings and join ONCE (`apply #'concat'); a
+    ;; `cl-loop ... concat' re-copies the growing accumulator each step -- O(N^2)
+    ;; in the output size (seconds at 10^4 headlines).
+    (apply #'concat
+           org-glance-overview:header
+           (if cycle (concat "#+TODO: " cycle "\n") "")
+           (cl-loop for meta in (org-glance-graph:headlines graph)
+                    when (funcall keep? meta)
+                    collect (org-glance-overview:render-headline meta)))))
 
 ;;; Cache paths + freshness
 

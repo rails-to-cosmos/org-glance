@@ -601,22 +601,20 @@ immutable (`:read-only' slots)."
 (cl-defun org-glance-graph:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."
   (cl-check-type graph org-glance-graph)
-  (sort (cl-remove-duplicates
+  (sort (-distinct                        ; hash-backed O(N) dedup (was O(N^2))
          (cl-loop for meta in (org-glance-graph:headlines graph)
                   append (mapcar (lambda (x) (format "%s" x))
-                                 (append (org-glance-headline-metadata:tags meta) nil)))
-         :test #'string=)
+                                 (append (org-glance-headline-metadata:tags meta) nil))))
         #'string<))
 
 (cl-defun org-glance-graph:states (graph)
   "Distinct non-empty todo states across GRAPH's live headlines, sorted."
   (cl-check-type graph org-glance-graph)
-  (sort (cl-remove-duplicates
+  (sort (-distinct                        ; hash-backed O(N) dedup (was O(N^2))
          (cl-loop for meta in (org-glance-graph:headlines graph)
                   for state = (org-glance-headline-metadata:state meta)
                   when (and (stringp state) (not (string-empty-p state)))
-                  collect state)
-         :test #'string=)
+                  collect state))
         #'string<))
 
 (cl-defun org-glance-graph:reindex (graph)

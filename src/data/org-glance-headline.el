@@ -136,9 +136,8 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 
 (cl-defun org-glance-headline--hash (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (cl-loop initially (org-glance--org-mode)
-                          for property in org-glance-headline:hash-ignore-properties
+  (thunk-delay (org-glance-headline:with-contents contents  ; with-contents already entered org-mode
+                 (cl-loop for property in org-glance-headline:hash-ignore-properties
                           do (org-entry-delete nil property)
                           finally return (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
                                            (with-temp-buffer
@@ -170,8 +169,7 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 
 (cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)
-  (org-glance-headline:with-contents contents
-    (org-glance--org-mode)
+  (org-glance-headline:with-contents contents      ; with-contents already entered org-mode
     (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
       (error "Unable to find `org-element' of type `headline' in the provided contents"))
     (org-glance-headline:at-point)))
@@ -272,7 +270,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline:reset-indent (headline)
   (cl-check-type headline org-glance-headline)
   (let ((contents (org-glance-headline:with-contents headline
-                    (org-glance--org-mode)
                     (re-search-forward "\\^*")
                     (while (looking-at "^\\*\\*")
                       (org-promote-subtree))
@@ -299,7 +296,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
   (cl-check-type headline org-glance-headline)
   (cl-check-type message string)
   (let ((contents (org-glance-headline:with-contents headline
-                    (org-glance--org-mode)
                     (goto-char (org-log-beginning t))
                     (insert "- " (apply #'format message format-args) "\n")
                     (buffer-substring-no-properties (point-min) (point-max)))))
@@ -318,7 +314,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline:timestamps (headline)
   (cl-check-type headline org-glance-headline)
   (org-glance-headline:with-contents headline
-    (org-glance--org-mode)
     (->> #'org-glance--element-timestamps
          (org-element-map (org-element-parse-buffer) '(timestamp headline))
          (-flatten-n 1)
@@ -331,7 +326,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline:clocks (headline)
   (cl-check-type headline org-glance-headline)
   (org-glance-headline:with-contents headline
-    (org-glance--org-mode)
     (cl-loop while (re-search-forward org-clock-line-re nil t)
              when (org-at-clock-log-p)
              collect (org-element-at-point))))
@@ -350,8 +344,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
         (hash (org-glance-headline:hash headline))
         (id (org-glance-headline:id headline)))
     (org-glance-headline:with-contents (org-glance-headline:header headline)
-      (org-glance--org-mode)
-
       (when id (org-entry-put nil "ORG_GLANCE_ID" id))
       (org-entry-put nil "ORG_GLANCE_HASH" hash)
 
@@ -369,7 +361,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline:header (headline)
   (cl-check-type headline org-glance-headline)
   (org-glance-headline:with-contents headline
-    (org-glance--org-mode)
     (buffer-substring-no-properties (point) (save-excursion
                                               (org-end-of-meta-data)
                                               (point)))))
