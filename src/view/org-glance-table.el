@@ -151,17 +151,12 @@ priority is its letter, absent values are the empty string."
            collect (org-glance-table--row meta)))
 
 (cl-defun org-glance-table--apply-sort ()
-  "Apply the sort currently in `table-view--sort-keys' -- the spec's declared
-default (seeded by `table-view-display'), a restored per-view config, or the
-sort the user left before a reload.
-NB reaches into `table-view' internals (`--sort-keys'/`--sorted'): the core
-seeds the keys but applies them only when rows arrive with the spec, whereas
-org-glance fills rows via `fill-fn' AFTER display.  A public \"apply seeded
-sort\" entry point in `table-view' would remove this coupling (matters when
-de-vendoring to MELPA)."
-  (when table-view--sort-keys
-    (setq table-view--sorted t)
-    (table-view-sort)))
+  "Apply the sort in `table-view--sort-keys' to rows filled after display.
+The keys are the spec's declared default (seeded by `table-view-display'), a
+restored per-view config, or the sort the user left before a reload.  Uses
+`table-view-apply-sort', the public entry point for `fill-fn' buffers whose
+rows arrive after the spec (a no-op with no keys; leaves the filter intact)."
+  (table-view-apply-sort))
 
 (cl-defun org-glance-table--restore-point (id line)
   "Return point to the row with ID; if that row is gone, to screen LINE.
