@@ -1,0 +1,79 @@
+#+TITLE: Performance audit — org-glance
+#+DATE: 2026-07-06
+
+Status: *living index* · performance audit 2026-07-06
+
+A deep-dive audit (per-subsystem analysis + adversarial verification of each
+finding) of where org-glance spends time at realistic scale (10^2–10^4
+headlines, frequent save→refresh, occasional bulk/reindex). This file is the
+entry point; each non-trivial optimization has its own proposal, linked below.
+
+* Three structural themes
+
+1. *The read cache is thrown away on every write.* ~--append~ →
+   ~--invalidate-cache~; the next read re-reads + re-JSON-parses every record in
+   every segment and re-deserializes every live struct. Worst on bulk (=O(N·k)=).
+2. *Parsing spins up full ~org-mode~ repeatedly* — per headline, and (until D)
+   ~5× per metadata build.
+3. *Views re-materialize/re-render the whole matching set on every interaction*
+   — the table on every mark/sort/reload; the overview via =O(N²)= string concat.
+
+* Done this session
+
+| Item | Change | Result |
+|------+--------+--------|
+| *B* | ~graph:states~/~graph:tags~: ~cl-remove-duplicates~ (=O(N²)=) → ~-distinct~ (hash, =O(N)=) | 1.8× at N=1500, grows with N; runs on every table/overview open |
+| *C* | overview render: ~cl-loop … concat~ (=O(N²)=) → ~collect~ + one ~apply #'concat~ | *6.6×* at N=1500, output byte-identical |
+| *E* | removed 8 redundant ~(org-glance--org-mode)~ re-inits inside ~with-contents~ bodies | halves the fixed mode-init cost per parse |
+| *D* | metadata build: 4 thunk reparses → one ~--content-facts~ pass | *3.9×* on the content-facts portion; byte-identical (5-shape test) |
+
+All four are org-glance-only, covered by the ERT suite (211 tests) + benchmarks.
+
+* Proposed (non-trivial, not yet done)
+
+| Proposal | Lever | Impact / Effort |
+|----------+-------+-----------------|
+| [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] | patch the cache on append instead of invalidating → save→refresh & bulk =O(N)/O(N·k)= → =O(k)= | *high / high* — the structural one |
+| [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] | reuse the ~--from-string~ parse so a headline build is *1* parse, not ~2 (builds on D) | high / medium |
+| [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for property columns]] | parse only *visible* rows for a displayed property column (not the whole tag) | high / high |
+| [[file:2026-07-06-table-paging.proposed.org][Table paging]] | render a screen-sized page, not the whole matching set | high / high |
+| [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row update]] | upsert one row + single render for single-row actions (pairs with the cache) | medium / medium |
+
+Suggested order: *Single-parse metadata* (safe, extends D) → *Incremental
+metadata cache* (the big structural win; makes *Incremental row update* truly
+=O(1)=) → table items (*Lazy value-fn*, *Paging*) only once large single-tag
+tables are a real pain point.
+
+* Minor / not yet scoped
+
+Real but low-impact; noted for completeness, no proposal yet:
+
+- ~--store-snapshot~ re-reads + parses the manifest on every read (tiny,
+  page-cached file); memoize if it ever shows up.
+- ~material:sync~ re-parses the just-saved blob in a fresh temp buffer instead of
+  deriving metadata from the already-parsed live buffer (=graph.el/material.el=;
+  one ~org-mode~ init per save — adds up in bulk).
+- ~filter--match-clause~ ~'member-all~ re-downcases + reallocates each headline's
+  tags per render (constant factor on the =O(N)= filter, dominated by the cache
+  rebuild).
+- ~tag-config:cycle-for-filter~ stats the tag-config file once per filter tag
+  (=O(T)=, T ≈ 1–3).
+- The display-boundary stale check does a couple of ~stat~-s per window event
+  (=O(1)=; the overview path is slightly heavier).
+- ~graph:headline~ has no ~(id, hash)~ parsed-headline cache (=O(1)= per
+  interactive action; the many-row caller is
+  [[file:2026-07-06-lazy-property-columns.proposed.org][property columns]]).
+
+* Refuted
+
+- "~graph:headlines~ copy-sequences the whole live list 3× per warm render" — the
+  =O(N)= copy is cheap relative to the render, and ~states~/~tags~ do not call it
+  3× per render. Not a bottleneck.
+
+* Method
+
+Findings were produced per subsystem (store-cache · parsing · table ·
+overview/material · filter/coherence) and each was independently, adversarially
+verified for real-workload impact (confirmed / minor / refuted), then the
+confirmed ones were re-checked against the source before landing (B/C/E/D) or
+writing up (the proposals above).

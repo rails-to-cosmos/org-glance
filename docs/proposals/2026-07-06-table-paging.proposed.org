@@ -1,0 +1,75 @@
+#+TITLE: Table paging / windowing
+#+DATE: 2026-07-06
+
+Status: *proposed* · performance audit 2026-07-06 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Problem
+
+The org-glance table is *flat and non-paged*: ~org-glance-table:visit~ calls
+~table-view-display~ with a ~fill-fn~ (no ~page-fn~), so every render
+materializes the *entire* matching set — an =O(cols · M)= width scan plus
+=O(M)= line inserts — for M matching headlines.
+
+A render fires on *every* mark toggle, sort, reload, and display-boundary pull.
+So on a large tag, each of those re-materializes the whole set.
+
+** Already mitigated upstream
+
+The vendored ~table-view~ "link cache" commit added a *column-width cache*
+(invalidated only when the row set / values / columns change — not on sort, mark,
+or point-restoration) and a *targeted mark re-render*. That removes the repeat
+width scan and the mark-toggle full redraw. What remains is the *first* render
+and any render after a genuine row-set change still building the whole set.
+
+* Proposed change
+
+Adopt table-view's *paging* path so only a screen-sized page is width-scanned and
+inserted:
+
+- Replace the ~fill-fn~ with a ~page-fn~ over the filtered+sorted headline list
+  (offset paging), delivering pages via ~table-view-set-page~.
+- The "server" is org-glance's in-memory filtered+sorted list; the page-fn
+  slices it by offset/limit. Sort and filter are applied to the *whole* list
+  (in memory) and paging slices the result — matching table-view's paged model,
+  where sort/filter live in the page *request*.
+
+* Interactions to design
+
+- *Sort / filter* must operate over the whole set (not just the loaded page), so
+  they re-slice from offset 0 — org-glance already holds the full list in memory,
+  so this is a re-sort + re-page, not a re-scan of the store.
+- *Custom property columns* — paging bounds the rendered rows; combined with
+  [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn]] it also
+  bounds the *parsed* rows to the page.
+- *Point preservation, marks (bulk), the "fill the frame" default* must keep
+  working across pages (marks already span pages via ~table-view~'s mark-cache).
+- *Per-view config* (column order/sort persisted per filter) is orthogonal.
+
+* Test plan
+
+- A tag with M ≫ page-size: only page-size rows are inserted per render (assert
+  buffer row count), navigation loads adjacent pages, totals correct.
+- Sort/filter re-slice from the top and stay correct across pages.
+- Bulk marking across pages still operates on the whole selection.
+- Point / fill-frame / persistence behave as today.
+
+* Risk
+
+High (structural — changes how the table sources rows), and it interacts with
+several existing table features (bulk marks, per-view config, custom columns,
+fill-frame). Worth doing only once large single-tag tables are a real pain
+point; the upstream width cache already removes the worst *repeat* cost.
+
+* Effort
+
+High. org-glance-side wiring of a ~page-fn~ + re-slice-on-sort/filter, plus test
+coverage across the interacting features. No vendored-file change (paging is
+already a first-class table-view capability).
+
+* Related
+
+- Pairs with [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for property columns]].
+- Complementary to [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row update]]
+  (which cuts the *per-action* rebuild; paging cuts the *per-render* size).
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

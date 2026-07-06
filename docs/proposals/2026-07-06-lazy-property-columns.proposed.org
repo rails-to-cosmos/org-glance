@@ -1,0 +1,87 @@
+#+TITLE: Lazy value-fn for custom property columns
+#+DATE: 2026-07-06
+
+Status: *proposed* · performance audit 2026-07-06 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Problem
+
+A custom property column (added with ~C-u +~) reads each row's *full headline*
+via a ~value-fn~ — a full ~org-mode~ parse of that row's blob — because drawer
+properties are not in the cheap metadata projection.
+
+The vendored ~table-view--compute-cells~ runs every ~value-fn~ over the *entire*
+row set inside ~table-view-set-rows~. So the *first* render of a tag that has a
+saved property column parses *all* matching headlines, not just the visible
+ones: =O(matching · parse)=.
+
+Reloads are cushioned by org-glance's per-~(id, hash)~ cache
+(~org-glance-table--headline-property~), but the *first* render (and any row
+whose content hash changed) still pays the parse.
+
+* Proposed change
+
+Compute a *display-only* property column *lazily*, for only the rendered/visible
+rows — falling back to eager materialization only when a column's values are
+actually needed set-wide.
+
+Values are needed set-wide when the property column is:
+- the active *sort* key (sorting must compare all rows), or
+- a *filter* target (the substring filter scans all cells).
+
+Otherwise (a column that is merely *displayed*), only the on-screen rows need a
+value.
+
+** Where it lands
+
+- Preferred: a table-view seam for *lazy cells* — a column whose ~value-fn~ is
+  invoked per visible row at render time, rather than for the whole set at
+  ~set-rows~ time. This is a generic capability, so it belongs upstream in
+  ~table-view~ (re-vendored), with org-glance supplying the ~value-fn~ and the
+  "is this column sort/filter-relevant?" signal. See the vendoring rule in
+  =CLAUDE.md=.
+- org-glance keeps the per-~(id, hash)~ cache so repeated renders of the same
+  visible window are free.
+
+* Alternative (bigger, eliminates the parse entirely)
+
+Extend the *metadata projection* to carry the configured drawer properties: add
+a projection field (an alist of the tag's declared property keys → values),
+populate it in ~org-glance-headline:metadata~, serialize it into the WAL, and
+~M-x org-glance-reindex~ to backfill. Then a property column reads from the cheap
+projection — no per-row parse at all, at any render.
+
+Trade-off: a WAL schema field + a reindex + slightly larger records, versus the
+lazy approach's zero storage change. The lazy change is the smaller first step;
+the projection change is the durable end state if property columns become heavily
+used.
+
+* Test plan
+
+- A tag with N matching headlines and a *displayed* property column: first render
+  computes the ~value-fn~ only for the visible window (assert call count), not N.
+- The property column as the *sort* key → all values computed (correct order).
+- The property column matched by the *filter* → all values computed (correct
+  matches).
+- Reload keeps the ~(id, hash)~ cache; a changed row re-parses, an unchanged row
+  does not.
+
+* Risk
+
+Medium–high. Correctness hinges on getting "needs all values" right — a column
+that is silently only-visible while it is actually the sort key would sort wrong.
+The sort/filter signal must be exact. Contained by the tests above and by
+defaulting to *eager* whenever unsure.
+
+* Effort
+
+High (a table-view seam + org-glance wiring) for the lazy approach; medium for the
+metadata-projection alternative (mechanical, but a schema + reindex).
+
+* Related
+
+- Depends on the same value-fn machinery as the done custom-columns feature.
+- Complements [[file:2026-07-06-table-paging.proposed.org][Table paging]] — both cut
+  first-render cost for large tags; paging bounds *what* is rendered, lazy value-fn
+  bounds *what is parsed* for it.
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

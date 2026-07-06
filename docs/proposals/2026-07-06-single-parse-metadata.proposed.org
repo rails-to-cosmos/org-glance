@@ -1,0 +1,77 @@
+#+TITLE: Single-parse metadata — reuse the from-string parse
+#+DATE: 2026-07-06
+
+Status: *proposed* · performance audit 2026-07-06 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Context
+
+The audit's item *D* is *done*: ~org-glance-headline:metadata~ now computes the
+four content-derived fields (~hash~/~linked?~/~propertized?~/~encrypted?~) in a
+single ~org-mode~ pass via ~org-glance-headline--content-facts~, replacing four
+independent thunk reparses (measured *3.9×* on the content-facts portion). See
+[[file:2026-07-06-performance-audit.org::*Done this session][Performance audit → Done]].
+
+* Problem
+
+Reconstructing a headline and building its metadata still costs *~2* ~org-mode~
+initializations + parses of the same blob:
+
+1. ~org-glance-headline--from-string~ parses the blob into the headline struct
+   (via ~--from-element~).
+2. ~--content-facts~ parses it *again* to derive hash/links/properties/encrypted.
+
+Every save, every ~reindex~ row, and every bulk row pays both. Reindex of 10^4
+headlines ≈ 32 s (post-D), of which ≈ half is this second parse.
+
+* Proposed change
+
+Fold the content-facts computation into the *single* buffer that ~--from-string~
+already stands up, so a headline reconstruction is *one* parse yielding both the
+struct and the metadata facts.
+
+- ~--from-string~ / ~--from-element~ operate in one ~with-contents~ buffer that
+  already has the parsed element and the live text. Compute hash/links/
+  properties/encrypted *there* (the buffer is still open) and attach them to the
+  headline as an eager ~facts~ slot (or pre-force the thunks).
+- ~org-glance-headline:metadata~ reads the pre-computed facts instead of calling
+  ~--content-facts~ (a second pass).
+- The lazy public thunks (~:hash~, ~:properties~) stay for headlines built
+  *without* facts (e.g. ~--from-lines~ in a non-metadata context) and for
+  single-field access on the overview/extract paths.
+
+Result: ~2 → ~1 parse per headline reconstruction — a further ≈ *2×* on
+save/reindex/bulk on top of D.
+
+* Correctness
+
+The facts computed in the shared buffer must stay *byte-identical* to the thunk
+values — exactly what the existing test
+~org-glance-test:headline-content-facts-matches-thunks~ asserts across five
+shapes (plain · linked · propertized · encrypted · all). Extend it to also
+assert the *eager* (from-string-time) facts equal the thunk values.
+
+The one subtlety carried over from D: the hash mutates the buffer (deletes the
+id/hash drawer properties), so it must run *last*, after links/properties/
+encrypted have read the pristine content — and after ~--from-element~ has
+extracted the element (which it does first).
+
+* Risk
+
+Medium. ~--from-element~ is central (every headline flows through it), so the
+change has real surface. Kept safe by: (a) the byte-identical facts test, (b)
+leaving the lazy thunks intact for callers that build a headline without needing
+metadata, (c) the full ERT suite (metadata drives serialize/deserialize/reindex).
+
+* Effort
+
+Medium. ≈ 25–40 LOC in ~org-glance-headline.el~ (share the buffer, attach facts)
++ a slot on the headline struct + a test extension.
+
+* Related
+
+- Prerequisite context: the done *D* change (this file supersedes its "why not 1
+  pass" note).
+- Complements [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] —
+  fewer per-record parses make both the rebuild and the incremental patch cheaper.
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

@@ -13,6 +13,14 @@ ones are `.org`.)
 Entry point for the current performance work:
 [[file:docs/proposals/2026-07-06-performance-audit.org][docs/proposals/2026-07-06-performance-audit.org]].
 
+## Keep doc references live
+
+Code moves; docs that cite it go stale. After changing code, grep the docs
+(`docs/`, the proposals) for references to anything you touched — line numbers,
+function/variable names, "current"/"done" claims — and update them in the same
+pass. A proposal citing `foo.el:365` after a refactor silently misleads the next
+reader.
+
 ## Fix — and prevent — the whole class
 
 A reported problem is one sample of a class. When you fix it, sweep the codebase
