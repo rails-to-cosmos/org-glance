@@ -97,7 +97,7 @@ commutative and idempotent **by construction** — `travel+baby ≡ baby+travel`
 *structurally*, and the diamond-superclass case (`travel` and `pets` both requiring
 `location`) collapses for free. A **canonical total order is imposed only at render**
 (`(phase, priority, tag-name)`), which is where org-capture's positional grammar is
-honored — keeping order-independence a property of the value, not a render hack.
+honored — so order-independence stays a structural property of the value.
 
 ### 4. Conflicts: a join-semilattice, not last-writer-wins
 
