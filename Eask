@@ -18,7 +18,12 @@
 (depends-on "aes")
 (depends-on "dash")
 (depends-on "f")
+(depends-on "s")
 (depends-on "transient")
+(depends-on "table-view"
+            :fetcher 'github
+            :repo "rails-to-cosmos/table-view"
+            :commit "9a4b4c77090ecac65b7de96d313e670e205fbea3")
 
 (eask-defcommand test
   "Run a configured ert test suite."

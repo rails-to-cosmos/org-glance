@@ -10,7 +10,7 @@ A custom property column (added with ~C-u +~) reads each row's *full headline*
 via a ~value-fn~ — a full ~org-mode~ parse of that row's blob — because drawer
 properties are not in the cheap metadata projection.
 
-The vendored ~table-view--compute-cells~ runs every ~value-fn~ over the *entire*
+~table-view--compute-cells~ runs every ~value-fn~ over the *entire*
 row set inside ~table-view-set-rows~. So the *first* render of a tag that has a
 saved property column parses *all* matching headlines, not just the visible
 ones: =O(matching · parse)=.

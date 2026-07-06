@@ -77,6 +77,7 @@ FILTER, if non-nil, is a predicate on the metadata."
     (org-glance-datetime-mode 1)))
 
 (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+(define-key org-glance-material-mode-map (kbd "C-c C-l") #'org-glance-material:lock)
 
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
@@ -178,6 +179,120 @@ Runs `:after' `org-auto-repeat-maybe'; only meaningful when
 (advice-add 'org-auto-repeat-maybe :before #'org-glance-material:clone-on-repeat '((depth . -90)))
 (advice-add 'org-auto-repeat-maybe :after #'org-glance-material:cleanup-after-repeat)
 
+;;; Encrypted headlines: decrypt on open, re-encrypt on save
+;;
+;; A materialized blob IS `data.org' (the store's canonical file), so plaintext
+;; must never touch disk.  The password prompted on open is cached buffer-local
+;; (with a TTL, `org-glance-material-password-ttl'); `before-save-hook' encrypts
+;; the body so the file is written as ciphertext, then `after-save-hook' (after
+;; `sync' has re-indexed the ciphertext) decrypts the body back for editing.  The
+;; buffer holds plaintext only in memory, and auto-save/backup/lockfiles are
+;; disabled so that plaintext cannot leak to `#data.org#' / `data.org~' / lock
+;; files.  SECURITY NOTE: the decrypted body and the cached password still live in
+;; process memory (and the undo list) for the buffer's lifetime; moving to
+;; gpg-agent removes that -- see the GPG-migration proposal.
+
+(defcustom org-glance-material-password-ttl 300
+  "Seconds an encrypted buffer caches its password before forgetting it.
+After the TTL the next save re-prompts.  0 keeps it for the buffer's lifetime.
+Forget it early with `org-glance-material:lock'."
+  :group 'org-glance
+  :type 'integer)
+
+(defvar-local org-glance-material--encrypted nil
+  "Non-nil when this materialized buffer's stored blob is encrypted.")
+(defvar-local org-glance-material--password nil
+  "Cached password of an encrypted materialized buffer, or nil when forgotten.")
+(defvar-local org-glance-material--password-timer nil
+  "Timer that forgets `org-glance-material--password' after the TTL.")
+
+(cl-defun org-glance-material--clear-password ()
+  "Forget the cached password and cancel its expiry timer."
+  (setq-local org-glance-material--password nil)
+  (when (timerp org-glance-material--password-timer)
+    (cancel-timer org-glance-material--password-timer))
+  (setq-local org-glance-material--password-timer nil))
+
+(cl-defun org-glance-material--set-password (pw)
+  "Cache PW buffer-local and (re)arm the TTL timer that forgets it."
+  (org-glance-material--clear-password)
+  (setq-local org-glance-material--password pw)
+  (when (> org-glance-material-password-ttl 0)
+    (let ((buf (current-buffer)))
+      (setq-local org-glance-material--password-timer
+                  (run-at-time org-glance-material-password-ttl nil
+                               (lambda ()
+                                 (when (buffer-live-p buf)
+                                   (with-current-buffer buf
+                                     (org-glance-material--clear-password)))))))))
+
+(cl-defun org-glance-material--require-password ()
+  "Return the cached password, prompting (and re-arming the TTL) when forgotten."
+  (or org-glance-material--password
+      (progn (org-glance-material--set-password (read-passwd "Headline password: "))
+             org-glance-material--password)))
+
+(cl-defun org-glance-material--harden-buffer ()
+  "Keep an encrypted buffer's plaintext off disk: no auto-save/backup/lockfile."
+  (let ((asf buffer-auto-save-file-name))
+    (auto-save-mode -1)
+    (when (and asf (file-exists-p asf)) (ignore-errors (delete-file asf))))
+  (setq-local buffer-auto-save-file-name nil
+              backup-inhibited t
+              create-lockfiles nil))
+
+(cl-defun org-glance-material--body-region ()
+  "Cons (BEG . END) of the current headline's body: meta-data end to subtree end.
+The same region `org-glance-headline:encrypt' rewrites, so crypto round-trips."
+  (cons (save-excursion (goto-char (point-min)) (org-end-of-meta-data t) (point))
+        (save-excursion (goto-char (point-min)) (org-end-of-subtree t) (point))))
+
+(cl-defun org-glance-material--encrypt-buffer ()
+  "Encrypt the materialized body in place before the file is written to disk.
+Buffer-local `before-save-hook'; prompts for the password if the TTL expired."
+  (when org-glance-material--encrypted
+    (let ((region (org-glance-material--body-region))
+          (inhibit-read-only t))
+      (org-glance--encrypt-region (car region) (cdr region)
+                                  (org-glance-material--require-password)))))
+
+(cl-defun org-glance-material--decrypt-buffer ()
+  "Decrypt the materialized body in place for editing.
+Clears the modified flag: the plaintext buffer matches the ciphertext already on
+disk.  Buffer-local `after-save-hook' (runs after `org-glance-material:sync')."
+  (when org-glance-material--encrypted
+    (let ((region (org-glance-material--body-region))
+          (inhibit-read-only t))
+      (org-glance--decrypt-region (car region) (cdr region)
+                                  (org-glance-material--require-password))
+      (set-buffer-modified-p nil))))
+
+(cl-defun org-glance-material:lock ()
+  "Forget this encrypted buffer's cached password now; the next save re-prompts.
+The decrypted body stays in the buffer until then."
+  (interactive)
+  (if org-glance-material--encrypted
+      (progn (org-glance-material--clear-password)
+             (message "org-glance: password forgotten"))
+    (user-error "Not an encrypted materialized buffer")))
+
+(cl-defun org-glance-material--maybe-decrypt (meta buffer)
+  "When META is encrypted, harden BUFFER, prompt for the password, and decrypt it.
+Caches the password (with TTL) and wires the save-time re-encrypt round-trip.
+A wrong password forgets it, kills BUFFER and re-signals, so `open' fails clean."
+  (when (org-glance-headline-metadata:encrypted? meta)
+    (setq-local org-glance-material--encrypted t)
+    (org-glance-material--harden-buffer)
+    (org-glance-material--set-password (read-passwd "Headline password: "))
+    (condition-case err
+        (org-glance-material--decrypt-buffer)
+      (error (org-glance-material--clear-password)
+             (kill-buffer buffer)
+             (signal (car err) (cdr err))))
+    (add-hook 'before-save-hook #'org-glance-material--encrypt-buffer nil t)
+    (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
+    (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t)))
+
 (cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.
 Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
@@ -218,7 +333,8 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
           ;; reach `--from-string's internal temp buffer.
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
-          (org-glance-material-mode 1))
+          (org-glance-material-mode 1)
+          (org-glance-material--maybe-decrypt meta buffer))
         buffer))))
 
 (cl-defun org-glance-material:apply ()

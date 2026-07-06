@@ -222,7 +222,7 @@ corresponding overview), not wherever the non-file buffer was spawned."
 
 (ert-deftest org-glance-test:table-renders-org-link-in-title ()
   "A headline title carrying an Org link renders as a followable description in
-the table (vendored `table-view' link support), not as raw `[[...]]' markup."
+the table (`table-view' link support), not as raw `[[...]]' markup."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-headline--from-lines "* TODO Read [[https://example.com][The Book]]"

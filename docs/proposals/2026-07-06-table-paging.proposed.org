@@ -16,7 +16,7 @@ So on a large tag, each of those re-materializes the whole set.
 
 ** Already mitigated upstream
 
-The vendored ~table-view~ "link cache" commit added a *column-width cache*
+The ~table-view~ "link cache" commit added a *column-width cache*
 (invalidated only when the row set / values / columns change — not on sort, mark,
 or point-restoration) and a *targeted mark re-render*. That removes the repeat
 width scan and the mark-toggle full redraw. What remains is the *first* render

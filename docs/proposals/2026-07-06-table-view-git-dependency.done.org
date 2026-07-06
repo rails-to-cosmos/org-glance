@@ -1,0 +1,87 @@
+#+TITLE: Retire vendoring — table-view as a pinned git dependency
+#+DATE: 2026-07-06
+
+Status: *done* · tooling 2026-07-06
+
+Implemented: =src/view/table-view.el= deleted; =table-view= declared in =Eask=
+(=:fetcher github :repo rails-to-cosmos/table-view :commit
+9a4b4c77090ecac65b7de96d313e670e205fbea3=) and in the =Package-Requires= header;
+the =update-table-view= skill removed.  Suite green (212/212), =make fat= treats
+it as a dependency (not bundled).  Note: Eask uses MELPA-recipe keywords
+(=:fetcher=/=:repo=/=:commit=), not =:git=/=:ref=.
+
+* Context
+
+~src/view/table-view.el~ is a byte-for-byte copy of upstream
+~~/sync/stuff/table-view/table-view.el~, kept pristine so org-glance builds
+anywhere and a future MELPA switch is trivial.  Every upstream change is pulled
+by hand via the ~update-table-view~ skill: commit upstream, copy the committed
+file over the vendored one, clean-rebuild, run the suite.  Currently pinned at
+upstream ~ef2fe0f~.
+
+The manual re-vendor is friction, and the copy drifts behind upstream between
+syncs (it was several commits stale before ~ef2fe0f~).
+
+* Why not a raw load-path
+
+Adding ~~/sync/stuff/table-view~ to ~load-path~ and ~require~-ing it directly is
+tempting but wrong: that path exists only on one machine (CI, a second checkout,
+~eask package~/install all fail), it points at a mutating Syncthing working tree
+(no pin, not reproducible), and Eask would not bundle it into ~dist~.  It trades
+away exactly the properties vendoring buys.
+
+* Proposed change — declare a pinned git dependency
+
+Replace the vendored copy with an Eask dependency pinned to a SHA:
+
+#+begin_src emacs-lisp
+;; Eask
+(depends-on "table-view" :git "<remote-url>" :ref "ef2fe0f")
+#+end_src
+
+- Eask fetches + byte-compiles it; ~require 'table-view~ resolves from the
+  fetched package, portable across machines and CI.
+- ~:ref~ pins a SHA, so it is reproducible — the same guarantee vendoring gives,
+  without a copied file to maintain.
+- Delete ~src/view/table-view.el~ and retire the ~update-table-view~ skill;
+  bumping the pin becomes editing ~:ref~ + running the suite.
+
+* Precondition
+
+Needs table-view reachable at a stable URL Eask can fetch:
+- publish to MELPA (the eventual goal), or
+- push the upstream repo to a git remote (GitHub/self-hosted) and point ~:git~ at
+  it.  A ~file://~ path works locally but reintroduces the portability problem, so
+  it is a stopgap only.
+
+* Migration
+
+1. Push table-view to a fetchable remote; note the SHA to pin.
+2. Add the ~depends-on~ with ~:git~/~:ref~ to =Eask=.
+3. Delete ~src/view/table-view.el~; drop it from the ~(files ...)~ glob if listed
+   explicitly.
+4. Clean rebuild + full suite (same guardrail the skill uses today):
+   ~rm -rf .eask && eask install-deps && eask recompile && eask run command test~.
+5. Remove the ~update-table-view~ skill and its references.
+
+* What stays the same
+
+The discipline is unchanged: table-view is upstream's, every org-glance adaptation
+stays in ~src/view/org-glance-table.el~, and the pinned SHA + the suite are the
+drop-in guardrail.  Only the delivery mechanism changes (fetch vs copy).
+
+* Risk
+
+Low, gated on the precondition.  Adds a fetch step to a cold ~eask install-deps~
+(network) where the vendored copy needed none — a consideration for offline/CI.
+Eask git-dependency resolution must be confirmed to pin ~:ref~ deterministically.
+
+* Effort
+
+Small once the remote exists: ~a few lines in =Eask=, delete one file, delete the
+skill, run the suite.
+
+* Related
+
+- Retires the ~update-table-view~ skill.
+- Back to the [[file:2026-07-06-performance-audit.org][proposals index]] (docs/proposals).

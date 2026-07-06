@@ -1,4 +1,4 @@
-.PHONY: build test info clean lint
+.PHONY: build test info clean lint fat
 
 info:
 	eask info
@@ -28,6 +28,15 @@ lint:
 
 clean:
 	eask clean elc
+
+# --- Fat build: one loadable file --------------------------------------------
+# Concatenate the multi-directory sources into a single `dist/org-glance.el' in
+# load-history order (dependencies precede dependents, so macros are defined
+# before use), then prove it byte-compiles and loads with only itself + its
+# dependencies on `load-path' (sources removed).  Ship dist/org-glance.el(c).
+fat:
+	eask exec emacs --batch -l build/build-fat.el
+	eask exec emacs --batch -l build/verify-fat.el
 
 # --- Version bumping ---------------------------------------------------------
 # `make patch|minor|major' bumps org-glance's semantic version (resetting the

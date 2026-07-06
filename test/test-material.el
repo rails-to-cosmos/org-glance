@@ -645,5 +645,52 @@ each one -- never discarding, never dangling on a killed buffer."
       (run-hooks 'post-command-hook)                            ; must NOT error
       (should (s-contains? "+1w" (org-glance-graph:get-content graph "rp1"))))))
 
+(ert-deftest org-glance-test:material-encrypted-decrypt-roundtrip ()
+  "Materializing an encrypted headline prompts for the password, shows plaintext,
+and re-encrypts on save so `data.org' never holds plaintext and edits round-trip."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "enc" "* TODO Secret" "plainbody")
+                                 "pw"))
+    ;; Seeded blob on disk is ciphertext.
+    (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
+    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+      (let ((buffer (org-glance-material:open graph "enc")))
+        (unwind-protect
+            (with-current-buffer buffer
+              ;; Body is decrypted in the buffer; ciphertext never shown.
+              (should (string= "pw" org-glance-material--password))
+              ;; Hardening: plaintext cannot leak to auto-save/backup/lockfiles.
+              (should (null buffer-auto-save-file-name))
+              (should backup-inhibited)
+              (should (null create-lockfiles))
+              ;; Lock forgets the password (next save would re-prompt).
+              (org-glance-material:lock)
+              (should (null org-glance-material--password))
+              (org-glance-material--set-password "pw")   ; restore for the save below
+              (should (save-excursion (goto-char (point-min)) (re-search-forward "plainbody" nil t)))
+              (should-not (save-excursion (goto-char (point-min)) (re-search-forward "aes-encrypted" nil t)))
+              ;; Edit + save: before-save encrypts, after-save decrypts back.
+              (goto-char (point-min))
+              (re-search-forward "plainbody")
+              (replace-match "editedbody")
+              (let ((inhibit-message t)) (save-buffer))
+              ;; Disk stays ciphertext; metadata still flagged encrypted.
+              (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
+              (should (org-glance-headline-metadata:encrypted?
+                       (org-glance-graph:get-headline graph "enc")))
+              ;; Buffer decrypted back to plaintext with the edit, not left dirty.
+              (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
+              (should-not (buffer-modified-p)))
+          (set-buffer-modified-p nil)
+          (kill-buffer buffer)))
+      ;; Reopen: the edited plaintext round-trips through the ciphertext blob.
+      (let ((buffer (org-glance-material:open graph "enc")))
+        (unwind-protect
+            (with-current-buffer buffer
+              (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t))))
+          (set-buffer-modified-p nil)
+          (kill-buffer buffer))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

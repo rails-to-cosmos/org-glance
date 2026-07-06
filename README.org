@@ -8,3 +8,72 @@
 [[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
 
 Emacs front-end for [[https://github.com/rails-to-cosmos/glance][Glance]]. Work in progress.
+
+* Using from your Emacs config
+
+org-glance is a multi-directory package: the entry point =org-glance.el= lives at
+the repo root, and its modules live under =src/data= and =src/view=.  It does NOT
+add those subdirectories to =load-path= itself, so all three must be on
+=load-path=.  (=Eask= is only the development/test harness; it is not needed to
+use the package.)
+
+** Dependencies
+
+From MELPA: =dash=, =f=, =s=, =aes=, =transient=.  From git:
+=table-view= ([[https://github.com/rails-to-cosmos/table-view][rails-to-cosmos/table-view]], not on MELPA).  Everything else (=org=
+and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
+
+** Load from a local clone
+
+The simplest form — add the three directories, then require it:
+
+#+begin_src emacs-lisp
+(dolist (dir '("" "src/data" "src/view"))
+  (add-to-list 'load-path (expand-file-name dir "~/path/to/org-glance")))
+(require 'org-glance)
+#+end_src
+
+With =use-package= (lazy-loads the commands, no autoload cookies needed):
+
+#+begin_src emacs-lisp
+(use-package org-glance
+  :load-path ("~/path/to/org-glance"
+              "~/path/to/org-glance/src/data"
+              "~/path/to/org-glance/src/view")
+  :commands (org-glance-materialize org-glance-open org-glance-extract))
+#+end_src
+
+With =straight.el= (fetches the dependencies from the package header):
+
+#+begin_src emacs-lisp
+(use-package org-glance
+  :straight (org-glance :type git :host github :repo "rails-to-cosmos/org-glance"
+                        :files ("*.el" "src/data/*.el" "src/view/*.el")))
+#+end_src
+
+=table-view= is a dependency fetched from git (not on MELPA), so =straight= needs
+a recipe for it too:
+
+#+begin_src emacs-lisp
+(use-package table-view
+  :straight (table-view :type git :host github :repo "rails-to-cosmos/table-view"))
+#+end_src
+
+** Single-file build
+
+=make fat= concatenates the sources into one =dist/org-glance.el= (+ =.elc=) in
+dependency order, and verifies it byte-compiles and loads standalone.  Then only
+that one directory needs to be on =load-path=:
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "~/path/to/org-glance/dist")
+(require 'org-glance)
+#+end_src
+
+Dependencies (=dash=, =f=, =s=, =aes=, =transient=) are still required separately.
+
+** Entry commands
+
+=M-x org-glance-materialize=, =org-glance-open=, =org-glance-extract= (and more in
+=org-glance.el=).  A plain =(require 'org-glance)= — or the =use-package :commands=
+stubs above — makes them available.
