@@ -120,7 +120,7 @@ This guards the interactive save path users actually hit."
           (kill-buffer buffer2))))))
 
 (ert-deftest org-glance-test:material-edit-updates-metadata ()
-  "Editing the heading and saving updates the stored metadata, not just the blob."
+  "Editing the heading and saving updates the stored metadata projection."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO foo"))
     (let ((buffer (org-glance-material:open graph "u1")))
@@ -554,8 +554,8 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
 
 (ert-deftest org-glance-test:material-set-todo-bulk-full-timestamp-logging ()
   "Bulk records the LOGBOOK state-change entry for EVERY row under timestamp
-logging (flushed synchronously, org-agenda style) -- not just the last row, never
-discarded -- and leaves nothing dangling on `post-command-hook'."
+logging (flushed synchronously, org-agenda style), never discarded, and leaves
+nothing dangling on `post-command-hook'."
   ;; `DONE(!)' logs a timestamp on entering DONE; the notation rides in via
   ;; `org-todo-keywords' so the materialized buffer actually derives the log
   ;; (a bare global `org-todo-log-states' would not -- it is buffer-local).

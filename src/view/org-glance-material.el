@@ -107,7 +107,7 @@ ORG_GLANCE_ID was changed."
            ;; global value the temp buffer's `org-mode' reads.
            (headline (let ((org-todo-keywords
                             (if org-glance-material--cycle
-                                (list (cons 'sequence (split-string org-glance-material--cycle)))
+                                (org-glance-tag-config:cycle->keywords org-glance-material--cycle)
                               org-todo-keywords)))
                        (org-glance-headline--from-string
                         (buffer-substring-no-properties (point-min) (point-max))))))
@@ -146,7 +146,8 @@ capture it into the graph as a new headline."
         (org-glance--org-mode)
         (goto-char (point-min))
         (org-glance-datetime-reset-buffer-timestamps-except-earliest)
-        (goto-char (point-min))
+        ;; `org-entry-delete' resolves the sole heading from any point in this
+        ;; single-entry buffer, so no reset to point-min is needed here.
         (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
         (org-glance-graph:capture graph (current-buffer))))))
 
@@ -171,8 +172,7 @@ Runs `:after' `org-auto-repeat-maybe'; only meaningful when
                                                (point)))))))
         (delete-region (point-min) (point-max))
         (insert (s-join "\n\n" (cons header pinned)) "\n")
-        (goto-char (point-min))
-        (org-delete-property "LAST_REPEAT")))))
+        (org-delete-property "LAST_REPEAT")))))   ; entry-delete finds the sole heading
 
 ;; Idempotent on reload: `advice-add' is a no-op for an already-added function.
 (advice-add 'org-auto-repeat-maybe :before #'org-glance-material:clone-on-repeat '((depth . -90)))
@@ -186,7 +186,7 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
   (let ((meta (org-glance-graph:get-headline graph id)))
     (unless (org-glance-headline-metadata? meta)
       (user-error "No live headline with id %s" id))
-    (let ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+    (let ((path (org-glance-graph:content-path graph id))
           (cycle (org-glance-tag-config:cycle-for-filter
                   graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))))
       (unless (f-exists? path)
@@ -199,7 +199,7 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
              ;; -- and hence native rendering, cycling and `org-todo' -- know the tag's
              ;; states (e.g. READING), WITHOUT a `#+TODO:' in the kept-clean blob.
              (let ((org-todo-keywords
-                    (if cycle (list (cons 'sequence (split-string cycle)))
+                    (if cycle (org-glance-tag-config:cycle->keywords cycle)
                       org-todo-keywords)))
                (find-file-noselect path))))
         (with-current-buffer buffer
@@ -270,7 +270,7 @@ kill it and run FINALIZE (a one-arg thunk of the new state) in the ORIGIN view.
 A pre-existing materialized buffer is edited in place; the user saves it."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let* ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+  (let* ((path (org-glance-graph:content-path graph id))
          (fresh (null (get-file-buffer path)))
          (origin (current-buffer))
          (buf (org-glance-material:open graph id)))  ; user-errors if not live
@@ -349,7 +349,7 @@ the (id . reason) pairs skipped."
            ;; Kill + advance OFF `org-store-log-note's extent (its window restore).
            (run-at-time 0 nil (lambda () (kill-fresh buf existing) (drive))))
          (change-row (id)                   ; -> t when it SUSPENDS on a note, else nil
-           (let* ((path (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+           (let* ((path (org-glance-graph:content-path graph id))
                   (existing (get-file-buffer path)))
              (cond
               ((and existing (buffer-modified-p existing))
@@ -440,18 +440,22 @@ chosen link, mirroring the v1 behaviour."
              (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
                (org-open-at-point)))))
 
-(cl-defun org-glance-open ()
-  "Choose a headline from the graph and open a link inside it."
-  (interactive)
+(cl-defun org-glance-material--pick-headline (prompt extra-pred)
+  "Read a graph headline matching the ambient filter AND EXTRA-PRED under PROMPT."
   (cl-assert (org-glance-initialized?))
   (let* ((graph org-glance-graph)
          (keep? (org-glance-filter:predicate org-glance-filter-spec))
          (metadata (org-glance-material:completing-read
-                    graph :prompt "Open: "
+                    graph :prompt prompt
                     :filter (lambda (m) (and (funcall keep? m)
-                                        (org-glance-headline-metadata:linked? m)))))
-         (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
-    (org-glance-material:open-link headline)))
+                                        (funcall extra-pred m))))))
+    (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
+
+(cl-defun org-glance-open ()
+  "Choose a headline from the graph and open a link inside it."
+  (interactive)
+  (org-glance-material:open-link
+   (org-glance-material--pick-headline "Open: " #'org-glance-headline-metadata:linked?)))
 
 (cl-defun org-glance-material:extract (headline &optional key)
   "Copy a key-value pair from HEADLINE's contents to the kill ring; return value.
@@ -468,16 +472,11 @@ With KEY, extract it non-interactively; otherwise prompt."
 (cl-defun org-glance-extract ()
   "Choose a headline from the graph and extract a key-value pair from it."
   (interactive)
-  (cl-assert (org-glance-initialized?))
-  (let* ((graph org-glance-graph)
-         (keep? (org-glance-filter:predicate org-glance-filter-spec))
-         (metadata (org-glance-material:completing-read
-                    graph :prompt "Extract from: "
-                    :filter (lambda (m) (and (funcall keep? m)
-                                        (or (org-glance-headline-metadata:propertized? m)
-                                            (org-glance-headline-metadata:encrypted? m))))))
-         (headline (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
-    (org-glance-material:extract headline)))
+  (org-glance-material:extract
+   (org-glance-material--pick-headline
+    "Extract from: "
+    (lambda (m) (or (org-glance-headline-metadata:propertized? m)
+                    (org-glance-headline-metadata:encrypted? m))))))
 
 (provide 'org-glance-material)
 ;;; org-glance-material.el ends here

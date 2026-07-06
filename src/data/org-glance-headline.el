@@ -20,7 +20,6 @@
                                  (symbol (list types)))))
       (otherwise nil))))
 
-(defconst org-glance-headline:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 (defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
 
 (cl-defstruct (org-glance-headline (:predicate org-glance-headline?)
@@ -75,7 +74,7 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
     (cl-loop initially (or (org-at-heading-p) (org-back-to-heading-or-point-min))
              while (org-at-heading-p)
              for element = (org-element-at-point)
-             if (org-element-type-p element 'headline) ;; (and (listp element) (eq (car element) 'headline))
+             if (org-element-type-p element 'headline)
              return (org-glance-headline--from-element element)
              else if (or (org-before-first-heading-p) (bobp))
              do (error "Unable to find `org-glance-headline' at point")
@@ -134,15 +133,41 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
   (-some->> (org-glance-headline:-deadline headline)
     (org-element-property :raw-value)))
 
+;; The four content-derived facts, each computed in the CURRENT `org-mode' buffer
+;; (holding one headline).  `--content-facts' composes all four in one shared
+;; buffer for the metadata build; the -hash/-encrypted thunks reuse the same
+;; helpers, so each computation has a single definition.
+
+(defun org-glance-headline--linked-here ()
+  "Non-nil if the current buffer's headline contains an Org link."
+  (save-excursion (goto-char (point-min)) (and (org-glance--buffer-links) t)))
+
+(defun org-glance-headline--propertized-here ()
+  "Non-nil if the current buffer's headline body has a `KEY: value' pair."
+  (save-excursion
+    (goto-char (point-min))
+    (and (re-search-forward org-glance:key-value-pair-re nil t) t)))
+
+(defun org-glance-headline--encrypted-here ()
+  "Non-nil if the current buffer's headline body is an `aes-encrypted' block."
+  (save-excursion
+    (goto-char (point-min))
+    (org-end-of-meta-data t)
+    (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))
+
+(defun org-glance-headline--hash-here ()
+  "Content hash of the current buffer with the id/hash drawer properties removed.
+MUTATES the buffer (deletes those properties), so call it LAST when sharing one."
+  (goto-char (point-min))
+  (dolist (property org-glance-headline:hash-ignore-properties)
+    (org-entry-delete nil property))
+  (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+    (with-temp-buffer (insert data) (buffer-hash))))
+
 (cl-defun org-glance-headline--hash (contents)
   (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents  ; with-contents already entered org-mode
-                 (cl-loop for property in org-glance-headline:hash-ignore-properties
-                          do (org-entry-delete nil property)
-                          finally return (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
-                                           (with-temp-buffer
-                                             (insert data)
-                                             (buffer-hash)))))))
+  (thunk-delay (org-glance-headline:with-contents contents
+                 (org-glance-headline--hash-here))))
 
 (cl-defun org-glance-headline--links (contents)
   (cl-check-type contents string)
@@ -152,9 +177,7 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline--properties (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline:with-contents contents
-                 (cl-loop while (re-search-forward org-glance-headline:key-value-pair-re nil t)
-                          collect (cons (s-trim (substring-no-properties (match-string 1)))
-                                        (s-trim (substring-no-properties (match-string 2))))))))
+                 (org-glance--buffer-key-value-pairs))))
 
 (cl-defun org-glance-headline--node-properties (contents)
   (cl-check-type contents string)
@@ -164,8 +187,19 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance-headline--encrypted (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline:with-contents contents
-                 (org-end-of-meta-data t)
-                 (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n"))))))
+                 (org-glance-headline--encrypted-here))))
+
+(cl-defun org-glance-headline--content-facts (headline)
+  "HEADLINE's four content-derived metadata facts, in ONE org-mode pass.
+Returns a plist (:hash H :linked L :propertized P :encrypted E), sharing one
+`with-contents' buffer + `org-mode' init across the four (the store's metadata
+build reparses the same blob otherwise).  Hash is LAST: it deletes the id/hash
+drawer properties in place, after the read-only facts."
+  (org-glance-headline:with-contents headline
+    (list :linked      (org-glance-headline--linked-here)
+          :propertized (org-glance-headline--propertized-here)
+          :encrypted   (org-glance-headline--encrypted-here)
+          :hash        (org-glance-headline--hash-here))))
 
 (cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)
@@ -232,17 +266,24 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
            collect slot-value into params
            finally (return (apply #'make-org-glance-headline params))))
 
+(cl-defun org-glance-headline--rewrite-body (headline region-fn password)
+  "HEADLINE's contents with REGION-FN applied to the body region under PASSWORD.
+REGION-FN takes (BEG END PASSWORD); the body runs from the end of the meta-data
+to the end of the subtree."
+  (org-glance-headline:with-contents headline
+    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
+          (end (save-excursion (org-end-of-subtree t) (point))))
+      (funcall region-fn beg end password)
+      (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
+
 (cl-defun org-glance-headline:encrypt (headline password)
   (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
   (if (org-glance-headline:encrypted? headline)
       headline
     (org-glance-headline--copy headline
-      :contents (org-glance-headline:with-contents headline
-                  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                        (end (save-excursion (org-end-of-subtree t) (point))))
-                    (org-glance--encrypt-region beg end password)
-                    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+      :contents (org-glance-headline--rewrite-body
+                 headline #'org-glance--encrypt-region password)
       :-encrypted? t)))
 
 (cl-defun org-glance-headline:decrypt (headline password)
@@ -251,11 +292,8 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
   (if (not (org-glance-headline:encrypted? headline))
       headline
     (org-glance-headline--copy headline
-      :contents (org-glance-headline:with-contents headline
-                  (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-                        (end (save-excursion (org-end-of-subtree t) (point))))
-                    (org-glance--decrypt-region beg end password)
-                    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+      :contents (org-glance-headline--rewrite-body
+                 headline #'org-glance--decrypt-region password)
       :-encrypted? nil)))
 
 (cl-defun org-glance-headline:search-forward (id)
@@ -306,10 +344,7 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 (cl-defun org-glance--element-timestamps (element)
   (cl-check-type element list)
   (cl-case (org-element-type element)
-    (timestamp (list element))
-    ;; (headline (list (org-element-property :scheduled element)
-    ;;                 (org-element-property :deadline element)))
-    ))
+    (timestamp (list element))))
 
 (cl-defun org-glance-headline:timestamps (headline)
   (cl-check-type headline org-glance-headline)

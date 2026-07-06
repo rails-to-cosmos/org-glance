@@ -7,6 +7,11 @@
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
+(cl-defun org-glance--present-string? (v)
+  "Non-nil when V is a non-empty string.
+Whitespace-only strings count as present (unlike `s-present?')."
+  (and (stringp v) (not (string-empty-p v))))
+
 (cl-defun org-glance--buffer-links ()
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)

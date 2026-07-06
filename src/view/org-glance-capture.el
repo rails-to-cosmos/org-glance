@@ -17,7 +17,7 @@
 
 (cl-defun org-glance-capture--format-tags (tags)
   "Format TAGS (a symbol or list of symbols) as an org tag string `:a:b:'."
-  (let ((tags (if (listp tags) tags (list tags))))
+  (let ((tags (org-glance-tag:as-list tags)))
     (mapconcat #'org-glance-tag:to-string tags ":")))
 
 (cl-defun org-glance-capture:template (tags &optional (title ""))
@@ -29,7 +29,7 @@ config's skeleton, and -- if the config declares a `:TODO_KEYWORDS:' cycle -- a
 Otherwise the default `* TITLE%?  :tags:' is used, so an unconfigured tag is
 byte-identical to before.  Multi-tag composition is deferred to Phase 2."
   (cl-check-type title string)
-  (let* ((tags (if (listp tags) tags (list tags)))
+  (let* ((tags (org-glance-tag:as-list tags))
          (config (when (= 1 (length tags))
                    (org-glance-tag-config:resolve org-glance-graph (car tags)))))
     (if config

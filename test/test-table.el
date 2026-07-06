@@ -112,7 +112,7 @@ path; a display-boundary refresh re-fills it and clears the flag."
       (unwind-protect
           (with-current-buffer buf
             (table-view-mode)
-            (setq org-glance-table--mtime (org-glance-table--mtime src))
+            (setq org-glance-table--mtime (org-glance-table--file-mtime src))
             (should-not (org-glance-table--stale? graph))
             (setq org-glance-table--mtime '(0 0 0 0))
             (should (org-glance-table--stale? graph)))

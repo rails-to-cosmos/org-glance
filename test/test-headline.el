@@ -146,5 +146,24 @@
     (should (string= (org-glance-headline:hash headline)
                      (org-glance-headline:hash (org-glance-headline--from-string overview))))))
 
+(ert-deftest org-glance-test:headline-content-facts-matches-thunks ()
+  "The metadata build's single-pass `--content-facts' is byte-identical to forcing
+the -hash/-links/-properties/-encrypted thunks separately, across headline shapes."
+  (dolist (lines '(("* TODO Plain" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:")
+                   ("* TODO Linked [[https://x][d]]" ":PROPERTIES:" ":ORG_GLANCE_ID: b" ":END:"
+                    "See [[file:y.org][y]] and [[id:z][z]].")
+                   ("* TODO Propd" ":PROPERTIES:" ":ORG_GLANCE_ID: c" ":END:"
+                    "author: Tolkien" "pages: 300")
+                   ("* TODO Enc" ":PROPERTIES:" ":ORG_GLANCE_ID: e" ":END:"
+                    "aes-encrypted V 1.3-OCB-B-4-4-Mxxxx" "morebody")
+                   ("* TODO Both [[https://q][q]]" ":PROPERTIES:" ":ORG_GLANCE_ID: d" ":AUTHOR: X" ":END:"
+                    "key: val")))
+    (let* ((h (apply #'org-glance-headline--from-lines lines))
+           (facts (org-glance-headline--content-facts h)))
+      (should (equal (plist-get facts :hash)        (org-glance-headline:hash h)))
+      (should (eq    (plist-get facts :linked)      (and (org-glance-headline:links h) t)))
+      (should (eq    (plist-get facts :propertized) (and (org-glance-headline:properties h) t)))
+      (should (eq    (plist-get facts :encrypted)   (and (org-glance-headline:encrypted? h) t))))))
+
 (provide 'test-headline)
 ;;; test-headline.el ends here

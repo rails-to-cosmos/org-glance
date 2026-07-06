@@ -21,7 +21,7 @@
 ;; Each view supplies only what genuinely differs: a STALE-FN (its freshness
 ;; test -- an org-file cache vs an in-memory fill) and a RELOAD-FN (its rebuild).
 ;; The window-hook wiring, the modified-buffer guard and the error demotion live
-;; here, so a new view type adds a `register' call, not a coherence skeleton.
+;; here, so a new view type adds only a `register' call.
 
 ;;; Code:
 

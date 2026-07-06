@@ -150,13 +150,17 @@ with the global todo keywords -- the graceful-degradation path."
   (cl-check-type tag org-glance-tag)
   (gethash tag (org-glance-tag-config--by-tag graph)))
 
+(cl-defun org-glance-tag-config:cycle->keywords (cycle)
+  "The `org-todo-keywords' value for a tag CYCLE string: one `:sequence'."
+  (list (cons 'sequence (split-string cycle))))
+
 (cl-defun org-glance-tag-config:done-keywords (todo-spec)
   "The done keywords of TODO-SPEC (everything after the last `|'), or nil.
 Derived by org itself from the verbatim cycle string, so the active/done split
 is exactly the one a `#+TODO:' header produces -- single source of truth."
-  (when (and (stringp todo-spec) (not (string-empty-p todo-spec)))
+  (when (org-glance--present-string? todo-spec)
     (with-temp-buffer
-      (let ((org-todo-keywords (list (cons 'sequence (split-string todo-spec)))))
+      (let ((org-todo-keywords (org-glance-tag-config:cycle->keywords todo-spec)))
         (delay-mode-hooks (org-mode))
         (copy-sequence org-done-keywords)))))
 
@@ -194,7 +198,7 @@ none of its own (in its body OR a kept drawer property); a well-formed skeleton
 therefore yields exactly one (org-capture honours only the first)."
   (cl-check-type config org-glance-tag-config)
   (cl-check-type title string)
-  (let ((tags (if (listp tags) tags (list tags))))
+  (let ((tags (org-glance-tag:as-list tags)))
     (org-glance-headline:with-contents (org-glance-tag-config:headline config)
       (dolist (property org-glance-tag-config--render-strip)
         (goto-char (point-min))
@@ -232,7 +236,7 @@ therefore yields exactly one (org-capture honours only the first)."
 "
   "Worked-example contents written into a freshly-created `tags.org'.
 A copy-ready config headline turns the schema (and the TODO_KEYWORDS gotcha)
-into an example, rather than dropping the user onto a blank page.")
+into an example the user can adapt.")
 
 (cl-defun org-glance-tag-config--drawer-has-key? (key)
   "Non-nil if the current entry's property drawer has a literal `:KEY:' line."

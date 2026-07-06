@@ -139,7 +139,7 @@ priority is its letter, absent values are the empty string."
 (defvar-local org-glance-table--mtime nil
   "Mtime of `headlines.jsonl' at the current table buffer's last fill.")
 
-(cl-defun org-glance-table--mtime (path)
+(cl-defun org-glance-table--file-mtime (path)
   "Modification time of PATH, or nil when it does not exist."
   (and (f-exists? path)
        (file-attribute-modification-time (file-attributes path))))
@@ -163,6 +163,14 @@ de-vendoring to MELPA)."
     (setq table-view--sorted t)
     (table-view-sort)))
 
+(cl-defun org-glance-table--restore-point (id line)
+  "Return point to the row with ID; if that row is gone, to screen LINE.
+The row may have left the current filter (e.g. now DONE under an active filter);
+fall back to the same screen line, org-agenda-style, instead of the buffer top."
+  (unless (and id (table-view--goto-id id))
+    (goto-char (point-min))
+    (forward-line (1- line))))
+
 (cl-defun org-glance-table--reload (buffer)
   "Re-fill BUFFER from the live graph, re-apply its sort, and keep point in place.
 Used by `g' (refresh) and the lazy display-boundary check.  `table-view-refresh'
@@ -177,9 +185,7 @@ LINE, which drifts to another row once the sort reorders them."
         (table-view-refresh buf)
         (org-glance-table--apply-sort)
         (org-glance-view:mark-fresh)
-        (unless (and id (table-view--goto-id id))
-          (goto-char (point-min))
-          (forward-line (1- line)))))))
+        (org-glance-table--restore-point id line)))))
 
 ;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
 ;;
@@ -196,7 +202,7 @@ so the buffer needs no graph of its own."
   (let ((src (org-glance-graph:headline-meta-path graph)))
     (and (f-exists? src)
          (or (null org-glance-table--mtime)
-             (time-less-p org-glance-table--mtime (org-glance-table--mtime src))))))
+             (time-less-p org-glance-table--mtime (org-glance-table--file-mtime src))))))
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
@@ -225,13 +231,7 @@ row once the change (and any note) is committed."
        graph id arg
        (lambda (state)
          (org-glance-table--reload (current-buffer))
-         ;; Preserve point: follow the row if it is still visible, else keep the
-         ;; screen line (the row may have left the filter -- e.g. now DONE under an
-         ;; active filter -- and the next row shifts into it, org-agenda-style)
-         ;; rather than jumping to the beginning of the buffer.
-         (unless (table-view--goto-id id)
-           (goto-char (point-min))
-           (forward-line (1- line)))
+         (org-glance-table--restore-point id line)
          (message "State: %s" (if (s-present? state) state "(none)")))))))
 
 (cl-defun org-glance-table--todo-candidates (graph filter)
@@ -263,12 +263,7 @@ single-row `org-glance-table--act-todo' (cycle + note)."
            (lambda (changed skipped)
              (org-glance-table--reload (current-buffer))
              (table-view-unmark-all)
-             ;; Keep point where it was: on the same row if it survived (a bulk-DONE
-             ;; row can leave an active-only view), else the same screen line --
-             ;; rather than the top the reload + unmark would otherwise leave it at.
-             (unless (and at-id (table-view--goto-id at-id))
-               (goto-char (point-min))
-               (forward-line (1- line)))
+             (org-glance-table--restore-point at-id line)
              (message "Set %d headline(s) to %s%s"
                       (length changed) state
                       (if skipped (format " (%d skipped)" (length skipped)) "")))))))))
@@ -287,11 +282,19 @@ single-row `org-glance-table--act-todo' (cycle + note)."
   "Path of GRAPH's table-view config store (may not exist)."
   (f-join (org-glance-graph:store-path graph) "config" "table-views.eld"))
 
+(cl-defun org-glance-table--read-eld (path)
+  "Read the single form in the .eld PATH, or nil when absent/unreadable."
+  (when (f-exists? path)
+    (ignore-errors (car (read-from-string (f-read-text path 'utf-8))))))
+
+(cl-defun org-glance-table--write-eld (path form)
+  "Serialize FORM to the .eld PATH, creating parent dirs."
+  (f-mkdir-full-path (f-dirname path))
+  (f-write-text (prin1-to-string form) 'utf-8 path))
+
 (cl-defun org-glance-table--config-all (graph)
   "Saved per-filter table configs: alist of (identity-string . config-plist)."
-  (let ((path (org-glance-table--config-file graph)))
-    (when (f-exists? path)
-      (ignore-errors (car (read-from-string (f-read-text path 'utf-8)))))))
+  (org-glance-table--read-eld (org-glance-table--config-file graph)))
 
 (cl-defun org-glance-table--config-get (graph spec)
   "Saved view-config plist for SPEC (`:columns' KEYS `:sort' SORT-KEYS), or nil."
@@ -304,8 +307,7 @@ single-row `org-glance-table--act-todo' (cycle + note)."
         (all (org-glance-table--config-all graph))
         (id (org-glance-filter:identity spec)))
     (setf (alist-get id all nil nil #'equal) config)
-    (f-mkdir-full-path (f-dirname path))
-    (f-write-text (prin1-to-string all) 'utf-8 path)))
+    (org-glance-table--write-eld path all)))
 
 (cl-defun org-glance-table--reorder-columns (columns order)
   "COLUMNS reordered so their `key's follow ORDER (a list of keys).
@@ -405,9 +407,7 @@ column for that property; empty input cancels the add."
 
 (cl-defun org-glance-table--schema-all (graph)
   "Saved per-tag schemas: alist of (tag-key . (:columns ((PROP . HEADER) ...)))."
-  (let ((path (org-glance-table--schema-file graph)))
-    (when (f-exists? path)
-      (ignore-errors (car (read-from-string (f-read-text path 'utf-8)))))))
+  (org-glance-table--read-eld (org-glance-table--schema-file graph)))
 
 (cl-defun org-glance-table--schema-key (filter)
   "Canonical per-tag key for FILTER: its tags sorted and `+'-joined, or
@@ -432,8 +432,7 @@ An empty COLUMNS drops the entry so the store does not accrete empties."
                          :key #'car :test #'equal)))
     (when columns
       (setq all (cons (cons key (list :columns columns)) all)))
-    (f-mkdir-full-path (f-dirname path))
-    (f-write-text (prin1-to-string all) 'utf-8 path)))
+    (org-glance-table--write-eld path all)))
 
 (cl-defun org-glance-table--apply-schema (graph filter columns)
   "COLUMNS with GRAPH's saved custom property columns for FILTER appended.
@@ -489,7 +488,7 @@ Honours the same filter language as the overview (see
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
                       (table-view-set-rows buf (org-glance-table--rows graph keep?))
-                      (setq org-glance-table--mtime (org-glance-table--mtime src)))))
+                      (setq org-glance-table--mtime (org-glance-table--file-mtime src)))))
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))

@@ -267,14 +267,48 @@ off or S has no link."
               'keymap table-view--link-keymap
               'follow-link t))
 
+;; Parsing the same cell values is repeated on every render (the width pass
+;; and the row pass each walk every cell, and sort/filter re-derive them), so
+;; memoize the two pure entry points.  Caches are buffer-local (freed with the
+;; buffer) and keyed on the raw cell string.
+(defvar-local table-view--linkify-cache nil
+  "Buffer-local memo of `table-view--linkify', keyed by raw cell string.")
+(defvar-local table-view--delink-cache nil
+  "Buffer-local memo of `table-view--delink', keyed by raw cell string.")
+(defvar-local table-view--links-cache-flag 'unset
+  "The `table-view-render-links' value the caches were built under.")
+(defconst table-view--link-cache-cap 65536
+  "Per-cache entry cap; a cache is cleared wholesale once it grows past this.")
+
+(defun table-view--link-cache-check ()
+  "Drop the link caches when `table-view-render-links' has changed, so
+memoization stays behaviour-identical to recomputing."
+  (unless (eq table-view--links-cache-flag table-view-render-links)
+    (setq table-view--links-cache-flag table-view-render-links
+          table-view--linkify-cache nil
+          table-view--delink-cache nil)))
+
+(defmacro table-view--cached-link (cache-var s &rest body)
+  "Memoize BODY (the transform of string S) in buffer-local CACHE-VAR."
+  (declare (indent 2))
+  `(progn
+     (table-view--link-cache-check)
+     (let ((cache (or ,cache-var (setq ,cache-var (make-hash-table :test 'equal)))))
+       (when (> (hash-table-count cache) table-view--link-cache-cap)
+         (clrhash cache))
+       (or (gethash ,s cache)
+           (puthash ,s (progn ,@body) cache)))))
+
 (defun table-view--linkify (s)
   "Return S with Org links rendered as propertized, followable descriptions."
-  (table-view--map-links s #'table-view--link-string))
+  (table-view--cached-link table-view--linkify-cache s
+    (table-view--map-links s #'table-view--link-string)))
 
 (defun table-view--delink (s)
   "Return S with Org links reduced to plain descriptions (no properties).
 Used for width, filtering, and sorting, so they see the displayed text."
-  (table-view--map-links s (lambda (_target desc) desc)))
+  (table-view--cached-link table-view--delink-cache s
+    (table-view--map-links s (lambda (_target desc) desc))))
 
 (defun table-view--links-p (col)
   "Non-nil when column COL renders Org links.
@@ -485,8 +519,10 @@ priority first.  A missing `ascending' defaults to ascending."
   "Non-nil if any cell in ROW contains FILTER (case-insensitive substring)."
   (let ((pat (downcase filter)))
     (cl-some (lambda (col)
-               (string-match-p
-                (regexp-quote pat)
+               ;; `string-search' is a literal substring test -- no per-cell
+               ;; regexp compilation, same case-insensitive semantics.
+               (string-search
+                pat
                 (downcase (table-view--cell-text
                            col (table-view--cell row (alist-get 'key col))))))
              (table-view--columns table-view--spec))))
@@ -530,6 +566,18 @@ narrowed), then restricted to the current filter."
       rows)))
 
 ;;; Rendering
+
+;; Column widths scan every visible cell -- the most expensive part of a
+;; render.  They change only when the visible row SET or cell VALUES or the
+;; columns change, never on a sort (same cells, reordered), a mark toggle (the
+;; gutter is a fixed prefix, not a column), or a point-restoration render -- so
+;; cache the result and invalidate it explicitly at those mutation seams.
+(defvar-local table-view--widths-cache nil
+  "Cached column-width alist, reused across renders that cannot change it.")
+
+(defun table-view--invalidate-widths ()
+  "Drop the cached column widths so the next render recomputes them."
+  (setq table-view--widths-cache nil))
 
 (defun table-view--cell-width (col row)
   "Screen width of COL's cell in ROW (its displayed text, links reduced)."
@@ -648,7 +696,8 @@ Keeps point on the same row id when possible, else falls back to the
 same line number."
   (let* ((spec table-view--spec)
          (rows (table-view--visible-rows))
-         (widths (table-view--widths spec rows))
+         (widths (or table-view--widths-cache
+                     (setq table-view--widths-cache (table-view--widths spec rows))))
          (inhibit-read-only t)
          (line (line-number-at-pos))
          (id (get-text-property (point) 'table-view-id)))
@@ -669,6 +718,33 @@ same line number."
     (unless (and id (table-view--goto-id id))
       (goto-char (point-min))
       (forward-line (1- line)))))
+
+(defun table-view--refresh-hint ()
+  "Rewrite the hint line (line 2) in place -- e.g. after the marked count
+changes -- without touching the rest of the buffer."
+  (let ((inhibit-read-only t))
+    (save-excursion
+      (goto-char (point-min))
+      (forward-line 1)                  ; line 2 is the hint
+      (delete-region (line-beginning-position) (line-end-position))
+      (insert (propertize (table-view--hint-string) 'face 'shadow)))))
+
+(defun table-view--rerender-after-mark (was-active)
+  "Refresh the display after a mark toggle at the row at point.
+When the mark gutter was shown before (WAS-ACTIVE) and still is, and the
+view is neither paged nor narrowed, flip only this row's gutter character
+and rewrite the hint line -- an O(1) update instead of a full re-render.
+Otherwise (the gutter appears or disappears, reflowing every row, or the
+visible set changed) fall back to `table-view--render'."
+  (let ((id (get-text-property (point) 'table-view-id)))
+    (if (and id was-active (table-view--marks-active-p)
+             (not table-view--narrowed) (not (table-view--paged-p)))
+        (let ((inhibit-read-only t)
+              (pos (+ (line-beginning-position) 2)))  ; the gutter char, past "| "
+          (subst-char-in-region pos (1+ pos) (char-after pos)
+                                (if (table-view--marked-p id) ?* ?\s) t)
+          (table-view--refresh-hint))
+      (table-view--render))))
 
 ;;; Marks and bulk
 
@@ -956,6 +1032,7 @@ the column that was added, or nil when the add was cancelled."
         (when (alist-get 'value-fn col)
           (table-view--strip-cell-everywhere key))
         (table-view--materialise-cells)
+        (table-view--invalidate-widths)
         (table-view--render)
         (run-hooks 'table-view-schema-changed-hook)
         (when (called-interactively-p 'interactive)
@@ -987,6 +1064,7 @@ KEY when a column was actually removed."
       ;; Drop the removed column's now-orphaned cell so a later same-key re-add
       ;; recomputes from its own `value-fn' rather than resurrecting this value.
       (table-view--strip-cell-everywhere key)
+      (table-view--invalidate-widths)
       (table-view--render)
       (run-hooks 'table-view-schema-changed-hook)
       (when (called-interactively-p 'interactive)
@@ -1086,6 +1164,7 @@ dataset rather than just the loaded page."
         (message (if table-view--filter
                      (format "Filter: %s" table-view--filter)
                    "Filter cleared")))
+    (table-view--invalidate-widths)
     (table-view--render)
     (table-view--goto-first-row)
     (if table-view--filter
@@ -1109,6 +1188,7 @@ Begin sorting with `^'."
         (message "Refreshed"))
     (table-view--save-point-location
       (setq table-view--filter nil table-view--narrowed nil)
+      (table-view--invalidate-widths)     ; clearing filter/narrow changes the visible set
       (when table-view--sorted
         (table-view--sort-rows))
       (table-view--render))
@@ -1122,7 +1202,9 @@ Marked rows show a `*' in a gutter column and are the operand of a
 `bulk' action; see `table-view-current-or-marked-rows'."
   (interactive)
   (let ((id (get-text-property (point) 'table-view-id))
-        (row (get-text-property (point) 'table-view-row)))
+        (row (get-text-property (point) 'table-view-row))
+        (was-active (table-view--marks-active-p))
+        (was-narrowed table-view--narrowed))
     (if (null id)
         (message "Point is not on a row")
       (if (member id table-view--marks)
@@ -1132,7 +1214,10 @@ Marked rows show a `*' in a gutter column and are the operand of a
         (setq table-view--marks (cons id table-view--marks))
         (when row (push (cons id row) table-view--mark-cache)))
       (table-view--prune-marks)         ; widen if that was the last mark
-      (table-view--render)
+      ;; While narrowed the visible set IS the marked subset, so a mark change
+      ;; resizes it; otherwise the gutter is a fixed prefix and widths hold.
+      (when was-narrowed (table-view--invalidate-widths))
+      (table-view--rerender-after-mark was-active)
       (forward-line 1))))
 
 (defun table-view-unmark ()
@@ -1140,7 +1225,9 @@ Marked rows show a `*' in a gutter column and are the operand of a
 Complements `m' (mark/unmark toggle) and `U' (unmark all); mirrors dired's
 `u'."
   (interactive)
-  (let ((id (get-text-property (point) 'table-view-id)))
+  (let ((id (get-text-property (point) 'table-view-id))
+        (was-active (table-view--marks-active-p))
+        (was-narrowed table-view--narrowed))
     (if (null id)
         (message "Point is not on a row")
       (when (member id table-view--marks)
@@ -1148,13 +1235,15 @@ Complements `m' (mark/unmark toggle) and `U' (unmark all); mirrors dired's
               table-view--mark-cache
               (cl-remove id table-view--mark-cache :key #'car :test #'equal))
         (table-view--prune-marks))      ; widen if that was the last mark
-      (table-view--render)
+      (when was-narrowed (table-view--invalidate-widths))
+      (table-view--rerender-after-mark was-active)
       (forward-line 1))))
 
 (defun table-view-unmark-all ()
   "Remove every mark (and its cached payload), widening a narrowed view."
   (interactive)
   (setq table-view--marks nil table-view--narrowed nil table-view--mark-cache nil)
+  (table-view--invalidate-widths)       ; a narrowed view widens back to all rows
   (table-view--render)
   (message "Marks cleared"))
 
@@ -1165,6 +1254,7 @@ Complements `m' (mark/unmark toggle) and `U' (unmark all); mirrors dired's
       (message "No marked rows")
     (table-view--save-point-location
       (setq table-view--narrowed (not table-view--narrowed))
+      (table-view--invalidate-widths)   ; the visible set switches all <-> marked
       (table-view--render))
     (message (if table-view--narrowed
                  (format "Narrowed to %d marked" (length table-view--marks))
@@ -1492,6 +1582,7 @@ the marked rows, so it is refused there until the view is widened."
                                                           table-view--spec)
               table-view--sorted nil)
         (table-view--prune-marks)
+        (table-view--invalidate-widths)
         (table-view--render)))))
 
 (cl-defun table-view-set-page (buffer rows &key total (has-next 'unset)
@@ -1545,6 +1636,7 @@ ROWS, and lands point on the first row (or the requested row id)."
             (let ((cell (assoc (alist-get 'id r) table-view--mark-cache)))
               (when cell (setcdr cell r))))
           (setq table-view--pending nil)
+          (table-view--invalidate-widths)
           (table-view--render)
           (table-view--land-point pending))))))
 
@@ -1591,6 +1683,7 @@ instead of enumerating rows it has not loaded.  This is the seam a future
                         table-view--rows))
           (unless found
             (setq table-view--rows (nconc table-view--rows (list row))))
+          (table-view--invalidate-widths)
           (table-view--render))))))
 
 (defun table-view-delete-row (buffer id)
@@ -1619,6 +1712,7 @@ calls this only on success, so the row survives if that work fails."
                   table-view--mark-cache
                   (cl-remove id table-view--mark-cache :key #'car :test #'equal))
             (table-view--prune-marks)
+            (table-view--invalidate-widths)
             (table-view--render)
             (when target (table-view--goto-id target))
             t))))))

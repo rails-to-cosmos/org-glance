@@ -103,13 +103,13 @@ which filter a cache directory holds."
         (schedule (org-glance-headline-metadata:schedule metadata))
         (deadline (org-glance-headline-metadata:deadline metadata)))
     (concat "* "
-            (if (and (stringp state) (not (string-empty-p state))) (concat state " ") "")
+            (if (org-glance--present-string? state) (concat state " ") "")
             (org-glance-headline-metadata:title metadata)
             (or (org-glance-overview:tag-string metadata) "")
             "\n"
-            (when (and (stringp schedule) (not (string-empty-p schedule)))
+            (when (org-glance--present-string? schedule)
               (concat "SCHEDULED: " schedule "\n"))
-            (when (and (stringp deadline) (not (string-empty-p deadline)))
+            (when (org-glance--present-string? deadline)
               (concat "DEADLINE: " deadline "\n"))
             ":PROPERTIES:\n:ORG_GLANCE_ID: " (org-glance-headline-metadata:id metadata) "\n:END:\n")))
 
@@ -192,8 +192,8 @@ A cache rendered by an older org-glance (e.g. with the pre-rename
 its prop-line would try to enable a mode that no longer exists."
   (let ((prop-line (car (s-lines org-glance-overview:header))))
     (with-temp-buffer
+      ;; `insert-file-contents' into an empty buffer leaves point at BOB.
       (insert-file-contents file nil 0 (+ 16 (length prop-line)))
-      (goto-char (point-min))
       (looking-at-p (regexp-quote prop-line)))))
 
 (cl-defun org-glance-overview:write (graph &optional filter)
@@ -373,10 +373,6 @@ returns point to the headline once the change (and any note) is committed."
 (cl-defun org-glance-overview:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."
   (org-glance-graph:tags graph))
-
-(cl-defun org-glance-overview:states (graph)
-  "Distinct non-empty todo states across GRAPH's live headlines, sorted."
-  (org-glance-graph:states graph))
 
 (cl-defun org-glance-overview:completing-read-tag ()
   "Prompt for a tag from the graph's headlines; empty input means \"all\"."

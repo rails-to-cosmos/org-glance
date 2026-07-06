@@ -19,6 +19,10 @@
 
   (symbol-name tag))
 
+(cl-defun org-glance-tag:as-list (tags)
+  "Coerce TAGS (a tag symbol or a list of tag symbols) to a list."
+  (if (listp tags) tags (list tags)))
+
 (cl-defun org-glance-tag:from-string (value)
   "Coerce VALUE (a tag string, or any printable) to its canonical tag symbol.
 Trimmed, downcased and interned, so mixed-case or padded input yields the same

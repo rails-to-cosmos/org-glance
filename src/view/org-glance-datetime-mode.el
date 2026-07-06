@@ -49,22 +49,25 @@
   (--filter (org-glance-datetime:active? it) tss))
 
 (cl-defun org-glance-datetime-filter-repeated (tss)
-  (--filter (and (member (org-element-property :type it) '(active active-range))
+  (--filter (and (org-glance-datetime:active? it)
                  (> (or (org-element-property :repeater-value it) 0) 0))
             tss))
 
+(cl-defun org-glance-datetime-active-repeated-timestamps (&rest includes)
+  "Headline's active, repeated timestamps, sorted.
+INCLUDES is passed to `org-glance-datetime-headline-timestamps'."
+  (-some->> (apply #'org-glance-datetime-headline-timestamps includes)
+    (org-glance-datetime-filter-active)
+    (org-glance-datetime-filter-repeated)
+    (org-glance-datetime-sort-timestamps)))
+
 (cl-defun org-glance-datetime-capture (&rest _args)
-  (setq-local -org-glance-datetime:local-timestamps (-some->> (org-glance-datetime-headline-timestamps)
-                                          (org-glance-datetime-filter-active)
-                                          (org-glance-datetime-filter-repeated)
-                                          (org-glance-datetime-sort-timestamps))))
+  (setq-local -org-glance-datetime:local-timestamps
+              (org-glance-datetime-active-repeated-timestamps)))
 
 (cl-defun org-glance-datetime-restore (&rest _args)
   (let ((standard-output 'ignore)
-        (tss* (-some->> (org-glance-datetime-headline-timestamps)
-                (org-glance-datetime-filter-active)
-                (org-glance-datetime-filter-repeated)
-                (org-glance-datetime-sort-timestamps))))
+        (tss* (org-glance-datetime-active-repeated-timestamps)))
     (cl-loop
        for tsi from 1 below (length tss*)
        for ts = (nth tsi -org-glance-datetime:local-timestamps)
@@ -78,10 +81,8 @@
 (cl-defun org-glance-datetime-reset-buffer-timestamps-except-earliest ()
   "Reset active timestamps in buffer except earliest."
   (let ((standard-output 'ignore)
-        (tss (-some->> (org-glance-datetime-headline-timestamps 'include-schedules 'include-deadlines)
-               (org-glance-datetime-filter-active)
-               (org-glance-datetime-filter-repeated)
-               (org-glance-datetime-sort-timestamps))))
+        (tss (org-glance-datetime-active-repeated-timestamps
+              'include-schedules 'include-deadlines)))
     (cl-loop
        for ts in tss
        for index from 0
@@ -107,11 +108,8 @@
   (save-excursion
     (unless (org-at-heading-p)
       (org-back-to-heading-or-point-min))
-    (when (append
-           (-some->> (org-glance-datetime-headline-timestamps 'include-schedules 'include-deadlines)
-             (org-glance-datetime-filter-active)
-             (org-glance-datetime-filter-repeated)
-             (org-glance-datetime-sort-timestamps)))
+    (when (org-glance-datetime-active-repeated-timestamps
+           'include-schedules 'include-deadlines)
       t)))
 
 (provide 'org-glance-datetime-mode)
