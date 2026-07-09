@@ -20,11 +20,11 @@
     (should (not (org-glance-headline:encrypted? headline)))))
 
 (ert-deftest org-glance-test:headline-active ()
-  (let ((org-done-keywords (list "DONE")))
-    (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!")))
-      (should (string= (org-glance-headline:state headline) "TODO"))
-      (should (org-glance-headline:active? headline))
-      (should (not (org-glance-headline:done? headline))))))
+  (let* ((org-done-keywords (list "DONE"))
+         (headline (org-glance-headline--from-lines "* TODO Hello, world!")))
+    (should (string= (org-glance-headline:state headline) "TODO"))
+    (should (org-glance-headline:active? headline))
+    (should (not (org-glance-headline:done? headline)))))
 
 (ert-deftest org-glance-test:headline-properties ()
   (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "- foo: bar")))
@@ -130,15 +130,13 @@
                     (org-glance-headline:clocks))))
     (should (= (length clocks) 2))))
 
-(ert-deftest org-glance-test:headline-schedule ()
-  (let ((schedule (-> (org-glance-headline--from-lines "* foo" "SCHEDULED: <2025-01-10 Fri>")
-                      (org-glance-headline:schedule))))
-    (should (string= schedule "<2025-01-10 Fri>"))))
-
-(ert-deftest org-glance-test:headline-deadline ()
-  (let ((deadline (-> (org-glance-headline--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
-                      (org-glance-headline:deadline))))
-    (should (string= deadline "<2025-01-10 Fri>"))))
+(ert-deftest org-glance-test:headline-planning ()
+  (pcase-dolist (`(,accessor ,keyword)
+                 '((org-glance-headline:schedule "SCHEDULED")
+                   (org-glance-headline:deadline "DEADLINE")))
+    (let ((h (org-glance-headline--from-lines
+              "* foo" (format "%s: <2025-01-10 Fri>" keyword))))
+      (should (string= (funcall accessor h) "<2025-01-10 Fri>")))))
 
 (ert-deftest org-glance-test:headline-hash-consistency ()
   (let* ((headline (org-glance-headline--from-string "* foo"))

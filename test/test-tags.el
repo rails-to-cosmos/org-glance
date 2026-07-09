@@ -88,12 +88,10 @@ become untagged but live, and the tag leaves the derived tag set."
                           (org-glance-test:headline "b" "* TODO B :y:"))
     (let ((org-glance-graph graph)
           (org-glance-view-fill-frame nil))
-      (let ((buf (org-glance-tags:visit graph)))
-        (unwind-protect
-            (with-current-buffer buf
-              (should (string= "*org-glance-tags*" (buffer-name)))
-              (should (= 2 (length table-view--rows))))
-          (kill-buffer buf))))))
+      (org-glance-test:with-open buf (org-glance-tags:visit graph)
+        (with-current-buffer buf
+          (should (string= "*org-glance-tags*" (buffer-name)))
+          (should (= 2 (length table-view--rows))))))))
 
 ;;; Coloured cells
 
@@ -119,10 +117,8 @@ become untagged but live, and the tag leaves the derived tag set."
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A :x:"))
     (let ((org-glance-graph graph)
           (org-glance-view-fill-frame nil))
-      (let ((buf (org-glance-tags--act-table graph "x")))
-        (unwind-protect
-            (should (string-prefix-p "*org-glance-table:" (buffer-name buf)))
-          (kill-buffer buf))))))
+      (org-glance-test:with-open buf (org-glance-tags--act-table graph "x")
+        (should (string-prefix-p "*org-glance-table:" (buffer-name buf)))))))
 
 (provide 'test-tags)
 ;;; test-tags.el ends here

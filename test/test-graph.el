@@ -43,14 +43,6 @@
       (org-glance-graph:add graph (org-glance-headline--copy headline :state "DONE"))
       (should (string= "DONE" (org-glance-headline-metadata:state (org-glance-graph:get-headline graph "id1")))))))
 
-(ert-deftest org-glance-test:graph-delete-tombstone ()
-  "Deleting an id makes `get-headline' report a tombstone."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
-    (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "id1")))
-    (org-glance-graph:delete graph "id1")
-    (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))))
-
 (ert-deftest org-glance-test:graph-delete-idempotent ()
   "Deleting an absent or already-deleted id is a no-op (no extra record)."
   (org-glance-test:with-graph graph
@@ -109,12 +101,9 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
 (ert-deftest org-glance-test:graph-capture-assigns-unique-ids ()
   "Capturing assigns a fresh, unique-per-namespace id to each id-less headline."
   (org-glance-test:with-graph graph
-    (with-temp-buffer
-      (org-mode)
-      (insert "* TODO foo :a:\n* TODO bar :b:\n")
-      (org-glance-graph:capture graph (current-buffer)))
-    (let* ((headlines (org-glance-graph:headlines graph))
-           (ids (mapcar #'org-glance-headline-metadata:id headlines)))
+    (org-glance-test:capture graph "* TODO foo :a:\n* TODO bar :b:\n")
+    (let ((headlines (org-glance-graph:headlines graph))
+          (ids (org-glance-test:ids graph)))
       (should (= 2 (length headlines)))
       (should (-none? #'null ids))
       (should (= 2 (length (-uniq ids)))))))
@@ -122,10 +111,7 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
 (ert-deftest org-glance-test:graph-capture-preserves-existing-id ()
   "Capturing keeps an already-present ORG_GLANCE_ID."
   (org-glance-test:with-graph graph
-    (with-temp-buffer
-      (org-mode)
-      (insert "* TODO foo\n:PROPERTIES:\n:ORG_GLANCE_ID: keep-me\n:END:\n")
-      (org-glance-graph:capture graph (current-buffer)))
+    (org-glance-test:capture graph "* TODO foo\n:PROPERTIES:\n:ORG_GLANCE_ID: keep-me\n:END:\n")
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "keep-me")))))
 
 (ert-deftest org-glance-test:graph-headlines-skips-tombstones ()
@@ -135,8 +121,7 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
                              (org-glance-test:headline "a" "* foo")
                              (org-glance-test:headline "b" "* bar"))
     (org-glance-graph:delete graph "a")
-    (should (equal '("b") (mapcar #'org-glance-headline-metadata:id
-                                  (org-glance-graph:headlines graph))))))
+    (should (equal '("b") (org-glance-test:ids graph)))))
 
 (ert-deftest org-glance-test:graph-content-roundtrip ()
   "Headline contents persist to the data store and reconstruct fully."
@@ -303,12 +288,11 @@ The cache must invalidate on compaction so this observable change is seen."
                              (org-glance-test:headline "o1" "* TODO A")
                              (org-glance-test:headline "o2" "* TODO B")
                              (org-glance-test:headline "o3" "* TODO C"))
-    (should (equal '("o1" "o2" "o3")
-                   (mapcar #'org-glance-headline-metadata:id (org-glance-graph:headlines graph))))
+    (should (equal '("o1" "o2" "o3") (org-glance-test:ids graph)))
     ;; re-add o2 with a new title: order is unchanged, content is the latest
     (org-glance-graph:add graph (org-glance-test:headline "o2" "* DONE B2"))
     (let ((metas (org-glance-graph:headlines graph)))
-      (should (equal '("o1" "o2" "o3") (mapcar #'org-glance-headline-metadata:id metas)))
+      (should (equal '("o1" "o2" "o3") (org-glance-test:ids graph)))
       (should (equal "DONE" (org-glance-headline-metadata:state (cadr metas)))))))
 
 (ert-deftest org-glance-test:graph-cache-external-compaction-mtime-independent ()

@@ -25,6 +25,10 @@ Resets the module cache around BODY so reads see exactly CONTENTS."
     %?
 ")
 
+(defconst org-glance-test:book-config-min
+  "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
+  "Minimal single-tag book config: cycle only, no prompts or sub-headings.")
+
 ;;; Degradation (the identity element)
 
 (ert-deftest org-glance-test:tag-config-degrades-without-config ()
@@ -152,20 +156,16 @@ the title via a keyword-naive reparse (the blob has no #+TODO; the cycle is boun
 per-tag at sync)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Dune :book:"))
-    (org-glance-test:with-tag-config
-        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
-      (let ((buf (org-glance-material:open graph "d1")))
-        (unwind-protect
-            (progn
-              (with-current-buffer buf
-                (goto-char (point-min))
-                (re-search-forward "TODO")
-                (replace-match "READING")
-                (org-glance-material:sync))
-              (let ((m (org-glance-graph:get-headline graph "d1")))
-                (should (equal "READING" (org-glance-headline-metadata:state m)))
-                (should (equal "Dune" (org-glance-headline-metadata:title m)))))
-          (when (buffer-live-p buf) (kill-buffer buf)))))))
+    (org-glance-test:with-tag-config org-glance-test:book-config-min
+      (org-glance-test:with-open buf (org-glance-material:open graph "d1")
+        (with-current-buffer buf
+          (goto-char (point-min))
+          (re-search-forward "TODO")
+          (replace-match "READING")
+          (org-glance-material:sync))
+        (let ((m (org-glance-graph:get-headline graph "d1")))
+          (should (equal "READING" (org-glance-headline-metadata:state m)))
+          (should (equal "Dune" (org-glance-headline-metadata:title m))))))))
 
 ;;; On-save lint (advisory)
 
@@ -251,24 +251,20 @@ the tag's states (READING is a state, not folded into the title) -- so `org-todo
 and faces work in place, with no `#+TODO:' in the kept-clean blob."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* READING Dune :book:"))
-    (org-glance-test:with-tag-config
-        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
-      (let ((buf (org-glance-material:open graph "b1")))
-        (unwind-protect
-            (with-current-buffer buf
-              (goto-char (point-min))
-              (should (equal "READING" (org-get-todo-state)))
-              (should (member "READ" org-done-keywords))
-              (should (member "READING" org-not-done-keywords)))
-          (when (buffer-live-p buf) (kill-buffer buf)))))))
+    (org-glance-test:with-tag-config org-glance-test:book-config-min
+      (org-glance-test:with-open buf (org-glance-material:open graph "b1")
+        (with-current-buffer buf
+          (goto-char (point-min))
+          (should (equal "READING" (org-get-todo-state)))
+          (should (member "READ" org-done-keywords))
+          (should (member "READING" org-not-done-keywords)))))))
 
 (ert-deftest org-glance-test:tag-config-change-todo-live-cycle ()
   "`change-todo-live' cycles a configured tag's OWN states (TODO -> READING ->
 READ), persisting each -- not the global TODO/DONE."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Dune :book:"))
-    (org-glance-test:with-tag-config
-        "#+TITLE: t\n\n* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"
+    (org-glance-test:with-tag-config org-glance-test:book-config-min
       (should (equal "READING" (org-glance-test:change-todo-live graph "b1")))
       (should (equal "READING" (org-glance-headline-metadata:state
                                 (org-glance-graph:get-headline graph "b1"))))

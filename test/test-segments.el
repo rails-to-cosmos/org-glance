@@ -41,9 +41,7 @@
              graph (f-join (org-glance-graph:meta-path graph) name)
              (lambda (_r) (cl-incf lines)))
             (should (> lines 0))))
-        (should (<= (or (file-attribute-size
-                         (file-attributes (org-glance-graph:headline-meta-path graph)))
-                        0)
+        (should (<= (org-glance-test:open-size graph)
                     org-glance-graph-segment-max-bytes))))))
 
 (ert-deftest org-glance-test:segments-never-split-record ()
@@ -106,8 +104,7 @@ the next append; intact records are unaffected."
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "ok")))
       ;; the next insert drops the torn tail and appends cleanly
       (org-glance-graph:add graph (org-glance-test:headline "next" "* After crash"))
-      (let ((ids (mapcar #'org-glance-headline-metadata:id (org-glance-graph:headlines graph))))
-        (should (equal '("ok" "next") ids))))))
+      (should (equal '("ok" "next") (org-glance-test:ids graph))))))
 
 (ert-deftest org-glance-test:segments-interrupted-seal-adopted ()
   "A seal that crashed before its MANIFEST commit is adopted on the next open."
@@ -157,8 +154,7 @@ in place: same reads, order preserved, next insert continues cleanly."
       (should (eq 'tombstone (org-glance-graph:get-headline graph "l3")))
       ;; new records sort after all legacy ones
       (org-glance-graph:insert graph (list (list :id "new" :state "" :title "New" :hash "h4")))
-      (should (equal '("l1" "l2" "new")
-                     (mapcar #'org-glance-headline-metadata:id (org-glance-graph:headlines graph)))))))
+      (should (equal '("l1" "l2" "new") (org-glance-test:ids graph))))))
 
 (ert-deftest org-glance-test:segments-compaction ()
   "Compaction merges sealed segments to one, drops superseded records and
@@ -198,17 +194,14 @@ such ids after everything else)."
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta")))      ; seals
     ;; update a with the default cap: the record stays in the OPEN segment
     (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE Alpha"))
-    (should (equal '("a" "b") (mapcar #'org-glance-headline-metadata:id
-                                      (org-glance-graph:headlines graph))))
+    (should (equal '("a" "b") (org-glance-test:ids graph)))
     (org-glance-graph:compact graph)
     (let ((metas (org-glance-graph:headlines graph)))
       (should (equal '("a" "b") (mapcar #'org-glance-headline-metadata:id metas)))
       (should (string= "DONE" (org-glance-headline-metadata:state (car metas)))))
     ;; everything merged: one sealed segment, empty open
     (should (= 1 (length (org-glance-test:sealed-segments graph))))
-    (should (= 0 (or (file-attribute-size
-                      (file-attributes (org-glance-graph:headline-meta-path graph)))
-                     0)))))
+    (should (= 0 (org-glance-test:open-size graph)))))
 
 (ert-deftest org-glance-test:segments-compaction-noop ()
   "Compacting an already-compact store changes nothing on disk."
@@ -253,8 +246,7 @@ listed segment still held the headline live)."
     ;; recover: x must STILL be dead, y alive, and the orphan merged seg reaped
     (let ((graph (org-glance-test:reopen-graph graph)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
-      (should (equal '("y") (mapcar #'org-glance-headline-metadata:id
-                                    (org-glance-graph:headlines graph))))
+      (should (equal '("y") (org-glance-test:ids graph)))
       ;; a subsequent clean compaction converges: x fully reclaimed
       (org-glance-graph:compact graph)
       (should (null (org-glance-graph:get-headline graph "x")))
@@ -282,8 +274,7 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
         ;; the orphan shares seqs with listed segments -> reaped, not adopted
         (should (equal segments-before (org-glance-test:sealed-segments graph)))
         (should (= 2 (funcall count-records graph)))
-        (should (equal '("a" "b") (mapcar #'org-glance-headline-metadata:id
-                                          (org-glance-graph:headlines graph))))))))
+        (should (equal '("a" "b") (org-glance-test:ids graph)))))))
 
 (ert-deftest org-glance-test:segments-freshness-signal ()
   "headline-meta-path's mtime advances on insert, delete, seal, and compact, so

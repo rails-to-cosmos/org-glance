@@ -20,6 +20,17 @@
                             (directory-files meta nil nil))
           #'string<)))
 
+(cl-defun org-glance-test-merge:conflict-manifest (ours theirs)
+  "Return MANIFEST text git left conflict-marked with OURS/THEIRS seg lists."
+  (cl-flet ((seg (names) (format "{\"version\":2,\"segments\":[%s]}\n"
+                                 (mapconcat (lambda (n) (format "\"%s\"" n)) names ","))))
+    (concat "<<<<<<< HEAD\n" (seg ours) "=======\n" (seg theirs)
+            ">>>>>>> other-machine\n")))
+
+(cl-defun org-glance-test-merge:record (&rest kv)
+  "Return a newline-terminated JSONL metadata line from plist KV."
+  (concat (json-serialize (apply #'list kv)) "\n"))
+
 (ert-deftest org-glance-test:merge-gitattributes-written ()
   "Store construction writes meta/.gitattributes with exactly the union driver
 line, and a second open never clobbers a hand-edited file (write-if-absent)."
@@ -49,12 +60,7 @@ and the rewritten MANIFEST is valid canonical JSON."
           (manifest (org-glance-graph--manifest-path graph)))
       (should (= 3 (length segs)))
       ;; mangle the MANIFEST exactly as git's default (non-union) merge would
-      (f-write-text (concat "<<<<<<< HEAD\n"
-                            "{\"version\":2,\"segments\":[\"" (nth 0 segs) "\"]}\n"
-                            "=======\n"
-                            "{\"version\":2,\"segments\":[\""
-                            (s-join "\",\"" segs) "\"]}\n"
-                            ">>>>>>> other-machine\n")
+      (f-write-text (org-glance-test-merge:conflict-manifest (list (nth 0 segs)) segs)
                     'utf-8 manifest)
       (let ((graph (org-glance-test-merge:reopen graph)))
         ;; every sealed segment adopted back; none reaped
@@ -88,8 +94,8 @@ position: the last record per id wins and no data is lost."
       ;; what `merge=union' leaves: the other side's lines spliced in after ours,
       ;; with a newer record for "a" positioned last and a brand-new id "c"
       (f-append-text
-       (concat "{\"id\":\"c\",\"state\":\"\",\"title\":\"C-new\",\"hash\":\"hc1\",\"seq\":50}\n"
-               "{\"id\":\"a\",\"state\":\"DONE\",\"title\":\"A-newer\",\"hash\":\"ha2\",\"seq\":51}\n")
+       (concat (org-glance-test-merge:record :id "c" :state "" :title "C-new" :hash "hc1" :seq 50)
+               (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 51))
        'utf-8 open))
     (let ((graph (org-glance-test-merge:reopen graph)))
       ;; positional last-wins: the later "a" record supersedes the earlier one
@@ -112,16 +118,12 @@ position: the last record per id wins and no data is lost."
   (with-temp-directory dir
     (let ((meta (f-join dir ".org-glance" "meta")))
       (f-mkdir-full-path meta)
-      (f-write-text "{\"id\":\"m1\",\"state\":\"\",\"title\":\"Machine one\",\"hash\":\"h1\",\"seq\":1}\n"
+      (f-write-text (org-glance-test-merge:record :id "m1" :state "" :title "Machine one" :hash "h1" :seq 1)
                     'utf-8 (f-join meta "seg-0000000001.jsonl"))
-      (f-write-text "{\"id\":\"m2\",\"state\":\"\",\"title\":\"Machine two\",\"hash\":\"h2\",\"seq\":2}\n"
+      (f-write-text (org-glance-test-merge:record :id "m2" :state "" :title "Machine two" :hash "h2" :seq 2)
                     'utf-8 (f-join meta "seg-0000000002.jsonl"))
       ;; MANIFEST as git left it: neither side lists both segments
-      (f-write-text (concat "<<<<<<< HEAD\n"
-                            "{\"version\":2,\"segments\":[]}\n"
-                            "=======\n"
-                            "{\"version\":2,\"segments\":[\"seg-0000000001.jsonl\"]}\n"
-                            ">>>>>>> other-machine\n")
+      (f-write-text (org-glance-test-merge:conflict-manifest '() '("seg-0000000001.jsonl"))
                     'utf-8 (f-join meta "MANIFEST"))
       (let ((graph (org-glance-graph dir)))
         ;; both segments now live

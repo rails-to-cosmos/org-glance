@@ -21,7 +21,7 @@
 preserved) and backs up the legacy metadata non-destructively."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
-                           "* TODO Hello :foo:\n:PROPERTIES:\n:ORG_GLANCE_ID: hello-1\n:END:\nbody text\n")
+                           (org-glance-test:org-with-id "* TODO Hello :foo:" "hello-1" "body text"))
     (org-glance-test:write (f-join dir "foo" "foo.metadata.el") "#s(hash-table)")
     (should (= 1 (org-glance-migrate dir)))
     (let* ((graph (org-glance-graph dir))
@@ -40,7 +40,7 @@ preserved) and backs up the legacy metadata non-destructively."
   "Overview clones (sharing an id) must not override the canonical source."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
-                           "* TODO Hello :foo:\n:PROPERTIES:\n:ORG_GLANCE_ID: hello-1\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO Hello :foo:" "hello-1"))
     (org-glance-test:write (f-join dir "foo" "overview.org")
                            "#    -*- mode: org; mode: org-glance-overview -*-\n* DONE Clone :foo:\n:PROPERTIES:\n:ORG_GLANCE_ID: hello-1\n:END:\n")
     (org-glance-migrate dir)
@@ -60,17 +60,12 @@ preserved) and backs up the legacy metadata non-destructively."
 migrate (no whole-batch abort)."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "good.org")
-                           "* TODO Good\n:PROPERTIES:\n:ORG_GLANCE_ID: good\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO Good" "good"))
     (org-glance-test:write (f-join dir "bad.org")
-                           "* TODO Bad\n:PROPERTIES:\n:ORG_GLANCE_ID: bad\n:END:\n")
-    (let ((orig (symbol-function 'org-glance-graph:add)))
-      (cl-letf (((symbol-function 'org-glance-graph:add)
-                 (lambda (graph &rest headlines)
-                   (if (cl-some (lambda (h) (string= "bad" (org-glance-headline:id h))) headlines)
-                       (error "simulated ingest failure")
-                     (apply orig graph headlines)))))
-        ;; must not abort despite bad.org failing
-        (org-glance-migrate dir)))
+                           (org-glance-test:org-with-id "* TODO Bad" "bad"))
+    ;; must not abort despite bad.org failing
+    (org-glance-test:with-failing-ingest "bad"
+      (org-glance-migrate dir))
     (let ((graph (org-glance-graph dir)))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "good")))
       (should (null (org-glance-graph:get-headline graph "bad"))))))
@@ -80,7 +75,7 @@ migrate (no whole-batch abort)."
 the second run adds 0 and the store still holds one record per id."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
-                           "* TODO Hello :foo:\n:PROPERTIES:\n:ORG_GLANCE_ID: h1\n:END:\nbody\n")
+                           (org-glance-test:org-with-id "* TODO Hello :foo:" "h1" "body"))
     (should (= 1 (org-glance-migrate dir)))
     (should (= 0 (org-glance-migrate dir)))     ; already migrated -> nothing new
     (should (= 1 (length (org-glance-graph:headlines (org-glance-graph dir)))))))
@@ -90,11 +85,11 @@ the second run adds 0 and the store still holds one record per id."
 already-migrated sources and ingests only newly-appeared ones."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "a.org")
-                           "* TODO A\n:PROPERTIES:\n:ORG_GLANCE_ID: a\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO A" "a"))
     (should (= 1 (org-glance-migrate dir)))
     ;; restart, and a brand-new source file appears
     (org-glance-test:write (f-join dir "b.org")
-                           "* TODO B\n:PROPERTIES:\n:ORG_GLANCE_ID: b\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO B" "b"))
     (should (= 1 (org-glance-migrate dir)))     ; only b.org is ingested; a.org skipped
     (let ((graph (org-glance-graph dir)))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "a")))
@@ -106,17 +101,12 @@ clean success).  A later run -- with the failure gone -- finishes the remaining
 file and only then backs the index up; the already-done file is not re-ingested."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "good.org")
-                           "* TODO Good\n:PROPERTIES:\n:ORG_GLANCE_ID: good\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO Good" "good"))
     (org-glance-test:write (f-join dir "bad.org")
-                           "* TODO Bad\n:PROPERTIES:\n:ORG_GLANCE_ID: bad\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO Bad" "bad"))
     (org-glance-test:write (f-join dir "tag.metadata.el") "#s(hash-table)")
-    (let ((orig (symbol-function 'org-glance-graph:add)))
-      (cl-letf (((symbol-function 'org-glance-graph:add)
-                 (lambda (graph &rest headlines)
-                   (if (cl-some (lambda (h) (string= "bad" (org-glance-headline:id h))) headlines)
-                       (error "simulated ingest failure")
-                     (apply orig graph headlines)))))
-        (org-glance-migrate dir)))
+    (org-glance-test:with-failing-ingest "bad"
+      (org-glance-migrate dir))
     ;; legacy index kept (NOT backed up) because a file was skipped
     (should (f-exists? (f-join dir "tag.metadata.el")))
     (should-not (f-exists? (f-join dir "tag.metadata.el.bak")))
@@ -134,7 +124,7 @@ file and only then backs the index up; the already-done file is not re-ingested.
 migrates, or touches the legacy store; it always returns nil."
   (with-temp-directory dir
     (org-glance-test:write (f-join dir "foo" "foo.org")
-                           "* TODO Hello\n:PROPERTIES:\n:ORG_GLANCE_ID: h1\n:END:\n")
+                           (org-glance-test:org-with-id "* TODO Hello" "h1"))
     (org-glance-test:write (f-join dir "foo" "foo.metadata.el") "#s(hash-table)")
     (let ((org-glance-migrate--warned nil)
           (warnings 0))
