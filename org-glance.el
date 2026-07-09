@@ -46,10 +46,12 @@
 (require 'org-glance-capture)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-tag-metrics)
 (require 'org-glance-view)
 (require 'org-glance-material)
 (require 'org-glance-overview)
 (require 'org-glance-table)
+(require 'org-glance-tags)
 
 (defcustom org-glance-directory org-directory
   "Main location for all Org mode content managed by `org-glance`."

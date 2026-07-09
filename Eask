@@ -23,7 +23,7 @@
 (depends-on "table-view"
             :fetcher 'github
             :repo "rails-to-cosmos/table-view"
-            :commit "9a4b4c77090ecac65b7de96d313e670e205fbea3")
+            :commit "1db0b23f4068dfe7f43fee8b9f28f7c21bee854f")
 
 (eask-defcommand test
   "Run a configured ert test suite."
@@ -41,5 +41,6 @@
   (load "test/test-material.el")
   (load "test/test-overview.el")
   (load "test/test-table.el")
+  (load "test/test-tags.el")
   (load "test/test-ui.el")
   (ert-run-tests-batch-and-exit))

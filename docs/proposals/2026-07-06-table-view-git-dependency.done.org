@@ -5,7 +5,7 @@ Status: *done* · tooling 2026-07-06
 
 Implemented: =src/view/table-view.el= deleted; =table-view= declared in =Eask=
 (=:fetcher github :repo rails-to-cosmos/table-view :commit
-9a4b4c77090ecac65b7de96d313e670e205fbea3=) and in the =Package-Requires= header;
+1db0b23f4068dfe7f43fee8b9f28f7c21bee854f=) and in the =Package-Requires= header;
 the =update-table-view= skill removed.  Suite green (212/212), =make fat= treats
 it as a dependency (not bundled).  Note: Eask uses MELPA-recipe keywords
 (=:fetcher=/=:repo=/=:commit=), not =:git=/=:ref=.
