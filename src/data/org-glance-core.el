@@ -31,5 +31,15 @@ Constructed by `org-glance-init'; nil until the system is initialized.")
   "Return the global graph if the system is initialized, else nil."
   org-glance-graph)
 
+(declare-function org-glance-init "org-glance")
+
+(cl-defun org-glance-ensure-init ()
+  "Return the global graph, initializing org-glance on first use.
+The guard every interactive command runs before touching the graph.  When the
+graph is not built yet, run `org-glance-init' (autoloaded from the umbrella
+`org-glance' file) so a fresh install just works without a manual init step."
+  (or org-glance-graph
+      (progn (org-glance-init) org-glance-graph)))
+
 (provide 'org-glance-core)
 ;;; org-glance-core.el ends here

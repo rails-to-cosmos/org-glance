@@ -535,7 +535,7 @@ the (id . reason) pairs skipped."
 (cl-defun org-glance-materialize ()
   "Choose a headline from the graph and materialize it."
   (interactive)
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
          (metadata (org-glance-material:completing-read
                     graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
@@ -564,7 +564,7 @@ chosen link, mirroring the v1 behaviour."
 
 (cl-defun org-glance-material--pick-headline (prompt extra-pred)
   "Read a graph headline matching the ambient filter AND EXTRA-PRED under PROMPT."
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
          (keep? (org-glance-filter:predicate org-glance-filter-spec))
          (metadata (org-glance-material:completing-read

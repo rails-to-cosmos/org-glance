@@ -220,7 +220,7 @@ tag vanishes once no live headline carries it."
 (cl-defun org-glance-tags ()
   "Open the all-tags overview: a table of tags with per-tag metrics."
   (interactive)
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (org-glance-tags:visit org-glance-graph))
 
 (provide 'org-glance-tags)

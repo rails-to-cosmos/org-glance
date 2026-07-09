@@ -536,7 +536,7 @@ Honours the same filter language as the overview (see
 
 (cl-defun org-glance-table:completing-read-tag ()
   "Prompt for a tag from the graph's headlines; empty input means \"all\"."
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (let ((choice (completing-read "Table tag (empty for all): "
                                  (org-glance-graph:tags org-glance-graph))))
     (unless (string-empty-p choice) choice)))
@@ -550,7 +550,7 @@ like `org-glance-overview', but rendered as a flat table.  Sort with `^' (sorts
 by the column at point; repeat toggles direction, `C-u ^' adds a tie-breaker);
 act on the row at point with RET/m, o, e."
   (interactive (list (org-glance-table:completing-read-tag)))
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (org-glance-table:visit org-glance-graph
                           (org-glance-filter:merge org-glance-filter-spec tag)))
 

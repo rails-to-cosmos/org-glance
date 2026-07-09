@@ -41,7 +41,7 @@ byte-identical to before.  Multi-tag composition is deferred to Phase 2."
   "Prompt for a tag; candidates come from the graph's live headlines.
 New tags are allowed -- the graph discovers tags from captured headlines, so no
 registration step is needed.  Errors on empty input."
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
   (let ((choice (s-trim (completing-read "Tag: " (org-glance-graph:tags org-glance-graph)))))
     (when (string-empty-p choice)
       (user-error "Tag must not be empty"))
@@ -72,7 +72,7 @@ separately."
                            (t ""))))
 
   (cl-check-type title string)
-  (cl-assert (org-glance-initialized?))
+  (org-glance-ensure-init)
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))
          (capture-token "_")
