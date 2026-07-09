@@ -49,7 +49,14 @@ FILTER, if non-nil, is a predicate on the metadata."
                               when (or (null filter) (funcall filter meta))
                               collect (cons (org-glance-material:label meta) meta))))
     (unless candidates
-      (user-error "No matching headlines (run `M-x org-glance-reindex' if you upgraded)"))
+      (let ((total (length (org-glance-graph:headlines graph)))
+            (dir (org-glance-graph:directory graph)))
+        (user-error
+         (if (zerop total)
+             (format "org-glance: no headlines in the graph at `%s' -- capture some, or run `M-x org-glance-reindex' if you upgraded"
+                     dir)
+           (format "org-glance: no headlines match the active filter `%s' (of %d in the graph at `%s') -- clear it with `c' in `org-glance-transient', or run `M-x org-glance-reindex' if you upgraded"
+                   (org-glance-filter:describe org-glance-filter-spec) total dir)))))
     (cdr (assoc (completing-read prompt candidates nil t) candidates))))
 
 ;;; Materialized buffer

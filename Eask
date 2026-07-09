@@ -1,4 +1,4 @@
-(package "org-glance" "0.1.2.0.20260709.0" "Org-mode mindmap.")
+(package "org-glance" "0.1.3.0.20260709.0" "Org-mode mindmap.")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "graph" "mindmap")
