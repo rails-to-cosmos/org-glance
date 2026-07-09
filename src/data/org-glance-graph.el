@@ -435,9 +435,22 @@ clean.  Cheap: only rewrites when PATH's final byte is not a newline."
             (let ((coding-system-for-write 'no-conversion))
               (write-region (point-min) (point-max) path nil 'silent))))))))
 
+(defvar org-glance-graph-before-append-functions nil
+  "Abnormal hook run just BEFORE SPECS are appended to a graph's WAL.
+Each function is called with (GRAPH SPECS) -- the metadata structs and tombstone
+plists about to be appended.  The read cache still shows the PRE-append state,
+so a tombstone's tags are resolvable via `org-glance-graph:get-headline'.  For
+side indexes such as tag metrics; errors are demoted so a failing hook never
+breaks the append.")
+
 (cl-defun org-glance-graph--append (graph specs)
   "Append SPECS (metadata structs or bare plists) to the open segment, stamping a
 fresh monotonic `seq' on each, then maybe seal and compact."
+  ;; Side indexes (tag metrics) fire here, while the cache still reflects the
+  ;; pre-append state so a tombstone's tags resolve.  Demoted: a side index must
+  ;; never break a save.
+  (with-demoted-errors "org-glance: before-append hook: %S"
+    (run-hook-with-args 'org-glance-graph-before-append-functions graph specs))
   (let ((open (org-glance-graph--open-segment-path graph)))
     (org-glance-graph--ensure-newline-terminated open)
     (cl-loop for spec in specs

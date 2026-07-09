@@ -9,6 +9,7 @@
 (defvar org-glance-graph)
 (declare-function org-glance-initialized? "org-glance")
 (declare-function org-glance-table "org-glance-table")
+(declare-function org-glance-tags "org-glance-tags")
 (declare-function org-glance-tag-config-edit "org-glance-tag-config")
 
 ;;; Ambient filter controls
@@ -50,7 +51,8 @@
    ("c" "Clear (all)" org-glance-form-action:filter-clear)]
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
-    ("o" "Overview" org-glance-overview)]]
+    ("o" "Overview" org-glance-overview)
+    ("t" "All tags" org-glance-tags)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)

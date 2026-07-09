@@ -12,6 +12,21 @@
 Whitespace-only strings count as present (unlike `s-present?')."
   (and (stringp v) (not (string-empty-p v))))
 
+(cl-defun org-glance--file-mtime (path)
+  "Filesystem modification time of PATH, or nil when it does not exist."
+  (and (f-exists? path)
+       (file-attribute-modification-time (file-attributes path))))
+
+(cl-defun org-glance--read-eld (path)
+  "Read the single Lisp form in the .eld PATH, or nil when absent/unreadable."
+  (when (f-exists? path)
+    (ignore-errors (car (read-from-string (f-read-text path 'utf-8))))))
+
+(cl-defun org-glance--write-eld (path form)
+  "Serialize FORM to the .eld PATH, creating parent dirs."
+  (f-mkdir-full-path (f-dirname path))
+  (f-write-text (prin1-to-string form) 'utf-8 path))
+
 (cl-defun org-glance--buffer-links ()
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)

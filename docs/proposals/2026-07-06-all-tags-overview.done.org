@@ -1,0 +1,255 @@
+#+TITLE: All-tags overview — a table-view of tags with metrics + add/remove
+#+DATE: 2026-07-06
+
+Status: *done (v1)* · feature 2026-07-06
+
+Implemented v1 with the recommended defaults (suite 218/218):
+- =src/data/org-glance-tag-metrics.el= — the event sidecar
+  (=config/tag-metrics.eld=), updated via a new =org-glance-graph-before-append-functions=
+  hook (fired PRE-append so a tombstone's tags resolve).  =:all= joins live
+  count/states with sidecar created/modified/captures/removals; =:created= seeded
+  lazily from blob mtime for pre-existing tags.
+- =src/view/org-glance-tags.el= — the table view (columns Tag / N / States /
+  Cycle / Created / Modified), command =org-glance-tags=, "t" in the
+  =org-glance-form-action= transient; actions RET (the tag's headline table),
+  o (overview), + (capture), - (guarded non-destructive retag).  The States and
+  Cycle cells are per-keyword coloured with the headline table's state palette
+  (`org-glance-table--state-color'); table-view preserves the face text
+  properties through its text-cell render path.
+- Metadata tags are STRINGS in the store, so all tag stringify with =(format
+  "%s" ...)=, not =org-glance-tag:to-string= (which needs a symbol).
+- Generic =org-glance--file-mtime= / =--read-eld= / =--write-eld= added to utils.
+
+Deviations from the proposal, deferred to v2:
+- Remove-tag does the retag only; it does NOT drop the =tags.org= config entry
+  (no config-delete API, and an orphan config is invisible to =graph:tags=
+  anyway).  Full headline-DELETE mode also deferred.
+- Count column sorts lexically (no numeric comparator wired yet).
+
+* Motivation
+
+Today every view is HEADLINE-rowed: =org-glance-overview= / =org-glance-table=
+show the headlines of ONE chosen tag ("o"), =org-glance-agenda= the planned ones.
+There is no way to see the tags THEMSELVES.  Add an *all-tags overview*: a
+table-view where each ROW is a tag, showing per-tag metrics (headline count,
+timestamps, its configuration), with row actions to open that tag's overview and
+to add / remove a tag.  Bind it to *"t"*, beside "o".
+
+* Entry point & binding
+
+- New interactive command =org-glance-tags= (filter-less; opens the single
+  =*org-glance-tags*= buffer).
+- Add =("t" "All tags" org-glance-tags)= to the "Overview" group of the
+  =org-glance-form-action= transient (=src/view/org-glance-ui.el:45-61=), beside
+  =("o" "Overview" …)=; forward-declare the command near ui.el:10-12.
+- "t" is free in the transient and in every view keymap; no collision.
+- Note: the transient is not bound to a global key today (M-x only), so "t"'s
+  discoverability rides on the user binding =org-glance-form-action= themselves.
+
+* Architecture
+
+A tag row differs from a headline row in cardinality (one per tag), id semantics
+(id = tag, not =ORG_GLANCE_ID=), column set, and the meaning of "+"/"-".  So write
+a *new sibling adapter* =src/view/org-glance-tags.el= rather than parameterize
+=org-glance-table.el=.
+
+*Reuse verbatim* (no changes to those files):
+- =org-glance-view:register= / =:fill-frame= / =:mark-fresh= coherence
+  (=org-glance-view.el:74-108=).
+- =table-view-display= / =table-view-set-rows= / =table-view-refresh= /
+  =table-view-apply-sort= (the table-view git dependency).
+- The =:visit= skeleton shape from =org-glance-table:visit=
+  (=table.el:464-536=): buffer name, fill-fn snapshotting the store mtime,
+  handlers alist, =org-glance-view:register=, =default-directory=, fill-frame.
+- The non-file stale/reload pattern (below).
+
+*Write fresh*: a =--tags-spec= (columns), a =--tag-rows= fold (group headlines by
+tag), a =--tag-row= builder (id = tag), and the o/+/- handlers.  The drawer-
+property custom-column machinery (which owns "-" in the headline table) does NOT
+apply to tag rows and is dropped, freeing "-" for remove-tag.
+
+* Columns & metric availability (the crux)
+
+Recon of the store (=graph.el:58-95=): the metadata projection carries exactly
+=id/state/title/tags/hash/schedule/deadline/priority/linked?/propertized?/
+encrypted?= — *no created or modified wall-clock field*.  Records also carry a
+store-global monotonic =:seq= ordinal, but it is insertion ORDER, not a time, and
+is stripped from the deserialized metadata (needs a raw scan to read).
+
+| Column | Source | Cost | Status |
+|--------+--------+------+--------|
+| *Tag* | row id / =graph:tags= | free | ready |
+| *Count* | fold =graph:headlines= by =metadata:tags= | O(N) once/build | ready |
+| *States* | same fold (e.g. "3 TODO · 2 DONE") | O(N) once | ready (optional) |
+| *Config* | =tag-config:resolve= → present? + todo cycle | O(T) resolves | ready |
+| *Created* | tag-metrics sidecar, stamped on first sighting | O(1) read | ready (event) |
+| *Modified* | tag-metrics sidecar, stamped on each touching event | O(1) read | ready (event) |
+| *Activity* | tag-metrics counters (captures / removals) | O(1) read | ready (event) |
+
+- *Count / States / Config* are cheap in-memory folds over the already-cached
+  =graph:headlines= (plus config resolves) — honest and ready now.
+- *Created / Modified / Activity* come from a small per-tag metrics sidecar the
+  store updates on tag events (next section): honest wall-clock, O(1) to read.
+
+** Per-tag metrics, tracked on events
+
+The store carries no wall-clock time (=:seq= is insertion ORDER, not a date), so
+creation cannot be derived after the fact.  Instead — per the request to track
+metrics "on tag creation and on other events" — maintain a *per-tag metrics
+sidecar* the store updates as events happen:
+
+- *Store:* =<store>/config/tag-metrics.eld=, a =tag → (:created TS :modified TS
+  :captures N :removals N)= map, read/written with the existing eld +
+  atomic-rename helpers (=--read-eld= / =graph--atomic-write=).  Config-like side
+  metadata OUTSIDE the content WAL (same stance as =tags.org=).
+- *Event seam:* the mutation funnel =graph:insert= / =:capture= / =:delete= (all
+  land through =--append=).  After an append, for each affected tag: stamp
+  =:created= = =(current-time)= on FIRST sighting (once), =:modified= = now on
+  EVERY touching event, and bump =:captures= (live record) or =:removals=
+  (tombstone).  "Other events" — retag, state change, edit — all re-append a
+  record for the headline, so they naturally bump =:modified=.  One read-modify-
+  write of the sidecar per mutation batch.
+- *Count stays DERIVED* (live fold), never stored, so it cannot drift; only the
+  non-recomputable wall-clock facts live in the sidecar.
+- *Reindex* seeds the sidecar for pre-existing tags, using the earliest blob mtime
+  as a best-effort =:created= where there is no recorded event history.
+- *Caveat (cross-process):* the sidecar is best-effort like the read cache — two
+  Emacsen appending at once race the read-modify-write; fine for metrics (the WAL
+  stays the source of truth).  A note, not a blocker.
+
+* Per-tag configuration columns
+
+(Per the request to surface config here.)  =org-glance-tag-config:resolve graph
+tag= returns the tag's config struct or nil; from it: presence, the =:todo= cycle
+string (=#+TODO:=-style), and its done-keyword split.  A *Config* column shows the
+cycle (or "—" when unconfigured); optionally a *Skeleton?* flag.  Caveat: all tag
+configs share one file (=config/tags.org=), so there is *no per-tag config mtime*
+— a "config modified" column would be identical for every configured tag and is
+not offered.
+
+* Row actions
+
+The tags spec declares its own actions alist (no inheritance from the headline
+table, so keys are free to reassign):
+
+- *RET / "o"* → open that tag's overview: build a single-tag filter
+  (=org-glance-filter:merge= with =:tags (TAG)=) and call =org-glance-overview:visit=
+  (or =org-glance-table:visit= per =org-glance-overview-default-view=).  Reuses the
+  headline table's "T" one-liner (=table.el:499=).
+- *"+"* → *add tag* (=org-glance-tags:add=): a tag becomes real only by carrying a
+  headline, so "+" reads a new tag name (=tag:from-string=, new tags allowed as in
+  capture) and runs =org-glance-capture= for a first headline with it; optionally
+  also seeds a =tags.org= config stub.
+- *"-"* → *remove tag* (=org-glance-tags:remove=): destructive, guarded (see
+  below).
+- *"g"* refresh, *"q"* quit — standard.
+
+** Remove-tag semantics (pick one; the second real decision)
+
+A tag has no entity to delete; "remove" must act on its headlines and/or config.
+Options, worst-case data loss increasing:
+
+1. *Retag (non-destructive, recommended default).*  Drop the tag off each carrying
+   headline — materialize each id, =org-set-tags= minus the tag, save — leaving
+   multi-tagged headlines alive under their OTHER tags.  Modeled exactly on
+   =org-glance-material:set-todo-bulk= (=material.el:440-455=): one at a time,
+   skip buffers with unsaved edits, report (CHANGED SKIPPED).  Also drop the
+   tag's =tags.org= config entry.  The tag then vanishes from =graph:tags= because
+   no live headline carries it.
+2. *Delete headlines.*  =org-glance-graph:delete= (tombstone) every headline
+   carrying the tag.  Nuclear: also destroys those headlines' membership in every
+   OTHER tag they carry, and is only recoverable until the next auto-compaction
+   GCs the blobs.
+3. *Config only.*  Drop the =tags.org= entry, leave headlines untouched (does not
+   remove the tag from the list).
+
+*Recommendation:* default to *(1) retag + drop config*, behind a =yes-or-no-p=
+that names the tag and the affected headline count and warns when headlines are
+multi-tagged; offer *(2)* only behind a second, stronger confirmation.  A bulk
+retag helper and a destructive-confirm helper do not exist yet and must be
+written (no such primitives in the codebase today).
+
+* New data-layer API
+
+- =org-glance-tag-metrics:read (graph)= / =:touch (graph records)= — the sidecar
+  store: read the =tag → (:created :modified :captures :removals)= map, and patch
+  it after an append (created-once / modified / counter per affected tag).  Hooked
+  into =graph:insert= / =:capture= / =:delete= (the =--append= funnel).
+- =org-glance-graph:tag-metrics (graph)= → the VIEW-facing fold that joins the
+  live per-tag =:count= / =:states= (from =graph:headlines=) with the sidecar's
+  =:created= / =:modified= / counters, so the view reads one map, no per-row
+  rescan.  Lives beside =graph:tags= (=graph.el:621=).
+- =org-glance-reindex= extended to seed the sidecar for existing tags.
+- Bulk retag: a =set-todo-bulk=-shaped helper in the material or tags module.
+
+* View coherence
+
+Clone the table's non-file pattern (=table.el:139-200,483-523=):
+- fill-fn snapshots =org-glance-graph:headline-meta-path= mtime into a buffer-local
+  (like =org-glance-table--mtime=).
+- =org-glance-view:register= with a STALE-FN comparing that snapshot to the live
+  =headlines.jsonl= mtime — this catches capture / delete / retag / reindex /
+  another Emacs by one stat.  The tag-metrics sidecar is written on the SAME
+  append that bumps =headlines.jsonl=, so the metric columns refresh with this one
+  STALE-FN — no extra source.  *If "+"/"-" also touch =tags.org=*, the STALE-FN
+  must ALSO watch =config/tags.org= mtime (as the overview does), else a
+  config-only change won't refresh.
+- RELOAD-FN re-fills, re-applies sort, restores point (id-then-line), and calls
+  =org-glance-view:mark-fresh=.
+- Buffer =*org-glance-tags*=; =default-directory= = graph root; =:fill-frame= last.
+
+* Test plan
+
+Mirror =test/test-table.el= (=with-graph=, build headlines, visit, stub the
+buffer-switch, assert =table-view--rows= / point / keymap):
+- rows: one per distinct tag, counts correct, multi-tag headline counted under
+  each of its tags.
+- config column reflects =tag-config:resolve=.
+- "o" on a tag row opens that tag's overview/table filtered to it.
+- "-" (retag) drops the tag off headlines, keeps multi-tagged ones alive, reports
+  counts, and the tag disappears on refresh; skips unsaved buffers.
+- coherence: after a capture in another buffer, the tags view is stale and
+  reloads at the display boundary.
+- Register the new =test/test-tags.el= in =Eask='s =eask-defcommand test= load list
+  (tests are loaded explicitly there).  Public =org-glance-test:= naming.
+
+* Phasing
+
+- *v1:* =org-glance-tags= command + "t" transient entry; the per-tag metrics
+  sidecar + event hook (=graph:insert= / =:capture= / =:delete=) + reindex seeding;
+  columns *Tag / Count / States / Config / Created / Modified* (+ optional
+  *Activity*); actions *o* (overview) + *+* (capture-first-headline) + *-* (retag +
+  drop config, guarded); coherence; tests.
+- *v2:* optional headline-DELETE remove mode behind a stronger confirm; optional
+  per-headline =:modified= if finer-than-tag granularity is ever needed; richer
+  activity columns.
+
+* Risks
+
+- *Destructive "-"*: multi-tag headlines and irreversibility after compaction —
+  mitigated by defaulting to non-destructive retag + explicit confirmation.
+- *Metrics sidecar*: best-effort across concurrent Emacsen (racy read-modify-write)
+  — acceptable for metrics; the content WAL stays authoritative.
+- *Backfill*: reindex must define historical =:created= for tags with no recorded
+  event history (earliest blob mtime fallback).
+- *Discoverability*: the transient is unbound globally; document that "t" needs a
+  user binding, like "o".
+
+* Open decisions (for approval)
+
+1. *Metrics sidecar:* store at =config/tag-metrics.eld= (recommended) vs. inside
+   the content WAL; which events to count (captures/removals only, or also
+   edits/retags/state-changes as distinct counters).
+2. *Remove-tag default:* retag+drop-config (recommended) vs. delete-headlines vs.
+   config-only; and whether to offer the destructive mode at all in v1.
+3. *Tag source:* =graph:tags= only vs. UNION with configured =:TAG:=s (so
+   config-only, headline-less tags are listable) — affects whether "+" of a
+   config stub shows a row.
+4. *Columns for v1:* include the *Modified* blob-mtime proxy, or Count/States/
+   Config only?
+
+* Related
+
+- Adapter template: =src/view/org-glance-table.el=; coherence:
+  =src/view/org-glance-view.el=; config: =src/data/org-glance-tag-config.el=.
+- Proposals index: [[file:2026-07-06-performance-audit.org][docs/proposals index]].
