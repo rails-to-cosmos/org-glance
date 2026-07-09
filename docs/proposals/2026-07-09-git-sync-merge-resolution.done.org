@@ -1,0 +1,83 @@
+#+TITLE: Auto-resolve git merge conflicts in the synced store
+#+DATE: 2026-07-09
+
+Status: *done* · 2026-07-09
+
+Implemented: the store writes =.org-glance/meta/.gitattributes= (=*.jsonl
+merge=union=) on creation, and the graph constructor rebuilds a git-mangled
+=MANIFEST= from the on-disk segment glob at open.  Suite green 216/216 on both
+Emacs 30.2 and 29.1; recompile warning-free.  No on-disk format changed (a valid
+MANIFEST is left byte-for-byte untouched; the only new artifact is
+=.gitattributes=).
+
+* Context
+
+The store under =.org-glance/= is synced across machines with git (Syncthing +
+a git repo at the sync root).  Its metadata is an append-only JSONL log: one
+open segment =meta/headlines.jsonl= plus immutable sealed =meta/seg-*.jsonl=,
+with =meta/MANIFEST= naming the live sealed set.  See the store-format notes in
+[[file:2026-07-06-incremental-metadata-cache.proposed.org][incremental-metadata-cache]] and the audit entry point
+[[file:2026-07-06-performance-audit.org][performance-audit]].
+
+When two machines each append to =headlines.jsonl= after a common prefix, git
+cannot merge the concurrent appends and leaves conflict markers:
+
+#+begin_example
+<<<<<<< HEAD
+{"id":"be57bbfd-…","state":"TODO",…,"seq":6233}
+=======
+{"id":"education-…","state":"STARTED",…,"seq":6252}
+>>>>>>> 49d72c6…
+#+end_example
+
+* Why a union merge is correct
+
+Latest-wins for an id is by *physical position* — segment order in the MANIFEST,
+then line order within a file (=org-glance-graph--latest-records= folds
+oldest→newest and keeps the last write per id).  The =seq= field is never read
+for ordering or dedup; it only reseeds the in-memory counter at open
+(=--max-seq=) and feeds =--heal='s debris test.
+
+So unioning both sides' lines is exactly the intended merge: every record from
+both histories is kept, and the reader collapses duplicate ids to the
+last-positioned one.  =seq= collisions across machines are harmless.
+
+* Changes
+
+** =.gitattributes= union driver (=org-glance-graph--ensure-gitattributes=)
+
+The constructor writes =meta/.gitattributes= containing =*.jsonl merge=union=
+(write-if-absent, never clobbering a hand-edit).  =union= is a built-in git
+driver, so no per-clone =git config= is needed.  Scope is deliberately
+=meta/*.jsonl= only: =data/= content blobs and =config/= are *not* unioned —
+interleaving prose or =.eld= forms would corrupt them.
+
+** MANIFEST self-heal (=org-glance-graph--reconcile-manifest=)
+
+=MANIFEST= has no =.jsonl= extension, so git's default merge leaves conflict
+markers rather than a union.  =--manifest-broken?= flags a MANIFEST that is
+empty, conflict-marked, unparseable, or missing its =:segments= vector.  When
+broken, =--reconcile-manifest= rebuilds =:segments= from the sorted non-empty
+on-disk =seg-*.jsonl= glob (through the existing =--write-manifest=, so the
+=({:version 2 :segments […]})= format is identical), which also *adopts* a
+segment sealed on another machine.  A valid MANIFEST is left untouched, so
+compaction and the byte-stability contract are unaffected.
+
+Constructor order: touch open → =ensure-gitattributes= → =migrate-maybe= →
+=reconcile-manifest= → =heal=.  Reconcile precedes =--heal='s =--gc-orphans= so
+a synced-in sealed segment is listed before gc could reap it.
+
+* Tests
+
+=test/test-merge.el= (4 tests): =.gitattributes= written once and never
+clobbered; a conflict-marked MANIFEST self-heals and re-exposes every sealed
+segment; a hand-unioned =headlines.jsonl= reads back with positional last-wins
+per id and no loss; two segments sealed on both sides are adopted, not deleted.
+
+* Sharp edge left open
+
+Cross-machine *compaction* (which rewrites/renumbers segments) can still race a
+concurrent append or another machine's compaction — a valid-but-divergent
+MANIFEST auto-merges to conflict markers and heals, but resurrected superseded
+records may linger until the next compaction.  Recommendation: run =compact= on
+a single machine, or gate it.  Plain appends — the common case — are fully safe.
