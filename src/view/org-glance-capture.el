@@ -65,6 +65,7 @@ separately."
                             (s-join "\n" tail))
                finally return (cons template nil)))))
 
+;;;###autoload
 (cl-defun org-glance-capture (tags title &key template finalize)
   "Capture a headline tagged with TAGS (a symbol or list of symbols)."
   (declare (indent 2))

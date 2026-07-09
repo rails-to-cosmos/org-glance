@@ -533,6 +533,7 @@ the (id . reason) pairs skipped."
 ;; overview and agenda (see `org-glance-overview'); capture creates a new
 ;; headline, so a state filter does not apply there.
 
+;;;###autoload
 (cl-defun org-glance-materialize ()
   "Choose a headline from the graph and materialize it."
   (interactive)
@@ -574,6 +575,7 @@ chosen link, mirroring the v1 behaviour."
                                         (funcall extra-pred m))))))
     (org-glance-graph:headline graph (org-glance-headline-metadata:id metadata))))
 
+;;;###autoload
 (cl-defun org-glance-open ()
   "Choose a headline from the graph and open a link inside it."
   (interactive)
@@ -592,6 +594,7 @@ With KEY, extract it non-interactively; otherwise prompt."
       (when (called-interactively-p 'any) (message "Copied: %s" value))
       value)))
 
+;;;###autoload
 (cl-defun org-glance-extract ()
   "Choose a headline from the graph and extract a key-value pair from it."
   (interactive)

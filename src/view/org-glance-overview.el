@@ -390,6 +390,7 @@ landing view for `org-glance-overview' (and the `org-glance-overview:' link)."
   :type '(choice (const :tag "Table dashboard" table)
                  (const :tag "Org-text overview" org)))
 
+;;;###autoload
 (cl-defun org-glance-overview (&optional tag)
   "Browse the graph, optionally filtered, in the default view.
 Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
@@ -473,6 +474,7 @@ under us, or predates a source it renders from (`org-glance-overview:fresh?')."
 
 ;;; Agenda
 
+;;;###autoload
 (cl-defun org-glance-agenda ()
   "Show an `org-agenda' over the graph's scheduled/deadline headlines.
 Honours the ambient `org-glance-filter-spec' (default: active headlines)."
