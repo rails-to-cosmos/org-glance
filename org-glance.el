@@ -2,7 +2,7 @@
 
 ;;; org-glance.el --- Org-mode mindmap.
 
-;; Copyright (C) 2018-2025 Dmitry Akatov
+;; Copyright (C) 2018-2026 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
