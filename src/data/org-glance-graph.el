@@ -201,8 +201,10 @@ snapshot stat (see `--store-snapshot')."
       (f-mkdir-full-path (org-glance-graph:data-path graph))
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
       (f-touch (org-glance-graph:headline-meta-path graph))
-      (org-glance-graph--migrate-maybe graph) ; bootstrap MANIFEST / adopt legacy file
-      (org-glance-graph--heal graph)           ; recover seal, derive seq, reap orphans
+      (org-glance-graph--ensure-gitattributes graph)  ; git union merge for *.jsonl
+      (org-glance-graph--migrate-maybe graph)      ; bootstrap MANIFEST / adopt legacy file
+      (org-glance-graph--reconcile-manifest graph) ; rebuild a git-mangled MANIFEST
+      (org-glance-graph--heal graph)               ; recover seal, derive seq, reap orphans
       (puthash directory graph org-glance-graph:list))
     graph))
 
@@ -668,6 +670,52 @@ Return the number of headlines re-indexed."
     n))
 
 ;;; Store bootstrap / recovery / compaction
+
+(cl-defun org-glance-graph--ensure-gitattributes (graph)
+  "Write the `merge=union' git driver for GRAPH's *.jsonl files, if absent.
+Concurrent appends to `headlines.jsonl' on two machines conflict when the store
+dir is synced via git; the built-in `union' driver keeps every line from both
+sides, and the positional last-wins reader (`--latest-records') resolves any
+duplicate id.  Write-if-absent and idempotent: never clobber an existing (maybe
+hand-edited) file.  `union' is built in, so no `git config' is needed."
+  (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes")))
+    (unless (f-exists? path)
+      (f-write-text "*.jsonl merge=union\n" 'utf-8 path))))
+
+(cl-defun org-glance-graph--manifest-broken? (text)
+  "Non-nil when MANIFEST TEXT cannot be trusted as the live segment set.
+Broken means: no content (nil or blank), git conflict markers (a line opening
+with `<<<<<<<', `=======', or `>>>>>>>'), unparseable JSON, or a parse lacking
+a `:segments' vector.  MANIFEST is not `*.jsonl', so git's default merge leaves
+conflict markers rather than a union -- the reader must notice and rebuild."
+  (or (null text)
+      (string-empty-p (string-trim text))
+      (string-match-p "^\\(<<<<<<<\\|=======\\|>>>>>>>\\)" text)
+      (condition-case nil
+          (not (vectorp (plist-get (json-parse-string text :object-type 'plist)
+                                   :segments)))
+        (error t))))
+
+(cl-defun org-glance-graph--reconcile-manifest (graph)
+  "Rebuild GRAPH's MANIFEST from the on-disk segments when it is unusable.
+A git sync can leave the MANIFEST conflict-marked or otherwise mangled (see
+`--manifest-broken?').  A valid MANIFEST is left byte-for-byte untouched (the
+byte-stability contract, and to not fight compaction).  A broken one is rebuilt
+by listing every non-empty on-disk seg-*.jsonl (excluding the open segment and
+temp files), oldest-first by generation, through `--write-manifest' so the
+canonical format is identical.  Run before `--heal' so a segment sealed on
+another machine and synced in is adopted here, never reaped as an orphan."
+  (let* ((path (org-glance-graph--manifest-path graph))
+         (text (when (f-exists? path) (f-read-text path 'utf-8))))
+    (when (org-glance-graph--manifest-broken? text)
+      (let ((meta (org-glance-graph:meta-path graph)))
+        (org-glance-graph--write-manifest
+         graph
+         (sort (cl-loop for name in (directory-files
+                                     meta nil org-glance-graph--segment-name-re)
+                        when (> (or (f-size (f-join meta name)) 0) 0)
+                        collect name)
+               #'string<))))))
 
 (cl-defun org-glance-graph--migrate-maybe (graph)
   "Bootstrap the segmented layout.  If no MANIFEST exists, adopt the present

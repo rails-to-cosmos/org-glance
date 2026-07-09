@@ -145,4 +145,7 @@ rewiring, the snapshot refresh) + ≈ 60–100 LOC of tests.
 
 - Builds on [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] —
   which shrinks the per-record deserialize the patch still pays for touched ids.
+- [[file:2026-07-09-git-sync-merge-resolution.done.org][Git-sync merge resolution]] relies on the same
+  append-only segment layout described here (union-merge the JSONL, self-heal a
+  git-mangled MANIFEST).
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
