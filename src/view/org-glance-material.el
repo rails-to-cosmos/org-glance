@@ -24,9 +24,7 @@
 (require 'org-glance-datetime-mode)
 (require 'org-glance-view)
 
-;; Defined in org-glance.el (which requires this file); referenced only at runtime.
-(defvar org-glance-graph)
-(declare-function org-glance-initialized? "org-glance")
+(require 'org-glance-core)
 
 ;;; Selection
 

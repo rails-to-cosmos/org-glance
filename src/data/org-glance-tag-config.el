@@ -39,9 +39,7 @@
 (require 'org-glance-graph)
 (require 'org-glance-filter)
 
-;; Defined in org-glance.el (require cycle); referenced only at runtime.
-(declare-function org-glance-initialized? "org-glance")
-(defvar org-glance-graph)
+(require 'org-glance-core)
 
 (defcustom org-glance-tag-config-file nil
   "Override path for the tag-configuration Org file.

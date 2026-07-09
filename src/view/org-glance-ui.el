@@ -5,9 +5,8 @@
 (require 'org-glance-graph)
 (require 'org-glance-filter)
 
-;; Defined in org-glance.el (which requires this file); referenced only at runtime.
-(defvar org-glance-graph)
-(declare-function org-glance-initialized? "org-glance")
+(require 'org-glance-core)
+;; The transient's suffix commands live in other files; declared for the compiler.
 (declare-function org-glance-table "org-glance-table")
 (declare-function org-glance-tags "org-glance-tags")
 (declare-function org-glance-tag-config-edit "org-glance-tag-config")

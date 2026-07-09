@@ -10,10 +10,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 
-;; Defined in org-glance.el, which requires this file (cycle) -- runtime-only refs.
-(declare-function org-glance-initialized? "org-glance")
-
-(defvar org-glance-graph)
+(require 'org-glance-core)
 
 (cl-defun org-glance-capture--format-tags (tags)
   "Format TAGS (a symbol or list of symbols) as an org tag string `:a:b:'."

@@ -44,8 +44,7 @@
 (require 'org-glance-material)
 (require 'org-glance-view)
 
-(defvar org-glance-graph)
-(declare-function org-glance-initialized? "org-glance")
+(require 'org-glance-core)
 (declare-function org-glance-table:visit "org-glance-table")
 (declare-function org-glance-capture "org-glance-capture")
 (declare-function org-glance-capture:completing-read-tag "org-glance-capture")

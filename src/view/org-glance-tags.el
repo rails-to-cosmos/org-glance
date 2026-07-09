@@ -26,8 +26,7 @@
 (require 'org-glance-material)
 (require 'org-glance-capture)
 
-(defvar org-glance-graph)
-(declare-function org-glance-initialized? "org-glance")
+(require 'org-glance-core)
 
 (defvar-local org-glance-tags--mtime nil
   "Mtime of `headlines.jsonl' at the tags buffer's last fill (staleness snapshot).")

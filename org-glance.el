@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 0.1.4.0.20260709.0
+;; Version: 0.1.5.0.20260709.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -41,6 +41,7 @@
 (require 'ol)
 (require 'org)
 
+(require 'org-glance-core)
 (require 'org-glance-ui)
 (require 'org-glance-utils)
 (require 'org-glance-capture)
@@ -53,19 +54,7 @@
 (require 'org-glance-table)
 (require 'org-glance-tags)
 
-(defcustom org-glance-directory org-directory
-  "Main location for all Org mode content managed by `org-glance`."
-  :group 'org-glance
-  :type 'directory)
-
-(defvar org-glance-graph nil
-  "Current global graph instance.
-Constructed by `org-glance-init'; nil until the system is initialized.")
-
-(defgroup org-glance nil "Org-mode mindmap explorer."
-  :tag "Org Glance"
-  :group 'org)
-
+;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Initialize org-glance in DIRECTORY: bring up the graph store and, when legacy
 metadata is detected, warn that `M-x org-glance-migrate' can convert it."
@@ -74,10 +63,6 @@ metadata is detected, warn that `M-x org-glance-migrate' can convert it."
     (mkdir directory t))
   (setq org-glance-graph (org-glance-graph directory))
   (org-glance-migrate-maybe directory))
-
-(cl-defun org-glance-initialized? ()
-  "Return the global graph if the system is initialized, else nil."
-  org-glance-graph)
 
 ;; --- Runtime migration of legacy v1 metadata into the graph -----------------
 ;;
