@@ -13,7 +13,7 @@
 ;; This used to live inside `org-glance-overview'; it was lifted here so the
 ;; SAME language drives every consumer -- the picker commands
 ;; (materialize/open/extract), the overview + agenda, the in-overview `/'
-;; refinement, and the `org-glance-form-action' transient.  `org-glance-overview'
+;; refinement, and the `org-glance-transient' transient.  `org-glance-overview'
 ;; keeps only the cache/render machinery layered on top (`spec-key',
 ;; `cached-file', the SPEC sidecar, ...).
 ;;
@@ -35,7 +35,7 @@
 (defvar org-glance-filter-spec '(:done nil)
   "Ambient filter applied to headline actions, as a normalized filter spec.
 Defaults to `(:done nil)' -- active (not-done) headlines.  Set via the
-`org-glance-form-action' transient; consumed by the picker commands
+`org-glance-transient' transient; consumed by the picker commands
 \(materialize / open / extract) and overlaid onto the overview and agenda.
 See `org-glance-filter:predicate' for the spec language.")
 
@@ -209,7 +209,7 @@ This -- not the lossy directory name -- is what makes two filters \"the same\"."
 
 ;;; Generalized refinement: build a new spec from a dimension choice
 ;;
-;; Shared by the in-overview `/' filter and the `org-glance-form-action'
+;; Shared by the in-overview `/' filter and the `org-glance-transient'
 ;; transient so the two stay consistent.  Each returns a fresh normalized spec.
 
 (cl-defun org-glance-filter:read-state (&optional graph)

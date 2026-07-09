@@ -11,7 +11,7 @@ Implemented v1 with the recommended defaults (suite 218/218):
   lazily from blob mtime for pre-existing tags.
 - =src/view/org-glance-tags.el= — the table view (columns Tag / N / States /
   Cycle / Created / Modified), command =org-glance-tags=, "t" in the
-  =org-glance-form-action= transient; actions RET (the tag's headline table),
+  =org-glance-transient= transient; actions RET (the tag's headline table),
   o (overview), + (capture), - (guarded non-destructive retag).  The States and
   Cycle cells are per-keyword coloured with the headline table's state palette
   (`org-glance-table--state-color'); table-view preserves the face text
@@ -40,11 +40,11 @@ to add / remove a tag.  Bind it to *"t"*, beside "o".
 - New interactive command =org-glance-tags= (filter-less; opens the single
   =*org-glance-tags*= buffer).
 - Add =("t" "All tags" org-glance-tags)= to the "Overview" group of the
-  =org-glance-form-action= transient (=src/view/org-glance-ui.el:45-61=), beside
+  =org-glance-transient= transient (=src/view/org-glance-ui.el:45-61=), beside
   =("o" "Overview" …)=; forward-declare the command near ui.el:10-12.
 - "t" is free in the transient and in every view keymap; no collision.
 - Note: the transient is not bound to a global key today (M-x only), so "t"'s
-  discoverability rides on the user binding =org-glance-form-action= themselves.
+  discoverability rides on the user binding =org-glance-transient= themselves.
 
 * Architecture
 

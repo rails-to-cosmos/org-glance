@@ -411,7 +411,7 @@ default); press `T' there to toggle to the other view.  TAG may be a bare tag
 ;; or re-uses, its own cache like any other filter, and the previous (less
 ;; filtered) buffer stays around, so narrowing is non-destructive.  The clause
 ;; builders (`org-glance-filter:set-state' / `:set-substring' / `:read-state')
-;; are shared with the `org-glance-form-action' transient so the two filter UIs
+;; are shared with the `org-glance-transient' transient so the two filter UIs
 ;; stay consistent.
 
 (cl-defun org-glance-overview--revisit (spec)

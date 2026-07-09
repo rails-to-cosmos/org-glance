@@ -5,7 +5,7 @@
 ;; breakdown, the tag's configured cycle, and event-tracked created/modified
 ;; timestamps (see `org-glance-tag-metrics').  Row actions: open the tag's
 ;; overview (o/RET), add a tag (+), remove a tag (-, a guarded non-destructive
-;; retag).  Bound to "t" in `org-glance-form-action'.  Reuses the table-view
+;; retag).  Bound to "t" in `org-glance-transient'.  Reuses the table-view
 ;; package and `org-glance-view' coherence like `org-glance-table'.
 
 ;;; Code:

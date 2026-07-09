@@ -1,4 +1,4 @@
-(package "org-glance" "1.0.1" "Org-mode mindmap.")
+(package "org-glance" "1.1.0" "Org-mode mindmap.")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "graph" "mindmap")
@@ -42,5 +42,6 @@
   (load "test/test-material.el")
   (load "test/test-overview.el")
   (load "test/test-table.el")
+  (load "test/test-tags.el")
   (load "test/test-ui.el")
   (ert-run-tests-batch-and-exit))

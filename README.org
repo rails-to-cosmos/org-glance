@@ -9,23 +9,65 @@
 
 Emacs front-end for [[https://github.com/rails-to-cosmos/glance][Glance]]. Work in progress.
 
-* Using from your Emacs config
+* Install
 
-org-glance is a multi-directory package: the entry point =org-glance.el= lives at
-the repo root, and its modules live under =src/data= and =src/view=.  It does NOT
-add those subdirectories to =load-path= itself, so all three must be on
-=load-path=.  (=Eask= is only the development/test harness; it is not needed to
-use the package.)
+The published package archive is the simplest route.  Add the archive, then let
+=use-package= install and set it up:
 
-** Dependencies
+#+begin_src emacs-lisp
+(add-to-list 'package-archives
+             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
 
-From MELPA: =dash=, =f=, =s=, =aes=, =transient=.  From git:
-=table-view= ([[https://github.com/rails-to-cosmos/table-view][rails-to-cosmos/table-view]], not on MELPA).  Everything else (=org=
+(use-package org-glance
+  :bind (("C-x j" . org-glance-transient)
+         ;; :map org-mode-map
+         ;; ("@" . org-glance:@)
+         )
+  :config (org-glance-init)
+  :ensure t)
+#+end_src
+
+=C-x j= opens =org-glance-transient=, the transient dispatcher (see
+[[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
+
+The =rails-to-cosmos= archive provides =org-glance= and its =table-view=
+dependency; the remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
+MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
-** Load from a local clone
+* Highlights
 
-The simplest form — add the three directories, then require it:
+Reach everything through the =org-glance-transient= transient (=C-x j= above).
+
+- *Overview* (=o=) — the org-text overview of a chosen tag; toggle it (=T=) to a
+  sortable headline *table* with custom drawer-property columns and bulk state
+  change.
+- *All tags* (=t=) — a table of the tags THEMSELVES: per-tag headline count, todo
+  state breakdown, configured cycle, and event-tracked created / last-modified
+  timestamps.  State and Cycle cells are colour-coded.  In the buffer: =RET=
+  opens that tag's headline table, =o= its overview, =+= adds a tag (captures a
+  first headline), =-= removes a tag (a guarded, non-destructive retag).
+- *Agenda* (=a=), *Capture* (=+=), *Extract property* (=e=), *Open link* (=j=),
+  *Materialize* (=m=), *Configure tags* (=C=).
+
+Other features:
+
+- *Encrypted headlines* — materializing an =aes-encrypted= headline prompts for
+  the password, decrypts the body for editing, and re-encrypts on save so the
+  stored blob is never plaintext (auto-save/backups are disabled for it).  The
+  password is cached buffer-local with a TTL (=org-glance-material-password-ttl=);
+  =C-c C-l= forgets it early.
+- *Crash-safe store* — a segmented, append-only JSONL log with atomic commits and
+  an in-memory read cache.
+
+* Install from source (development)
+
+For hacking on org-glance, clone the repo and load it directly.  It is a
+multi-directory package: =org-glance.el= is at the root, modules under =src/data=
+and =src/view=; it does NOT add those to =load-path= itself, so all three must be
+on it.  =table-view= is a pinned git dependency
+([[https://github.com/rails-to-cosmos/table-view][rails-to-cosmos/table-view]], not on MELPA); the MELPA deps above are still
+needed.  (=Eask= is the dev/test harness, not required to use the package.)
 
 #+begin_src emacs-lisp
 (dolist (dir '("" "src/data" "src/view"))
@@ -33,28 +75,12 @@ The simplest form — add the three directories, then require it:
 (require 'org-glance)
 #+end_src
 
-With =use-package= (lazy-loads the commands, no autoload cookies needed):
-
-#+begin_src emacs-lisp
-(use-package org-glance
-  :load-path ("~/path/to/org-glance"
-              "~/path/to/org-glance/src/data"
-              "~/path/to/org-glance/src/view")
-  :commands (org-glance-materialize org-glance-open org-glance-extract))
-#+end_src
-
-With =straight.el= (fetches the dependencies from the package header):
+With =straight.el= (also needs a recipe for =table-view=):
 
 #+begin_src emacs-lisp
 (use-package org-glance
   :straight (org-glance :type git :host github :repo "rails-to-cosmos/org-glance"
                         :files ("*.el" "src/data/*.el" "src/view/*.el")))
-#+end_src
-
-=table-view= is a dependency fetched from git (not on MELPA), so =straight= needs
-a recipe for it too:
-
-#+begin_src emacs-lisp
 (use-package table-view
   :straight (table-view :type git :host github :repo "rails-to-cosmos/table-view"))
 #+end_src
@@ -62,18 +88,13 @@ a recipe for it too:
 ** Single-file build
 
 =make fat= concatenates the sources into one =dist/org-glance.el= (+ =.elc=) in
-dependency order, and verifies it byte-compiles and loads standalone.  Then only
-that one directory needs to be on =load-path=:
+dependency order and verifies it byte-compiles and loads standalone.  Then only
+that directory needs to be on =load-path=:
 
 #+begin_src emacs-lisp
 (add-to-list 'load-path "~/path/to/org-glance/dist")
 (require 'org-glance)
 #+end_src
 
-Dependencies (=dash=, =f=, =s=, =aes=, =transient=) are still required separately.
-
-** Entry commands
-
-=M-x org-glance-materialize=, =org-glance-open=, =org-glance-extract= (and more in
-=org-glance.el=).  A plain =(require 'org-glance)= — or the =use-package :commands=
-stubs above — makes them available.
+The dependencies (=dash=, =f=, =s=, =aes=, =transient=, =table-view=) are still
+installed separately.
