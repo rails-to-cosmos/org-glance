@@ -43,6 +43,7 @@
   (interactive)
   (setq org-glance-filter-spec nil))
 
+;;;###autoload
 (transient-define-prefix org-glance-transient ()
   "Perform action on selected view/headlines"
   [:description (lambda (&rest _) (format "Filter: %s" (org-glance-filter:describe org-glance-filter-spec)))
