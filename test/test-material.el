@@ -78,59 +78,32 @@ so the filter is correct even from this non-Org command context."
                    :filter (lambda (m) (string= "TODO" (org-glance-headline-metadata:state m))))))
         (should (string= "a" (org-glance-headline-metadata:id meta)))))))
 
-(ert-deftest org-glance-test:material-open-apply ()
-  "Materialize opens the blob editable; apply writes back a new version."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "m1" "* TODO foo"))
-    (let ((buffer (org-glance-material:open graph "m1")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (should org-glance-material-mode)
-            (should (s-contains? "TODO foo" (buffer-string)))
-            (goto-char (point-min))
-            (re-search-forward "TODO")
-            (replace-match "DONE")
-            (org-glance-material:apply))
-        (kill-buffer buffer))
-      (should (string= "DONE" (org-glance-headline-metadata:state
-                               (org-glance-graph:get-headline graph "m1")))))))
-
 (ert-deftest org-glance-test:material-save-affordance ()
   "A materialized buffer visits its content-blob FILE, runs the minor mode,
 and is editable; saving persists to the graph and survives re-materialize.
 This guards the interactive save path users actually hit."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO foo"))
-    (let ((buffer (org-glance-material:open graph "s1")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (should org-glance-material-mode)
-            (should-not buffer-read-only)
-            (should buffer-file-name)            ; a real file -> the standard save works
-            (goto-char (point-min))
-            (re-search-forward "TODO")
-            (replace-match "DONE")
-            (org-glance-material:apply))
-        (kill-buffer buffer))
-      ;; persisted: re-materializing shows the edited state
-      (let ((buffer2 (org-glance-material:open graph "s1")))
-        (unwind-protect
-            (with-current-buffer buffer2
-              (should (s-contains? "DONE foo" (buffer-string))))
-          (kill-buffer buffer2))))))
+    (org-glance-test:with-material (buffer graph "s1")
+      (should org-glance-material-mode)
+      (should-not buffer-read-only)
+      (should buffer-file-name)            ; a real file -> the standard save works
+      (should (s-contains? "TODO foo" (buffer-string)))
+      (org-glance-test:sed "TODO" "DONE")
+      (org-glance-material:apply))
+    (should (string= "DONE" (org-glance-headline-metadata:state
+                             (org-glance-graph:get-headline graph "s1"))))
+    ;; persisted: re-materializing shows the edited state
+    (org-glance-test:with-material (buffer graph "s1")
+      (should (s-contains? "DONE foo" (buffer-string))))))
 
 (ert-deftest org-glance-test:material-edit-updates-metadata ()
   "Editing the heading and saving updates the stored metadata projection."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO foo"))
-    (let ((buffer (org-glance-material:open graph "u1")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (re-search-forward "TODO foo")
-            (replace-match "DONE bar")
-            (org-glance-material:apply))
-        (kill-buffer buffer)))
+    (org-glance-test:with-material (buffer graph "u1")
+      (org-glance-test:sed "TODO foo" "DONE bar")
+      (org-glance-material:apply))
     (let ((meta (org-glance-graph:get-headline graph "u1")))
       (should (string= "DONE" (org-glance-headline-metadata:state meta)))
       (should (string= "bar" (org-glance-headline-metadata:title meta))))))
@@ -151,9 +124,7 @@ graph.  Drives the real command + the real keybinding."
                 (should org-glance-material-mode)
                 (should-not buffer-read-only)
                 (should buffer-file-name)
-                (goto-char (point-min))
-                (re-search-forward "TODO")
-                (replace-match "DONE")
+                (org-glance-test:sed "TODO" "DONE")
                 (let ((inhibit-message t))
                   (call-interactively (key-binding (kbd "C-x C-s")))))
             (when (string-prefix-p "*org-glance: " (buffer-name))
@@ -168,16 +139,10 @@ materialized buffer through `write-contents-functions' -- robust to configs that
 rebind/shadow C-x C-s, and no \"not visiting a file\" prompt on this non-file buffer."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "sb1" "* TODO foo"))
-    (let ((buffer (org-glance-material:open graph "sb1")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (re-search-forward "TODO")
-            (replace-match "DONE")
-            (set-buffer-modified-p t)
-            (let ((inhibit-message t)) (save-buffer)))
-        (set-buffer-modified-p nil)
-        (kill-buffer buffer)))
+    (org-glance-test:with-material (buffer graph "sb1")
+      (org-glance-test:sed "TODO" "DONE")
+      (set-buffer-modified-p t)
+      (let ((inhibit-message t)) (save-buffer)))
     (should (string= "DONE" (org-glance-headline-metadata:state
                              (org-glance-graph:get-headline graph "sb1"))))))
 
@@ -186,14 +151,9 @@ rebind/shadow C-x C-s, and no \"not visiting a file\" prompt on this non-file bu
 for the original id (the sync hook skips a mismatched id)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "m1" "* TODO foo"))
-    (let ((buffer (org-glance-material:open graph "m1")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (re-search-forward "^:ORG_GLANCE_ID:.*$")
-            (replace-match ":ORG_GLANCE_ID: changed")
-            (let ((inhibit-message t)) (org-glance-material:apply)))
-        (kill-buffer buffer)))
+    (org-glance-test:with-material (buffer graph "m1")
+      (org-glance-test:sed "^:ORG_GLANCE_ID:.*$" ":ORG_GLANCE_ID: changed")
+      (let ((inhibit-message t)) (org-glance-material:apply)))
     ;; the original id's metadata is left untouched
     (should (string= "foo" (org-glance-headline-metadata:title
                             (org-glance-graph:get-headline graph "m1"))))))
@@ -298,39 +258,33 @@ for the original id (the sync hook skips a mismatched id)."
   "Materialized buffers enable `org-glance-datetime-mode'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water"))
-    (let ((buffer (org-glance-material:open graph "R")))
-      (unwind-protect
-          (with-current-buffer buffer
-            (should org-glance-datetime-mode))
-        (kill-buffer buffer)))))
+    (org-glance-test:with-material (buffer graph "R")
+      (should org-glance-datetime-mode))))
 
 (ert-deftest org-glance-test:material-clone-on-repeat ()
   "Completing a repeated headline preserves the done state as a new headline."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water flowers :house:"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
-    (let ((buffer (org-glance-material:open graph "R"))
-          (org-glance-clone-on-repeat-p t)
+    (let ((org-glance-clone-on-repeat-p t)
           (org-log-repeat nil)
           (org-log-done nil))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (org-todo "DONE")
-            (let* ((headlines (org-glance-graph:headlines graph))
-                   (clone (cl-find-if (lambda (m) (not (string= "R" (org-glance-headline-metadata:id m))))
-                                      headlines)))
-              (should (= 2 (length headlines)))
-              (should clone)
-              ;; The clone preserves the completed state...
-              (should (string= "DONE" (org-glance-headline-metadata:state clone)))
-              (should (member "house" (append (org-glance-headline-metadata:tags clone) nil)))
-              ;; ...with its repeater disarmed, so it never repeats again.
-              (should (s-contains? "+0d" (org-glance-graph:get-content
-                                          graph (org-glance-headline-metadata:id clone))))
-              ;; The live headline repeated forward.
-              (should (string= "TODO" (org-get-todo-state)))))
-        (kill-buffer buffer)))))
+      (org-glance-test:with-material (buffer graph "R")
+        (goto-char (point-min))
+        (org-todo "DONE")
+        (let* ((headlines (org-glance-graph:headlines graph))
+               (clone (cl-find-if (lambda (m) (not (string= "R" (org-glance-headline-metadata:id m))))
+                                  headlines)))
+          (should (= 2 (length headlines)))
+          (should clone)
+          ;; The clone preserves the completed state...
+          (should (string= "DONE" (org-glance-headline-metadata:state clone)))
+          (should (member "house" (append (org-glance-headline-metadata:tags clone) nil)))
+          ;; ...with its repeater disarmed, so it never repeats again.
+          (should (s-contains? "+0d" (org-glance-graph:get-content
+                                      graph (org-glance-headline-metadata:id clone))))
+          ;; The live headline repeated forward.
+          (should (string= "TODO" (org-get-todo-state))))))))
 
 (ert-deftest org-glance-test:material-cleanup-after-repeat ()
   "After repeating, the live headline is trimmed to header + pinned blocks."
@@ -341,18 +295,15 @@ for the original id (the sync hook skips a mismatched id)."
                                                              "keep me"
                                                              "#+end_pin"
                                                              "transient note"))
-    (let ((buffer (org-glance-material:open graph "R"))
-          (org-glance-clone-on-repeat-p t)
+    (let ((org-glance-clone-on-repeat-p t)
           (org-log-repeat nil)
           (org-log-done nil))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (org-todo "DONE")
-            (should (s-contains? "keep me" (buffer-string)))
-            (should-not (s-contains? "transient note" (buffer-string)))
-            (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string))))
-        (kill-buffer buffer)))))
+      (org-glance-test:with-material (buffer graph "R")
+        (goto-char (point-min))
+        (org-todo "DONE")
+        (should (s-contains? "keep me" (buffer-string)))
+        (should-not (s-contains? "transient note" (buffer-string)))
+        (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string)))))))
 
 (ert-deftest org-glance-test:material-no-clone-when-disabled ()
   "Without `org-glance-clone-on-repeat-p', repeating leaves the graph alone."
@@ -360,17 +311,14 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"
                                                              "transient note"))
-    (let ((buffer (org-glance-material:open graph "R"))
-          (org-glance-clone-on-repeat-p nil)
+    (let ((org-glance-clone-on-repeat-p nil)
           (org-log-repeat nil)
           (org-log-done nil))
-      (unwind-protect
-          (with-current-buffer buffer
-            (goto-char (point-min))
-            (org-todo "DONE")
-            (should (= 1 (length (org-glance-graph:headlines graph))))
-            (should (s-contains? "transient note" (buffer-string))))
-        (kill-buffer buffer)))))
+      (org-glance-test:with-material (buffer graph "R")
+        (goto-char (point-min))
+        (org-todo "DONE")
+        (should (= 1 (length (org-glance-graph:headlines graph))))
+        (should (s-contains? "transient note" (buffer-string)))))))
 
 (cl-defmacro org-glance-test--seen-ids (&rest body)
   "Stub `completing-read' to capture the offered headline ids (sorted) in `seen',
@@ -499,35 +447,32 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
 (native `C-c C-t' semantics).  Drives the deferred note flow synchronously."
   (dolist (case '((:label "commit" :abort nil :note t)
                   (:label "abort"  :abort t   :note nil)))
-    (let ((org-todo-keywords '((sequence "TODO" "DONE")))
-          (org-log-done 'note) (org-log-into-drawer t)
-          (this-command 'org-glance-test-cct)
-          (origin (generate-new-buffer " *ctl-origin*"))
-          (finalized 'unset))
-      (unwind-protect
-          (org-glance-test:with-graph graph
-            (org-glance-graph:add graph (org-glance-test:headline "n1" "* TODO Alpha"))
-            (with-current-buffer origin
-              (org-glance-material:change-todo-live
-               graph "n1" nil (lambda (s) (setq finalized s))))
-            ;; deliver + finish the note (C-c C-c commit, or C-c C-k abort)
-            (ignore-errors (run-hooks 'post-command-hook))
-            (let ((nb (get-buffer "*Org Note*")))
-              (should nb)
-              (with-current-buffer nb
-                (unless (plist-get case :abort) (insert "the reason"))
-                (let ((org-note-abort (plist-get case :abort)))
-                  (ignore-errors (funcall org-finish-function)))))
-            (with-timeout (3) (while (eq finalized 'unset) (sit-for 0.02)))
-            (let ((blob (org-glance-graph:get-content graph "n1")))
-              (should (equal "DONE" finalized))
-              (should (equal "DONE" (org-glance-headline-metadata:state
-                                     (org-glance-graph:get-headline graph "n1"))))
-              (should (s-contains? "CLOSED:" blob))            ; state+CLOSED always kept
-              (should (eq (plist-get case :note)               ; note only on commit
-                          (and (s-contains? "the reason" blob) t)))))
-        (when (buffer-live-p origin) (kill-buffer origin))
-        (when (get-buffer "*Org Note*") (kill-buffer "*Org Note*"))))))
+    (org-glance-test:with-note-origin (origin)
+      (let ((org-todo-keywords '((sequence "TODO" "DONE")))
+            (org-log-done 'note) (org-log-into-drawer t)
+            (this-command 'org-glance-test-cct)
+            (finalized 'unset))
+        (org-glance-test:with-graph graph
+          (org-glance-graph:add graph (org-glance-test:headline "n1" "* TODO Alpha"))
+          (with-current-buffer origin
+            (org-glance-material:change-todo-live
+             graph "n1" nil (lambda (s) (setq finalized s))))
+          ;; deliver + finish the note (C-c C-c commit, or C-c C-k abort)
+          (ignore-errors (run-hooks 'post-command-hook))
+          (let ((nb (get-buffer "*Org Note*")))
+            (should nb)
+            (with-current-buffer nb
+              (unless (plist-get case :abort) (insert "the reason"))
+              (let ((org-note-abort (plist-get case :abort)))
+                (ignore-errors (funcall org-finish-function)))))
+          (with-timeout (3) (while (eq finalized 'unset) (sit-for 0.02)))
+          (let ((blob (org-glance-graph:get-content graph "n1")))
+            (should (equal "DONE" finalized))
+            (should (equal "DONE" (org-glance-headline-metadata:state
+                                   (org-glance-graph:get-headline graph "n1"))))
+            (should (s-contains? "CLOSED:" blob))            ; state+CLOSED always kept
+            (should (eq (plist-get case :note)               ; note only on commit
+                        (and (s-contains? "the reason" blob) t)))))))))
 
 ;;; Bulk TODO state change: materialize -> org-todo -> sync, per row, no note
 
@@ -580,57 +525,50 @@ nothing dangling on `post-command-hook'."
   (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO A"))
-      (let ((buf (org-glance-material:open graph "u1")))
-        (unwind-protect
-            (let ((result 'unset))
-              (with-current-buffer buf (goto-char (point-max)) (insert "dirty\n"))
-              (org-glance-material:set-todo-bulk
-               graph '("u1") "DONE" (lambda (c s) (setq result (list c s))))
-              (should (null (car result)))                       ; not changed
-              (should (equal '("u1" . "unsaved changes") (car (cadr result))))
-              (should (equal "TODO" (org-glance-headline-metadata:state
-                                     (org-glance-graph:get-headline graph "u1"))))
-              (should (buffer-modified-p buf)))                  ; edits preserved
-          (when (buffer-live-p buf)
-            (with-current-buffer buf (set-buffer-modified-p nil))
-            (kill-buffer buf)))))))
+      (org-glance-test:with-material (buf graph "u1")
+        (let ((result 'unset))
+          (goto-char (point-max)) (insert "dirty\n")
+          (org-glance-material:set-todo-bulk
+           graph '("u1") "DONE" (lambda (c s) (setq result (list c s))))
+          (should (null (car result)))                       ; not changed
+          (should (equal '("u1" . "unsaved changes") (car (cadr result))))
+          (should (equal "TODO" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "u1"))))
+          (should (buffer-modified-p buf)))))))               ; edits preserved
 
 (ert-deftest org-glance-test:material-set-todo-bulk-note-sequential ()
   "Under note logging, bulk prompts for a note PER ROW, sequentially, and records
 each one -- never discarding, never dangling on a killed buffer."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE")))
-        (org-log-done 'note) (org-log-into-drawer t)
-        (this-command 'org-glance-test-bulk)
-        (origin (generate-new-buffer " *bulk-origin*"))
-        (finalized 'unset) (notes 0))
-    (unwind-protect
-        (org-glance-test:with-graph graph
-          (org-glance-graph:add graph
-                                (org-glance-test:headline "n1" "* TODO A")
-                                (org-glance-test:headline "n2" "* TODO B"))
-          (with-current-buffer origin
-            (org-glance-material:set-todo-bulk
-             graph '("n1" "n2") "DONE" (lambda (c _s) (setq finalized c))))
-          ;; Drive the sequential prompts: whenever `*Org Note*' appears, fill and
-          ;; commit it; the next row's prompt follows once the timer advances.
-          (with-timeout (5)
-            (while (eq finalized 'unset)
-              (let ((nb (get-buffer "*Org Note*")))
-                (if (not (buffer-live-p nb))
-                    (sit-for 0.02)
-                  (with-current-buffer nb
-                    (insert (format "reason %d" (cl-incf notes)))
-                    (let ((org-note-abort nil)) (funcall org-finish-function)))))))
-          (should (equal 2 notes))                       ; one prompt PER row
-          (should (equal '("n1" "n2") finalized))        ; both recorded, in order
-          (dolist (pair '(("n1" . "reason 1") ("n2" . "reason 2")))
-            (let ((blob (org-glance-graph:get-content graph (car pair))))
-              (should (equal "DONE" (org-glance-headline-metadata:state
-                                     (org-glance-graph:get-headline graph (car pair)))))
-              (should (s-contains? (cdr pair) blob))      ; the note text landed
-              (should (s-contains? "CLOSED:" blob)))))    ; and CLOSED stayed
-      (when (buffer-live-p origin) (kill-buffer origin))
-      (when (get-buffer "*Org Note*") (kill-buffer "*Org Note*")))))
+  (org-glance-test:with-note-origin (origin)
+    (let ((org-todo-keywords '((sequence "TODO" "DONE")))
+          (org-log-done 'note) (org-log-into-drawer t)
+          (this-command 'org-glance-test-bulk)
+          (finalized 'unset) (notes 0))
+      (org-glance-test:with-graph graph
+        (org-glance-graph:add graph
+                              (org-glance-test:headline "n1" "* TODO A")
+                              (org-glance-test:headline "n2" "* TODO B"))
+        (with-current-buffer origin
+          (org-glance-material:set-todo-bulk
+           graph '("n1" "n2") "DONE" (lambda (c _s) (setq finalized c))))
+        ;; Drive the sequential prompts: whenever `*Org Note*' appears, fill and
+        ;; commit it; the next row's prompt follows once the timer advances.
+        (with-timeout (5)
+          (while (eq finalized 'unset)
+            (let ((nb (get-buffer "*Org Note*")))
+              (if (not (buffer-live-p nb))
+                  (sit-for 0.02)
+                (with-current-buffer nb
+                  (insert (format "reason %d" (cl-incf notes)))
+                  (let ((org-note-abort nil)) (funcall org-finish-function)))))))
+        (should (equal 2 notes))                       ; one prompt PER row
+        (should (equal '("n1" "n2") finalized))        ; both recorded, in order
+        (dolist (pair '(("n1" . "reason 1") ("n2" . "reason 2")))
+          (let ((blob (org-glance-graph:get-content graph (car pair))))
+            (should (equal "DONE" (org-glance-headline-metadata:state
+                                   (org-glance-graph:get-headline graph (car pair)))))
+            (should (s-contains? (cdr pair) blob))      ; the note text landed
+            (should (s-contains? "CLOSED:" blob))))))))  ; and CLOSED stayed
 
 (ert-deftest org-glance-test:material-set-todo-bulk-repeater-no-dangling ()
   "A repeating task set DONE in bulk reschedules and leaves no dangling log note."
@@ -655,42 +593,32 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
     ;; Seeded blob on disk is ciphertext.
     (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
     (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
-      (let ((buffer (org-glance-material:open graph "enc")))
-        (unwind-protect
-            (with-current-buffer buffer
-              ;; Body is decrypted in the buffer; ciphertext never shown.
-              (should (string= "pw" org-glance-material--password))
-              ;; Hardening: plaintext cannot leak to auto-save/backup/lockfiles.
-              (should (null buffer-auto-save-file-name))
-              (should backup-inhibited)
-              (should (null create-lockfiles))
-              ;; Lock forgets the password (next save would re-prompt).
-              (org-glance-material:lock)
-              (should (null org-glance-material--password))
-              (org-glance-material--set-password "pw")   ; restore for the save below
-              (should (save-excursion (goto-char (point-min)) (re-search-forward "plainbody" nil t)))
-              (should-not (save-excursion (goto-char (point-min)) (re-search-forward "aes-encrypted" nil t)))
-              ;; Edit + save: before-save encrypts, after-save decrypts back.
-              (goto-char (point-min))
-              (re-search-forward "plainbody")
-              (replace-match "editedbody")
-              (let ((inhibit-message t)) (save-buffer))
-              ;; Disk stays ciphertext; metadata still flagged encrypted.
-              (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
-              (should (org-glance-headline-metadata:encrypted?
-                       (org-glance-graph:get-headline graph "enc")))
-              ;; Buffer decrypted back to plaintext with the edit, not left dirty.
-              (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
-              (should-not (buffer-modified-p)))
-          (set-buffer-modified-p nil)
-          (kill-buffer buffer)))
+      (org-glance-test:with-material (buffer graph "enc")
+        ;; Body is decrypted in the buffer; ciphertext never shown.
+        (should (string= "pw" org-glance-material--password))
+        ;; Hardening: plaintext cannot leak to auto-save/backup/lockfiles.
+        (should (null buffer-auto-save-file-name))
+        (should backup-inhibited)
+        (should (null create-lockfiles))
+        ;; Lock forgets the password (next save would re-prompt).
+        (org-glance-material:lock)
+        (should (null org-glance-material--password))
+        (org-glance-material--set-password "pw")   ; restore for the save below
+        (should (save-excursion (goto-char (point-min)) (re-search-forward "plainbody" nil t)))
+        (should-not (save-excursion (goto-char (point-min)) (re-search-forward "aes-encrypted" nil t)))
+        ;; Edit + save: before-save encrypts, after-save decrypts back.
+        (org-glance-test:sed "plainbody" "editedbody")
+        (let ((inhibit-message t)) (save-buffer))
+        ;; Disk stays ciphertext; metadata still flagged encrypted.
+        (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
+        (should (org-glance-headline-metadata:encrypted?
+                 (org-glance-graph:get-headline graph "enc")))
+        ;; Buffer decrypted back to plaintext with the edit, not left dirty.
+        (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
+        (should-not (buffer-modified-p)))
       ;; Reopen: the edited plaintext round-trips through the ciphertext blob.
-      (let ((buffer (org-glance-material:open graph "enc")))
-        (unwind-protect
-            (with-current-buffer buffer
-              (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t))))
-          (set-buffer-modified-p nil)
-          (kill-buffer buffer))))))
+      (org-glance-test:with-material (buffer graph "enc")
+        (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

@@ -79,27 +79,22 @@
 path; a display-boundary refresh re-fills it and clears the flag."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Foo :work:"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
-                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph))
-            (with-current-buffer buf
-              (should (= 1 (length table-view--rows)))
-              (should-not org-glance-view--stale)
-              ;; the store advances (a new headline) and views are flagged
-              (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
-              (set-file-times (org-glance-graph:headline-meta-path graph)
-                              (time-add (current-time) 100))
-              (org-glance-view:mark-graph-stale graph)
-              ;; flagged stale, but NOT re-filled on the hot path (still 1 row)
-              (should org-glance-view--stale)
-              (should (= 1 (length table-view--rows)))
-              ;; display boundary re-fills and clears the flag
-              (org-glance-view--refresh-when-stale)
-              (should (= 2 (length table-view--rows)))
-              (should-not org-glance-view--stale)))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (= 1 (length table-view--rows)))
+        (should-not org-glance-view--stale)
+        ;; the store advances (a new headline) and views are flagged
+        (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
+        (set-file-times (org-glance-graph:headline-meta-path graph)
+                        (time-add (current-time) 100))
+        (org-glance-view:mark-graph-stale graph)
+        ;; flagged stale, but NOT re-filled on the hot path (still 1 row)
+        (should org-glance-view--stale)
+        (should (= 1 (length table-view--rows)))
+        ;; display boundary re-fills and clears the flag
+        (org-glance-view--refresh-when-stale)
+        (should (= 2 (length table-view--rows)))
+        (should-not org-glance-view--stale)))))
 
 ;;; Coherence: staleness
 
@@ -126,28 +121,13 @@ path; a display-boundary refresh re-fills it and clears the flag."
     (org-glance-graph:add graph
                              (org-glance-test:headline "v1" "* TODO One")
                              (org-glance-test:headline "v2" "* DONE Two"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph))
-            (should (buffer-live-p buf))
-            (with-current-buffer buf
-              (should (derived-mode-p 'table-view-mode))
-              (should (= 2 (length table-view--rows)))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-buffer graph buf
+      (should (buffer-live-p buf))
+      (with-current-buffer buf
+        (should (derived-mode-p 'table-view-mode))
+        (should (= 2 (length table-view--rows)))))))
 
 ;;; Per-view persistence (column order + sort)
-
-(cl-defmacro org-glance-test:with-table-buffer (graph var &rest body)
-  "Visit GRAPH's default table, bind the buffer to VAR, run BODY, kill the buffer."
-  (declare (indent 2))
-  `(let ((,var nil))
-     (unwind-protect
-         (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq ,var b) b))
-                   ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq ,var b) b)))
-           (setq ,var (org-glance-table:visit ,graph))
-           ,@body)
-       (when (buffer-live-p ,var) (kill-buffer ,var)))))
 
 (ert-deftest org-glance-test:table-persist-column-order ()
   "A column reorder is persisted per filter and restored on re-visit."
@@ -190,35 +170,25 @@ path; a display-boundary refresh re-fills it and clears the flag."
     (org-glance-graph:add graph
                           (org-glance-test:headline "w" "* TODO A :work:")
                           (org-glance-test:headline "h" "* TODO B :home:"))
-    (let ((buf nil))
-      (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq buf b) b))
-                ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-        (setq buf (org-glance-table:visit graph 'work))
-        (with-current-buffer buf
-          (setf (alist-get 'columns table-view--spec)
-                (org-glance-table--reorder-columns (alist-get 'columns table-view--spec)
-                                                   '("tags" "state")))
-          (org-glance-table--persist-config))
-        (kill-buffer buf)
-        ;; the :home filter still has the default order (state first)
-        (setq buf (org-glance-table:visit graph 'home))
-        (with-current-buffer buf
-          (should (equal "state" (alist-get 'key (car (alist-get 'columns table-view--spec))))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-filter graph 'work buf
+      (with-current-buffer buf
+        (setf (alist-get 'columns table-view--spec)
+              (org-glance-table--reorder-columns (alist-get 'columns table-view--spec)
+                                                 '("tags" "state")))
+        (org-glance-table--persist-config)))
+    ;; the :home filter still has the default order (state first)
+    (org-glance-test:with-table-filter graph 'home buf
+      (with-current-buffer buf
+        (should (equal "state" (alist-get 'key (car (alist-get 'columns table-view--spec)))))))))
 
 (ert-deftest org-glance-test:table-visit-default-directory ()
   "The table buffer's `default-directory' is the graph ROOT (matching the
 corresponding overview), not wherever the non-file buffer was spawned."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d1" "* TODO Alpha"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
-                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph))
-            (with-current-buffer buf
-              (should (file-equal-p default-directory (org-glance-graph:directory graph)))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (file-equal-p default-directory (org-glance-graph:directory graph)))))))
 
 (ert-deftest org-glance-test:table-renders-org-link-in-title ()
   "A headline title carrying an Org link renders as a followable description in
@@ -324,15 +294,10 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
     (org-glance-graph:add graph
                              (org-glance-test:headline "d" "* DONE Zeta")
                              (org-glance-test:headline "t" "* TODO Alpha"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
-                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph))
-            (with-current-buffer buf
-              (should (equal '("t" "d")
-                             (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (equal '("t" "d")
+                       (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))))))
 
 (ert-deftest org-glance-test:table-visit-tag-filter ()
   "org-glance-table:visit with a tag filter shows only matching headlines."
@@ -340,14 +305,10 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
     (org-glance-graph:add graph
                              (org-glance-test:headline "vt1" "* TODO Alpha :work:")
                              (org-glance-test:headline "vt2" "* TODO Beta :home:"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph 'work))
-            (with-current-buffer buf
-              (should (= 1 (length table-view--rows)))
-              (should (equal "vt1" (alist-get 'id (car table-view--rows))))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-filter graph 'work buf
+      (with-current-buffer buf
+        (should (= 1 (length table-view--rows)))
+        (should (equal "vt1" (alist-get 'id (car table-view--rows))))))))
 
 (ert-deftest org-glance-test:table-action-materialize ()
   "The materialize action handler opens via org-glance-material:open."
@@ -367,19 +328,14 @@ materialize (which stays on RET) -- org-glance no longer binds `m'."
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO Alpha")
                           (org-glance-test:headline "b" "* TODO Beta"))
-    (let ((buf nil))
-      (unwind-protect
-          (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq buf b) b))
-                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-            (setq buf (org-glance-table:visit graph))
-            (with-current-buffer buf
-              (should (eq (key-binding (kbd "m")) #'table-view-mark-toggle))
-              (should (eq (key-binding (kbd "U")) #'table-view-unmark-all))
-              (should (functionp (key-binding (kbd "RET"))))   ; RET still materializes
-              (table-view--goto-id "a")
-              (call-interactively (key-binding (kbd "m")))
-              (should (member "a" table-view--marks))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (eq (key-binding (kbd "m")) #'table-view-mark-toggle))
+        (should (eq (key-binding (kbd "U")) #'table-view-unmark-all))
+        (should (functionp (key-binding (kbd "RET"))))   ; RET still materializes
+        (table-view--goto-id "a")
+        (call-interactively (key-binding (kbd "m")))
+        (should (member "a" table-view--marks))))))
 
 (ert-deftest org-glance-test:table-todo-preserves-point ()
   "Changing state keeps point where it was instead of jumping to the top: when the
@@ -390,19 +346,14 @@ row leaves the view (DONE under an active filter) point stays on the same line."
                             (org-glance-test:headline "r1" "* TODO A")
                             (org-glance-test:headline "r2" "* TODO B")
                             (org-glance-test:headline "r3" "* TODO C"))
-      (let ((buf nil))
-        (unwind-protect
-            (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq buf b) b))
-                      ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-              (setq buf (org-glance-table:visit graph '(:done nil)))   ; active-only
-              (with-current-buffer buf
-                (should (table-view--goto-id "r2"))
-                (let ((line (line-number-at-pos)))
-                  (should (> line 1))                     ; r2 is below the header
-                  (org-glance-table--act-todo graph "r2" nil)   ; r2 -> DONE, leaves the view
-                  (should (= (line-number-at-pos) line))  ; point preserved, NOT at the top
-                  (should-not (table-view--goto-id "r2"))))) ; r2 indeed gone
-          (when (buffer-live-p buf) (kill-buffer buf)))))))
+      (org-glance-test:with-table-filter graph '(:done nil) buf   ; active-only
+        (with-current-buffer buf
+          (should (table-view--goto-id "r2"))
+          (let ((line (line-number-at-pos)))
+            (should (> line 1))                     ; r2 is below the header
+            (org-glance-table--act-todo graph "r2" nil)   ; r2 -> DONE, leaves the view
+            (should (= (line-number-at-pos) line))  ; point preserved, NOT at the top
+            (should-not (table-view--goto-id "r2")))))))) ; r2 indeed gone
 
 (ert-deftest org-glance-test:table-refresh-preserves-point ()
   "`g' (refresh) keeps point on the same row even when the sort reorders it -- the
@@ -426,21 +377,16 @@ after the (no-note) commit the reloaded table shows the new state on the row."
   (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
-      (let ((buf nil))
-        (unwind-protect
-            (cl-letf (((symbol-function 'pop-to-buffer) (lambda (b &rest _) (setq buf b) b))
-                      ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq buf b) b)))
-              (setq buf (org-glance-table:visit graph))
-              (with-current-buffer buf
-                (org-glance-table--act-todo graph "td1" nil)   ; no-note -> synchronous finalize
-                ;; persisted in the graph
-                (should (equal "DONE" (org-glance-headline-metadata:state
-                                       (org-glance-graph:get-headline graph "td1"))))
-                ;; reloaded row reflects the new state
-                (let ((row (car table-view--rows)))
-                  (should (equal "td1" (alist-get 'id row)))
-                  (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))
-          (when (buffer-live-p buf) (kill-buffer buf)))))))
+      (org-glance-test:with-table-buffer graph buf
+        (with-current-buffer buf
+          (org-glance-table--act-todo graph "td1" nil)   ; no-note -> synchronous finalize
+          ;; persisted in the graph
+          (should (equal "DONE" (org-glance-headline-metadata:state
+                                 (org-glance-graph:get-headline graph "td1"))))
+          ;; reloaded row reflects the new state
+          (let ((row (car table-view--rows)))
+            (should (equal "td1" (alist-get 'id row)))
+            (should (equal "DONE" (alist-get 'state (alist-get 'cells row))))))))))
 
 (ert-deftest org-glance-test:table-todo-candidates-fallback ()
   "Without a configured cycle, bulk candidates are the states in use."
@@ -620,17 +566,6 @@ final rows -- the equivalence the in-place fast path relies on."
       (kill-buffer full))))
 
 ;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
-
-(cl-defmacro org-glance-test:with-table-filter (graph filter var &rest body)
-  "Visit GRAPH's table for FILTER, bind the buffer to VAR, run BODY, kill it."
-  (declare (indent 3))
-  `(let ((,var nil))
-     (unwind-protect
-         (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq ,var b) b))
-                   ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq ,var b) b)))
-           (setq ,var (org-glance-table:visit ,graph ,filter))
-           ,@body)
-       (when (buffer-live-p ,var) (kill-buffer ,var)))))
 
 (defun org-glance-test:table-col-keys (buf)
   "Display-order column keys of table BUF."

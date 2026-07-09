@@ -1,0 +1,141 @@
+#+TITLE: Interactive delete-headline command — activate graph:delete
+#+DATE: 2026-07-09
+
+Status: *proposed* · ux 2026-07-09
+
+* Problem
+
+No interactive path deletes a headline from any view. A user who captures a
+headline by mistake, or outgrows one, must edit the WAL by hand or drop the
+whole store.
+
+The deletion primitive already exists and is complete:
+~org-glance-graph:delete~ (~src/data/org-glance-graph.el:612~) appends a
+tombstone via ~org-glance-graph:insert~ unless the id is already absent or
+tombstoned. It is tested and correct, yet reached only from a commented-out
+scratch block (~src/data/org-glance-graph.el:864~) — dead code. The overview,
+table, and tags views bind ~n p f b RET o e a g T + C-c C-t q~
+(~src/view/org-glance-overview.el:254-271~) but nothing for delete.
+
+This fulfils the standing TODO *Overview kill-headline should do
+materialization* (~org-glance.org:194~). The 2021 note assumed deletion had to
+round-trip through a materialized buffer. The append-only WAL makes a direct
+tombstone append the correct and simpler realization: a tombstone is one more
+record, and ~graph:delete~ already writes it.
+
+* Proposed change
+
+Bind ~d~ in each of the three views to delete the headline at point:
+
+1. Read the id at point.
+2. Confirm with ~yes-or-no-p~ (deletion is destructive from the user's view,
+   though the blob survives on disk — see Design).
+3. Call ~(org-glance-graph:delete org-glance-graph id)~.
+4. Refresh the view and mark sibling views stale, on the same path
+   ~change-todo-live~ already uses.
+
+* Design
+
+** Overview
+
+Add ~org-glance-overview:delete~ next to ~org-glance-overview:todo~
+(~src/view/org-glance-overview.el:307~), reusing the id reader
+~org-glance-overview:id-at-point~ (~src/view/org-glance-overview.el:277~):
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-overview:delete ()
+  "Delete the headline at point (append a tombstone), then refresh."
+  (interactive)
+  (let ((id (org-glance-overview:id-at-point)))
+    (when (yes-or-no-p (format "Delete headline %s? " id))
+      (org-glance-graph:delete org-glance-graph id)
+      (org-glance-view:mark-graph-stale org-glance-graph)
+      (org-glance-overview:refresh))))
+#+end_src
+
+~org-glance-overview:refresh~ (~src/view/org-glance-overview.el:353~) rebuilds
+the buffer from the graph and marks it fresh; ~org-glance-view:mark-graph-stale~
+(~src/view/org-glance-view.el:99~) flags the sibling table/tags views to reload
+at their display boundary — the exact pair ~change-todo-live~ drives on save
+(~src/view/org-glance-material.el:118~). Bind next to the others:
+
+#+begin_src emacs-lisp
+(define-key org-glance-overview-mode-map (kbd "d") #'org-glance-overview:delete)
+#+end_src
+
+Point preservation: after a delete the deleted heading is gone, so leave point
+where ~revert-buffer~ leaves it (buffer top). The overview does not need the
+id-seek ~:todo~ performs, because the target no longer exists.
+
+** Table
+
+Add an id-keyed action ~org-glance-table--act-delete~ beside
+~org-glance-table--act-todo~ (~src/view/org-glance-table.el:218~), reusing
+~org-glance-table--reload~ (~src/view/org-glance-table.el:169~) and
+~org-glance-table--restore-point~:
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-table--act-delete (graph id _row)
+  (when (and id (yes-or-no-p (format "Delete headline %s? " id)))
+    (org-glance-graph:delete graph id)
+    (org-glance-view:mark-graph-stale graph)
+    (org-glance-table--reload (current-buffer))))
+#+end_src
+
+Register the handler in the ~handlers~ alist
+(~src/view/org-glance-table.el:487-507~) and add the action row
+~((key . "d") (command . "delete") (label . "Delete"))~ to the spec's ~actions~
+list (~src/view/org-glance-table.el:109-116~). The table-view core dispatches
+the row's id to the handler.
+
+** Correctness of the tombstone path
+
+~graph:delete~ appends ~(:id id :tombstone t)~ (~src/data/org-glance-graph.el:617~).
+~org-glance-graph:headlines~ (~src/data/org-glance-graph.el:620~) serves the
+cache's ~:live~ list, which excludes tombstoned ids (built by skipping records
+with ~:tombstone~, ~src/data/org-glance-graph.el:404~), so a refresh drops the
+row. ~graph:insert~ invalidates the cache, so the next ~headlines~ call rebuilds
+without the id. The content blob is left on disk — GC of fully-deleted ids
+happens only at seal/compaction (~src/data/org-glance-graph.el:788-834~), which
+is correct: an old snapshot may still reference the blob.
+
+* Test plan
+
+Extend the graph/view suites:
+
+- *Tombstone appended.* ~graph:delete~ on a live id makes
+  ~graph:get-metadata~ return ~tombstone~ (~src/data/org-glance-graph.el:591~).
+- *Drops from live.* Deleted id absent from ~graph:headlines~.
+- *Blob retained.* ~graph:get-content~ (low-level) still returns the blob after
+  delete, pre-compaction.
+- *Idempotent re-delete.* A second ~graph:delete~ on the tombstoned id is a
+  no-op — no new record (the ~(memq meta '(nil tombstone))~ guard,
+  ~src/data/org-glance-graph.el:617~).
+- *Delete-absent.* ~graph:delete~ on an unknown id appends nothing.
+- *Overview command.* With ~yes-or-no-p~ stubbed to ~t~,
+  ~org-glance-overview:delete~ removes the row and leaves the buffer readable;
+  stubbed to ~nil~, the graph is unchanged.
+- *Point survives.* Point stays inside the buffer (no error) after refresh.
+
+* Risk
+
+Low. The primitive is tested and append-only; a delete adds a record and never
+mutates prior state. Worst case a mis-key deletes one headline, recoverable by
+editing the WAL (the blob is still on disk until compaction). The ~yes-or-no-p~
+confirm guards the common slip. No new persistence format, no schema change.
+
+* Effort
+
+Low. Two commands (~5 lines each), one table handler + spec/action entry, three
+keymap bindings, and the ERT cases above. Single pass, no dependency bumps.
+
+* Related
+
+- [[file:2026-07-06-performance-audit.org][Performance audit]] — the WAL /
+  cache model this relies on.
+- [[file:2026-07-09-git-sync-merge-resolution.done.org][Git sync merge
+  resolution]] — tombstones under concurrent stores.
+- Touched: ~src/data/org-glance-graph.el~, ~src/view/org-glance-overview.el~,
+  ~src/view/org-glance-table.el~, ~src/view/org-glance-view.el~,
+  ~src/view/org-glance-material.el~ (pattern reference), ~org-glance.org~ (close
+  the ~line 194~ TODO).

@@ -1,0 +1,137 @@
+#+TITLE: Dev tooling: a benchmark harness + a lint command
+#+DATE: 2026-07-09
+
+Status: *proposed* · dev tooling 2026-07-09 · supports
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+Two low-effort, high-value gaps in the repo's own tooling. Both are pure
+additions — no runtime code changes, no new package dependencies for the shipped
+library.
+
+* Problem
+
+** No benchmarks, yet the whole branch is a performance play
+
+The ~metadata-migration~ branch is a segmented (LSM-lite) store: a WAL open
+segment, byte-capped sealing, N-segment auto-compaction, and an in-memory fold
+cache. Its tuning knobs and its hot paths are *entirely unmeasured*:
+
+- ~org-glance-graph-segment-max-bytes~ (256 KiB) and
+  ~org-glance-graph-compact-segment-count~ (4) are ~defcustom~ *guesses*
+  (=src/data/org-glance-graph.el:43,51=) — no data ties either to a seal/compact
+  frequency or a read cost at any N.
+- ~org-glance-graph--latest-records~ (=graph.el:329=) re-reads and
+  re-~json-parse~-s *every record in every live segment* on every cold fold; the
+  =O(R)= cost that ~--ensure-cache~ (=graph.el:389=) pays on a snapshot miss is
+  invisible, so a regression here ships silently.
+- The [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
+  and [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] proposals
+  each promise an asymptotic win (=O(N)/O(N·k)= → =O(k)=) with *no way to
+  confirm it landed* — their "Performance validation" sections have nothing to
+  run.
+
+The audit index already claims coverage "by the ERT suite (211 tests) *+
+benchmarks*" (=2026-07-06-performance-audit.org:30=) — the benchmarks do not
+exist. This proposal makes that claim true.
+
+** No linters, yet CLAUDE.md mandates the hygiene they check
+
+~CLAUDE.md~ requires checkdoc-valid docstrings (complete imperative first line,
+CAPS arg names), every docstring line ≤ 80 columns, and warning-free
+~eask recompile~. Nothing *enforces* it: ~eask recompile~ catches byte-compile
+warnings but not docstring shape, regexp mistakes, or ~Package-Requires~ /
+metadata drift. A stale docstring or a broken ~defcustom~ regexp lands unnoticed.
+
+* Proposed change
+
+** (1) A benchmark harness — ~test/bench-graph.el~ + an ~eask bench~ command
+
+A sibling to ~test/test-segments.el~, reusing the same fixtures
+(~org-glance-test:with-graph~, ~org-glance-test:headline~ from
+~test/test-helpers.el~) — *no new dependency* (~benchmark~ ships with Emacs).
+
+For N ∈ {1e3, 1e4, 1e5} build a synthetic graph and time, with
+~benchmark-run~ / ~benchmark-progn~:
+
+- *cold fold* — ~--invalidate-cache~ then ~:headlines~ (forces
+  ~--ensure-cache~ → ~--latest-records~ full re-read);
+- *warm get-by-id* — ~org-glance-graph:get-headline~ (=graph.el:589=), the
+  =O(1)= ~:by-id~ path, over a random id sample;
+- *insert + seal* — a batch of ~:add~ (=graph.el:574=) sized to cross
+  ~segment-max-bytes~, exercising ~--append~ → ~--maybe-seal~
+  (=graph.el:446,465=);
+- *full compaction* — ~org-glance-graph:compact~ (=graph.el:786=) over the
+  accumulated segments.
+
+Print a table (N × operation → ms, plus seal/compact counts) to stdout. Run
+under ~eask bench~, a new ~(eask-defcommand bench …)~ in ~Eask~ mirroring the
+existing ~test~ command (=Eask:28=): load ~test/test-helpers.el~ then
+~test/bench-graph.el~ and call its entry point. Not wired into ~eask test~ (slow,
+non-assertive).
+
+*Payoff:* the seal/compact knobs get a curve instead of a guess, and every perf
+proposal gets a before/after number.
+
+** (2) A lint command — ~eask lint~
+
+A new ~(eask-defcommand lint …)~ running, over ~src/data/*.el~ and
+~src/view/*.el~:
+
+- ~checkdoc-file~ — docstring shape + the ≤ 80-column rule CLAUDE.md mandates;
+- ~package-lint~ — ~Package-Requires~ / metadata / naming hygiene;
+- ~relint~ — mistakes in the store's regexps (e.g.
+  ~org-glance-graph--segment-name-re~, =graph.el:256=).
+
+~package-lint~ and ~relint~ are *dev-only* deps — added via ~(development …)~ in
+~Eask~ so they never enter the shipped ~Package-Requires~. The command collects
+findings and exits non-zero if any linter reports, so it can gate CI.
+
+* Design
+
+- New file ~test/bench-graph.el~ — sibling to ~test/test-segments.el~; ~(require
+  'test-helpers)~; one ~defun~ per benchmark plus an ~org-glance-bench:run~
+  entry point that loops N and formats the table.
+- ~Eask~ (=Eask:28= is the existing ~test~ command): add ~(eask-defcommand
+  bench …)~ and ~(eask-defcommand lint …)~ alongside it; add a
+  ~(development (depends-on "package-lint") (depends-on "relint"))~ block.
+  ~checkdoc~ is built in.
+- The ~files~ / ~load-paths~ directives (=Eask:6-8=) already put ~src/data~ and
+  ~src/view~ on the load path, so both commands see the sources with no extra
+  wiring.
+- No change to any ~src/~ file. If ~checkdoc~ / ~package-lint~ / ~relint~ flag
+  existing violations, fixing those is follow-up work tracked separately — this
+  proposal lands the *harness*, green or with a documented baseline allowlist.
+
+* Test plan
+
+- ~eask bench~ runs to completion at N = 1e3 and 1e4 and prints a well-formed
+  table; N = 1e5 is opt-in (env var or arg) to keep the default run quick.
+- ~eask lint~ exits 0 on a clean tree and non-zero when a deliberately broken
+  docstring / regexp is introduced (smoke check, then reverted).
+- ~eask recompile~ stays warning-free (bench + lint files compile clean).
+- ~eask test~ is unchanged — the 211-test suite still passes; bench is not wired
+  into it.
+
+* Risk
+
+Low. Both are additive tooling; neither touches shipped runtime code or the
+shipped dependency set (linters are ~development~-scoped). Worst case a benchmark
+is mis-timed — a measurement bug, not a correctness bug. The lint command may
+surface a backlog of pre-existing warnings; that is signal, handled by fixing or
+baselining, and does not block the harness landing.
+
+* Effort
+
+Low. ≈ 60–100 LOC for ~test/bench-graph.el~, ≈ 20–40 LOC across the two
+~eask-defcommand~ blocks + the ~development~ deps in ~Eask~.
+
+* Related
+
+- Gives [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
+  and [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] the
+  before/after numbers their "Performance validation" sections call for.
+- Measures the knobs documented in
+  [[file:2026-07-06-performance-audit.org][Performance audit]]; makes its line-30
+  "+ benchmarks" claim real. Update that line when this lands.
+- Touches ~Eask~ (test-command sibling) and adds ~test/bench-graph.el~ next to
+  ~test/test-segments.el~.

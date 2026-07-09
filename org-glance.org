@@ -1,3 +1,22 @@
+* Status
+:PROPERTIES:
+:REANIMATED: 2026-07
+:END:
+
+Project reanimated 2026-07 after a long pause; the store, views and tooling were
+rebuilt.  Much of the backlog below is now DONE (flagged inline).  Still-open ideas
+worth pursuing are written up under [[file:docs/proposals/][docs/proposals/]] (the
+2026-07-09 set: relations-edge-model, closed-day-activity-dashboard,
+inactive-archived-commented, full-text-search, delete-headline-command,
+dev-tooling-benchmarks-linters, graph-change-listeners).
+
+Shipped since reanimation: segmented append-only JSONL WAL store (sealing,
+compaction, crash recovery, in-memory read cache) · JSON serialization · org-text
+overview + agenda + per-filter cache · sortable badge table (=org-glance-table= over
+the =table-view= git dependency) · all-tags overview with per-tag event metrics
+(=org-glance-tags=) · headline encryption on materialize · per-tag config (cycle +
+capture skeleton) · broad ERT suite + =make fat= single-file build.
+
 * Terms
 
 - Headline: org-element of type `headline` with ORG_GLANCE_ID property specified.
@@ -23,16 +42,17 @@
 - State "STARTED"    from "TODO"       [2024-11-11 Mon 22:11]
 :END:
 
-- [-] Test main scenarios
+- [X] Test main scenarios (broad ERT suite wired into `eask run command test')
   - [X] Proper sessions / tag namespaces for testing and distributed dbs
-  - [-] Headline data model
-    - [X] Refactor headline data model: `org-glance-headline1`.
-    - [ ] Refactor capture method to use `org-glance-headline1`.
-- [ ] Benchmarks
-- [ ] Linters
-- [ ] Look at ht / map for hash table manipulation
-- [ ] [[https://elpa.gnu.org/packages/persist.html][Persist]] for caching
-- [ ] [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]]
+  - [X] Headline data model
+    - [X] Refactor headline data model
+    - [X] Refactor capture to use the current headline model
+- [ ] Benchmarks -- see [[file:docs/proposals/2026-07-09-dev-tooling-benchmarks-linters.proposed.org][dev-tooling proposal]]
+- [ ] Linters -- see the same proposal
+- [X] Look at ht / map for hash table manipulation (plain `make-hash-table' where it
+  matters + own in-memory fold cache; ht/map not needed)
+- [ ] [[https://elpa.gnu.org/packages/persist.html][Persist]] / [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]] for caching -- superseded by
+  the segment store + in-memory fold cache + per-filter overview cache
 ** TODO Thunkify headline derivative properties if possible
 ** TODO ability to encrypt regions, not only headlines
 ** TODO Separate directory for "resources"
@@ -43,7 +63,9 @@
       *DONE* Decomposition ▒▒▒▒▒▒▒
       *TODO* Do something         ▒▒▒▒▒▒▒▒▒▒▒▒▒
       *TODO* Publish report                    ▒▒▒▒▒
-** TODO clone id should be unique (postfix)
+** DONE clone id should be unique (postfix)
+CLOSED: [2026-07-09]
+Fresh collision-checked UUIDs (=org-glance-graph:make-id=); no postfix scheme.
 ** DONE bindat
 CLOSED: [2022-02-15 Tue 23:03]
 :LOGBOOK:
@@ -104,7 +126,9 @@ CLOCK: [2022-01-05 Wed 18:40]--[2022-01-05 Wed 21:32] =>  2:52
 ** TODO CLOSED entries partition by closed day
 ** TODO Cloned headlines should contain pointer on previous
 ** TODO memos (flashcard support)
-** TODO kill buffer after material apply
+** DONE kill buffer after material apply
+CLOSED: [2026-07-09]
+=C-c C-q= in material mode; background buffers auto-killed after sync.
 ** TODO optimize "register" methods
 ** TODO timedelta for downstream tasks
 ** TODO completing read instead of org-completing-read
@@ -132,10 +156,18 @@ CLOSED: [2026-06-18]
 =org-glance-table= renders the graph as a sortable, badge-coloured table over the
 generic =table-view= core (a pinned git dependency; sister to the org-text overview).
 ** TODO mentions in capture
-** TODO material mode: proper tags removal (update local buffer variables)
-** TODO class overview
-** TODO clone + reschedule
-** DONE bidirected relations
+** DONE material mode: proper tags removal
+CLOSED: [2026-07-09]
+Non-destructive retag in the all-tags view (=org-glance-tags--retag-remove=).  The
+sliver left -- refreshing the buffer-local cycle on an in-buffer tag edit -- is minor.
+** DONE class overview
+CLOSED: [2026-07-09]
+=org-glance-tags= -- one row per class (tag) with metrics; see
+[[file:docs/proposals/2026-07-06-all-tags-overview.done.org][all-tags overview]].
+** DONE clone + reschedule
+CLOSED: [2026-07-09]
+=org-glance-material:clone-on-repeat= (gated by =org-glance-clone-on-repeat-p=).
+** DONE bidirected relations (pre-reanimation; absent in current code -- see the relations-edge-model proposal)
 CLOSED: [2021-11-20 Sat 13:59]
 :LOGBOOK:
 - State "DONE"       from "STARTED"    [2021-11-20 Sat 13:59]
@@ -215,7 +247,9 @@ CLOSED: [2021-08-26 Thu 10:40]
 *** TODO build titles from all direct relations
 ** Unsorted [5/18]
 *** TODO Resolve title collision by traversing dependencies
-*** TODO Handle capture cancelling
+*** DONE Handle capture cancelling
+CLOSED: [2026-07-09]
+=C-c C-k= yields no headline, so ingest is a no-op and the graph stays untouched.
 *** TODO Clone repeated headlines
 *** DONE [#A] make headline types implicit with headline grain
 CLOSED: [2021-10-01 Fri 16:40]
@@ -233,16 +267,20 @@ CLOSED: [2021-10-01 Fri 16:40]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-10-01 Fri 16:40]
 :END:
-*** TODO capture templates support
-*** CANCELLED change metastore serialization format (elisp → json)
-CLOSED: [2021-10-01 Fri 16:40]
+*** DONE capture templates support
+CLOSED: [2026-07-09]
+Per-tag org-capture skeletons via =org-glance-tag-config:render=.
+*** DONE change metastore serialization format (elisp → json)
+CLOSED: [2026-07-09]
 :LOGBOOK:
+- State "DONE"       from "CANCELLED"  [2026-07-09]
 - State "CANCELLED"  from "TODO"       [2021-10-01 Fri 16:40]
 :END:
-*** TODO mutable states → publish-subscribe model
-- implement write ahead log
-- store initial state and diffs, then apply compaction
-- subscribe on changes
+The store is JSON end-to-end: JSONL records + a JSON MANIFEST.
+*** STARTED mutable states → publish-subscribe model
+- [X] implement write ahead log
+- [X] store initial state and diffs, then apply compaction
+- [ ] subscribe on changes -- see [[file:docs/proposals/2026-07-09-graph-change-listeners.proposed.org][graph-change-listeners proposal]]
 *** DONE register headlines in metastore & overview on materialized sync
 CLOSED: [2021-09-12 Sun 13:45]
 :LOGBOOK:

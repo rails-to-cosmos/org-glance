@@ -1,0 +1,134 @@
+#+TITLE: Hide ARCHIVED / COMMENTED headlines from pickers
+#+DATE: 2026-07-09
+
+Status: *proposed* · metadata 2026-07-09
+
+* Problem
+
+The parser already records whether a headline is =ARCHIVED= or =COMMENTED=.
+=org-glance-headline= carries two slots for it —
+=archived?= (=src/data/org-glance-headline.el:40=) and
+=commented?= (=src/data/org-glance-headline.el:42=) — filled from the
+org-element =:archivedp= / =:commentedp= properties in
+=org-glance-headline--from-element= (=src/data/org-glance-headline.el:220=,
+=…:221=; passed to the constructor at =…:246=, =…:247=).
+=org-glance-headline:active?= (=src/data/org-glance-headline.el:84=) even
+folds both into its "is this live?" test.
+
+Nothing downstream honours it. The picker commands read the *metadata*
+projection (=org-glance-headline-metadata=), and that struct carries only
+=linked?= / =propertized?= / =encrypted?=
+(=src/data/org-glance-graph.el:68=–=72=) — never =archived?= / =commented?=.
+So the ambient filter has no way to test them, and archived / commented
+entries leak into every consumer: =org-glance-materialize=
+(=src/data/../view/org-glance-material.el:535=), =org-glance-open=
+(=src/view/org-glance-material.el:563=), the overview
+(=src/view/org-glance-overview.el:132=) and the table view
+(=src/view/org-glance-table.el:480=). A half-built feature: the fact is
+parsed and stored on the full headline, then dropped before it can filter
+anything.
+
+* Proposed change
+
+Carry =archived?= / =commented?= into the metadata projection and exclude both
+by default, mirroring the existing =(:done nil)= default. No new subsystem —
+the documented "append a projection field" pattern plus two filter rows.
+
+1. Two struct slots + two table rows extend the projection.
+2. Two rows in =org-glance-filter:table= expose =:archived= / =:commented=
+   as =bool= filter keys.
+3. The ambient default =org-glance-filter-spec= gains =:archived nil= and
+   =:commented nil=, so pickers hide both out of the box.
+
+Old records (written before the fields existed) decode the absent keys as nil
+(= not archived / not commented), and =M-x org-glance-reindex= backfills the
+true value from stored content — the same backfill story as =linked?= et al.
+
+* Design
+
+** Projection field (=src/data/org-glance-graph.el=)
+
+- Add two slots to =org-glance-headline-metadata= alongside the existing
+  content-derived flags (=src/data/org-glance-graph.el:68=–=72=):
+  #+begin_src emacs-lisp
+  (archived?  nil :read-only t :type boolean)
+  (commented? nil :read-only t :type boolean)
+  #+end_src
+- Append two rows to =org-glance-headline-metadata:fields=
+  (=src/data/org-glance-graph.el:74=–=95=) — order IS the on-disk JSON key
+  order, so *append at the end* per the table's own contract:
+  #+begin_src emacs-lisp
+  (archived?   :archived   ,#'org-glance-headline:archived?   nil bool)
+  (commented?  :commented  ,#'org-glance-headline:commented?  nil bool)
+  #+end_src
+  The =bool= decode kind (=src/data/org-glance-graph.el:113=) already maps a
+  missing / false JSON value to nil.
+- The load-time slot/table sync guard (=src/data/org-glance-graph.el:98=–=102=)
+  and the table-driven constructor (=…:117=–=132=) then pick both up with no
+  further edits; the constructor's =pcase= falls through to =(funcall from
+  headline)= for these two (they are plain struct reads, not content facts).
+
+** Filter language (=src/data/org-glance-filter.el=)
+
+- Add two rows to =org-glance-filter:table= (=src/data/org-glance-filter.el:44=–
+  =70=), next to the other =bool= flags:
+  #+begin_src emacs-lisp
+  (:archived   :match bool :accessor ,#'org-glance-headline-metadata:archived?)
+  (:commented  :match bool :accessor ,#'org-glance-headline-metadata:commented?)
+  #+end_src
+  =org-glance-filter:keys= and the table-driven clause loop
+  (=src/data/org-glance-filter.el:175=–=180=) consume them automatically; a
+  =(:archived nil)= clause then means "archived? is falsey".
+- Change the ambient default (=src/data/org-glance-filter.el:35=) from
+  =(:done nil)= to =(:done nil :archived nil :commented nil)=, and update the
+  accompanying docstring ("active (not-done) headlines") to state the two added
+  exclusions.
+- Optionally extend =org-glance-filter:describe= (=src/data/org-glance-filter.el:260=)
+  with =:archived= / =:commented= arms so the transient label reads cleanly;
+  the fallback arm already renders them as =archived=nil=.
+
+** Backfill (=src/data/org-glance-graph.el:653=)
+
+=org-glance-graph:reindex= re-derives every live headline from stored content
+and re-appends, so an existing store gains the two fields on the next reindex —
+identical to how =linked?= / =propertized?= / =encrypted?= were rolled out.
+
+* Test plan
+
+- Metadata round-trip: an =ARCHIVED= headline and a =COMMENTED= headline →
+  =serialize= → =deserialize= preserves =archived?= / =commented?=; the JSON
+  carries =:archived= / =:commented= at the *end* of the key order (byte
+  stability).
+- Old-record decode: a record lacking the two keys deserializes with both nil.
+- Filter: =(org-glance-filter:predicate '(:archived nil))= rejects an archived
+  metadata and accepts a plain one; likewise =:commented=. =(:archived t)=
+  matches only archived.
+- Default spec: with the ambient =org-glance-filter-spec=, a store holding one
+  plain, one archived and one commented headline surfaces only the plain one to
+  =org-glance-materialize= / =org-glance-open= and to the overview / table.
+- =reindex= on a store written before the fields backfills the true values
+  (archived headline reads =archived? t= afterwards).
+
+* Risk
+
+Low. Additive schema change (append-only, guarded by the load-time sync check),
+and the two new filter keys default to the existing behaviour for anyone who
+sets =org-glance-filter-spec= explicitly. The one behaviour change users see is
+the intended one: archived / commented entries stop appearing in pickers. A
+user who *wants* them can pass =:archived t= / clear the clause.
+
+* Effort
+
+Low. Two struct slots, two field rows, two filter rows, one default-spec edit,
+plus tests. No storage-format break (fields appended), no reader rewrite.
+
+* Related
+
+- [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — its "alternative" section
+  proposes the same append-a-projection-field + reindex pattern this uses.
+- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata build]] — the =--content-facts= path these
+  struct-read fields sidestep.
+- Touched: =src/data/org-glance-graph.el= (projection + reindex),
+  =src/data/org-glance-filter.el= (filter table + ambient default),
+  reading =src/data/org-glance-headline.el= (=archived?= / =commented?= slots).
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
