@@ -292,7 +292,7 @@ A wrong password forgets it, kills BUFFER and re-signals, so `open' fails clean.
     (condition-case err
         (org-glance-material--decrypt-buffer)
       (error (org-glance-material--clear-password)
-             (kill-buffer buffer)
+             (org-glance--discard-buffer buffer)
              (signal (car err) (cdr err))))
     (add-hook 'before-save-hook #'org-glance-material--encrypt-buffer nil t)
     (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
@@ -440,7 +440,7 @@ A pre-existing materialized buffer is edited in place; the user saves it."
                 (when commit-now (finish (persist))))
             ;; org-todo threw (e.g. a dependency block) before ownership passed to
             ;; the note advice / commit -> don't leak the background buffer.
-            (when (and (not owned) (buffer-live-p buf)) (kill-buffer buf))))))))
+            (unless owned (org-glance--discard-buffer buf))))))))
 
 (cl-defun org-glance-material:set-todo-bulk (graph ids state finalize)
   "Set every id in IDS to TODO STATE with full `C-c C-t' logging, then FINALIZE.

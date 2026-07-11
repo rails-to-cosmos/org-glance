@@ -90,4 +90,15 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
         (insert decrypted-text))
     (user-error "Wrong password")))
 
+(defun org-glance--discard-buffer (buffer)
+  "Kill BUFFER without the `Buffer modified; kill anyway?' confirmation.
+For buffers org-glance owns and means to discard -- a capture temp file whose
+content is already in the graph, a materialization abandoned on error -- the
+modified flag is only noise, so clear it before killing.  No-op if BUFFER is
+already dead."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (set-buffer-modified-p nil))
+    (kill-buffer buffer)))
+
 (provide 'org-glance-utils)

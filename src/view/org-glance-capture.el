@@ -9,6 +9,7 @@
 (require 'org-glance-tag-config)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
+(require 'org-glance-utils)
 
 (require 'org-glance-core)
 
@@ -89,8 +90,7 @@ separately."
                  (unwind-protect
                      (when-let ((buffer (get-file-buffer ,file)))
                        (org-glance-graph:capture org-glance-graph buffer))
-                   (when-let ((buffer (get-file-buffer ,file)))
-                     (kill-buffer buffer))
+                   (org-glance--discard-buffer (get-file-buffer ,file))
                    (f-delete ,file)))
               0 t)
     (org-capture nil capture-token)

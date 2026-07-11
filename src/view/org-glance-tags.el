@@ -160,8 +160,7 @@ SKIPPED)."
                   (let ((inhibit-message t)) (save-buffer))
                   (cl-incf changed))
               (unless existing
-                (set-buffer-modified-p nil)
-                (kill-buffer buffer)))))))
+                (org-glance--discard-buffer buffer)))))))
     (cons changed skipped)))
 
 (cl-defun org-glance-tags--act-remove (graph tag-string)
