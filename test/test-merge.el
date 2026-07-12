@@ -31,6 +31,11 @@
   "Return a newline-terminated JSONL metadata line from plist KV."
   (concat (json-serialize (apply #'list kv)) "\n"))
 
+(cl-defun org-glance-test-merge:conflict-open (ours theirs)
+  "Return open-segment text git left conflict-marked with OURS/THEIRS records.
+OURS and THEIRS are each a string of newline-terminated JSONL record lines."
+  (concat "<<<<<<< HEAD\n" ours "=======\n" theirs ">>>>>>> other-machine\n"))
+
 (ert-deftest org-glance-test:merge-gitattributes-written ()
   "Store construction writes meta/.gitattributes with exactly the union driver
 line, and a second open never clobbers a hand-edited file (write-if-absent)."
@@ -143,6 +148,74 @@ position: the last record per id wins and no data is lost."
         ;; nothing reaped by gc
         (should (f-exists? (f-join meta "seg-0000000001.jsonl")))
         (should (f-exists? (f-join meta "seg-0000000002.jsonl")))))))
+
+(ert-deftest org-glance-test:merge-open-segment-conflict-union-resolved ()
+  "Conflict markers already written into the open segment (a store synced before
+the union driver existed) are union-resolved on open when
+`org-glance-graph-conflict-resolution' is `union': markers gone, every record
+from both sides kept, positional last-wins per id."
+  (org-glance-test:with-graph graph
+    (let ((open (org-glance-graph:headline-meta-path graph))
+          (org-glance-graph-conflict-resolution 'union))
+      ;; "a" landed normally; then git wrapped the two machines' concurrent
+      ;; appends in markers, theirs carrying a newer "a" positioned last
+      (f-write-text
+       (concat
+        (org-glance-test-merge:record :id "a" :state "" :title "A-orig" :hash "ha1" :seq 1)
+        (org-glance-test-merge:conflict-open
+         (org-glance-test-merge:record :id "b" :state "TODO" :title "B" :hash "hb1" :seq 2)
+         (concat (org-glance-test-merge:record :id "c" :state "" :title "C" :hash "hc1" :seq 3)
+                 (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 4))))
+       'utf-8 open)
+      (let ((graph (org-glance-test-merge:reopen graph)))
+        ;; markers stripped from disk
+        (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
+        (should-not (s-contains? "=======" (f-read-text open 'utf-8)))
+        ;; every id from both sides kept
+        (should (equal '("a" "b" "c")
+                       (sort (mapcar #'org-glance-headline-metadata:id
+                                     (org-glance-graph:headlines graph))
+                             #'string<)))
+        ;; positional last-wins: theirs' later "a" supersedes ours
+        (let ((a (org-glance-graph:get-headline graph "a")))
+          (should (string= "A-newer" (org-glance-headline-metadata:title a)))
+          (should (string= "DONE" (org-glance-headline-metadata:state a))))))))
+
+(ert-deftest org-glance-test:merge-open-segment-conflict-ask-approved ()
+  "With `ask' resolution an approved prompt union-resolves the conflicted open
+segment; a declined prompt errors and leaves the markers in place."
+  (org-glance-test:with-graph graph
+    (let ((open (org-glance-graph:headline-meta-path graph))
+          (org-glance-graph-conflict-resolution 'ask))
+      (f-write-text (org-glance-test-merge:conflict-open
+                     (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
+                     (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
+                    'utf-8 open)
+      ;; declined -> error, markers untouched
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) nil)))
+        (should-error (org-glance-test-merge:reopen graph))
+        (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))
+      ;; approved -> resolved, both ids readable
+      (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+        (let ((graph (org-glance-test-merge:reopen graph)))
+          (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
+          (should (equal '("a" "b")
+                         (sort (mapcar #'org-glance-headline-metadata:id
+                                       (org-glance-graph:headlines graph))
+                               #'string<))))))))
+
+(ert-deftest org-glance-test:merge-open-segment-conflict-nil-errors ()
+  "With nil resolution the store refuses to open a conflict-marked segment:
+signals an error and leaves the markers in place for manual handling."
+  (org-glance-test:with-graph graph
+    (let ((open (org-glance-graph:headline-meta-path graph))
+          (org-glance-graph-conflict-resolution nil))
+      (f-write-text (org-glance-test-merge:conflict-open
+                     (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
+                     (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
+                    'utf-8 open)
+      (should-error (org-glance-test-merge:reopen graph))
+      (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))))
 
 (provide 'test-merge)
 ;;; test-merge.el ends here

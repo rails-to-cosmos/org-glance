@@ -52,6 +52,23 @@ driver, so no per-clone =git config= is needed.  Scope is deliberately
 =meta/*.jsonl= only: =data/= content blobs and =config/= are *not* unioned —
 interleaving prose or =.eld= forms would corrupt them.
 
+** Resolve markers a pre-driver sync left (=org-glance-graph--resolve-jsonl-conflicts=)
+
+The =union= driver only fires at *git-merge* time.  A store synced across
+machines *before* =.gitattributes= existed can arrive with conflict markers
+already written into =headlines.jsonl= (or a sealed segment) — and the JSONL
+reader chokes on a =<<<<<<<= line.  At open, =--resolve-jsonl-conflicts= scans
+=meta/*.jsonl= for markers (=--conflicted-jsonl-files=) and, when any are found,
+union-resolves each file (=--union-resolve-file=): strip only the
+=<<<<<<<=/=======/=>>>>>>>= marker lines, keep every content line from both
+sides — byte-identical to what the =union= driver would have produced, so the
+positional last-wins reader collapses any duplicate id.
+
+The =org-glance-graph-conflict-resolution= defcustom governs it: =ask= (default)
+prompts the user to approve the union merge before rewriting; =union= resolves
+silently; nil signals an error so the conflict stays visible.  A declined =ask=
+prompt also errors — the store cannot load with markers in place.
+
 ** MANIFEST self-heal (=org-glance-graph--reconcile-manifest=)
 
 =MANIFEST= has no =.jsonl= extension, so git's default merge leaves conflict
@@ -63,16 +80,22 @@ on-disk =seg-*.jsonl= glob (through the existing =--write-manifest=, so the
 segment sealed on another machine.  A valid MANIFEST is left untouched, so
 compaction and the byte-stability contract are unaffected.
 
-Constructor order: touch open → =ensure-gitattributes= → =migrate-maybe= →
-=reconcile-manifest= → =heal=.  Reconcile precedes =--heal='s =--gc-orphans= so
-a synced-in sealed segment is listed before gc could reap it.
+Constructor order: touch open → =ensure-gitattributes= → =resolve-jsonl-conflicts=
+→ =migrate-maybe= → =reconcile-manifest= → =heal=.  Conflict resolution precedes
+=migrate-maybe= and the readers so no scan ever meets a marker; reconcile precedes
+=--heal='s =--gc-orphans= so a synced-in sealed segment is listed before gc could
+reap it.
 
 * Tests
 
-=test/test-merge.el= (4 tests): =.gitattributes= written once and never
+=test/test-merge.el= (7 tests): =.gitattributes= written once and never
 clobbered; a conflict-marked MANIFEST self-heals and re-exposes every sealed
 segment; a hand-unioned =headlines.jsonl= reads back with positional last-wins
-per id and no loss; two segments sealed on both sides are adopted, not deleted.
+per id and no loss; two segments sealed on both sides are adopted, not deleted;
+and, for the on-open marker resolution — a conflict-marked open segment
+union-resolves under =union= (markers gone, both sides kept, last-wins per id),
+under =ask= resolves on approval and errors (markers left) on decline, and under
+nil errors and leaves the markers in place.
 
 * Sharp edge left open
 
