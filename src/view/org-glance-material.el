@@ -81,13 +81,15 @@ FILTER, if non-nil, is a predicate on the metadata."
     ;; Advance only the earliest of multiple repeatable timestamps on repeat.
     (org-glance-datetime-mode 1)))
 
-(define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-(define-key org-glance-material-mode-map (kbd "C-c C-l") #'org-glance-material:lock)
+;; (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
+;; (define-key org-glance-material-mode-map (kbd "C-c C-l") #'org-glance-material:lock)
 
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
+
 (defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
+
 (defvar-local org-glance-material--cycle nil
   "Per-tag `#+TODO:'-style cycle string for this buffer's headline, or nil.
 Used by `org-glance-material:sync' to re-parse the saved buffer with the tag's
