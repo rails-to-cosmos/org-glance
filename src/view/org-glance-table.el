@@ -460,6 +460,16 @@ columns (the `prop'-marked columns of the live spec, in display order) per tag."
 
 ;;; Browser
 
+(defun org-glance-table:filter-or-reset ()
+  "Filter or narrow the table; with a prefix arg, clear the active filter.
+With no prefix, defer to `table-view-filter-or-narrow' -- narrow to the marked
+rows, or prompt for a substring filter when none are marked.  With a prefix arg
+\(`C-u /'), clear the current substring filter without prompting."
+  (interactive)
+  (if current-prefix-arg
+      (table-view-filter "")
+    (call-interactively #'table-view-filter-or-narrow)))
+
 (cl-defun org-glance-table:visit (graph &optional filter)
   "Open GRAPH's table for FILTER, one buffer per filter description.
 Honours the same filter language as the overview (see
@@ -523,6 +533,8 @@ Honours the same filter language as the overview (see
       ;; Custom property columns: `C-u +' builds one via the prompt below, and any
       ;; add/remove is persisted per tag through the schema-changed hook.
       (setq-local table-view-add-column-function #'org-glance-table--add-column-prompt)
+      ;; `C-u /' clears the active filter; a bare `/' stays filter-or-narrow.
+      (local-set-key "/" #'org-glance-table:filter-or-reset)
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.

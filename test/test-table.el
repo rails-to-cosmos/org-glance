@@ -127,6 +127,21 @@ path; a display-boundary refresh re-fills it and clears the flag."
         (should (derived-mode-p 'table-view-mode))
         (should (= 2 (length table-view--rows)))))))
 
+(ert-deftest org-glance-test:table-filter-reset ()
+  "`C-u /' clears the active substring filter; `/' is bound to the wrapper."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "r1" "* TODO Alpha")
+                          (org-glance-test:headline "r2" "* TODO Beta"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (eq (key-binding "/") #'org-glance-table:filter-or-reset))
+        (table-view-filter "alpha")
+        (should (equal "alpha" table-view--filter))
+        (let ((current-prefix-arg '(4)))       ; `C-u /'
+          (org-glance-table:filter-or-reset))
+        (should (null table-view--filter))))))
+
 ;;; Per-view persistence (column order + sort)
 
 (ert-deftest org-glance-test:table-persist-column-order ()
