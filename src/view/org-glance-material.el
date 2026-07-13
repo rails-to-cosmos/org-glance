@@ -524,6 +524,35 @@ the (id . reason) pairs skipped."
                    (funcall finalize (reverse changed) (reverse skipped))))))))
       (drive))))
 
+(cl-defun org-glance-material:retag (graph id tag &key remove)
+  "Add TAG to headline ID in GRAPH, or drop it when REMOVE is non-nil.
+Materialize ID's blob, rewrite its `org-set-tags', and save so the after-save
+`:sync' persists the change and refreshes open views.  Signal a `user-error'
+when a pre-existing blob buffer holds unsaved edits (never clobber live work).
+Return non-nil when the tag set actually changed."
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type tag string)
+  (let* ((path (org-glance-graph:content-path graph id))
+         (existing (find-buffer-visiting path)))
+    (when (and existing (buffer-modified-p existing))
+      (user-error "org-glance: %s has unsaved edits"
+                  (file-name-nondirectory path)))
+    (let ((buffer (org-glance-material:open graph id))
+          (changed nil))
+      (unwind-protect
+          (with-current-buffer buffer
+            (org-glance-material--goto-first-heading)
+            (let* ((tags (org-get-tags nil t))
+                   (new (if remove
+                            (remove tag tags)
+                          (if (member tag tags) tags (append tags (list tag))))))
+              (unless (equal tags new)
+                (org-set-tags new)
+                (let ((inhibit-message t)) (save-buffer))
+                (setq changed t))))
+        (unless existing (org-glance--discard-buffer buffer)))
+      changed)))
+
 ;;; Commands
 ;;
 ;; The picker commands -- materialize / open / extract -- gate their candidate

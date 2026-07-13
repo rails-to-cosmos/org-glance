@@ -111,6 +111,7 @@ Default sort is the state column ascending (active first)."
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))
                 ((key . "T")     (command . "overview")  (label . "Overview"))
                 ((key . "+")     (command . "capture")   (label . "Capture"))
+                ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "-")     (command . "delcolumn") (label . "Del col"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
@@ -261,6 +262,36 @@ single-row `org-glance-table--act-todo' (cycle + note)."
              (message "Set %d headline(s) to %s%s"
                       (length changed) state
                       (if skipped (format " (%d skipped)" (length skipped)) "")))))))))
+
+(cl-defun org-glance-table--metadata (graph id)
+  "Return live headline metadata for ID in GRAPH, or a `user-error' when gone."
+  (let ((meta (org-glance-graph:get-headline graph id)))
+    (if (org-glance-headline-metadata? meta)
+        meta
+      (user-error "Headline no longer in graph (table is stale; press `g' to refresh)"))))
+
+(cl-defun org-glance-table--act-tag (graph id)
+  "Add a tag to headline ID at point, or remove one of its tags with a prefix.
+Bare `:' completing-reads a tag from GRAPH's tag universe and accepts a new tag
+\(no match required); `C-u :' completing-reads one of the headline's own tags
+\(match required) and removes it.  On a change, reload the table and keep point
+on the row."
+  (unless id (user-error "Point is not on a row"))
+  (let* ((line (line-number-at-pos))
+         (remove current-prefix-arg)
+         (tag (if remove
+                  (let ((tags (mapcar (lambda (x) (format "%s" x))
+                                      (org-glance-headline-metadata:tags
+                                       (org-glance-table--metadata graph id)))))
+                    (if tags
+                        (completing-read "Remove tag: " tags nil t)
+                      (user-error "Headline has no tags to remove")))
+                (s-trim (completing-read "Add tag: " (org-glance-graph:tags graph))))))
+    (when (and tag (not (string-empty-p tag))
+               (org-glance-material:retag graph id tag :remove remove))
+      (org-glance-table--reload (current-buffer))
+      (org-glance-table--restore-point id line)
+      (message "%s tag `%s'" (if remove "Removed" "Added") tag))))
 
 ;;; Per-view persistence: column order + sort, keyed by filter identity
 ;;
@@ -513,7 +544,8 @@ Honours the same filter language as the overview (see
                                                    (call-interactively #'table-view-add-column)
                                                  (org-glance-capture (or (org-glance-filter:tags spec)
                                                                          (org-glance-capture:completing-read-tag))
-                                                                     ""))))))
+                                                                     ""))))
+                         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))))
          ;; Build the spec, restoring the saved column order (if any) before display.
          (tspec (let ((s (org-glance-table--spec graph spec)))
                   (when-let ((order (plist-get saved :columns)))

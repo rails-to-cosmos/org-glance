@@ -11,7 +11,6 @@
 
 (source "gnu")
 (source "melpa")
-(source "org")
 
 (depends-on "emacs" "29.1")
 (depends-on "org")

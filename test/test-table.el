@@ -142,6 +142,42 @@ path; a display-boundary refresh re-fills it and clears the flag."
           (org-glance-table:filter-or-reset))
         (should (null table-view--filter))))))
 
+(ert-deftest org-glance-test:table-add-tag ()
+  "`:' adds a tag (new tags allowed) to the headline at point and persists it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "t1" "* TODO Alpha :work:"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (table-view--goto-first-row)
+        (let ((id (get-text-property (point) 'table-view-id)))
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "urgent")))
+            (org-glance-table--act-tag graph id))
+          (should (member "urgent"
+                          (mapcar (lambda (x) (format "%s" x))
+                                  (org-glance-headline-metadata:tags
+                                   (org-glance-graph:get-headline graph id))))))))))
+
+(ert-deftest org-glance-test:table-remove-tag ()
+  "`C-u :' removes one of the headline's own tags, keeping the others."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "t2" "* TODO Beta :work:home:"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (table-view--goto-first-row)
+        (let ((id (get-text-property (point) 'table-view-id)))
+          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "work")))
+            (let ((current-prefix-arg '(4)))
+              (org-glance-table--act-tag graph id)))
+          (let ((tags (mapcar (lambda (x) (format "%s" x))
+                              (org-glance-headline-metadata:tags
+                               (org-glance-graph:get-headline graph id)))))
+            (should-not (member "work" tags))
+            (should (member "home" tags))))))))
+
 ;;; Per-view persistence (column order + sort)
 
 (ert-deftest org-glance-test:table-persist-column-order ()
