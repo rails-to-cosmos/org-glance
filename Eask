@@ -21,6 +21,8 @@
 (depends-on "s")
 (depends-on "transient")
 (depends-on "table-view")
+;; Powers `org-glance-llm' (the `l' action); pulls in vterm.
+(depends-on "agnostic-llm")
 
 (eask-defcommand test
   "Run a configured ert test suite."

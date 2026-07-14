@@ -58,6 +58,13 @@ comments, commit messages, prose. State the point directly.
   Generic table capabilities belong upstream at `~/sync/stuff/table-view`
   (commit + push, then publish to the ELPA); every org-glance adaptation lives
   in `src/view/org-glance-table.el`.
+- **`agnostic-llm` is a required dependency** (powers `org-glance-llm`, the `l`
+  action): declared in `Package-Requires` and via `(depends-on "agnostic-llm")`
+  in `Eask` (from the same `rails-to-cosmos` ELPA). It pulls in `vterm` (a native
+  module whose compile prompt breaks batch tooling), so the code loads it lazily
+  through its autoload — a `declare-function` plus a direct call in
+  `org-glance-llm`, never a load-time `require` — so byte-compile and headless
+  test runs never load or build vterm. Upstream lives at `~/sync/stuff/agnostic-llm`.
 
 ## Build / test
 

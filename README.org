@@ -35,6 +35,11 @@ dependency; the remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
 MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
+The *LLM session* action (=l=) opens an =agnostic-llm= claude session in the
+selected headline's data directory.  =agnostic-llm= (also on the =rails-to-cosmos=
+archive) is a required dependency; it pulls in =vterm=, loaded lazily the first
+time you run the action, so org-glance never loads vterm at startup.
+
 * Highlights
 
 Reach everything through the =org-glance-transient= transient (=C-x j= above).
@@ -48,7 +53,7 @@ Reach everything through the =org-glance-transient= transient (=C-x j= above).
   opens that tag's headline table, =o= its overview, =+= adds a tag (captures a
   first headline), =-= removes a tag (a guarded, non-destructive retag).
 - *Agenda* (=a=), *Capture* (=+=), *Extract property* (=e=), *Open link* (=j=),
-  *Materialize* (=m=), *Configure tags* (=C=).
+  *Materialize* (=m=), *LLM session* (=l=), *Configure tags* (=C=).
 
 Other features:
 
@@ -65,7 +70,7 @@ Other features:
 For hacking on org-glance, clone the repo and load it directly.  It is a
 multi-directory package: =org-glance.el= is at the root, modules under =src/data=
 and =src/view=; it does NOT add those to =load-path= itself, so all three must be
-on it.  =table-view= is a pinned git dependency
+on it.  =table-view= is an external dependency from the =rails-to-cosmos= ELPA
 ([[https://github.com/rails-to-cosmos/table-view][rails-to-cosmos/table-view]], not on MELPA); the MELPA deps above are still
 needed.  (=Eask= is the dev/test harness, not required to use the package.)
 

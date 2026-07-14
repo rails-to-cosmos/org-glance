@@ -26,6 +26,11 @@
 
 (require 'org-glance-core)
 
+;; `agnostic-llm' powers `org-glance-llm' (the `l' action).  A required
+;; dependency, but loaded lazily through its autoload only when the command
+;; runs, so org-glance never pulls in vterm at load or byte-compile time.
+(declare-function agnostic-llm "agnostic-llm" (&optional user-root))
+
 ;;; Selection
 
 (cl-defun org-glance-material:label (metadata)
@@ -572,6 +577,24 @@ Return non-nil when the tag set actually changed."
                     graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
          (id (org-glance-headline-metadata:id metadata)))
     (switch-to-buffer (org-glance-material:open graph id))))
+
+;;;###autoload
+(cl-defun org-glance-llm ()
+  "Choose a headline and open an `agnostic-llm' session in its data directory.
+Prompt for a headline as `org-glance-materialize' does, then launch
+`agnostic-llm' with its working directory set to the headline's
+content-addressable data directory.  The CLI operates on that headline's data
+there, and its per-directory session context accumulates in the same directory
+across invocations."
+  (interactive)
+  (org-glance-ensure-init)
+  (let* ((graph org-glance-graph)
+         (metadata (org-glance-material:completing-read
+                    graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
+         (id (org-glance-headline-metadata:id metadata))
+         (dir (org-glance-graph:headline-data-path graph id)))
+    (make-directory dir t)
+    (agnostic-llm dir)))
 
 ;;; Read commands: open / extract (operate on the stored blob, read-only)
 

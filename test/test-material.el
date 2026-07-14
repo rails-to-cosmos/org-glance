@@ -620,5 +620,21 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
       (org-glance-test:with-material (buffer graph "enc")
         (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))))))
 
+(ert-deftest org-glance-test:llm-spawns-in-data-dir ()
+  "`org-glance-llm' launches `agnostic-llm' in the chosen headline's data dir.
+The directory is created if absent so the CLI has a working directory."
+  (org-glance-test:session
+    (org-glance-graph:add org-glance-graph
+                          (org-glance-test:headline "llmid" "* TODO Alpha :x:"))
+    (let ((spawned 'unset))
+      (cl-letf (((symbol-function 'completing-read)
+                 (lambda (_p coll &rest _) (caar coll)))
+                ((symbol-function 'agnostic-llm)
+                 (lambda (&optional dir) (setq spawned dir))))
+        (org-glance-llm))
+      (let ((expected (org-glance-graph:headline-data-path org-glance-graph "llmid")))
+        (should (equal (file-truename spawned) (file-truename expected)))
+        (should (file-directory-p spawned))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

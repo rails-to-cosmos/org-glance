@@ -58,6 +58,7 @@
     ("e" "Extract property" org-glance-extract)
     ("j" "Open link" org-glance-open)
     ("m" "Materialize headline" org-glance-materialize)
+    ("l" "LLM session" org-glance-llm)
     ("C" "Configure tags" org-glance-tag-config-edit)]]
   (interactive)
   (transient-setup 'org-glance-transient))
