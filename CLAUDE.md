@@ -52,11 +52,12 @@ comments, commit messages, prose. State the point directly.
 - **Docstrings:** keep every line ≤ 80 columns (byte-compile warns otherwise).
 - **Rich args:** functions taking several lambda/same-typed arguments use
   `cl-defun … &key`, not positional.
-- **`table-view` is a pinned git dependency**, not vendored: declared in `Eask`
-  (`:fetcher github :repo rails-to-cosmos/table-view :commit <sha>`) and in the
-  `Package-Requires` header. Generic table capabilities belong upstream at
-  `~/sync/stuff/table-view` (commit + push, then bump the `:commit` pin); every
-  org-glance adaptation lives in `src/view/org-glance-table.el`.
+- **`table-view` is an external ELPA dependency**: declared in `Eask` via a
+  `(source "rails-to-cosmos" "https://rails-to-cosmos.github.io/elpa/")` archive
+  and a plain `(depends-on "table-view")`, plus the `Package-Requires` header.
+  Generic table capabilities belong upstream at `~/sync/stuff/table-view`
+  (commit + push, then publish to the ELPA); every org-glance adaptation lives
+  in `src/view/org-glance-table.el`.
 
 ## Build / test
 

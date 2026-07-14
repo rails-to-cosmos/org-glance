@@ -16,6 +16,28 @@
                                       org-glance-graph
                                       (org-glance-headline-metadata:id meta))))))))
 
+(ert-deftest org-glance-test:kill-buffer-noconfirm ()
+  "`org-glance--kill-buffer-noconfirm' clears the modified flag and returns t.
+Installed buffer-locally on `kill-buffer-query-functions', it turns the built-in
+`Buffer modified; kill anyway?' confirmation into a no-op for a discarded buffer."
+  (with-temp-buffer
+    (insert "scratch")
+    (should (buffer-modified-p))
+    (should (eq t (org-glance--kill-buffer-noconfirm)))
+    (should-not (buffer-modified-p))))
+
+(ert-deftest org-glance-test:capture-discards-temp-buffer ()
+  "Capture finalize discards its temp buffer, leaving none behind.
+The `kill-buffer-query-functions' guard clears the modified flag first, so the
+discard raises no `Buffer modified; kill anyway?' confirmation."
+  (org-glance-test:session
+    (org-glance-capture 'test "Hello")
+    (org-capture-finalize)
+    (should-not (cl-find-if (lambda (b)
+                              (string-match-p "\\`org-glance-.*\\.org\\'"
+                                              (buffer-name b)))
+                            (buffer-list)))))
+
 (ert-deftest org-glance-test:capture-tag-prompt-from-graph ()
   "The interactive tag prompt sources candidates from the graph, allows new
 tags, normalizes case, and rejects empty input."

@@ -11,6 +11,7 @@
 
 (source "gnu")
 (source "melpa")
+(source "rails-to-cosmos" "https://rails-to-cosmos.github.io/elpa/")
 
 (depends-on "emacs" "29.1")
 (depends-on "org")
@@ -19,10 +20,7 @@
 (depends-on "f")
 (depends-on "s")
 (depends-on "transient")
-(depends-on "table-view"
-            :fetcher 'github
-            :repo "rails-to-cosmos/table-view"
-            :commit "21af2737999bd3c8ea1f2f268c34be49113fb1a0")
+(depends-on "table-view")
 
 (eask-defcommand test
   "Run a configured ert test suite."

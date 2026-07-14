@@ -85,6 +85,10 @@ separately."
     (when preamble
       (f-write-text (concat preamble "\n") 'utf-8 file))
     (find-file file)
+    ;; The temp buffer is discarded once its content is in the graph; guard it
+    ;; so any kill -- the after-finalize discard, or org-capture's own teardown
+    ;; -- is silent, with no `Buffer modified; kill anyway?' confirmation.
+    (add-hook 'kill-buffer-query-functions #'org-glance--kill-buffer-noconfirm nil t)
     (add-hook 'org-capture-after-finalize-hook
               `(lambda ()
                  (unwind-protect

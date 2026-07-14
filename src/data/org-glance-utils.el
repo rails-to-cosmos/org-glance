@@ -101,4 +101,15 @@ already dead."
       (set-buffer-modified-p nil))
     (kill-buffer buffer)))
 
+(defun org-glance--kill-buffer-noconfirm ()
+  "Clear the current buffer's modified flag and return t.
+Install this buffer-locally on `kill-buffer-query-functions' for a buffer
+org-glance owns and means to discard, so any code path that kills it -- the
+interactive `C-c C-c' finalize, a programmatic finalize, or org-capture's own
+teardown -- proceeds silently, with no `Buffer modified; kill anyway?'
+confirmation.  Query functions run before that confirmation, so clearing the
+flag here makes it a no-op."
+  (set-buffer-modified-p nil)
+  t)
+
 (provide 'org-glance-utils)
