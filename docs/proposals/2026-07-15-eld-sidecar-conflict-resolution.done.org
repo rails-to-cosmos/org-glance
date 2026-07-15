@@ -1,0 +1,111 @@
+#+TITLE: Auto-resolve git conflicts in the config/*.eld sidecars
+#+DATE: 2026-07-15
+
+Status: *done* · 2026-07-15
+
+Extends [[file:2026-07-09-git-sync-merge-resolution.done.org][git-sync-merge-resolution]] from the =meta/*.jsonl= WAL to the
+=config/*.eld= sidecars, which the =union= git driver cannot cover, and factors
+the conflict machinery both resolvers share into a reusable toolkit.  Suite green
+239/239; recompile warning-free.  No on-disk format changed.
+
+* Context
+
+The jsonl resolver keeps concurrent WAL appends conflict-free with a =merge=union=
+git driver, because a WAL is line-oriented: unioning both sides' lines and letting
+the positional last-wins reader dedup is exactly the intended merge.  That driver
+is scoped to =meta/*.jsonl= only — a =config/*.eld= holds ONE =prin1= s-expression,
+so a line-union would concatenate two whole alists (=(…)(…)=) and =read= would
+silently keep only the first, or embed markers and read back a stray =<<<<<<<=
+*symbol* that crashes the caller.
+
+Three sidecars share this exposure, all single-form alists under =config/=:
+
+- =tag-metrics.eld= — per-tag event facts (=:created= / =:modified= / =:captures=
+  / =:removals=), see [[file:2026-07-06-all-tags-overview.done.org][all-tags-overview]];
+- =table-views.eld=, =table-columns.eld= — per-view / per-tag table UI config.
+
+Two machines that both captured (or both edited a table view) leave git conflict
+markers here, and the reader chokes.
+
+* Design: heal on read, not a git driver
+
+An =.eld= cannot be git-unioned, so it heals when *read* instead.  Because
+=--write-eld= serialises as one =prin1= line, a conflict is always a whole-line
+hunk: dropping the =<<<<<<<=/=======/=>>>>>>>= lines leaves both sides' complete
+forms back to back, each independently =read=-able.
+
+** Generic floor (=org-glance-utils=)
+
+=org-glance--read-eld= is now conflict-aware: on a marked file it strips the
+markers, reads every form (=--read-eld-forms=), and returns the first *non-empty*
+side (=consp=, so a side written as literal =nil= — an emptied config — never
+shadows a populated side that follows it) instead of the marker symbol — so
+=table-views.eld= / =table-columns.eld= degrade to one machine's config rather
+than crashing.  The conflict-marker regexp
+moved down here (=org-glance--conflict-marker-re=, was =org-glance-graph--=), the
+one home both the jsonl resolver and this floor now share.  The duplicate
+=org-glance-table--read-eld= / =--write-eld= were removed; table uses the utils
+pair.
+
+** Semantic union (=org-glance-tag-metrics=)
+
+The metrics sidecar merges rather than picks-a-side, since both machines'
+counters are real.  =--read= routes a marked file through the shared
+=org-glance--heal-eld=, supplying only its domain merge (=--merge-maps= /
+=--merge-plists=):
+
+- =:created= keeps the *earliest* (first sighting is the truth);
+- =:modified= keeps the *latest* (most recent event);
+- =:captures= / =:removals= take =max= — a counter only increments, so =max=
+  never inflates (a sum would double-count the common base); it may undercount
+  when both sides logged distinct events, an accepted floor for this soft index
+  (=:count= / =:states=, the numbers users read most, are re-derived exact);
+- a tag present on only one side is carried through.
+
+Gated by the shared policy custom =org-glance-conflict-resolution= (old name
+=org-glance-graph-conflict-resolution=, kept as an obsolete alias): =union=
+resolves silently, =ask= prompts, nil errors.  On resolution the merged map is
+written back, so the markers are gone for good and =:count= / =:states= stay
+derived-fresh from the headlines as before.
+
+* Reusable toolkit (=org-glance-utils=)
+
+The two resolvers had duplicated the same conflict machinery — the ask/union/nil
+policy gate and the marker-strip.  Both now live once, format-agnostic, in the
+lowest layer (=org-glance-utils=, which =graph= and the sidecars both require):
+
+- =org-glance--conflict-marker-re= / =org-glance--conflict-marked?= — detect;
+- =org-glance--strip-conflict-markers= — union-strip any text (the jsonl
+  =--union-resolve-file= and the =.eld= =--read-eld-forms= both call it);
+- =org-glance--resolve-conflict SUBJECT RESOLVE-FN= — the *policy gate*: reads
+  =org-glance-conflict-resolution=, prompts / errors / runs =RESOLVE-FN= silently,
+  returns its value.  =RESOLVE-FN= owns the actual merge, so every store or
+  sidecar shares one policy and one prompt;
+- =org-glance--heal-eld PATH MERGE-FN &optional SUBJECT= — the gated =.eld=
+  heal: reads the sides, folds them with the caller's =MERGE-FN=, writes back,
+  returns the merged form.  A clean file just reads.
+
+The jsonl resolver (=--resolve-jsonl-conflicts=) and the metrics =--read= are now
+thin callers.  A future sidecar resolves in three lines: detect with
+=--conflict-marked?=, wrap its merge in =--resolve-conflict= (or pass a
+=MERGE-FN= to =--heal-eld=).
+
+* Tests
+
+Added to =test/test-merge.el= (9 tests).  Metrics-specific: plist field semantics
+(earliest / latest / =max=, never a sum); a conflicted =tag-metrics.eld=
+union-resolves on read under =union= (earliest/latest/max applied, one-sided tag
+kept, file rewritten marker-free and reparsing to the returned map); =ask= heals
+on approval; nil errors and leaves the markers.  Floor: =--read-eld= keeps a
+readable side from any conflicted =.eld= instead of the marker symbol, and skips
+an empty (=nil=) side so it never shadows a populated one.  Toolkit:
+=--strip-conflict-markers= / =--conflict-marked?= behaviour; =--resolve-conflict=
+gating (union silent, ask approve/decline, nil error); and =--heal-eld= driving
+an arbitrary caller merge-fn end to end.
+
+* Verified on a live store
+
+=~/sync/views/.org-glance/config/tag-metrics.eld= had arrived from a sync
+conflict-marked (two 93-tag sides).  The resolver merged it to a single clean
+93-entry form (10177 → 5053 bytes, markers gone, reparses), unblocking capture on
+that store.

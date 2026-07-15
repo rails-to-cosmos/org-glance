@@ -21,12 +21,52 @@
   (f-join (org-glance-graph:store-path graph) "config" "tag-metrics.eld"))
 
 (cl-defun org-glance-tag-metrics--read (graph)
-  "GRAPH's tag-metrics map: alist of TAG-STRING -> plist, or nil."
-  (org-glance--read-eld (org-glance-tag-metrics--file graph)))
+  "GRAPH's tag-metrics map: alist of TAG-STRING -> plist, or nil.
+Auto-resolves a git-conflicted sidecar by union-merging every side's map
+(`--merge-maps') through the shared `org-glance--heal-eld'.  A `config/*.eld' is
+not `*.jsonl', so the WAL's union driver never prevents these -- two machines
+that both captured leave conflict markers here."
+  (org-glance--heal-eld
+   (org-glance-tag-metrics--file graph)
+   (lambda (sides)
+     (org-glance-tag-metrics--merge-maps (cl-remove-if-not #'listp sides)))))
 
 (cl-defun org-glance-tag-metrics--write (graph map)
   "Persist MAP (alist TAG-STRING -> plist) as GRAPH's tag-metrics sidecar."
   (org-glance--write-eld (org-glance-tag-metrics--file graph) map))
+
+(cl-defun org-glance-tag-metrics--merge-plists (a b)
+  "Union tag metric plists A and B.
+:created keeps the earliest and :modified the latest; :captures/:removals take
+the `max' (a counter only increments, so `max' never inflates -- a sum would
+double-count the common base -- though it may undercount when both sides logged
+distinct events, an accepted floor for this soft index); any other key prefers
+B's non-nil value."
+  (let ((out (copy-sequence a)))
+    (cl-loop for (k v) on b by #'cddr do
+             (let ((cur (plist-get out k)))
+               (setq out
+                     (plist-put out k
+                                (pcase k
+                                  (:created  (cond ((not cur) v) ((not v) cur)
+                                                   ((time-less-p v cur) v) (t cur)))
+                                  (:modified (cond ((not cur) v) ((not v) cur)
+                                                   ((time-less-p cur v) v) (t cur)))
+                                  ((or :captures :removals) (max (or cur 0) (or v 0)))
+                                  (_ (or v cur)))))))
+    out))
+
+(cl-defun org-glance-tag-metrics--merge-maps (maps)
+  "Fold tag-metrics MAPS (each an alist TAG-STRING -> plist) into one union map.
+A tag present in several MAPS has its plists merged by `--merge-plists'."
+  (let (merged)
+    (dolist (map maps (nreverse merged))
+      (dolist (cell map)
+        (let ((existing (assoc (car cell) merged)))
+          (if existing
+              (setcdr existing (org-glance-tag-metrics--merge-plists
+                                (cdr existing) (cdr cell)))
+            (push (cons (car cell) (copy-sequence (cdr cell))) merged)))))))
 
 (cl-defun org-glance-tag-metrics--blob-mtime (graph id)
   "Filesystem mtime of ID's content blob in GRAPH, or nil when absent."

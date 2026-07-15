@@ -55,20 +55,6 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   :group 'org-glance
   :type 'integer)
 
-(defcustom org-glance-graph-conflict-resolution 'ask
-  "How to handle git conflict markers found in the metadata store on open.
-The `union' git driver keeps concurrent appends from conflicting going
-forward, but a store synced across machines before the driver was in place
-can arrive with markers already written into a *.jsonl segment.  Values:
-`ask'   -- prompt to approve a union merge (keep every record from both
-           sides), the default;
-`union' -- resolve automatically, without prompting;
-nil     -- never resolve; signal an error so the conflict stays visible."
-  :group 'org-glance
-  :type '(choice (const :tag "Prompt to approve" ask)
-                 (const :tag "Auto-resolve (union)" union)
-                 (const :tag "Never (error)" nil)))
-
 (cl-defstruct (org-glance-headline-metadata (:predicate org-glance-headline-metadata?)
                                                (:conc-name org-glance-headline-metadata:))
   (id nil :read-only t :type string)
@@ -686,14 +672,6 @@ Return the number of headlines re-indexed."
 
 ;;; Store bootstrap / recovery / compaction
 
-(defconst org-glance-graph--conflict-marker-re
-  "^\\(<<<<<<<\\|=======\\|>>>>>>>\\)"
-  "Regexp matching the start of a git conflict-marker line.
-Anchored to a line start (Emacs `^' matches after every newline in a
-string).  Covers git's default two-way merge markers; the `union' driver
-prevents these on *.jsonl going forward, but a store synced before the
-driver existed can still carry them.")
-
 (cl-defun org-glance-graph--ensure-gitattributes (graph)
   "Write the `merge=union' git driver for GRAPH's *.jsonl files, if absent.
 Concurrent appends to `headlines.jsonl' on two machines conflict when the store
@@ -713,7 +691,7 @@ a `:segments' vector.  MANIFEST is not `*.jsonl', so git's default merge leaves
 conflict markers rather than a union -- the reader must notice and rebuild."
   (or (null text)
       (string-empty-p (string-trim text))
-      (string-match-p org-glance-graph--conflict-marker-re text)
+      (org-glance--conflict-marked? text)
       (condition-case nil
           (not (vectorp (plist-get (json-parse-string text :object-type 'plist)
                                    :segments)))
@@ -747,46 +725,32 @@ already written into a segment; the JSONL reader would choke on those lines."
   (let ((meta (org-glance-graph:meta-path graph)))
     (cl-loop for name in (directory-files meta nil "\\.jsonl\\'")
              for path = (f-join meta name)
-             when (string-match-p org-glance-graph--conflict-marker-re
-                                  (f-read-text path 'utf-8))
+             when (org-glance--conflict-marked? (f-read-text path 'utf-8))
              collect path)))
 
 (cl-defun org-glance-graph--union-resolve-file (path)
   "Strip git conflict markers from PATH by union merge; return blocks resolved.
-Delete only the `<<<<<<<'/`======='/`>>>>>>>' marker lines, keeping every
-content line from both sides -- exactly what git's built-in `union' driver
-produces.  The positional last-wins reader collapses any duplicate id."
-  (let* ((blocks 0)
-         (text (with-temp-buffer
-                 (insert (f-read-text path 'utf-8))
-                 (goto-char (point-min))
-                 (while (re-search-forward
-                         (concat org-glance-graph--conflict-marker-re ".*\n?") nil t)
-                   (when (eq ?< (char-after (match-beginning 1)))
-                     (cl-incf blocks))
-                   (replace-match "" t t))
-                 (buffer-string))))
-    (f-write-text text 'utf-8 path)
+Keeps both sides' content lines via `org-glance--strip-conflict-markers' --
+exactly what git's built-in `union' driver produces, so the positional last-wins
+reader collapses any duplicate id.  Blocks = the `<<<<<<<' count."
+  (let* ((text (f-read-text path 'utf-8))
+         (blocks (cl-count-if (lambda (l) (string-prefix-p "<<<<<<<" l))
+                              (split-string text "\n"))))
+    (f-write-text (org-glance--strip-conflict-markers text) 'utf-8 path)
     blocks))
 
 (cl-defun org-glance-graph--resolve-jsonl-conflicts (graph)
   "Resolve git conflict markers in GRAPH's meta/*.jsonl by union merge.
-The `union' driver stops future conflicts, but a store synced before it was
-in place can carry markers a JSONL reader cannot parse.  Behaviour follows
-`org-glance-graph-conflict-resolution': `ask' prompts for approval before
-rewriting, `union' resolves silently, nil signals an error so the conflict
-stays visible.  A declined prompt also errors -- the store cannot load with
-markers in place."
+The `union' driver stops future conflicts, but a store synced before it was in
+place can carry markers a JSONL reader cannot parse.  Gated by the shared
+`org-glance--resolve-conflict' (see `org-glance-conflict-resolution'): `ask'
+prompts before rewriting, `union' resolves silently, nil (or a declined prompt)
+errors so the store never loads with markers in place."
   (when-let ((files (org-glance-graph--conflicted-jsonl-files graph)))
     (let ((names (mapconcat #'file-name-nondirectory files ", ")))
-      (pcase org-glance-graph-conflict-resolution
-        ('nil (error "org-glance: unresolved git conflict in %s" names))
-        (mode
-         (unless (or (eq mode 'union)
-                     (y-or-n-p
-                      (format "org-glance: git conflict markers in %s -- \
-resolve by union merge (keep all records from both sides)? " names)))
-           (error "org-glance: git conflict in %s left unresolved" names))
+      (org-glance--resolve-conflict
+       names
+       (lambda ()
          (let ((blocks (cl-loop for path in files
                                 sum (org-glance-graph--union-resolve-file path))))
            (message "org-glance: union-resolved %d git conflict block(s) in %s"

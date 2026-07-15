@@ -50,7 +50,9 @@ The constructor writes =meta/.gitattributes= containing =*.jsonl merge=union=
 (write-if-absent, never clobbering a hand-edit).  =union= is a built-in git
 driver, so no per-clone =git config= is needed.  Scope is deliberately
 =meta/*.jsonl= only: =data/= content blobs and =config/= are *not* unioned —
-interleaving prose or =.eld= forms would corrupt them.
+interleaving prose or =.eld= forms would corrupt them.  The =config/*.eld=
+sidecars instead heal on *read* with a semantic union merge — see
+[[file:2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
 
 ** Resolve markers a pre-driver sync left (=org-glance-graph--resolve-jsonl-conflicts=)
 
@@ -64,10 +66,14 @@ union-resolves each file (=--union-resolve-file=): strip only the
 sides — byte-identical to what the =union= driver would have produced, so the
 positional last-wins reader collapses any duplicate id.
 
-The =org-glance-graph-conflict-resolution= defcustom governs it: =ask= (default)
-prompts the user to approve the union merge before rewriting; =union= resolves
-silently; nil signals an error so the conflict stays visible.  A declined =ask=
-prompt also errors — the store cannot load with markers in place.
+The =org-glance-conflict-resolution= defcustom governs it (old name
+=org-glance-graph-conflict-resolution=, kept as an obsolete alias): =ask=
+(default) prompts the user to approve the union merge before rewriting; =union=
+resolves silently; nil signals an error so the conflict stays visible.  A
+declined =ask= prompt also errors — the store cannot load with markers in place.
+This gate is now the shared =org-glance--resolve-conflict= helper — see
+[[file:2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]], which factors the conflict machinery into a
+reusable toolkit both resolvers call.
 
 ** MANIFEST self-heal (=org-glance-graph--reconcile-manifest=)
 

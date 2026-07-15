@@ -32,6 +32,7 @@
 (require 's)
 
 (require 'table-view)
+(require 'org-glance-utils)
 (require 'org-glance-graph)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
@@ -307,19 +308,9 @@ on the row."
   "Path of GRAPH's table-view config store (may not exist)."
   (f-join (org-glance-graph:store-path graph) "config" "table-views.eld"))
 
-(cl-defun org-glance-table--read-eld (path)
-  "Read the single form in the .eld PATH, or nil when absent/unreadable."
-  (when (f-exists? path)
-    (ignore-errors (car (read-from-string (f-read-text path 'utf-8))))))
-
-(cl-defun org-glance-table--write-eld (path form)
-  "Serialize FORM to the .eld PATH, creating parent dirs."
-  (f-mkdir-full-path (f-dirname path))
-  (f-write-text (prin1-to-string form) 'utf-8 path))
-
 (cl-defun org-glance-table--config-all (graph)
   "Saved per-filter table configs: alist of (identity-string . config-plist)."
-  (org-glance-table--read-eld (org-glance-table--config-file graph)))
+  (org-glance--read-eld (org-glance-table--config-file graph)))
 
 (cl-defun org-glance-table--config-get (graph spec)
   "Saved view-config plist for SPEC (`:columns' KEYS `:sort' SORT-KEYS), or nil."
@@ -332,7 +323,7 @@ on the row."
         (all (org-glance-table--config-all graph))
         (id (org-glance-filter:identity spec)))
     (setf (alist-get id all nil nil #'equal) config)
-    (org-glance-table--write-eld path all)))
+    (org-glance--write-eld path all)))
 
 (cl-defun org-glance-table--reorder-columns (columns order)
   "COLUMNS reordered so their `key's follow ORDER (a list of keys).
@@ -432,7 +423,7 @@ column for that property; empty input cancels the add."
 
 (cl-defun org-glance-table--schema-all (graph)
   "Saved per-tag schemas: alist of (tag-key . (:columns ((PROP . HEADER) ...)))."
-  (org-glance-table--read-eld (org-glance-table--schema-file graph)))
+  (org-glance--read-eld (org-glance-table--schema-file graph)))
 
 (cl-defun org-glance-table--schema-key (filter)
   "Canonical per-tag key for FILTER: its tags sorted and `+'-joined, or
@@ -457,7 +448,7 @@ An empty COLUMNS drops the entry so the store does not accrete empties."
                          :key #'car :test #'equal)))
     (when columns
       (setq all (cons (cons key (list :columns columns)) all)))
-    (org-glance-table--write-eld path all)))
+    (org-glance--write-eld path all)))
 
 (cl-defun org-glance-table--apply-schema (graph filter columns)
   "COLUMNS with GRAPH's saved custom property columns for FILTER appended.
