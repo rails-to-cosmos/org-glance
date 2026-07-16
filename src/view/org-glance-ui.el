@@ -52,7 +52,7 @@
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
     ("o" "Overview" org-glance-overview)
-    ("t" "All tags" org-glance-tags)]]
+    ("t" "Tags" org-glance-tags)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)

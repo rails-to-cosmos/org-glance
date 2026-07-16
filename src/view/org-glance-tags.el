@@ -75,8 +75,8 @@ The `|' active/done separator is left plain."
                 ((key . "modified") (header . "Modified") (type . "text") (sortable . t)   (align . "left"))))
     (actions . (((key . "RET") (command . "table")    (label . "Table"))
                 ((key . "o")   (command . "overview") (label . "Overview"))
-                ((key . "+")   (command . "add")      (label . "Add tag"))
-                ((key . "-")   (command . "remove")   (label . "Remove tag"))
+                ((key . "+")   (command . "add")      (label . "Add"))
+                ((key . "-")   (command . "remove")   (label . "Remove"))
                 ((key . "g")   (command . "refresh")  (label . "Refresh"))))
     (sort . ((column . "tag") (ascending . t)))))
 
