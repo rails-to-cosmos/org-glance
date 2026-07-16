@@ -32,6 +32,9 @@ to the new version and open a fresh `* Unreleased`. A user-visible change
 landing without a changelog entry is an incomplete change; internal-only
 refactors (no behaviour change) need no entry.
 
+Keep it **compact — facts only**: one line per bullet, naming the command, key,
+or file that changed. No rationale, no prose; that belongs in `docs/proposals/`.
+
 ## Fix — and prevent — the whole class
 
 A reported problem is one sample of a class. When you fix it, sweep the codebase

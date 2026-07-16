@@ -1,54 +1,49 @@
 #+TITLE: Changelog
 
-All notable, user-facing changes to org-glance are recorded here, in the spirit
-of [[https://keepachangelog.com/][Keep a Changelog]].  Versions are date-based
-=MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV= (see the =Makefile= and the package
-header).  Design detail lives in [[file:docs/proposals/][docs/proposals/]]; this file is the summary.
+Notable user-facing changes.  Versions date-based
+=MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV=.  Detail: [[file:docs/proposals/][docs/proposals/]].
 
 * Unreleased
 
 ** Added
-- Encrypt / decrypt a headline straight from the table view (=org-glance-table=):
-  =#= toggles encryption of the row at point, prompting for a password
-  (confirmed when encrypting); =C-u #= re-keys an encrypted headline (old
-  password, then new).
-- =Enc= column in the table, showing 🔒 for encrypted headlines (sortable, so
-  encrypted rows group together).
-- Store-level crypto API: =org-glance-material:crypt-set= (encrypt/decrypt) and
-  =org-glance-material:crypt-rekey= (change password), sharing one guarded
-  transform helper.
+- Table view: =#= encrypt/decrypt the row; =C-u #= re-key an encrypted headline.
+- Table =Enc= column: 🔒 for encrypted headlines (sortable).
+- Store API =org-glance-material:crypt-set= / =:crypt-rekey=.
 
 ** Changed
-- The materialized-buffer password lock moved from =C-c C-l= (org's
-  =org-insert-link=) to =C-c #=.
+- Material password lock =C-c C-l= → =C-c #=.
 
 ** Fixed
-- Capturing from the table no longer raises a "Buffer modified; kill anyway?"
-  prompt (the temporary capture buffer is discarded cleanly).
+- Capture from table no longer prompts "Buffer modified; kill anyway?".
 
-* 0.6.0.0.20260716.0
+* 0.6.0.0.20260716.0 — metadata-migration (major)
+
+v1 =*.metadata.el= → v2 content-addressable graph store.  Migration re-scans the
+canonical org files; legacy files backed up, not deleted.  New layout
+=.org-glance/{meta,data,config}/=.
 
 ** Added
-- All-tags overview (=org-glance-tags=, bound =t=): a table of tags with per-tag
-  metrics — headline count, todo-state breakdown, configured cycle, and
-  event-tracked created/modified timestamps.  Row actions: open the tag's table
-  (RET) or overview (=o=), add (=+=) / remove (=-=) a tag.
-- Git-sync conflict auto-resolution.  The =meta/*.jsonl= WAL heals via a
-  =merge=union= git driver plus a marker-stripping recovery on open; the
-  single-form =config/*.eld= sidecars (e.g. =tag-metrics.eld=) heal on read
-  through a reusable, format-agnostic conflict toolkit in =org-glance-utils=
-  (=org-glance-conflict-resolution= governs both).  See
-  [[file:docs/proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
-- =agnostic-llm= integration (=org-glance-llm=, the =l= action): opens an LLM
-  session in a headline's data directory; the =*llm:…*= buffer is named for the
-  headline's title slug, not the data directory's content hash.
-- =table-view= and =agnostic-llm= consumed as external ELPA/git dependencies
-  rather than vendored.
+- v2 store: segmented append-only JSONL WAL (=headlines.jsonl=, =seg-*.jsonl=,
+  =MANIFEST=), content =data/= blobs, read cache, atomic writes, compaction,
+  =--heal= recovery.
+- Table view (=org-glance-table=, on =table-view=): sort, badge colours, per-tag
+  custom columns, bulk todo, filters.
+- Overview (=org-glance-overview=): filtered agenda view, cache + pull coherence.
+- Per-tag config (=org-glance-tag-config=): capture skeleton + todo cycle.
+- All-tags overview (=org-glance-tags=, =t=): per-tag metrics; =+= / =-= add/remove.
+- Git-sync conflict auto-resolution: WAL ~merge=union~ driver + =config/*.eld=
+  heal toolkit (=org-glance-conflict-resolution=).
+- =agnostic-llm= (=org-glance-llm=, =l=); =*llm:…*= named by title slug.
+- Encrypted materialization: decrypt on open, re-encrypt on save; password TTL,
+  =C-c #= to forget.
+- =make fat= single-file build; =make major|minor|patch|build|rev= bumpers.
 
 ** Changed
-- Date-based versioning (=MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV=), stamped by the
-  =Makefile= bumpers (=make major|minor|patch|build|rev=).
-- Main entry point renamed =org-glance-form-action= → =org-glance-transient=
-  (autoloaded, with all its suffix commands).
-- Session primitives moved to =org-glance-core= so autoloaded commands
-  initialise cleanly on a fresh install.
+- Materialize = edit content blob as a real file; =after-save= syncs metadata.
+- Date-based versioning.
+- =org-glance-form-action= → =org-glance-transient= (autoloaded).
+- Session primitives → =org-glance-core=.
+- =table-view=, =agnostic-llm= external deps, not vendored.
+
+** Removed
+- v1 =*.metadata.el= read path.
