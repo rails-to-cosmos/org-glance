@@ -19,22 +19,19 @@ Whitespace-only strings count as present (unlike `s-present?')."
 
 (defconst org-glance--conflict-marker-re
   "^\\(<<<<<<<\\|=======\\|>>>>>>>\\)"
-  "Regexp matching the start of a git conflict-marker line.
-Anchored to a line start (Emacs `^' matches after every newline in a string).
-Covers git's default two-way merge markers.  A `*.jsonl' union driver prevents
-these in the WAL, but a `config/*.eld' sidecar it never touches can still carry
-them after a git sync.")
+  "Regexp matching a git conflict-marker line start.
+`^' matches after every newline in a string.  A `*.jsonl' union driver stops
+these in the WAL; a `config/*.eld' sidecar can still carry them after a sync.")
 
 (define-obsolete-variable-alias 'org-glance-graph-conflict-resolution
   'org-glance-conflict-resolution "org-glance 0.2")
 
 (defcustom org-glance-conflict-resolution 'ask
-  "How to auto-resolve a git conflict found in the store or its sidecars.
-A store dir synced across machines (git/Syncthing) can arrive with conflict
-markers.  This governs every resolver alike -- the `meta/*.jsonl' WAL and the
-`config/*.eld' sidecars:
-`ask'   -- prompt to approve a union merge (keep data from both sides), default;
-`union' -- resolve automatically, without prompting;
+  "How to auto-resolve a git conflict in the store or its sidecars.
+A synced store dir (git/Syncthing) can arrive with conflict markers.  Governs
+every resolver -- the `meta/*.jsonl' WAL and the `config/*.eld' sidecars:
+`ask'   -- prompt to approve a union merge (keep both sides), the default;
+`union' -- resolve silently;
 nil     -- never resolve; signal an error so the conflict stays visible."
   :group 'org-glance
   :type '(choice (const :tag "Prompt to approve" ask)
@@ -47,19 +44,15 @@ nil     -- never resolve; signal an error so the conflict stays visible."
 
 (cl-defun org-glance--strip-conflict-markers (text)
   "TEXT with its git conflict-marker lines removed -- a union of both sides.
-Deletes only the `<<<<<<<'/`======='/`>>>>>>>' lines, keeping every content line
-from either side: exactly what git's built-in `union' driver produces."
+Drops only the `<<<<<<<'/`======='/`>>>>>>>' lines, what git's `union' produces."
   (replace-regexp-in-string
    (concat org-glance--conflict-marker-re ".*\n?") "" text))
 
 (cl-defun org-glance--resolve-conflict (subject resolve-fn)
-  "Heal a git conflict in SUBJECT by calling RESOLVE-FN, honouring the policy.
-SUBJECT is a short name for the prompt/message.  Per the
-`org-glance-conflict-resolution' custom: `union' runs RESOLVE-FN silently, `ask'
-prompts for approval first, nil signals an error so the conflict stays visible;
-a declined prompt also errors.  Returns RESOLVE-FN's value.  RESOLVE-FN owns the
-actual merge/rewrite -- this is only the gate, so every store and sidecar shares
-one policy and one prompt."
+  "Heal a git conflict in SUBJECT via RESOLVE-FN, per the policy custom.
+SUBJECT names the conflict in the prompt.  Per `org-glance-conflict-resolution':
+`union' runs RESOLVE-FN silently, `ask' prompts first, nil (or a declined
+prompt) errors.  RESOLVE-FN owns the merge; return its value."
   (pcase org-glance-conflict-resolution
     ('nil (error "org-glance: unresolved git conflict in %s" subject))
     (mode
@@ -71,10 +64,8 @@ resolve by union merge (keep data from both sides)? " subject)))
 
 (cl-defun org-glance--read-eld-forms (text)
   "Every readable top-level form in TEXT, git conflict markers stripped first.
-`--write-eld' serialises an .eld as one `prin1' line, so a conflict is a whole
-line hunk: `--strip-conflict-markers' leaves both sides' complete forms back to
-back.  Read them all (stopping at the first unreadable tail) so a caller can
-pick a side or merge them."
+`--write-eld' writes one `prin1' line, so a conflict leaves both sides' whole
+forms back to back once stripped.  Read all, stopping at the first bad tail."
   (let ((clean (org-glance--strip-conflict-markers text))
         (pos 0) forms)
     (ignore-errors
@@ -87,12 +78,9 @@ pick a side or merge them."
 
 (cl-defun org-glance--read-eld (path)
   "Read the single Lisp form in the .eld PATH, or nil when absent/unreadable.
-A git-conflicted sidecar would otherwise read back as a stray `<<<<<<<' marker
-symbol and crash the caller; in that case keep the first NON-EMPTY side instead
--- `consp', not `listp', so a side written as literal `nil' (an emptied config)
-never shadows a populated side that follows it.  Callers that can union the
-sides (see `org-glance-tag-metrics') do so; this floor just refuses to hand
-back garbage, returning nil only when every side is empty or unreadable."
+On a git-conflicted PATH keep the first NON-EMPTY side (`consp', so a side
+written as literal `nil' never shadows a populated one) rather than crash on the
+`<<<<<<<' marker symbol.  Callers that union the sides use `--heal-eld' instead."
   (when (f-exists? path)
     (let ((text (f-read-text path 'utf-8)))
       (if (org-glance--conflict-marked? text)
@@ -107,11 +95,9 @@ back garbage, returning nil only when every side is empty or unreadable."
 (cl-defun org-glance--heal-eld (path merge-fn &optional subject)
   "Read the .eld at PATH, union-resolving a git conflict through MERGE-FN.
 A clean PATH returns its single form (nil if absent/unreadable).  A conflicted
-one combines every readable side-form with MERGE-FN (a function of the LIST of
-side-forms) under `org-glance--resolve-conflict' (SUBJECT names it, default
-PATH's basename), writes the result back so the markers are gone for good, and
-returns it.  The reusable counterpart to the `--read-eld' floor: a caller brings
-only its domain merge, the conflict machinery is shared."
+one folds its readable side-forms with MERGE-FN (over that LIST) under
+`--resolve-conflict' (SUBJECT names it, default PATH's basename), writes the
+result back, and returns it.  Gated counterpart to the `--read-eld' floor."
   (when (f-exists? path)
     (let ((text (f-read-text path 'utf-8)))
       (if (not (org-glance--conflict-marked? text))
@@ -190,10 +176,9 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
 
 (defun org-glance--discard-buffer (buffer)
   "Kill BUFFER without the `Buffer modified; kill anyway?' confirmation.
-For buffers org-glance owns and means to discard -- a capture temp file whose
-content is already in the graph, a materialization abandoned on error -- the
-modified flag is only noise, so clear it before killing.  No-op if BUFFER is
-already dead."
+For a buffer org-glance owns and means to discard (a captured temp file, a
+materialization abandoned on error): clear the modified flag, then kill.  No-op
+if BUFFER is already dead."
   (when (buffer-live-p buffer)
     (with-current-buffer buffer
       (set-buffer-modified-p nil))

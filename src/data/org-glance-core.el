@@ -35,9 +35,8 @@ Constructed by `org-glance-init'; nil until the system is initialized.")
 
 (cl-defun org-glance-ensure-init ()
   "Return the global graph, initializing org-glance on first use.
-The guard every interactive command runs before touching the graph.  When the
-graph is not built yet, run `org-glance-init' (autoloaded from the umbrella
-`org-glance' file) so a fresh install just works without a manual init step."
+The guard commands run before touching the graph: when unbuilt, run
+`org-glance-init' (autoloaded) so a fresh install needs no manual init."
   (or org-glance-graph
       (progn (org-glance-init) org-glance-graph)))
 

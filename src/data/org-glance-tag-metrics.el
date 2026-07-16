@@ -22,9 +22,8 @@
 
 (cl-defun org-glance-tag-metrics--read (graph)
   "GRAPH's tag-metrics map: alist of TAG-STRING -> plist, or nil.
-Auto-resolves a git-conflicted sidecar by union-merging every side's map
-(`--merge-maps') through the shared `org-glance--heal-eld'.  A `config/*.eld' is
-not `*.jsonl', so the WAL's union driver never prevents these -- two machines
+A git-conflicted sidecar is union-merged (`--merge-maps') via
+`org-glance--heal-eld': config/*.eld gets no WAL union driver, so two machines
 that both captured leave conflict markers here."
   (org-glance--heal-eld
    (org-glance-tag-metrics--file graph)
@@ -37,11 +36,10 @@ that both captured leave conflict markers here."
 
 (cl-defun org-glance-tag-metrics--merge-plists (a b)
   "Union tag metric plists A and B.
-:created keeps the earliest and :modified the latest; :captures/:removals take
-the `max' (a counter only increments, so `max' never inflates -- a sum would
-double-count the common base -- though it may undercount when both sides logged
-distinct events, an accepted floor for this soft index); any other key prefers
-B's non-nil value."
+:created keeps the earliest, :modified the latest; :captures/:removals take the
+`max' (counters only increment, so `max' never inflates -- a sum would
+double-count the common base -- but may undercount distinct events, an accepted
+floor for this soft index); any other key prefers B's non-nil value."
   (let ((out (copy-sequence a)))
     (cl-loop for (k v) on b by #'cddr do
              (let ((cur (plist-get out k)))
