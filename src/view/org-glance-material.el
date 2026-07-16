@@ -86,8 +86,7 @@ FILTER, if non-nil, is a predicate on the metadata."
     ;; Advance only the earliest of multiple repeatable timestamps on repeat.
     (org-glance-datetime-mode 1)))
 
-;; (define-key org-glance-material-mode-map (kbd "C-c C-q") #'kill-current-buffer)
-;; (define-key org-glance-material-mode-map (kbd "C-c C-l") #'org-glance-material:lock)
+(define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:lock)
 
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
@@ -557,6 +556,54 @@ Return non-nil when the tag set actually changed."
                 (setq changed t))))
         (unless existing (org-glance--discard-buffer buffer)))
       changed)))
+
+(cl-defun org-glance-material--replace-headline (graph id transform)
+  "Replace headline ID in GRAPH with (TRANSFORM headline), re-indexing it.
+Signal a `user-error' when the blob is open with unsaved edits or ID is dead; a
+TRANSFORM that errors (e.g. a wrong password) aborts before any write.
+Discard a stale open buffer.  Return the new headline."
+  (cl-check-type graph org-glance-graph)
+  (cl-check-type id string)
+  (let* ((path (org-glance-graph:content-path graph id))
+         (existing (find-buffer-visiting path))
+         (headline (org-glance-graph:headline graph id)))
+    (when (and existing (buffer-modified-p existing))
+      (user-error "org-glance: %s has unsaved edits" (file-name-nondirectory path)))
+    (unless headline (user-error "No live headline with id %s" id))
+    (let ((new (funcall transform headline)))
+      (org-glance-graph:add graph new)
+      (when existing (org-glance--discard-buffer existing))
+      new)))
+
+(cl-defun org-glance-material:crypt-set (graph id encrypt password)
+  "Encrypt (ENCRYPT non-nil) or decrypt headline ID in GRAPH under PASSWORD.
+Re-index so the `encrypted?' projection flips.  Signal a `user-error' when it is
+already in the requested state (or open with unsaved edits); a wrong PASSWORD on
+decrypt errors before any write.  Return t."
+  (cl-check-type password string)
+  (org-glance-material--replace-headline
+   graph id
+   (lambda (headline)
+     (when (eq (and (org-glance-headline:encrypted? headline) t) (and encrypt t))
+       (user-error "Headline is already %s" (if encrypt "encrypted" "decrypted")))
+     (if encrypt
+         (org-glance-headline:encrypt headline password)
+       (org-glance-headline:decrypt headline password))))
+  t)
+
+(cl-defun org-glance-material:crypt-rekey (graph id old new)
+  "Re-encrypt headline ID in GRAPH from the OLD password to NEW.
+Signal a `user-error' when ID is not encrypted (or open with unsaved edits), or
+when OLD is wrong -- the decrypt fails before any write.  Return t."
+  (cl-check-type old string)
+  (cl-check-type new string)
+  (org-glance-material--replace-headline
+   graph id
+   (lambda (headline)
+     (unless (org-glance-headline:encrypted? headline)
+       (user-error "Headline is not encrypted"))
+     (org-glance-headline:encrypt (org-glance-headline:decrypt headline old) new)))
+  t)
 
 ;;; Commands
 ;;

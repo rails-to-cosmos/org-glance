@@ -620,6 +620,52 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
       (org-glance-test:with-material (buffer graph "enc")
         (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))))))
 
+(ert-deftest org-glance-test:material-crypt-set-roundtrip ()
+  "`org-glance-material:crypt-set' encrypts a plaintext headline's stored
+blob and decrypts it back, flipping the `encrypted?' projection each way, and
+refuses to re-encrypt an already-encrypted headline."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "sec" "* TODO Secret" "plainbody"))
+    (should-not (org-glance-headline-metadata:encrypted?
+                 (org-glance-graph:get-headline graph "sec")))
+    ;; encrypt: blob becomes ciphertext, projection flips
+    (should (org-glance-material:crypt-set graph "sec" t "pw"))
+    (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "sec")))
+    (should (org-glance-headline-metadata:encrypted?
+             (org-glance-graph:get-headline graph "sec")))
+    (should-error (org-glance-material:crypt-set graph "sec" t "pw"))  ; already
+    ;; decrypt: plaintext restored, projection flips back
+    (should (org-glance-material:crypt-set graph "sec" nil "pw"))
+    (let ((blob (org-glance-graph:get-content graph "sec")))
+      (should-not (s-contains? "aes-encrypted" blob))
+      (should (s-contains? "plainbody" blob)))
+    (should-not (org-glance-headline-metadata:encrypted?
+                 (org-glance-graph:get-headline graph "sec")))))
+
+(ert-deftest org-glance-test:material-crypt-set-guards-unsaved ()
+  "`crypt-set' refuses when the blob is open with unsaved edits."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "sec" "* TODO Secret" "body"))
+    (org-glance-test:with-material (buffer graph "sec")
+      (org-glance-test:sed "body" "edited")   ; dirty, unsaved
+      (should-error (org-glance-material:crypt-set graph "sec" t "pw")))))
+
+(ert-deftest org-glance-test:material-crypt-rekey ()
+  "`crypt-rekey' re-keys an encrypted headline -- the new password decrypts,
+the old no longer does -- and refuses a plaintext headline or a wrong OLD."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "k" "* TODO Secret" "body") "old"))
+    (org-glance-graph:add graph (org-glance-test:headline "p" "* TODO Plain" "b"))
+    (should-error (org-glance-material:crypt-rekey graph "p" "x" "y"))  ; not encrypted
+    (should (org-glance-material:crypt-rekey graph "k" "old" "new"))
+    (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "k")))
+    (should-error (org-glance-material:crypt-rekey graph "k" "old" "z"))  ; wrong OLD now
+    (let ((hl (org-glance-graph:headline graph "k")))
+      (should-error (org-glance-headline:decrypt hl "old"))                   ; old dead
+      (should (s-contains? "body" (org-glance-headline:contents
+                                   (org-glance-headline:decrypt hl "new"))))))) ; new works
+
 (ert-deftest org-glance-test:llm-spawns-in-data-dir ()
   "`org-glance-llm' launches `agnostic-llm' in the chosen headline's data dir,
 labelling the session by the headline's title (not the data dir's hash)."

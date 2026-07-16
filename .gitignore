@@ -21,3 +21,4 @@ devenv.local.nix
 /ert-profile
 .llm/
 /.claude/
+.agnostic-llm/

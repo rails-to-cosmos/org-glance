@@ -8,7 +8,7 @@
 ;; planning, agenda, an on-disk cache + coherence machinery), this is a flat,
 ;; in-memory `table-view' buffer: one row per matching headline, columns for
 ;; state / title / tags / scheduled / deadline / priority, client-side sort, and
-;; the same id-keyed actions (materialize / open / extract).
+;; the same id-keyed actions (materialize / open / extract / tag / encrypt).
 ;;
 ;; It reuses the headless half of org-glance verbatim: rows come from
 ;; `org-glance-graph:headlines' filtered by `org-glance-filter:predicate' (the
@@ -105,7 +105,8 @@ Default sort is the state column ascending (active first)."
                    ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
                    ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
                    ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left")))))
+                   ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
+                   ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center")))))
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
@@ -113,6 +114,7 @@ Default sort is the state column ascending (active first)."
                 ((key . "T")     (command . "overview")  (label . "Overview"))
                 ((key . "+")     (command . "capture")   (label . "Capture"))
                 ((key . ":")     (command . "tag")       (label . "Tag"))
+                ((key . "#")     (command . "crypt")     (label . "Crypt"))
                 ((key . "-")     (command . "delcolumn") (label . "Del col"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
@@ -131,7 +133,8 @@ priority is its letter, absent values are the empty string."
                 (tags     . ,(if tags (s-join ":" (mapcar (lambda (x) (format "%s" x)) tags)) ""))
                 (schedule . ,(or (org-glance-headline-metadata:schedule metadata) ""))
                 (deadline . ,(or (org-glance-headline-metadata:deadline metadata) ""))
-                (priority . ,(if (integerp priority) (char-to-string priority) "")))))))
+                (priority . ,(if (integerp priority) (char-to-string priority) ""))
+                (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" "")))))))
 
 ;;; Per-buffer state
 
@@ -293,6 +296,34 @@ on the row."
       (org-glance-table--reload (current-buffer))
       (org-glance-table--restore-point id line)
       (message "%s tag `%s'" (if remove "Removed" "Added") tag))))
+
+(cl-defun org-glance-table--act-crypt (graph id)
+  "Toggle encryption of headline ID at point in GRAPH; `C-u' changes the password.
+Bare: encrypt a plaintext headline, or decrypt an encrypted one.  With a prefix
+arg on an encrypted headline: re-key it (old password, then new).  Prompts for
+passwords (confirmed when setting a new one) and reloads the row."
+  (unless id (user-error "Point is not on a row"))
+  (let* ((line (line-number-at-pos))
+         (encrypted (org-glance-headline-metadata:encrypted?
+                     (org-glance-table--metadata graph id)))
+         (done (cond
+                (current-prefix-arg
+                 (unless encrypted
+                   (user-error "Headline is not encrypted -- nothing to re-key"))
+                 (and (org-glance-material:crypt-rekey
+                       graph id (read-passwd "Old password: ")
+                       (read-passwd "New password (confirm): " t))
+                      "Password changed"))
+                (t
+                 (and (org-glance-material:crypt-set
+                       graph id (not encrypted)
+                       (if encrypted (read-passwd "Password to decrypt: ")
+                         (read-passwd "Password to encrypt (confirm): " t)))
+                      (if encrypted "Headline decrypted" "Headline encrypted"))))))
+    (when done
+      (org-glance-table--reload (current-buffer))
+      (org-glance-table--restore-point id line)
+      (message "%s" done))))
 
 ;;; Per-view persistence: column order + sort, keyed by filter identity
 ;;
@@ -536,7 +567,8 @@ Honours the same filter language as the overview (see
                                                  (org-glance-capture (or (org-glance-filter:tags spec)
                                                                          (org-glance-capture:completing-read-tag))
                                                                      ""))))
-                         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))))
+                         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
+                         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))))
          ;; Build the spec, restoring the saved column order (if any) before display.
          (tspec (let ((s (org-glance-table--spec graph spec)))
                   (when-let ((order (plist-get saved :columns)))

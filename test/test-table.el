@@ -50,12 +50,12 @@
 ;;; Spec generation
 
 (ert-deftest org-glance-test:table-spec-shape ()
-  "The spec has the required top-level keys and six columns."
+  "The spec has the required top-level keys and seven columns."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO X"))
     (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
-      (should (= 6 (length (alist-get 'columns spec))))
+      (should (= 7 (length (alist-get 'columns spec))))
       (should (alist-get 'actions spec))
       (should (alist-get 'sort spec)))))
 
@@ -177,6 +177,54 @@ path; a display-boundary refresh re-fills it and clears the flag."
                                (org-glance-graph:get-headline graph id)))))
             (should-not (member "work" tags))
             (should (member "home" tags))))))))
+
+(ert-deftest org-glance-test:table-crypt-toggle ()
+  "`#' encrypts the headline at point, then decrypts it: the stored blob and the
+`encrypted?' projection flip each way."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha" "body"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (table-view--goto-first-row)
+        (let ((id (get-text-property (point) 'table-view-id)))
+          (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+            (org-glance-table--act-crypt graph id)          ; encrypt
+            (should (org-glance-headline-metadata:encrypted?
+                     (org-glance-graph:get-headline graph id)))
+            (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph id)))
+            (should (equal "🔒" (org-glance-test:cell graph id 'encrypted)))
+            (org-glance-table--act-crypt graph id)          ; decrypt
+            (should-not (org-glance-headline-metadata:encrypted?
+                         (org-glance-graph:get-headline graph id)))
+            (should (s-contains? "body" (org-glance-graph:get-content graph id)))
+            (should (equal "" (org-glance-test:cell graph id 'encrypted)))))))))
+
+(cl-defun org-glance-test:cell (graph id key)
+  "The KEY cell string of headline ID's `org-glance-table' row in GRAPH."
+  (alist-get key (alist-get 'cells
+                            (org-glance-table--row (org-glance-graph:get-headline graph id)))))
+
+(ert-deftest org-glance-test:table-crypt-rekey ()
+  "`C-u #' on an encrypted row re-keys it: it stays encrypted and decrypts with
+the new password."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "c2" "* TODO Alpha" "body") "old"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (table-view--goto-first-row)
+        (let ((id (get-text-property (point) 'table-view-id))
+              (pws (list "old" "new")))
+          (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) (pop pws))))
+            (let ((current-prefix-arg '(4)))
+              (org-glance-table--act-crypt graph id)))
+          (should (org-glance-headline-metadata:encrypted?
+                   (org-glance-graph:get-headline graph id)))
+          (should (s-contains? "body" (org-glance-headline:contents
+                                       (org-glance-headline:decrypt
+                                        (org-glance-graph:headline graph id) "new")))))))))
 
 ;;; Per-view persistence (column order + sort)
 
