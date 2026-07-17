@@ -112,9 +112,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
   (alist-get (upcase property) (org-glance-headline:node-properties headline)
              nil nil #'string=))
 
-(cl-defun org-glance-headline:done? (headline)
-  (not (null (member (org-glance-headline:state headline) org-done-keywords))))
-
 (cl-defun org-glance-headline:schedule (headline)
   "Scheduled timestamp of HEADLINE as a raw org string, or nil."
   (cl-check-type headline org-glance-headline)
