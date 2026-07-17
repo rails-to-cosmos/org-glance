@@ -9,6 +9,8 @@ Notable user-facing changes.  Versions date-based
 - Table view: =#= encrypt/decrypt the row; =C-u #= re-key an encrypted headline.
 - Table =Enc= column: 🔒 for encrypted headlines (sortable).
 - Store API =org-glance-material:crypt-set= / =:crypt-rekey=.
+- Transient =T= toggles the default overview view (table ⇄ org), mirroring the
+  in-view =T=.
 
 ** Changed
 - Material password lock =C-c C-l= → =C-c #=.

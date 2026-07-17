@@ -44,13 +44,34 @@
 
 (defvar org-glance-overview-default-view)  ; defined in org-glance-overview
 
+(defun org-glance-transient--view-mode ()
+  "Current overview display mode as a short string: \"table\" or \"org\"."
+  (if (memq (bound-and-true-p org-glance-overview-default-view)
+            '(org-glance-overview org))
+      "org" "table"))
+
 (defun org-glance-transient--overview-description (&rest _)
-  "Overview label tagged with `org-glance-overview-default-view'."
+  "Overview label tagged with the current `org-glance-overview-default-view'."
   (format "Overview [%s]"
-          (propertize (if (memq (bound-and-true-p org-glance-overview-default-view)
-                                 '(org-glance-overview org))
-                          "org" "table")
+          (propertize (org-glance-transient--view-mode) 'face 'transient-value)))
+
+(defun org-glance-transient--toggle-view-description (&rest _)
+  "Toggle label naming the display mode it would switch TO."
+  (format "Toggle view -> %s"
+          (propertize (if (equal (org-glance-transient--view-mode) "org") "table" "org")
                       'face 'transient-value)))
+
+(transient-define-suffix org-glance-transient:toggle-view ()
+  "Toggle `org-glance-overview-default-view' between the table and org-text view.
+Symmetric to the `T' key inside a view; stays in the menu so the `o' label and
+this one update in place."
+  :transient t
+  (interactive)
+  (setq org-glance-overview-default-view
+        (if (equal (org-glance-transient--view-mode) "org")
+            'org-glance-table
+          'org-glance-overview))
+  (message "Overview default view: %s" (org-glance-transient--view-mode)))
 
 ;;;###autoload
 (transient-define-prefix org-glance-transient ()
@@ -62,6 +83,7 @@
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
     ("o" org-glance-overview :description org-glance-transient--overview-description)
+    ("T" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
     ("t" "Tags" org-glance-tags)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
