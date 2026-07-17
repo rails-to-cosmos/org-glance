@@ -58,15 +58,74 @@
     (should (eq 1 (length (org-glance-headline:links headline))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
+  "Encrypt wraps the body in one sealed crypt block; decrypt keeps the markers
+\(plaintext body), decrypt+unwrap restores the original bytes."
   (let* ((orig (org-glance-headline--from-lines "* TODO Hello, world!" "foo bar"))
          (password "password")
          (encrypted (org-glance-headline:encrypt orig password))
-         (decrypted (org-glance-headline:decrypt encrypted password)))
+         (decrypted (org-glance-headline:decrypt encrypted password))
+         (public (org-glance-headline:decrypt encrypted password t)))
     (should (not (org-glance-headline:encrypted? orig)))
     (should (org-glance-headline:encrypted? encrypted))
+    (should (s-contains? "#+begin_crypt" (org-glance-headline:contents encrypted)))
+    (should (not (s-contains? "foo bar" (org-glance-headline:contents encrypted))))
+    ;; decrypt: blocks stay (rekey path), body plaintext again
     (should (not (org-glance-headline:encrypted? decrypted)))
-    (should (not (string= (org-glance-headline:contents orig) (org-glance-headline:contents encrypted))))
-    (should (string= (org-glance-headline:contents decrypted) (org-glance-headline:contents orig)))))
+    (should (s-contains? "#+begin_crypt" (org-glance-headline:contents decrypted)))
+    (should (s-contains? "foo bar" (org-glance-headline:contents decrypted)))
+    ;; decrypt + unwrap: byte-identical to the original
+    (should (string= (org-glance-headline:contents public)
+                     (org-glance-headline:contents orig)))))
+
+(ert-deftest org-glance-test:headline-crypt-blocks-mixed ()
+  "Several crypt blocks seal independently; plaintext between them stays public,
+so an encrypted headline keeps honest `linked?' metadata.  Rekey (decrypt ->
+encrypt) preserves the block structure; decrypt+unwrap restores the original."
+  (let* ((orig (org-glance-headline--from-lines
+                "* TODO Mixed"
+                "public intro [[https://example.com][site]]"
+                "#+begin_crypt" "secret one" "#+end_crypt"
+                "public middle"
+                "#+begin_crypt" "secret two" "#+end_crypt"))
+         (enc (org-glance-headline:encrypt orig "pw"))
+         (fresh (org-glance-headline--from-string (org-glance-headline:contents enc)))
+         (meta (org-glance-headline:metadata fresh))
+         (cipher (org-glance-headline:contents fresh)))
+    ;; only the blocks sealed; public parts intact
+    (should (s-contains? "example.com" cipher))
+    (should (s-contains? "public middle" cipher))
+    (should-not (s-contains? "secret one" cipher))
+    (should-not (s-contains? "secret two" cipher))
+    (should (= 2 (s-count-matches "#\\+begin_crypt" cipher)))
+    ;; the metadata sees both facts at once -- the point of the feature
+    (should (org-glance-headline-metadata:encrypted? meta))
+    (should (org-glance-headline-metadata:linked? meta))
+    ;; rekey preserves both blocks; the new password opens them
+    (let* ((rekeyed (org-glance-headline:encrypt
+                     (org-glance-headline:decrypt fresh "pw") "new"))
+           (opened (org-glance-headline:contents
+                    (org-glance-headline:decrypt rekeyed "new"))))
+      (should (= 2 (s-count-matches "#\\+begin_crypt"
+                                    (org-glance-headline:contents rekeyed))))
+      (should (s-contains? "secret one" opened))
+      (should (s-contains? "secret two" opened)))
+    ;; decrypt + unwrap: fully public, no markers left
+    (let ((public (org-glance-headline:contents
+                   (org-glance-headline:decrypt fresh "pw" t))))
+      (should (s-contains? "secret one" public))
+      (should (s-contains? "secret two" public))
+      (should-not (s-contains? "#+begin_crypt" public)))))
+
+(ert-deftest org-glance-test:headline-crypt-legacy-layout ()
+  "The pre-block whole-body cipher still detects as encrypted and decrypts."
+  (let* ((orig (org-glance-headline--from-lines "* TODO Old" "old secret"))
+         (legacy (org-glance-test:legacy-encrypt orig "pw")))
+    (should (org-glance-headline:encrypted? legacy))
+    (should-not (s-contains? "old secret" (org-glance-headline:contents legacy)))
+    (should-not (s-contains? "#+begin_crypt" (org-glance-headline:contents legacy)))
+    (should (s-contains? "old secret"
+                         (org-glance-headline:contents
+                          (org-glance-headline:decrypt legacy "pw"))))))
 
 (ert-deftest org-glance-test:headline-search ()
   (with-temp-buffer

@@ -193,11 +193,13 @@ path; a display-boundary refresh re-fills it and clears the flag."
             (should (org-glance-headline-metadata:encrypted?
                      (org-glance-graph:get-headline graph id)))
             (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph id)))
+            (should (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
             (should (equal "🔒" (org-glance-test:cell graph id 'encrypted)))
-            (org-glance-table--act-crypt graph id)          ; decrypt
+            (org-glance-table--act-crypt graph id)          ; decrypt -> fully public
             (should-not (org-glance-headline-metadata:encrypted?
                          (org-glance-graph:get-headline graph id)))
             (should (s-contains? "body" (org-glance-graph:get-content graph id)))
+            (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
             (should (equal "" (org-glance-test:cell graph id 'encrypted)))))))))
 
 (cl-defun org-glance-test:cell (graph id key)

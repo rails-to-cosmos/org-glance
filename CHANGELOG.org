@@ -6,6 +6,10 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Crypt blocks: =#+begin_crypt= regions seal at rest, decrypt in the material
+  buffer; several per headline, public text between stays indexable (links open
+  without a password).  =C-c #= wraps region / =C-u C-c #= unwraps / else locks.
+  Legacy whole-body ciphers upgrade on first save.
 - Table view: =#= encrypt/decrypt the row; =C-u #= re-key an encrypted headline.
 - Table =Enc= column: 🔒 for encrypted headlines (sortable).
 - Store API =org-glance-material:crypt-set= / =:crypt-rekey=.

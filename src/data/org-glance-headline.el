@@ -149,11 +149,11 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
     (and (re-search-forward org-glance:key-value-pair-re nil t) t)))
 
 (defun org-glance-headline--encrypted-here ()
-  "Non-nil if the current buffer's headline body is an `aes-encrypted' block."
-  (save-excursion
-    (goto-char (point-min))
-    (org-end-of-meta-data t)
-    (not (null (looking-at "aes-encrypted V [0-9]+.[0-9]+-.+\n")))))
+  "Non-nil if the current buffer's headline carries ciphertext.
+Either the whole body is `aes-encrypted' (the legacy layout) or at least one
+`#+begin_crypt' block is sealed (see `org-glance--crypt-block-regions')."
+  (or (org-glance-headline--crypt-legacy-cipher-p)
+      (org-glance--crypt-sealed-blocks-p)))
 
 (defun org-glance-headline--hash-here ()
   "Content hash of the current buffer with the id/hash drawer properties removed.
@@ -266,34 +266,72 @@ drawer properties in place, after the read-only facts."
            collect slot-value into params
            finally (return (apply #'make-org-glance-headline params))))
 
-(cl-defun org-glance-headline--rewrite-body (headline region-fn password)
-  "HEADLINE's contents with REGION-FN applied to the body region under PASSWORD.
-REGION-FN takes (BEG END PASSWORD); the body runs from the end of the meta-data
-to the end of the subtree."
-  (org-glance-headline:with-contents headline
-    (let ((beg (save-excursion (org-end-of-meta-data t) (point)))
-          (end (save-excursion (org-end-of-subtree t) (point))))
-      (funcall region-fn beg end password)
-      (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
+(cl-defmacro org-glance-headline--rewrite-contents (headline &rest body)
+  "HEADLINE's contents after evaluating BODY in a buffer holding them."
+  (declare (indent 1))
+  `(org-glance-headline:with-contents ,headline
+     ,@body
+     (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+
+(cl-defun org-glance-headline--body-region ()
+  "Cons (BEG . END) of the current buffer's headline body:
+end of meta-data (planning + drawers) to end of subtree."
+  (cons (save-excursion (goto-char (point-min)) (org-end-of-meta-data t) (point))
+        (save-excursion (goto-char (point-min)) (org-end-of-subtree t) (point))))
+
+(defun org-glance-headline--crypt-legacy-cipher-p ()
+  "Non-nil when the buffer holds the pre-block layout:
+no crypt blocks, and the whole body is ciphertext (aes header at body start)."
+  (and (null (org-glance--crypt-block-regions))
+       (save-excursion
+         (goto-char (point-min))
+         (org-end-of-meta-data t)
+         (looking-at org-glance--aes-header-re))))
+
+(defun org-glance-headline--crypt-upgrade-legacy ()
+  "Wrap a legacy whole-body cipher in one crypt block; return non-nil if done.
+A wrapped bare cipher IS a sealed block (`org-glance--crypt-sealed?'), so after
+this the block path handles everything -- legacy blobs become block blobs at
+their first decrypt, with no downstream branching.  Structurally safe: a public
+body has no aes header, so the upgrade can never re-wrap unwrapped plaintext."
+  (when (org-glance-headline--crypt-legacy-cipher-p)
+    (let ((body (org-glance-headline--body-region)))
+      (org-glance--crypt-wrap-region (car body) (cdr body)))
+    t))
 
 (cl-defun org-glance-headline:encrypt (headline password)
+  "HEADLINE with its secret regions sealed under PASSWORD.
+When the body carries `#+begin_crypt' blocks, seal exactly those (plaintext
+between them stays public and indexable); with no blocks, wrap the whole body
+in one crypt block and seal it.  Already-encrypted HEADLINE returns unchanged."
   (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
   (if (org-glance-headline:encrypted? headline)
       headline
     (org-glance-headline--copy headline
-      :contents (org-glance-headline--rewrite-body
-                 headline #'org-glance--encrypt-region password)
+      :contents (org-glance-headline--rewrite-contents headline
+                  (unless (org-glance--crypt-block-regions)
+                    (let ((body (org-glance-headline--body-region)))
+                      (org-glance--crypt-wrap-region (car body) (cdr body))))
+                  (org-glance--crypt-seal-blocks password))
       :-encrypted? t)))
 
-(cl-defun org-glance-headline:decrypt (headline password)
+(cl-defun org-glance-headline:decrypt (headline password &optional unwrap)
+  "HEADLINE with its ciphertext opened under PASSWORD.
+A legacy whole-body cipher is first upgraded to one crypt block
+(`org-glance-headline--crypt-upgrade-legacy'); then every sealed block is
+unsealed.  Markers stay unless UNWRAP is non-nil -- rekeying keeps them, making
+a headline public removes them.  Signal on a wrong PASSWORD.  Not-encrypted
+HEADLINE returns unchanged."
   (cl-check-type headline org-glance-headline)
   (cl-check-type password string)
   (if (not (org-glance-headline:encrypted? headline))
       headline
     (org-glance-headline--copy headline
-      :contents (org-glance-headline--rewrite-body
-                 headline #'org-glance--decrypt-region password)
+      :contents (org-glance-headline--rewrite-contents headline
+                  (org-glance-headline--crypt-upgrade-legacy)
+                  (org-glance--crypt-unseal-blocks password)
+                  (when unwrap (org-glance--crypt-unwrap-blocks)))
       :-encrypted? nil)))
 
 (cl-defun org-glance-headline:search-forward (id)

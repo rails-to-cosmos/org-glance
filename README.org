@@ -57,14 +57,18 @@ Reach everything through the =org-glance-transient= transient (=C-x j= above).
 
 Other features:
 
-- *Encrypted headlines* — materializing an =aes-encrypted= headline prompts for
-  the password, decrypts the body for editing, and re-encrypts on save so the
-  stored blob is never plaintext (auto-save/backups are disabled for it).  The
-  password is cached buffer-local with a TTL (=org-glance-material-password-ttl=);
-  =C-c #= forgets it early.  In the table (=org-glance-table=), =#= toggles a
-  headline's encryption in place — encrypt a plaintext row or decrypt an
-  encrypted one, prompting for the password; =C-u #= re-keys an encrypted row
-  (old password, then new).
+- *Encrypted headlines* — secret regions live in =#+begin_crypt= … =#+end_crypt=
+  blocks: ciphertext at rest, decrypted for editing in the materialized buffer
+  and re-sealed on save (plaintext never touches disk; auto-save/backups are
+  disabled).  Several blocks per headline; everything outside them stays public
+  and indexable, so an encrypted headline with a plaintext link still shows up
+  in =org-glance-open= and the link opens without a password.  In the buffer,
+  =C-c #= is context-aware: wrap the region in a crypt block, =C-u= unwraps the
+  block at point, otherwise it forgets the cached password (TTL
+  =org-glance-material-password-ttl=).  In the table, =#= toggles a whole
+  headline (encrypt = one whole-body block; decrypt = open + unwrap), and
+  =C-u #= re-keys.  Pre-block whole-body ciphers upgrade silently on their
+  first save.
 - *Crash-safe store* — a segmented, append-only JSONL log with atomic commits and
   an in-memory read cache.
 

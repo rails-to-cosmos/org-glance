@@ -1,5 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
+(require 'cl-lib)
 (require 'f)
 (require 'aes)
 (require 'dash)
@@ -173,6 +174,113 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
         (goto-char beg)
         (insert decrypted-text))
     (user-error "Wrong password")))
+
+;;; Crypt blocks
+;;
+;; A `#+begin_crypt' … `#+end_crypt' special block marks a body region that is
+;; ciphertext AT REST and plaintext only in the material buffer.  The markers
+;; are the persistent secrecy annotation; sealing/unsealing rewrites only the
+;; body between them.  Plaintext outside the blocks stays indexable (links,
+;; properties), which is the whole point.  Base64 ciphertext cannot collide
+;; with the marker lines.
+
+(defconst org-glance--crypt-begin-re "^[ \t]*#\\+begin_crypt[ \t]*$"
+  "Regexp matching a crypt block's opening marker line (case-insensitive use).")
+
+(defconst org-glance--crypt-end-re "^[ \t]*#\\+end_crypt[ \t]*$"
+  "Regexp matching a crypt block's closing marker line (case-insensitive use).")
+
+(defconst org-glance--aes-header-re "aes-encrypted V [0-9]+\\.[0-9]+-.+"
+  "Regexp matching the first line of `aes.el' ciphertext.")
+
+(defun org-glance--crypt-block-regions ()
+  "Crypt blocks of the current buffer, in buffer order.
+Each is a plist (:beg B :body-beg BB :body-end BE :end E): B/E delimit the
+marker lines (E excludes the trailing newline), BB/BE the body between them.
+A begin marker with no closing marker is ignored."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((case-fold-search t) blocks)
+      (while (re-search-forward org-glance--crypt-begin-re nil t)
+        (let ((beg (match-beginning 0))
+              (body-beg (min (1+ (match-end 0)) (point-max))))
+          (when (re-search-forward org-glance--crypt-end-re nil t)
+            (push (list :beg beg :body-beg body-beg
+                        :body-end (match-beginning 0) :end (match-end 0))
+                  blocks))))
+      (nreverse blocks))))
+
+(defun org-glance--crypt-block-at (pos)
+  "The crypt block plist containing POS (markers inclusive), or nil."
+  (cl-find-if (lambda (b) (<= (plist-get b :beg) pos (plist-get b :end)))
+              (org-glance--crypt-block-regions)))
+
+(defun org-glance--crypt-sealed? (block)
+  "Non-nil when BLOCK's body is ciphertext."
+  (save-excursion
+    (goto-char (plist-get block :body-beg))
+    (looking-at org-glance--aes-header-re)))
+
+(defun org-glance--crypt-sealed-blocks-p ()
+  "Non-nil when the buffer has at least one sealed crypt block."
+  (cl-some #'org-glance--crypt-sealed? (org-glance--crypt-block-regions)))
+
+(defun org-glance--crypt--replace-body (block text)
+  "Replace BLOCK's body with TEXT, keeping the end marker on its own line."
+  (let ((beg (plist-get block :body-beg)))
+    (delete-region beg (plist-get block :body-end))
+    (save-excursion
+      (goto-char beg)
+      (insert text)
+      (unless (bolp) (insert "\n")))))
+
+(defun org-glance--crypt--transform-blocks (sealed transform)
+  "Replace each block body whose sealed state equals SEALED with (TRANSFORM BODY).
+Processes blocks last-to-first so earlier positions stay valid while later
+bodies are rewritten."
+  (dolist (block (reverse (org-glance--crypt-block-regions)))
+    (when (eq sealed (and (org-glance--crypt-sealed? block) t))
+      (org-glance--crypt--replace-body
+       block (funcall transform
+                      (buffer-substring-no-properties (plist-get block :body-beg)
+                                                      (plist-get block :body-end)))))))
+
+(defun org-glance--crypt-seal-blocks (password)
+  "Encrypt every unsealed crypt-block body in the buffer with PASSWORD."
+  (org-glance--crypt--transform-blocks
+   nil (lambda (body) (aes-encrypt-buffer-or-string body password))))
+
+(defun org-glance--crypt-unseal-blocks (password)
+  "Decrypt every sealed crypt-block body in the buffer with PASSWORD.
+Signal a `user-error' on a wrong PASSWORD."
+  (org-glance--crypt--transform-blocks
+   t (lambda (body) (or (aes-decrypt-buffer-or-string body password)
+                        (user-error "Wrong password")))))
+
+(defun org-glance--crypt-wrap-region (beg end)
+  "Wrap BEG..END in crypt block markers, on whole lines.
+BEG is moved to its line start; END extends to the following line start (a final
+line without a newline gets one), so the markers sit on their own lines."
+  (save-excursion
+    (goto-char end)
+    (unless (bolp) (insert "\n"))
+    (insert "#+end_crypt\n")
+    (goto-char beg)
+    (forward-line 0)
+    (insert "#+begin_crypt\n")))
+
+(defun org-glance--crypt-unwrap-block (block)
+  "Remove BLOCK's marker lines, keeping its body."
+  (delete-region (plist-get block :body-end)
+                 (min (1+ (plist-get block :end)) (point-max)))
+  (delete-region (plist-get block :beg) (plist-get block :body-beg)))
+
+(defun org-glance--crypt-unwrap-blocks ()
+  "Remove every crypt block's marker lines, keeping the bodies.  Return count."
+  (let ((count 0))
+    (dolist (block (reverse (org-glance--crypt-block-regions)) count)
+      (org-glance--crypt-unwrap-block block)
+      (cl-incf count))))
 
 (defun org-glance--discard-buffer (buffer)
   "Kill BUFFER without the `Buffer modified; kill anyway?' confirmation.

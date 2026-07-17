@@ -5,8 +5,10 @@ Status: *proposed* · security 2026-07-06
 
 * Context — what ships today
 
-Materializing an encrypted headline now prompts for a password, decrypts the body
-in the buffer, and re-encrypts on save via a round-trip:
+Materializing an encrypted headline now prompts for a password, decrypts its
+=#+begin_crypt= blocks in the buffer (see
+[[file:2026-07-17-crypt-blocks.done.org][crypt-blocks]]; the pre-block layout
+sealed the whole body), and re-seals on save via a round-trip:
 - ~org-glance-material--maybe-decrypt~ prompts, decrypts, caches the password
   buffer-local with a TTL (~org-glance-material-password-ttl~, forget early with
   ~org-glance-material:lock~).

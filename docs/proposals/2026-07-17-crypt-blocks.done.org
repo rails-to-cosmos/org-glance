@@ -1,0 +1,69 @@
+#+TITLE: Crypt blocks: partial headline encryption
+#+DATE: 2026-07-17
+
+Status: *done* · 2026-07-17
+
+Suite green 253/253; recompile warning-free.
+
+* Problem
+
+Whole-body encryption made metadata blind: an encrypted headline storing a URL
+indexed as =linked?=nil= (the body was ciphertext at parse time), so it never
+appeared in =org-glance-open= candidates.  Users need mixed headlines — secret
+parts sealed, links and notes public and usable without a password.
+
+* Design
+
+An org special block marks each secret region:
+
+#+begin_example
+public notes, [[https://wiki/runbook][runbook]]
+,#+begin_crypt
+aes-encrypted V 1.2-OCB…
+,#+end_crypt
+more public text — several blocks allowed
+#+end_example
+
+The markers are the *persistent secrecy annotation*; sealing/unsealing rewrites
+only the body between them.  Ciphertext at rest, plaintext in the material
+buffer.  One password per headline.  Base64 ciphertext cannot collide with the
+marker lines, and it contains no org links or =KEY: value= pairs, so the
+=linked?= / =propertized?= projections stay honest for the public parts.
+
+Envelope recap: title, tags, state, planning, PROPERTIES and drawers before the
+body were already public (=org-end-of-meta-data t=); a =:LINKS:= drawer remains
+the zero-markup idiom for public links.
+
+* Implementation
+
+- =org-glance-utils= — block primitives: =--crypt-block-regions= /
+  =--crypt-seal-blocks= / =--crypt-unseal-blocks= / =--crypt-wrap-region= /
+  =--crypt-unwrap-block(s)= / =--crypt-block-at= / =--crypt-sealed?=; the aes
+  header regexp is the shared =org-glance--aes-header-re=.
+- =org-glance-headline= — =encrypt= seals the body's blocks (no blocks: wraps
+  the whole body in one, the fail-closed one-shot); =decrypt= unseals, keeping
+  markers unless UNWRAP — rekey composes decrypt→encrypt and so preserves
+  structure; =--encrypted-here= = legacy whole-body cipher OR a sealed block.
+- =org-glance-material= — save/open round-trip runs per block; a decrypted
+  legacy buffer is wrapped on its next save (silent format upgrade, flagged by
+  =--crypt-legacy=).  =C-c #= is context-aware: region → wrap it in a crypt
+  block (first block prompts for the password), =C-u= → unwrap the block at
+  point (last unwrap makes the headline public and forgets the password),
+  else → lock.
+- Table =#= unchanged: encrypt seals, decrypt opens *and unwraps* (public means
+  no residual markers); =C-u #= rekeys all blocks.
+
+* Compatibility
+
+Legacy whole-body blobs keep detecting and decrypting; the first material save
+rewrites them in block format under the same password.  No metadata schema
+change.
+
+* Tests
+
+=headline-encryption= (wrap/seal/unseal/unwrap contract),
+=headline-crypt-blocks-mixed= (2 blocks + public link: seal independence,
+honest =encrypted?=+=linked?=, rekey preserves blocks),
+=headline-crypt-legacy-layout=, =material-crypt-legacy-upgrade=,
+=material-crypt-region-command=, =material-crypt-unwrap-last-goes-public=,
+plus marker assertions in =table-crypt-toggle=.

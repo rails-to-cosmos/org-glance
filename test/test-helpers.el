@@ -174,5 +174,14 @@ All other ingests proceed through the real function."
   (declare (indent 2))
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
+(cl-defun org-glance-test:legacy-encrypt (headline password)
+  "HEADLINE re-parsed with its whole body as legacy (pre-block) ciphertext.
+Fabricates the pre-crypt-block on-disk layout for upgrade/compat tests."
+  (org-glance-headline--from-string
+   (org-glance-headline:with-contents headline
+     (org-end-of-meta-data t)
+     (org-glance--encrypt-region (point) (point-max) password)
+     (buffer-string))))
+
 (provide 'test-helpers)
 ;;; test-helpers.el ends here

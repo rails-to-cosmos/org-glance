@@ -81,7 +81,9 @@ FILTER, if non-nil, is a predicate on the metadata."
     ;; Advance only the earliest of multiple repeatable timestamps on repeat.
     (org-glance-datetime-mode 1)))
 
-(define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:lock)
+;; `C-c #' by context: region -> wrap it in a crypt block; `C-u' -> unwrap the
+;; block at point; else -> forget the cached password (lock).
+(define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
@@ -247,30 +249,25 @@ Forget it early with `org-glance-material:lock'."
               backup-inhibited t
               create-lockfiles nil))
 
-(cl-defun org-glance-material--body-region ()
-  "Cons (BEG . END) of the current headline's body: meta-data end to subtree end.
-The same region `org-glance-headline:encrypt' rewrites, so crypto round-trips."
-  (cons (save-excursion (goto-char (point-min)) (org-end-of-meta-data t) (point))
-        (save-excursion (goto-char (point-min)) (org-end-of-subtree t) (point))))
-
 (cl-defun org-glance-material--encrypt-buffer ()
-  "Encrypt the materialized body in place before the file is written to disk.
+  "Seal the buffer's crypt blocks in place before the file is written to disk.
 Buffer-local `before-save-hook'; prompts for the password if the TTL expired."
   (when org-glance-material--encrypted
-    (let ((region (org-glance-material--body-region))
-          (inhibit-read-only t))
-      (org-glance--encrypt-region (car region) (cdr region)
-                                  (org-glance-material--require-password)))))
+    (let ((inhibit-read-only t))
+      (org-glance--crypt-seal-blocks (org-glance-material--require-password)))))
 
 (cl-defun org-glance-material--decrypt-buffer ()
-  "Decrypt the materialized body in place for editing.
-Clears the modified flag: the plaintext buffer matches the ciphertext already on
-disk.  Buffer-local `after-save-hook' (runs after `org-glance-material:sync')."
+  "Open the buffer's ciphertext in place for editing.
+A legacy whole-body cipher is first wrapped in one crypt block
+(`org-glance-headline--crypt-upgrade-legacy'; the disk upgrades on the next
+save), then every sealed block is unsealed.  Clears the modified flag: the
+plaintext buffer matches the ciphertext already on disk.  Buffer-local
+`after-save-hook' (runs after `org-glance-material:sync')."
   (when org-glance-material--encrypted
-    (let ((region (org-glance-material--body-region))
-          (inhibit-read-only t))
-      (org-glance--decrypt-region (car region) (cdr region)
-                                  (org-glance-material--require-password))
+    (let ((inhibit-read-only t))
+      (when (org-glance-headline--crypt-upgrade-legacy)
+        (message "org-glance: upgraded to the crypt-block format"))
+      (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
       (set-buffer-modified-p nil))))
 
 (cl-defun org-glance-material:lock ()
@@ -282,22 +279,73 @@ The decrypted body stays in the buffer until then."
              (message "org-glance: password forgotten"))
     (user-error "Not an encrypted materialized buffer")))
 
+(cl-defun org-glance-material--wire-crypto ()
+  "Mark the buffer encrypted: harden it and wire the seal/unseal round-trip.
+Idempotent -- `add-hook' deduplicates and hardening re-runs harmlessly."
+  (setq-local org-glance-material--encrypted t)
+  (org-glance-material--harden-buffer)
+  (add-hook 'before-save-hook #'org-glance-material--encrypt-buffer nil t)
+  (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
+  (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t))
+
 (cl-defun org-glance-material--maybe-decrypt (meta buffer)
   "When META is encrypted, harden BUFFER, prompt for the password, and decrypt it.
 Caches the password (with TTL) and wires the save-time re-encrypt round-trip.
 A wrong password forgets it, kills BUFFER and re-signals, so `open' fails clean."
   (when (org-glance-headline-metadata:encrypted? meta)
-    (setq-local org-glance-material--encrypted t)
-    (org-glance-material--harden-buffer)
+    (org-glance-material--wire-crypto)
     (org-glance-material--set-password (read-passwd "Headline password: "))
     (condition-case err
         (org-glance-material--decrypt-buffer)
       (error (org-glance-material--clear-password)
              (org-glance--discard-buffer buffer)
-             (signal (car err) (cdr err))))
-    (add-hook 'before-save-hook #'org-glance-material--encrypt-buffer nil t)
-    (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
-    (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t)))
+             (signal (car err) (cdr err))))))
+
+(cl-defun org-glance-material:crypt-region (beg end)
+  "Wrap BEG..END in a `#+begin_crypt' block; it seals on the next save.
+The first block in a plaintext buffer prompts for a password (confirmed) and
+wires the seal/unseal round-trip.  The region must lie inside the body."
+  (interactive "r")
+  (unless (and org-glance-material--graph org-glance-material--id)
+    (user-error "Not a materialized buffer"))
+  (when (< beg (car (org-glance-headline--body-region)))
+    (user-error "Region must lie inside the headline body"))
+  (org-glance--crypt-wrap-region beg end)
+  (unless org-glance-material--encrypted
+    (org-glance-material--wire-crypto)
+    (org-glance-material--set-password
+     (read-passwd "Headline password (confirm): " t)))
+  (deactivate-mark)
+  (message "org-glance: region wrapped -- seals on save"))
+
+(cl-defun org-glance-material:crypt-unwrap ()
+  "Remove the crypt block around point; its body becomes public on save.
+A still-sealed body is decrypted first.  Unwrapping the last block makes the
+whole headline public: the buffer stops sealing and forgets its password."
+  (interactive)
+  (let ((block (org-glance--crypt-block-at (point))))
+    (unless block (user-error "Point is not inside a crypt block"))
+    (when (org-glance--crypt-sealed? block)
+      (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
+      (setq block (org-glance--crypt-block-at (point))))
+    (org-glance--crypt-unwrap-block block)
+    (when (and org-glance-material--encrypted
+               (null (org-glance--crypt-block-regions)))
+      (setq-local org-glance-material--encrypted nil)
+      (org-glance-material--clear-password)
+      (message "org-glance: last crypt block unwrapped -- headline public on save"))))
+
+(cl-defun org-glance-material:crypt ()
+  "Crypt action at point, by context.
+Active region -> wrap it in a crypt block (`org-glance-material:crypt-region').
+Prefix arg -> unwrap the block at point (`org-glance-material:crypt-unwrap').
+Otherwise -> forget the cached password (`org-glance-material:lock')."
+  (interactive)
+  (cond
+   ((use-region-p)
+    (org-glance-material:crypt-region (region-beginning) (region-end)))
+   (current-prefix-arg (org-glance-material:crypt-unwrap))
+   (t (org-glance-material:lock))))
 
 (cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.
@@ -572,6 +620,8 @@ Discard a stale open buffer.  Return the new headline."
 
 (cl-defun org-glance-material:crypt-set (graph id encrypt password)
   "Encrypt (ENCRYPT non-nil) or decrypt headline ID in GRAPH under PASSWORD.
+Encrypt seals the body's crypt blocks (wrapping the whole body in one when none
+exist); decrypt opens every block AND removes the markers -- fully public.
 Re-index so the `encrypted?' projection flips.  Signal a `user-error' when it is
 already in the requested state (or open with unsaved edits); a wrong PASSWORD on
 decrypt errors before any write.  Return t."
@@ -583,7 +633,7 @@ decrypt errors before any write.  Return t."
        (user-error "Headline is already %s" (if encrypt "encrypted" "decrypted")))
      (if encrypt
          (org-glance-headline:encrypt headline password)
-       (org-glance-headline:decrypt headline password))))
+       (org-glance-headline:decrypt headline password t))))
   t)
 
 (cl-defun org-glance-material:crypt-rekey (graph id old new)

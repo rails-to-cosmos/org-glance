@@ -666,6 +666,70 @@ the old no longer does -- and refuses a plaintext headline or a wrong OLD."
       (should (s-contains? "body" (org-glance-headline:contents
                                    (org-glance-headline:decrypt hl "new"))))))) ; new works
 
+(ert-deftest org-glance-test:material-crypt-legacy-upgrade ()
+  "A legacy whole-body-cipher blob opens with its password, and the first save
+silently upgrades the stored format to crypt blocks (same password works)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:legacy-encrypt
+                                 (org-glance-test:headline "leg" "* TODO Old" "old secret")
+                                 "pw"))
+    (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph "leg")))
+    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+      (org-glance-test:with-material (buffer graph "leg")
+        (should (s-contains? "old secret" (buffer-string)))   ; legacy branch decrypted
+        (org-glance-test:sed "old secret" "new secret")
+        (let ((inhibit-message t)) (save-buffer))
+        (let ((blob (org-glance-graph:get-content graph "leg")))
+          (should (s-contains? "#+begin_crypt" blob))         ; upgraded at rest
+          (should (s-contains? "aes-encrypted" blob))
+          (should-not (s-contains? "new secret" blob)))
+        (should (s-contains? "new secret" (buffer-string))))  ; buffer plaintext again
+      (org-glance-test:with-material (buffer graph "leg")     ; round-trips post-upgrade
+        (should (s-contains? "new secret" (buffer-string)))))))
+
+(ert-deftest org-glance-test:material-crypt-region-command ()
+  "`crypt-region' wraps a body region; save seals ONLY it: the public rest stays
+plaintext at rest and the metadata keeps `linked?' alongside `encrypted?'."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "mix" "* TODO Mixed"
+                                                    "public [[https://example.com][site]]"
+                                                    "secret line"))
+    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+      (org-glance-test:with-material (buffer graph "mix")
+        (goto-char (point-min))
+        (re-search-forward "secret line")
+        (org-glance-material:crypt-region (match-beginning 0) (match-end 0))
+        (let ((inhibit-message t)) (save-buffer))
+        (let ((blob (org-glance-graph:get-content graph "mix")))
+          (should (s-contains? "example.com" blob))           ; public link at rest
+          (should (s-contains? "#+begin_crypt" blob))
+          (should (s-contains? "aes-encrypted" blob))
+          (should-not (s-contains? "secret line" blob)))
+        (let ((meta (org-glance-graph:get-headline graph "mix")))
+          (should (org-glance-headline-metadata:encrypted? meta))
+          (should (org-glance-headline-metadata:linked? meta)))
+        (should (s-contains? "secret line" (buffer-string)))))))  ; buffer plaintext
+
+(ert-deftest org-glance-test:material-crypt-unwrap-last-goes-public ()
+  "Unwrapping the last crypt block and saving stores plaintext; `encrypted?'
+flips off, so the next open needs no password."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "pub" "* TODO Was-secret" "plainbody")
+                                 "pw"))
+    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+      (org-glance-test:with-material (buffer graph "pub")
+        (goto-char (point-min))
+        (search-forward "plainbody")                          ; inside the block
+        (org-glance-material:crypt-unwrap)
+        (let ((inhibit-message t)) (save-buffer))
+        (let ((blob (org-glance-graph:get-content graph "pub")))
+          (should (s-contains? "plainbody" blob))
+          (should-not (s-contains? "#+begin_crypt" blob))
+          (should-not (s-contains? "aes-encrypted" blob)))
+        (should-not (org-glance-headline-metadata:encrypted?
+                     (org-glance-graph:get-headline graph "pub")))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here
