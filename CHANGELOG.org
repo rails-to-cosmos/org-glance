@@ -23,6 +23,9 @@ Notable user-facing changes.  Versions date-based
 
 ** Fixed
 - Capture from table no longer prompts "Buffer modified; kill anyway?".
+- Git-conflicted =config/*.eld= sidecars (e.g. =tag-metrics.eld=) heal at graph
+  open (new =org-glance-graph-after-open-functions= hook), not only lazily on the
+  next append -- where a declined prompt was swallowed by the demoted hook.
 
 * 0.6.0.0.20260716.0 — metadata-migration (major)
 

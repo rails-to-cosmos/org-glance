@@ -284,6 +284,19 @@ earliest :created, latest :modified, max counters; the file is rewritten clean."
       (should-error (org-glance-tag-metrics--read graph))
       (should (s-contains? "<<<<<<<" (f-read-text file 'utf-8))))))
 
+(ert-deftest org-glance-test:merge-tag-metrics-heal-on-open ()
+  "A git-conflicted tag-metrics.eld is resolved proactively when the graph is
+reopened (the after-open hook), not only on the next append."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-conflict-resolution 'union)
+          (file (org-glance-test-merge:write-metrics-conflict
+                 graph (list (list "x" :captures 1)) (list (list "x" :captures 2)))))
+      (should (s-contains? "<<<<<<<" (f-read-text file 'utf-8)))
+      (let ((graph (org-glance-test-merge:reopen graph)))   ; after-open hook heals
+        (should-not (s-contains? "<<<<<<<" (f-read-text file 'utf-8)))
+        (should (= 2 (plist-get (cdr (assoc "x" (org-glance-tag-metrics--read graph)))
+                                :captures)))))))
+
 (ert-deftest org-glance-test:merge-eld-read-floor ()
   "`org-glance--read-eld' on any conflicted .eld keeps a readable side, never the
 stray `<<<<<<<' marker symbol that would crash the caller."

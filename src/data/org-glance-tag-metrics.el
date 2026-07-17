@@ -103,6 +103,19 @@ cache) bump :removals; both stamp :created once and :modified now.  Runs on
 
 (add-hook 'org-glance-graph-before-append-functions #'org-glance-tag-metrics--touch)
 
+(cl-defun org-glance-tag-metrics--heal-on-open (graph)
+  "Resolve a git-conflicted tag-metrics sidecar when GRAPH is opened.
+The lazy `--read' heal only fires on the next append (and, inside the demoted
+before-append hook, a declined prompt is swallowed); running it at open too
+resolves a synced-in conflict proactively, like the WAL resolver, under
+`org-glance-conflict-resolution'."
+  (let ((path (org-glance-tag-metrics--file graph)))
+    (when (and (f-exists? path)
+               (org-glance--conflict-marked? (f-read-text path 'utf-8)))
+      (org-glance-tag-metrics--read graph))))
+
+(add-hook 'org-glance-graph-after-open-functions #'org-glance-tag-metrics--heal-on-open)
+
 (cl-defun org-glance-tag-metrics--ensure-created (graph live-tags)
   "Ensure every tag in LIVE-TAGS has a :created in GRAPH's sidecar; return the map.
 Seed a missing one from the earliest content-blob mtime among its headlines

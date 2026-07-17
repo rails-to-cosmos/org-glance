@@ -192,6 +192,14 @@ snapshot stat (see `--store-snapshot')."
               (plist-put (org-glance-graph:-paths graph) key v))
         v)))
 
+(defvar org-glance-graph-after-open-functions nil
+  "Abnormal hook run with GRAPH once it is freshly constructed and WAL-healed.
+Each function is called with (GRAPH) at the end of `org-glance-graph', after the
+instance is cached.  Side indexes register here to resolve their own git
+conflicts proactively at open -- symmetric to the WAL resolver -- e.g.
+`org-glance-tag-metrics' heals its `config/*.eld' sidecar.  Errors are demoted
+so a soft index never breaks graph open.")
+
 (cl-defun org-glance-graph (&optional (directory org-glance-directory))
   (cl-check-type directory string)
   (let* ((directory (-> directory (file-truename) (f-full)))
@@ -206,7 +214,11 @@ snapshot stat (see `--store-snapshot')."
       (org-glance-graph--migrate-maybe graph)      ; bootstrap MANIFEST / adopt legacy file
       (org-glance-graph--reconcile-manifest graph) ; rebuild a git-mangled MANIFEST
       (org-glance-graph--heal graph)               ; recover seal, derive seq, reap orphans
-      (puthash directory graph org-glance-graph:list))
+      (puthash directory graph org-glance-graph:list)
+      ;; Side indexes resolve their own conflicts (config/*.eld) proactively here,
+      ;; symmetric to the WAL resolver above.  Demoted: a soft index never breaks open.
+      (with-demoted-errors "org-glance: after-open hook: %S"
+        (run-hook-with-args 'org-glance-graph-after-open-functions graph)))
     graph))
 
 (cl-defun org-glance-graph:insert (graph meta)
