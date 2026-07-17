@@ -666,45 +666,6 @@ the old no longer does -- and refuses a plaintext headline or a wrong OLD."
       (should (s-contains? "body" (org-glance-headline:contents
                                    (org-glance-headline:decrypt hl "new"))))))) ; new works
 
-(ert-deftest org-glance-test:llm-spawns-in-data-dir ()
-  "`org-glance-llm' launches `agnostic-llm' in the chosen headline's data dir,
-labelling the session by the headline's title (not the data dir's hash)."
-  (org-glance-test:session
-    (org-glance-graph:add org-glance-graph
-                          (org-glance-test:headline "llmid" "* TODO Alpha :x:"))
-    (let ((spawned 'unset) (label 'unset))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (caar coll)))
-                ((symbol-function 'agnostic-llm)
-                 (lambda (&optional dir lbl) (setq spawned dir label lbl))))
-        (org-glance-llm))
-      (let ((expected (org-glance-graph:headline-data-path org-glance-graph "llmid")))
-        (should (equal (file-truename spawned) (file-truename expected)))
-        (should (file-directory-p spawned))
-        (should (equal "alpha" label))))))
-
-(ert-deftest org-glance-test:llm-slug-and-collision ()
-  "`org-glance-llm--slug' normalises a title; `--label' disambiguates only when
-a session for a different headline already holds the plain slug."
-  (should (equal "buy-milk-2l" (org-glance-llm--slug "Buy milk (2L)!")))
-  (should (equal "hello-world" (org-glance-llm--slug "  Hello  World  ")))
-  (should-not (org-glance-llm--slug "###"))
-  (with-temp-directory dir
-    (let* ((md (make-org-glance-headline-metadata :id "abcdef123" :title "Foo Bar"))
-           (mine (f-join dir "mine")) (other (f-join dir "other")))
-      (make-directory mine t) (make-directory other t)
-      ;; no clash -> plain slug
-      (should (equal "foo-bar" (org-glance-llm--label md mine)))
-      (let ((buf (get-buffer-create "*llm:foo-bar*")))
-        (unwind-protect
-            (progn
-              ;; a *llm:foo-bar* rooted elsewhere -> disambiguate with the dir leaf
-              (with-current-buffer buf (setq default-directory (file-name-as-directory other)))
-              (should (equal "foo-bar-mine" (org-glance-llm--label md mine)))
-              ;; same root -> reuse the plain slug
-              (with-current-buffer buf (setq default-directory (file-name-as-directory mine)))
-              (should (equal "foo-bar" (org-glance-llm--label md mine))))
-          (kill-buffer buf))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

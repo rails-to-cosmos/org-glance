@@ -52,20 +52,25 @@
 
 (ert-deftest org-glance-test:overview-default-view-dispatch ()
   "`org-glance-overview' lands in `org-glance-overview-default-view': the table
-dashboard by default, the org-text overview when set to `org'."
+dashboard for `org-glance-table', the org-text overview for `org-glance-overview'.
+The legacy `table' / `org' values map the same way."
+  ;; value -> view selection (pure; legacy aliases included)
+  (dolist (case '((org-glance-table . t) (table . t)
+                  (org-glance-overview . nil) (org . nil)))
+    (let ((org-glance-overview-default-view (car case)))
+      (should (eq (and (org-glance-overview--default-table?) t) (cdr case)))))
+  ;; end-to-end: each canonical value opens the right buffer
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph (org-glance-test:headline "d1" "* TODO Alpha :work:"))
     (let ((org-glance-filter-spec nil))
       (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) b))
                 ((symbol-function 'pop-to-buffer)     (lambda (b &rest _) b)))
-        ;; default -> table dashboard
-        (let* ((org-glance-overview-default-view 'table)
+        (let* ((org-glance-overview-default-view 'org-glance-table)
                (buf (org-glance-overview "work")))
           (unwind-protect
               (with-current-buffer buf (should (derived-mode-p 'table-view-mode)))
             (when (buffer-live-p buf) (kill-buffer buf))))
-        ;; 'org -> org-text overview
-        (let* ((org-glance-overview-default-view 'org)
+        (let* ((org-glance-overview-default-view 'org-glance-overview)
                (buf (org-glance-overview "work")))
           (unwind-protect
               (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode)))

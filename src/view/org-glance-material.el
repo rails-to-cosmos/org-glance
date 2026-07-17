@@ -26,11 +26,6 @@
 
 (require 'org-glance-core)
 
-;; `agnostic-llm' powers `org-glance-llm' (the `l' action).  A required
-;; dependency, but loaded lazily through its autoload only when the command
-;; runs, so org-glance never pulls in vterm at load or byte-compile time.
-(declare-function agnostic-llm "agnostic-llm" (&optional user-root label))
-
 ;;; Selection
 
 (cl-defun org-glance-material:label (metadata)
@@ -624,46 +619,6 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
                     graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
          (id (org-glance-headline-metadata:id metadata)))
     (switch-to-buffer (org-glance-material:open graph id))))
-
-(cl-defun org-glance-llm--slug (title)
-  "Downcased dash-separated slug of TITLE, or nil when it has no word chars.
-Non-alphanumeric runs become one dash, edges trimmed (\"Buy milk (2L)!\" ->
-\"buy-milk-2l\")."
-  (let ((slug (string-trim
-               (replace-regexp-in-string "[^a-z0-9]+" "-" (downcase (or title "")))
-               "-+" "-+")))
-    (unless (string-empty-p slug) slug)))
-
-(cl-defun org-glance-llm--label (metadata dir)
-  "The `*llm:...*' label for METADATA's session rooted at DIR.
-METADATA's title slug (`--slug'), reading nicer than DIR's content-hash leaf.
-Falls back to that leaf when the title slugs to nothing, and appends it to
-disambiguate when a session for a DIFFERENT headline already holds the slug."
-  (let* ((tail (file-name-nondirectory (directory-file-name dir)))
-         (slug (or (org-glance-llm--slug (org-glance-headline-metadata:title metadata))
-                   tail))
-         (buf (get-buffer (format "*llm:%s*" slug))))
-    (if (and buf (not (file-equal-p (buffer-local-value 'default-directory buf)
-                                    (file-name-as-directory dir))))
-        (format "%s-%s" slug tail)
-      slug)))
-
-;;;###autoload
-(cl-defun org-glance-llm ()
-  "Choose a headline and open an `agnostic-llm' session in its data directory.
-Prompt for a headline like `org-glance-materialize', then launch `agnostic-llm'
-in the headline's content-addressable data dir, where its per-directory session
-context accumulates.  Buffer named for the title (`org-glance-llm--label'), not
-the dir's hash."
-  (interactive)
-  (org-glance-ensure-init)
-  (let* ((graph org-glance-graph)
-         (metadata (org-glance-material:completing-read
-                    graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
-         (id (org-glance-headline-metadata:id metadata))
-         (dir (org-glance-graph:headline-data-path graph id)))
-    (make-directory dir t)
-    (agnostic-llm dir (org-glance-llm--label metadata dir))))
 
 ;;; Read commands: open / extract (operate on the stored blob, read-only)
 

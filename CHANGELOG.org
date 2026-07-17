@@ -12,6 +12,12 @@ Notable user-facing changes.  Versions date-based
 
 ** Changed
 - Material password lock =C-c C-l= → =C-c #=.
+- =org-glance-overview-default-view= takes =org-glance-table= / =org-glance-overview=
+  (legacy =table= / =org= still accepted).
+- Transient =o= label shows the current default view (=Overview [table|org]=).
+- =org-glance-llm= opens =agnostic-llm-menu= pinned to the headline's data dir and
+  =*llm:…*= buffer (menu highlights the override); reopening a headline switches
+  to its live session.  Command moved to =org-glance-llm.el=.
 
 ** Fixed
 - Capture from table no longer prompts "Buffer modified; kill anyway?".

@@ -380,14 +380,18 @@ returns point to the headline once the change (and any note) is committed."
                                  (org-glance-overview:tags org-glance-graph))))
     (unless (string-empty-p choice) choice)))
 
-(defcustom org-glance-overview-default-view 'table
+(defcustom org-glance-overview-default-view 'org-glance-table
   "Which view `org-glance-overview' opens by default.
-`table' is the sortable `org-glance-table' dashboard; `org' is the org-text
-overview file.  Either view toggles to the other with `T', so this only sets the
-landing view for `org-glance-overview' (and the `org-glance-overview:' link)."
+Value `org-glance-table' opens the sortable table dashboard (default); value
+`org-glance-overview' opens the classic org-text overview (backward-compatible).
+`T' toggles either view to the other.  Legacy values `table'/`org' still work."
   :group 'org-glance
-  :type '(choice (const :tag "Table dashboard" table)
-                 (const :tag "Org-text overview" org)))
+  :type '(choice (const :tag "Table dashboard (org-glance-table)" org-glance-table)
+                 (const :tag "Org-text overview (org-glance-overview)" org-glance-overview)))
+
+(cl-defun org-glance-overview--default-table? ()
+  "Non-nil when `org-glance-overview-default-view' selects the table dashboard."
+  (memq org-glance-overview-default-view '(org-glance-table table)))
 
 ;;;###autoload
 (cl-defun org-glance-overview (&optional tag)
@@ -400,7 +404,7 @@ default); press `T' there to toggle to the other view.  TAG may be a bare tag
   (interactive (list (org-glance-overview:completing-read-tag)))
   (org-glance-ensure-init)
   (let ((filter (org-glance-filter:merge org-glance-filter-spec tag)))
-    (if (eq org-glance-overview-default-view 'table)
+    (if (org-glance-overview--default-table?)
         (org-glance-table:visit org-glance-graph filter)
       (org-glance-overview:visit org-glance-graph filter))))
 

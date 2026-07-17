@@ -42,6 +42,16 @@
   (interactive)
   (setq org-glance-filter-spec nil))
 
+(defvar org-glance-overview-default-view)  ; defined in org-glance-overview
+
+(defun org-glance-transient--overview-description (&rest _)
+  "Overview label tagged with `org-glance-overview-default-view'."
+  (format "Overview [%s]"
+          (propertize (if (memq (bound-and-true-p org-glance-overview-default-view)
+                                 '(org-glance-overview org))
+                          "org" "table")
+                      'face 'transient-value)))
+
 ;;;###autoload
 (transient-define-prefix org-glance-transient ()
   "Perform action on selected view/headlines"
@@ -51,7 +61,7 @@
    ("c" "Clear (all)" org-glance-transient:filter-clear)]
   ["Overview"
    [("a" "Agenda" org-glance-agenda)
-    ("o" "Overview" org-glance-overview)
+    ("o" org-glance-overview :description org-glance-transient--overview-description)
     ("t" "Tags" org-glance-tags)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
