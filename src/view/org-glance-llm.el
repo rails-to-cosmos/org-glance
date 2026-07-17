@@ -67,10 +67,11 @@ disambiguate when a session for a DIFFERENT headline already holds the slug."
 (cl-defun org-glance-llm ()
   "Choose a headline and open its `agnostic-llm' session.
 Prompt for a headline like `org-glance-materialize'.  If that headline's session
-buffer is already live, switch to it.  Otherwise open `agnostic-llm-menu' with
-its session directory and buffer name overridden to the headline's
-content-addressable data dir and title-slug label (`org-glance-llm--label') --
-the menu highlights the override, and the CLI's context accumulates in that dir."
+buffer is already live, switch to it.  Otherwise materialize the headline and,
+from its blob buffer, open `agnostic-llm-menu' with its session directory and
+buffer name overridden to the headline's content-addressable data dir and
+title-slug label (`org-glance-llm--label') -- the menu highlights the override,
+and the CLI's context accumulates in that dir alongside the editable blob."
   (interactive)
   (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
@@ -78,11 +79,15 @@ the menu highlights the override, and the CLI's context accumulates in that dir.
                     graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
          (id (org-glance-headline-metadata:id metadata))
          (dir (org-glance-graph:headline-data-path graph id))
+         (label (org-glance-llm--label metadata dir))
          (existing (org-glance-llm--session-buffer dir)))
     (if (buffer-live-p existing)
         (switch-to-buffer existing)
       (make-directory dir t)
-      (agnostic-llm-menu dir (org-glance-llm--label metadata dir)))))
+      ;; Materialize, then launch the menu FROM the blob buffer (its
+      ;; `default-directory' is the headline's data dir).
+      (switch-to-buffer (org-glance-material:open graph id))
+      (agnostic-llm-menu dir label))))
 
 (provide 'org-glance-llm)
 ;;; org-glance-llm.el ends here
