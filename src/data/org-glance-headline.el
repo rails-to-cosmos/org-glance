@@ -81,12 +81,6 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
              else
              do (org-up-heading-or-point-min))))
 
-(cl-defun org-glance-headline:active? (headline)
-  (not (or (org-glance-headline:done? headline)
-           (org-glance-headline:commented? headline)
-           (org-glance-headline:archived? headline)
-           (org-glance-headline:closed headline))))
-
 (cl-defun org-glance-headline:encrypted? (headline)
   (let ((encrypted? (org-glance-headline:-encrypted? headline)))
     (cl-typecase encrypted?
@@ -343,18 +337,6 @@ HEADLINE returns unchanged."
                        (string= id (org-glance-headline:id headline)))
              return headline)))
 
-(cl-defun org-glance-headline:reset-indent (headline)
-  (cl-check-type headline org-glance-headline)
-  (let ((contents (org-glance-headline:with-contents headline
-                    (re-search-forward "\\^*")
-                    (while (looking-at "^\\*\\*")
-                      (org-promote-subtree))
-                    (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
-    (org-glance-headline--copy headline
-      :indent 1
-      :contents contents
-      :-hash (org-glance-headline--hash contents))))
-
 (cl-defun org-glance--title-clean (title)
   "Render org link markup in TITLE as plain text.
 \"[[target][desc]]\" becomes \"desc\"; a bare \"[[target]]\" becomes \"target\"."
@@ -363,79 +345,5 @@ HEADLINE returns unchanged."
    org-link-bracket-re
    (lambda (match) (or (match-string 2 match) (match-string 1 match) ""))
    title))
-
-(cl-defun org-glance-headline:title-clean (headline)
-  (cl-check-type headline org-glance-headline)
-  (org-glance--title-clean (org-glance-headline:title headline)))
-
-(cl-defun org-glance-headline:add-note (headline message &rest format-args)
-  (cl-check-type headline org-glance-headline)
-  (cl-check-type message string)
-  (let ((contents (org-glance-headline:with-contents headline
-                    (goto-char (org-log-beginning t))
-                    (insert "- " (apply #'format message format-args) "\n")
-                    (buffer-substring-no-properties (point-min) (point-max)))))
-    (org-glance-headline--copy headline
-      :contents contents
-      :-hash (org-glance-headline--hash contents))))
-
-(cl-defun org-glance--element-timestamps (element)
-  (cl-check-type element list)
-  (cl-case (org-element-type element)
-    (timestamp (list element))))
-
-(cl-defun org-glance-headline:timestamps (headline)
-  (cl-check-type headline org-glance-headline)
-  (org-glance-headline:with-contents headline
-    (->> #'org-glance--element-timestamps
-         (org-element-map (org-element-parse-buffer) '(timestamp headline))
-         (-flatten-n 1)
-         (-non-nil))))
-
-(cl-defun org-glance-headline:timestamps-raw (headline)
-  (cl-check-type headline org-glance-headline)
-  (mapcar (-partial #'org-element-property :raw-value) (org-glance-headline:timestamps headline)))
-
-(cl-defun org-glance-headline:clocks (headline)
-  (cl-check-type headline org-glance-headline)
-  (org-glance-headline:with-contents headline
-    (cl-loop while (re-search-forward org-clock-line-re nil t)
-             when (org-at-clock-log-p)
-             collect (org-element-at-point))))
-
-(cl-defun org-glance-headline:tag-string (headline)
-  (cl-check-type headline org-glance-headline)
-  (when-let (tags (org-glance-headline:tags headline))
-    (-> (s-join ":" (mapcar #'symbol-name tags))
-        (s-wrap ":" ":"))))
-
-(cl-defun org-glance-headline:overview (headline)
-  (cl-check-type headline org-glance-headline)
-  (let ((timestamps (org-glance-headline:timestamps-raw headline))
-        (clocks (->> (org-glance-headline:clocks headline)
-                     (--filter (eql 'closed (org-element-property :status it)))))
-        (hash (org-glance-headline:hash headline))
-        (id (org-glance-headline:id headline)))
-    (org-glance-headline:with-contents (org-glance-headline:header headline)
-      (when id (org-entry-put nil "ORG_GLANCE_ID" id))
-      (org-entry-put nil "ORG_GLANCE_HASH" hash)
-
-      (goto-char (point-max))
-
-      (insert (s-join "\n" (-non-nil (list (when timestamps (concat "\n*Timestamps*\n- " (s-join "\n- " timestamps)))
-                                           (when clocks (concat "\n*Time spent*\n" (s-join "\n" (mapcar #'org-element-interpret-data clocks))))))))
-
-      (condition-case nil
-          (org-update-checkbox-count-maybe 'all)
-        (error nil))
-
-      (s-trim (buffer-substring-no-properties (point-min) (point-max))))))
-
-(cl-defun org-glance-headline:header (headline)
-  (cl-check-type headline org-glance-headline)
-  (org-glance-headline:with-contents headline
-    (buffer-substring-no-properties (point) (save-excursion
-                                              (org-end-of-meta-data)
-                                              (point)))))
 
 (provide 'org-glance-headline)

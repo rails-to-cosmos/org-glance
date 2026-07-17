@@ -406,7 +406,7 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
                              (org-glance-test:headline "o1" "* Alpha :work:")
                              (org-glance-test:headline "o2" "* Beta :home:work:")
                              (org-glance-test:headline "o3" "* Gamma"))
-    (should (equal '("home" "work") (org-glance-overview:tags graph)))))
+    (should (equal '("home" "work") (org-glance-graph:tags graph)))))
 
 (ert-deftest org-glance-test:overview-interactive-tag-filter ()
   "Invoking the overview interactively prompts for a tag and overlays it on the

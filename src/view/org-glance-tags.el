@@ -28,9 +28,6 @@
 
 (require 'org-glance-core)
 
-(defvar-local org-glance-tags--mtime nil
-  "Mtime of `headlines.jsonl' at the tags buffer's last fill (staleness snapshot).")
-
 ;;; Formatting
 
 (cl-defun org-glance-tags--format-time (ts)
@@ -101,25 +98,6 @@ The row id is the tag string; the Cycle cell comes from the tag's config."
 
 ;;; Coherence (non-file projection, mirrors `org-glance-table')
 
-(cl-defun org-glance-tags--stale? (graph)
-  "Non-nil when the tags buffer is behind GRAPH's store."
-  (let ((src (org-glance-graph:headline-meta-path graph)))
-    (or (null org-glance-tags--mtime)
-        (time-less-p org-glance-tags--mtime (org-glance--file-mtime src)))))
-
-(cl-defun org-glance-tags--reload (buffer)
-  "Re-fill BUFFER from the graph, re-apply the sort, and keep point in place."
-  (when-let ((buf (get-buffer buffer)))
-    (with-current-buffer buf
-      (let ((id (get-text-property (point) 'table-view-id))
-            (line (line-number-at-pos)))
-        (table-view-refresh buf)
-        (table-view-apply-sort)
-        (org-glance-view:mark-fresh)
-        (unless (and id (table-view--goto-id id))
-          (goto-char (point-min))
-          (forward-line (1- line)))))))
-
 ;;; Actions
 
 (cl-defun org-glance-tags--tag-filter (tag)
@@ -142,25 +120,16 @@ A tag exists only by carrying a headline, so this runs the standard capture
   (call-interactively #'org-glance-capture))
 
 (cl-defun org-glance-tags--retag-remove (graph tag ids)
-  "Drop TAG (a symbol) off each headline in IDS via materialize + save.
-Skip an id whose blob buffer already has unsaved edits.  Return (CHANGED .
-SKIPPED)."
+  "Drop TAG (a symbol) off each headline in IDS via `org-glance-material:retag'.
+An id whose blob buffer has unsaved edits (retag's `user-error') is skipped.
+Return (CHANGED . SKIPPED)."
   (let ((tag-string (format "%s" tag))
         (changed 0) (skipped 0))
     (dolist (id ids)
-      (let* ((path (org-glance-graph:content-path graph id))
-             (existing (find-buffer-visiting path)))
-        (if (and existing (buffer-modified-p existing))
-            (cl-incf skipped)
-          (let ((buffer (org-glance-material:open graph id)))
-            (unwind-protect
-                (with-current-buffer buffer
-                  (goto-char (point-min))
-                  (org-set-tags (remove tag-string (org-get-tags nil t)))
-                  (let ((inhibit-message t)) (save-buffer))
-                  (cl-incf changed))
-              (unless existing
-                (org-glance--discard-buffer buffer)))))))
+      (condition-case nil
+          (when (org-glance-material:retag graph id tag-string :remove t)
+            (cl-incf changed))
+        (user-error (cl-incf skipped))))
     (cons changed skipped)))
 
 (cl-defun org-glance-tags--act-remove (graph tag-string)
@@ -169,8 +138,7 @@ Non-destructive -- multi-tagged headlines stay alive under their other tags; the
 tag vanishes once no live headline carries it."
   (let* ((metas (cl-remove-if-not
                  (lambda (m) (member tag-string
-                                     (mapcar (lambda (x) (format "%s" x))
-                                             (org-glance-headline-metadata:tags m))))
+                                     (org-glance-headline-metadata:tag-strings m)))
                  (org-glance-graph:headlines graph)))
          (ids (mapcar #'org-glance-headline-metadata:id metas))
          (multi (cl-some (lambda (m) (> (length (org-glance-headline-metadata:tags m)) 1))
@@ -183,7 +151,7 @@ tag vanishes once no live headline carries it."
                                " (multi-tagged headlines stay under their other tags)"
                              "")))
       (let ((res (org-glance-tags--retag-remove graph tag-string ids)))
-        (org-glance-tags--reload (current-buffer))
+        (org-glance-table--reload (current-buffer))
         (message "Removed `%s' from %d headline(s)%s"
                  tag-string (car res)
                  (if (> (cdr res) 0)
@@ -199,18 +167,18 @@ tag vanishes once no live headline carries it."
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
                       (table-view-set-rows buf (org-glance-tags--rows graph))
-                      (setq org-glance-tags--mtime (org-glance--file-mtime src)))))
+                      (org-glance-view:snapshot-mtime src))))
          (handlers (list (cons "table"    (lambda (id _row) (org-glance-tags--act-table graph id)))
                          (cons "overview" (lambda (id _row) (org-glance-tags--act-overview graph id)))
                          (cons "add"      (lambda (_id _row) (org-glance-tags--act-add graph)))
                          (cons "remove"   (lambda (id _row) (org-glance-tags--act-remove graph id)))
-                         (cons "refresh"  (lambda (_id _row) (org-glance-tags--reload (current-buffer))))))
+                         (cons "refresh"  (lambda (_id _row) (org-glance-table--reload (current-buffer))))))
          (buf (table-view-display "*org-glance-tags*" (org-glance-tags--spec) handlers fill-fn)))
     (with-current-buffer buf
       (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
       (org-glance-view:register graph
-                                :stale-fn  (lambda () (org-glance-tags--stale? graph))
-                                :reload-fn (lambda () (org-glance-tags--reload (current-buffer))))
+                                :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
+                                :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
       (table-view-apply-sort)
       (org-glance-view:fill-frame from-view))
     buf))

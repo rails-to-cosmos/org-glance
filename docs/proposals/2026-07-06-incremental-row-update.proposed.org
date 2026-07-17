@@ -14,7 +14,7 @@ changed:
   does ~org-glance-graph:headlines~ (an =O(N)= copy) + the filter predicate over
   all N + ~--row~ for every match.
 - ~--reload~ then renders *twice*: ~table-view-refresh~ (→ ~set-rows~ → render)
-  followed by ~org-glance-table--apply-sort~ (→ another render). One of the two
+  followed by ~table-view-apply-sort~ (→ another render). One of the two
   full in-memory render passes is redundant (Emacs still redisplays once per
   command, but the string-measure + buffer-insert work is paid twice).
 

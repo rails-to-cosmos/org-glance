@@ -93,8 +93,8 @@ which filter a cache directory holds."
 ;;; Rendering (from metadata, not content)
 
 (cl-defun org-glance-overview:tag-string (metadata)
-  (when-let ((tags (append (org-glance-headline-metadata:tags metadata) nil)))
-    (format "  :%s:" (s-join ":" (mapcar (lambda (x) (format "%s" x)) tags)))))
+  (when-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
+    (format "  :%s:" (s-join ":" tags))))
 
 (cl-defun org-glance-overview:render-headline (metadata)
   "Render METADATA as one org heading + planning + ORG_GLANCE_ID property."
@@ -162,17 +162,14 @@ filter gets `<cache-path>/<key>/overview.org'."
      ((string= key "all") (org-glance-overview:file graph))
      (t (f-join (org-glance-overview:cache-path graph) key "overview.org")))))
 
-(cl-defun org-glance-overview--mtime (path)
-  (file-attribute-modification-time (file-attributes path)))
-
 (cl-defun org-glance-overview--fresher-than? (file src)
   "Non-nil if SRC is absent or FILE is STRICTLY newer than SRC.
 Strict, so a same-second source treats the cache as stale and rebuilds: serving
 stale content is the only real bug, a rebuild is just a perf cost.  A future
 source (clock skew / restored backup) also rebuilds."
   (or (not (f-exists? src))
-      (time-less-p (org-glance-overview--mtime src)
-                   (org-glance-overview--mtime file))))
+      (time-less-p (org-glance--file-mtime src)
+                   (org-glance--file-mtime file))))
 
 (cl-defun org-glance-overview:fresh? (graph file)
   "Non-nil if FILE exists and is newer than every source it is rendered from.
@@ -369,30 +366,6 @@ returns point to the headline once the change (and any note) is committed."
                           (org-glance-capture:completing-read-tag))
                       ""))
 
-(cl-defun org-glance-overview:tags (graph)
-  "Distinct tags across GRAPH's live headlines, sorted."
-  (org-glance-graph:tags graph))
-
-(cl-defun org-glance-overview:completing-read-tag ()
-  "Prompt for a tag from the graph's headlines; empty input means \"all\"."
-  (org-glance-ensure-init)
-  (let ((choice (completing-read "Overview tag (empty for all): "
-                                 (org-glance-overview:tags org-glance-graph))))
-    (unless (string-empty-p choice) choice)))
-
-(defcustom org-glance-overview-default-view 'org-glance-table
-  "Which view `org-glance-overview' opens by default.
-Value `org-glance-table' opens the sortable table dashboard (default); value
-`org-glance-overview' opens the classic org-text overview (backward-compatible).
-`T' toggles either view to the other.  Legacy values `table'/`org' still work."
-  :group 'org-glance
-  :type '(choice (const :tag "Table dashboard (org-glance-table)" org-glance-table)
-                 (const :tag "Org-text overview (org-glance-overview)" org-glance-overview)))
-
-(cl-defun org-glance-overview--default-table? ()
-  "Non-nil when `org-glance-overview-default-view' selects the table dashboard."
-  (memq org-glance-overview-default-view '(org-glance-table table)))
-
 ;;;###autoload
 (cl-defun org-glance-overview (&optional tag)
   "Browse the graph, optionally filtered, in the default view.
@@ -401,7 +374,7 @@ on the ambient `org-glance-filter-spec' (default: active headlines).
 The landing view is `org-glance-overview-default-view' (the table dashboard by
 default); press `T' there to toggle to the other view.  TAG may be a bare tag
 (symbol/string) or a full filter plist -- see `org-glance-filter:predicate'."
-  (interactive (list (org-glance-overview:completing-read-tag)))
+  (interactive (list (org-glance-view:completing-read-tag "Overview tag (empty for all): ")))
   (org-glance-ensure-init)
   (let ((filter (org-glance-filter:merge org-glance-filter-spec tag)))
     (if (org-glance-overview--default-table?)

@@ -12,7 +12,7 @@ The parser already records whether a headline is =ARCHIVED= or =COMMENTED=.
 org-element =:archivedp= / =:commentedp= properties in
 =org-glance-headline--from-element= (=src/data/org-glance-headline.el:220=,
 =…:221=; passed to the constructor at =…:246=, =…:247=).
-=org-glance-headline:active?= (=src/data/org-glance-headline.el:84=) even
+=org-glance-headline-metadata:active?= (src/data/org-glance-filter.el) even
 folds both into its "is this live?" test.
 
 Nothing downstream honours it. The picker commands read the *metadata*

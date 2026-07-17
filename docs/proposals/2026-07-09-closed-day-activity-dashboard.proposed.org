@@ -17,7 +17,7 @@ can group or count by closed day today.
   (=src/data/org-glance-headline.el:222=).  The value is the org-element
   timestamp OBJECT, though the slot type is declared =(or null string)= -- a
   latent mismatch.  The only reader today is a presence check inside
-  =org-glance-headline:active?= (=src/data/org-glance-headline.el:88=), for which
+  =org-glance-headline-metadata:active?= (src/data/org-glance-filter.el), for which
   any non-nil value works, so the mismatch has stayed invisible.
 - The projection every view reads -- =org-glance-headline-metadata=
   (=src/data/org-glance-graph.el:58-72=), built from the field table

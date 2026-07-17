@@ -186,7 +186,7 @@ written (no such primitives in the codebase today).
 
 Clone the table's non-file pattern (=table.el:139-200,483-523=):
 - fill-fn snapshots =org-glance-graph:headline-meta-path= mtime into a buffer-local
-  (like =org-glance-table--mtime=).
+  (like =org-glance-view--mtime=).
 - =org-glance-view:register= with a STALE-FN comparing that snapshot to the live
   =headlines.jsonl= mtime — this catches capture / delete / retag / reindex /
   another Emacs by one stat.  The tag-metrics sidecar is written on the SAME

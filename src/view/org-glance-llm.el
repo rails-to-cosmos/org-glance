@@ -75,8 +75,7 @@ and the CLI's context accumulates in that dir alongside the editable blob."
   (interactive)
   (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
-         (metadata (org-glance-material:completing-read
-                    graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
+         (metadata (org-glance-material:pick-metadata graph))
          (id (org-glance-headline-metadata:id metadata))
          (dir (org-glance-graph:headline-data-path graph id))
          (label (org-glance-llm--label metadata dir))

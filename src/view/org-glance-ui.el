@@ -42,13 +42,9 @@
   (interactive)
   (setq org-glance-filter-spec nil))
 
-(defvar org-glance-overview-default-view)  ; defined in org-glance-overview
-
 (defun org-glance-transient--view-mode ()
   "Current overview display mode as a short string: \"table\" or \"org\"."
-  (if (memq (bound-and-true-p org-glance-overview-default-view)
-            '(org-glance-overview org))
-      "org" "table"))
+  (if (org-glance-overview--default-table?) "table" "org"))
 
 (defun org-glance-transient--overview-description (&rest _)
   "Overview label tagged with the current `org-glance-overview-default-view'."

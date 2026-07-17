@@ -6,12 +6,6 @@
   "Names of the sealed segments listed in GRAPH's MANIFEST."
   (org-glance-graph--sealed-segments graph))
 
-(defun org-glance-test:reopen-graph (graph)
-  "Drop GRAPH from the instance cache and re-open it (running heal/migration)."
-  (let ((dir (org-glance-graph:directory graph)))
-    (remhash dir org-glance-graph:list)
-    (org-glance-graph dir)))
-
 (ert-deftest org-glance-test:segments-manifest-bootstrap ()
   "A fresh store gets a MANIFEST with no sealed segments; reopening is a no-op."
   (org-glance-test:with-graph graph
@@ -20,7 +14,7 @@
     (should (null (org-glance-graph:headlines graph)))
     ;; reopen (bypass the instance cache) -> same manifest, still empty
     (let ((manifest-before (f-read-text (org-glance-graph--manifest-path graph) 'utf-8)))
-      (org-glance-test:reopen-graph graph)
+      (org-glance-test:reopen graph)
       (should (string= manifest-before
                        (f-read-text (org-glance-graph--manifest-path graph) 'utf-8))))))
 
@@ -115,7 +109,7 @@ the next append; intact records are unaffected."
       ;; simulate --seal dying between rename and manifest swap
       (rename-file open sealed)
       (f-touch open)
-      (let ((graph (org-glance-test:reopen-graph graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         (should (member (file-name-nondirectory sealed)
                         (org-glance-test:sealed-segments graph)))
         (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "x")))))))
@@ -127,7 +121,7 @@ reaped, not adopted; pre-crash data stays intact."
     (org-glance-graph:add graph (org-glance-test:headline "keep" "* Keep me"))
     (let ((orphan (org-glance-graph--segment-path graph 9)))
       (f-write-text "{\"id\":\"ghost\",\"title\":\"ghost\",\"seq\":999}\n" 'utf-8 orphan)
-      (let ((graph (org-glance-test:reopen-graph graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         (should-not (f-exists? orphan))               ; reaped
         (should (null (org-glance-graph:get-headline graph "ghost")))
         (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "keep")))))))
@@ -244,7 +238,7 @@ listed segment still held the headline live)."
                (lambda (&rest _) (error "simulated crash at commit"))))
       (should-error (org-glance-graph:compact graph)))
     ;; recover: x must STILL be dead, y alive, and the orphan merged seg reaped
-    (let ((graph (org-glance-test:reopen-graph graph)))
+    (let ((graph (org-glance-test:reopen graph)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
       (should (equal '("y") (org-glance-test:ids graph)))
       ;; a subsequent clean compaction converges: x fully reclaimed
@@ -270,7 +264,7 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
       (cl-letf (((symbol-function 'org-glance-graph--write-manifest)
                  (lambda (&rest _) (error "simulated crash at commit"))))
         (should-error (org-glance-graph:compact graph)))
-      (let ((graph (org-glance-test:reopen-graph graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         ;; the orphan shares seqs with listed segments -> reaped, not adopted
         (should (equal segments-before (org-glance-test:sealed-segments graph)))
         (should (= 2 (funcall count-records graph)))

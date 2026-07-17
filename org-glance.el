@@ -257,11 +257,6 @@ performs the conversion whenever the user chooses.  Always returns nil."
                      :warning))
   nil)
 
-(cl-defun org-glance:insert-pin-block ()
-  (interactive)
-  (insert "#+begin_pin" "\n\n" "#+end_pin")
-  (forward-line -1))
-
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))
     (t (:inherit default :underline "Magenta")))

@@ -25,6 +25,11 @@ Notable user-facing changes.  Versions date-based
   its blob buffer pinned to the data dir and =*llm:…*= buffer (highlighted);
   reopening switches to the live session.  Moved to =org-glance-llm.el=.
 
+** Removed
+- Dead command =org-glance:insert-pin-block= and the unused legacy headline
+  helpers (=org-glance-headline:overview= chain, =:reset-indent=, =:add-note=,
+  =:active?=, =:tag-string=, =:title-clean=).
+
 ** Fixed
 - Capture from table no longer prompts "Buffer modified; kill anyway?".
 - Git-conflicted =config/*.eld= sidecars (e.g. =tag-metrics.eld=) heal at graph

@@ -125,12 +125,12 @@ The id is the ORG_GLANCE_ID (passed to the action handlers); cells are display
 strings: tags are joined with `:' (they are interned symbols, never a raw list),
 priority is its letter, absent values are the empty string."
   (cl-check-type metadata org-glance-headline-metadata)
-  (let ((tags (append (org-glance-headline-metadata:tags metadata) nil))
+  (let ((tags (org-glance-headline-metadata:tag-strings metadata))
         (priority (org-glance-headline-metadata:priority metadata)))
     `((id . ,(org-glance-headline-metadata:id metadata))
       (cells . ((state    . ,(or (org-glance-headline-metadata:state metadata) ""))
                 (title    . ,(or (org-glance-headline-metadata:title metadata) ""))
-                (tags     . ,(if tags (s-join ":" (mapcar (lambda (x) (format "%s" x)) tags)) ""))
+                (tags     . ,(if tags (s-join ":" tags) ""))
                 (schedule . ,(or (org-glance-headline-metadata:schedule metadata) ""))
                 (deadline . ,(or (org-glance-headline-metadata:deadline metadata) ""))
                 (priority . ,(if (integerp priority) (char-to-string priority) ""))
@@ -140,27 +140,11 @@ priority is its letter, absent values are the empty string."
 
 (defvar-local org-glance-table--spec nil
   "Normalised filter spec the current table buffer was generated with.")
-(defvar-local org-glance-table--mtime nil
-  "Mtime of `headlines.jsonl' at the current table buffer's last fill.")
-
-(cl-defun org-glance-table--file-mtime (path)
-  "Modification time of PATH, or nil when it does not exist."
-  (and (f-exists? path)
-       (file-attribute-modification-time (file-attributes path))))
-
 (cl-defun org-glance-table--rows (graph keep?)
   "Rows for GRAPH's live headlines satisfying predicate KEEP?, in graph order."
   (cl-loop for meta in (org-glance-graph:headlines graph)
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
-
-(cl-defun org-glance-table--apply-sort ()
-  "Apply the sort in `table-view--sort-keys' to rows filled after display.
-The keys are the spec's declared default (seeded by `table-view-display'), a
-restored per-view config, or the sort the user left before a reload.  Uses
-`table-view-apply-sort', the public entry point for `fill-fn' buffers whose
-rows arrive after the spec (a no-op with no keys; leaves the filter intact)."
-  (table-view-apply-sort))
 
 (cl-defun org-glance-table--restore-point (id line)
   "Return point to the row with ID; if that row is gone, to screen LINE.
@@ -169,6 +153,12 @@ fall back to the same screen line, org-agenda-style, instead of the buffer top."
   (unless (and id (table-view--goto-id id))
     (goto-char (point-min))
     (forward-line (1- line))))
+
+(cl-defun org-glance-table--finish (id line fmt &rest args)
+  "Reload the table, return point to row ID (else screen LINE), message FMT ARGS."
+  (org-glance-table--reload (current-buffer))
+  (org-glance-table--restore-point id line)
+  (message "%s" (apply #'format fmt args)))
 
 (cl-defun org-glance-table--reload (buffer)
   "Re-fill BUFFER from the live graph, re-apply its sort, and keep point in place.
@@ -182,7 +172,7 @@ LINE, which drifts to another row once the sort reorders them."
       (let ((id (get-text-property (point) 'table-view-id))
             (line (line-number-at-pos)))
         (table-view-refresh buf)
-        (org-glance-table--apply-sort)
+        (table-view-apply-sort)
         (org-glance-view:mark-fresh)
         (org-glance-table--restore-point id line)))))
 
@@ -193,15 +183,6 @@ LINE, which drifts to another row once the sort reorders them."
 ;; `org-glance-table:visit'.  A table is a NON-FILE projection rebuilt from the
 ;; graph, so the shared driver always reloads it at the display boundary (it
 ;; discards no user data, unlike the overview's file-backed buffer).
-
-(cl-defun org-glance-table--stale? (graph)
-  "Non-nil when the CURRENT table buffer's fill predates GRAPH's last change.
-The view's STALE-FN (see `org-glance-view:register'), closed over GRAPH at visit
-so the buffer needs no graph of its own."
-  (let ((src (org-glance-graph:headline-meta-path graph)))
-    (and (f-exists? src)
-         (or (null org-glance-table--mtime)
-             (time-less-p org-glance-table--mtime (org-glance-table--file-mtime src))))))
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
@@ -229,9 +210,8 @@ row once the change (and any note) is committed."
       (org-glance-material:change-todo-live
        graph id arg
        (lambda (state)
-         (org-glance-table--reload (current-buffer))
-         (org-glance-table--restore-point id line)
-         (message "State: %s" (if (s-present? state) state "(none)")))))))
+         (org-glance-table--finish id line "State: %s"
+                                   (if (s-present? state) state "(none)")))))))
 
 (cl-defun org-glance-table--todo-candidates (graph filter)
   "Candidate target states for a bulk change under FILTER.
@@ -284,18 +264,16 @@ on the row."
   (let* ((line (line-number-at-pos))
          (remove current-prefix-arg)
          (tag (if remove
-                  (let ((tags (mapcar (lambda (x) (format "%s" x))
-                                      (org-glance-headline-metadata:tags
-                                       (org-glance-table--metadata graph id)))))
+                  (let ((tags (org-glance-headline-metadata:tag-strings
+                              (org-glance-table--metadata graph id))))
                     (if tags
                         (completing-read "Remove tag: " tags nil t)
                       (user-error "Headline has no tags to remove")))
                 (s-trim (completing-read "Add tag: " (org-glance-graph:tags graph))))))
     (when (and tag (not (string-empty-p tag))
                (org-glance-material:retag graph id tag :remove remove))
-      (org-glance-table--reload (current-buffer))
-      (org-glance-table--restore-point id line)
-      (message "%s tag `%s'" (if remove "Removed" "Added") tag))))
+      (org-glance-table--finish id line "%s tag `%s'"
+                                (if remove "Removed" "Added") tag))))
 
 (cl-defun org-glance-table--act-crypt (graph id)
   "Toggle encryption of headline ID at point in GRAPH; `C-u' changes the password.
@@ -321,9 +299,7 @@ passwords (confirmed when setting a new one) and reloads the row."
                          (read-passwd "Password to encrypt (confirm): " t)))
                       (if encrypted "Headline decrypted" "Headline encrypted"))))))
     (when done
-      (org-glance-table--reload (current-buffer))
-      (org-glance-table--restore-point id line)
-      (message "%s" done))))
+      (org-glance-table--finish id line "%s" done))))
 
 ;;; Per-view persistence: column order + sort, keyed by filter identity
 ;;
@@ -545,7 +521,7 @@ Honours the same filter language as the overview (see
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
                       (table-view-set-rows buf (org-glance-table--rows graph keep?))
-                      (setq org-glance-table--mtime (org-glance-table--file-mtime src)))))
+                      (org-glance-view:snapshot-mtime src))))
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))
@@ -583,7 +559,7 @@ Honours the same filter language as the overview (see
             ;; graph's ROOT, not wherever this non-file buffer happened to spawn.
             default-directory (file-name-as-directory (org-glance-graph:directory graph)))
       (org-glance-view:register graph
-                                :stale-fn  (lambda () (org-glance-table--stale? graph))
+                                :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
       ;; Custom property columns: `C-u +' builds one via the prompt below, and any
       ;; add/remove is persisted per tag through the schema-changed hook.
@@ -595,18 +571,11 @@ Honours the same filter language as the overview (see
       ;; then persist any subsequent layout change (column move / sort) for this filter.
       (when-let ((sort (plist-get saved :sort)))
         (setq-local table-view--sort-keys sort))
-      (org-glance-table--apply-sort)
+      (table-view-apply-sort)
       (setq org-glance-table--config-snapshot (org-glance-table--current-config))
       (add-hook 'post-command-hook #'org-glance-table--persist-config nil t)
       (org-glance-view:fill-frame from-view))
     buf))
-
-(cl-defun org-glance-table:completing-read-tag ()
-  "Prompt for a tag from the graph's headlines; empty input means \"all\"."
-  (org-glance-ensure-init)
-  (let ((choice (completing-read "Table tag (empty for all): "
-                                 (org-glance-graph:tags org-glance-graph))))
-    (unless (string-empty-p choice) choice)))
 
 ;;;###autoload
 (cl-defun org-glance-table (&optional tag)
@@ -616,7 +585,7 @@ on the ambient `org-glance-filter-spec' (default: active headlines) -- exactly
 like `org-glance-overview', but rendered as a flat table.  Sort with `^' (sorts
 by the column at point; repeat toggles direction, `C-u ^' adds a tie-breaker);
 act on the row at point with RET/m, o, e."
-  (interactive (list (org-glance-table:completing-read-tag)))
+  (interactive (list (org-glance-view:completing-read-tag "Table tag (empty for all): ")))
   (org-glance-ensure-init)
   (org-glance-table:visit org-glance-graph
                           (org-glance-filter:merge org-glance-filter-spec tag)))

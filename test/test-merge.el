@@ -8,12 +8,6 @@
 (require 'test-helpers)
 (require 'org-glance-tag-metrics)
 
-(cl-defun org-glance-test-merge:reopen (graph)
-  "Drop GRAPH from the instance cache and re-open it, re-running construction."
-  (let ((dir (org-glance-graph:directory graph)))
-    (remhash dir org-glance-graph:list)
-    (org-glance-graph dir)))
-
 (cl-defun org-glance-test-merge:conflict-eld (ours theirs)
   "Return .eld text git left conflict-marked with the OURS/THEIRS Lisp forms."
   (concat "<<<<<<< HEAD\n" (prin1-to-string ours) "\n"
@@ -59,7 +53,7 @@ line, and a second open never clobbers a hand-edited file (write-if-absent)."
       (should (string= "*.jsonl merge=union\n" (f-read-text path 'utf-8)))
       ;; hand-edit, then reopen: the existing file must survive untouched
       (f-write-text "*.jsonl merge=union\n# local override\n" 'utf-8 path)
-      (let ((graph (org-glance-test-merge:reopen graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         (should (string= "*.jsonl merge=union\n# local override\n"
                          (f-read-text (f-join (org-glance-graph:meta-path graph)
                                               ".gitattributes")
@@ -81,7 +75,7 @@ and the rewritten MANIFEST is valid canonical JSON."
       ;; mangle the MANIFEST exactly as git's default (non-union) merge would
       (f-write-text (org-glance-test-merge:conflict-manifest (list (nth 0 segs)) segs)
                     'utf-8 manifest)
-      (let ((graph (org-glance-test-merge:reopen graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         ;; every sealed segment adopted back; none reaped
         (should (equal segs (sort (copy-sequence
                                    (org-glance-graph--sealed-segments graph))
@@ -116,7 +110,7 @@ position: the last record per id wins and no data is lost."
        (concat (org-glance-test-merge:record :id "c" :state "" :title "C-new" :hash "hc1" :seq 50)
                (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 51))
        'utf-8 open))
-    (let ((graph (org-glance-test-merge:reopen graph)))
+    (let ((graph (org-glance-test:reopen graph)))
       ;; positional last-wins: the later "a" record supersedes the earlier one
       (let ((a (org-glance-graph:get-headline graph "a")))
         (should (string= "A-newer" (org-glance-headline-metadata:title a)))
@@ -181,7 +175,7 @@ from both sides kept, positional last-wins per id."
          (concat (org-glance-test-merge:record :id "c" :state "" :title "C" :hash "hc1" :seq 3)
                  (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 4))))
        'utf-8 open)
-      (let ((graph (org-glance-test-merge:reopen graph)))
+      (let ((graph (org-glance-test:reopen graph)))
         ;; markers stripped from disk
         (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
         (should-not (s-contains? "=======" (f-read-text open 'utf-8)))
@@ -207,11 +201,11 @@ segment; a declined prompt errors and leaves the markers in place."
                     'utf-8 open)
       ;; declined -> error, markers untouched
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) nil)))
-        (should-error (org-glance-test-merge:reopen graph))
+        (should-error (org-glance-test:reopen graph))
         (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))
       ;; approved -> resolved, both ids readable
       (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
-        (let ((graph (org-glance-test-merge:reopen graph)))
+        (let ((graph (org-glance-test:reopen graph)))
           (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
           (should (equal '("a" "b")
                          (sort (mapcar #'org-glance-headline-metadata:id
@@ -228,7 +222,7 @@ signals an error and leaves the markers in place for manual handling."
                      (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
                      (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
                     'utf-8 open)
-      (should-error (org-glance-test-merge:reopen graph))
+      (should-error (org-glance-test:reopen graph))
       (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))))
 
 ;;; tag-metrics.eld conflict resolution (a config/*.eld the union driver misses)
@@ -292,7 +286,7 @@ reopened (the after-open hook), not only on the next append."
           (file (org-glance-test-merge:write-metrics-conflict
                  graph (list (list "x" :captures 1)) (list (list "x" :captures 2)))))
       (should (s-contains? "<<<<<<<" (f-read-text file 'utf-8)))
-      (let ((graph (org-glance-test-merge:reopen graph)))   ; after-open hook heals
+      (let ((graph (org-glance-test:reopen graph)))   ; after-open hook heals
         (should-not (s-contains? "<<<<<<<" (f-read-text file 'utf-8)))
         (should (= 2 (plist-get (cdr (assoc "x" (org-glance-tag-metrics--read graph)))
                                 :captures)))))))

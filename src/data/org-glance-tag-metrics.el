@@ -66,12 +66,6 @@ A tag present in several MAPS has its plists merged by `--merge-plists'."
                                 (cdr existing) (cdr cell)))
             (push (cons (car cell) (copy-sequence (cdr cell))) merged)))))))
 
-(cl-defun org-glance-tag-metrics--blob-mtime (graph id)
-  "Filesystem mtime of ID's content blob in GRAPH, or nil when absent."
-  (let ((path (org-glance-graph:content-path graph id)))
-    (and (f-exists? path)
-         (file-attribute-modification-time (file-attributes path)))))
-
 (cl-defun org-glance-tag-metrics--touch (graph specs)
   "Record GRAPH's tag events for the just-appended SPECS.
 Live records bump :captures; tombstones (tags resolved from the still-current
@@ -128,11 +122,11 @@ seeding, so warm calls do no I/O."
         map
       (let ((earliest (make-hash-table :test 'equal)))
         (dolist (meta (org-glance-graph:headlines graph))
-          (let ((tags (mapcar (lambda (x) (format "%s" x))
-                              (org-glance-headline-metadata:tags meta))))
+          (let ((tags (org-glance-headline-metadata:tag-strings meta)))
             (when (cl-intersection tags unseeded :test #'string=)
-              (let ((mtime (org-glance-tag-metrics--blob-mtime
-                            graph (org-glance-headline-metadata:id meta))))
+              (let ((mtime (org-glance--file-mtime
+                            (org-glance-graph:content-path
+                             graph (org-glance-headline-metadata:id meta)))))
                 (when mtime
                   (dolist (tag tags)
                     (when (and (member tag unseeded)

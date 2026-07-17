@@ -174,13 +174,23 @@ All other ingests proceed through the real function."
   (declare (indent 2))
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
+(defun org-glance-test:reopen (graph)
+  "Drop GRAPH from the instance cache and re-open it (running heal/migration)."
+  (let ((dir (org-glance-graph:directory graph)))
+    (remhash dir org-glance-graph:list)
+    (org-glance-graph dir)))
+
 (cl-defun org-glance-test:legacy-encrypt (headline password)
   "HEADLINE re-parsed with its whole body as legacy (pre-block) ciphertext.
 Fabricates the pre-crypt-block on-disk layout for upgrade/compat tests."
   (org-glance-headline--from-string
    (org-glance-headline:with-contents headline
      (org-end-of-meta-data t)
-     (org-glance--encrypt-region (point) (point-max) password)
+     (let* ((beg (point))
+            (cipher (aes-encrypt-buffer-or-string
+                     (buffer-substring-no-properties beg (point-max)) password)))
+       (delete-region beg (point-max))
+       (insert cipher))
      (buffer-string))))
 
 (provide 'test-helpers)

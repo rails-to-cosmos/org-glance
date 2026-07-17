@@ -16,7 +16,7 @@ sealed the whole body), and re-seals on save via a round-trip:
   ~after-save-hook~ (~--decrypt-buffer~, after ~sync~) decrypts back.
 - ~--harden-buffer~ disables auto-save, backups and lockfiles so plaintext cannot
   leak to ~#data.org#~ / ~data.org~~ / lock files.
-- Crypto itself is ~org-glance--encrypt-region~ / ~--decrypt-region~ over the
+- Crypto itself is ~org-glance--crypt-seal-blocks~ / ~--crypt-unseal-blocks~ over the
   ~aes.el~ package (AES-OCB).
 
 That closes the on-disk leak and bounds the password's residence.  Three risks

@@ -107,10 +107,10 @@ path; a display-boundary refresh re-fills it and clears the flag."
       (unwind-protect
           (with-current-buffer buf
             (table-view-mode)
-            (setq org-glance-table--mtime (org-glance-table--file-mtime src))
-            (should-not (org-glance-table--stale? graph))
-            (setq org-glance-table--mtime '(0 0 0 0))
-            (should (org-glance-table--stale? graph)))
+            (org-glance-view:snapshot-mtime src)
+            (should-not (org-glance-view:stale-vs-file? src))
+            (setq org-glance-view--mtime '(0 0 0 0))
+            (should (org-glance-view:stale-vs-file? src)))
         (kill-buffer buf)))))
 
 ;;; Visit + actions
@@ -467,7 +467,7 @@ re-fill + re-sort restore by line, so without re-anchoring point drifts."
       (org-glance-test:with-table-buffer graph buf
         (with-current-buffer buf
           (setq table-view--sort-keys '(("title" . t)))   ; sort by title ascending
-          (org-glance-table--apply-sort)                   ; order: Alpha (a1), Zeta (z1)
+          (table-view-apply-sort)                          ; order: Alpha (a1), Zeta (z1)
           (should (table-view--goto-id "z1"))              ; z1 last sorted, first in load order
           (funcall (key-binding (kbd "g")))                ; refresh
           (should (equal "z1" (get-text-property (point) 'table-view-id))))))))  ; still on z1

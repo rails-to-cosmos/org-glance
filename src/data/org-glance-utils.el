@@ -150,31 +150,6 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
            else
            collect (list link title pos)))
 
-(defun org-glance--encrypt-region (beg end &optional password)
-  "Encrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (let* ((original-text (buffer-substring-no-properties beg end))
-         (encrypted-text (aes-encrypt-buffer-or-string original-text password)))
-    (save-excursion
-      (delete-region beg end)
-      (goto-char beg)
-      (insert encrypted-text))))
-
-(defun org-glance--decrypt-region (beg end &optional password)
-  "Decrypt region from BEG to END using PASSWORD."
-  (interactive "r")
-  (if-let (decrypted-text (let ((encrypted (buffer-substring-no-properties beg end)))
-                            (if (with-temp-buffer
-                                  (insert encrypted)
-                                  (aes-is-encrypted))
-                                (aes-decrypt-buffer-or-string encrypted password)
-                              (user-error "Headline is not encrypted"))))
-      (save-excursion
-        (delete-region beg end)
-        (goto-char beg)
-        (insert decrypted-text))
-    (user-error "Wrong password")))
-
 ;;; Crypt blocks
 ;;
 ;; A `#+begin_crypt' … `#+end_crypt' special block marks a body region that is

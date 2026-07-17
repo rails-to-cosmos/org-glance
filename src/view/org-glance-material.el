@@ -31,7 +31,7 @@
 (cl-defun org-glance-material:label (metadata)
   "Completing-read label for headline METADATA: \"[tags] title\"."
   (cl-check-type metadata org-glance-headline-metadata)
-  (let ((tags (append (org-glance-headline-metadata:tags metadata) nil)))
+  (let ((tags (org-glance-headline-metadata:tag-strings metadata)))
     (concat (if tags (format "[%s] " (s-join "," tags)) "")
             (org-glance--title-clean (org-glance-headline-metadata:title metadata)))))
 
@@ -419,7 +419,6 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
 ;; (we never flush their unsaved edits).
 
 (defvar org-log-setup)         ; org.el: non-nil while an interactive note is queued
-(defvar org-log-note-marker)   ; org.el: marker `org-add-log-note' will return to
 (defvar org-log-note-how)      ; org.el: `note' (prompt) vs `time'/`state' (timestamp)
 (defvar org-log-note-this-command) ; org.el: command that queued the note
 (declare-function org-add-log-note "org" (&optional purpose))
@@ -659,14 +658,18 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
 ;; overview and agenda (see `org-glance-overview'); capture creates a new
 ;; headline, so a state filter does not apply there.
 
+(cl-defun org-glance-material:pick-metadata (graph)
+  "Choose a live GRAPH headline gated by the ambient `org-glance-filter-spec'."
+  (org-glance-material:completing-read
+   graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
+
 ;;;###autoload
 (cl-defun org-glance-materialize ()
   "Choose a headline from the graph and materialize it."
   (interactive)
   (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
-         (metadata (org-glance-material:completing-read
-                    graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
+         (metadata (org-glance-material:pick-metadata graph))
          (id (org-glance-headline-metadata:id metadata)))
     (switch-to-buffer (org-glance-material:open graph id))))
 

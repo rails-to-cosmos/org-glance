@@ -33,6 +33,39 @@ need no entry.
 Keep it **compact — facts only**: one line per bullet, naming the command, key,
 or file that changed. No rationale, no prose; that belongs in `docs/proposals/`.
 
+## Global invariants
+
+Rules the whole codebase enforces; no change may violate them. Full statements
+with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
+
+1. WAL is append-only; duplicates resolve by physical position (last wins);
+   `seq` is storage-only — never ordering, never re-stamped.
+2. Store writes are atomic temp-then-rename; MANIFEST swap is the commit
+   point; compaction commits MANIFEST before truncating the open segment.
+3. A valid MANIFEST is byte-stable — rebuilt only when broken.
+4. Schema tables (`org-glance-headline-metadata:fields`,
+   `org-glance-filter:table`) are the single source of truth; append new
+   metadata fields at the end only (row order = JSON key order).
+5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
+   before any write, blob lands before its WAL record.
+6. Ids are path-safety-checked via `error` (never `cl-assert`) before any
+   filesystem use.
+7. Single-user, no locking; staleness detection uses the full store snapshot
+   (mtime + size + segment names), never mtime alone.
+8. Git conflicts heal by union merge; `.eld` sidecar merges are commutative and
+   non-inflating (earliest/latest/`max`, never a sum).
+9. Side-index hooks and view refresh are error-demoted — they may never break
+   a save, an open, or a display.
+10. View coherence is flag-stale + pull-refresh; when freshness is in doubt,
+    rebuild.
+11. Never clobber unsaved user edits: `user-error` or skip, never overwrite.
+12. Store content parses in temp buffers via `org-glance--org-mode`
+    (`delay-mode-hooks`, `tab-width` 8); never `find-file` sources to read.
+13. Tags are canonical downcased interned symbols at the boundary; deserialized
+    metadata carries STRING tags — coerce with `(format "%s" tag)`.
+14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the
+    persistent secrecy annotation.
+
 ## Fix — and prevent — the whole class
 
 A reported problem is one sample of a class. When you fix it, sweep the codebase

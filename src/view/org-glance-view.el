@@ -27,6 +27,9 @@
 
 (require 'cl-lib)
 (require 'cl-macs)
+(require 'org-glance-core)
+(require 'org-glance-utils)
+(require 'org-glance-graph)
 
 (defvar-local org-glance-view--graph nil
   "The graph this buffer is a view of; its presence marks an org-glance view.")
@@ -40,6 +43,28 @@ lighter.")
 
 (defvar-local org-glance-view--reload-fn nil
   "Nullary thunk of the current view: re-fill it from the graph.")
+
+(defvar-local org-glance-view--mtime nil
+  "Store mtime snapshot taken at this view's last fill (its freshness anchor).")
+
+(cl-defun org-glance-view:snapshot-mtime (path)
+  "Record PATH's mtime as the current view's freshness anchor."
+  (setq-local org-glance-view--mtime (org-glance--file-mtime path)))
+
+(cl-defun org-glance-view:stale-vs-file? (path)
+  "Non-nil when the view's fill predates PATH's last change.
+No snapshot yet or PATH missing both count as stale -- when freshness is in
+doubt, rebuild."
+  (let ((mtime (org-glance--file-mtime path)))
+    (or (null org-glance-view--mtime)
+        (null mtime)
+        (time-less-p org-glance-view--mtime mtime))))
+
+(cl-defun org-glance-view:completing-read-tag (&optional (prompt "Tag (empty for all): "))
+  "Prompt with PROMPT for a tag from the graph's headlines; empty input = nil."
+  (org-glance-ensure-init)
+  (let ((choice (completing-read prompt (org-glance-graph:tags org-glance-graph))))
+    (unless (string-empty-p choice) choice)))
 
 ;;; Display
 

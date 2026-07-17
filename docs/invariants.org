@@ -1,0 +1,93 @@
+#+TITLE: Global invariants
+#+DATE: 2026-07-17
+
+Rules the whole codebase enforces; every change must preserve them.  Each entry:
+the rule, where the code enforces it (symbol anchors, stable across refactors),
+and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]].
+
+* Store
+
+1. *Append-only WAL, positional last-wins.*  Duplicate ids resolve by physical
+   position (oldest→newest segments, last line wins); =seq= is a storage-only
+   ordinal — never read for ordering, never in headline metadata, never
+   re-stamped by compaction.  Enforced: =org-glance-graph--latest-records=,
+   =org-glance-graph--heal=.  Violation: union-merged stores resolve the wrong
+   record; heal misclassifies debris.
+
+2. *Atomic writes; MANIFEST swap is the commit point.*  Every store write is
+   temp-then-rename (=org-glance-graph--atomic-write=, =file-precious-flag= on
+   blobs); compaction commits the MANIFEST *before* truncating the open segment.
+   Violation: crash/ENOSPC truncates data or resurrects a tombstoned headline.
+
+3. *MANIFEST byte-stability.*  A valid MANIFEST is never rewritten; rebuilt only
+   when broken (=org-glance-graph--manifest-broken?=).  Violation: churn that
+   fights compaction and generates sync conflicts.
+
+4. *Schema tables are the single source of truth.*
+   =org-glance-headline-metadata:fields= drives constructor + serialize +
+   deserialize (load-time guard against the struct; row order IS the JSON key
+   order — append new fields at the end only); =org-glance-filter:table= drives
+   keys + predicate + canonicalisation.  Violation: silent drift (always-nil
+   field, match-everything filter) or broken on-disk byte order.
+
+5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical;
+   metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
+   ordering: metadata computed first (fail before any write), blob before WAL
+   append (=org-glance-graph:add=).  Violation: unrebuildable facts or
+   half-states.
+
+6. *Path safety before filesystem.*  An id is checked (reject =/= and =..=) via
+   =error= — never =cl-assert=, which can be compiled out — before feeding any
+   path (=org-glance-graph:headline-data-path=).  Violation: a hand-edited id
+   escapes the store (traversal; compaction GC deleting outside it).
+
+7. *Single user, no locking.*  Cross-process staleness is detected by the store
+   snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
+   alone (=org-glance-graph--store-snapshot=); in-process mutations call
+   =--invalidate-cache= explicitly.  Violation: same-second external compaction
+   serves deleted data as live.
+
+8. *Git conflicts heal by union merge.*  Gated by
+   =org-glance-conflict-resolution= (ask/union/nil); =.gitattributes= written
+   only if absent; =.eld= sidecar merges are commutative and non-inflating —
+   earliest/latest/=max=, never a sum; a =nil= side never shadows a populated
+   one (=org-glance--read-eld=, =org-glance-tag-metrics--merge-plists=).  See
+   [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
+
+* Hooks and views
+
+9. *Soft paths are error-demoted.*  Side-index hooks
+   (=org-glance-graph-before-append-functions=,
+   =org-glance-graph-after-open-functions=) and view refresh run under demoted
+   errors — a sidecar or reload may never break a save, an open, or a display.
+
+10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale
+    (boolean; no I/O, never touches point); views re-fill at display boundaries;
+    freshness checks are strict — when in doubt, rebuild (serving stale is the
+    only real bug).  Enforced: =org-glance-view=, =org-glance-material:sync=.
+
+11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a
+    modified buffer must =user-error= or skip that row
+    (=org-glance-material--replace-headline=, =:retag=, bulk todo); a modified
+    file-backed view is flagged stale, never reverted.
+
+* Parsing and data hygiene
+
+12. *Store content parses in temp buffers via =org-glance--org-mode=.*
+    =delay-mode-hooks= (no globalized minor modes, no undo-tree litter) and
+    =tab-width 8= set after mode init; sources are never =find-file='d for
+    reading.  Violation: user =tab-width= mis-parses content; hook litter.
+
+13. *Tags are canonical downcased interned symbols.*  Coerced via
+    =org-glance-tag:from-string= wherever text enters; serialized back to
+    strings in metadata (so deserialized metadata carries STRING tags — coerce
+    with =(format "%s" tag)= when comparing).  Violation: mixed-case duplicates
+    fragment filters and caches.
+
+14. *Crypt: plaintext never touches disk.*  Material buffers of encrypted
+    headlines are hardened (no auto-save/backup/lockfiles), sealed by
+    =before-save-hook=, unsealed after; =#+begin_crypt= markers are the
+    persistent secrecy annotation, and the legacy upgrade cannot re-wrap
+    plaintext (aes-header guard in
+    =org-glance-headline--crypt-upgrade-legacy=).  Violation: secrets leak to
+    =data.org= / backup files.

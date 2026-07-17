@@ -16,15 +16,7 @@
     (should (string= (org-glance-headline:title headline) "bar"))
     (should (string= (org-glance-headline:state headline) ""))
     (should (string= (org-glance-headline:id headline) "bar"))
-    (should (string= (org-glance-headline:tag-string headline) ":a:b:c:"))
     (should (not (org-glance-headline:encrypted? headline)))))
-
-(ert-deftest org-glance-test:headline-active ()
-  (let* ((org-done-keywords (list "DONE"))
-         (headline (org-glance-headline--from-lines "* TODO Hello, world!")))
-    (should (string= (org-glance-headline:state headline) "TODO"))
-    (should (org-glance-headline:active? headline))
-    (should (not (org-glance-headline:done? headline)))))
 
 (ert-deftest org-glance-test:headline-properties ()
   (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "- foo: bar")))
@@ -153,42 +145,6 @@ encrypt) preserves the block structure; decrypt+unwrap restores the original."
     (should (string= (org-glance-headline:state orig) "TODO"))
     (should (string= (org-glance-headline:state copy) "DONE"))))
 
-(ert-deftest org-glance-test:headline-indent-hash ()
-  "Headline hash should change after indentation."
-  (let* ((orig (org-glance-headline--from-string "*** foo"))
-         (copy (org-glance-headline:reset-indent orig)))
-    (should (not (string= (org-glance-headline:hash orig) (org-glance-headline:hash copy))))))
-
-(ert-deftest org-glance-test:headline-title ()
-  (let ((headline (org-glance-headline--from-string "* foo [[https:google.com]]")))
-    (should (string= (org-glance-headline:title-clean headline) "foo https:google.com"))))
-
-(ert-deftest org-glance-test:headline-log ()
-  (let ((contents (-> (org-glance-headline--from-string "* foo")
-                      (org-glance-headline:add-note "Log note")
-                      (org-glance-headline:contents))))
-    (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
-
-(ert-deftest org-glance-test:headline-timestamps ()
-  (let ((timestamps (-> (org-glance-headline--from-lines "* foo"
-                                                          "<2025-01-01 Wed>"
-                                                          "[2025-01-01 Wed]")
-                        (org-glance-headline:timestamps-raw))))
-    (should (= (length timestamps) 2))
-    (should (member "<2025-01-01 Wed>" timestamps))))
-
-(ert-deftest org-glance-test:headline-clocks ()
-  (let ((clocks (-> (org-glance-headline--from-lines "* foo"
-                                                      ":LOGBOOK:"
-                                                      "- State \"STARTED\"    from \"PENDING\"    [2025-01-10 Fri 14:43]"
-                                                      "CLOCK: [2025-01-10 Fri 14:43]"
-                                                      "- State \"PENDING\"    from \"STARTED\"    [2025-01-10 Fri 14:43]"
-                                                      "- State \"STARTED\"    from \"TODO\"       [2025-01-10 Fri 14:15]"
-                                                      "CLOCK: [2025-01-10 Fri 14:15]--[2025-01-10 Fri 14:43] =>  0:28"
-                                                      ":END:")
-                    (org-glance-headline:clocks))))
-    (should (= (length clocks) 2))))
-
 (ert-deftest org-glance-test:headline-planning ()
   (pcase-dolist (`(,accessor ,keyword)
                  '((org-glance-headline:schedule "SCHEDULED")
@@ -196,12 +152,6 @@ encrypt) preserves the block structure; decrypt+unwrap restores the original."
     (let ((h (org-glance-headline--from-lines
               "* foo" (format "%s: <2025-01-10 Fri>" keyword))))
       (should (string= (funcall accessor h) "<2025-01-10 Fri>")))))
-
-(ert-deftest org-glance-test:headline-hash-consistency ()
-  (let* ((headline (org-glance-headline--from-string "* foo"))
-         (overview (org-glance-headline:overview headline)))
-    (should (string= (org-glance-headline:hash headline)
-                     (org-glance-headline:hash (org-glance-headline--from-string overview))))))
 
 (ert-deftest org-glance-test:headline-content-facts-matches-thunks ()
   "The metadata build's single-pass `--content-facts' is byte-identical to forcing

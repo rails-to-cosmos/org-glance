@@ -6,13 +6,9 @@
 (require 'org)
 (require 'org-id)
 
+(require 'org-glance-core)
 (require 'org-glance-utils)
 (require 'org-glance-headline)
-
-(defcustom org-glance-directory org-directory
-  "Main location for all Org mode content managed by `org-glance`."
-  :group 'org-glance
-  :type 'directory)
 
 ;; NB: the hash must canonicalize exactly like the equality does -- hashing the
 ;; raw string would make equal keys ("foo" vs "foo/") land in different buckets.
@@ -136,6 +132,13 @@ headline methods, so they are JSON-serializable as-is.")
   (cl-typecase obj
     (org-glance-headline-metadata obj)
     (org-glance-headline (org-glance-headline:metadata obj))))
+
+(cl-defun org-glance-headline-metadata:tag-strings (metadata)
+  "METADATA's tags as a list of strings.
+Fresh metadata carries symbol tags, JSON-deserialized metadata carries strings
+\(and a vector until decoded); this is the one total coercion for both."
+  (mapcar (lambda (tag) (format "%s" tag))
+          (append (org-glance-headline-metadata:tags metadata) nil)))
 
 (cl-defun org-glance-headline-metadata:serialize* (obj)
   "Generic variant of `org-glance-headline-metadata:serialize'."
@@ -651,8 +654,7 @@ immutable (`:read-only' slots)."
   (cl-check-type graph org-glance-graph)
   (org-glance-graph--sorted-distinct
    (cl-loop for meta in (org-glance-graph:headlines graph)
-            append (mapcar (lambda (x) (format "%s" x))
-                           (append (org-glance-headline-metadata:tags meta) nil)))))
+            append (org-glance-headline-metadata:tag-strings meta))))
 
 (cl-defun org-glance-graph:states (graph)
   "Distinct non-empty todo states across GRAPH's live headlines, sorted."
@@ -883,36 +885,6 @@ Return the live record count.  See docs/archive/MIGRATION-PLAN.md Phase 4."
       (org-glance-graph--gc-orphans graph)
       (org-glance-graph--invalidate-cache graph)
       (length emit))))
-
-;; (cl-defun org-glance-graph:add-relation (graph relation &rest entities)
-;;   (cl-check-type graph org-glance-graph)
-;;   (cl-check-type relation symbol)
-;;   (cl-loop with ids = (->> entities
-;;                            (mapcar #'org-glance-headline-metadata:id*)
-;;                            (-non-nil))
-;;            for id in ids
-;;            collect (--> (org-glance-graph:get-headline graph id)
-;;                         (org-glance-headline-metadata:serialize it)
-;;                         (plist-put it :relations (list relation (vconcat (plist-get it :relations) (apply #'vector (remove id ids))))))
-;;            into spec
-;;            finally do (apply #'org-glance-graph:insert graph spec)))
-
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
-;;        (foo (org-glance-headline--from-lines "* foo :a:" "- [[http://10.17.2.107:3002/overview/activity/timeline][Web UI]]"))
-;;        (bar (org-glance-headline--from-lines "* bar :b:" "123"))
-;;        (foo* (org-glance-headline-metadata graph foo))
-;;        (bar* (org-glance-headline-metadata graph bar)))
-;;   (org-glance-graph:add graph foo* bar*)
-;;   (org-glance-graph:add-relation graph 'neighbors foo* bar*))
-
-;; (let* ((graph (org-glance-graph "/tmp/glance"))
-;;        (meta (org-glance-graph:get-headline graph "575cd2ec-8184-4d75-8f15-526dd9e76c8b"))
-;;        ;; (id (org-glance-headline-metadata:id meta))
-;;        )
-;;   ;; (org-glance-graph:delete graph id)
-;;   ;; (org-glance-headline-metadata:relations meta)
-;;   meta
-;;   )
 
 (cl-defun org-glance-graph:capture-buffer (&optional (buffer (current-buffer)))
   "Return a list of `org-glance-headline' parsed from BUFFER."
