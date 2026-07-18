@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.9.0.0.20260718.0
+;; Version: 1.10.0.0.20260718.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -277,9 +277,9 @@ performs the conversion whenever the user chooses.  Always returns nil."
   "Org link completion for the canonical edge type: pick a headline, return
 an `org-glance-material:ID' link string."
   (org-glance-ensure-init)
-  (->> (org-glance-material:completing-read org-glance-graph)
-       org-glance-headline-metadata:id
-       (concat org-glance-link-material-type ":")))
+  (org-glance--edge->link-path
+   (org-glance-headline-metadata:id
+    (org-glance-material:completing-read org-glance-graph))))
 
 (cl-defun org-glance-link:complete-open ()
   "Org link completion for `org-glance-open': pick an active, linked headline."

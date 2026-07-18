@@ -804,6 +804,12 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
         (org-glance-material:crypt)                     ; the C-c # dispatcher
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (s-contains? "line one" (buffer-string)))   ; still plaintext in buffer
+        ;; second bare C-c #: buffer is now encrypted -> LOCK route (declined),
+        ;; never a second whole-body wrap
+        (org-glance-test:answering ((y-or-n-p nil))
+          (org-glance-material:crypt))
+        (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
+        (should (string= "pw" org-glance-material--password))
         (let ((inhibit-message t)) (save-buffer))))
     (let ((blob (org-glance-graph:get-content graph "wb")))
       (should (s-contains? "aes-encrypted" blob))
@@ -832,12 +838,21 @@ keeps the headline; the referrer's edge dangles harmlessly afterwards."
           (should (org-glance-material:delete graph "gone")))
         (should-not (buffer-live-p buf)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "gone")))
-      (should-not (org-glance-test:filter-ids graph '(:refers-to "zzz")))
-      ;; the referrer still lives and still carries the (now dangling) edge
+      ;; the dangling edge still matches :refers-to; the tombstoned target is
+      ;; itself excluded from every scan
+      (should (equal '("ref") (org-glance-test:filter-ids graph '(:refers-to "gone"))))
       (should (equal '(("gone" . nil))
                      (org-glance-headline-metadata:relations
                       (org-glance-graph:get-headline graph "ref"))))
-      (should (equal "gone" (org-glance-graph:title-or-id graph "gone"))))))
+      (should (equal "gone" (org-glance-graph:title-or-id graph "gone")))
+      ;; deleting the now-referrer-free "ref": the prompt drops the referrer talk
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (p) (setq prompt p) t)))
+        (should (org-glance-material:delete graph "ref")))
+      (should-not (s-contains? "reference" prompt))
+      ;; compaction reclaims the tombstoned blob dir (occurrences included)
+      (org-glance-graph:compact graph)
+      (should-not (f-exists? (org-glance-graph:headline-data-path graph "gone"))))))
 
 (ert-deftest org-glance-test:material-crypt-set-purges-occurrences ()
   "Encrypting a headline deletes its PLAINTEXT occurrence snapshots (they are

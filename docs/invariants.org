@@ -39,9 +39,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    cached, and =org-glance-reindex= drops it — so no caller may trust an index
    value in a durable write/delete without that fallback
    (=org-glance-property-index--entry=).  Relation edges follow the same rule:
-   the =org-glance-material:= body link is canonical, the =relations= metadata
-   field is a projection recomputed on save/reindex — never written
-   independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
+   the =org-glance-material:= body link is canonical; the =relations= AND
+   =links= metadata fields are projections recomputed on save/reindex — never
+   written independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
    are canonical content too — immutable files GC'd with the id dir, never
    indexed state (GC runs at compaction, so a tombstoned id's snapshots linger
    until then).  Violation: unrebuildable facts or half-states.
@@ -84,7 +84,10 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     modified buffer must =user-error= or skip that row
     (=org-glance-material--replace-headline=, =:retag= — its =user-error= trapped
     by the table's =org-glance-table--act-deltag=, bulk todo); a modified
-    file-backed view is flagged stale, never reverted.
+    file-backed view is flagged stale, never reverted.  Deletion
+    (=org-glance-material:delete=) names unsaved edits in its consent prompt
+    and tombstones BEFORE discarding the buffer, so a failed append never
+    costs the only unsaved copy.
 
 * Parsing and data hygiene
 
@@ -112,7 +115,11 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     resolve, and the index never holds decrypted plaintext).  Occurrence
     snapshots are plaintext: an encrypted material buffer never snapshots
     (=org-glance-material:snapshot-on-repeat=), and BOTH encrypt paths purge
-    existing snapshots (=org-glance-material--purge-occurrences=).  Violation:
+    existing snapshots (=org-glance-material--purge-occurrences=).  The
+    =links=/=relations= projections compute from SEALED bytes, so a link
+    inside a crypt block is never indexed; capture of content already
+    carrying UNSEALED =#+begin_crypt= markers indexes it as the plaintext it
+    is — markers bind through the material/crypt-set flows only.  Violation:
     secrets leak to =data.org= / backups / =occurrences/=, or an encrypted
     headline's intentionally-public regions vanish from search.
 
@@ -145,7 +152,14 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     snapshot — one per link-set version), with no pruning pass to reclaim
     them.
 
-18. *Reserved properties are managed keys.*  The keys in
+18. *Overview headings are self-sufficient, metadata-only.*  The render
+    (=org-glance-overview:render-headline=) carries state, priority cookie,
+    the SINGLE planning line, the id drawer, relations and plain links — all
+    from metadata, zero blob parses; agenda and link-following work without
+    materializing.  Violation: agenda misses planning, or the render cost
+    becomes O(blobs).
+
+19. *Reserved properties are managed keys.*  The keys in
     =org-glance-material-hidden-properties= are org-glance's, not the user's:
     concealed in material buffers (overlays only — file and store keep them),
     and hand edits to them reverted at =before-save= with a warning

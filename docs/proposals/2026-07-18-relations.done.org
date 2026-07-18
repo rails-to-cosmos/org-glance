@@ -127,9 +127,9 @@ secret.  The seal/sync hook ordering this rests on gets a regression test
 (sealed save excludes the edge; reindex agrees byte-for-byte).
 
 Named hole found while verifying (pre-existing, fixed alongside):
-=clone-on-repeat= snapshots the LIVE unsealed buffer, so a repeating encrypted
+=snapshot-on-repeat= snapshots the LIVE unsealed buffer, so a repeating encrypted
 headline clones as a PLAINTEXT blob (invariant 14 breach independent of
-relations).  Fix here: skip clone-on-repeat for encrypted headlines with a
+relations).  Fix here: skip snapshot-on-repeat for encrypted headlines with a
 message; sealing-with-cached-password is follow-up work.
 
 ** Non-interactions (verified HOLDS)
@@ -158,7 +158,7 @@ stores · unregistered-type parsing: bracket links parse as links regardless.
   config not persisted.
 - Commands open tables with bare filters (DONE referrer visible).
 - Crypt: sealed-block edge excluded on sync AND reindex (byte-equal metadata);
-  encrypted clone-on-repeat skips with a message.
+  encrypted snapshot-on-repeat skips with a message.
 - Reindex backfill.
 
 * Effort

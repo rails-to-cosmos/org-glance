@@ -112,6 +112,11 @@ data dir; set it with `org-glance-material:set-project-dir' (`C-c d').")
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
 
+(cl-defun org-glance-material--ensure ()
+  "Signal a `user-error' unless the current buffer is a materialized headline."
+  (unless (and org-glance-material--graph org-glance-material--id)
+    (user-error "Not in a materialized headline buffer")))
+
 (defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 
@@ -242,8 +247,7 @@ flag."
 (cl-defun org-glance-material:history ()
   "Choose one of this headline's occurrence snapshots and open it read-only."
   (interactive)
-  (unless (and org-glance-material--graph org-glance-material--id)
-    (user-error "Not in a materialized headline buffer"))
+  (org-glance-material--ensure)
   (org-glance-view:pick-occurrence org-glance-material--graph org-glance-material--id))
 
 (define-key org-glance-material-mode-map (kbd "C-c l") #'org-glance-material:history)
@@ -402,10 +406,10 @@ A wrong password forgets it, kills BUFFER and re-signals, so `open' fails clean.
 The first block in a plaintext buffer prompts for a password (confirmed) and
 wires the seal/unseal round-trip.  The region must lie inside the body."
   (interactive "r")
-  (unless (and org-glance-material--graph org-glance-material--id)
-    (user-error "Not a materialized buffer"))
+  (org-glance-material--ensure)
   (when (< beg (car (org-glance-headline--body-region)))
     (user-error "Region must lie inside the headline body"))
+  (when (>= beg end) (user-error "Nothing to encrypt"))
   (org-glance--crypt-wrap-region beg end)
   (unless org-glance-material--encrypted
     (org-glance-material--wire-crypto)
@@ -448,8 +452,6 @@ No region, already encrypted -> forget the cached password
    (current-prefix-arg (org-glance-material:crypt-unwrap))
    (org-glance-material--encrypted (org-glance-material:lock))
    (t (pcase-let ((`(,beg . ,end) (org-glance-headline--body-region)))
-        (when (>= beg end)
-          (user-error "Headline has no body to encrypt"))
         (org-glance-material:crypt-region beg end)))))
 
 (cl-defun org-glance-material:set-project-dir (dir)
@@ -462,8 +464,7 @@ DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
             (read-directory-name
              "Project dir: "
              (or (org-glance-material--property org-glance-project-dir-property) ""))))))
-  (unless (and org-glance-material--graph org-glance-material--id)
-    (user-error "Not a materialized buffer"))
+  (org-glance-material--ensure)
   (save-excursion
     (org-glance-material--goto-first-heading)
     (if (org-glance--present-string? dir)
@@ -823,27 +824,38 @@ columns fall back to the id).  The blob and its occurrence snapshots are
 reclaimed at the next compaction.  Discards ID's open material buffer and
 flags views stale."
   (let* ((title (org-glance-graph:title-or-id graph id))
+         (buf (find-buffer-visiting (org-glance-graph:content-path graph id)))
          (referrers
           (cl-loop for meta in (org-glance-graph:headlines graph)
                    when (assoc id (org-glance-headline-metadata:relations meta))
                    collect (org-glance-headline-metadata:title meta)))
          (prompt
-          (if referrers
-              (format "Delete \"%s\"? %d headline(s) reference it (%s) -- their links will dangle. "
-                      title (length referrers)
-                      (s-join ", " (mapcar (lambda (r) (s-truncate 30 r)) referrers)))
-            (format "Delete \"%s\"? " title))))
+          (concat
+           (if referrers
+               (format "Delete \"%s\"? %d headline(s) reference it (%s) -- their links will dangle"
+                       title (length referrers)
+                       (s-join ", " (mapcar (lambda (r) (s-truncate 30 r)) referrers)))
+             (format "Delete \"%s\"?" title))
+           ;; never clobber silently (invariant 11): a dirty open buffer is
+           ;; called out in the SAME consent prompt
+           (if (and buf (buffer-modified-p buf))
+               " (its open buffer has UNSAVED edits, which will be discarded)"
+             "")
+           " ")))
     (when (yes-or-no-p prompt)
-      (when-let ((buf (find-buffer-visiting (org-glance-graph:content-path graph id))))
-        (org-glance--discard-buffer buf))
+      ;; tombstone FIRST: if the append fails (ENOSPC), the open buffer -- the
+      ;; user's only unsaved copy -- must survive (write-ordering, inv 5 spirit)
       (org-glance-graph:delete graph id)
+      (when buf (org-glance--discard-buffer buf))
       (org-glance-view:mark-graph-stale graph)
       (message "org-glance: headline deleted (disk reclaimed at next compaction)")
       t)))
 
 ;;;###autoload
 (cl-defun org-glance-delete ()
-  "Choose a headline and delete it (tombstone; referrer-aware confirmation)."
+  "Choose a headline and delete it (tombstone; referrer-aware confirmation).
+Deliberately ignores the ambient `org-glance-filter-spec' -- filtered-out
+\(e.g. DONE) headlines must stay deletable."
   (interactive)
   (org-glance-ensure-init)
   (org-glance-material:delete
@@ -1037,11 +1049,9 @@ inserts a literal `@' anywhere."
                  (org-glance-material--read-reference
                   org-glance-material--graph org-glance-material--id
                   :with-kind arg)))
-      ;; A kinded reference reads as prose: "roasted by [[...][Manhattan]]" --
-      ;; the kind prefixes the link as plain text (only the name is clickable);
-      ;; the canonical, machine-readable kind lives in the link path.
-      (insert (concat (and kind (concat (org-glance--kind-pretty kind) " "))
-                      (org-link-make-string (org-glance--edge->link-path id kind) title))))))
+      ;; Prose edge: "roasted by [[...][Manhattan]]" -- only the name is a
+      ;; link; the canonical kind lives in the link path.
+      (insert (org-glance--edge->string id kind title)))))
 
 (cl-defun org-glance-material:references (&optional arg)
   "Table of the headlines this one refers to; with ARG, its back-references.

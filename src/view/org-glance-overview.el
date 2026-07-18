@@ -99,10 +99,8 @@ which filter a cache directory holds."
 
 (cl-defun org-glance-overview:render-headline (graph metadata)
   "Render METADATA as one self-sufficient org heading.
-Carries everything agenda and link-following need WITHOUT materializing:
-state, priority cookie, tags, the single planning line, the id drawer, then
-the relations (pretty kind + canonical edge link, titles resolved live from
-GRAPH) and the plain (non-edge) body links, each as a list item."
+Agenda and link-following need no materialization; relation titles resolve
+live from GRAPH (id fallback for gone targets)."
   (let ((state (org-glance-headline-metadata:state metadata))
         (priority (org-glance-headline-metadata:priority metadata))
         (schedule (org-glance-headline-metadata:schedule metadata))
@@ -128,10 +126,8 @@ GRAPH) and the plain (non-edge) body links, each as a list item."
             (apply #'concat
                    (cl-loop for (target . kind) in (org-glance-headline-metadata:relations metadata)
                             collect (concat "- "
-                                            (if kind (concat (org-glance--kind-pretty kind) " ") "")
-                                            (org-link-make-string
-                                             (org-glance--edge->link-path target kind)
-                                             (org-glance-graph:title-or-id graph target))
+                                            (org-glance--edge->string
+                                             target kind (org-glance-graph:title-or-id graph target))
                                             "\n")))
             ;; Plain links, verbatim -- clickable straight from the overview.
             (apply #'concat

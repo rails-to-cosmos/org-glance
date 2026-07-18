@@ -58,8 +58,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
    before any write, blob lands before its WAL record. The property index is a
    pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
-   trust it in a durable write. Relation edges: the `org-glance-material:` body
-   link is canonical; `relations` metadata is a projection, never written
+   trust it in a durable write. The `org-glance-material:` body link is
+   canonical; `relations` AND `links` metadata are projections, never written
    independently.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any
    filesystem use.
@@ -89,7 +89,10 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
     judged by `org-glance-filter:transient?`) never persist per-filter state:
     no overview cache, no table config, no column schema.
-18. Reserved properties (`org-glance-material-hidden-properties`) are managed
+18. Overview headings are self-sufficient, metadata-only: state, priority,
+    one planning line, id drawer, relations, plain links — zero blob parses;
+    agenda + link-following need no materialization.
+19. Reserved properties (`org-glance-material-hidden-properties`) are managed
     keys: concealed in material buffers, hand edits reverted on save with a
     warning; the revert touches only the heading drawer (disjoint from the
     crypt seal).

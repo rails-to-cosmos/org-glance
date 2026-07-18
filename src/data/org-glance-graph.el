@@ -79,7 +79,7 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   `((id            :id           ,#'org-glance-headline:id                                 nil          nil)
     (state         :state        ,#'org-glance-headline:state                              nil          nil)
     (title         :title        ,#'org-glance-headline:title                              nil          nil)
-    (tags          :tags         ,#'org-glance-headline:tags                               tags-vector  tags-list)
+    (tags          :tags         ,#'org-glance-headline:tags                               strings-vector strings-list)
     (hash          :hash         :hash                                                     nil          nil)
     (schedule      :schedule     ,#'org-glance-headline:schedule                           nil          nil)
     (deadline      :deadline     ,#'org-glance-headline:deadline                           nil          nil)
@@ -88,8 +88,7 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
     (propertized?  :propertized  :propertized                                              nil          bool)
     (encrypted?    :encrypted    :encrypted                                                nil          bool)
     (relations     :relations    :relations                                                edges-vector edges-list)
-    ;; tags-vector/tags-list are generic string-list codecs; links reuse them.
-    (links         :links        :links                                                    tags-vector  tags-list))
+    (links         :links        :links                                                    strings-vector strings-list))
   "The single source of truth for the metadata projection's shape.
 Drives the `org-glance-headline:metadata' constructor, `serialize' and
 `deserialize' together, so the four can never drift (a hand-written
@@ -113,7 +112,7 @@ as-is.")
 (cl-defun org-glance-headline-metadata--encode (kind value)
   "Serialize-side coercion for a field of ENCODE kind KIND."
   (pcase kind
-    ('tags-vector (->> value (mapcar (-partial #'format "%s")) (apply #'vector)))
+    ('strings-vector (->> value (mapcar (-partial #'format "%s")) (apply #'vector)))
     ;; Vector of [ID] / [ID KIND] vectors: `json-serialize' renders only
     ;; vectors as JSON arrays (a list would error inside the non-demoted
     ;; append, crashing every save).
@@ -127,7 +126,7 @@ as-is.")
   "Deserialize-side coercion for a field of DECODE kind KIND."
   (pcase kind
     ('bool (eq t value))                ; JSON false/null both read as nil
-    ('tags-list (append value nil))
+    ('strings-list (append value nil))
     ;; Normalize BOTH levels -- outer array to a list, each inner [ID]/[ID KIND]
     ;; to an (ID . KIND-or-nil) cons; a shallow decode would leave inner vectors
     ;; and every relation filter would silently match nothing.

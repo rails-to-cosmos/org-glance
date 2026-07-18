@@ -175,9 +175,10 @@ store's metadata build reparses the same blob otherwise).  The links parse
 once, feeding both `linked?' and the relation edges.  Hash is LAST: it deletes
 the id/hash drawer properties in place, after the read-only facts."
   (org-glance-headline:with-contents headline
-    (let ((links (org-glance--buffer-links)))    ; with-contents is at point-min
-      (list :relations   (org-glance--links->edges links)
-            :links       (org-glance--links->plain links)
+    (pcase-let* ((links (org-glance--buffer-links))   ; with-contents is at point-min
+                 (`(,edges . ,plain) (org-glance--links-partition links)))
+      (list :relations   edges
+            :links       plain
             :linked      (and links t)
             :propertized (org-glance-headline--propertized-here)
             :encrypted   (org-glance-headline--encrypted-here)

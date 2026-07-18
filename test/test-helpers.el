@@ -148,15 +148,12 @@ All other ingests proceed through the real function."
        (when (buffer-live-p ,buf) (kill-buffer ,buf)))))
 
 (cl-defmacro org-glance-test:with-table-filter (graph filter var &rest body)
-  "Visit GRAPH's table for FILTER, bind the buffer to VAR, run BODY, kill it."
+  "Visit GRAPH's table for FILTER, bind the buffer to VAR, run BODY, kill it.
+Implemented over `org-glance-test:with-shown' (same show-stubs + kill-all)."
   (declare (indent 3))
-  `(let ((,var nil))
-     (unwind-protect
-         (cl-letf (((symbol-function 'pop-to-buffer)   (lambda (b &rest _) (setq ,var b) b))
-                   ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq ,var b) b)))
-           (setq ,var (org-glance-table:visit ,graph ,filter))
-           ,@body)
-       (when (buffer-live-p ,var) (kill-buffer ,var)))))
+  `(org-glance-test:with-shown (,var)
+     (setq ,var (org-glance-table:visit ,graph ,filter))
+     ,@body))
 
 (cl-defmacro org-glance-test:with-table-buffer (graph var &rest body)
   "Visit GRAPH's default (unfiltered) table; see the filter variant."

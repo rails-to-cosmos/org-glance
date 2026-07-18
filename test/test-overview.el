@@ -558,6 +558,21 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd "/")) #'org-glance-overview-filter))
     (should (eq (lookup-key map (kbd "q")) #'quit-window))))
 
+(ert-deftest org-glance-test:overview-delete-key ()
+  "`D' in the overview deletes the headline at point and refreshes."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "dd" "* TODO Doomed")
+      (org-glance-test:headline "kk" "* TODO Keeper"))
+    (org-glance-test:with-overview (buf graph nil)
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (re-search-forward "Doomed")
+        (org-glance-test:answering ((yes-or-no-p t))
+          (funcall (key-binding (kbd "D"))))
+        (should-not (s-contains? "Doomed" (buffer-string)))
+        (should (s-contains? "Keeper" (buffer-string)))))))
+
 (ert-deftest org-glance-test:overview-planning-keys ()
   "`C-c C-s' / `C-c C-d' in the overview set planning on the headline at point;
 `C-u' clears through the same interactive frontend."
@@ -596,8 +611,10 @@ plain body links -- agenda and link-following need no materialization."
       (org-glance-test:headline "c1" "* TODO [#A] Kebena Decaf :coffee:"
         "SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>"
         "roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan]]"
+        "see [[org-glance-material:r2][x]]"
         "[[https://example.com][Homepage]]")
-      (org-glance-test:headline "r1" "* Manhattan Coffee Roasters"))
+      (org-glance-test:headline "r1" "* Manhattan Coffee Roasters")
+      (org-glance-test:headline "r2" "* Water Notes"))
     (let ((text (org-glance-overview:render graph '(:tags ("coffee")))))
       ;; priority cookie + one-line planning (agenda-native)
       (should (s-contains? "* TODO [#A] Kebena Decaf" text))
@@ -606,9 +623,26 @@ plain body links -- agenda and link-following need no materialization."
       (should (s-contains?
                "- roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan Coffee Roasters]]"
                text))
+      ;; kindless edge: bare list item, no prose prefix
+      (should (s-contains? "\n- [[org-glance-material:r2][Water Notes]]" text))
       ;; plain link verbatim; the edge link is NOT duplicated into the list
       (should (s-contains? "- [[https://example.com][Homepage]]" text))
       (should (= 1 (s-count-matches "r1\\?kind" text))))))
+
+(ert-deftest org-glance-test:metadata-links-sealed-excluded ()
+  "A URL inside a SEALED crypt block never reaches the `links' field."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline:encrypt
+       (org-glance-test:headline "s" "* TODO Secret"
+         "[[https://public.example][P]]"
+         "#+begin_crypt"
+         "[[https://secret.example][S]]"
+         "#+end_crypt")
+       "pw"))
+    (should (equal '("[[https://public.example][P]]")
+                   (org-glance-headline-metadata:links
+                    (org-glance-graph:get-headline graph "s"))))))
 
 (ert-deftest org-glance-test:metadata-links-field ()
   "The `links' metadata field carries NON-edge links only; edges live in

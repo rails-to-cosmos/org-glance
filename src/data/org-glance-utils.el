@@ -186,19 +186,23 @@ The decode half of the edge wire format; `--edge->link-path' encodes."
   (concat org-glance-link-material-type ":" id
           (and kind (concat "?kind=" (org-glance--kind-slug kind)))))
 
-(cl-defun org-glance--links->plain (links)
-  "Raw bracket texts of the NON-edge links among LINKS (the tuple shape).
-Edge links (`org-glance-material:'/`org-glance-visit:') live in the
-`relations' metadata instead; together the two fields cover every link."
-  (cl-loop for (text _title _pos type _path) in links
-           unless (member type org-glance--link-edge-types)
-           collect text))
+(cl-defun org-glance--edge->string (id kind title)
+  "Human-readable edge: \"roasted by [[org-glance-material:ID?kind=SLUG][TITLE]]\".
+The prose half of the edge wire format: pretty KIND prefix (when any) + the
+canonical link.  Used by the overview render and the `@' inserter."
+  (concat (and kind (concat (org-glance--kind-pretty kind) " "))
+          (org-link-make-string (org-glance--edge->link-path id kind) title)))
 
-(cl-defun org-glance--links->edges (links)
-  "Distinct relation edges among LINKS (the `--buffer-links' tuple shape)."
-  (-distinct (cl-loop for (_link _title _pos type path) in links
-                      for edge = (org-glance--link-edge type path)
-                      when edge collect edge)))
+(cl-defun org-glance--links-partition (links)
+  "Partition LINKS (the `--buffer-links' tuple shape) into (EDGES . PLAIN).
+EDGES are the distinct (TARGET . KIND) pairs of the edge-typed links; PLAIN
+the raw bracket texts of everything else.  One pass; together the halves
+cover every link."
+  (cl-loop for (text _title _pos type path) in links
+           if (member type org-glance--link-edge-types)
+           collect (org-glance--link-edge type path) into edges
+           else collect text into plain
+           finally return (cons (-distinct (delq nil edges)) plain)))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
