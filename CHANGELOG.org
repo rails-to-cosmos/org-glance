@@ -6,6 +6,8 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- =C-c C-s= / =C-c C-d= in the overview AND table set the row's schedule /
+  deadline exactly like org (=C-u= clears); runs org's own planner on the blob.
 - Material buffers conceal bookkeeping drawer lines
   (=org-glance-material-hidden-properties=, default =ORG_GLANCE_ID= +
   =ORG_GLANCE_HASH=; overlays only, file content untouched); an all-reserved
@@ -22,7 +24,7 @@ Notable user-facing changes.  Versions date-based
   =org-glance-repeat-history-depth= keeps the newest N (0 = off, default;
   =t= = unlimited); the =ORG_GLANCE_REPEAT_HISTORY_DEPTH= drawer property
   overrides it per headline (integer or =inf=).
-  Table shows a =↻= column; =l= (table/overview) / =C-c l= (material) open a
+  Table shows a =Rep= column (=↻= cell marker); =l= (table/overview) / =C-c l= (material) open a
   chosen occurrence read-only.  Encrypted headlines keep no history (skip +
   no trim -- plaintext would leak).  Replaces the clone-on-repeat prototype
   (=org-glance-clone-on-repeat-p= removed).

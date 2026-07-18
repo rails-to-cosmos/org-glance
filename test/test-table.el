@@ -854,10 +854,11 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered)))))))
 
-;;; Occurrence history: ↻ column + `l' action
+;;; Occurrence history: Rep column + `l' action
 
 (ert-deftest org-glance-test:table-repeated-column-and-history ()
-  "The ↻ column marks repeater-carrying rows; `l' routes to the shared picker."
+  "The Rep column marks repeater-carrying rows (↻ cell); `l' routes to the
+shared picker."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "rep" "* TODO daily" "SCHEDULED: <2026-06-07 Sun +1d>")
@@ -872,6 +873,32 @@ but stays live in the graph (mirror of the bare `+' capture)."
             (table-view--goto-id "rep")
             (funcall (key-binding (kbd "l"))))
           (should (equal "rep" picked)))))))
+
+(ert-deftest org-glance-test:table-planning-keys ()
+  "`C-c C-s' / `C-c C-d' set schedule/deadline on the row; `C-u' clears."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Plan me"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (table-view--goto-id "p1")
+        (org-glance-test:answering ((org-read-date "2026-08-01"))
+          (funcall (key-binding (kbd "C-c C-s"))))
+        (should (s-contains? "2026-08-01"
+                             (org-glance-headline-metadata:schedule
+                              (org-glance-graph:get-headline graph "p1"))))
+        (table-view--goto-id "p1")
+        (org-glance-test:answering ((org-read-date "2026-09-01"))
+          (funcall (key-binding (kbd "C-c C-d"))))
+        (should (s-contains? "2026-09-01"
+                             (org-glance-headline-metadata:deadline
+                              (org-glance-graph:get-headline graph "p1"))))
+        ;; C-u clears the schedule, deadline untouched
+        (table-view--goto-id "p1")
+        (let ((current-prefix-arg '(4)))
+          (funcall (key-binding (kbd "C-c C-s"))))
+        (let ((meta (org-glance-graph:get-headline graph "p1")))
+          (should (null (org-glance-headline-metadata:schedule meta)))
+          (should (s-contains? "2026-09-01" (org-glance-headline-metadata:deadline meta))))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

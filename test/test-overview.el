@@ -558,5 +558,24 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd "/")) #'org-glance-overview-filter))
     (should (eq (lookup-key map (kbd "q")) #'quit-window))))
 
+(ert-deftest org-glance-test:overview-planning-keys ()
+  "`C-c C-s' / `C-c C-d' in the overview set planning on the headline at point."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Plan me"))
+    (let ((org-glance-graph graph))
+      (org-glance-test:with-overview (buf graph nil)
+        (with-current-buffer buf
+          (should (eq (key-binding (kbd "C-c C-s")) #'org-glance-overview:schedule))
+          (should (eq (key-binding (kbd "C-c C-d")) #'org-glance-overview:deadline))
+          (goto-char (point-min))
+          (re-search-forward "Plan me")
+          (org-glance-test:answering ((org-read-date "2026-08-15"))
+            (org-glance-overview:schedule))
+          (should (s-contains? "2026-08-15"
+                               (org-glance-headline-metadata:schedule
+                                (org-glance-graph:get-headline graph "p1"))))
+          ;; point restored onto the headline after the refresh
+          (should (org-at-heading-p)))))))
+
 (provide 'test-overview)
 ;;; test-overview.el ends here

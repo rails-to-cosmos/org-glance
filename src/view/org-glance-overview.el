@@ -267,6 +267,8 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
 (define-key org-glance-overview-mode-map (kbd "C-c C-t") #'org-glance-overview:todo)
+(define-key org-glance-overview-mode-map (kbd "C-c C-s") #'org-glance-overview:schedule)
+(define-key org-glance-overview-mode-map (kbd "C-c C-d") #'org-glance-overview:deadline)
 (define-key org-glance-overview-mode-map (kbd "q") #'quit-window)
 
 (defvar-local org-glance-overview--spec nil
@@ -324,6 +326,26 @@ returns point to the headline once the change (and any note) is committed."
        (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
          (org-back-to-heading t))
        (message "State: %s" (if (s-present? state) state "(none)"))))))
+
+(cl-defun org-glance-overview--set-planning (kind remove)
+  "Set (or REMOVE) KIND planning of the headline at point; refresh, keep point."
+  (let ((id (org-glance-overview:id-at-point)))
+    (org-glance-material:set-planning org-glance-graph id kind remove)
+    (org-glance-overview:refresh)
+    (goto-char (point-min))
+    (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
+      (org-back-to-heading t))
+    (message "%s %s" (capitalize (symbol-name kind)) (if remove "cleared" "set"))))
+
+(cl-defun org-glance-overview:schedule (&optional arg)
+  "Set the schedule of the headline at point, like `C-c C-s'; `C-u' clears it."
+  (interactive "P")
+  (org-glance-overview--set-planning 'schedule arg))
+
+(cl-defun org-glance-overview:deadline (&optional arg)
+  "Set the deadline of the headline at point, like `C-c C-d'; `C-u' clears it."
+  (interactive "P")
+  (org-glance-overview--set-planning 'deadline arg))
 
 (cl-defun org-glance-overview:visit (graph &optional filter)
   "Open GRAPH's overview for FILTER read-only, serving the cache when fresh."

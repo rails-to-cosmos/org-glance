@@ -127,7 +127,7 @@ live spec against these keys to record the hidden ones."
     ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
     ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
     ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))
-    ((key . "repeated") (header . "↻")         (type . "text")  (sortable . t) (align . "center"))))
+    ((key . "repeated") (header . "Rep")       (type . "text")  (sortable . t) (align . "center"))))
 
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
@@ -150,7 +150,9 @@ ascending (active first)."
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
                 ((key . "l")     (command . "history")   (label . "Log"))
                 ((key . "-")     (command . "remove")    (label . "Untag"))
-                ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
+                ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))
+                ((key . "C-c C-s") (command . "schedule") (label . "Schedule"))
+                ((key . "C-c C-d") (command . "deadline") (label . "Deadline"))))
     (sort . ((column . "state") (ascending . t)))))
 
 (cl-defun org-glance-table--row (metadata)
@@ -511,6 +513,15 @@ untagged (\":none:\") entry."
         (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
                                       :columns columns :hidden hidden)))))
 
+(cl-defun org-glance-table--act-planning (graph id kind)
+  "Set (or with `C-u' clear) KIND planning of the row at point, like org's keys."
+  (unless id (user-error "Point is not on a row"))
+  (let ((line (line-number-at-pos))
+        (remove current-prefix-arg))
+    (org-glance-material:set-planning graph id kind remove)
+    (org-glance-table--finish id line "%s %s" (capitalize (symbol-name kind))
+                              (if remove "cleared" "set"))))
+
 (cl-defun org-glance-table--act-history (graph id)
   "`l' handler: open one of ID's occurrence snapshots, read-only."
   (unless id (user-error "Point is not on a row"))
@@ -611,7 +622,9 @@ Honours the same filter language as the overview (see
                                                                      ""))))
                          (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
                          (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
-                         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))))
+                         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
+                         (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
+                         (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
          ;; Build the spec, restoring the saved column order (if any) before display.
          (tspec (let ((s (org-glance-table--spec graph spec)))
                   (when-let ((order (plist-get saved :columns)))

@@ -807,6 +807,24 @@ Discard a stale open buffer.  Return the new headline."
       (when existing (org-glance--discard-buffer existing))
       new)))
 
+(cl-defun org-glance-material:set-planning (graph id kind &optional remove)
+  "Set headline ID's KIND (`schedule' or `deadline') planning in GRAPH.
+Prompts via `org-read-date'; REMOVE clears the planning instead.  Runs org's
+own planner in a temp parse of the blob, so repeaters and habit cookies typed
+at the prompt land natively.  Errors on unsaved edits
+\(`org-glance-material--replace-headline').  Return the new headline."
+  (let ((setter (if (eq kind 'schedule) #'org-schedule #'org-deadline))
+        (time (unless remove
+                (org-read-date nil nil nil
+                               (format "%s: " (capitalize (symbol-name kind)))))))
+    (org-glance-material--replace-headline
+     graph id
+     (lambda (headline)
+       (org-glance-headline--from-string
+        (org-glance-headline:with-contents headline
+          (funcall setter (when remove '(4)) time)
+          (buffer-substring-no-properties (point-min) (point-max))))))))
+
 (cl-defun org-glance-material:crypt-set (graph id encrypt password)
   "Encrypt (ENCRYPT non-nil) or decrypt headline ID in GRAPH under PASSWORD.
 Encrypt seals the body's crypt blocks (wrapping the whole body in one when none
