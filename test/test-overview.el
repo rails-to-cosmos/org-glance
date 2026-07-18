@@ -550,7 +550,8 @@ when it is (re)displayed or selected."
     ;; `m' is NOT a materialize key -- it was dropped, and in the table view `m'
     ;; marks (`table-view-mark-toggle'); the org-text overview leaves it unbound.
     (should-not (lookup-key map (kbd "m")))
-    (should (eq (lookup-key map (kbd "o")) #'org-glance-overview:open))
+    (should (eq (lookup-key map (kbd "j")) #'org-glance-overview:open))
+    (should (eq (lookup-key map (kbd "!")) #'org-glance-overview:open))
     (should (eq (lookup-key map (kbd "e")) #'org-glance-overview:extract))
     (should (eq (lookup-key map (kbd "a")) #'org-glance-agenda))
     (should (eq (lookup-key map (kbd "g")) #'org-glance-overview:refresh))

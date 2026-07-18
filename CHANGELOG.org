@@ -6,6 +6,11 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Material buffers conceal bookkeeping drawer lines
+  (=org-glance-material-hidden-properties=, default =ORG_GLANCE_ID= +
+  =ORG_GLANCE_HASH=; overlays only, file content untouched); an all-reserved
+  drawer hides entirely.  Hand edits to these managed keys are reverted on
+  save with a warning.
 - Relations: =@= in a material buffer inserts an =org-glance-material:ID= link
   to a completing-read headline (=C-u @= adds a =?kind== reference kind, e.g.
   author/editor); following materializes the target.  Edges derive from body
@@ -14,7 +19,9 @@ Notable user-facing changes.  Versions date-based
   Legacy =org-glance-visit:= links count as kindless edges.
 - Repeat occurrence history: completing a repetition snapshots the done state
   into =data/<id>/occurrences/<STAMP>.org= (one graph headline, never clones);
-  =org-glance-repeat-history-depth= keeps the newest N (0 = off, default).
+  =org-glance-repeat-history-depth= keeps the newest N (0 = off, default;
+  =t= = unlimited); the =ORG_GLANCE_REPEAT_HISTORY_DEPTH= drawer property
+  overrides it per headline (integer or =inf=).
   Table shows a =↻= column; =l= (table/overview) / =C-c l= (material) open a
   chosen occurrence read-only.  Encrypted headlines keep no history (skip +
   no trim -- plaintext would leak).  Replaces the clone-on-repeat prototype
@@ -47,6 +54,8 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Open-link key in the overview and table is =j= (was =o=), matching the
+  transient (=j= Open link, =o= Overview); =!= is a quiet alias (dired rhyme).
 - Table =:= (add tag) offers only tags the headline does not already carry.
 - Material password lock =C-c C-l= → =C-c #=.
 - =org-glance-overview-default-view= takes =org-glance-table= / =org-glance-overview=
@@ -57,6 +66,9 @@ Notable user-facing changes.  Versions date-based
   reopening switches to the live session.  Moved to =org-glance-llm.el=.
 
 ** Removed
+- =org-glance-material:apply= — a thin =save-buffer= wrapper; use the ordinary
+  save (=C-x C-s=), which has synced through =write-contents-functions= all
+  along.
 - Dead command =org-glance:insert-pin-block= and the unused legacy headline
   helpers (=org-glance-headline:overview= chain, =:reset-indent=, =:add-note=,
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).

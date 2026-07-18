@@ -87,6 +87,10 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
     judged by `org-glance-filter:transient?`) never persist per-filter state:
     no overview cache, no table config, no column schema.
+18. Reserved properties (`org-glance-material-hidden-properties`) are managed
+    keys: concealed in material buffers, hand edits reverted on save with a
+    warning; the revert touches only the heading drawer (disjoint from the
+    crypt seal).
 
 ## Fix — and prevent — the whole class
 

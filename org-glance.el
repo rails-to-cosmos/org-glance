@@ -297,8 +297,8 @@ performs the conversion whenever the user chooses.  Always returns nil."
  :face 'org-glance-link-materialize-face)
 
 (org-link-set-parameters
- "org-glance-visit"
- :follow #'org-glance-link:materialize
+ "org-glance-visit"                       ; legacy edge type; same handler
+ :follow #'org-glance-link:material
  :face 'org-glance-link-materialize-face
  :complete 'org-glance-link:choose-thing-for-materialization)
 
@@ -320,8 +320,6 @@ One handler serves both edge link types (material + legacy visit)."
   (switch-to-buffer
    (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
 
-(defalias 'org-glance-link:materialize #'org-glance-link:material
-  "Follow handler of the legacy `org-glance-visit:' edge links.")
 
 (defun org-glance-link:open (id &optional _)
   "Open a link inside the org-glance headline identified by ID."

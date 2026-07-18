@@ -155,11 +155,15 @@ the save that flagged it, so its errors are demoted."
 
 ;;; Occurrence history picker (shared by table `l', overview `l', material `C-c l')
 
-(cl-defun org-glance-view:pick-occurrence (graph id title)
+(cl-defun org-glance-view:pick-occurrence (graph id)
   "Completing-read one of ID's occurrence snapshots and open it READ-ONLY.
 Snapshots are immutable history (`org-glance-graph:occurrences'); the buffer is
-named by TITLE and the chosen stamp."
-  (let ((occurrences (org-glance-graph:occurrences graph id)))
+named by the headline's title (id when the headline is gone) and the stamp."
+  (let ((title (let ((meta (org-glance-graph:get-headline graph id)))
+                 (if (org-glance-headline-metadata? meta)
+                     (org-glance-headline-metadata:title meta)
+                   id)))
+        (occurrences (org-glance-graph:occurrences graph id)))
     (unless occurrences
       (user-error "No occurrence history for this headline (see `org-glance-repeat-history-depth')"))
     (let* ((stamp (completing-read "Occurrence: " (mapcar #'car occurrences) nil t))

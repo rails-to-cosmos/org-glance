@@ -43,7 +43,8 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    field is a projection recomputed on save/reindex — never written
    independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
    are canonical content too — immutable files GC'd with the id dir, never
-   indexed state.  Violation: unrebuildable facts or half-states.
+   indexed state (GC runs at compaction, so a tombstoned id's snapshots linger
+   until then).  Violation: unrebuildable facts or half-states.
 
 6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and
    =..=) via =error= — never =cl-assert=, which can be compiled out — before
@@ -105,9 +106,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     plaintext (aes-header guard in =org-glance-headline--crypt-upgrade-legacy=).
     Only block bodies are secret: text OUTSIDE the blocks stays plaintext on disk
     and IS indexed even for an =encrypted?= headline (so its links/properties
-    resolve, and the index never holds decrypted plaintext).  Violation: secrets
-    leak to =data.org= / backups, or an encrypted headline's intentionally-public
-    regions vanish from search.
+    resolve, and the index never holds decrypted plaintext).  Occurrence
+    snapshots are plaintext: an encrypted material buffer never snapshots
+    (=org-glance-material:snapshot-on-repeat=), and BOTH encrypt paths purge
+    existing snapshots (=org-glance-material--purge-occurrences=).  Violation:
+    secrets leak to =data.org= / backups / =occurrences/=, or an encrypted
+    headline's intentionally-public regions vanish from search.
 
 * Views and tables
 
@@ -137,3 +141,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     accretes per visited headline (=:id-any= identities embed the target
     snapshot — one per link-set version), with no pruning pass to reclaim
     them.
+
+18. *Reserved properties are managed keys.*  The keys in
+    =org-glance-material-hidden-properties= are org-glance's, not the user's:
+    concealed in material buffers (overlays only — file and store keep them),
+    and hand edits to them reverted at =before-save= with a warning
+    (=org-glance-material--restore-reserved= — the sole sanctioned in-buffer
+    edit under invariant 11; it touches only the heading drawer, disjoint from
+    the crypt seal's body blocks).  Violation: a hand-edited or region-killed
+    =ORG_GLANCE_ID= silently orphans the blob from its WAL id.

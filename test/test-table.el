@@ -50,12 +50,14 @@
 ;;; Spec generation
 
 (ert-deftest org-glance-test:table-spec-shape ()
-  "The spec has the required top-level keys and eight columns."
+  "The spec has the required top-level keys and exactly the built-in columns."
   (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO X"))
     (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
-      (should (= 8 (length (alist-get 'columns spec))))
+      (should (equal '("state" "title" "tags" "schedule" "deadline"
+                       "priority" "encrypted" "repeated")
+                     (mapcar (lambda (c) (alist-get 'key c))
+                             (alist-get 'columns spec))))
       (should (alist-get 'actions spec))
       (should (alist-get 'sort spec)))))
 
@@ -147,7 +149,10 @@ path; a display-boundary refresh re-fills it and clears the flag."
       (should (buffer-live-p buf))
       (with-current-buffer buf
         (should (derived-mode-p 'table-view-mode))
-        (should (= 2 (length table-view--rows)))))))
+        (should (= 2 (length table-view--rows)))
+        ;; `!' quietly aliases the `j' open action (dired rhyme)
+        (should (eq (key-binding (kbd "!")) (key-binding (kbd "j"))))
+        (should (key-binding (kbd "j")))))))
 
 (ert-deftest org-glance-test:table-filter-reset ()
   "`C-u /' clears the active substring filter; `/' is bound to the wrapper."
@@ -420,7 +425,7 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
     (let ((opened nil))
       (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq opened b) b))
                 ((symbol-function 'org-glance-material:open) (lambda (_g id) (get-buffer-create (format "*mat-%s*" id)))))
-        (org-glance-table--act-materialize graph "am1" nil)
+        (org-glance-table--act-materialize graph "am1")
         (should (equal "*mat-am1*" (buffer-name opened)))   ; the correct id was opened
         (kill-buffer opened)))))
 
@@ -454,7 +459,7 @@ row leaves the view (DONE under an active filter) point stays on the same line."
           (should (table-view--goto-id "r2"))
           (let ((line (line-number-at-pos)))
             (should (> line 1))                     ; r2 is below the header
-            (org-glance-table--act-todo graph "r2" nil)   ; r2 -> DONE, leaves the view
+            (org-glance-table--act-todo graph "r2")   ; r2 -> DONE, leaves the view
             (should (= (line-number-at-pos) line))  ; point preserved, NOT at the top
             (should-not (table-view--goto-id "r2")))))))) ; r2 indeed gone
 
@@ -482,7 +487,7 @@ after the (no-note) commit the reloaded table shows the new state on the row."
       (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
       (org-glance-test:with-table-buffer graph buf
         (with-current-buffer buf
-          (org-glance-table--act-todo graph "td1" nil)   ; no-note -> synchronous finalize
+          (org-glance-table--act-todo graph "td1")   ; no-note -> synchronous finalize
           ;; persisted in the graph
           (should (equal "DONE" (org-glance-headline-metadata:state
                                  (org-glance-graph:get-headline graph "td1"))))
@@ -849,10 +854,10 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered)))))))
 
-;;; Occurrence history: ↻ column + `h' action
+;;; Occurrence history: ↻ column + `l' action
 
 (ert-deftest org-glance-test:table-repeated-column-and-history ()
-  "The ↻ column marks repeater-carrying rows; `h' routes to the shared picker."
+  "The ↻ column marks repeater-carrying rows; `l' routes to the shared picker."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "rep" "* TODO daily" "SCHEDULED: <2026-06-07 Sun +1d>")
@@ -863,10 +868,10 @@ but stays live in the graph (mirror of the bare `+' capture)."
         (should (equal ""  (org-glance-test:table-cell buf "one" "repeated")))
         (let (picked)
           (cl-letf (((symbol-function 'org-glance-view:pick-occurrence)
-                     (lambda (_g id title) (setq picked (cons id title)))))
+                     (lambda (_g id) (setq picked id))))
             (table-view--goto-id "rep")
             (funcall (key-binding (kbd "l"))))
-          (should (equal '("rep" . "daily") picked)))))))
+          (should (equal "rep" picked)))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

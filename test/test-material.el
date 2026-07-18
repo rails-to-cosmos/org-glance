@@ -78,7 +78,7 @@ This guards the interactive save path users actually hit."
       (should buffer-file-name)            ; a real file -> the standard save works
       (should (s-contains? "TODO foo" (buffer-string)))
       (org-glance-test:sed "TODO" "DONE")
-      (org-glance-material:apply))
+      (let ((inhibit-message t)) (save-buffer)))
     (should (string= "DONE" (org-glance-headline-metadata:state
                              (org-glance-graph:get-headline graph "s1"))))
     ;; persisted: re-materializing shows the edited state
@@ -91,7 +91,7 @@ This guards the interactive save path users actually hit."
     (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO foo"))
     (org-glance-test:with-material (buffer graph "u1")
       (org-glance-test:sed "TODO foo" "DONE bar")
-      (org-glance-material:apply))
+      (let ((inhibit-message t)) (save-buffer)))
     (let ((meta (org-glance-graph:get-headline graph "u1")))
       (should (string= "DONE" (org-glance-headline-metadata:state meta)))
       (should (string= "bar" (org-glance-headline-metadata:title meta))))))
@@ -141,7 +141,7 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-graph:add graph (org-glance-test:headline "m1" "* TODO foo"))
     (org-glance-test:with-material (buffer graph "m1")
       (org-glance-test:sed "^:ORG_GLANCE_ID:.*$" ":ORG_GLANCE_ID: changed")
-      (let ((inhibit-message t)) (org-glance-material:apply)))
+      (let ((inhibit-message t)) (save-buffer)))
     ;; the original id's metadata is left untouched
     (should (string= "foo" (org-glance-headline-metadata:title
                             (org-glance-graph:get-headline graph "m1"))))))
@@ -234,12 +234,12 @@ for the original id (the sync hook skips a mismatched id)."
   "Following a stale org-glance link errors loudly, not popping a picker."
   ;; Uninitialized: still a loud user-error, no picker.
   (let ((org-glance-graph nil))
-    (should-error (org-glance-link:materialize "no-such-id") :type 'user-error)
+    (should-error (org-glance-link:material "no-such-id") :type 'user-error)
     (should-error (org-glance-link:open "no-such-id") :type 'user-error))
   ;; Initialized but the id is unknown: not-found user-error.
   (org-glance-test:with-graph graph
     (let ((org-glance-graph graph))
-      (should-error (org-glance-link:materialize "no-such-id") :type 'user-error)
+      (should-error (org-glance-link:material "no-such-id") :type 'user-error)
       (should-error (org-glance-link:open "no-such-id") :type 'user-error))))
 
 (ert-deftest org-glance-test:material-datetime-mode-enabled ()
@@ -255,12 +255,9 @@ NEVER a new headline -- stamped by the completed occurrence's timestamp."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water flowers :house:"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
-    (let ((org-glance-repeat-history-depth 7)
-          (org-log-repeat nil)
-          (org-log-done nil))
-      (org-glance-test:with-material (buffer graph "R")
-        (goto-char (point-min))
-        (org-todo "DONE")
+    (org-glance-test:with-repeat (buffer graph "R" 7)
+        (progn
+          (org-glance-test:complete-repetition)
         ;; still exactly ONE headline in the graph
         (should (= 1 (length (org-glance-graph:headlines graph))))
         ;; one snapshot, stamped by the completed occurrence, holding DONE state
@@ -280,12 +277,9 @@ NEVER a new headline -- stamped by the completed occurrence's timestamp."
                                                              "keep me"
                                                              "#+end_pin"
                                                              "transient note"))
-    (let ((org-glance-repeat-history-depth 7)
-          (org-log-repeat nil)
-          (org-log-done nil))
-      (org-glance-test:with-material (buffer graph "R")
-        (goto-char (point-min))
-        (org-todo "DONE")
+    (org-glance-test:with-repeat (buffer graph "R" 7)
+        (progn
+          (org-glance-test:complete-repetition)
         (should (s-contains? "keep me" (buffer-string)))
         (should-not (s-contains? "transient note" (buffer-string)))
         (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string)))
@@ -300,42 +294,112 @@ NEVER a new headline -- stamped by the completed occurrence's timestamp."
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"
                                                              "transient note"))
-    (let ((org-glance-repeat-history-depth 0)
-          (org-log-repeat nil)
-          (org-log-done nil))
-      (org-glance-test:with-material (buffer graph "R")
-        (goto-char (point-min))
-        (org-todo "DONE")
+    (org-glance-test:with-repeat (buffer graph "R" 0)
+        (progn
+          (org-glance-test:complete-repetition)
         (should (= 1 (length (org-glance-graph:headlines graph))))
         (should (null (org-glance-graph:occurrences graph "R")))
         (should (s-contains? "transient note" (buffer-string)))))))
 
-(ert-deftest org-glance-test:metadata-repeated-predicate ()
-  "`repeated?' reads the repeater cookie off schedule/deadline raw strings."
+(ert-deftest org-glance-test:material-hides-reserved-properties ()
+  "Bookkeeping drawer lines are concealed (overlays, never deleted); a drawer
+whose every property is reserved hides entirely; nil custom shows all; the
+concealment survives a save."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-test:headline "r1" "* TODO A" "SCHEDULED: <2026-06-07 Sun +1d>")
-      (org-glance-test:headline "r2" "* TODO B" "DEADLINE: <2026-06-07 Sun ++2w>")
-      (org-glance-test:headline "r3" "* TODO C" "SCHEDULED: <2026-06-07 Sun>")
-      (org-glance-test:headline "r4" "* TODO D"))
-    (should (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r1")))
-    (should (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r2")))
-    (should-not (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r3")))
-    (should-not (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r4")))))
+      (org-glance-test:headline-props "vis" "* TODO Visible" '(("AUTHOR" . "Tolkien")))
+      (org-glance-test:headline "bare" "* TODO Bare"))
+    (cl-flet ((line-invisible? (re)
+                (save-excursion
+                  (goto-char (point-min))
+                  (re-search-forward re)
+                  (invisible-p (line-beginning-position)))))
+      ;; mixed drawer: id hidden, AUTHOR visible, delimiters visible
+      (org-glance-test:with-material (buf graph "vis")
+        (should (line-invisible? ":ORG_GLANCE_ID:"))
+        (should-not (line-invisible? ":AUTHOR:"))
+        (should-not (line-invisible? ":PROPERTIES:"))
+        ;; the line is concealed, not deleted -- the file still carries the id
+        (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
+        ;; still concealed after an edit + save (overlays re-applied)
+        (goto-char (point-max))
+        (insert "\nnote")
+        (let ((inhibit-message t)) (save-buffer))
+        (should (line-invisible? ":ORG_GLANCE_ID:")))
+      ;; all-reserved drawer: the whole drawer hides, delimiters included
+      (org-glance-test:with-material (buf graph "bare")
+        (should (line-invisible? ":PROPERTIES:"))
+        (should (line-invisible? ":ORG_GLANCE_ID:"))
+        (should (line-invisible? ":END:")))
+      ;; opt out entirely
+      (let ((org-glance-material-hidden-properties nil))
+        (org-glance-test:with-material (buf graph "bare")
+          (should-not (line-invisible? ":ORG_GLANCE_ID:")))))))
+
+(ert-deftest org-glance-test:material-reserved-properties-managed ()
+  "A hand edit to a reserved property is reverted on save with a warning:
+the original id survives to disk and metadata, a hand-added ORG_GLANCE_HASH is
+removed, and ordinary edits persist under the original id."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline-props "vis" "* TODO Visible" '(("AUTHOR" . "Tolkien"))))
+    (let (warnings)
+      (cl-letf (((symbol-function 'display-warning)
+                 (lambda (_type msg &rest _) (push msg warnings))))
+        (org-glance-test:with-material (buf graph "vis")
+          ;; hand-edit the managed id + hand-add a managed hash + a real edit
+          (org-glance-test:sed ":ORG_GLANCE_ID: vis" ":ORG_GLANCE_ID: hacked")
+          (org-glance-test:sed ":AUTHOR: Tolkien"
+                               ":ORG_GLANCE_HASH: fake\n:AUTHOR: Le Guin")
+          (let ((inhibit-message t)) (save-buffer))
+          ;; both managed edits reverted in the BUFFER...
+          (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
+          (should-not (s-contains? "hacked" (buffer-string)))
+          (should-not (s-contains? "ORG_GLANCE_HASH" (buffer-string)))
+          ;; ...and warned, once per key
+          (should (= 2 (length warnings)))
+          (should (cl-some (lambda (w) (s-contains? "ORG_GLANCE_ID" w)) warnings))
+          (should (cl-some (lambda (w) (s-contains? "ORG_GLANCE_HASH" w)) warnings))
+          ;; a CLEAN save is silent (pins the equal-gate: always-revert would warn)
+          (set-buffer-modified-p t)
+          (let ((inhibit-message t)) (save-buffer))
+          (should (= 2 (length warnings)))
+          ;; a region kill can take the INVISIBLE id line; save resurrects it
+          (goto-char (point-min))
+          (re-search-forward ":ORG_GLANCE_ID: vis")
+          (delete-region (line-beginning-position) (1+ (line-end-position)))
+          (should-not (s-contains? ":ORG_GLANCE_ID:" (buffer-string)))
+          (let ((inhibit-message t)) (save-buffer))
+          (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
+          (should (= 3 (length warnings)))))
+      ;; disk agrees; the ordinary edit persisted under the ORIGINAL id
+      (should (s-contains? ":ORG_GLANCE_ID: vis" (org-glance-graph:get-content graph "vis")))
+      (should (s-contains? "Le Guin" (org-glance-graph:get-content graph "vis")))
+      (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "vis"))))))
+
+(ert-deftest org-glance-test:metadata-repeated-predicate ()
+  "`repeated?' reads a NONZERO repeater cookie off schedule/deadline strings."
+  (cl-flet ((rep? (&rest lines)
+              (org-glance-headline-metadata:repeated?
+               (org-glance-headline:metadata
+                (apply #'org-glance-test:headline "x" lines)))))
+    (should (rep? "* TODO A" "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (should (rep? "* TODO B" "DEADLINE: <2026-06-07 Sun ++2w>"))
+    (should-not (rep? "* TODO C" "SCHEDULED: <2026-06-07 Sun>"))
+    (should-not (rep? "* TODO D"))
+    (should-not (rep? "* TODO E" "SCHEDULED: <2026-06-07 Sun +0d>"))))  ; disarmed
 
 (ert-deftest org-glance-test:material-history-picker ()
-  "`C-c h' completing-reads an occurrence stamp and opens it READ-ONLY;
+  "`C-c l' completing-reads an occurrence stamp and opens it READ-ONLY;
 without history it errors with a hint."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
-    (let ((org-glance-repeat-history-depth 3)
-          (org-log-repeat nil) (org-log-done nil))
-      (org-glance-test:with-material (buffer graph "R")
+    (org-glance-test:with-repeat (buffer graph "R" 3)
+      (progn
         (should (eq (key-binding (kbd "C-c l")) #'org-glance-material:history))
         (should-error (org-glance-material:history) :type 'user-error)  ; no history yet
-        (goto-char (point-min))
-        (org-todo "DONE")
+        (org-glance-test:complete-repetition)
         (let (shown)
           (cl-letf (((symbol-function 'completing-read)
                      (lambda (_p coll &rest _) (car coll)))          ; newest stamp
@@ -354,13 +418,10 @@ without history it errors with a hint."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
-    (let ((org-glance-repeat-history-depth 2)
-          (org-log-repeat nil)
-          (org-log-done nil))
-      (org-glance-test:with-material (buffer graph "R")
+    (org-glance-test:with-repeat (buffer graph "R" 2)
+      (progn
         (dotimes (_ 4)                       ; complete four consecutive occurrences
-          (goto-char (point-min))
-          (org-todo "DONE"))
+          (org-glance-test:complete-repetition))
         (let ((occ (org-glance-graph:occurrences graph "R")))
           (should (= 2 (length occ)))                       ; pruned to depth
           ;; newest first, and the two NEWEST occurrences survived
@@ -696,6 +757,59 @@ refuses to re-encrypt an already-encrypted headline."
     (org-glance-test:with-material (buffer graph "sec")
       (org-glance-test:sed "body" "edited")   ; dirty, unsaved
       (should-error (org-glance-material:crypt-set graph "sec" t "pw")))))
+
+(ert-deftest org-glance-test:material-history-depth-property ()
+  "ORG_GLANCE_REPEAT_HISTORY_DEPTH on the headline overrides the global depth:
+a positive value enables history under a global 0, inf disables pruning under
+a global 1, and 0 disables under a global t."
+  (org-glance-test:with-graph graph
+    (cl-flet ((repeater (id depth)
+                (org-glance-test:headline-props
+                 id "* TODO daily"
+                 `(("ORG_GLANCE_REPEAT_HISTORY_DEPTH" . ,depth))
+                 "SCHEDULED: <2026-06-07 Sun +1d>")))
+      (org-glance-graph:add graph
+        (repeater "on" "2") (repeater "inf" "inf") (repeater "off" "0")
+        (repeater "junk" "whenever")))
+    ;; property 2 wins over global 0: snapshots, pruned to 2
+    (org-glance-test:with-repeat (buffer graph "on" 0)
+      (progn (dotimes (_ 3) (org-glance-test:complete-repetition))
+             (should (= 2 (length (org-glance-graph:occurrences graph "on"))))))
+    ;; property inf wins over global 1: keeps all
+    (org-glance-test:with-repeat (buffer graph "inf" 1)
+      (progn (dotimes (_ 3) (org-glance-test:complete-repetition))
+             (should (= 3 (length (org-glance-graph:occurrences graph "inf"))))))
+    ;; property 0 wins over global t: no history, no trim
+    (org-glance-test:with-repeat (buffer graph "off" t)
+      (progn (org-glance-test:complete-repetition)
+             (should (null (org-glance-graph:occurrences graph "off")))))
+    ;; unparseable value reads as 0 -- disabled, even under global t
+    (org-glance-test:with-repeat (buffer graph "junk" t)
+      (progn (org-glance-test:complete-repetition)
+             (should (null (org-glance-graph:occurrences graph "junk")))))))
+
+(ert-deftest org-glance-test:material-snapshot-unlimited-depth ()
+  "Depth t keeps every occurrence -- no pruning."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (org-glance-test:with-repeat (buffer graph "R" t)
+      (progn
+        (dotimes (_ 4)
+          (org-glance-test:complete-repetition))
+        (should (= 4 (length (org-glance-graph:occurrences graph "R"))))))))
+
+(ert-deftest org-glance-test:material-crypt-set-purges-occurrences ()
+  "Encrypting a headline deletes its PLAINTEXT occurrence snapshots (they are
+copies of content the user just declared secret)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (org-glance-test:with-repeat (buffer graph "R" 3)
+      (org-glance-test:complete-repetition))
+    (should (= 1 (length (org-glance-graph:occurrences graph "R"))))
+    (should (org-glance-material:crypt-set graph "R" t "pw"))
+    (should (null (org-glance-graph:occurrences graph "R")))))
 
 (ert-deftest org-glance-test:material-crypt-rekey ()
   "`crypt-rekey' re-keys an encrypted headline -- the new password decrypts,

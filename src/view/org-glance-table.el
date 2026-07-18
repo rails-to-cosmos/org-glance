@@ -141,7 +141,7 @@ ascending (active first)."
     (columns . ,(org-glance-table--apply-schema
                  graph filter (org-glance-table--base-columns graph)))
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
-                ((key . "o")   (command . "open")        (label . "Open link"))
+                ((key . "j")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))
                 ((key . "T")     (command . "overview")  (label . "Overview"))
@@ -221,7 +221,7 @@ LINE, which drifts to another row once the sort reorders them."
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
-(cl-defun org-glance-table--act-materialize (graph id _row)
+(cl-defun org-glance-table--act-materialize (graph id)
   (when id (switch-to-buffer (org-glance-material:open graph id))))
 
 (cl-defun org-glance-table--headline (graph id)
@@ -229,13 +229,13 @@ LINE, which drifts to another row once the sort reorders them."
   (or (org-glance-graph:headline graph id)
       (user-error "Headline no longer in graph (table is stale; press `g' to refresh)")))
 
-(cl-defun org-glance-table--act-open (graph id _row)
+(cl-defun org-glance-table--act-open (graph id)
   (when id (org-glance-material:open-link (org-glance-table--headline graph id))))
 
-(cl-defun org-glance-table--act-extract (graph id _row)
+(cl-defun org-glance-table--act-extract (graph id)
   (when id (org-glance-material:extract-pairs (org-glance-property-index:body graph id))))
 
-(cl-defun org-glance-table--act-todo (graph id _row)
+(cl-defun org-glance-table--act-todo (graph id)
   "Advance ID's TODO state exactly like `C-c C-t' (via
 `org-glance-material:change-todo-live'), then reload the table and return to the
 row once the change (and any note) is committed."
@@ -512,10 +512,9 @@ untagged (\":none:\") entry."
                                       :columns columns :hidden hidden)))))
 
 (cl-defun org-glance-table--act-history (graph id)
-  "`h' handler: open one of ID's occurrence snapshots, read-only."
+  "`l' handler: open one of ID's occurrence snapshots, read-only."
   (unless id (user-error "Point is not on a row"))
-  (org-glance-view:pick-occurrence
-   graph id (org-glance-headline-metadata:title (org-glance-table--metadata graph id))))
+  (org-glance-view:pick-occurrence graph id))
 
 (cl-defun org-glance-table--act-delcolumn ()
   "`C-u -' handler: remove the column at point.  Title is mandatory and refused."
@@ -583,9 +582,9 @@ Honours the same filter language as the overview (see
                         ;; columns' value-fns; persist only if a blob re-parsed.
                         (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))
-         (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
-                         (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
-                         (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))
+         (handlers (list (cons "materialize" (lambda (id _row) (org-glance-table--act-materialize graph id)))
+                         (cons "open"        (lambda (id _row) (org-glance-table--act-open graph id)))
+                         (cons "extract"     (lambda (id _row) (org-glance-table--act-extract graph id)))
                          (cons "todo"        (lambda (rows)
                                                ;; `bulk' handler: a row LIST.  With marks -> bulk
                                                ;; (one prompt, all marked); else the row at point
@@ -593,7 +592,7 @@ Honours the same filter language as the overview (see
                                                (if (table-view-marked-rows)
                                                    (org-glance-table--act-todo-bulk graph rows)
                                                  (let ((row (car rows)))
-                                                   (org-glance-table--act-todo graph (alist-get 'id row) row)))))
+                                                   (org-glance-table--act-todo graph (alist-get 'id row))))))
                          (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
                          (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
                          (cons "remove"      (lambda (id _row)
@@ -634,6 +633,8 @@ Honours the same filter language as the overview (see
       (setq-local table-view-add-column-function #'org-glance-table--add-column-prompt)
       ;; `C-u /' clears the active filter; a bare `/' stays filter-or-narrow.
       (local-set-key "/" #'org-glance-table:filter-or-reset)
+      ;; `!' quietly aliases `j' (open link) -- dired's execute rhyme.
+      (local-set-key (kbd "!") (lookup-key (current-local-map) (kbd "j")))
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.
@@ -652,7 +653,7 @@ Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
 on the ambient `org-glance-filter-spec' (default: active headlines) -- exactly
 like `org-glance-overview', but rendered as a flat table.  Sort with `^' (sorts
 by the column at point; repeat toggles direction, `C-u ^' adds a tie-breaker);
-act on the row at point with RET/m, o, e."
+act on the row at point with RET/m, j, e."
   (interactive (list (org-glance-view:completing-read-tag "Table tag (empty for all): ")))
   (org-glance-ensure-init)
   (org-glance-table:visit org-glance-graph

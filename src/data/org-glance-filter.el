@@ -217,24 +217,26 @@ unambiguously."
 ;; `org-glance-overview:' link paths encode a filter.  Value syntax derives
 ;; from the table's :match/:canon kinds -- no second key list to maintain.
 
-(cl-defun org-glance-filter--link-bool (v)
-  "Boolean encoded in link value V: \"t\" or \"nil\"."
-  (pcase v ("t" t) ("nil" nil)
-         (_ (error "org-glance: link filter boolean must be t/nil: %S" v))))
-
 (cl-defun org-glance-filter--link-value (key v)
   "Link value string V coerced for filter KEY, per the table's kinds.
-Lists are comma-separated; booleans read t/nil; `:priority' reads a letter;
+Lists are comma-separated; booleans read t/nil; planning keys read
+present/absent (the clause's own vocabulary); `:priority' reads a letter;
 `:where' (a function) is not linkable."
   (let* ((props (alist-get key org-glance-filter:table))
          (kind (plist-get props :match)))
     (cond
      ((eq key :where) (error "org-glance: `:where' is not linkable"))
-     ((eq key :done) (org-glance-filter--link-bool v))
+     ((or (eq key :done) (eq kind 'bool))
+      (pcase v ("t" t) ("nil" nil)
+             (_ (error "org-glance: link filter boolean must be t/nil: %S" v))))
+     ;; :schedule/:deadline speak the predicate's own vocabulary -- a t/nil
+     ;; here would error per headline inside the clause, not at parse time.
+     ((eq kind 'present-absent)
+      (pcase v ("present" :present) ("absent" :absent)
+             (_ (error "org-glance: planning link value must be present/absent: %S" v))))
      ((or (memq kind '(member-all member))
           (eq (plist-get props :canon) 'string-list))
       (split-string v "," t))
-     ((memq kind '(bool present-absent)) (org-glance-filter--link-bool v))
      ((eq kind 'eql) (string-to-char v))           ; :priority, as a letter
      (t v))))
 

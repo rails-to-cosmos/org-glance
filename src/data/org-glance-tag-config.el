@@ -185,7 +185,7 @@ active/done split, so 0 or >1 distinct cycles fall back to the global keywords."
 ;;; Render: a config -> an `org-capture' entry template string
 
 (defconst org-glance-tag-config--render-strip
-  '("TAG" "TODO_KEYWORDS" "ORG_GLANCE_ID" "ORG_GLANCE_HASH")
+  (append '("TAG" "TODO_KEYWORDS") org-glance-headline:hash-ignore-properties)
   "Config drawer keys stripped from a rendered capture instance.
 The todo cycle is applied as a `#+TODO:' FILE keyword (capture/overview), not as
 an instance drawer property.")

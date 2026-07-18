@@ -246,7 +246,7 @@ time; reindex agrees."
       (should (equal after-sync (org-glance-headline-metadata:relations
                                  (org-glance-graph:get-headline graph "cs")))))))
 
-;;; Clone-on-repeat: encrypted headlines are not cloned (would store plaintext)
+;;; Snapshot-on-repeat: encrypted headlines keep no occurrence history
 
 (ert-deftest org-glance-test:snapshot-on-repeat-skips-encrypted ()
   "An encrypted headline keeps no occurrence history (would store plaintext)."
@@ -257,7 +257,8 @@ time; reindex agrees."
             (org-done-keywords '("DONE")))
         (setq-local org-glance-material--encrypted t)
         (cl-letf (((symbol-function 'org-get-todo-state) (lambda () "DONE"))
-                  ((symbol-function 'org-glance-datetime-headline-repeated-p) (lambda () t)))
+                  ((symbol-function 'org-glance-datetime-active-repeated-timestamps)
+                   (lambda (&rest _) (list '(timestamp (:raw-value "<2026-06-07 Sun +1d>"))))))
           (org-glance-material:snapshot-on-repeat)
           (should (null (org-glance-graph:occurrences graph "e")))
           ;; ...and the after-repeat TRIM is gated too: no snapshot was made, so
@@ -291,6 +292,11 @@ time; reindex agrees."
                    (id (org-glance-filter:from-link-path "?priority=A&linked=t"))))
     (should (equal (id '(:done t :done-keywords ("DONE" "GIVEN")))
                    (id (org-glance-filter:from-link-path "?done=t&done-keywords=DONE,GIVEN"))))
+    ;; planning keys use the predicate's own vocabulary (a t here would error
+    ;; per headline inside the clause -- the diverged-dispatch regression)
+    (should (equal (id '(:schedule :present :deadline :absent))
+                   (id (org-glance-filter:from-link-path "?schedule=present&deadline=absent"))))
+    (should-error (org-glance-filter:from-link-path "?schedule=t"))
     ;; `done=nil' is a clause, not an omission
     (should-not (equal (id (org-glance-filter:from-link-path "book"))
                        (id (org-glance-filter:from-link-path "book?done=nil"))))

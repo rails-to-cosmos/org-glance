@@ -161,71 +161,97 @@ ORG_GLANCE_ID was changed."
   "How many completed occurrences to keep per repeating headline.
 0 disables occurrence history (and the after-repeat trim); N > 0 keeps the
 newest N snapshots under the headline's `occurrences/' dir, pruning older
-ones on each completion (syncthing-style)."
+ones on each completion (syncthing-style); t keeps them ALL."
   :group 'org-glance
-  :type 'natnum)
+  :type '(choice (natnum :tag "Keep newest N (0 disables)")
+                 (const :tag "Unlimited" t)))
 
-(cl-defun org-glance-material--occurrence-stamp ()
-  "Filename stamp of the occurrence being completed.
-Its earliest active repeated timestamp -- read BEFORE org advances it -- or
-now, when none parses.  Lexically sortable; a same-occurrence re-completion
-maps to the same stamp and overwrites (idempotent)."
+(defconst org-glance-repeat-history-depth-property "ORG_GLANCE_REPEAT_HISTORY_DEPTH"
+  "Drawer property overriding `org-glance-repeat-history-depth' per headline.
+An integer (0 disables) or t/inf/unlimited (all aliases for unlimited);
+unparseable values read as 0, floats truncate.")
+
+(cl-defun org-glance-material--property (key)
+  "Drawer property KEY at this materialized buffer's heading, or nil."
+  (save-excursion
+    (org-glance-material--goto-first-heading)
+    (org-entry-get (point) key)))
+
+(cl-defun org-glance-material--history-depth ()
+  "Effective repeat-history depth for this buffer's headline.
+The `ORG_GLANCE_REPEAT_HISTORY_DEPTH' drawer property wins over the global
+`org-glance-repeat-history-depth'; t/inf mean unlimited."
+  (if-let ((v (org-glance-material--property org-glance-repeat-history-depth-property)))
+      (pcase (downcase (s-trim v))
+        ((or "t" "inf" "unlimited") t)
+        (n (truncate (string-to-number n))))   ; junk -> 0 -> disabled; 3.5 -> 3
+    org-glance-repeat-history-depth))
+
+(defvar-local org-glance-material--snapshotted nil
+  "Non-nil when `snapshot-on-repeat' actually wrote an occurrence file.
+The SINGLE owner of the \"this repeat preserved history\" decision:
+`cleanup-after-repeat' trims iff it consumes this flag, so the two advice
+gates can never drift (a failed/skipped snapshot never loses the body).")
+
+(cl-defun org-glance-material--occurrence-stamp (ts)
+  "Filename stamp for occurrence timestamp TS (an org-element), or now if nil.
+Lexically sortable; a same-occurrence re-completion maps to the same stamp and
+overwrites (idempotent)."
   (format-time-string
    "%Y-%m-%dT%H%M"
-   (if-let ((ts (car (org-glance-datetime-active-repeated-timestamps
-                      'include-schedules 'include-deadlines))))
-       (org-time-string-to-time (org-element-property :raw-value ts))
+   (if ts (org-time-string-to-time (org-element-property :raw-value ts))
      (current-time))))
 
 (cl-defun org-glance-material:snapshot-on-repeat (&rest _)
   "Preserve the completed repetition as an occurrence snapshot.
 Runs `:before' `org-auto-repeat-maybe' (the headline is still in its done
-state); gated by `org-glance-repeat-history-depth'."
-  (when (and (> org-glance-repeat-history-depth 0)
-             org-glance-material-mode
-             org-glance-material--graph
-             (member (org-get-todo-state) org-done-keywords)
-             (org-glance-datetime-headline-repeated-p))
+state, timestamps not yet advanced); gated by the effective depth
+(`org-glance-material--history-depth' -- the headline's own property wins).
+Sets `--snapshotted' only on a successful write -- the trim consumes that
+flag."
+  (setq org-glance-material--snapshotted nil)
+  (when-let* ((depth (and org-glance-material-mode
+                          org-glance-material--graph
+                          (org-glance-material--history-depth)))
+              (ts (and (or (eq depth t) (> depth 0))
+                       (member (org-get-todo-state) org-done-keywords)
+                       ;; ONE subtree parse: the earliest repeated timestamp both
+                       ;; gates the snapshot and names it.
+                       (car (org-glance-datetime-active-repeated-timestamps
+                             'include-schedules 'include-deadlines)))))
     ;; This buffer is DECRYPTED plaintext; snapshotting it would write
     ;; plaintext history for an encrypted headline (invariant 14).  Skip.
     (if org-glance-material--encrypted
         (message "org-glance: encrypted headline keeps no occurrence history")
-      (let ((graph org-glance-material--graph)
-            (id org-glance-material--id))
-        (let ((dir (org-glance-graph:occurrences-path graph id)))
+      (with-demoted-errors "org-glance: occurrence snapshot failed: %S"   ; inv 9
+        (let* ((graph org-glance-material--graph)
+               (id org-glance-material--id)
+               (dir (org-glance-graph:occurrences-path graph id)))
           (f-mkdir-full-path dir)
-          (f-write-text (buffer-substring-no-properties (point-min) (point-max))
-                        'utf-8
-                        (f-join dir (concat (org-glance-material--occurrence-stamp) ".org"))))
-        (cl-loop for (_stamp . path) in (nthcdr org-glance-repeat-history-depth
-                                                (org-glance-graph:occurrences graph id))
-                 do (ignore-errors (f-delete path)))))))
+          ;; temp-then-rename like every store write (invariant 2)
+          (org-glance-graph--atomic-write
+           graph (f-join dir (concat (org-glance-material--occurrence-stamp ts) ".org"))
+           (buffer-substring-no-properties (point-min) (point-max)))
+          (setq org-glance-material--snapshotted t)
+          (when (integerp depth)                     ; t = unlimited, no prune
+            (cl-loop for (_stamp . path) in (nthcdr depth
+                                                    (org-glance-graph:occurrences graph id))
+                     do (ignore-errors (f-delete path)))))))))
 
 (cl-defun org-glance-material:history ()
   "Choose one of this headline's occurrence snapshots and open it read-only."
   (interactive)
   (unless (and org-glance-material--graph org-glance-material--id)
     (user-error "Not in a materialized headline buffer"))
-  (let ((meta (org-glance-graph:get-headline org-glance-material--graph
-                                             org-glance-material--id)))
-    (org-glance-view:pick-occurrence
-     org-glance-material--graph org-glance-material--id
-     (if (org-glance-headline-metadata? meta)
-         (org-glance-headline-metadata:title meta)
-       org-glance-material--id))))
+  (org-glance-view:pick-occurrence org-glance-material--graph org-glance-material--id))
 
 (define-key org-glance-material-mode-map (kbd "C-c l") #'org-glance-material:history)
 
 (cl-defun org-glance-material:cleanup-after-repeat (&rest _)
   "Trim the repeated materialized headline to its header and pinned blocks.
-Runs `:after' `org-auto-repeat-maybe'; only meaningful when
-`org-glance-material:snapshot-on-repeat' preserved the previous repetition."
-  (when (and (> org-glance-repeat-history-depth 0)
-             org-glance-material-mode
-             ;; The crypt gate skipped the snapshot (invariant 14) -- trimming
-             ;; here would cut the history that was never preserved.
-             (not org-glance-material--encrypted)
-             (org-glance-datetime-headline-repeated-p))
+Runs `:after' `org-auto-repeat-maybe'; consumes the `--snapshotted' flag."
+  (when (prog1 org-glance-material--snapshotted
+          (setq org-glance-material--snapshotted nil))
     (save-excursion
       (goto-char (point-min))
       (let ((header (s-trim (buffer-substring-no-properties
@@ -338,6 +364,15 @@ The decrypted body stays in the buffer until then."
              (message "org-glance: password forgotten"))
     (user-error "Not an encrypted materialized buffer")))
 
+(cl-defun org-glance-material--purge-occurrences (graph id)
+  "Delete ID's occurrence snapshots: PLAINTEXT copies of now-secret content.
+Called on BOTH encrypt paths -- `crypt-set' and the first in-buffer crypt
+block (invariant 14).  Idempotent."
+  (let ((dir (org-glance-graph:occurrences-path graph id)))
+    (when (f-exists? dir)
+      (f-delete dir t)
+      (message "org-glance: plaintext occurrence history removed (headline is now encrypted)"))))
+
 (cl-defun org-glance-material--wire-crypto ()
   "Mark the buffer encrypted: harden it and wire the seal/unseal round-trip.
 Idempotent -- `add-hook' deduplicates and hardening re-runs harmlessly."
@@ -373,7 +408,10 @@ wires the seal/unseal round-trip.  The region must lie inside the body."
   (unless org-glance-material--encrypted
     (org-glance-material--wire-crypto)
     (org-glance-material--set-password
-     (read-passwd "Headline password (confirm): " t)))
+     (read-passwd "Headline password (confirm): " t))
+    ;; the headline just became secret: purge its plaintext occurrence history
+    (org-glance-material--purge-occurrences org-glance-material--graph
+                                            org-glance-material--id))
   (deactivate-mark)
   (message "org-glance: region wrapped -- seals on save"))
 
@@ -415,10 +453,7 @@ DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
            (expand-file-name
             (read-directory-name
              "Project dir: "
-             (or (save-excursion
-                   (org-glance-material--goto-first-heading)
-                   (org-entry-get nil org-glance-project-dir-property))
-                 ""))))))
+             (or (org-glance-material--property org-glance-project-dir-property) ""))))))
   (unless (and org-glance-material--graph org-glance-material--id)
     (user-error "Not a materialized buffer"))
   (save-excursion
@@ -428,6 +463,76 @@ DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
       (org-entry-delete nil org-glance-project-dir-property)))
   (let ((inhibit-message t)) (save-buffer))
   (message "Project dir %s" (if (org-glance--present-string? dir) dir "cleared")))
+
+(defcustom org-glance-material-hidden-properties org-glance-headline:hash-ignore-properties
+  "Drawer property KEYS (uppercase) that org-glance MANAGES in material buffers.
+Two enforcements share this list: the lines are CONCEALED (overlays only --
+the file and store keep them; a drawer whose every property is listed hides
+entirely), and hand edits to them are REVERTED on save with a warning
+\(`org-glance-material--restore-reserved').  nil disables both."
+  :group 'org-glance
+  :type '(repeat string))
+
+(defvar-local org-glance-material--reserved-values nil
+  "Snapshot ((KEY . VALUE-or-nil)…) of the reserved properties taken at open.
+`--restore-reserved' reverts any hand edit to these on save -- the keys are
+managed by org-glance, concealed in the buffer, and not the user's to change.")
+
+(cl-defun org-glance-material--reserved-snapshot ()
+  "Current values of the reserved properties at the buffer's heading."
+  (mapcar (lambda (key) (cons key (org-glance-material--property key)))
+          org-glance-material-hidden-properties))
+
+(cl-defun org-glance-material--restore-reserved ()
+  "Revert hand edits to reserved properties, warning per reverted KEY.
+Buffer-local `before-save-hook', so the restored value is what lands on disk
+and what `org-glance-material:sync' then reads."
+  (when org-glance-material--reserved-values
+    (save-excursion
+      (org-glance-material--goto-first-heading)
+      (pcase-dolist (`(,key . ,original) org-glance-material--reserved-values)
+        (unless (equal original (org-entry-get (point) key))
+          (if original
+              (org-entry-put (point) key original)
+            (org-delete-property key))
+          (display-warning
+           'org-glance
+           (format "%s is managed by org-glance; your edit was reverted" key)))))))
+
+(cl-defun org-glance-material--hide-reserved-properties (&rest _)
+  "Conceal `org-glance-material-hidden-properties' lines via overlays.
+Idempotent (old overlays dropped first); re-run from `after-save-hook' because
+a crypt reseal/unseal rewrites the drawer region and kills its overlays."
+  (remove-overlays (point-min) (point-max) 'org-glance-reserved t)
+  (when org-glance-material-hidden-properties
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward org-property-start-re nil t)
+        (let ((drawer-beg (line-beginning-position))
+              (hidden nil)                ; (BEG . END) per concealed line
+              (total 0)
+              (done nil)
+              drawer-end)
+          (while (and (not done) (zerop (forward-line 1)) (not (eobp)))
+            (cond
+             ((looking-at org-property-end-re)
+              (setq drawer-end (min (point-max) (1+ (line-end-position)))
+                    done t))
+             ((looking-at "^[ \t]*:\\([A-Za-z0-9_-]+\\):")
+              (cl-incf total)
+              (when (member (upcase (match-string 1))
+                            org-glance-material-hidden-properties)
+                (push (cons (line-beginning-position)
+                            (min (point-max) (1+ (line-end-position))))
+                      hidden)))
+             (t (setq done t))))               ; malformed drawer: no :END: seen
+          (dolist (region (if (and drawer-end (= total (length hidden)) hidden)
+                              (list (cons drawer-beg drawer-end)) ; all concealed
+                            hidden))
+            (let ((ov (make-overlay (car region) (cdr region))))
+              (overlay-put ov 'invisible t)
+              (overlay-put ov 'evaporate t)
+              (overlay-put ov 'org-glance-reserved t))))))))
 
 (cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.
@@ -469,15 +574,19 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
           (org-glance-material-mode 1)
-          (org-glance-material--maybe-decrypt meta buffer))
+          (org-glance-material--maybe-decrypt meta buffer)
+          ;; Conceal bookkeeping drawer lines; re-conceal after every save
+          ;; (depth 100: after the crypt unseal hook has restored plaintext).
+          (org-glance-material--hide-reserved-properties)
+          (add-hook 'after-save-hook #'org-glance-material--hide-reserved-properties 100 t)
+          ;; Reserved properties are managed: snapshot the originals and revert
+          ;; hand edits on save (with a warning), before the file is written.
+          ;; Order vs the crypt seal is immaterial: restore edits only the
+          ;; heading drawer, the seal only body crypt blocks -- disjoint regions.
+          (setq-local org-glance-material--reserved-values
+                      (org-glance-material--reserved-snapshot))
+          (add-hook 'before-save-hook #'org-glance-material--restore-reserved nil t))
         buffer))))
-
-(cl-defun org-glance-material:apply ()
-  "Save the materialized buffer: write the blob and sync its metadata."
-  (interactive)
-  (unless org-glance-material--graph
-    (user-error "Not in an org-glance materialized buffer"))
-  (save-buffer))
 
 ;;; TODO state change: exactly `C-c C-t' on the headline (materialize -> sync)
 ;;
@@ -485,7 +594,7 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
 ;; org fidelity by MATERIALIZING it and running `org-todo' in the real blob buffer:
 ;; per-tag keywords are live (see `org-glance-material:open'), so state cycling, the
 ;; CLOSED timestamp, `org-after-todo-state-change-hook', dependency blocking,
-;; repeaters (clone-on-repeat) and the interactive LOGBOOK note all happen natively.
+;; repeaters (snapshot-on-repeat) and the interactive LOGBOOK note all happen natively.
 ;; Persistence reuses the ordinary save -> `after-save-hook' -> `:sync' path (atomic
 ;; blob + WAL + mark-stale); there is no separate write.
 ;;
@@ -714,6 +823,7 @@ decrypt errors before any write.  Return t."
      (if encrypt
          (org-glance-headline:encrypt headline password)
        (org-glance-headline:decrypt headline password t))))
+  (when encrypt (org-glance-material--purge-occurrences graph id))
   t)
 
 (cl-defun org-glance-material:crypt-rekey (graph id old new)

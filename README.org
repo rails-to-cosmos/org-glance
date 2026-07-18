@@ -86,7 +86,8 @@ Other features:
   first save.
 - *Repeat history* — a repeating headline (=+1d=) stays ONE headline; completing
   a repetition snapshots it under its own data dir
-  (=org-glance-repeat-history-depth= newest kept, 0 = off).  The table marks
+  (=org-glance-repeat-history-depth= newest kept, 0 = off, =t= = all;
+  per-headline override via =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:=).  The table marks
   repeaters with =↻=; =l= on a row (or =C-c l= in the material buffer) opens a
   chosen occurrence read-only.
 - *Crash-safe store* — a segmented, append-only JSONL log with atomic commits and

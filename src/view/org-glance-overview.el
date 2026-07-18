@@ -258,7 +258,8 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd ">") #'end-of-buffer)
 (define-key org-glance-overview-mode-map (kbd "TAB") #'org-cycle)
 (define-key org-glance-overview-mode-map (kbd "RET") #'org-glance-overview:materialize)
-(define-key org-glance-overview-mode-map (kbd "o") #'org-glance-overview:open)
+(define-key org-glance-overview-mode-map (kbd "j") #'org-glance-overview:open)
+(define-key org-glance-overview-mode-map (kbd "!") #'org-glance-overview:open)  ; dired execute rhyme
 (define-key org-glance-overview-mode-map (kbd "e") #'org-glance-overview:extract)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
@@ -287,13 +288,7 @@ re-renders."
 (cl-defun org-glance-overview:history ()
   "Open one of the occurrence snapshots of the headline at point, read-only."
   (interactive)
-  (let* ((id (org-glance-overview:id-at-point))
-         (meta (org-glance-graph:get-headline org-glance-graph id)))
-    (org-glance-view:pick-occurrence
-     org-glance-graph id
-     (if (org-glance-headline-metadata? meta)
-         (org-glance-headline-metadata:title meta)
-       id))))
+  (org-glance-view:pick-occurrence org-glance-graph (org-glance-overview:id-at-point)))
 
 (cl-defun org-glance-overview--headline-at-point ()
   "The live `org-glance-headline' for the heading at point.

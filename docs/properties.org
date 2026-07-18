@@ -11,16 +11,22 @@ Set in a headline's =:PROPERTIES:= drawer.
 - =ORG_GLANCE_ID= — the headline's stable store key (content-addressed data
   dir, WAL id).  Capture generates it; a headline without it is not tracked.
   Path-safety-checked before it touches the filesystem.  Read by
-  =org-glance-headline:id=.
+  =org-glance-headline:id=.  Concealed (never deleted) in material buffers via
+  =org-glance-material-hidden-properties=.
 - =ORG_GLANCE_PROJECT_DIR= — a project directory for =org-glance-llm= to open its
   session in, instead of the content data dir.  Set/clear from a materialized
   buffer with =C-c d= (=org-glance-material:set-project-dir=); read by
   =org-glance-llm--dir=.  =~= is expanded; the dir is created if missing.
 - =ORG_GLANCE_TITLE= (or =TITLE=) — overrides the displayed title; otherwise the
   heading text is used.  Read in =org-glance-headline--from-element=.
-- =ORG_GLANCE_HASH= — content hash; written into overview clones and stripped
-  before hashing (=org-glance-headline:hash-ignore-properties=).  Internal — do
-  not set by hand.
+- =ORG_GLANCE_REPEAT_HISTORY_DEPTH= — per-headline override of
+  =org-glance-repeat-history-depth=: an integer (=0= disables) or =t=/=inf=
+  (unlimited).  Read at repeat completion by
+  =org-glance-material--history-depth=.
+- =ORG_GLANCE_HASH= — legacy content-hash property; no current code writes it.
+  Stripped before hashing (=org-glance-headline:hash-ignore-properties=),
+  skipped by the tag-config lint, concealed and edit-reverted in material
+  buffers.  Internal — do not set by hand.
 
 * Tag-config headline properties
 
@@ -40,7 +46,7 @@ Only in the tag-config file =<store>/config/tags.org= (see
   plaintext only in the material buffer.  Several per headline; text outside
   stays public and indexable.  See [[file:proposals/2026-07-17-crypt-blocks.done.org][crypt-blocks]].
 - =#+begin_pin= … =#+end_pin= — a pinned block: kept when a repeated headline is
-  trimmed on completion (=org-glance-repeat-history-depth= > 0), so it survives
+  trimmed on completion (=org-glance-repeat-history-depth= non-zero), so it survives
   in the live headline while the trimmed history lives on in the occurrence
   snapshot (see [[file:proposals/2026-07-18-repeat-occurrences.done.org][repeat-occurrences]]).
 
@@ -62,7 +68,8 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
   =org-glance-filter-spec=; a =?=-qualified path is explicit — exactly the
   filter it states.  KEYs are the filter-table keys (=done=, =state=,
   =title-contains=, =tags=, =id-any=, =refers-to=, =priority=, …); lists
-  comma-separated, booleans =t=/=nil=, priority a letter; TAG =all= or empty
+  comma-separated, booleans =t=/=nil=, planning keys =present=/=absent=,
+  priority a letter; TAG =all= or empty
   adds no tag constraint; =:where= is not linkable.  E.g.
   =[[org-glance-overview:book?done=nil&state=READING][Reading now]]=.  Parsed
   by =org-glance-filter:from-link-path=.

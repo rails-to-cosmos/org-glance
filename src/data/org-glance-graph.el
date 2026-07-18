@@ -680,8 +680,9 @@ immutable (`:read-only' slots)."
             when (org-glance--present-string? state)
             collect state)))
 
-(defconst org-glance--org-repeater-re "[.+]\\+?[0-9]+[hdwmy]"
-  "Matches an org repeater cookie (+1d, ++1w, .+2m) inside a timestamp string.")
+(defconst org-glance--org-repeater-re "[.+]\\+?0*[1-9][0-9]*[hdwmy]"
+  "Matches a NONZERO org repeater cookie (+1d, ++1w, .+2m) in a timestamp
+string -- a disarmed +0d repeater no longer repeats, so no \u21bb.")
 
 (cl-defun org-glance-headline-metadata:repeated? (metadata)
   "Non-nil when METADATA's schedule or deadline carries a repeater cookie.

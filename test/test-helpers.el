@@ -31,18 +31,7 @@ LINES is the heading, then optional planning (SCHEDULED:/DEADLINE:/CLOSED:)
 lines, then optional body.  The ORG_GLANCE_ID drawer is placed after the
 heading and any planning lines -- where org expects a property drawer --
 so the id parses correctly whether or not a body or planning is present."
-  (let* ((rest (cdr lines))
-         (planning (seq-take-while
-                    (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
-                    rest))
-         (body (seq-drop rest (length planning))))
-    (apply #'org-glance-headline--from-lines
-           (append (list (car lines))
-                   planning
-                   (list ":PROPERTIES:"
-                         (format ":ORG_GLANCE_ID: %s" id)
-                         ":END:")
-                   body))))
+  (apply #'org-glance-test:headline-props id (car lines) nil (cdr lines)))
 
 (cl-defun org-glance-test:change-todo-live (graph id &optional arg)
   "Run `org-glance-material:change-todo-live' (the no-note path) in a live origin
@@ -175,12 +164,20 @@ All other ingests proceed through the real function."
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
 (cl-defun org-glance-test:headline-props (id heading props &rest body)
-  "Like `org-glance-test:headline' but with extra drawer PROPS ((KEY . VALUE)…)."
-  (apply #'org-glance-headline--from-lines
-         (append (list heading ":PROPERTIES:" (format ":ORG_GLANCE_ID: %s" id))
-                 (mapcar (lambda (kv) (format ":%s: %s" (car kv) (cdr kv))) props)
-                 (list ":END:")
-                 body)))
+  "Build a headline: HEADING, planning lines from BODY's head, the drawer
+\(ORG_GLANCE_ID + PROPS as (KEY . VALUE) pairs), then the rest of BODY.
+Planning lines (SCHEDULED:/DEADLINE:/CLOSED:) are hoisted BEFORE the drawer,
+where org expects them."
+  (let* ((planning (seq-take-while
+                    (lambda (l) (string-match-p "^\\(SCHEDULED\\|DEADLINE\\|CLOSED\\):" l))
+                    body))
+         (rest (seq-drop body (length planning))))
+    (apply #'org-glance-headline--from-lines
+           (append (list heading) planning
+                   (list ":PROPERTIES:" (format ":ORG_GLANCE_ID: %s" id))
+                   (mapcar (lambda (kv) (format ":%s: %s" (car kv) (cdr kv))) props)
+                   (list ":END:")
+                   rest))))
 
 (defun org-glance-test:first-row-id ()
   "Move point to the current table's first data row and return its id."
@@ -204,6 +201,19 @@ plain `cl-letf'."
                        `((symbol-function ',(car b)) (lambda (&rest _) ,(cadr b))))
                      bindings)
      ,@body))
+
+(cl-defmacro org-glance-test:with-repeat ((buf graph id depth) &rest body)
+  "Materialize ID from GRAPH with repeat-history DEPTH and quiet repeat logs."
+  (declare (indent 1))
+  `(let ((org-glance-repeat-history-depth ,depth)
+         (org-log-repeat nil)
+         (org-log-done nil))
+     (org-glance-test:with-material (,buf ,graph ,id) ,@body)))
+
+(defun org-glance-test:complete-repetition ()
+  "Complete the current repetition (state to DONE; org advances the repeater)."
+  (goto-char (point-min))
+  (org-todo "DONE"))
 
 (defun org-glance-test:row-ids (rows)
   "The `id' cell of each row in ROWS."
