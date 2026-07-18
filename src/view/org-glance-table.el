@@ -528,11 +528,9 @@ Honours the same filter language as the overview (see
                     (with-current-buffer buf
                       (let ((rows (org-glance-table--rows graph keep?)))
                         (table-view-set-rows buf rows)
-                        ;; Warm + persist the property index for the custom
-                        ;; columns (skip the O(N) parse when there are none).
-                        (when (org-glance-table--schema-get graph spec)
-                          (org-glance-property-index:ensure
-                           graph (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows))))
+                        ;; `set-rows' already warmed the memo via the custom
+                        ;; columns' value-fns; persist only if a blob re-parsed.
+                        (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))

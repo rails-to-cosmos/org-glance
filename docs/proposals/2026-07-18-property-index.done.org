@@ -52,7 +52,8 @@ correctness never depends on it -- a miss falls back to an O(N) blob parse.
 its current metadata hash (or is absent), parse the blob ONCE (both drawer +
 body), update the in-memory map; flush the map to disk atomically if anything
 changed.  O(changed); the first build over N headlines is O(N) (acceptable per
-the "fall back to O(N) is fine" scope).  Tombstoned ids are pruned.
+the "fall back to O(N) is fine" scope).  A gone id is never (re)cached on a
+miss; entries for deleted headlines are dropped wholesale by =reindex=.
 
 Readers:
 - =:drawer graph id= / =:body graph id= — ensure that id, return its alist.

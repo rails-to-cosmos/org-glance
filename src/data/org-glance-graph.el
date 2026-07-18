@@ -644,22 +644,17 @@ immutable (`:read-only' slots)."
   (cl-check-type graph org-glance-graph)
   (copy-sequence (plist-get (org-glance-graph--ensure-cache graph) :live)))
 
-(cl-defun org-glance-graph--sorted-distinct (strings)
-  "Return STRINGS de-duplicated and sorted with `string<'."
-  (sort (-distinct strings)               ; hash-backed O(N) dedup (was O(N^2))
-        #'string<))
-
 (cl-defun org-glance-graph:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."
   (cl-check-type graph org-glance-graph)
-  (org-glance-graph--sorted-distinct
+  (org-glance--sorted-distinct
    (cl-loop for meta in (org-glance-graph:headlines graph)
             append (org-glance-headline-metadata:tag-strings meta))))
 
 (cl-defun org-glance-graph:states (graph)
   "Distinct non-empty todo states across GRAPH's live headlines, sorted."
   (cl-check-type graph org-glance-graph)
-  (org-glance-graph--sorted-distinct
+  (org-glance--sorted-distinct
    (cl-loop for meta in (org-glance-graph:headlines graph)
             for state = (org-glance-headline-metadata:state meta)
             when (org-glance--present-string? state)

@@ -13,6 +13,11 @@
 Whitespace-only strings count as present (unlike `s-present?')."
   (and (stringp v) (not (string-empty-p v))))
 
+(cl-defun org-glance--sorted-distinct (strings)
+  "Return STRINGS de-duplicated and sorted with `string<'."
+  (sort (-distinct strings)               ; hash-backed O(N) dedup (was O(N^2))
+        #'string<))
+
 (cl-defun org-glance--file-mtime (path)
   "Filesystem modification time of PATH, or nil when it does not exist."
   (and (f-exists? path)
