@@ -1,4 +1,4 @@
-(package "org-glance" "0.13.0.0.20260718.0" "Org-mode mindmap.")
+(package "org-glance" "1.0.0.0.20260718.0" "Org-mode mindmap.")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
 (keywords "org-mode" "graph" "mindmap")
@@ -37,6 +37,7 @@
   (load "test/test-merge.el")
   (load "test/test-capture.el")
   (load "test/test-tag-config.el")
+  (load "test/test-property-index.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
   (load "test/test-llm.el")

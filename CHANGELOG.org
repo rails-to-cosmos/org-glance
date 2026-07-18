@@ -21,6 +21,10 @@ Notable user-facing changes.  Versions date-based
 - =:ORG_GLANCE_PROJECT_DIR:= headline property: =org-glance-llm= opens the session
   there instead of the data dir.  Set/clear it in a materialized buffer with
   =C-c d= (=org-glance-material:set-project-dir=).
+- Table =C-u += now completing-reads (required match) a drawer property the
+  filtered headlines actually carry, backed by a derived, persisted property
+  index (=org-glance-property-index=); column values and the table =e= action
+  read from it instead of re-parsing blobs.
 
 ** Changed
 - Material password lock =C-c C-l= → =C-c #=.

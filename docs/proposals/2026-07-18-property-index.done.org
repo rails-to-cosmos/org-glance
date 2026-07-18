@@ -1,0 +1,108 @@
+#+TITLE: Property index: discover + read headline properties efficiently
+#+DATE: 2026-07-18
+
+Status: *done* · 2026-07-18
+
+Suite green 255/255; recompile warning-free.
+
+* Problem
+
+Two features read a headline's org properties, and both are blind + slow:
+
+1. *Adding a table column* (=C-u +=) prompts with a free-form =read-string= for a
+   drawer key (=org-glance-table--add-column-prompt=).  The user must know the
+   exact key; a typo yields an all-empty column.  There is no discovery of
+   *which* properties the visible headlines actually carry.
+2. *Reading a property value* -- for a custom column cell, or the extract action
+   (=e=) -- means parsing the headline's content blob.  Columns cache this
+   per-buffer (=org-glance-table--prop-cache=: id -> (HASH . drawer-props)), but
+   that cache is per-buffer, cold on the first render, lost on restart, and
+   unshared with extract.
+
+The store's metadata projection deliberately does NOT carry arbitrary properties
+(they are variable-size K→V; putting them in every append-only WAL record would
+bloat the log and fight the byte-stability contract).  So a persistent, derived
+index is the right layer.
+
+Note two distinct "property" notions in the code, both worth indexing:
+- *drawer* properties -- the org =:PROPERTIES:= drawer
+  (=org-glance-headline:node-properties=); what custom columns show.
+- *body* =KEY: value= pairs -- org-glance's "user properties"
+  (=org-glance-headline:properties=); what extract (=e=) reads.
+
+* Design — a derived property-index sidecar
+
+A per-graph index, keyed by id, storing each live headline's properties keyed by
+its content hash.  It is a PURE CACHE: rebuildable from the canonical blobs, and
+correctness never depends on it -- a miss falls back to an O(N) blob parse.
+
+** Storage
+
+=<store>/config/property-index.eld=: an alist =id -> (HASH :drawer AL :body AL)=.
+- =HASH= is the headline's content hash (=org-glance-headline-metadata:hash=), the
+  same invalidation key the per-buffer cache uses.
+- =:drawer= / =:body= are the two property alists, both filled in ONE blob parse.
+- Rebuildable, so no union-merge on git conflict: the generic =org-glance--read-eld=
+  floor keeps a readable side, and any stale/missing entry self-heals on the next
+  lazy refresh.  =org-glance-reindex= drops it.
+
+** Maintenance — lazy, hash-invalidated
+
+=org-glance-property-index:ensure (graph ids)= — for each id whose stored HASH ≠
+its current metadata hash (or is absent), parse the blob ONCE (both drawer +
+body), update the in-memory map; flush the map to disk atomically if anything
+changed.  O(changed); the first build over N headlines is O(N) (acceptable per
+the "fall back to O(N) is fine" scope).  Tombstoned ids are pruned.
+
+Readers:
+- =:drawer graph id= / =:body graph id= — ensure that id, return its alist.
+- =:keys graph ids= — ensure IDS, return the sorted union of their drawer keys.
+
+Warm path (v2, optional): the metadata build (=--content-facts=) already parses
+each blob once to derive hash/linked?/propertized?/encrypted?.  Capturing the two
+property alists in that SAME pass and pushing them to the index would keep it
+current with ~zero extra I/O, removing the lazy re-parse entirely.  Deferred:
+v1's lazy refresh is simpler and the fallback makes it correct regardless.
+
+* UX — column add becomes discoverable
+
+=org-glance-table--add-column-prompt= switches =read-string= →
+=completing-read= with =require-match t= over
+=(org-glance-property-index:keys graph <ids of the current rows>)= — the union of
+drawer keys across the headlines matching the current filter.  Empty input
+cancels.  A key the user picks is guaranteed to populate at least one row.
+
+Column cell values (=--headline-property=) read from the index (fallback: the
+existing per-buffer cache / blob parse), so a value is O(1) once warm and shared
+across every table buffer of the graph.
+
+* Extract optimization
+
+=org-glance-material:extract= reads a headline's body =KEY: value= pairs.  Backing
+it with the index's =:body= map lets extract offer/read a property without
+re-parsing the blob (fallback: parse).  Secondary to the column feature, but the
+same index serves it -- and opens a future "extract across the filtered set".
+
+* Alternatives (rejected)
+
+- *A =properties= field in the WAL record.*  Bloats the append-only log with
+  variable-size maps and violates the fixed-projection byte-stability contract.
+- *Keep the per-buffer cache only.*  No cross-session/cross-buffer reuse, and no
+  cheap key union BEFORE a column exists (the discovery prompt would cold-parse
+  every headline every time).
+
+* Invariants respected
+
+Blobs canonical, index derived + rebuildable (reindex); content-hash
+invalidation; git conflict → keep-a-side + lazy self-heal (pure cache, so no
+union merge); atomic sidecar write.
+
+* Phases
+
+1. =src/data/org-glance-property-index.el=: storage + =ensure= / =:drawer= /
+   =:body= / =:keys= / =:clear=; hook =:clear= into reindex.
+2. Table: =--add-column-prompt= → completing-read over =:keys=;
+   =--headline-property= reads via the index.
+3. Extract: read =:body= via the index (fallback preserved).
+4. Docs: =docs/properties.org= unaffected (no new headline property); README +
+   CHANGELOG; rename to =.done.org=.

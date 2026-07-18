@@ -34,6 +34,7 @@
 (require 'table-view)
 (require 'org-glance-utils)
 (require 'org-glance-graph)
+(require 'org-glance-property-index)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
 (require 'org-glance-material)
@@ -220,7 +221,7 @@ LINE, which drifts to another row once the sort reorders them."
   (when id (org-glance-material:open-link (org-glance-table--headline graph id))))
 
 (cl-defun org-glance-table--act-extract (graph id _row)
-  (when id (org-glance-material:extract (org-glance-table--headline graph id))))
+  (when id (org-glance-material:extract-pairs (org-glance-property-index:body graph id))))
 
 (cl-defun org-glance-table--act-todo (graph id _row)
   "Advance ID's TODO state exactly like `C-c C-t' (via
@@ -388,38 +389,15 @@ may be nil -- the \"all\" filter -- so guard only on being a registered view.)"
 
 ;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
 ;;
-;; `C-u +' prompts for an org drawer property (e.g. AUTHOR) and appends a column
-;; showing that property for each row.  The value is read lazily via a
-;; `table-view' `value-fn'; because the metadata projection the table renders from
-;; does not carry arbitrary drawer properties, the cell is pulled from the full
-;; headline -- cached per id and keyed by the content hash, so a reload only
-;; re-parses the rows that actually changed.  The set of custom columns (a schema)
+;; `C-u +' completing-reads an org drawer property the visible headlines carry
+;; (`org-glance-property-index:keys') and appends a column showing it per row.
+;; The metadata projection the table renders from does not carry arbitrary drawer
+;; properties, so the cell is pulled from `org-glance-property-index' -- a derived,
+;; hash-invalidated, persisted cache of each headline's properties (fallback: an
+;; O(N) blob parse).  The set of custom columns (a schema)
 ;; is persisted PER TAG (the filter's tags) at `<store>/config/table-columns.eld',
 ;; so every view of a tag inherits its columns.  Only these added columns are
 ;; removable (`-' on one); the built-in columns are fixed.
-
-(defvar-local org-glance-table--prop-cache nil
-  "Per-buffer cache for custom-column values: id -> (HASH . NODE-PROPERTIES).
-The cell for a property column is the headline's drawer property, which lives in
-the content blob, not the cheap metadata.  Caching the parsed drawer per id and
-invalidating on the content HASH keeps a reload from re-parsing unchanged rows.")
-
-(cl-defun org-glance-table--headline-property (graph id property)
-  "Value of ID's headline drawer PROPERTY in GRAPH, via the per-buffer cache.
-Reuses the cached parse while the headline's content hash is unchanged; only a
-new or modified row pays the blob read + parse.  Returns nil when ID is gone."
-  (let* ((cache (or org-glance-table--prop-cache
-                    (setq org-glance-table--prop-cache (make-hash-table :test #'equal))))
-         (meta (org-glance-graph:get-headline graph id))
-         (hash (and (org-glance-headline-metadata? meta)
-                    (org-glance-headline-metadata:hash meta)))
-         (entry (gethash id cache)))
-    (unless (and entry (equal (car entry) hash))
-      (setq entry (cons hash (ignore-errors
-                               (org-glance-headline:node-properties
-                                (org-glance-graph:headline graph id)))))
-      (puthash id entry cache))
-    (alist-get (upcase property) (cdr entry) nil nil #'string=)))
 
 (cl-defun org-glance-table--property-column (graph property &optional header)
   "A `table-view' column displaying drawer PROPERTY for each row's headline.
@@ -434,15 +412,21 @@ without persisting its (unreadable) `value-fn' closure."
       (align . "left")
       (prop . ,prop)
       (value-fn . ,(lambda (id _row)
-                     (or (org-glance-table--headline-property graph id prop) ""))))))
+                     (or (org-glance-property-index:property graph id prop) ""))))))
 
 (cl-defun org-glance-table--add-column-prompt ()
-  "Prompt for a drawer property and return a `table-view' column showing it.
-Bound buffer-locally as `table-view-add-column-function' so `C-u +' adds a
-column for that property; empty input cancels the add."
-  (let ((property (string-trim (read-string "Property column (drawer key): "))))
-    (unless (string-empty-p property)
-      (org-glance-table--property-column org-glance-view--graph property))))
+  "Return a `table-view' column for a drawer property chosen by completing-read.
+Candidates are the drawer keys the filtered headlines actually carry
+(`org-glance-property-index:keys'); required match, empty input cancels.
+Bound buffer-locally as `table-view-add-column-function' so `C-u +' uses it."
+  (let* ((graph org-glance-view--graph)
+         (ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
+         (keys (org-glance-property-index:keys graph ids)))
+    (if (null keys)
+        (user-error "No drawer properties on the headlines in this view")
+      (let ((property (completing-read "Property column: " keys nil t)))
+        (unless (string-empty-p property)
+          (org-glance-table--property-column graph property))))))
 
 ;;; Per-tag column schema store (`<store>/config/table-columns.eld')
 
@@ -542,8 +526,14 @@ Honours the same filter language as the overview (see
          (src (org-glance-graph:headline-meta-path graph))
          (fill-fn (lambda (buf)
                     (with-current-buffer buf
-                      (table-view-set-rows buf (org-glance-table--rows graph keep?))
-                      (org-glance-view:snapshot-mtime src))))
+                      (let ((rows (org-glance-table--rows graph keep?)))
+                        (table-view-set-rows buf rows)
+                        ;; Warm + persist the property index for the custom
+                        ;; columns (skip the O(N) parse when there are none).
+                        (when (org-glance-table--schema-get graph spec)
+                          (org-glance-property-index:ensure
+                           graph (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows))))
+                        (org-glance-view:snapshot-mtime src)))))
          (handlers (list (cons "materialize" (lambda (id row) (org-glance-table--act-materialize graph id row)))
                          (cons "open"        (lambda (id row) (org-glance-table--act-open graph id row)))
                          (cons "extract"     (lambda (id row) (org-glance-table--act-extract graph id row)))

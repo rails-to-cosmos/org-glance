@@ -49,8 +49,10 @@ Reach everything through the =org-glance-transient= transient (=C-x j= above).
 
 - *Overview* (=o=) — the org-text overview of a chosen tag; toggle it (=T=) to a
   sortable headline *table* with custom drawer-property columns and bulk state
-  change.  The table header always shows the sort and a coloured =#+TODO:= line
-  of the graph's states; =?= toggles the action-key legend (RET:Materialize …).
+  change.  =C-u += adds a column for any drawer property the view's headlines
+  carry (chosen by completion, backed by a persisted property index).  The table
+  header always shows the sort and a coloured =#+TODO:= line of the graph's
+  states; =?= toggles the action-key legend (RET:Materialize …).
 - *All tags* (=t=) — a table of the tags THEMSELVES: per-tag headline count, todo
   state breakdown, configured cycle, and event-tracked created / last-modified
   timestamps.  State and Cycle cells are colour-coded.  In the buffer: =RET=

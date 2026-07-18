@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 0.13.0.0.20260718.0
+;; Version: 1.0.0.0.20260718.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -48,6 +48,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 (require 'org-glance-tag-metrics)
+(require 'org-glance-property-index)
 (require 'org-glance-view)
 (require 'org-glance-material)
 (require 'org-glance-llm)
@@ -225,6 +226,7 @@ and `org-glance-extract')."
   (interactive)
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:reindex graph)))
+    (org-glance-property-index:clear graph)   ; derived; rebuilds lazily
     (when (called-interactively-p 'any)
       (message "org-glance: re-indexed %d headline(s)." n))
     n))

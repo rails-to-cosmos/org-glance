@@ -778,7 +778,7 @@ final rows -- the equivalence the in-place fast path relies on."
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
-        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "author")))
+        (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "author")))
           (let ((col (org-glance-table--add-column-prompt)))
             (should (equal "AUTHOR" (alist-get 'key col)))
             (should (equal "Author" (alist-get 'header col)))
@@ -792,7 +792,7 @@ final rows -- the equivalence the in-place fast path relies on."
        "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":AUTHOR: Ann" ":END:"))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
-        (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "AUTHOR")))
+        (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "AUTHOR")))
           (let ((current-prefix-arg '(4)))
             (funcall (key-binding (kbd "+")))))     ; the `+' action reads current-prefix-arg
         (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))

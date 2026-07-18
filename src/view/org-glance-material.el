@@ -741,17 +741,23 @@ chosen link, mirroring the v1 behaviour."
   (org-glance-material:open-link
    (org-glance-material--pick-headline "Open: " #'org-glance-headline-metadata:linked?)))
 
+(cl-defun org-glance-material:extract-pairs (pairs &optional key)
+  "Copy a value from PAIRS (an alist KEY -> VALUE) to the kill ring; return it.
+With KEY, take it non-interactively; else completing-read the key.  Signal a
+`user-error' on empty PAIRS.  The core shared by `org-glance-material:extract'
+(from a headline) and the table's `e' action (from the property index)."
+  (unless pairs (user-error "No key-value pairs in headline"))
+  (let* ((key (or key (completing-read "Extract: " pairs nil t)))
+         (value (alist-get key pairs nil nil #'string=)))
+    (kill-new value)
+    (when (called-interactively-p 'any) (message "Copied: %s" value))
+    value))
+
 (cl-defun org-glance-material:extract (headline &optional key)
-  "Copy a key-value pair from HEADLINE's contents to the kill ring; return value.
+  "Copy a body `KEY: value' pair from HEADLINE to the kill ring; return the value.
 With KEY, extract it non-interactively; otherwise prompt."
   (cl-check-type headline org-glance-headline)
-  (let ((pairs (org-glance-headline:properties headline)))
-    (unless pairs (user-error "No key-value pairs in headline"))
-    (let* ((key (or key (completing-read "Extract: " pairs nil t)))
-           (value (alist-get key pairs nil nil #'string=)))
-      (kill-new value)
-      (when (called-interactively-p 'any) (message "Copied: %s" value))
-      value)))
+  (org-glance-material:extract-pairs (org-glance-headline:properties headline) key))
 
 ;;;###autoload
 (cl-defun org-glance-extract ()
