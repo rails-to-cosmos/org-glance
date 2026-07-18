@@ -174,6 +174,25 @@ All other ingests proceed through the real function."
   (declare (indent 2))
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
+(defun org-glance-test:row-ids (rows)
+  "The `id' cell of each row in ROWS."
+  (mapcar (lambda (r) (alist-get 'id r)) rows))
+
+(cl-defmacro org-glance-test:assert-fills-frame (visit-form)
+  "Assert VISIT-FORM fills the frame when `org-glance-view-fill-frame' is non-nil
+and leaves a two-window split alone when nil.  VISIT-FORM must return the view
+buffer and really display it (`switch-to-buffer')."
+  `(save-window-excursion
+     (dolist (case '((t . 1) (nil . 2)))
+       (delete-other-windows) (split-window)          ; two windows before the visit
+       (let* ((org-glance-view-fill-frame (car case))
+              (buf ,visit-form))
+         (unwind-protect
+             (progn
+               (should (eq (window-buffer) buf))       ; the view is what's shown
+               (should (= (cdr case) (length (window-list)))))
+           (when (buffer-live-p buf) (kill-buffer buf)))))))
+
 (defun org-glance-test:reopen (graph)
   "Drop GRAPH from the instance cache and re-open it (running heal/migration)."
   (let ((dir (org-glance-graph:directory graph)))

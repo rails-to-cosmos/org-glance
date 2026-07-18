@@ -18,7 +18,7 @@
 
 (cl-defun org-glance-tag-metrics--file (graph)
   "Path to GRAPH's per-tag metrics sidecar."
-  (f-join (org-glance-graph:store-path graph) "config" "tag-metrics.eld"))
+  (org-glance-graph:config-file graph "tag-metrics.eld"))
 
 (cl-defun org-glance-tag-metrics--read (graph)
   "GRAPH's tag-metrics map: alist of TAG-STRING -> plist, or nil.

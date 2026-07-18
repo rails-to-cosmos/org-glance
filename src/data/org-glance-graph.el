@@ -525,6 +525,11 @@ Dot-prefixed so `org-agenda' (and legacy v1 tag discovery, which matched
    graph :meta
    (lambda () (-> (f-join (org-glance-graph:store-path graph) "meta") (file-truename)))))
 
+(cl-defun org-glance-graph:config-file (graph name)
+  "Path of GRAPH's config sidecar NAME under the store's `config/' (may not exist)."
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:store-path graph) "config" name))
+
 (cl-defun org-glance-graph:headline-meta-path (graph)
   (cl-check-type graph org-glance-graph)
   (org-glance-graph--path
@@ -536,13 +541,13 @@ Dot-prefixed so `org-agenda' (and legacy v1 tag discovery, which matched
 Long ids (e.g. UUIDs) are sharded by their first two characters."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (cl-assert (not (string-empty-p id)))
-  ;; Path-safety: ID feeds straight into `f-join'/`substring', so reject path
-  ;; separators and traversal -- a hand-edited ORG_GLANCE_ID must not escape the
-  ;; store (auto-generated UUIDs and tag-hash ids are already safe). Use `error',
-  ;; not `cl-assert': the latter can be optimized out, and its
-  ;; `cl-assertion-failed' is not a portable `error' subtype across Emacs versions.
-  (when (or (string-match-p "/" id) (string-match-p "\\.\\." id))
+  ;; Path-safety: ID feeds straight into `f-join'/`substring', so reject empty,
+  ;; path separators, and traversal -- a hand-edited ORG_GLANCE_ID must not escape
+  ;; the store (empty resolves to the data root, which compaction GC would delete;
+  ;; auto-generated UUIDs and tag-hash ids are already safe).  Use `error', not
+  ;; `cl-assert': the latter can be optimized out, and its `cl-assertion-failed'
+  ;; is not a portable `error' subtype across Emacs versions.
+  (when (or (string-empty-p id) (string-match-p "/" id) (string-match-p "\\.\\." id))
     (error "Unsafe ORG_GLANCE_ID for content-addressable path: %S" id))
   (let ((data (org-glance-graph:data-path graph)))
     (file-truename

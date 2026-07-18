@@ -53,7 +53,7 @@
                           (org-glance-test:headline "a" "* TODO A :x:")
                           (org-glance-test:headline "b" "* TODO B :y:"))
     (let* ((rows (org-glance-tags--rows graph))
-           (ids (mapcar (lambda (r) (alist-get 'id r)) rows)))
+           (ids (org-glance-test:row-ids rows)))
       (should (= 2 (length rows)))
       (should (member "x" ids))
       (should (member "y" ids))

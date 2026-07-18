@@ -56,7 +56,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    `org-glance-filter:table`) are the single source of truth; append new
    metadata fields at the end only (row order = JSON key order).
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
-   before any write, blob lands before its WAL record.
+   before any write, blob lands before its WAL record. The property index is a
+   pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
+   trust it in a durable write.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any
    filesystem use.
 7. Single-user, no locking; staleness detection uses the full store snapshot
@@ -73,7 +75,13 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 13. Tags are canonical downcased interned symbols at the boundary; deserialized
     metadata carries STRING tags — coerce with `(format "%s" tag)`.
 14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the
-    persistent secrecy annotation.
+    persistent secrecy annotation. Secrecy is per-block — text between blocks
+    stays plaintext and indexed, even for an encrypted headline.
+15. Table Title column is mandatory — never removable/hideable (`--act-delcolumn`
+    refuses it; `--apply-schema` strips it from the hidden set).
+16. Per-tag column schema: `:hidden` is a denylist of removed built-ins (new
+    built-ins still appear); `C-u +` candidates exclude `ORG_GLANCE_*` + CATEGORY;
+    order + sort persist separately per filter.
 
 ## Fix — and prevent — the whole class
 

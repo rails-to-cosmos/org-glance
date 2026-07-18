@@ -1,5 +1,5 @@
 #+TITLE: Global invariants
-#+DATE: 2026-07-17
+#+DATE: 2026-07-18
 
 Rules the whole codebase enforces; every change must preserve them.  Each entry:
 the rule, where the code enforces it (symbol anchors, stable across refactors),
@@ -33,7 +33,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical;
    metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
    ordering: metadata computed first (fail before any write), blob before WAL
-   append (=org-glance-graph:add=).  Violation: unrebuildable facts or
+   append (=org-glance-graph:add=).  The property index
+   (=config/property-index.eld=) is a PURE derived cache: every read is
+   content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
+   cached, and =org-glance-reindex= drops it — so no caller may trust an index
+   value in a durable write/delete without that fallback
+   (=org-glance-property-index--entry=).  Violation: unrebuildable facts or
    half-states.
 
 6. *Path safety before filesystem.*  An id is checked (reject =/= and =..=) via
@@ -51,7 +56,10 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    =org-glance-conflict-resolution= (ask/union/nil); =.gitattributes= written
    only if absent; =.eld= sidecar merges are commutative and non-inflating —
    earliest/latest/=max=, never a sum; a =nil= side never shadows a populated
-   one (=org-glance--read-eld=, =org-glance-tag-metrics--merge-plists=).  See
+   one (=org-glance--read-eld=, =org-glance-tag-metrics--merge-plists=).  The
+   property-index sidecar is the deliberate exception — it reads via the lossy
+   =--read-eld= floor, NOT a union, because a conflict self-heals on the next
+   content-hash miss.  See
    [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
 
 * Hooks and views
@@ -68,7 +76,8 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 
 11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a
     modified buffer must =user-error= or skip that row
-    (=org-glance-material--replace-headline=, =:retag=, bulk todo); a modified
+    (=org-glance-material--replace-headline=, =:retag= — its =user-error= trapped
+    by the table's =org-glance-table--act-deltag=, bulk todo); a modified
     file-backed view is flagged stale, never reverted.
 
 * Parsing and data hygiene
@@ -84,10 +93,30 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     with =(format "%s" tag)= when comparing).  Violation: mixed-case duplicates
     fragment filters and caches.
 
-14. *Crypt: plaintext never touches disk.*  Material buffers of encrypted
-    headlines are hardened (no auto-save/backup/lockfiles), sealed by
-    =before-save-hook=, unsealed after; =#+begin_crypt= markers are the
+14. *Crypt: plaintext never touches disk; secrecy is per-block.*  Material
+    buffers of encrypted headlines are hardened (no auto-save/backup/lockfiles),
+    sealed by =before-save-hook=, unsealed after; =#+begin_crypt= markers are the
     persistent secrecy annotation, and the legacy upgrade cannot re-wrap
-    plaintext (aes-header guard in
-    =org-glance-headline--crypt-upgrade-legacy=).  Violation: secrets leak to
-    =data.org= / backup files.
+    plaintext (aes-header guard in =org-glance-headline--crypt-upgrade-legacy=).
+    Only block bodies are secret: text OUTSIDE the blocks stays plaintext on disk
+    and IS indexed even for an =encrypted?= headline (so its links/properties
+    resolve, and the index never holds decrypted plaintext).  Violation: secrets
+    leak to =data.org= / backups, or an encrypted headline's intentionally-public
+    regions vanish from search.
+
+* Views and tables
+
+15. *Table Title column is mandatory.*  Never removable or hideable —
+    =org-glance-table--act-delcolumn= refuses =C-u -= on =title=, and
+    =org-glance-table--apply-schema= strips =title= from the persisted hidden set
+    (defence in depth against a hand-edited sidecar).  Violation: rows lose their
+    only human-readable label; a schema file could blank every view of a tag.
+
+16. *Per-tag column schema: hidden is a denylist; candidates are user keys.*  The
+    per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never
+    an allowlist of the visible set — so a built-in shipped in a later version
+    still appears; the =C-u += candidate keys exclude =ORG_GLANCE_*= bookkeeping
+    and org's synthesised =CATEGORY= (=org-glance-property-index--candidate-key?=).
+    Column order + sort persist separately, per filter (=table-views.eld=).
+    Violation: a version upgrade's new column is invisible to anyone with a saved
+    schema; internal keys pollute the column prompt.

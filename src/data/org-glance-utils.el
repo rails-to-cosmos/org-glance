@@ -98,6 +98,17 @@ written as literal `nil' never shadows a populated one) rather than crash on the
   (f-mkdir-full-path (f-dirname path))
   (f-write-text (prin1-to-string form) 'utf-8 path))
 
+(cl-defun org-glance--eld-alist-ref (path key)
+  "Value for KEY in the keyed alist stored at .eld PATH (`equal' keys), or nil."
+  (alist-get key (org-glance--read-eld path) nil nil #'equal))
+
+(cl-defun org-glance--eld-alist-set (path key value)
+  "Upsert KEY -> VALUE in the keyed alist at .eld PATH; a nil VALUE drops KEY.
+Rewrites the whole alist atomically via `--write-eld'."
+  (let ((all (cl-remove key (org-glance--read-eld path) :key #'car :test #'equal)))
+    (when value (setq all (cons (cons key value) all)))
+    (org-glance--write-eld path all)))
+
 (cl-defun org-glance--heal-eld (path merge-fn &optional subject)
   "Read the .eld at PATH, union-resolving a git conflict through MERGE-FN.
 A clean PATH returns its single form (nil if absent/unreadable).  A conflicted

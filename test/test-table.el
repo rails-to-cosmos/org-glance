@@ -91,7 +91,7 @@ then `|', then done -- coloured; exposed as the `table-view' subtitle."
                              (org-glance-test:headline "f2" "* Beta :home:"))
     (let* ((keep? (org-glance-filter:predicate '(:tags ("work"))))
            (rows (org-glance-table--rows graph keep?))
-           (ids (mapcar (lambda (r) (alist-get 'id r)) rows)))
+           (ids (org-glance-test:row-ids rows)))
       (should (equal '("f1") ids)))))
 
 ;;; Coherence: pull model (stale flag + display-boundary reload)
@@ -216,15 +216,15 @@ path; a display-boundary refresh re-fills it and clears the flag."
                      (org-glance-graph:get-headline graph id)))
             (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph id)))
             (should (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
-            (should (equal "🔒" (org-glance-test:cell graph id 'encrypted)))
+            (should (equal "🔒" (org-glance-test:meta-cell graph id 'encrypted)))
             (org-glance-table--act-crypt graph id)          ; decrypt -> fully public
             (should-not (org-glance-headline-metadata:encrypted?
                          (org-glance-graph:get-headline graph id)))
             (should (s-contains? "body" (org-glance-graph:get-content graph id)))
             (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
-            (should (equal "" (org-glance-test:cell graph id 'encrypted)))))))))
+            (should (equal "" (org-glance-test:meta-cell graph id 'encrypted)))))))))
 
-(cl-defun org-glance-test:cell (graph id key)
+(cl-defun org-glance-test:meta-cell (graph id key)
   "The KEY cell string of headline ID's `org-glance-table' row in GRAPH."
   (alist-get key (alist-get 'cells
                             (org-glance-table--row (org-glance-graph:get-headline graph id)))))
@@ -285,7 +285,7 @@ the new password."
       (org-glance-test:with-table-buffer graph buf
         (with-current-buffer buf
           (should (equal '(("title" . t)) table-view--sort-keys))
-          (should (equal '("b" "a") (mapcar (lambda (r) (alist-get 'id r)) table-view--rows))))))))
+          (should (equal '("b" "a") (org-glance-test:row-ids table-view--rows))))))))
 
 (ert-deftest org-glance-test:table-persist-per-filter ()
   "Configs are keyed per filter: one filter's layout does not leak to another."
@@ -338,16 +338,7 @@ the table (`table-view' link support), not as raw `[[...]]' markup."
 \(deletes the other windows); nil leaves the layout untouched."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "f1" "* TODO A"))
-    (save-window-excursion
-      (dolist (case '((t . 1) (nil . 2)))
-        (delete-other-windows) (split-window)          ; two windows before the visit
-        (let* ((org-glance-view-fill-frame (car case))
-               (buf (org-glance-table:visit graph)))   ; real switch-to-buffer displays it
-          (unwind-protect
-              (progn
-                (should (eq (window-buffer) buf))       ; the table is what's shown
-                (should (= (cdr case) (length (window-list)))))
-            (kill-buffer buf)))))))
+    (org-glance-test:assert-fills-frame (org-glance-table:visit graph))))
 
 (ert-deftest org-glance-test:view-fill-frame-guards-undisplayed ()
   "`org-glance-view:fill-frame' is a no-op when the current buffer is not the one
@@ -399,14 +390,14 @@ the first open (from outside a view) fills the frame."
 (ert-deftest org-glance-test:view-fill-frame-survives-delete-error ()
   "A `delete-other-windows' signal never breaks opening the view -- caught even
 under `debug-on-error' (so a quirky side/atomic window arrangement is harmless)."
-  (let ((org-glance-view-fill-frame t) (debug-on-error t))
+  (let ((org-glance-view-fill-frame t) (debug-on-error t) reached)
     (save-window-excursion
       (with-temp-buffer
         (switch-to-buffer (current-buffer))              ; buffer IS the selected window's
         (cl-letf (((symbol-function 'delete-other-windows)
-                   (lambda (&rest _) (error "boom"))))
+                   (lambda (&rest _) (setq reached t) (error "boom"))))
           (org-glance-view:fill-frame)                   ; must return, not signal
-          (should t))))))
+          (should reached))))))            ; reached the erroring delete, then swallowed it
 
 (ert-deftest org-glance-test:table-visit-default-sort ()
   "The table opens sorted by the spec default (state, active-first) regardless of
@@ -420,7 +411,7 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
         (should (equal '("t" "d")
-                       (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))))))
+                       (org-glance-test:row-ids table-view--rows)))))))
 
 (ert-deftest org-glance-test:table-visit-tag-filter ()
   "org-glance-table:visit with a tag filter shows only matching headlines."
@@ -441,7 +432,7 @@ graph insertion order -- guards `org-glance-table--apply-default-sort' against
       (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq opened b) b))
                 ((symbol-function 'org-glance-material:open) (lambda (_g id) (get-buffer-create (format "*mat-%s*" id)))))
         (org-glance-table--act-materialize graph "am1" nil)
-        (should (bufferp opened))
+        (should (equal "*mat-am1*" (buffer-name opened)))   ; the correct id was opened
         (kill-buffer opened)))))
 
 (ert-deftest org-glance-test:table-m-marks-not-materializes ()
@@ -455,7 +446,7 @@ materialize (which stays on RET) -- org-glance no longer binds `m'."
       (with-current-buffer buf
         (should (eq (key-binding (kbd "m")) #'table-view-mark-toggle))
         (should (eq (key-binding (kbd "U")) #'table-view-unmark-all))
-        (should (functionp (key-binding (kbd "RET"))))   ; RET still materializes
+        (should-not (eq (key-binding (kbd "RET")) #'table-view-mark-toggle))  ; RET is not the mark key
         (table-view--goto-id "a")
         (call-interactively (key-binding (kbd "m")))
         (should (member "a" table-view--marks))))))

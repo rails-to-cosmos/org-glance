@@ -122,9 +122,8 @@ ORG_GLANCE_ID was changed."
            ;; not buffer-local here (see `material:open'), so this `let' binds the
            ;; global value the temp buffer's `org-mode' reads.
            (headline (let ((org-todo-keywords
-                            (if org-glance-material--cycle
-                                (org-glance-tag-config:cycle->keywords org-glance-material--cycle)
-                              org-todo-keywords)))
+                            (org-glance-tag-config:cycle->keywords-or
+                             org-glance-material--cycle org-todo-keywords)))
                        (org-glance-headline--from-string
                         (buffer-substring-no-properties (point-min) (point-max))))))
       (if (equal (org-glance-headline:id headline) id)
@@ -398,8 +397,7 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
              ;; -- and hence native rendering, cycling and `org-todo' -- know the tag's
              ;; states (e.g. READING), WITHOUT a `#+TODO:' in the kept-clean blob.
              (let ((org-todo-keywords
-                    (if cycle (org-glance-tag-config:cycle->keywords cycle)
-                      org-todo-keywords)))
+                    (org-glance-tag-config:cycle->keywords-or cycle org-todo-keywords)))
                (find-file-noselect path))))
         (with-current-buffer buffer
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)

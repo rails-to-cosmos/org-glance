@@ -75,16 +75,21 @@ States not listed here render in `org-glance-table-default-state-color'."
   (or (cdr (assoc state org-glance-table-state-colors))
       org-glance-table-default-state-color))
 
+(cl-defun org-glance-table--split-states (graph)
+  "GRAPH's states split as (ACTIVE . DONE), each in `org-glance-graph:states'
+sorted order.  The split reads the ambient `org-done-keywords' (bound by
+`org-glance-table:visit' to the tag's cycle, else the global done set) through
+`org-glance--done-keywords'."
+  (let ((states (org-glance-graph:states graph))
+        (done-kw (org-glance--done-keywords)))
+    (cons (cl-remove-if     (lambda (s) (member s done-kw)) states)
+          (cl-remove-if-not (lambda (s) (member s done-kw)) states))))
+
 (cl-defun org-glance-table--state-badges (graph)
   "Badge palette (a list of `((value . S) (color . C))') for GRAPH's states.
-Active states first then done states, each group in the sorted order
-`org-glance-graph:states' returns, so the palette is also an active-first sort
-priority.  The active/done split uses the ambient `org-done-keywords' (bound by
-`org-glance-table:visit' to the tag's cycle), falling back to the global set."
-  (let* ((states (org-glance-graph:states graph))
-         (done-kw (or org-done-keywords (org-glance--done-keywords)))
-         (done (cl-remove-if-not (lambda (s) (member s done-kw)) states))
-         (active (cl-remove-if (lambda (s) (member s done-kw)) states)))
+Active states first then done, each group in `org-glance-graph:states' sorted
+order, so the palette doubles as an active-first sort priority."
+  (pcase-let ((`(,active . ,done) (org-glance-table--split-states graph)))
     (cl-loop for state in (append active done)
              collect `((value . ,state) (color . ,(org-glance-table--state-color state))))))
 
@@ -98,11 +103,8 @@ priority.  The active/done split uses the ambient `org-done-keywords' (bound by
 each coloured by the state palette; nil when the graph has no states.  Shown
 always in the table header via the `table-view' `subtitle' (never hidden by the
 `?' action-legend toggle)."
-  (let* ((states (org-glance-graph:states graph))
-         (done-kw (or org-done-keywords (org-glance--done-keywords)))
-         (done (cl-remove-if-not (lambda (s) (member s done-kw)) states))
-         (active (cl-remove-if (lambda (s) (member s done-kw)) states)))
-    (when states
+  (pcase-let ((`(,active . ,done) (org-glance-table--split-states graph)))
+    (when (or active done)
       (concat "#+TODO: "
               (mapconcat #'org-glance-table--colorize-state active " ")
               (when done
@@ -346,24 +348,17 @@ passwords (confirmed when setting a new one) and reloads the row."
 
 (cl-defun org-glance-table--config-file (graph)
   "Path of GRAPH's table-view config store (may not exist)."
-  (f-join (org-glance-graph:store-path graph) "config" "table-views.eld"))
-
-(cl-defun org-glance-table--config-all (graph)
-  "Saved per-filter table configs: alist of (identity-string . config-plist)."
-  (org-glance--read-eld (org-glance-table--config-file graph)))
+  (org-glance-graph:config-file graph "table-views.eld"))
 
 (cl-defun org-glance-table--config-get (graph spec)
   "Saved view-config plist for SPEC (`:columns' KEYS `:sort' SORT-KEYS), or nil."
-  (alist-get (org-glance-filter:identity spec)
-             (org-glance-table--config-all graph) nil nil #'equal))
+  (org-glance--eld-alist-ref (org-glance-table--config-file graph)
+                             (org-glance-filter:identity spec)))
 
 (cl-defun org-glance-table--config-put (graph spec config)
-  "Persist CONFIG (a plist) for SPEC, merged into GRAPH's config store."
-  (let ((path (org-glance-table--config-file graph))
-        (all (org-glance-table--config-all graph))
-        (id (org-glance-filter:identity spec)))
-    (setf (alist-get id all nil nil #'equal) config)
-    (org-glance--write-eld path all)))
+  "Persist CONFIG (a plist) for SPEC in GRAPH's config store."
+  (org-glance--eld-alist-set (org-glance-table--config-file graph)
+                             (org-glance-filter:identity spec) config))
 
 (cl-defun org-glance-table--reorder-columns (columns order)
   "COLUMNS reordered so their `key's follow ORDER (a list of keys).
@@ -446,11 +441,7 @@ Bound buffer-locally as `table-view-add-column-function' so `C-u +' uses it."
 
 (cl-defun org-glance-table--schema-file (graph)
   "Path of GRAPH's per-tag custom-column schema store (may not exist)."
-  (f-join (org-glance-graph:store-path graph) "config" "table-columns.eld"))
-
-(cl-defun org-glance-table--schema-all (graph)
-  "Saved per-tag schemas: alist of (tag-key . (:columns ((PROP . HEADER) ...)))."
-  (org-glance--read-eld (org-glance-table--schema-file graph)))
+  (org-glance-graph:config-file graph "table-columns.eld"))
 
 (cl-defun org-glance-table--schema-key (filter)
   "Canonical per-tag key for FILTER: its tags sorted and `+'-joined, or
@@ -461,8 +452,8 @@ the full filter identity) is what shares a tag's columns across its views."
 
 (cl-defun org-glance-table--schema-entry (graph filter)
   "FILTER's saved schema plist (:columns PROPS :hidden KEYS) for its tags, or nil."
-  (alist-get (org-glance-table--schema-key filter)
-             (org-glance-table--schema-all graph) nil nil #'equal))
+  (org-glance--eld-alist-ref (org-glance-table--schema-file graph)
+                             (org-glance-table--schema-key filter)))
 
 (cl-defun org-glance-table--schema-get (graph filter)
   "Ordered custom columns saved for FILTER's tags.
@@ -477,13 +468,10 @@ A list of (PROP . HEADER), or nil."
   "Persist FILTER's per-tag schema: custom COLUMNS ((PROP . HEADER) list) and
 HIDDEN built-in column keys.  An all-empty schema drops the entry so the store
 does not accrete empties."
-  (let* ((path (org-glance-table--schema-file graph))
-         (key (org-glance-table--schema-key filter))
-         (all (cl-remove key (org-glance-table--schema-all graph)
-                         :key #'car :test #'equal)))
-    (when (or columns hidden)
-      (setq all (cons (cons key (list :columns columns :hidden hidden)) all)))
-    (org-glance--write-eld path all)))
+  (org-glance--eld-alist-set
+   (org-glance-table--schema-file graph)
+   (org-glance-table--schema-key filter)
+   (and (or columns hidden) (list :columns columns :hidden hidden))))
 
 (cl-defun org-glance-table--apply-schema (graph filter columns)
   "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.

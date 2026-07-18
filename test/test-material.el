@@ -27,21 +27,9 @@
       ;; raw link markup never leaks into a label
       (should-not (cl-some (lambda (l) (s-contains? "[[" l)) labels)))))
 
-(ert-deftest org-glance-test:material-active-filter ()
-  "The commands filter selection to active headlines.
-No `org-done-keywords' binding: `completing-read' resolves the done set itself,
-so the filter is correct even from this non-Org command context."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-                             (org-glance-test:headline "a" "* TODO Todo")
-                             (org-glance-test:headline "b" "* DONE Done"))
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_p coll &rest _)
-                 (should (= 1 (length coll)))   ; DONE excluded
-                 (caar coll))))
-      (let ((meta (org-glance-material:completing-read
-                   graph :filter #'org-glance-headline-metadata:active?)))
-        (should (string= "a" (org-glance-headline-metadata:id meta)))))))
+;; (`material-active-filter' removed: its body is a strict subset of
+;; `material-done-keywords-custom' below -- same fixture, same default-branch
+;; assertion -- and mutation-testing the `:filter' path confirmed no unique kill.)
 
 (ert-deftest org-glance-test:material-done-keywords-custom ()
   "`org-done-keywords' redefines what counts as active for selection."

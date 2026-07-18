@@ -65,7 +65,7 @@ store.  Nil when neither is available (uninitialised, no override) -- callers
 then see an empty config set."
   (or (and (stringp org-glance-tag-config-file) org-glance-tag-config-file)
       (and (org-glance-graph? graph)
-           (f-join (org-glance-graph:store-path graph) "config" "tags.org"))))
+           (org-glance-graph:config-file graph "tags.org"))))
 
 ;;; Parse: tags.org -> tag-symbol -> config
 
@@ -151,6 +151,10 @@ with the global todo keywords -- the graceful-degradation path."
 (cl-defun org-glance-tag-config:cycle->keywords (cycle)
   "The `org-todo-keywords' value for a tag CYCLE string: one `:sequence'."
   (list (cons 'sequence (split-string cycle))))
+
+(cl-defun org-glance-tag-config:cycle->keywords-or (cycle default)
+  "CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
+  (if cycle (org-glance-tag-config:cycle->keywords cycle) default))
 
 (cl-defun org-glance-tag-config:done-keywords (todo-spec)
   "The done keywords of TODO-SPEC (everything after the last `|'), or nil.

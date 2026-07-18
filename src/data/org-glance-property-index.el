@@ -41,7 +41,7 @@ Hides org-glance bookkeeping (`ORG_GLANCE_*') and org's synthesised CATEGORY
 
 (cl-defun org-glance-property-index--file (graph)
   "Path of GRAPH's property-index sidecar (may not exist)."
-  (f-join (org-glance-graph:store-path graph) "config" "property-index.eld"))
+  (org-glance-graph:config-file graph "property-index.eld"))
 
 (cl-defun org-glance-property-index--table (graph)
   "GRAPH's index as a live hash-table id->entry (loaded from disk on first use)."
