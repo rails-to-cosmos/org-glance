@@ -845,6 +845,18 @@ shared picker."
             (funcall (key-binding (kbd "l"))))
           (should (equal "rep" picked)))))))
 
+(ert-deftest org-glance-test:table-delete-key ()
+  "`D' deletes the row's headline after confirmation and reloads the table."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "d1" "* TODO Doomed")
+      (org-glance-test:headline "k1" "* TODO Keeper"))
+    (org-glance-test:with-table (graph)
+      (table-view--goto-id "d1")
+      (org-glance-test:answering ((yes-or-no-p t))
+        (funcall (key-binding (kbd "D"))))
+      (should (equal '("k1") (org-glance-test:row-ids table-view--rows))))))
+
 (ert-deftest org-glance-test:table-planning-keys ()
   "`C-c C-s' / `C-c C-d' set schedule/deadline on the row; `C-u' clears."
   (org-glance-test:with-graph graph

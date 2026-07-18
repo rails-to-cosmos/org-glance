@@ -811,6 +811,34 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
     (should (org-glance-headline-metadata:encrypted?
              (org-glance-graph:get-headline graph "wb")))))
 
+(ert-deftest org-glance-test:material-delete-referrer-aware ()
+  "Delete tombstones after confirmation; the prompt names referrers; declining
+keeps the headline; the referrer's edge dangles harmlessly afterwards."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "gone" "* TODO Doomed")
+      (org-glance-test:headline "ref" "* TODO Referrer"
+        "[[org-glance-material:gone][Doomed]]"))
+    (let (prompt)
+      ;; decline: still alive, prompt named the referrer
+      (cl-letf (((symbol-function 'yes-or-no-p)
+                 (lambda (p) (setq prompt p) nil)))
+        (should-not (org-glance-material:delete graph "gone")))
+      (should (s-contains? "Referrer" prompt))
+      (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "gone")))
+      ;; confirm: tombstoned; open material buffer discarded; edge dangles
+      (let ((buf (org-glance-material:open graph "gone")))
+        (org-glance-test:answering ((yes-or-no-p t))
+          (should (org-glance-material:delete graph "gone")))
+        (should-not (buffer-live-p buf)))
+      (should (eq 'tombstone (org-glance-graph:get-headline graph "gone")))
+      (should-not (org-glance-test:filter-ids graph '(:refers-to "zzz")))
+      ;; the referrer still lives and still carries the (now dangling) edge
+      (should (equal '(("gone" . nil))
+                     (org-glance-headline-metadata:relations
+                      (org-glance-graph:get-headline graph "ref"))))
+      (should (equal "gone" (org-glance-graph:title-or-id graph "gone"))))))
+
 (ert-deftest org-glance-test:material-crypt-set-purges-occurrences ()
   "Encrypting a headline deletes its PLAINTEXT occurrence snapshots (they are
 copies of content the user just declared secret)."

@@ -815,6 +815,42 @@ Discard a stale open buffer.  Return the new headline."
       (when existing (org-glance--discard-buffer existing))
       new)))
 
+(cl-defun org-glance-material:delete (graph id)
+  "Tombstone headline ID after a referrer-aware confirmation; t when deleted.
+The prompt lists the titles of headlines whose relations point at ID -- their
+body links stay put and dangle harmlessly (follow reports, filters skip, edge
+columns fall back to the id).  The blob and its occurrence snapshots are
+reclaimed at the next compaction.  Discards ID's open material buffer and
+flags views stale."
+  (let* ((title (org-glance-graph:title-or-id graph id))
+         (referrers
+          (cl-loop for meta in (org-glance-graph:headlines graph)
+                   when (assoc id (org-glance-headline-metadata:relations meta))
+                   collect (org-glance-headline-metadata:title meta)))
+         (prompt
+          (if referrers
+              (format "Delete \"%s\"? %d headline(s) reference it (%s) -- their links will dangle. "
+                      title (length referrers)
+                      (s-join ", " (mapcar (lambda (r) (s-truncate 30 r)) referrers)))
+            (format "Delete \"%s\"? " title))))
+    (when (yes-or-no-p prompt)
+      (when-let ((buf (find-buffer-visiting (org-glance-graph:content-path graph id))))
+        (org-glance--discard-buffer buf))
+      (org-glance-graph:delete graph id)
+      (org-glance-view:mark-graph-stale graph)
+      (message "org-glance: headline deleted (disk reclaimed at next compaction)")
+      t)))
+
+;;;###autoload
+(cl-defun org-glance-delete ()
+  "Choose a headline and delete it (tombstone; referrer-aware confirmation)."
+  (interactive)
+  (org-glance-ensure-init)
+  (org-glance-material:delete
+   org-glance-graph
+   (org-glance-headline-metadata:id (org-glance-material:completing-read
+                                     org-glance-graph :prompt "Delete: "))))
+
 (cl-defun org-glance-material:set-planning (graph id kind &optional remove)
   "Set headline ID's KIND (`schedule' or `deadline') planning in GRAPH.
 Prompts via `org-read-date'; REMOVE clears the planning instead.  Runs org's

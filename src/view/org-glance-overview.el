@@ -291,6 +291,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "T") #'org-glance-overview:table)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
+(define-key org-glance-overview-mode-map (kbd "D") #'org-glance-overview:delete)
 (define-key org-glance-overview-mode-map (kbd "C-c C-t") #'org-glance-overview:todo)
 (define-key org-glance-overview-mode-map (kbd "C-c C-s") #'org-glance-overview:schedule)
 (define-key org-glance-overview-mode-map (kbd "C-c C-d") #'org-glance-overview:deadline)
@@ -311,6 +312,12 @@ re-renders."
   "Materialize the headline at point."
   (interactive)
   (switch-to-buffer (org-glance-material:open org-glance-graph (org-glance-overview:id-at-point))))
+
+(cl-defun org-glance-overview:delete ()
+  "Delete the headline at point (tombstone; referrer-aware confirmation)."
+  (interactive)
+  (when (org-glance-material:delete org-glance-graph (org-glance-overview:id-at-point))
+    (org-glance-overview:refresh)))
 
 (cl-defun org-glance-overview:history ()
   "Open one of the occurrence snapshots of the headline at point, read-only."

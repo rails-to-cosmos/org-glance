@@ -215,7 +215,10 @@ CLOSED: [2021-10-23 Sat 13:24]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-10-23 Sat 13:24]
 :END:
-** TODO Overview kill-headline should do materialization. Add tests
+** DONE Overview kill-headline should do materialization. Add tests
+CLOSED: [2026-07-18]
+Direct tombstone instead (append-only WAL): =D= in overview/table,
+=org-glance-delete= picker; referrer-aware confirmation; tested.
 ** DONE Fix headline-at-point behavior
 CLOSED: [2021-10-13 Wed 14:28]
 :LOGBOOK:

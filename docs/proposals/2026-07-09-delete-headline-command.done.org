@@ -1,7 +1,9 @@
 #+TITLE: Interactive delete-headline command — activate graph:delete
 #+DATE: 2026-07-09
 
-Status: *proposed* · ux 2026-07-09
+Status: *done* · 2026-07-18 — shipped as =D= (table/overview) + =M-x org-glance-delete=,
+upgraded beyond this sketch with a referrer-aware confirmation over the
+(2026-07-18) relations metadata.
 
 * Problem
 

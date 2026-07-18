@@ -151,6 +151,7 @@ ascending (active first)."
                 ((key . "l")     (command . "history")   (label . "Log"))
                 ((key . "-")     (command . "remove")    (label . "Untag"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))
+                ((key . "D")     (command . "delete")    (label . "Delete"))
                 ((key . "C-c C-s") (command . "schedule") (label . "Schedule"))
                 ((key . "C-c C-d") (command . "deadline") (label . "Deadline"))))
     (sort . ((column . "state") (ascending . t)))))
@@ -550,6 +551,13 @@ untagged (\":none:\") entry."
         (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
                                       :columns columns :hidden hidden)))))
 
+(cl-defun org-glance-table--act-delete (graph id)
+  "`D' handler: delete the headline at point (referrer-aware confirmation)."
+  (unless id (user-error "Point is not on a row"))
+  (let ((line (line-number-at-pos)))
+    (when (org-glance-material:delete graph id)
+      (org-glance-table--finish id line "Headline deleted"))))
+
 (cl-defun org-glance-table--act-planning (graph id kind)
   "Set (or with `C-u' clear) KIND planning of the row at point, like org's keys."
   (unless id (user-error "Point is not on a row"))
@@ -660,6 +668,7 @@ Honours the same filter language as the overview (see
                          (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
                          (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
                          (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
+                         (cons "delete"   (lambda (id _row) (org-glance-table--act-delete graph id)))
                          (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
                          (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
          ;; Build the spec, restoring the saved column order (if any) before display.
