@@ -28,7 +28,9 @@ The published package archive is the simplest route.  Add the archive, then let
 [[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
 
 The =rails-to-cosmos= archive provides =org-glance= and its
-[[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
+[[https://github.com/rails-to-cosmos/table-view][table-view]] and
+[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] dependencies; the
+remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
 MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
@@ -100,9 +102,10 @@ Other features:
 For hacking on org-glance, clone the repo and load it directly.  It is a
 multi-directory package: =org-glance.el= is at the root, modules under =src/data=
 and =src/view=; it does NOT add those to =load-path= itself, so all three must be
-on it.  [[https://github.com/rails-to-cosmos/table-view][table-view]] is an external dependency from the =rails-to-cosmos= ELPA
-archive (not on MELPA); the MELPA deps above are still
-needed.  (=Eask= is the dev/test harness, not required to use the package.)
+on it.  [[https://github.com/rails-to-cosmos/table-view][table-view]] and
+[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] are external
+dependencies from the =rails-to-cosmos= ELPA archive (not on MELPA); the MELPA
+deps above are still needed.  (=Eask= is the dev/test harness, not required to use the package.)
 
 #+begin_src emacs-lisp
 (dolist (dir '("" "src/data" "src/view"))
@@ -110,8 +113,9 @@ needed.  (=Eask= is the dev/test harness, not required to use the package.)
 (require 'org-glance)
 #+end_src
 
-With =straight.el= (also needs a recipe for
-[[https://github.com/rails-to-cosmos/table-view][table-view]]):
+With =straight.el= (also needs recipes for
+[[https://github.com/rails-to-cosmos/table-view][table-view]] and
+[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]]):
 
 #+begin_src emacs-lisp
 (use-package org-glance
@@ -119,4 +123,6 @@ With =straight.el= (also needs a recipe for
                         :files ("*.el" "src/data/*.el" "src/view/*.el")))
 (use-package table-view
   :straight (table-view :type git :host github :repo "rails-to-cosmos/table-view"))
+(use-package agnostic-llm
+  :straight (agnostic-llm :type git :host github :repo "rails-to-cosmos/agnostic-llm"))
 #+end_src
