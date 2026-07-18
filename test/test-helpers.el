@@ -163,6 +163,45 @@ All other ingests proceed through the real function."
   (declare (indent 2))
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
+(cl-defmacro org-glance-test:with-table ((graph &optional filter) &rest body)
+  "Visit GRAPH's table for FILTER; run BODY with the table buffer current,
+kill it afterward.  BODY refers to the buffer via `current-buffer'."
+  (declare (indent 1) (debug ((form &optional form) body)))
+  (let ((buf (gensym "table-buf")))
+    `(org-glance-test:with-table-filter ,graph ,filter ,buf
+       (with-current-buffer ,buf ,@body))))
+
+(cl-defmacro org-glance-test:offering ((coll answer) &rest body)
+  "Stub `completing-read' around BODY, recording what it offers in COLL.
+Each prompt stores its COLLECTION argument in COLL (last prompt wins), then
+replies with ANSWER, a form that may read COLL (e.g. `(caar coll)').  COLL
+stays bound around BODY for assertions on what was offered.  Complement of
+`org-glance-test:answering', whose stubs cannot see their arguments."
+  (declare (indent 1) (debug ((symbolp form) body)))
+  `(let (,coll)
+     (cl-letf (((symbol-function 'completing-read)
+                (lambda (_p c &rest _) (setq ,coll c) ,answer)))
+       ,@body)))
+
+(cl-defmacro org-glance-test:with-shown ((var) &rest body)
+  "Stub `switch-to-buffer'/`pop-to-buffer' to record shown buffers in VAR
+\(most recent; the stubs still return the buffer).  Run BODY; on exit KILL
+every buffer shown, modified flags cleared -- shown buffers must never leak
+into later tests (`org-glance-llm--label' scans live buffers)."
+  (declare (indent 1) (debug ((symbolp) body)))
+  (let ((all (gensym "shown-all")))
+    `(let (,var ,all)
+       (unwind-protect
+           (cl-letf (((symbol-function 'switch-to-buffer)
+                      (lambda (b &rest _) (push b ,all) (setq ,var b) b))
+                     ((symbol-function 'pop-to-buffer)
+                      (lambda (b &rest _) (push b ,all) (setq ,var b) b)))
+             ,@body)
+         (dolist (b ,all)
+           (when (buffer-live-p b)
+             (with-current-buffer b (set-buffer-modified-p nil))
+             (kill-buffer b)))))))
+
 (cl-defun org-glance-test:headline-props (id heading props &rest body)
   "Build a headline: HEADING, planning lines from BODY's head, the drawer
 \(ORG_GLANCE_ID + PROPS as (KEY . VALUE) pairs), then the rest of BODY.
@@ -214,6 +253,11 @@ plain `cl-letf'."
   "Complete the current repetition (state to DONE; org advances the repeater)."
   (goto-char (point-min))
   (org-todo "DONE"))
+
+(defun org-glance-test:offered-ids (candidates)
+  "Sorted headline ids of a picker's CANDIDATES alist (label . metadata)."
+  (sort (mapcar (lambda (c) (org-glance-headline-metadata:id (cdr c))) candidates)
+        #'string<))
 
 (defun org-glance-test:row-ids (rows)
   "The `id' cell of each row in ROWS."

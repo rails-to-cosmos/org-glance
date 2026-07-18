@@ -89,10 +89,10 @@ a session for a different headline already holds the plain slug."
         (org-glance-headline--from-lines "* TODO Proj" ":PROPERTIES:" ":ORG_GLANCE_ID: p"
                                          (format ":ORG_GLANCE_PROJECT_DIR: %s" proj) ":END:"))
       (let ((root 'unset))
-        (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                  ((symbol-function 'switch-to-buffer) (lambda (b &rest _) b))
-                  ((symbol-function 'agnostic-llm-menu) (lambda (&optional dir _lbl) (setq root dir))))
-          (org-glance-llm))
+        (org-glance-test:with-shown (_shown)
+          (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
+                    ((symbol-function 'agnostic-llm-menu) (lambda (&optional dir _lbl) (setq root dir))))
+            (org-glance-llm)))
         (should (file-equal-p root proj))))))
 
 (provide 'test-llm)

@@ -47,8 +47,7 @@ column's value-fn reads that property via the index."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien"))))
-    (org-glance-test:with-table-buffer graph buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph)
         (let (offered)
           (cl-letf (((symbol-function 'completing-read)
                      (lambda (_p coll &rest _)
@@ -58,7 +57,7 @@ column's value-fn reads that property via the index."
               (should (member "AUTHOR" offered))          ; discovered from the headline
               (should-not (member "ORG_GLANCE_ID" offered))
               (should (equal "AUTHOR" (alist-get 'key col)))
-              (should (equal "Tolkien" (funcall (alist-get 'value-fn col) "a" nil))))))))))
+              (should (equal "Tolkien" (funcall (alist-get 'value-fn col) "a" nil)))))))))
 
 (ert-deftest org-glance-test:table-extract-via-index ()
   "The table `e' action extracts a body KEY:value read from the property index."

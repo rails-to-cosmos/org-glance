@@ -48,7 +48,7 @@ reuses that session, independent of the (cosmetic) title label."
                 (and (string-prefix-p "*llm:" (buffer-name buf))
                      (ignore-errors
                        (file-equal-p (buffer-local-value 'default-directory buf)
-                                     (file-name-as-directory dir)))))
+                                     dir))))
               (buffer-list)))
 
 (cl-defun org-glance-llm--label (metadata dir)
@@ -61,7 +61,7 @@ disambiguate when a session for a DIFFERENT headline already holds the slug."
                    tail))
          (buf (get-buffer (org-glance-llm--buffer-name slug))))
     (if (and buf (not (file-equal-p (buffer-local-value 'default-directory buf)
-                                    (file-name-as-directory dir))))
+                                    dir)))
         (format "%s-%s" slug tail)
       slug)))
 

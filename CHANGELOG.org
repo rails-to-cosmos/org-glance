@@ -35,7 +35,8 @@ Notable user-facing changes.  Versions date-based
 - Crypt blocks: =#+begin_crypt= regions seal at rest, decrypt in the material
   buffer; several per headline, public text between stays indexable (links open
   without a password).  =C-c #= wraps region / =C-u C-c #= unwraps / else locks.
-  Legacy whole-body ciphers upgrade on first save.
+  Legacy whole-body ciphers upgrade on first save.  A bare =C-c #= (no
+  region) in a plaintext buffer encrypts the whole body.
 - Table view: =#= encrypt/decrypt the row; =C-u #= re-key an encrypted headline.
 - Table =Enc= column: 🔒 for encrypted headlines (sortable).
 - Store API =org-glance-material:crypt-set= / =:crypt-rekey=.
@@ -59,10 +60,14 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Org link completion (=C-c C-l=) offers the canonical =org-glance-material:=
+  type; legacy =org-glance-visit:= links still follow but are no longer
+  completed.
 - Open-link key in the overview and table is =j= (was =o=), matching the
   transient (=j= Open link, =o= Overview); =!= is a quiet alias (dired rhyme).
 - Table =:= (add tag) offers only tags the headline does not already carry.
-- Material password lock =C-c C-l= → =C-c #=.
+- Material password lock =C-c C-l= → =C-c #=; forgetting the cached password
+  now asks =y-or-n-p= first.
 - =org-glance-overview-default-view= takes =org-glance-table= / =org-glance-overview=
   (legacy =table= / =org= still accepted).
 - Transient =o= label shows the current default view (=Overview [table|org]=).
@@ -79,6 +84,9 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Overview renders BOTH planning keywords on one line, as org requires --
+  headlines carrying schedule AND deadline had an orphaned property drawer,
+  breaking every at-point action on them (materialize, todo, planning keys).
 - =org-glance-llm= session dir is slash-terminated, as =default-directory=
   expects (=org-glance-llm--dir=).
 - Capture from table no longer prompts "Buffer modified; kill anyway?".

@@ -107,10 +107,16 @@ which filter a cache directory holds."
             (org-glance-headline-metadata:title metadata)
             (or (org-glance-overview:tag-string metadata) "")
             "\n"
-            (when (org-glance--present-string? schedule)
-              (concat "SCHEDULED: " schedule "\n"))
-            (when (org-glance--present-string? deadline)
-              (concat "DEADLINE: " deadline "\n"))
+            ;; ONE planning line: org recognises planning keywords only on the
+            ;; single line right after the heading -- a second line would be
+            ;; body text and orphan the drawer below it.
+            (let ((planning
+                   (concat (when (org-glance--present-string? deadline)
+                             (concat "DEADLINE: " deadline " "))
+                           (when (org-glance--present-string? schedule)
+                             (concat "SCHEDULED: " schedule)))))
+              (unless (string-empty-p planning)
+                (concat (s-trim-right planning) "\n")))
             ":PROPERTIES:\n:ORG_GLANCE_ID: " (org-glance-headline-metadata:id metadata) "\n:END:\n")))
 
 (cl-defun org-glance-overview:render (graph &optional filter)
@@ -321,20 +327,21 @@ returns point to the headline once the change (and any note) is committed."
     (org-glance-material:change-todo-live
      org-glance-graph id arg
      (lambda (state)
-       (org-glance-overview:refresh)
-       (goto-char (point-min))
-       (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
-         (org-back-to-heading t))
+       (org-glance-overview--refresh-to-id id)
        (message "State: %s" (if (s-present? state) state "(none)"))))))
+
+(cl-defun org-glance-overview--refresh-to-id (id)
+  "Refresh the overview and return point to ID's heading."
+  (org-glance-overview:refresh)
+  (goto-char (point-min))
+  (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
+    (org-back-to-heading t)))
 
 (cl-defun org-glance-overview--set-planning (kind remove)
   "Set (or REMOVE) KIND planning of the headline at point; refresh, keep point."
   (let ((id (org-glance-overview:id-at-point)))
     (org-glance-material:set-planning org-glance-graph id kind remove)
-    (org-glance-overview:refresh)
-    (goto-char (point-min))
-    (when (re-search-forward (format "^:ORG_GLANCE_ID: %s$" (regexp-quote id)) nil t)
-      (org-back-to-heading t))
+    (org-glance-overview--refresh-to-id id)
     (message "%s %s" (capitalize (symbol-name kind)) (if remove "cleared" "set"))))
 
 (cl-defun org-glance-overview:schedule (&optional arg)

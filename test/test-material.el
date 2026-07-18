@@ -428,18 +428,6 @@ without history it errors with a hint."
           (should (equal (sort (mapcar #'car occ) #'string>) (mapcar #'car occ)))
           (should (string-prefix-p "2026-06-10" (caar occ))))))))
 
-(cl-defmacro org-glance-test--seen-ids (&rest body)
-  "Stub `completing-read' to capture the offered headline ids (sorted) in `seen',
-returning the first candidate, then run BODY.  `seen' is bound around BODY."
-  (declare (indent 0))
-  `(let ((seen nil))
-     (cl-letf (((symbol-function 'completing-read)
-                (lambda (_p coll &rest _)
-                  (setq seen (sort (mapcar (lambda (c) (org-glance-headline-metadata:id (cdr c))) coll)
-                                   #'string<))
-                  (caar coll))))
-       ,@body)))
-
 (ert-deftest org-glance-test:materialize-honors-filter ()
   "`org-glance-materialize' restricts its candidate list to `org-glance-filter-spec'.
 Drives the real command; the chosen-headline `open' is stubbed so no file IO
@@ -451,15 +439,15 @@ runs and only the offered candidate set is observed."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
                 ((symbol-function 'switch-to-buffer) #'ignore))
-        (org-glance-test--seen-ids
+        (org-glance-test:offering (offered (caar offered))
           (let ((org-glance-filter-spec '(:done nil)))     ; active
-            (org-glance-materialize) (should (equal '("mt") seen)))
+            (org-glance-materialize) (should (equal '("mt") (org-glance-test:offered-ids offered))))
           (let ((org-glance-filter-spec '(:done t)))       ; done
-            (org-glance-materialize) (should (equal '("md") seen)))
+            (org-glance-materialize) (should (equal '("md") (org-glance-test:offered-ids offered))))
           (let ((org-glance-filter-spec nil))              ; all
-            (org-glance-materialize) (should (equal '("md" "mt") seen)))
+            (org-glance-materialize) (should (equal '("md" "mt") (org-glance-test:offered-ids offered))))
           (let ((org-glance-filter-spec '(:state "DONE"))) ; exact state
-            (org-glance-materialize) (should (equal '("md") seen))))))))
+            (org-glance-materialize) (should (equal '("md") (org-glance-test:offered-ids offered)))))))))
 
 (ert-deftest org-glance-test:materialize-default-filter-is-active ()
   "With NO binding, `org-glance-filter-spec' defaults to active: DONE excluded.
@@ -471,9 +459,9 @@ Pins the design default so an accidental change to the defvar fails loudly."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open) (lambda (&rest _) (current-buffer)))
                 ((symbol-function 'switch-to-buffer) #'ignore))
-        (org-glance-test--seen-ids
+        (org-glance-test:offering (offered (caar offered))
           (org-glance-materialize)            ; no `org-glance-filter-spec' binding
-          (should (equal '("dt") seen)))))))
+          (should (equal '("dt") (org-glance-test:offered-ids offered))))))))
 
 (ert-deftest org-glance-test:open-honors-filter ()
   "`org-glance-open' composes `org-glance-filter-spec' with its linked? constraint."
@@ -484,16 +472,16 @@ Pins the design default so an accidental change to the defvar fails loudly."
                              (org-glance-test:headline "tn" "* TODO C" "no link"))
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open-link) #'ignore))
-        (org-glance-test--seen-ids
+        (org-glance-test:offering (offered (caar offered))
           ;; active + linked -> "ta" (DONE filtered out; "tn" lacks a link)
           (let ((org-glance-filter-spec '(:done nil)))
-            (org-glance-open) (should (equal '("ta") seen)))
+            (org-glance-open) (should (equal '("ta") (org-glance-test:offered-ids offered))))
           ;; done + linked -> "da"
           (let ((org-glance-filter-spec '(:done t)))
-            (org-glance-open) (should (equal '("da") seen)))
+            (org-glance-open) (should (equal '("da") (org-glance-test:offered-ids offered))))
           ;; all + linked -> "ta","da" (still not "tn")
           (let ((org-glance-filter-spec nil))
-            (org-glance-open) (should (equal '("da" "ta") seen))))))))
+            (org-glance-open) (should (equal '("da" "ta") (org-glance-test:offered-ids offered)))))))))
 
 (ert-deftest org-glance-test:extract-honors-filter ()
   "`org-glance-extract' composes `org-glance-filter-spec' with its propertized? constraint."
@@ -504,16 +492,16 @@ Pins the design default so an accidental change to the defvar fails loudly."
                              (org-glance-test:headline "tn" "* TODO C" "no pairs"))
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:extract) #'ignore))
-        (org-glance-test--seen-ids
+        (org-glance-test:offering (offered (caar offered))
           ;; active + propertized -> "tk" (DONE filtered; "tn" lacks pairs)
           (let ((org-glance-filter-spec '(:done nil)))
-            (org-glance-extract) (should (equal '("tk") seen)))
+            (org-glance-extract) (should (equal '("tk") (org-glance-test:offered-ids offered))))
           ;; done + propertized -> "dk"
           (let ((org-glance-filter-spec '(:done t)))
-            (org-glance-extract) (should (equal '("dk") seen)))
+            (org-glance-extract) (should (equal '("dk") (org-glance-test:offered-ids offered))))
           ;; all + propertized -> "tk","dk" (still not "tn")
           (let ((org-glance-filter-spec nil))
-            (org-glance-extract) (should (equal '("dk" "tk") seen))))))))
+            (org-glance-extract) (should (equal '("dk" "tk") (org-glance-test:offered-ids offered)))))))))
 
 ;;; TODO state change: materialize -> org-todo -> sync (exactly C-c C-t)
 
@@ -708,8 +696,13 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
         (should (null buffer-auto-save-file-name))
         (should backup-inhibited)
         (should (null create-lockfiles))
-        ;; Lock forgets the password (next save would re-prompt).
-        (org-glance-material:lock)
+        ;; Lock asks first, then forgets the password (next save re-prompts);
+        ;; declining keeps it.
+        (org-glance-test:answering ((y-or-n-p nil))
+          (org-glance-material:lock))
+        (should (string= "pw" org-glance-material--password))
+        (org-glance-test:answering ((y-or-n-p t))
+          (org-glance-material:lock))
         (should (null org-glance-material--password))
         (org-glance-material--set-password "pw")   ; restore for the save below
         (should (save-excursion (goto-char (point-min)) (re-search-forward "plainbody" nil t)))
@@ -798,6 +791,25 @@ a global 1, and 0 disables under a global t."
         (dotimes (_ 4)
           (org-glance-test:complete-repetition))
         (should (= 4 (length (org-glance-graph:occurrences graph "R"))))))))
+
+(ert-deftest org-glance-test:material-crypt-whole-body-no-region ()
+  "`C-c #' with no region in a PLAINTEXT buffer encrypts the whole body:
+one crypt block wrapping it, sealed ciphertext on disk after save."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "wb" "* TODO Secretish"
+                                                             "line one" "line two"))
+    (org-glance-test:answering ((read-passwd "pw"))
+      (org-glance-test:with-material (buffer graph "wb")
+        (deactivate-mark)
+        (org-glance-material:crypt)                     ; the C-c # dispatcher
+        (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
+        (should (s-contains? "line one" (buffer-string)))   ; still plaintext in buffer
+        (let ((inhibit-message t)) (save-buffer))))
+    (let ((blob (org-glance-graph:get-content graph "wb")))
+      (should (s-contains? "aes-encrypted" blob))
+      (should-not (s-contains? "line one" blob)))
+    (should (org-glance-headline-metadata:encrypted?
+             (org-glance-graph:get-headline graph "wb")))))
 
 (ert-deftest org-glance-test:material-crypt-set-purges-occurrences ()
   "Encrypting a headline deletes its PLAINTEXT occurrence snapshots (they are

@@ -5,7 +5,7 @@
 ;;; Commentary:
 ;; Command layer over the graph.  Selection lists live headlines from the
 ;; graph; materialize opens a headline's content blob in an editable buffer;
-;; apply writes it back as a NEW version (the store is append-only,
+;; saving writes it back as a NEW version (the store is append-only,
 ;; last-write-wins), guarded by a hash check against concurrent changes.
 
 ;;; Code:
@@ -94,7 +94,8 @@ FILTER, if non-nil, is a predicate on the metadata."
     (org-glance-datetime-mode 1)))
 
 ;; `C-c #' by context: region -> wrap it in a crypt block; `C-u' -> unwrap the
-;; block at point; else -> forget the cached password (lock).
+;; block at point; else encrypt the whole body (plaintext buffer) or forget
+;; the cached password (already encrypted).
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 ;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
@@ -360,8 +361,9 @@ plaintext buffer matches the ciphertext already on disk.  Buffer-local
 The decrypted body stays in the buffer until then."
   (interactive)
   (if org-glance-material--encrypted
-      (progn (org-glance-material--clear-password)
-             (message "org-glance: password forgotten"))
+      (when (y-or-n-p "Forget the cached password (next save re-prompts)? ")
+        (org-glance-material--clear-password)
+        (message "org-glance: password forgotten"))
     (user-error "Not an encrypted materialized buffer")))
 
 (cl-defun org-glance-material--purge-occurrences (graph id)
@@ -436,13 +438,19 @@ whole headline public: the buffer stops sealing and forgets its password."
   "Crypt action at point, by context.
 Active region -> wrap it in a crypt block (`org-glance-material:crypt-region').
 Prefix arg -> unwrap the block at point (`org-glance-material:crypt-unwrap').
-Otherwise -> forget the cached password (`org-glance-material:lock')."
+No region, plaintext buffer -> encrypt the WHOLE body (one block).
+No region, already encrypted -> forget the cached password
+\(`org-glance-material:lock')."
   (interactive)
   (cond
    ((use-region-p)
     (org-glance-material:crypt-region (region-beginning) (region-end)))
    (current-prefix-arg (org-glance-material:crypt-unwrap))
-   (t (org-glance-material:lock))))
+   (org-glance-material--encrypted (org-glance-material:lock))
+   (t (pcase-let ((`(,beg . ,end) (org-glance-headline--body-region)))
+        (when (>= beg end)
+          (user-error "Headline has no body to encrypt"))
+        (org-glance-material:crypt-region beg end)))))
 
 (cl-defun org-glance-material:set-project-dir (dir)
   "Set the materialized headline's project directory (`C-c d') to DIR and save.
@@ -813,17 +821,23 @@ Prompts via `org-read-date'; REMOVE clears the planning instead.  Runs org's
 own planner in a temp parse of the blob, so repeaters and habit cookies typed
 at the prompt land natively.  Errors on unsaved edits
 \(`org-glance-material--replace-headline').  Return the new headline."
-  (let ((setter (if (eq kind 'schedule) #'org-schedule #'org-deadline))
-        (time (unless remove
-                (org-read-date nil nil nil
-                               (format "%s: " (capitalize (symbol-name kind)))))))
+  (let ((setter (if (eq kind 'schedule) #'org-schedule #'org-deadline)))
     (org-glance-material--replace-headline
      graph id
      (lambda (headline)
-       (org-glance-headline--from-string
-        (org-glance-headline:with-contents headline
-          (funcall setter (when remove '(4)) time)
-          (buffer-substring-no-properties (point-min) (point-max))))))))
+       ;; Prompt only after --replace-headline's guards (unsaved edits, dead
+       ;; id): C-g here still aborts before any write.
+       (let ((time (unless remove
+                     (org-read-date nil nil nil
+                                    (format "%s: " (capitalize (symbol-name kind))))))
+             ;; A temp parse cannot host org's deferred reschedule/redeadline
+             ;; note buffer -- never let the planner queue one.
+             (org-log-reschedule nil)
+             (org-log-redeadline nil))
+         (org-glance-headline--from-string
+          (org-glance-headline:with-contents headline
+            (funcall setter (when remove '(4)) time)
+            (buffer-substring-no-properties (point-min) (point-max)))))))))
 
 (cl-defun org-glance-material:crypt-set (graph id encrypt password)
   "Encrypt (ENCRYPT non-nil) or decrypt headline ID in GRAPH under PASSWORD.

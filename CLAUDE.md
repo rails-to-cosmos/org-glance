@@ -75,7 +75,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 12. Store content parses in temp buffers via `org-glance--org-mode`
     (`delay-mode-hooks`, `tab-width` 8); never `find-file` sources to read.
 13. Tags are canonical downcased interned symbols at the boundary; deserialized
-    metadata carries STRING tags — coerce with `(format "%s" tag)`.
+    metadata carries STRING tags — coerce with `(format "%s" tag)`. Relation
+    kinds are canonical dash-slugs at every boundary (encode/decode/deserialize);
+    spaced form is display-only.
 14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the
     persistent secrecy annotation. Secrecy is per-block — text between blocks
     stays plaintext and indexed, even for an encrypted headline.

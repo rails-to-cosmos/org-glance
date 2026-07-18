@@ -31,15 +31,15 @@
   "Materializing from the overview opens the headline under point."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "o1" "* TODO Alpha"))
-    (let ((org-glance-graph graph) (opened nil))
-      (with-temp-buffer
-        (insert (org-glance-overview:render graph))
-        (delay-mode-hooks (org-mode))
-        (goto-char (point-min))
-        (re-search-forward "Alpha")
-        (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq opened b) b)))
-          (org-glance-overview:materialize)))
-      (should (bufferp opened)))))
+    (let ((org-glance-graph graph))
+      (org-glance-test:with-shown (opened)
+        (with-temp-buffer
+          (insert (org-glance-overview:render graph))
+          (delay-mode-hooks (org-mode))
+          (goto-char (point-min))
+          (re-search-forward "Alpha")
+          (org-glance-overview:materialize))
+        (should (bufferp opened))))))
 
 (ert-deftest org-glance-test:overview-write-file ()
   "The overview is materialized to a file under the store."
@@ -559,23 +559,33 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd "q")) #'quit-window))))
 
 (ert-deftest org-glance-test:overview-planning-keys ()
-  "`C-c C-s' / `C-c C-d' in the overview set planning on the headline at point."
+  "`C-c C-s' / `C-c C-d' in the overview set planning on the headline at point;
+`C-u' clears through the same interactive frontend."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Plan me"))
-    (let ((org-glance-graph graph))
-      (org-glance-test:with-overview (buf graph nil)
-        (with-current-buffer buf
-          (should (eq (key-binding (kbd "C-c C-s")) #'org-glance-overview:schedule))
-          (should (eq (key-binding (kbd "C-c C-d")) #'org-glance-overview:deadline))
-          (goto-char (point-min))
-          (re-search-forward "Plan me")
-          (org-glance-test:answering ((org-read-date "2026-08-15"))
-            (org-glance-overview:schedule))
-          (should (s-contains? "2026-08-15"
-                               (org-glance-headline-metadata:schedule
-                                (org-glance-graph:get-headline graph "p1"))))
-          ;; point restored onto the headline after the refresh
-          (should (org-at-heading-p)))))))
+    (org-glance-test:with-overview (buf graph nil)
+      (with-current-buffer buf
+        (goto-char (point-min))
+        (re-search-forward "Plan me")
+        (org-glance-test:answering ((org-read-date "2026-08-15"))
+          (funcall (key-binding (kbd "C-c C-s"))))
+        (should (s-contains? "2026-08-15"
+                             (org-glance-headline-metadata:schedule
+                              (org-glance-graph:get-headline graph "p1"))))
+        ;; point restored onto the headline after the refresh
+        (should (org-at-heading-p))
+        (org-glance-test:answering ((org-read-date "2026-09-15"))
+          (funcall (key-binding (kbd "C-c C-d"))))
+        (should (s-contains? "2026-09-15"
+                             (org-glance-headline-metadata:deadline
+                              (org-glance-graph:get-headline graph "p1"))))
+        ;; C-u through the interactive frontend clears; the other survives
+        (let ((current-prefix-arg '(4)))
+          (org-glance-overview:schedule current-prefix-arg))
+        (let ((meta (org-glance-graph:get-headline graph "p1")))
+          (should (null (org-glance-headline-metadata:schedule meta)))
+          (should (s-contains? "2026-09-15"
+                               (org-glance-headline-metadata:deadline meta))))))))
 
 (provide 'test-overview)
 ;;; test-overview.el ends here

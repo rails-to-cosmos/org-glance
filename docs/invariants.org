@@ -93,7 +93,10 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     =tab-width 8= set after mode init; sources are never =find-file='d for
     reading.  Violation: user =tab-width= mis-parses content; hook litter.
 
-13. *Tags are canonical downcased interned symbols.*  Coerced via
+13. *Tags are canonical downcased interned symbols; relation kinds are
+    canonical dash-slugs.*  Kinds slug (downcase, spaces→dashes) at EVERY
+    boundary — link encode, link decode, metadata deserialize
+    (=org-glance--kind-slug=); the spaced form is display-only.  Tags:  Coerced via
     =org-glance-tag:from-string= wherever text enters; serialized back to
     strings in metadata (so deserialized metadata carries STRING tags — coerce
     with =(format "%s" tag)= when comparing).  Violation: mixed-case duplicates

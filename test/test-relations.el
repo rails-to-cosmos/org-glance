@@ -69,23 +69,21 @@ relation keys are transient (never overview-cached, no table config)."
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
       (org-glance-test:headline "b" "* TODO B"))
-    (org-glance-test:with-table-filter graph '(:refers-to "b") buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph '(:refers-to "b"))
         (let (saved)
           (cl-letf (((symbol-function 'org-glance-table--config-put)
                      (lambda (&rest _) (setq saved t))))
             (setq org-glance-table--config-snapshot nil)   ; force "layout changed"
             (org-glance-table--persist-config)
-            (should-not saved)))))                          ; transient: never persisted
+            (should-not saved))))                          ; transient: never persisted
     ;; a plain tag view under the same forced change DOES persist
-    (org-glance-test:with-table-filter graph nil buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph nil)
         (let (saved)
           (cl-letf (((symbol-function 'org-glance-table--config-put)
                      (lambda (&rest _) (setq saved t))))
             (setq org-glance-table--config-snapshot nil)
             (org-glance-table--persist-config)
-            (should saved)))))))
+            (should saved))))))
 
 ;;; The `@' command
 
@@ -173,16 +171,14 @@ self is excluded from the candidates."
 dangling id errors."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "t" "* TODO Target"))
-    (let ((org-glance-graph graph) shown)
-      (cl-letf (((symbol-function 'org-glance-ensure-init) #'ignore)
-                ((symbol-function 'switch-to-buffer) (lambda (b) (setq shown b) b)))
-        (org-glance-link:material "t?kind=author")
-        (should (buffer-live-p shown))
-        (with-current-buffer shown
-          (should (equal "t" org-glance-material--id))
-          (set-buffer-modified-p nil))
-        (kill-buffer shown)
-        (should-error (org-glance-link:material "no-such-id") :type 'user-error)))))
+    (let ((org-glance-graph graph))
+      (org-glance-test:with-shown (shown)
+        (cl-letf (((symbol-function 'org-glance-ensure-init) #'ignore))
+          (org-glance-link:material "t?kind=author")
+          (should (buffer-live-p shown))
+          (with-current-buffer shown
+            (should (equal "t" org-glance-material--id)))
+          (should-error (org-glance-link:material "no-such-id") :type 'user-error))))))
 
 ;;; References / back-references commands
 
@@ -364,8 +360,8 @@ and the per-tag schema round-trips it as an edge column."
           (should (member "roasted by" offered)))
         ;; column shows titles; many-to-many joins; gone target -> id
         (should (equal "Manhattan Coffee Roasters, gone"
-                       (org-glance-test:table-cell buf "c1" "roasted-by")))
-        (should (equal "" (org-glance-test:table-cell buf "c2" "roasted-by")))
+                       (org-glance-test:table-cell buf "c1" "kind:roasted-by")))
+        (should (equal "" (org-glance-test:table-cell buf "c2" "kind:roasted-by")))
         ;; header is the capitalized pretty form
         (should (cl-find "Roasted by"
                          (alist-get 'columns table-view--spec)
@@ -374,11 +370,27 @@ and the per-tag schema round-trips it as an edge column."
     (org-glance-test:with-table-filter graph 'coffee buf
       (with-current-buffer buf
         (should (equal "Manhattan Coffee Roasters, gone"
-                       (org-glance-test:table-cell buf "c1" "roasted-by")))))))
+                       (org-glance-test:table-cell buf "c1" "kind:roasted-by")))))))
+
+(ert-deftest org-glance-test:table-custom-column-kind-vs-property ()
+  "Case is the type tag: \"AUTHOR\" builds a drawer column, \"author\" an
+edge column -- both usable on one graph, no live-membership flip."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline-props "bk" "* TODO Book" '(("AUTHOR" . "Tolkien"))
+        "[[org-glance-material:t1?kind=author][Ann]]")
+      (org-glance-test:headline "t1" "* Ann the Author"))
+    (let ((prop-col (org-glance-table--custom-column graph "AUTHOR"))
+          (edge-col (org-glance-table--custom-column graph "author")))
+      (should (equal "Tolkien" (funcall (alist-get 'value-fn prop-col) "bk" nil)))
+      (should (equal "Ann the Author" (funcall (alist-get 'value-fn edge-col) "bk" nil)))
+      (should (equal "AUTHOR" (alist-get 'key prop-col)))
+      (should (equal "kind:author" (alist-get 'key edge-col))))))
 
 (ert-deftest org-glance-test:kind-slug-roundtrip ()
   "Kind slugs: downcase + dashes in the wire, spaces back for humans."
   (should (equal "roasted-by" (org-glance--kind-slug "Roasted By")))
+  (should (equal "roasted-by" (org-glance--kind-slug "roasted-by")))   ; idempotent
   (should (equal "roasted-by" (org-glance--kind-slug "  roasted by ")))
   (should (equal "roasted by" (org-glance--kind-pretty "roasted-by")))
   ;; legacy spaced kind in a stored link normalizes on parse

@@ -125,9 +125,12 @@ as-is.")
     ;; Normalize BOTH levels -- outer array to a list, each inner [ID]/[ID KIND]
     ;; to an (ID . KIND-or-nil) cons; a shallow decode would leave inner vectors
     ;; and every relation filter would silently match nothing.
+    ;; Kinds canonicalize to dash-slugs at the read boundary (the tags rule,
+    ;; invariant 13): legacy spaced kinds normalize on the next deserialize.
     ('edges-list (cl-loop for edge across (or value [])
                           for e = (append edge nil)
-                          collect (cons (car e) (cadr e))))
+                          collect (cons (car e)
+                                        (when (cadr e) (org-glance--kind-slug (cadr e))))))
     (_ value)))
 
 (cl-defun org-glance-headline:metadata (headline)
@@ -708,13 +711,29 @@ The filenames ARE the index (STAMP is a lexically-sortable timestamp)."
       (sort (mapcar (lambda (f) (cons (f-base f) f)) (f-files dir))
             (lambda (a b) (string> (car a) (car b)))))))
 
-(cl-defun org-glance-graph:edge-kinds (graph)
-  "Distinct relation kinds across GRAPH's live headlines, sorted."
+(cl-defun org-glance-graph--metas (graph &optional ids)
+  "GRAPH's live headline metadata; with IDS, just those (unknown ids skipped)."
+  (if ids
+      (cl-loop for id in ids
+               for meta = (org-glance-graph:get-headline graph id)
+               when (org-glance-headline-metadata? meta) collect meta)
+    (org-glance-graph:headlines graph)))
+
+(cl-defun org-glance-graph:edge-kinds (graph &optional ids)
+  "Distinct relation kinds across GRAPH's live headlines, sorted.
+With IDS, restrict the fold to those headlines.  An edge is (TARGET . KIND);
+`-keep #\='cdr' collects the non-nil kinds."
   (cl-check-type graph org-glance-graph)
   (org-glance--sorted-distinct
-   (cl-loop for meta in (org-glance-graph:headlines graph)
-            append (cl-loop for (_target . kind) in (org-glance-headline-metadata:relations meta)
-                            when kind collect kind))))
+   (cl-loop for meta in (org-glance-graph--metas graph ids)
+            append (-keep #'cdr (org-glance-headline-metadata:relations meta)))))
+
+(cl-defun org-glance-graph:title-or-id (graph id)
+  "ID's headline title in GRAPH, or ID itself when the headline is gone."
+  (let ((meta (org-glance-graph:get-headline graph id)))
+    (if (org-glance-headline-metadata? meta)
+        (org-glance-headline-metadata:title meta)
+      id)))
 
 (cl-defun org-glance-graph:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,

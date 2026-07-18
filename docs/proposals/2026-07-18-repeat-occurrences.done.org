@@ -54,12 +54,12 @@ An encrypted headline's material buffer is decrypted at repeat time; writing it
 would store plaintext (invariant 14).  Encrypted headlines get no occurrence
 snapshot and no trim — skip with a message (the prototype's gate, kept).
 
-** Indicator: ↻ column, zero store changes
+** Indicator: Rep column (↻ cell marker), zero store changes
 
 The repeater already rides the metadata: =schedule= / =deadline= raw strings
 carry =+1d= etc.  =org-glance-headline-metadata:repeated?= is a pure predicate
 over those strings (regexp =[.+]\+?[0-9]+[hdwmy]=); the table gains a sortable
-=↻= column like =Enc=.  The org overview already shows the timestamp itself.
+=Rep= column (=↻= cell marker) like =Enc=.  The org overview already shows the timestamp itself.
 
 ** Picker: =l= / =C-c l=
 

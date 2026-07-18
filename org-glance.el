@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.6.0.0.20260718.0
+;; Version: 1.8.0.0.20260718.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -262,27 +262,28 @@ performs the conversion whenever the user chooses.  Always returns nil."
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))
     (t (:inherit default :underline "Magenta")))
-  "*Face used to highlight evaluated paragraph."
+  "Face of `org-glance-material:'/`org-glance-visit:' links (follow = edit)."
   :group 'org-glance
   :group 'faces)
 
 (defface org-glance-link-overview-face
   '((((background dark)) (:inherit default :slant italic))
     (t (:inherit default :slant italic)))
-  "*Face used to highlight evaluated paragraph."
+  "Face of `org-glance-overview:' links (follow = browse a filtered view)."
   :group 'org-glance
   :group 'faces)
 
-(cl-defun org-glance-link:choose-thing-for-materialization ()
-  (unless (org-glance-initialized?)
-    (user-error "org-glance: not initialized"))
+(cl-defun org-glance-link:complete-material ()
+  "Org link completion for the canonical edge type: pick a headline, return
+an `org-glance-material:ID' link string."
+  (org-glance-ensure-init)
   (->> (org-glance-material:completing-read org-glance-graph)
        org-glance-headline-metadata:id
-       (concat "org-glance-visit:")))
+       (concat org-glance-link-material-type ":")))
 
-(cl-defun org-glance-link:choose-thing-for-opening ()
-  (unless (org-glance-initialized?)
-    (user-error "org-glance: not initialized"))
+(cl-defun org-glance-link:complete-open ()
+  "Org link completion for `org-glance-open': pick an active, linked headline."
+  (org-glance-ensure-init)
   (->> (org-glance-material:completing-read
         org-glance-graph
         :prompt "Open: "
@@ -294,18 +295,18 @@ performs the conversion whenever the user chooses.  Always returns nil."
 (org-link-set-parameters
  org-glance-link-material-type            ; "org-glance-material" -- the canonical edge
  :follow #'org-glance-link:material
- :face 'org-glance-link-materialize-face)
+ :face 'org-glance-link-materialize-face
+ :complete #'org-glance-link:complete-material)
 
 (org-link-set-parameters
- "org-glance-visit"                       ; legacy edge type; same handler
+ "org-glance-visit"                       ; legacy edge type: followed, never completed
  :follow #'org-glance-link:material
- :face 'org-glance-link-materialize-face
- :complete 'org-glance-link:choose-thing-for-materialization)
+ :face 'org-glance-link-materialize-face)
 
 (org-link-set-parameters
  "org-glance-open"
  :follow #'org-glance-link:open
- :complete 'org-glance-link:choose-thing-for-opening)
+ :complete #'org-glance-link:complete-open)
 
 (org-link-set-parameters
  "org-glance-overview"
@@ -319,7 +320,6 @@ One handler serves both edge link types (material + legacy visit)."
   (org-glance-ensure-init)
   (switch-to-buffer
    (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
-
 
 (defun org-glance-link:open (id &optional _)
   "Open a link inside the org-glance headline identified by ID."

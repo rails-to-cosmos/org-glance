@@ -431,23 +431,12 @@ without persisting its (unreadable) `value-fn' closure."
       (value-fn . ,(lambda (id _row)
                      (or (org-glance-property-index:property graph id prop) ""))))))
 
-(cl-defun org-glance-table--edge-kinds-for (graph ids)
-  "Distinct relation kinds among IDS' edges, sorted (pure metadata reads)."
-  (org-glance--sorted-distinct
-   (cl-loop for id in ids
-            for meta = (org-glance-graph:get-headline graph id)
-            when (org-glance-headline-metadata? meta)
-            append (cl-loop for (_target . kind) in (org-glance-headline-metadata:relations meta)
-                            when kind collect kind))))
-
 (cl-defun org-glance-table--edge-column (graph kind &optional header)
   "A `table-view' column showing the TITLES of KIND-edge targets per row.
-A kinded reference is a property whose value is another headline: a coffee's
-=roasted by= column shows the roaster.  Many-to-many joins with \", \"; a gone
-target falls back to its id.  Pure metadata reads -- no blob parses.  Carries
-the same `prop' marker as a drawer column, so the per-tag schema round-trips
-it; `--apply-schema' re-discriminates by kind membership on rebuild."
-  `((key . ,kind)                        ; kinds are free-text, drawer keys UPCASE
+Many-to-many joins with \", \"; a gone target falls back to its id.  Pure
+metadata reads -- no blob parses.  The `prop' marker round-trips it through
+the per-tag schema (see `org-glance-table--custom-column')."
+  `((key . ,(concat "kind:" kind))       ; own namespace: never collides with built-ins
     (header . ,(or header (s-capitalize (org-glance--kind-pretty kind))))
     (type . "text")
     (sortable . t)
@@ -459,22 +448,19 @@ it; `--apply-schema' re-discriminates by kind membership on rebuild."
                          (s-join ", "
                                  (cl-loop for (target . k) in (org-glance-headline-metadata:relations meta)
                                           when (equal k kind)
-                                          collect (let ((tm (org-glance-graph:get-headline graph target)))
-                                                    (if (org-glance-headline-metadata? tm)
-                                                        (org-glance-headline-metadata:title tm)
-                                                      target))))
+                                          collect (org-glance-graph:title-or-id graph target)))
                        ""))))))
 
 (cl-defun org-glance-table--custom-column (graph name &optional header)
-  "Build the custom column NAME: an edge column when NAME is a relation kind
-of GRAPH (kinds are slugs, drawer keys UPCASE -- exact membership, no case
-folding, so \"AUTHOR\" the property and \"author\" the kind coexist), else
-a drawer-property column.  The single discrimination rule -- the `C-u +'
-prompt and the schema rebuild both use it, so a saved column resolves the
-same way it was created."
-  (if (member name (org-glance-graph:edge-kinds graph))
-      (org-glance-table--edge-column graph name header)
-    (org-glance-table--property-column graph name header)))
+  "Build the custom column NAME; its CASE is the persisted type tag.
+Drawer columns persist UPCASE keys, relation kinds pure-downcase slugs -- so
+an all-upcase NAME is a property column, anything else an edge column.
+Deterministic (no live-graph membership scan, whose answer would flip when a
+kind's last edge disappears), and \"AUTHOR\" the property coexists with
+\"author\" the kind."
+  (if (string= name (upcase name))
+      (org-glance-table--property-column graph name header)
+    (org-glance-table--edge-column graph name header)))
 
 (cl-defun org-glance-table--add-column-prompt ()
   "Return a `table-view' column chosen by completing-read: a drawer property
@@ -485,7 +471,7 @@ so `C-u +' uses it."
          (ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
          ;; kinds display PRETTY ("roasted by") but canonicalize to their slug
          (candidates (append (mapcar (lambda (k) (cons (org-glance--kind-pretty k) k))
-                                     (org-glance-table--edge-kinds-for graph ids))
+                                     (org-glance-graph:edge-kinds graph ids))
                              (mapcar (lambda (k) (cons k k))
                                      (org-glance-property-index:keys graph ids)))))
     (if (null candidates)
@@ -535,10 +521,8 @@ does not accrete empties."
 (cl-defun org-glance-table--apply-schema (graph filter columns)
   "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.
 Drops the columns hidden for FILTER's tags (Title never dropped), then appends
-the saved custom columns -- each (NAME . HEADER) rebuilt by
-`org-glance-table--custom-column' (edge kind or drawer property, decided by
-the same rule that created it).  Absent a schema, COLUMNS is returned
-unchanged."
+the saved custom columns via `org-glance-table--custom-column'.  Absent a
+schema, COLUMNS is returned unchanged."
   (let ((hidden (remove "title" (org-glance-table--schema-hidden graph filter))))
     (append (cl-remove-if (lambda (c) (member (alist-get 'key c) hidden)) columns)
             (mapcar (lambda (pair)

@@ -79,7 +79,8 @@ Other features:
   and indexable, so an encrypted headline with a plaintext link still shows up
   in =org-glance-open= and the link opens without a password.  In the buffer,
   =C-c #= is context-aware: wrap the region in a crypt block, =C-u= unwraps the
-  block at point, otherwise it forgets the cached password (TTL
+  block at point; with no region it encrypts the whole body (plaintext buffer)
+  or forgets the cached password (already encrypted; TTL
   =org-glance-material-password-ttl=).  In the table, =#= toggles a whole
   headline (encrypt = one whole-body block; decrypt = open + unwrap), and
   =C-u #= re-keys.  Pre-block whole-body ciphers upgrade silently on their
