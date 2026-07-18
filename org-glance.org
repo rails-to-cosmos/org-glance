@@ -20,7 +20,7 @@ overview with per-tag event metrics (=org-glance-tags=) · per-block encryption
 per-tag config (cycle + capture skeleton) + per-headline =ORG_GLANCE_PROJECT_DIR= ·
 LLM session action over =agnostic-llm= · git-sync conflict auto-resolution (WAL
 union merge + =.eld= sidecar heal) · documented global invariants + properties
-reference + CHANGELOG · broad ERT suite + =make fat= single-file build.
+reference + CHANGELOG · broad ERT suite.
 
 * Terms
 

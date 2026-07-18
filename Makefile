@@ -1,4 +1,4 @@
-.PHONY: build test info clean lint fat
+.PHONY: build test info clean lint
 
 info:
 	eask info
@@ -34,9 +34,6 @@ clean:
 # load-history order (dependencies precede dependents, so macros are defined
 # before use), then prove it byte-compiles and loads with only itself + its
 # dependencies on `load-path' (sources removed).  Ship dist/org-glance.el(c).
-fat:
-	eask exec emacs --batch -l build/build-fat.el
-	eask exec emacs --batch -l build/verify-fat.el
 
 # --- Version bumping ---------------------------------------------------------
 # org-glance versions are MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV (package-build /

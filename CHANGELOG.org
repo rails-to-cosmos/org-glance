@@ -85,6 +85,9 @@ Notable user-facing changes.  Versions date-based
   reopening switches to the live session.  Moved to =org-glance-llm.el=.
 
 ** Removed
+- =make fat= single-file build (=build/build-fat.el=, =dist/=) — the
+  =rails-to-cosmos= ELPA archive distributes the package properly; from-source
+  users have the load-path/straight recipes.
 - =org-glance-material:apply= — a thin =save-buffer= wrapper; use the ordinary
   save (=C-x C-s=), which has synced through =write-contents-functions= all
   along.
