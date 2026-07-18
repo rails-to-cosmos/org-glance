@@ -40,8 +40,9 @@ Only in the tag-config file =<store>/config/tags.org= (see
   plaintext only in the material buffer.  Several per headline; text outside
   stays public and indexable.  See [[file:proposals/2026-07-17-crypt-blocks.done.org][crypt-blocks]].
 - =#+begin_pin= … =#+end_pin= — a pinned block: kept when a repeated headline is
-  trimmed on completion (=org-glance-clone-on-repeat-p=), so it survives into the
-  clone instead of being cut with the accumulated history.
+  trimmed on completion (=org-glance-repeat-history-depth= > 0), so it survives
+  in the live headline while the trimmed history lives on in the occurrence
+  snapshot (see [[file:proposals/2026-07-18-repeat-occurrences.done.org][repeat-occurrences]]).
 
 * Link types (in a headline's body)
 

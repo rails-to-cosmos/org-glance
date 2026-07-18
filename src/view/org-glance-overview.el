@@ -264,6 +264,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
 (define-key org-glance-overview-mode-map (kbd "T") #'org-glance-overview:table)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
+(define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
 (define-key org-glance-overview-mode-map (kbd "C-c C-t") #'org-glance-overview:todo)
 (define-key org-glance-overview-mode-map (kbd "q") #'quit-window)
 
@@ -282,6 +283,17 @@ re-renders."
   "Materialize the headline at point."
   (interactive)
   (switch-to-buffer (org-glance-material:open org-glance-graph (org-glance-overview:id-at-point))))
+
+(cl-defun org-glance-overview:history ()
+  "Open one of the occurrence snapshots of the headline at point, read-only."
+  (interactive)
+  (let* ((id (org-glance-overview:id-at-point))
+         (meta (org-glance-graph:get-headline org-glance-graph id)))
+    (org-glance-view:pick-occurrence
+     org-glance-graph id
+     (if (org-glance-headline-metadata? meta)
+         (org-glance-headline-metadata:title meta)
+       id))))
 
 (cl-defun org-glance-overview--headline-at-point ()
   "The live `org-glance-headline' for the heading at point.

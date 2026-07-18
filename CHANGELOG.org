@@ -12,8 +12,13 @@ Notable user-facing changes.  Versions date-based
   links into new =relations= metadata; =C-c @= / =C-u C-c @= open the
   references / back-references table (filters =:id-any= / =:refers-to=).
   Legacy =org-glance-visit:= links count as kindless edges.
-- Clone-on-repeat skips encrypted headlines (a clone would store plaintext);
-  the after-repeat trim is skipped too, so their history is never cut.
+- Repeat occurrence history: completing a repetition snapshots the done state
+  into =data/<id>/occurrences/<STAMP>.org= (one graph headline, never clones);
+  =org-glance-repeat-history-depth= keeps the newest N (0 = off, default).
+  Table shows a =↻= column; =l= (table/overview) / =C-c l= (material) open a
+  chosen occurrence read-only.  Encrypted headlines keep no history (skip +
+  no trim -- plaintext would leak).  Replaces the clone-on-repeat prototype
+  (=org-glance-clone-on-repeat-p= removed).
 - Overview links take a filter: =org-glance-overview:TAG?done=nil&state=READING=
   (any filter-table key; bare TAG keeps the ambient merge; opens in the default
   view).  Parser =org-glance-filter:from-link-path=.

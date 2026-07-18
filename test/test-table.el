@@ -50,12 +50,12 @@
 ;;; Spec generation
 
 (ert-deftest org-glance-test:table-spec-shape ()
-  "The spec has the required top-level keys and seven columns."
+  "The spec has the required top-level keys and eight columns."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO X"))
     (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
-      (should (= 7 (length (alist-get 'columns spec))))
+      (should (= 8 (length (alist-get 'columns spec))))
       (should (alist-get 'actions spec))
       (should (alist-get 'sort spec)))))
 
@@ -848,6 +848,25 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should (member "film" offered))                ; another headline's tag
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered)))))))
+
+;;; Occurrence history: ↻ column + `h' action
+
+(ert-deftest org-glance-test:table-repeated-column-and-history ()
+  "The ↻ column marks repeater-carrying rows; `h' routes to the shared picker."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "rep" "* TODO daily" "SCHEDULED: <2026-06-07 Sun +1d>")
+      (org-glance-test:headline "one" "* TODO once"))
+    (org-glance-test:with-table-buffer graph buf
+      (with-current-buffer buf
+        (should (equal "↻" (org-glance-test:table-cell buf "rep" "repeated")))
+        (should (equal ""  (org-glance-test:table-cell buf "one" "repeated")))
+        (let (picked)
+          (cl-letf (((symbol-function 'org-glance-view:pick-occurrence)
+                     (lambda (_g id title) (setq picked (cons id title)))))
+            (table-view--goto-id "rep")
+            (funcall (key-binding (kbd "l"))))
+          (should (equal '("rep" . "daily") picked)))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

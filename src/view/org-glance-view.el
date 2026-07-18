@@ -153,5 +153,26 @@ the save that flagged it, so its errors are demoted."
 ;; reloads).
 (cl-pushnew '(org-glance-view--stale " glance:stale") mode-line-misc-info :test #'equal)
 
+;;; Occurrence history picker (shared by table `l', overview `l', material `C-c l')
+
+(cl-defun org-glance-view:pick-occurrence (graph id title)
+  "Completing-read one of ID's occurrence snapshots and open it READ-ONLY.
+Snapshots are immutable history (`org-glance-graph:occurrences'); the buffer is
+named by TITLE and the chosen stamp."
+  (let ((occurrences (org-glance-graph:occurrences graph id)))
+    (unless occurrences
+      (user-error "No occurrence history for this headline (see `org-glance-repeat-history-depth')"))
+    (let* ((stamp (completing-read "Occurrence: " (mapcar #'car occurrences) nil t))
+           (path (alist-get stamp occurrences nil nil #'string=))
+           (buf (get-buffer-create (format "*org-glance-occurrence: %s [%s]*" title stamp))))
+      (with-current-buffer buf
+        (let ((inhibit-read-only t))
+          (erase-buffer)
+          (insert (f-read-text path 'utf-8))
+          (org-mode)
+          (goto-char (point-min)))
+        (read-only-mode 1))
+      (switch-to-buffer buf))))
+
 (provide 'org-glance-view)
 ;;; org-glance-view.el ends here

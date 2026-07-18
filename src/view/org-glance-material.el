@@ -148,55 +148,81 @@ ORG_GLANCE_ID was changed."
             (org-glance-view:mark-graph-stale graph))
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
 
-;;; Repeated headlines: clone-on-repeat
+;;; Repeated headlines: occurrence history
 ;;
-;; When a repeated headline is completed, optionally preserve the finished
-;; repetition as a NEW graph headline (fresh id, repeater disarmed) before org
-;; bumps the timestamps, then trim the live headline back to its header and
-;; pinned blocks -- the accumulated history lives on in the clone.
+;; A repeating headline stays ONE graph entity.  Completing a repetition
+;; snapshots the done state VERBATIM into `data/<id>/occurrences/<STAMP>.org'
+;; (immutable files, newest `org-glance-repeat-history-depth' kept), then the
+;; live headline is trimmed to its header + pinned blocks.  Pick a snapshot
+;; with `l' (table/overview) or `C-c l' (here).  See
+;; docs/proposals/2026-07-18-repeat-occurrences.done.org.
 
-(defcustom org-glance-clone-on-repeat-p nil
-  "Create a new headline copy when repeating rather than modifying in place."
+(defcustom org-glance-repeat-history-depth 0
+  "How many completed occurrences to keep per repeating headline.
+0 disables occurrence history (and the after-repeat trim); N > 0 keeps the
+newest N snapshots under the headline's `occurrences/' dir, pruning older
+ones on each completion (syncthing-style)."
   :group 'org-glance
-  :type 'boolean)
+  :type 'natnum)
 
-(cl-defun org-glance-material:clone-on-repeat (&rest _)
-  "Preserve the completed repetition of the materialized headline.
+(cl-defun org-glance-material--occurrence-stamp ()
+  "Filename stamp of the occurrence being completed.
+Its earliest active repeated timestamp -- read BEFORE org advances it -- or
+now, when none parses.  Lexically sortable; a same-occurrence re-completion
+maps to the same stamp and overwrites (idempotent)."
+  (format-time-string
+   "%Y-%m-%dT%H%M"
+   (if-let ((ts (car (org-glance-datetime-active-repeated-timestamps
+                      'include-schedules 'include-deadlines))))
+       (org-time-string-to-time (org-element-property :raw-value ts))
+     (current-time))))
+
+(cl-defun org-glance-material:snapshot-on-repeat (&rest _)
+  "Preserve the completed repetition as an occurrence snapshot.
 Runs `:before' `org-auto-repeat-maybe' (the headline is still in its done
-state): snapshot the subtree, disarm its repeaters, strip its ORG_GLANCE_ID and
-capture it into the graph as a new headline."
-  (when (and org-glance-clone-on-repeat-p
+state); gated by `org-glance-repeat-history-depth'."
+  (when (and (> org-glance-repeat-history-depth 0)
              org-glance-material-mode
              org-glance-material--graph
              (member (org-get-todo-state) org-done-keywords)
              (org-glance-datetime-headline-repeated-p))
-    ;; This buffer is DECRYPTED plaintext; capturing its snapshot would write a
-    ;; plaintext blob for an encrypted headline (invariant 14).  Skip.
+    ;; This buffer is DECRYPTED plaintext; snapshotting it would write
+    ;; plaintext history for an encrypted headline (invariant 14).  Skip.
     (if org-glance-material--encrypted
-        (message "org-glance: encrypted headline not cloned on repeat (would store plaintext)")
-      (org-glance-material--clone-snapshot))))
+        (message "org-glance: encrypted headline keeps no occurrence history")
+      (let ((graph org-glance-material--graph)
+            (id org-glance-material--id))
+        (let ((dir (org-glance-graph:occurrences-path graph id)))
+          (f-mkdir-full-path dir)
+          (f-write-text (buffer-substring-no-properties (point-min) (point-max))
+                        'utf-8
+                        (f-join dir (concat (org-glance-material--occurrence-stamp) ".org"))))
+        (cl-loop for (_stamp . path) in (nthcdr org-glance-repeat-history-depth
+                                                (org-glance-graph:occurrences graph id))
+                 do (ignore-errors (f-delete path)))))))
 
-(cl-defun org-glance-material--clone-snapshot ()
-  "Capture the current material buffer's subtree as a fresh headline."
-  (let ((graph org-glance-material--graph)
-        (contents (buffer-substring-no-properties (point-min) (point-max))))
-    (with-temp-buffer
-      (insert contents)
-      (org-glance--org-mode)
-      (goto-char (point-min))
-      (org-glance-datetime-reset-buffer-timestamps-except-earliest)
-      ;; `org-entry-delete' resolves the sole heading from any point in this
-      ;; single-entry buffer, so no reset to point-min is needed here.
-      (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
-      (org-glance-graph:capture graph (current-buffer)))))
+(cl-defun org-glance-material:history ()
+  "Choose one of this headline's occurrence snapshots and open it read-only."
+  (interactive)
+  (unless (and org-glance-material--graph org-glance-material--id)
+    (user-error "Not in a materialized headline buffer"))
+  (let ((meta (org-glance-graph:get-headline org-glance-material--graph
+                                             org-glance-material--id)))
+    (org-glance-view:pick-occurrence
+     org-glance-material--graph org-glance-material--id
+     (if (org-glance-headline-metadata? meta)
+         (org-glance-headline-metadata:title meta)
+       org-glance-material--id))))
+
+(define-key org-glance-material-mode-map (kbd "C-c l") #'org-glance-material:history)
 
 (cl-defun org-glance-material:cleanup-after-repeat (&rest _)
   "Trim the repeated materialized headline to its header and pinned blocks.
 Runs `:after' `org-auto-repeat-maybe'; only meaningful when
-`org-glance-material:clone-on-repeat' preserved the previous repetition."
-  (when (and org-glance-clone-on-repeat-p
+`org-glance-material:snapshot-on-repeat' preserved the previous repetition."
+  (when (and (> org-glance-repeat-history-depth 0)
              org-glance-material-mode
-             ;; The crypt gate skipped the clone (invariant 14) -- trimming
+             ;; The crypt gate skipped the snapshot (invariant 14) -- trimming
              ;; here would cut the history that was never preserved.
              (not org-glance-material--encrypted)
              (org-glance-datetime-headline-repeated-p))
@@ -217,7 +243,7 @@ Runs `:after' `org-auto-repeat-maybe'; only meaningful when
         (org-delete-property "LAST_REPEAT")))))   ; entry-delete finds the sole heading
 
 ;; Idempotent on reload: `advice-add' is a no-op for an already-added function.
-(advice-add 'org-auto-repeat-maybe :before #'org-glance-material:clone-on-repeat '((depth . -90)))
+(advice-add 'org-auto-repeat-maybe :before #'org-glance-material:snapshot-on-repeat '((depth . -90)))
 (advice-add 'org-auto-repeat-maybe :after #'org-glance-material:cleanup-after-repeat)
 
 ;;; Encrypted headlines: decrypt on open, re-encrypt on save

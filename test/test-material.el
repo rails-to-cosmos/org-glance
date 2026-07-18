@@ -249,30 +249,27 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-test:with-material (buffer graph "R")
       (should org-glance-datetime-mode))))
 
-(ert-deftest org-glance-test:material-clone-on-repeat ()
-  "Completing a repeated headline preserves the done state as a new headline."
+(ert-deftest org-glance-test:material-snapshot-on-repeat ()
+  "Completing a repetition snapshots the done state as an occurrence file --
+NEVER a new headline -- stamped by the completed occurrence's timestamp."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water flowers :house:"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
-    (let ((org-glance-clone-on-repeat-p t)
+    (let ((org-glance-repeat-history-depth 7)
           (org-log-repeat nil)
           (org-log-done nil))
       (org-glance-test:with-material (buffer graph "R")
         (goto-char (point-min))
         (org-todo "DONE")
-        (let* ((headlines (org-glance-graph:headlines graph))
-               (clone (cl-find-if (lambda (m) (not (string= "R" (org-glance-headline-metadata:id m))))
-                                  headlines)))
-          (should (= 2 (length headlines)))
-          (should clone)
-          ;; The clone preserves the completed state...
-          (should (string= "DONE" (org-glance-headline-metadata:state clone)))
-          (should (member "house" (org-glance-headline-metadata:tag-strings clone)))
-          ;; ...with its repeater disarmed, so it never repeats again.
-          (should (s-contains? "+0d" (org-glance-graph:get-content
-                                      graph (org-glance-headline-metadata:id clone))))
-          ;; The live headline repeated forward.
-          (should (string= "TODO" (org-get-todo-state))))))))
+        ;; still exactly ONE headline in the graph
+        (should (= 1 (length (org-glance-graph:headlines graph))))
+        ;; one snapshot, stamped by the completed occurrence, holding DONE state
+        (let ((occ (org-glance-graph:occurrences graph "R")))
+          (should (= 1 (length occ)))
+          (should (string-prefix-p "2026-06-07" (caar occ)))
+          (should (s-contains? "DONE water flowers" (f-read-text (cdar occ) 'utf-8))))
+        ;; the live headline repeated forward
+        (should (string= "TODO" (org-get-todo-state)))))))
 
 (ert-deftest org-glance-test:material-cleanup-after-repeat ()
   "After repeating, the live headline is trimmed to header + pinned blocks."
@@ -283,7 +280,7 @@ for the original id (the sync hook skips a mismatched id)."
                                                              "keep me"
                                                              "#+end_pin"
                                                              "transient note"))
-    (let ((org-glance-clone-on-repeat-p t)
+    (let ((org-glance-repeat-history-depth 7)
           (org-log-repeat nil)
           (org-log-done nil))
       (org-glance-test:with-material (buffer graph "R")
@@ -291,22 +288,84 @@ for the original id (the sync hook skips a mismatched id)."
         (org-todo "DONE")
         (should (s-contains? "keep me" (buffer-string)))
         (should-not (s-contains? "transient note" (buffer-string)))
-        (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string)))))))
+        (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string)))
+        ;; the trimmed-away note lives on in the occurrence snapshot
+        (should (s-contains? "transient note"
+                             (f-read-text (cdar (org-glance-graph:occurrences graph "R"))
+                                          'utf-8)))))))
 
-(ert-deftest org-glance-test:material-no-clone-when-disabled ()
-  "Without `org-glance-clone-on-repeat-p', repeating leaves the graph alone."
+(ert-deftest org-glance-test:material-no-snapshot-when-depth-zero ()
+  "Depth 0 (the default): no snapshot, no trim -- repeating changes nothing else."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO water"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"
                                                              "transient note"))
-    (let ((org-glance-clone-on-repeat-p nil)
+    (let ((org-glance-repeat-history-depth 0)
           (org-log-repeat nil)
           (org-log-done nil))
       (org-glance-test:with-material (buffer graph "R")
         (goto-char (point-min))
         (org-todo "DONE")
         (should (= 1 (length (org-glance-graph:headlines graph))))
+        (should (null (org-glance-graph:occurrences graph "R")))
         (should (s-contains? "transient note" (buffer-string)))))))
+
+(ert-deftest org-glance-test:metadata-repeated-predicate ()
+  "`repeated?' reads the repeater cookie off schedule/deadline raw strings."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "r1" "* TODO A" "SCHEDULED: <2026-06-07 Sun +1d>")
+      (org-glance-test:headline "r2" "* TODO B" "DEADLINE: <2026-06-07 Sun ++2w>")
+      (org-glance-test:headline "r3" "* TODO C" "SCHEDULED: <2026-06-07 Sun>")
+      (org-glance-test:headline "r4" "* TODO D"))
+    (should (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r1")))
+    (should (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r2")))
+    (should-not (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r3")))
+    (should-not (org-glance-headline-metadata:repeated? (org-glance-graph:get-headline graph "r4")))))
+
+(ert-deftest org-glance-test:material-history-picker ()
+  "`C-c h' completing-reads an occurrence stamp and opens it READ-ONLY;
+without history it errors with a hint."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (let ((org-glance-repeat-history-depth 3)
+          (org-log-repeat nil) (org-log-done nil))
+      (org-glance-test:with-material (buffer graph "R")
+        (should (eq (key-binding (kbd "C-c l")) #'org-glance-material:history))
+        (should-error (org-glance-material:history) :type 'user-error)  ; no history yet
+        (goto-char (point-min))
+        (org-todo "DONE")
+        (let (shown)
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_p coll &rest _) (car coll)))          ; newest stamp
+                    ((symbol-function 'switch-to-buffer)
+                     (lambda (b) (setq shown b) b)))
+            (org-glance-material:history))
+          (unwind-protect
+              (with-current-buffer shown
+                (should buffer-read-only)
+                (should (s-contains? "DONE daily" (buffer-string)))
+                (should (s-contains? "org-glance-occurrence" (buffer-name))))
+            (kill-buffer shown)))))))
+
+(ert-deftest org-glance-test:material-snapshot-prunes-to-depth ()
+  "The newest DEPTH snapshots survive; older ones are pruned on each write."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
+                                                             "SCHEDULED: <2026-06-07 Sun +1d>"))
+    (let ((org-glance-repeat-history-depth 2)
+          (org-log-repeat nil)
+          (org-log-done nil))
+      (org-glance-test:with-material (buffer graph "R")
+        (dotimes (_ 4)                       ; complete four consecutive occurrences
+          (goto-char (point-min))
+          (org-todo "DONE"))
+        (let ((occ (org-glance-graph:occurrences graph "R")))
+          (should (= 2 (length occ)))                       ; pruned to depth
+          ;; newest first, and the two NEWEST occurrences survived
+          (should (equal (sort (mapcar #'car occ) #'string>) (mapcar #'car occ)))
+          (should (string-prefix-p "2026-06-10" (caar occ))))))))
 
 (cl-defmacro org-glance-test--seen-ids (&rest body)
   "Stub `completing-read' to capture the offered headline ids (sorted) in `seen',

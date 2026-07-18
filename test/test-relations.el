@@ -248,29 +248,26 @@ time; reindex agrees."
 
 ;;; Clone-on-repeat: encrypted headlines are not cloned (would store plaintext)
 
-(ert-deftest org-glance-test:clone-on-repeat-skips-encrypted ()
-  "The repeat clone is skipped for an encrypted headline."
+(ert-deftest org-glance-test:snapshot-on-repeat-skips-encrypted ()
+  "An encrypted headline keeps no occurrence history (would store plaintext)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "e" "* TODO E"))
     (org-glance-test:with-material (buf graph "e")
-      (let ((org-glance-clone-on-repeat-p t)
-            (org-done-keywords '("DONE"))
-            cloned)
+      (let ((org-glance-repeat-history-depth 3)
+            (org-done-keywords '("DONE")))
         (setq-local org-glance-material--encrypted t)
         (cl-letf (((symbol-function 'org-get-todo-state) (lambda () "DONE"))
-                  ((symbol-function 'org-glance-datetime-headline-repeated-p) (lambda () t))
-                  ((symbol-function 'org-glance-material--clone-snapshot)
-                   (lambda () (setq cloned t))))
-          (org-glance-material:clone-on-repeat)
-          (should-not cloned)
-          ;; ...and the after-repeat TRIM is gated too: no clone was made, so
+                  ((symbol-function 'org-glance-datetime-headline-repeated-p) (lambda () t)))
+          (org-glance-material:snapshot-on-repeat)
+          (should (null (org-glance-graph:occurrences graph "e")))
+          ;; ...and the after-repeat TRIM is gated too: no snapshot was made, so
           ;; trimming would cut history that was never preserved (invariant 14)
           (let ((before (buffer-string)))
             (org-glance-material:cleanup-after-repeat)
             (should (equal before (buffer-string))))
           (setq-local org-glance-material--encrypted nil)
-          (org-glance-material:clone-on-repeat)
-          (should cloned))))))
+          (org-glance-material:snapshot-on-repeat)
+          (should (= 1 (length (org-glance-graph:occurrences graph "e")))))))))
 
 ;;; Overview links: TAG[?KEY=VALUE&...] -> filter
 

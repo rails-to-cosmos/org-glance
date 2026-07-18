@@ -680,6 +680,33 @@ immutable (`:read-only' slots)."
             when (org-glance--present-string? state)
             collect state)))
 
+(defconst org-glance--org-repeater-re "[.+]\\+?[0-9]+[hdwmy]"
+  "Matches an org repeater cookie (+1d, ++1w, .+2m) inside a timestamp string.")
+
+(cl-defun org-glance-headline-metadata:repeated? (metadata)
+  "Non-nil when METADATA's schedule or deadline carries a repeater cookie.
+Pure predicate over the raw timestamp strings -- nothing extra is stored.
+Body-only repeated timestamps are not visible here (documented limit)."
+  (cl-check-type metadata org-glance-headline-metadata)
+  (cl-some (lambda (ts) (and ts (string-match-p org-glance--org-repeater-re ts)))
+           (list (org-glance-headline-metadata:schedule metadata)
+                 (org-glance-headline-metadata:deadline metadata))))
+
+(cl-defun org-glance-graph:occurrences-path (graph id)
+  "Directory of ID's occurrence snapshots in GRAPH (may not exist).
+Completed repetitions live here as immutable `<STAMP>.org' files -- content,
+not derived state -- and are GC'd with the id dir on deletion.  See
+docs/proposals/2026-07-18-repeat-occurrences.done.org."
+  (f-join (org-glance-graph:headline-data-path graph id) "occurrences"))
+
+(cl-defun org-glance-graph:occurrences (graph id)
+  "ID's occurrence snapshots in GRAPH, newest first: list of (STAMP . PATH).
+The filenames ARE the index (STAMP is a lexically-sortable timestamp)."
+  (let ((dir (org-glance-graph:occurrences-path graph id)))
+    (when (f-exists? dir)
+      (sort (mapcar (lambda (f) (cons (f-base f) f)) (f-files dir))
+            (lambda (a b) (string> (car a) (car b)))))))
+
 (cl-defun org-glance-graph:edge-kinds (graph)
   "Distinct relation kinds across GRAPH's live headlines, sorted."
   (cl-check-type graph org-glance-graph)

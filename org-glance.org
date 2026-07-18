@@ -176,7 +176,8 @@ CLOSED: [2026-07-09]
 [[file:docs/proposals/2026-07-06-all-tags-overview.done.org][all-tags overview]].
 ** DONE clone + reschedule
 CLOSED: [2026-07-09]
-=org-glance-material:clone-on-repeat= (gated by =org-glance-clone-on-repeat-p=).
+Superseded 2026-07-18 by occurrence history (=org-glance-repeat-history-depth=):
+one headline, snapshots under =data/<id>/occurrences/=, =l= picks a version.
 ** DONE bidirected relations (pre-reanimation; absent in current code -- see the relations-edge-model proposal)
 CLOSED: [2021-11-20 Sat 13:59]
 :LOGBOOK:

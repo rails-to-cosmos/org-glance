@@ -41,7 +41,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    (=org-glance-property-index--entry=).  Relation edges follow the same rule:
    the =org-glance-material:= body link is canonical, the =relations= metadata
    field is a projection recomputed on save/reindex — never written
-   independently of content.  Violation: unrebuildable facts or half-states.
+   independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
+   are canonical content too — immutable files GC'd with the id dir, never
+   indexed state.  Violation: unrebuildable facts or half-states.
 
 6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and
    =..=) via =error= — never =cl-assert=, which can be compiled out — before

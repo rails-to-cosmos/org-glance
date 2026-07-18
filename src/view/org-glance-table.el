@@ -126,7 +126,8 @@ live spec against these keys to record the hidden ones."
     ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
     ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
     ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
-    ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))))
+    ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))
+    ((key . "repeated") (header . "↻")         (type . "text")  (sortable . t) (align . "center"))))
 
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
@@ -147,6 +148,7 @@ ascending (active first)."
                 ((key . "+")     (command . "capture")   (label . "Capture"))
                 ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
+                ((key . "l")     (command . "history")   (label . "Log"))
                 ((key . "-")     (command . "remove")    (label . "Untag"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
@@ -166,7 +168,8 @@ priority is its letter, absent values are the empty string."
                 (schedule . ,(or (org-glance-headline-metadata:schedule metadata) ""))
                 (deadline . ,(or (org-glance-headline-metadata:deadline metadata) ""))
                 (priority . ,(if (integerp priority) (char-to-string priority) ""))
-                (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" "")))))))
+                (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" ""))
+                (repeated . ,(if (org-glance-headline-metadata:repeated? metadata) "↻" "")))))))
 
 ;;; Per-buffer state
 
@@ -508,6 +511,12 @@ untagged (\":none:\") entry."
         (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
                                       :columns columns :hidden hidden)))))
 
+(cl-defun org-glance-table--act-history (graph id)
+  "`h' handler: open one of ID's occurrence snapshots, read-only."
+  (unless id (user-error "Point is not on a row"))
+  (org-glance-view:pick-occurrence
+   graph id (org-glance-headline-metadata:title (org-glance-table--metadata graph id))))
+
 (cl-defun org-glance-table--act-delcolumn ()
   "`C-u -' handler: remove the column at point.  Title is mandatory and refused."
   (let ((key (get-text-property (point) 'table-view-col)))
@@ -602,7 +611,8 @@ Honours the same filter language as the overview (see
                                                                          (org-glance-capture:completing-read-tag))
                                                                      ""))))
                          (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
-                         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))))
+                         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
+                         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))))
          ;; Build the spec, restoring the saved column order (if any) before display.
          (tspec (let ((s (org-glance-table--spec graph spec)))
                   (when-let ((order (plist-get saved :columns)))
