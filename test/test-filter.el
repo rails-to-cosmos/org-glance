@@ -54,7 +54,10 @@
   (should (string= "active" (org-glance-filter:describe '(:done nil))))
   (should (string= "done" (org-glance-filter:describe '(:done t))))
   (should (string= "state=TODO" (org-glance-filter:describe '(:state "TODO"))))
-  (should (s-contains? "title~foo" (org-glance-filter:describe '(:title-contains "foo")))))
+  (should (s-contains? "title~foo" (org-glance-filter:describe '(:title-contains "foo"))))
+  ;; relation views stay compact: truncated id / target count, never the raw list
+  (should (string= "refs->abcdefgh" (org-glance-filter:describe '(:refers-to "abcdefgh-long-id"))))
+  (should (string= "id-any(2)" (org-glance-filter:describe '(:id-any ("a" "b"))))))
 
 (ert-deftest org-glance-test:filter-read-state ()
   "read-state maps the specials and concrete states; errors on empty input."
@@ -74,7 +77,7 @@
         (org-glance-filter:read-state graph))
       (dolist (w '("active" "done" "all" "TODO" "DONE")) (should (member w offered))))
     ;; empty input -> user-error (no silent "match everything")
-    (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "")))
+    (org-glance-test:answering ((completing-read ""))
       (should-error (org-glance-filter:read-state graph) :type 'user-error))))
 
 (ert-deftest org-glance-test:filter-read-state-collision ()

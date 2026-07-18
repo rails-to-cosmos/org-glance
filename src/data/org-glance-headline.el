@@ -44,7 +44,6 @@
   ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline--<slot-name>'
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
-  (-links nil :read-only t :type (or list function))
   (-properties nil :read-only t :type (or list function))
   (-node-properties nil :read-only t :type (or list function)))
 
@@ -90,9 +89,6 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
 
 (cl-defun org-glance-headline:hash (headline)
   (thunk-force (org-glance-headline:-hash headline)))
-
-(cl-defun org-glance-headline:links (headline)
-  (thunk-force (org-glance-headline:-links headline)))
 
 (cl-defun org-glance-headline:properties (headline)
   (thunk-force (org-glance-headline:-properties headline)))
@@ -156,11 +152,6 @@ MUTATES the buffer (deletes those properties), so call it LAST when sharing one.
   (thunk-delay (org-glance-headline:with-contents contents
                  (org-glance-headline--hash-here))))
 
-(cl-defun org-glance-headline--links (contents)
-  (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (org-glance--parse-links))))
-
 (cl-defun org-glance-headline--properties (contents)
   (cl-check-type contents string)
   (thunk-delay (org-glance-headline:with-contents contents
@@ -178,16 +169,14 @@ MUTATES the buffer (deletes those properties), so call it LAST when sharing one.
 
 (cl-defun org-glance-headline--content-facts (headline)
   "HEADLINE's five content-derived metadata facts, in ONE org-mode pass.
-Returns a plist (:links LS :linked L :propertized P :encrypted E :hash H),
+Returns a plist (:relations RS :linked L :propertized P :encrypted E :hash H),
 sharing one `with-contents' buffer + `org-mode' init across all five (the
-store's metadata build reparses the same blob otherwise).  LINKS is the
-`org-glance--buffer-links' tuple list, parsed once and feeding both the
-`linked?' flag and the relation edges.  Hash is LAST: it deletes the id/hash
-drawer properties in place, after the read-only facts."
+store's metadata build reparses the same blob otherwise).  The links parse
+once, feeding both `linked?' and the relation edges.  Hash is LAST: it deletes
+the id/hash drawer properties in place, after the read-only facts."
   (org-glance-headline:with-contents headline
-    (let ((links (save-excursion (goto-char (point-min))
-                                 (org-glance--buffer-links))))
-      (list :links       links
+    (let ((links (org-glance--buffer-links)))    ; with-contents is at point-min
+      (list :relations   (org-glance--links->edges links)
             :linked      (and links t)
             :propertized (org-glance-headline--propertized-here)
             :encrypted   (org-glance-headline--encrypted-here)
@@ -239,7 +228,6 @@ drawer properties in place, after the read-only facts."
                                  :commented? commented?
                                  :closed closed
                                  :-hash (org-glance-headline--hash contents)
-                                 :-links (org-glance-headline--links contents)
                                  :-properties (org-glance-headline--properties contents)
                                  :-node-properties (org-glance-headline--node-properties contents)
                                  :-encrypted? (org-glance-headline--encrypted contents))))

@@ -174,6 +174,37 @@ All other ingests proceed through the real function."
   (declare (indent 2))
   `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
 
+(cl-defun org-glance-test:headline-props (id heading props &rest body)
+  "Like `org-glance-test:headline' but with extra drawer PROPS ((KEY . VALUE)…)."
+  (apply #'org-glance-headline--from-lines
+         (append (list heading ":PROPERTIES:" (format ":ORG_GLANCE_ID: %s" id))
+                 (mapcar (lambda (kv) (format ":%s: %s" (car kv) (cdr kv))) props)
+                 (list ":END:")
+                 body)))
+
+(defun org-glance-test:first-row-id ()
+  "Move point to the current table's first data row and return its id."
+  (goto-char (point-min))
+  (table-view--goto-first-row)
+  (get-text-property (point) 'table-view-id))
+
+(defun org-glance-test:mark-rows (&rest ids)
+  "Toggle the table mark on each row in IDS."
+  (dolist (id ids)
+    (table-view--goto-id id)
+    (call-interactively #'table-view-mark-toggle)))
+
+(cl-defmacro org-glance-test:answering (bindings &rest body)
+  "Stub prompting functions to constant answers around BODY.
+BINDINGS is ((FN VALUE)...); each FN becomes a lambda ignoring its args and
+returning VALUE.  For prompts whose stub must inspect its arguments, use a
+plain `cl-letf'."
+  (declare (indent 1))
+  `(cl-letf ,(mapcar (lambda (b)
+                       `((symbol-function ',(car b)) (lambda (&rest _) ,(cadr b))))
+                     bindings)
+     ,@body))
+
 (defun org-glance-test:row-ids (rows)
   "The `id' cell of each row in ROWS."
   (mapcar (lambda (r) (alist-get 'id r)) rows))

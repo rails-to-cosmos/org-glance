@@ -47,7 +47,9 @@
 
 (ert-deftest org-glance-test:headline-links ()
   (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
-    (should (eq 1 (length (org-glance-headline:links headline))))))
+    (should (plist-get (org-glance-headline--content-facts headline) :linked))
+    (should (eq 1 (org-glance-headline:with-contents headline
+                    (length (org-glance--parse-links)))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
   "Encrypt wraps the body in one sealed crypt block; decrypt keeps the markers
@@ -168,7 +170,8 @@ the -hash/-links/-properties/-encrypted thunks separately, across headline shape
     (let* ((h (apply #'org-glance-headline--from-lines lines))
            (facts (org-glance-headline--content-facts h)))
       (should (equal (plist-get facts :hash)        (org-glance-headline:hash h)))
-      (should (eq    (plist-get facts :linked)      (and (org-glance-headline:links h) t)))
+      (should (eq    (plist-get facts :linked)
+                     (and (org-glance-headline:with-contents h (org-glance--buffer-links)) t)))
       (should (eq    (plist-get facts :propertized) (and (org-glance-headline:properties h) t)))
       (should (eq    (plist-get facts :encrypted)   (and (org-glance-headline:encrypted? h) t))))))
 

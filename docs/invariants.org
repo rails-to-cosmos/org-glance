@@ -43,10 +43,11 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    field is a projection recomputed on save/reindex — never written
    independently of content.  Violation: unrebuildable facts or half-states.
 
-6. *Path safety before filesystem.*  An id is checked (reject =/= and =..=) via
-   =error= — never =cl-assert=, which can be compiled out — before feeding any
-   path (=org-glance-graph:headline-data-path=).  Violation: a hand-edited id
-   escapes the store (traversal; compaction GC deleting outside it).
+6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and
+   =..=) via =error= — never =cl-assert=, which can be compiled out — before
+   feeding any path (=org-glance-graph:headline-data-path=).  Violation: a
+   hand-edited id escapes the store (traversal; an empty id resolves to the
+   data root, which compaction GC would delete).
 
 7. *Single user, no locking.*  Cross-process staleness is detected by the store
    snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
@@ -122,3 +123,15 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     Column order + sort persist separately, per filter (=table-views.eld=).
     Violation: a version upgrade's new column is invisible to anyone with a saved
     schema; internal keys pollute the column prompt.
+
+17. *Transient filters never persist per-filter state.*  Keys flagged
+    =:transient= in =org-glance-filter:table= (=:where=, =:refers-to=,
+    =:id-any=) are one-off views: the overview never caches them
+    (=org-glance-overview:spec-key= → nil), and the table persists neither
+    their view config (=org-glance-table--persist-config=) nor their column
+    schema (=org-glance-table--persist-schema= — a tagless relation view would
+    edit the shared \":none:\" entry).  Judged by the single predicate
+    =org-glance-filter:transient?=.  Violation: one cache dir / config entry
+    accretes per visited headline (=:id-any= identities embed the target
+    snapshot — one per link-set version), with no pruning pass to reclaim
+    them.

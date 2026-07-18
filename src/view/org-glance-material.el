@@ -43,9 +43,21 @@ FILTER, if non-nil, is a predicate on the metadata."
   ;; `org-done-keywords' -- nil in this command/minibuffer context.  Bind the
   ;; user's done set so the filter is correct regardless of the current buffer.
   (let* ((org-done-keywords (org-glance--done-keywords))
-         (candidates (cl-loop for meta in (org-glance-graph:headlines graph)
-                              when (or (null filter) (funcall filter meta))
-                              collect (cons (org-glance-material:label meta) meta))))
+         (metas (cl-loop for meta in (org-glance-graph:headlines graph)
+                         when (or (null filter) (funcall filter meta))
+                         collect meta))
+         ;; Duplicate labels get a short-id suffix so the pick is injective --
+         ;; resolving a collision to the FIRST metadata would silently act on
+         ;; the wrong headline.
+         (counts (-frequencies (mapcar #'org-glance-material:label metas)))
+         (candidates (mapcar (lambda (meta)
+                               (let ((label (org-glance-material:label meta)))
+                                 (cons (if (> (alist-get label counts 0 nil #'equal) 1)
+                                           (format "%s ·%s" label
+                                                   (s-left 8 (org-glance-headline-metadata:id meta)))
+                                         label)
+                                       meta)))
+                             metas)))
     (unless candidates
       (let ((total (length (org-glance-graph:headlines graph)))
             (dir (org-glance-graph:directory graph)))
@@ -184,6 +196,9 @@ Runs `:after' `org-auto-repeat-maybe'; only meaningful when
 `org-glance-material:clone-on-repeat' preserved the previous repetition."
   (when (and org-glance-clone-on-repeat-p
              org-glance-material-mode
+             ;; The crypt gate skipped the clone (invariant 14) -- trimming
+             ;; here would cut the history that was never preserved.
+             (not org-glance-material--encrypted)
              (org-glance-datetime-headline-repeated-p))
     (save-excursion
       (goto-char (point-min))
@@ -721,8 +736,8 @@ Reconstructs the content in a temp buffer and runs `org-open-at-point' at the
 chosen link, mirroring the v1 behaviour."
   (cl-check-type headline org-glance-headline)
   (org-glance-headline:with-contents headline
-    (cl-loop for (link title pos) in (org-glance--parse-links)
-             unless (s-starts-with-p "[[org-glance-" link)
+    (cl-loop for (_link title pos type) in (org-glance--parse-links)
+             unless (s-starts-with-p "org-glance-" type)
              collect (list title pos) into links
              finally
              (goto-char (cond ((> (length links) 1)
@@ -781,46 +796,25 @@ With KEY, extract it non-interactively; otherwise prompt."
 
 ;;; References (`@'): edges to other headlines
 ;;
-;; A reference IS an `org-glance-material:ID' link in the body (optionally
-;; `?kind=KIND'); the store derives the `relations' metadata from it on save.
-;; See docs/proposals/2026-07-18-relations.done.org.
-
-(cl-defun org-glance-material--edge-kinds (graph)
-  "Distinct reference kinds present in GRAPH's relations, sorted."
-  (org-glance--sorted-distinct
-   (cl-loop for meta in (org-glance-graph:headlines graph)
-            append (cl-loop for (_target . kind) in (org-glance-headline-metadata:relations meta)
-                            when kind collect kind))))
+;; A reference IS a link in the body; `org-glance--link-edge' owns the wire
+;; format.  See docs/proposals/2026-07-18-relations.done.org.
 
 (cl-defun org-glance-material--read-reference (graph self &key with-kind)
   "Choose a reference target in GRAPH: (ID TITLE KIND-or-nil).
-Required match; SELF's id is excluded; duplicate labels are disambiguated with
-a short id suffix (a same-label pick must be injective -- an edge to the wrong
-id is a silent data error).  WITH-KIND prompts for a kind: completion over the
-kinds already in GRAPH, free input allowed, empty = none."
-  (let* ((metas (cl-remove-if (lambda (m) (equal self (org-glance-headline-metadata:id m)))
-                              (org-glance-graph:headlines graph)))
-         (counts (make-hash-table :test #'equal)))
-    (unless metas (user-error "No other headlines to refer to"))
-    (dolist (m metas) (cl-incf (gethash (org-glance-material:label m) counts 0)))
-    (let* ((candidates
-            (mapcar (lambda (m)
-                      (let ((label (org-glance-material:label m))
-                            (id (org-glance-headline-metadata:id m)))
-                        (cons (if (> (gethash label counts) 1)
-                                  (format "%s ·%s" label (substring id 0 (min 8 (length id))))
-                                label)
-                              m)))
-                    metas))
-           (meta (cdr (assoc (completing-read "Refer to: " candidates nil t) candidates)))
-           (kind (when with-kind
-                   (let ((k (s-trim (completing-read
-                                     "Reference kind (empty for none): "
-                                     (org-glance-material--edge-kinds graph)))))
-                     (unless (string-empty-p k) k)))))
-      (list (org-glance-headline-metadata:id meta)
-            (org-glance--title-clean (org-glance-headline-metadata:title meta))
-            kind))))
+Required match, SELF's id excluded (the shared picker disambiguates duplicate
+labels).  WITH-KIND prompts for a kind: completion over the kinds already in
+GRAPH (`org-glance-graph:edge-kinds'), free input allowed, empty = none."
+  (let* ((meta (org-glance-material:completing-read
+                graph :prompt "Refer to: "
+                :filter (lambda (m) (not (equal self (org-glance-headline-metadata:id m))))))
+         (kind (when with-kind
+                 (let ((k (s-trim (completing-read
+                                   "Reference kind (empty for none): "
+                                   (org-glance-graph:edge-kinds graph)))))
+                   (unless (string-empty-p k) k)))))
+    (list (org-glance-headline-metadata:id meta)
+          (org-glance--title-clean (org-glance-headline-metadata:title meta))
+          kind)))
 
 (cl-defun org-glance-material:refer (&optional arg)
   "Insert a reference to another headline at point, or self-insert `@'.
@@ -838,10 +832,7 @@ inserts a literal `@' anywhere."
                  (org-glance-material--read-reference
                   org-glance-material--graph org-glance-material--id
                   :with-kind arg)))
-      (insert (org-link-make-string
-               (concat org-glance-link-material-type ":" id
-                       (and kind (concat "?kind=" kind)))
-               title)))))
+      (insert (org-link-make-string (org-glance--edge->link-path id kind) title)))))
 
 (cl-defun org-glance-material:references (&optional arg)
   "Table of the headlines this one refers to; with ARG, its back-references.

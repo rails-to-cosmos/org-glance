@@ -171,15 +171,12 @@ path; a display-boundary refresh re-fills it and clears the flag."
                           (org-glance-test:headline "t1" "* TODO Alpha :work:"))
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
-        (goto-char (point-min))
-        (table-view--goto-first-row)
-        (let ((id (get-text-property (point) 'table-view-id)))
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "urgent")))
+        (let ((id (org-glance-test:first-row-id)))
+          (org-glance-test:answering ((completing-read "urgent"))
             (org-glance-table--act-tag graph id))
           (should (member "urgent"
-                          (mapcar (lambda (x) (format "%s" x))
-                                  (org-glance-headline-metadata:tags
-                                   (org-glance-graph:get-headline graph id))))))))))
+                          (org-glance-headline-metadata:tag-strings
+                           (org-glance-graph:get-headline graph id)))))))))
 
 (ert-deftest org-glance-test:table-remove-tag ()
   "`C-u :' removes one of the headline's own tags, keeping the others."
@@ -188,15 +185,12 @@ path; a display-boundary refresh re-fills it and clears the flag."
                           (org-glance-test:headline "t2" "* TODO Beta :work:home:"))
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
-        (goto-char (point-min))
-        (table-view--goto-first-row)
-        (let ((id (get-text-property (point) 'table-view-id)))
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "work")))
+        (let ((id (org-glance-test:first-row-id)))
+          (org-glance-test:answering ((completing-read "work"))
             (let ((current-prefix-arg '(4)))
               (org-glance-table--act-tag graph id)))
-          (let ((tags (mapcar (lambda (x) (format "%s" x))
-                              (org-glance-headline-metadata:tags
-                               (org-glance-graph:get-headline graph id)))))
+          (let ((tags (org-glance-headline-metadata:tag-strings
+                       (org-glance-graph:get-headline graph id))))
             (should-not (member "work" tags))
             (should (member "home" tags))))))))
 
@@ -207,10 +201,8 @@ path; a display-boundary refresh re-fills it and clears the flag."
     (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha" "body"))
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
-        (goto-char (point-min))
-        (table-view--goto-first-row)
-        (let ((id (get-text-property (point) 'table-view-id)))
-          (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+        (let ((id (org-glance-test:first-row-id)))
+          (org-glance-test:answering ((read-passwd "pw"))
             (org-glance-table--act-crypt graph id)          ; encrypt
             (should (org-glance-headline-metadata:encrypted?
                      (org-glance-graph:get-headline graph id)))
@@ -237,11 +229,9 @@ the new password."
                                  (org-glance-test:headline "c2" "* TODO Alpha" "body") "old"))
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
-        (goto-char (point-min))
-        (table-view--goto-first-row)
-        (let ((id (get-text-property (point) 'table-view-id))
+        (let ((id (org-glance-test:first-row-id))
               (pws (list "old" "new")))
-          (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) (pop pws))))
+          (org-glance-test:answering ((read-passwd (pop pws)))
             (let ((current-prefix-arg '(4)))
               (org-glance-table--act-crypt graph id)))
           (should (org-glance-headline-metadata:encrypted?
@@ -318,8 +308,7 @@ corresponding overview), not wherever the non-file buffer was spawned."
 the table (`table-view' link support), not as raw `[[...]]' markup."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO Read [[https://example.com][The Book]]"
-                                       ":PROPERTIES:" ":ORG_GLANCE_ID: k1" ":END:"))
+      (org-glance-test:headline "k1" "* TODO Read [[https://example.com][The Book]]"))
     (let ((buf (org-glance-table:visit graph)))
       (unwind-protect
           (with-current-buffer buf
@@ -522,10 +511,9 @@ after the (no-note) commit the reloaded table shows the new state on the row."
                             (org-glance-test:headline "b3" "* TODO C"))
       (org-glance-test:with-table-buffer graph buf
         (with-current-buffer buf
-          (table-view--goto-id "b1") (call-interactively #'table-view-mark-toggle)
-          (table-view--goto-id "b3") (call-interactively #'table-view-mark-toggle)
+          (org-glance-test:mark-rows "b1" "b3")
           (should (= 2 (length (table-view-marked-rows))))
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+          (org-glance-test:answering ((completing-read "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))          ; bulk (marks present)
           (should (equal "DONE" (org-glance-headline-metadata:state
                                  (org-glance-graph:get-headline graph "b1"))))
@@ -546,10 +534,9 @@ after the (no-note) commit the reloaded table shows the new state on the row."
                             (org-glance-test:headline "p4" "* TODO D"))
       (org-glance-test:with-table-buffer graph buf
         (with-current-buffer buf
-          (table-view--goto-id "p1") (call-interactively #'table-view-mark-toggle)
-          (table-view--goto-id "p2") (call-interactively #'table-view-mark-toggle)
+          (org-glance-test:mark-rows "p1" "p2")
           (should (table-view--goto-id "p4"))            ; park point on an UNMARKED row
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+          (org-glance-test:answering ((completing-read "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))     ; bulk-sets p1,p2 (not p4)
           ;; point followed its row (p4), which survived the change
           (should (equal "p4" (get-text-property (point) 'table-view-id)))
@@ -575,10 +562,9 @@ buffer switching -- which the flush relies on -- runs for real.)"
           (progn
             (setq buf (org-glance-table:visit graph))
             (with-current-buffer buf
-              (table-view--goto-id "g1") (call-interactively #'table-view-mark-toggle)
-              (table-view--goto-id "g2") (call-interactively #'table-view-mark-toggle)
+              (org-glance-test:mark-rows "g1" "g2")
               (table-view--goto-id "g3")                     ; point on the UNMARKED row
-              (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+              (org-glance-test:answering ((completing-read "DONE"))
                 (funcall (key-binding (kbd "C-c C-t"))))
               (run-hooks 'post-command-hook)                 ; must NOT dead-marker
               (should (equal "g3" (get-text-property (point) 'table-view-id)))  ; point kept
@@ -703,10 +689,8 @@ final rows -- the equivalence the in-place fast path relies on."
   "An added property column displays each headline's drawer property."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:")
-      (org-glance-headline--from-lines
-       "* TODO Dune :book:"       ":PROPERTIES:" ":ORG_GLANCE_ID: bk2" ":AUTHOR: Herbert" ":END:"))
+      (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien")))
+      (org-glance-test:headline-props "bk2" "* TODO Dune :book:" '(("AUTHOR" . "Herbert"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
@@ -721,8 +705,7 @@ final rows -- the equivalence the in-place fast path relies on."
   "An added property column is saved per tag and restored (with values) on re-visit."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:"))
+      (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))))
@@ -735,10 +718,8 @@ final rows -- the equivalence the in-place fast path relies on."
   "A column added under one tag does not appear under another."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:")
-      (org-glance-headline--from-lines
-       "* TODO Ship it :work:"    ":PROPERTIES:" ":ORG_GLANCE_ID: wk1" ":AUTHOR: Me" ":END:"))
+      (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien")))
+      (org-glance-test:headline-props "wk1" "* TODO Ship it :work:" '(("AUTHOR" . "Me"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))))
@@ -749,8 +730,7 @@ final rows -- the equivalence the in-place fast path relies on."
   "Removing an added column drops it, and the removal persists across a re-visit."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":AUTHOR: Tolkien" ":END:"))
+      (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))
@@ -764,12 +744,11 @@ final rows -- the equivalence the in-place fast path relies on."
   "The visited buffer wires `C-u +' to the drawer-property prompt."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":AUTHOR: A" ":END:"))
+      (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "A"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
-        (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "author")))
+        (org-glance-test:answering ((completing-read "author"))
           (let ((col (org-glance-table--add-column-prompt)))
             (should (equal "AUTHOR" (alist-get 'key col)))
             (should (equal "Author" (alist-get 'header col)))
@@ -779,11 +758,10 @@ final rows -- the equivalence the in-place fast path relies on."
   "Pressing `C-u +' (prefix arg + the capture key) adds a property column."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":AUTHOR: Ann" ":END:"))
+      (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "Ann"))))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
-        (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "AUTHOR")))
+        (org-glance-test:answering ((completing-read "AUTHOR"))
           (let ((current-prefix-arg '(4)))
             (funcall (key-binding (kbd "+")))))     ; the `+' action reads current-prefix-arg
         (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
@@ -795,8 +773,7 @@ final rows -- the equivalence the in-place fast path relies on."
   "`C-u -' routes to column removal; a bare `-' to tag removal."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":END:"))
+      (org-glance-test:headline "x1" "* TODO X :book:"))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (let (called)
@@ -813,8 +790,7 @@ final rows -- the equivalence the in-place fast path relies on."
   "`C-u -' removes any column except the mandatory Title."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":END:"))
+      (org-glance-test:headline "x1" "* TODO X :book:"))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         ;; a built-in column is removable
@@ -822,7 +798,7 @@ final rows -- the equivalence the in-place fast path relies on."
         (table-view-remove-column "tags")
         (should-not (member "tags" (org-glance-test:table-col-keys buf)))
         ;; Title is refused (errors before touching the spec)
-        (cl-letf (((symbol-function 'get-text-property) (lambda (&rest _) "title")))
+        (org-glance-test:answering ((get-text-property "title"))
           (should-error (org-glance-table--act-delcolumn) :type 'user-error))
         (should (member "title" (org-glance-test:table-col-keys buf)))))))
 
@@ -830,10 +806,8 @@ final rows -- the equivalence the in-place fast path relies on."
   "Removing a built-in column persists per tag: gone on reopen, other tags intact."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines
-       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":END:")
-      (org-glance-headline--from-lines
-       "* TODO Essay :article:" ":PROPERTIES:" ":ORG_GLANCE_ID: ar1" ":END:"))
+      (org-glance-test:headline "bk1" "* TODO The Hobbit :book:")
+      (org-glance-test:headline "ar1" "* TODO Essay :article:"))
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (should (member "tags" (org-glance-test:table-col-keys buf)))
@@ -853,7 +827,7 @@ but stays live in the graph (mirror of the bare `+' capture)."
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (should (= 1 (length table-view--rows)))
-        (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+        (org-glance-test:answering ((y-or-n-p t))
           (org-glance-table--act-deltag graph "bk1" '(:tags ("book"))))
         (should (null (org-glance-headline-metadata:tags        ; survives, untagged
                        (org-glance-graph:get-headline graph "bk1"))))

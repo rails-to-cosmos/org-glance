@@ -490,8 +490,11 @@ reading that drawer property.  Absent a schema, COLUMNS is returned unchanged."
 (cl-defun org-glance-table--persist-schema ()
   "Buffer-local `table-view-schema-changed-hook': save this filter's schema per
 tag -- the live spec's custom (`prop') columns, and which built-in columns are
-hidden (a built-in key absent from the live spec)."
-  (when org-glance-view--graph
+hidden (a built-in key absent from the live spec).  Transient views (relation
+filters) persist nothing -- their tagless schema key would edit the shared
+untagged (\":none:\") entry."
+  (when (and org-glance-view--graph
+             (not (org-glance-filter:transient? org-glance-table--spec)))
     (let* ((live (table-view--columns table-view--spec))
            (live-keys (mapcar (lambda (c) (alist-get 'key c)) live))
            (columns (cl-loop for c in live

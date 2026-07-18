@@ -71,8 +71,7 @@ a session for a different headline already holds the plain slug."
   "`org-glance-llm--dir' returns `ORG_GLANCE_PROJECT_DIR' when set, else data dir."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":ORG_GLANCE_PROJECT_DIR: ~/x/proj" ":END:")
+      (org-glance-test:headline-props "a" "* TODO A" '(("ORG_GLANCE_PROJECT_DIR" . "~/x/proj")))
       (org-glance-test:headline "b" "* TODO B"))
     (should (equal (expand-file-name "~/x/proj") (org-glance-llm--dir org-glance-graph "a")))
     (should (equal (org-glance-graph:headline-data-path org-glance-graph "b")

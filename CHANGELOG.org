@@ -12,7 +12,11 @@ Notable user-facing changes.  Versions date-based
   links into new =relations= metadata; =C-c @= / =C-u C-c @= open the
   references / back-references table (filters =:id-any= / =:refers-to=).
   Legacy =org-glance-visit:= links count as kindless edges.
-- Clone-on-repeat skips encrypted headlines (a clone would store plaintext).
+- Clone-on-repeat skips encrypted headlines (a clone would store plaintext);
+  the after-repeat trim is skipped too, so their history is never cut.
+- Overview links take a filter: =org-glance-overview:TAG?done=nil&state=READING=
+  (any filter-table key; bare TAG keeps the ambient merge; opens in the default
+  view).  Parser =org-glance-filter:from-link-path=.
 - Crypt blocks: =#+begin_crypt= regions seal at rest, decrypt in the material
   buffer; several per headline, public text between stays indexable (links open
   without a password).  =C-c #= wraps region / =C-u C-c #= unwraps / else locks.

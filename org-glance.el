@@ -314,15 +314,14 @@ performs the conversion whenever the user chooses.  Always returns nil."
 
 (defun org-glance-link:material (path &optional _)
   "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
-The kind annotates the edge (stored in the `relations' metadata), not the jump."
+The kind annotates the edge (stored in the `relations' metadata), not the jump.
+One handler serves both edge link types (material + legacy visit)."
   (org-glance-ensure-init)
   (switch-to-buffer
    (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
 
-(defun org-glance-link:materialize (id &optional _)
-  "Materialize org-glance headline identified by ID."
-  (org-glance-ensure-init)
-  (switch-to-buffer (org-glance-material:open org-glance-graph id)))
+(defalias 'org-glance-link:materialize #'org-glance-link:material
+  "Follow handler of the legacy `org-glance-visit:' edge links.")
 
 (defun org-glance-link:open (id &optional _)
   "Open a link inside the org-glance headline identified by ID."
@@ -331,9 +330,17 @@ The kind annotates the edge (stored in the `relations' metadata), not the jump."
     (unless headline (user-error "org-glance: headline %s not found" id))
     (org-glance-material:open-link headline)))
 
-(defun org-glance-link:overview (tag &optional _)
-  "Open the overview filtered by TAG."
-  (org-glance-overview (downcase tag)))
+(defun org-glance-link:overview (path &optional _)
+  "Open the overview PATH describes: \"TAG[?KEY=VALUE&...]\".
+A bare TAG merges the ambient `org-glance-filter-spec' exactly like the
+`org-glance-overview' command; a `?'-qualified PATH is explicit — exactly the
+filter it states, no ambient merge.  Both land in
+`org-glance-overview-default-view'.  See `org-glance-filter:from-link-path'."
+  (org-glance-ensure-init)
+  (let ((spec (org-glance-filter:from-link-path path)))
+    (if (string-match-p "[?]" path)
+        (org-glance-overview:visit-default org-glance-graph spec)
+      (org-glance-overview spec))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

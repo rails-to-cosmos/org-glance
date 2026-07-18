@@ -56,7 +56,15 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 - =org-glance-visit:ID= — legacy materialize link; still followed, and counts
   as a kindless relation edge.
 - =org-glance-open:ID= — follows the link INSIDE headline ID.
-- =org-glance-overview:TAG= — opens TAG's overview.
+- =org-glance-overview:TAG[?KEY=VALUE&…]= — opens the overview (in
+  =org-glance-overview-default-view=).  A bare TAG merges the ambient
+  =org-glance-filter-spec=; a =?=-qualified path is explicit — exactly the
+  filter it states.  KEYs are the filter-table keys (=done=, =state=,
+  =title-contains=, =tags=, =id-any=, =refers-to=, =priority=, …); lists
+  comma-separated, booleans =t=/=nil=, priority a letter; TAG =all= or empty
+  adds no tag constraint; =:where= is not linkable.  E.g.
+  =[[org-glance-overview:book?done=nil&state=READING][Reading now]]=.  Parsed
+  by =org-glance-filter:from-link-path=.
 
 * File keywords
 

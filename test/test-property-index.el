@@ -7,11 +7,8 @@
 dropping org-glance's own ORG_GLANCE_* bookkeeping from the candidate keys."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":AUTHOR: Tolkien" ":GENRE: fantasy" ":END:")
-      (org-glance-headline--from-lines "* TODO B" ":PROPERTIES:" ":ORG_GLANCE_ID: b"
-                                       ":AUTHOR: Le Guin" ":END:"
-                                       "- rating: 5"))
+      (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien") ("GENRE" . "fantasy")))
+      (org-glance-test:headline-props "b" "* TODO B" '(("AUTHOR" . "Le Guin")) "- rating: 5"))
     ;; union of drawer keys across both, ORG_GLANCE_ID excluded, sorted
     (should (equal '("AUTHOR" "GENRE") (org-glance-property-index:keys graph '("a" "b"))))
     (should (equal "Tolkien" (org-glance-property-index:property graph "a" "author")))
@@ -25,12 +22,10 @@ dropping org-glance's own ORG_GLANCE_* bookkeeping from the candidate keys."
   "A content change refreshes the indexed value (keyed by content hash)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":AUTHOR: Old" ":END:"))
+      (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Old"))))
     (should (equal "Old" (org-glance-property-index:property graph "a" "AUTHOR")))
     (org-glance-graph:add graph            ; new content -> new hash
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":AUTHOR: New" ":END:"))
+      (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "New"))))
     (should (equal "New" (org-glance-property-index:property graph "a" "AUTHOR")))))
 
 (ert-deftest org-glance-test:property-index-persists-and-clears ()
@@ -38,8 +33,7 @@ dropping org-glance's own ORG_GLANCE_* bookkeeping from the candidate keys."
 drops both."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":AUTHOR: X" ":END:"))
+      (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "X"))))
     (org-glance-property-index:ensure graph '("a"))
     (should (f-exists? (org-glance-property-index--file graph)))
     (remhash (org-glance-graph:store-path graph) org-glance-property-index--cache)  ; cold memo
@@ -52,8 +46,7 @@ drops both."
 column's value-fn reads that property via the index."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
-                                       ":AUTHOR: Tolkien" ":END:"))
+      (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table-buffer graph buf
       (with-current-buffer buf
         (let (offered)
@@ -69,8 +62,7 @@ column's value-fn reads that property via the index."
   "The table `e' action extracts a body KEY:value read from the property index."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:"
-                                       "- author: Tolkien"))
+      (org-glance-test:headline "a" "* TODO A" "- author: Tolkien"))
     (let (killed)
       (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
                 ((symbol-function 'kill-new) (lambda (v &rest _) (setq killed v))))

@@ -371,20 +371,20 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
         (with-temp-buffer
           (setq-local org-glance-overview--spec '(:tags ("work")))
           ;; narrow by state: composes onto the tag filter
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "TODO")))
+          (org-glance-test:answering ((completing-read "TODO"))
             (org-glance-overview:filter-by-state))
           (should (equal '(:tags ("work") :state "TODO") visited))
           ;; narrow by substring
-          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "alp")))
+          (org-glance-test:answering ((read-string "alp"))
             (org-glance-overview:filter-by-substring))
           (should (equal '(:tags ("work") :title-contains "alp") visited))
           ;; re-filtering the same dimension REPLACES it
           (setq-local org-glance-overview--spec '(:state "TODO"))
-          (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "DONE")))
+          (org-glance-test:answering ((completing-read "DONE"))
             (org-glance-overview:filter-by-state))
           (should (equal '(:state "DONE") visited))
           ;; empty input aborts instead of filtering
-          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
+          (org-glance-test:answering ((read-string ""))
             (should-error (org-glance-overview:filter-by-substring) :type 'user-error))
           ;; clear -> unfiltered
           (org-glance-overview:filter-clear)

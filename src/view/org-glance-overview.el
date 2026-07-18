@@ -63,7 +63,8 @@
 
 (cl-defun org-glance-overview:spec-key (filter)
   "Return a compact, deterministic cache key for FILTER.
-\"all\" for the empty filter; nil when FILTER is uncacheable (carries `:where').
+\"all\" for the empty filter; nil when FILTER is transient — uncacheable
+\(`org-glance-filter:transient?': `:where' and the relation keys).
 The key is the first 12 hex chars of the SHA-1 of the canonical spec identity
 (`org-glance-filter:identity'), so specs differing only in key order or tag
 order map to the same key, every machine derives the same name for the same
@@ -376,10 +377,14 @@ default); press `T' there to toggle to the other view.  TAG may be a bare tag
 (symbol/string) or a full filter plist -- see `org-glance-filter:predicate'."
   (interactive (list (org-glance-view:completing-read-tag "Overview tag (empty for all): ")))
   (org-glance-ensure-init)
-  (let ((filter (org-glance-filter:merge org-glance-filter-spec tag)))
-    (if (org-glance-overview--default-table?)
-        (org-glance-table:visit org-glance-graph filter)
-      (org-glance-overview:visit org-glance-graph filter))))
+  (org-glance-overview:visit-default org-glance-graph
+                                     (org-glance-filter:merge org-glance-filter-spec tag)))
+
+(cl-defun org-glance-overview:visit-default (graph filter)
+  "Open FILTER's view of GRAPH per `org-glance-overview-default-view'."
+  (if (org-glance-overview--default-table?)
+      (org-glance-table:visit graph filter)
+    (org-glance-overview:visit graph filter)))
 
 ;;; Interactive filter refinement (the `/' transient)
 ;;

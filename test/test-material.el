@@ -267,7 +267,7 @@ for the original id (the sync hook skips a mismatched id)."
           (should clone)
           ;; The clone preserves the completed state...
           (should (string= "DONE" (org-glance-headline-metadata:state clone)))
-          (should (member "house" (append (org-glance-headline-metadata:tags clone) nil)))
+          (should (member "house" (org-glance-headline-metadata:tag-strings clone)))
           ;; ...with its repeater disarmed, so it never repeats again.
           (should (s-contains? "+0d" (org-glance-graph:get-content
                                       graph (org-glance-headline-metadata:id clone))))
@@ -580,7 +580,7 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
                                  "pw"))
     ;; Seeded blob on disk is ciphertext.
     (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
-    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+    (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "enc")
         ;; Body is decrypted in the buffer; ciphertext never shown.
         (should (string= "pw" org-glance-material--password))
@@ -662,7 +662,7 @@ silently upgrades the stored format to crypt blocks (same password works)."
                                  (org-glance-test:headline "leg" "* TODO Old" "old secret")
                                  "pw"))
     (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph "leg")))
-    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+    (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "leg")
         (should (s-contains? "old secret" (buffer-string)))   ; legacy branch decrypted
         (org-glance-test:sed "old secret" "new secret")
@@ -683,7 +683,7 @@ plaintext at rest and the metadata keeps `linked?' alongside `encrypted?'."
                           (org-glance-test:headline "mix" "* TODO Mixed"
                                                     "public [[https://example.com][site]]"
                                                     "secret line"))
-    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+    (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "mix")
         (goto-char (point-min))
         (re-search-forward "secret line")
@@ -706,7 +706,7 @@ flips off, so the next open needs no password."
     (org-glance-graph:add graph (org-glance-headline:encrypt
                                  (org-glance-test:headline "pub" "* TODO Was-secret" "plainbody")
                                  "pw"))
-    (cl-letf (((symbol-function 'read-passwd) (lambda (&rest _) "pw")))
+    (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "pub")
         (goto-char (point-min))
         (search-forward "plainbody")                          ; inside the block

@@ -10,7 +10,7 @@
       (let ((meta (car headlines)))
         (should (org-glance-headline-metadata:id meta))
         (should (string= "Hello" (org-glance-headline-metadata:title meta)))
-        (should (member "test" (append (org-glance-headline-metadata:tags meta) nil)))
+        (should (member "test" (org-glance-headline-metadata:tag-strings meta)))
         ;; the captured body was persisted and is retrievable
         (should (s-contains? "Hello" (org-glance-graph:get-content
                                       org-glance-graph
@@ -51,9 +51,9 @@ tags, normalizes case, and rejects empty input."
         (should (eq 'task (org-glance-capture:completing-read-tag))))
       (should (equal '("task" "work") seen-candidates))
       ;; A tag unknown to the graph is fine -- discovery is capture-driven.
-      (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "fresh")))
+      (org-glance-test:answering ((completing-read "fresh"))
         (should (eq 'fresh (org-glance-capture:completing-read-tag))))
-      (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "  ")))
+      (org-glance-test:answering ((completing-read "  "))
         (should-error (org-glance-capture:completing-read-tag) :type 'user-error)))))
 
 (provide 'test-capture)

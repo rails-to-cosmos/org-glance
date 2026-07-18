@@ -212,6 +212,50 @@ unambiguously."
                  collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
+;;; Overview links: "TAG[?KEY=VALUE&...]" -> filter spec
+;;
+;; `org-glance-overview:' link paths encode a filter.  Value syntax derives
+;; from the table's :match/:canon kinds -- no second key list to maintain.
+
+(cl-defun org-glance-filter--link-bool (v)
+  "Boolean encoded in link value V: \"t\" or \"nil\"."
+  (pcase v ("t" t) ("nil" nil)
+         (_ (error "org-glance: link filter boolean must be t/nil: %S" v))))
+
+(cl-defun org-glance-filter--link-value (key v)
+  "Link value string V coerced for filter KEY, per the table's kinds.
+Lists are comma-separated; booleans read t/nil; `:priority' reads a letter;
+`:where' (a function) is not linkable."
+  (let* ((props (alist-get key org-glance-filter:table))
+         (kind (plist-get props :match)))
+    (cond
+     ((eq key :where) (error "org-glance: `:where' is not linkable"))
+     ((eq key :done) (org-glance-filter--link-bool v))
+     ((or (memq kind '(member-all member))
+          (eq (plist-get props :canon) 'string-list))
+      (split-string v "," t))
+     ((memq kind '(bool present-absent)) (org-glance-filter--link-bool v))
+     ((eq kind 'eql) (string-to-char v))           ; :priority, as a letter
+     (t v))))
+
+(cl-defun org-glance-filter:from-link-path (path)
+  "Filter spec encoded in an overview link PATH: \"TAG[?KEY=VALUE&...]\".
+TAG empty or `all' adds no tag constraint.  KEYs are the filter-table keys;
+unknown keys error via `normalize-spec'.  Returns a normalized spec."
+  (pcase-let* ((`(,head ,query) (split-string path "[?]"))
+               (spec (unless (member (downcase head) '("" "all"))
+                       (list :tags (list (downcase head))))))
+    (dolist (kv (and query (split-string query "&" t)))
+      (unless (string-match "\\`\\([^=]+\\)=\\(.*\\)\\'" kv)
+        (error "org-glance: malformed link filter clause: %S" kv))
+      (let* ((key (intern (concat ":" (match-string 1 kv))))
+             (value (org-glance-filter--link-value key (match-string 2 kv))))
+        (setq spec (plist-put spec key
+                              (if (eq key :tags)   ; join with the path TAG
+                                  (append (plist-get spec :tags) value)
+                                value)))))
+    (org-glance-filter:normalize-spec spec)))
+
 (cl-defun org-glance-filter:transient? (filter)
   "Non-nil when FILTER carries a `:transient' key (see the table).
 Transient views are one-off: never overview-cached, no persisted table config."
@@ -287,7 +331,7 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
                      (:title-contains (format "title~%s" v))
                      ;; Compact: an :id-any value embeds a whole target list and
                      ;; ids are long -- keep buffer names/titles bounded.
-                     (:refers-to (format "refs->%s" (substring v 0 (min 8 (length v)))))
+                     (:refers-to (format "refs->%s" (s-left 8 v)))
                      (:id-any (format "id-any(%d)" (length v)))
                      (:where "where")
                      (_ (format "%s=%s" (substring (symbol-name k) 1) v)))

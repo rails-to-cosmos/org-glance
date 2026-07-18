@@ -131,9 +131,7 @@ result back, and returns it.  Gated counterpart to the `--read-eld' floor."
 (cl-defun org-glance--buffer-links ()
   "Buffer links as (LINK TITLE POS TYPE PATH) tuples, in buffer order.
 LINK is the raw bracket text, TITLE the description (or raw link), POS the
-start; TYPE and PATH are the parsed `org-element' link type and unescaped
-path (relation edges read these — consumers destructuring only the first
-three are unaffected)."
+start; TYPE and PATH the parsed `org-element' link type and unescaped path."
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)
            for end = (org-element-property :end link-element)
@@ -163,20 +161,23 @@ three are unaffected)."
   "Link types that denote a relation edge to another headline.")
 
 (cl-defun org-glance--link-edge (type path)
-  "Edge (TARGET-ID . KIND-or-nil) denoted by a TYPE/PATH link, or nil."
+  "Edge (TARGET-ID . KIND-or-nil) denoted by a TYPE/PATH link, or nil.
+The decode half of the edge wire format; `--edge->link-path' encodes."
   (when (and (member type org-glance--link-edge-types)
              (stringp path)
              (string-match "\\`\\([^?]+\\)\\(?:\\?kind=\\(.+\\)\\)?\\'" path))
     (cons (match-string 1 path) (match-string 2 path))))
 
+(cl-defun org-glance--edge->link-path (id &optional kind)
+  "Link path (TYPE:ID[?kind=KIND]) for an edge to ID; the encode half."
+  (concat org-glance-link-material-type ":" id
+          (and kind (concat "?kind=" kind))))
+
 (cl-defun org-glance--links->edges (links)
   "Distinct relation edges among LINKS (the `--buffer-links' tuple shape)."
-  (cl-loop with seen = nil
-           for (_link _title _pos type path) in links
-           for edge = (org-glance--link-edge type path)
-           when (and edge (not (member edge seen)))
-           do (push edge seen)
-           finally return (nreverse seen)))
+  (-distinct (cl-loop for (_link _title _pos type path) in links
+                      for edge = (org-glance--link-edge type path)
+                      when edge collect edge)))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.

@@ -194,8 +194,7 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
             (org-glance--org-mode)
             (should (= tab-width 8))
             (should-not indent-tabs-mode))
-          (let ((h (org-glance-headline--from-lines
-                    "* TODO foo" ":PROPERTIES:" ":ORG_GLANCE_ID: t1" ":END:" "body")))
+          (let ((h (org-glance-test:headline "t1" "* TODO foo" "body")))
             (should (org-glance-headline-metadata? (org-glance-headline:metadata h)))))
       (setq-default tab-width orig))))
 

@@ -28,7 +28,7 @@ preserved) and backs up the legacy metadata non-destructively."
            (meta (org-glance-graph:get-headline graph "hello-1")))
       (should (org-glance-headline-metadata? meta))
       (should (string= "Hello" (org-glance-headline-metadata:title meta)))
-      (should (member "foo" (append (org-glance-headline-metadata:tags meta) nil)))
+      (should (member "foo" (org-glance-headline-metadata:tag-strings meta)))
       (should (s-contains? "body text" (org-glance-graph:get-content graph "hello-1"))))
     ;; non-destructive backup
     (should (f-exists? (f-join dir "foo" "foo.metadata.el.bak")))

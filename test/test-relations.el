@@ -32,10 +32,7 @@ DESERIALIZED structs (the inner-vector normalization trap)."
       (should (equal '(("b" . "editor"))
                      (org-glance-headline-metadata:relations meta)))
       ;; filter over the deserialized structs
-      (let ((keep? (org-glance-filter:predicate '(:refers-to "b"))))
-        (should (equal '("a")
-                       (mapcar #'org-glance-headline-metadata:id
-                               (seq-filter keep? (org-glance-graph:headlines cold)))))))))
+      (should (equal '("a") (org-glance-test:filter-ids cold '(:refers-to "b")))))))
 
 (ert-deftest org-glance-test:relations-absent-field-reads-nil ()
   "A record serialized before the field existed deserializes relations = nil."
@@ -55,21 +52,39 @@ relation keys are transient (never overview-cached, no table config)."
       (org-glance-test:headline "x" "* TODO X :book:")
       (org-glance-test:headline "y" "* TODO Y")
       (org-glance-test:headline "z" "* TODO Z"))
-    (let ((keep? (org-glance-filter:predicate '(:id-any ("x" "z")))))
-      (should (equal '("x" "z")
-                     (mapcar #'org-glance-headline-metadata:id
-                             (seq-filter keep? (org-glance-graph:headlines graph))))))
+    (should (equal '("x" "z") (org-glance-test:filter-ids graph '(:id-any ("x" "z")))))
     ;; composes with :tags
-    (let ((keep? (org-glance-filter:predicate '(:id-any ("x" "z") :tags ("book")))))
-      (should (equal '("x") (org-glance-test:filter-ids graph '(:id-any ("x" "z") :tags ("book"))))
-              ))
+    (should (equal '("x") (org-glance-test:filter-ids graph '(:id-any ("x" "z") :tags ("book")))))
     (should (equal (org-glance-filter:identity '(:id-any ("b" "a")))
                    (org-glance-filter:identity '(:id-any ("a" "b")))))
     (should (org-glance-filter:transient? '(:refers-to "x")))
     (should (org-glance-filter:transient? '(:id-any ("x"))))
     (should-not (org-glance-filter:transient? '(:tags ("book"))))
-    (should (null (org-glance-overview:spec-key '(:refers-to "x"))))
-    (should (org-glance-overview:spec-key '(:tags ("book"))))))
+    (should (null (org-glance-overview:spec-key '(:refers-to "x"))))))
+
+(ert-deftest org-glance-test:relations-transient-no-table-config ()
+  "A relation view persists NO per-filter table config on layout changes."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
+      (org-glance-test:headline "b" "* TODO B"))
+    (org-glance-test:with-table-filter graph '(:refers-to "b") buf
+      (with-current-buffer buf
+        (let (saved)
+          (cl-letf (((symbol-function 'org-glance-table--config-put)
+                     (lambda (&rest _) (setq saved t))))
+            (setq org-glance-table--config-snapshot nil)   ; force "layout changed"
+            (org-glance-table--persist-config)
+            (should-not saved)))))                          ; transient: never persisted
+    ;; a plain tag view under the same forced change DOES persist
+    (org-glance-test:with-table-filter graph nil buf
+      (with-current-buffer buf
+        (let (saved)
+          (cl-letf (((symbol-function 'org-glance-table--config-put)
+                     (lambda (&rest _) (setq saved t))))
+            (setq org-glance-table--config-snapshot nil)
+            (org-glance-table--persist-config)
+            (should saved)))))))
 
 ;;; The `@' command
 
@@ -78,7 +93,8 @@ relation keys are transient (never overview-cached, no table config)."
 self is excluded from the candidates."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
-      (org-glance-test:headline "me" "* TODO Me" "body")
+      ;; me's own kinded edge seeds the graph's kind vocabulary ("author")
+      (org-glance-test:headline "me" "* TODO Me" "[[org-glance-material:other?kind=author][x]]")
       (org-glance-test:headline "other" "* TODO Other headline"))
     (org-glance-test:with-material (buf graph "me")
       (goto-char (point-max))
@@ -91,16 +107,41 @@ self is excluded from the candidates."
         (should-not (cl-some (lambda (c) (s-contains? "Me" c)) offered))  ; self excluded
         (should (s-contains? "[[org-glance-material:other][Other headline]]"
                              (buffer-string))))
-      ;; C-u: kind prompt (second completing-read call) encodes ?kind=
+      ;; C-u: kind prompt (second completing-read call) encodes ?kind= and
+      ;; offers the kinds already present in the graph
       (insert "\n")
-      (cl-letf (((symbol-function 'completing-read)
-                 (let ((n 0))
-                   (lambda (_p coll &rest _)
-                     (cl-incf n)
-                     (if (= n 1) (caar coll) "editor")))))
-        (org-glance-material:refer '(4)))
+      (let (kind-coll)
+        (cl-letf (((symbol-function 'completing-read)
+                   (let ((n 0))
+                     (lambda (_p coll &rest _)
+                       (cl-incf n)
+                       (if (= n 1) (caar coll)
+                         (setq kind-coll coll) "editor")))))
+          (org-glance-material:refer '(4)))
+        (should (member "author" kind-coll)))    ; seeded below via me's own edge
       (should (s-contains? "[[org-glance-material:other?kind=editor][Other headline]]"
                            (buffer-string))))))
+
+(ert-deftest org-glance-test:material-refer-duplicate-labels-injective ()
+  "Same-titled candidates get a short-id suffix, and picking one targets ITS id."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "me" "* TODO Me" "body")
+      (org-glance-test:headline "dup-one-xx" "* TODO Same title")
+      (org-glance-test:headline "dup-two-yy" "* TODO Same title"))
+    (org-glance-test:with-material (buf graph "me")
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (let (offered)
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (_p coll &rest _)
+                     (setq offered (mapcar #'car coll))
+                     ;; pick the SECOND duplicate by its id suffix
+                     (cl-find "dup-two-" (mapcar #'car coll) :test #'s-contains?))))
+          (org-glance-material:refer))
+        (should (= 2 (cl-count "·" offered :test #'s-contains?)))  ; both disambiguated
+        (should (s-contains? "[[org-glance-material:dup-two-yy][Same title]]"
+                             (buffer-string)))))))
 
 (ert-deftest org-glance-test:material-refer-self-inserts-elsewhere ()
   "`@' mid-word and on a heading line self-inserts (no prompt)."
@@ -177,6 +218,34 @@ table; both pass the bare relation filter."
                    (org-glance-graph:get-headline graph "s"))))
         (should (equal '(("public-ref" . nil)) rels))))))
 
+(ert-deftest org-glance-test:relations-crypt-sync-parses-sealed ()
+  "The LIVE SAVE path (sync) derives relations from the SEALED bytes: a link
+inside a crypt block is excluded although the buffer was plaintext at save
+time; reindex agrees."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline:encrypt
+       (org-glance-test:headline "cs" "* TODO Secret"
+         "editme"
+         "[[org-glance-material:public-ref][Public]]"
+         "#+begin_crypt"
+         "[[org-glance-material:secret-ref][Secret]]"
+         "#+end_crypt")
+       "pw")
+      (org-glance-test:headline "public-ref" "* TODO P"))
+    (org-glance-test:answering ((read-passwd "pw"))
+      (org-glance-test:with-material (buffer graph "cs")
+        ;; decrypted buffer shows BOTH links; save reseals before sync reads
+        (should (s-contains? "secret-ref" (buffer-string)))
+        (org-glance-test:sed "editme" "edited")
+        (let ((inhibit-message t)) (save-buffer))))
+    (let ((after-sync (org-glance-headline-metadata:relations
+                       (org-glance-graph:get-headline graph "cs"))))
+      (should (equal '(("public-ref" . nil)) after-sync))
+      (org-glance-graph:reindex graph)
+      (should (equal after-sync (org-glance-headline-metadata:relations
+                                 (org-glance-graph:get-headline graph "cs")))))))
+
 ;;; Clone-on-repeat: encrypted headlines are not cloned (would store plaintext)
 
 (ert-deftest org-glance-test:clone-on-repeat-skips-encrypted ()
@@ -194,9 +263,77 @@ table; both pass the bare relation filter."
                    (lambda () (setq cloned t))))
           (org-glance-material:clone-on-repeat)
           (should-not cloned)
+          ;; ...and the after-repeat TRIM is gated too: no clone was made, so
+          ;; trimming would cut history that was never preserved (invariant 14)
+          (let ((before (buffer-string)))
+            (org-glance-material:cleanup-after-repeat)
+            (should (equal before (buffer-string))))
           (setq-local org-glance-material--encrypted nil)
           (org-glance-material:clone-on-repeat)
           (should cloned))))))
+
+;;; Overview links: TAG[?KEY=VALUE&...] -> filter
+
+(ert-deftest org-glance-test:overview-link-path-parse ()
+  "The overview link path grammar covers the filter table's value kinds."
+  (cl-flet ((id (spec) (org-glance-filter:identity spec)))
+    ;; bare tag (downcased) / all / empty
+    (should (equal (id '(:tags ("book"))) (id (org-glance-filter:from-link-path "BOOK"))))
+    (should (null (org-glance-filter:from-link-path "all")))
+    (should (null (org-glance-filter:from-link-path "")))
+    ;; booleans, strings, lists, priority letter, edges
+    (should (equal (id '(:tags ("book") :done nil :state "READING"))
+                   (id (org-glance-filter:from-link-path "book?done=nil&state=READING"))))
+    (should (equal (id '(:tags ("book" "extra")))
+                   (id (org-glance-filter:from-link-path "book?tags=extra"))))  ; joins path TAG
+    (should (equal (id '(:id-any ("a" "b")))
+                   (id (org-glance-filter:from-link-path "?id-any=a,b"))))
+    (should (equal (id '(:refers-to "x"))
+                   (id (org-glance-filter:from-link-path "all?refers-to=x"))))
+    (should (equal (id '(:priority ?A :linked t))
+                   (id (org-glance-filter:from-link-path "?priority=A&linked=t"))))
+    (should (equal (id '(:done t :done-keywords ("DONE" "GIVEN")))
+                   (id (org-glance-filter:from-link-path "?done=t&done-keywords=DONE,GIVEN"))))
+    ;; `done=nil' is a clause, not an omission
+    (should-not (equal (id (org-glance-filter:from-link-path "book"))
+                       (id (org-glance-filter:from-link-path "book?done=nil"))))
+    ;; malformed / unlinkable / unknown
+    (should-error (org-glance-filter:from-link-path "book?done=maybe"))
+    (should-error (org-glance-filter:from-link-path "book?where=f"))
+    (should-error (org-glance-filter:from-link-path "book?nope=1"))
+    (should-error (org-glance-filter:from-link-path "book?novalue"))))
+
+(ert-deftest org-glance-test:overview-link-follow ()
+  "A `?'-qualified path opens the EXACT stated filter (no ambient merge); a
+bare TAG path merges the ambient spec like the command; both land in the
+default view."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-graph graph)
+          (org-glance-filter-spec '(:done nil))
+          seen)
+      (cl-letf (((symbol-function 'org-glance-ensure-init) #'ignore)
+                ((symbol-function 'org-glance-overview:visit-default)
+                 (lambda (_g filter) (push filter seen) nil)))
+        (org-glance-link:overview "book?state=DONE")   ; explicit: ambient must NOT leak in
+        (org-glance-link:overview "book")              ; legacy: ambient merges
+        (should (equal (org-glance-filter:identity '(:tags ("book") :state "DONE"))
+                       (org-glance-filter:identity (cadr seen))))
+        (should (equal (org-glance-filter:identity '(:done nil :tags ("book")))
+                       (org-glance-filter:identity (car seen))))))))
+
+(ert-deftest org-glance-test:overview-link-default-view-dispatch ()
+  "`visit-default' routes to the table or the org overview per the custom."
+  (org-glance-test:with-graph graph
+    (let (calls)
+      (cl-letf (((symbol-function 'org-glance-table:visit)
+                 (lambda (&rest _) (push 'table calls) nil))
+                ((symbol-function 'org-glance-overview:visit)
+                 (lambda (&rest _) (push 'org calls) nil)))
+        (let ((org-glance-overview-default-view 'org-glance-table))
+          (org-glance-overview:visit-default graph nil))
+        (let ((org-glance-overview-default-view 'org-glance-overview))
+          (org-glance-overview:visit-default graph nil))
+        (should (equal '(org table) calls))))))
 
 (provide 'test-relations)
 ;;; test-relations.el ends here

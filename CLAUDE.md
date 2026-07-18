@@ -84,6 +84,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 16. Per-tag column schema: `:hidden` is a denylist of removed built-ins (new
     built-ins still appear); `C-u +` candidates exclude `ORG_GLANCE_*` + CATEGORY;
     order + sort persist separately per filter.
+17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
+    judged by `org-glance-filter:transient?`) never persist per-filter state:
+    no overview cache, no table config, no column schema.
 
 ## Fix — and prevent — the whole class
 

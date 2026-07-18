@@ -66,9 +66,8 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   (linked? nil :read-only t :type boolean)
   (propertized? nil :read-only t :type boolean)
   (encrypted? nil :read-only t :type boolean)
-  ;; Relation edges (TARGET-ID . KIND-or-nil), derived from the body's
-  ;; `org-glance-material:'/`org-glance-visit:' links -- the link is canonical,
-  ;; this is a projection.  nil on pre-field records; reindex backfills.
+  ;; Relation edges (TARGET-ID . KIND-or-nil); the body link is canonical
+  ;; (`org-glance--link-edge').  nil on pre-field records; reindex backfills.
   (relations nil :read-only t :type list))
 
 (defconst org-glance-headline-metadata:fields
@@ -77,23 +76,26 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
     (state         :state        ,#'org-glance-headline:state                              nil          nil)
     (title         :title        ,#'org-glance-headline:title                              nil          nil)
     (tags          :tags         ,#'org-glance-headline:tags                               tags-vector  tags-list)
-    (hash          :hash         ,#'org-glance-headline:hash                               nil          nil)
+    (hash          :hash         :hash                                                     nil          nil)
     (schedule      :schedule     ,#'org-glance-headline:schedule                           nil          nil)
     (deadline      :deadline     ,#'org-glance-headline:deadline                           nil          nil)
     (priority      :priority     ,#'org-glance-headline:priority                           nil          nil)
-    (linked?       :linked       ,(lambda (h) (and (org-glance-headline:links h) t))       nil          bool)
-    (propertized?  :propertized  ,(lambda (h) (and (org-glance-headline:properties h) t))  nil          bool)
-    (encrypted?    :encrypted    ,(lambda (h) (and (org-glance-headline:encrypted? h) t))  nil          bool)
-    (relations     :relations    ,(lambda (h) (org-glance--links->edges (org-glance-headline:links h))) edges-vector edges-list))
+    (linked?       :linked       :linked                                                   nil          bool)
+    (propertized?  :propertized  :propertized                                              nil          bool)
+    (encrypted?    :encrypted    :encrypted                                                nil          bool)
+    (relations     :relations    :relations                                                edges-vector edges-list))
   "The single source of truth for the metadata projection's shape.
 Drives the `org-glance-headline:metadata' constructor, `serialize' and
 `deserialize' together, so the four can never drift (a hand-written
 `deserialize' line was silently forgettable -- the field then read as
 always-nil).  Adding a projection field = one row here + one struct slot
-\(checked against this table at load).  Row order IS the serialized JSON key
-order -- a byte-stability contract with the on-disk store; append new fields
-at the end.  SCHEDULE/DEADLINE come back as raw strings (or nil) from the
-headline methods, so they are JSON-serializable as-is.")
+\(checked against this table at load).  FROM-HEADLINE is either a function of
+the headline, or a keyword naming a `org-glance-headline--content-facts' fact
+\(the content-derived fields share ONE org-mode pass that way).  Row order IS
+the serialized JSON key order -- a byte-stability contract with the on-disk
+store; append new fields at the end.  SCHEDULE/DEADLINE come back as raw
+strings (or nil) from the headline methods, so they are JSON-serializable
+as-is.")
 
 ;; Load-time guard: the struct and the table must list the same slots, in order.
 (let ((struct-slots (mapcar #'car (cdr (cl-struct-slot-info 'org-glance-headline-metadata))))
@@ -130,22 +132,15 @@ headline methods, so they are JSON-serializable as-is.")
 
 (cl-defun org-glance-headline:metadata (headline)
   (cl-check-type headline org-glance-headline)
-  ;; The content-derived fields (hash/linked?/propertized?/encrypted?/relations)
-  ;; each reparse the same blob via their own thunk; compute them in ONE
-  ;; `org-mode' pass (`--content-facts') -- one reparse per metadata build
-  ;; (matters on save/reindex/bulk).  The rest are cheap struct-slot reads.
+  ;; Keyword FROM cells read `--content-facts' (one org-mode pass shared by all
+  ;; content-derived fields); function cells are cheap struct-slot reads.
   (let ((facts (org-glance-headline--content-facts headline)))
     (apply #'make-org-glance-headline-metadata
            (cl-loop for (slot _json from) in org-glance-headline-metadata:fields
                     append (list (intern (concat ":" (symbol-name slot)))
-                                 (pcase slot
-                                   ('hash         (plist-get facts :hash))
-                                   ('linked?      (plist-get facts :linked))
-                                   ('propertized? (plist-get facts :propertized))
-                                   ('encrypted?   (plist-get facts :encrypted))
-                                   ('relations    (org-glance--links->edges
-                                                   (plist-get facts :links)))
-                                   (_             (funcall from headline))))))))
+                                 (if (keywordp from)
+                                     (plist-get facts from)
+                                   (funcall from headline)))))))
 
 (cl-defun org-glance-headline:metadata* (obj)
   "Generic variant of `org-glance-headline:metadata'."
@@ -684,6 +679,14 @@ immutable (`:read-only' slots)."
             for state = (org-glance-headline-metadata:state meta)
             when (org-glance--present-string? state)
             collect state)))
+
+(cl-defun org-glance-graph:edge-kinds (graph)
+  "Distinct relation kinds across GRAPH's live headlines, sorted."
+  (cl-check-type graph org-glance-graph)
+  (org-glance--sorted-distinct
+   (cl-loop for meta in (org-glance-graph:headlines graph)
+            append (cl-loop for (_target . kind) in (org-glance-headline-metadata:relations meta)
+                            when kind collect kind))))
 
 (cl-defun org-glance-graph:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,
