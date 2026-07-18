@@ -111,25 +111,32 @@ always in the table header via the `table-view' `subtitle' (never hidden by the
 
 ;;; Spec + rows (built in pure elisp -- no backend process)
 
+(cl-defun org-glance-table--base-columns (graph)
+  "The fixed built-in table columns for GRAPH, in default order.
+Title is mandatory (`C-u -' refuses it); the rest are removable, and which are
+hidden persists per tag (see `org-glance-table--apply-schema').  The single
+source of the built-in key set -- `org-glance-table--persist-schema' diffs the
+live spec against these keys to record the hidden ones."
+  `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
+     (badges . ,(org-glance-table--state-badges graph)))
+    ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
+    ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
+    ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
+    ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
+    ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
+    ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))))
+
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
-FILTER titles the view and keys the per-tag custom-column schema; rows are
-produced by the fill-fn.  Built-in columns: state (badge), title, tags,
-scheduled, deadline, priority -- all sortable -- followed by any custom
-property columns saved for its tags (see `org-glance-table--apply-schema').
-Default sort is the state column ascending (active first)."
+FILTER titles the view and keys the per-tag column schema; rows are produced by
+the fill-fn.  Columns are the built-ins (`org-glance-table--base-columns') minus
+the ones hidden for its tags, followed by any custom property columns saved for
+them (see `org-glance-table--apply-schema').  Default sort is the state column
+ascending (active first)."
   `((title . ,(format "org-glance table: %s" (org-glance-filter:describe filter)))
     (subtitle . ,(org-glance-table--todo-line graph))
     (columns . ,(org-glance-table--apply-schema
-                 graph filter
-                 `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
-                    (badges . ,(org-glance-table--state-badges graph)))
-                   ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
-                   ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center")))))
+                 graph filter (org-glance-table--base-columns graph)))
     (actions . (((key . "RET") (command . "materialize") (label . "Materialize"))
                 ((key . "o")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
@@ -138,7 +145,7 @@ Default sort is the state column ascending (active first)."
                 ((key . "+")     (command . "capture")   (label . "Capture"))
                 ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
-                ((key . "-")     (command . "delcolumn") (label . "Del col"))
+                ((key . "-")     (command . "remove")    (label . "Untag"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))))
     (sort . ((column . "state") (ascending . t)))))
 
@@ -279,20 +286,23 @@ single-row `org-glance-table--act-todo' (cycle + note)."
 
 (cl-defun org-glance-table--act-tag (graph id)
   "Add a tag to headline ID at point, or remove one of its tags with a prefix.
-Bare `:' completing-reads a tag from GRAPH's tag universe and accepts a new tag
-\(no match required); `C-u :' completing-reads one of the headline's own tags
-\(match required) and removes it.  On a change, reload the table and keep point
-on the row."
+Bare `:' completing-reads a tag the headline does NOT already carry (GRAPH's tag
+universe minus its own) and accepts a new tag (no match required); `C-u :'
+completing-reads one of the headline's own tags (match required) and removes it.
+On a change, reload the table and keep point on the row."
   (unless id (user-error "Point is not on a row"))
   (let* ((line (line-number-at-pos))
          (remove current-prefix-arg)
+         (own (org-glance-headline-metadata:tag-strings
+               (org-glance-table--metadata graph id)))
          (tag (if remove
-                  (let ((tags (org-glance-headline-metadata:tag-strings
-                              (org-glance-table--metadata graph id))))
-                    (if tags
-                        (completing-read "Remove tag: " tags nil t)
-                      (user-error "Headline has no tags to remove")))
-                (s-trim (completing-read "Add tag: " (org-glance-graph:tags graph))))))
+                  (if own
+                      (completing-read "Remove tag: " own nil t)
+                    (user-error "Headline has no tags to remove"))
+                (s-trim (completing-read
+                         "Add tag: "
+                         (cl-remove-if (lambda (x) (member x own))
+                                       (org-glance-graph:tags graph)))))))
     (when (and tag (not (string-empty-p tag))
                (org-glance-material:retag graph id tag :remove remove))
       (org-glance-table--finish id line "%s tag `%s'"
@@ -387,17 +397,21 @@ may be nil -- the \"all\" filter -- so guard only on being a registered view.)"
         (with-demoted-errors "org-glance: table config save failed: %S"
           (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur))))))
 
-;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
+;;; Column schema (`C-u +' adds, `C-u -' removes, persisted per tag)
 ;;
 ;; `C-u +' completing-reads an org drawer property the visible headlines carry
 ;; (`org-glance-property-index:keys') and appends a column showing it per row.
 ;; The metadata projection the table renders from does not carry arbitrary drawer
 ;; properties, so the cell is pulled from `org-glance-property-index' -- a derived,
 ;; hash-invalidated, persisted cache of each headline's properties (fallback: an
-;; O(N) blob parse).  The set of custom columns (a schema)
-;; is persisted PER TAG (the filter's tags) at `<store>/config/table-columns.eld',
-;; so every view of a tag inherits its columns.  Only these added columns are
-;; removable (`-' on one); the built-in columns are fixed.
+;; O(N) blob parse).  `C-u -' removes the column at point -- any column except the
+;; mandatory Title.
+;;
+;; Both persist PER TAG (the filter's tags) at `<store>/config/table-columns.eld':
+;; `:columns' the added custom columns, `:hidden' the removed built-in keys.  So
+;; every view of a tag inherits its columns; a hidden built-in stays hidden and a
+;; new built-in shipped later still appears (hidden is a denylist, not an
+;; allowlist).  Column ORDER + sort persist separately, per filter (see above).
 
 (cl-defun org-glance-table--property-column (graph property &optional header)
   "A `table-view' column displaying drawer PROPERTY for each row's headline.
@@ -445,53 +459,87 @@ the full filter identity) is what shares a tag's columns across its views."
   (let ((tags (sort (mapcar #'symbol-name (org-glance-filter:tags filter)) #'string<)))
     (if tags (s-join "+" tags) ":none:")))
 
+(cl-defun org-glance-table--schema-entry (graph filter)
+  "FILTER's saved schema plist (:columns PROPS :hidden KEYS) for its tags, or nil."
+  (alist-get (org-glance-table--schema-key filter)
+             (org-glance-table--schema-all graph) nil nil #'equal))
+
 (cl-defun org-glance-table--schema-get (graph filter)
   "Ordered custom columns saved for FILTER's tags.
 A list of (PROP . HEADER), or nil."
-  (plist-get (alist-get (org-glance-table--schema-key filter)
-                        (org-glance-table--schema-all graph) nil nil #'equal)
-             :columns))
+  (plist-get (org-glance-table--schema-entry graph filter) :columns))
 
-(cl-defun org-glance-table--schema-put (graph filter columns)
-  "Persist COLUMNS (a list of (PROP . HEADER)) for FILTER's tags in GRAPH's store.
-An empty COLUMNS drops the entry so the store does not accrete empties."
+(cl-defun org-glance-table--schema-hidden (graph filter)
+  "Built-in column keys hidden for FILTER's tags (a list of key strings), or nil."
+  (plist-get (org-glance-table--schema-entry graph filter) :hidden))
+
+(cl-defun org-glance-table--schema-put (graph filter &key columns hidden)
+  "Persist FILTER's per-tag schema: custom COLUMNS ((PROP . HEADER) list) and
+HIDDEN built-in column keys.  An all-empty schema drops the entry so the store
+does not accrete empties."
   (let* ((path (org-glance-table--schema-file graph))
          (key (org-glance-table--schema-key filter))
          (all (cl-remove key (org-glance-table--schema-all graph)
                          :key #'car :test #'equal)))
-    (when columns
-      (setq all (cons (cons key (list :columns columns)) all)))
+    (when (or columns hidden)
+      (setq all (cons (cons key (list :columns columns :hidden hidden)) all)))
     (org-glance--write-eld path all)))
 
 (cl-defun org-glance-table--apply-schema (graph filter columns)
-  "COLUMNS with GRAPH's saved custom property columns for FILTER appended.
-Each saved (PROP . HEADER) becomes a `value-fn' column reading that drawer
-property.  Absent a saved schema, COLUMNS is returned unchanged."
-  (append columns
-          (mapcar (lambda (pair)
-                    (org-glance-table--property-column graph (car pair) (cdr pair)))
-                  (org-glance-table--schema-get graph filter))))
+  "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.
+Drops the columns hidden for FILTER's tags (Title never dropped), then appends
+the saved custom property columns -- each (PROP . HEADER) a `value-fn' column
+reading that drawer property.  Absent a schema, COLUMNS is returned unchanged."
+  (let ((hidden (remove "title" (org-glance-table--schema-hidden graph filter))))
+    (append (cl-remove-if (lambda (c) (member (alist-get 'key c) hidden)) columns)
+            (mapcar (lambda (pair)
+                      (org-glance-table--property-column graph (car pair) (cdr pair)))
+                    (org-glance-table--schema-get graph filter)))))
 
 (cl-defun org-glance-table--persist-schema ()
-  "Buffer-local `table-view-schema-changed-hook': save this filter's custom
-columns (the `prop'-marked columns of the live spec, in display order) per tag."
+  "Buffer-local `table-view-schema-changed-hook': save this filter's schema per
+tag -- the live spec's custom (`prop') columns, and which built-in columns are
+hidden (a built-in key absent from the live spec)."
   (when org-glance-view--graph
-    (let ((columns (cl-loop for c in (table-view--columns table-view--spec)
-                            when (alist-get 'prop c)
-                            collect (cons (alist-get 'prop c) (alist-get 'header c)))))
+    (let* ((live (table-view--columns table-view--spec))
+           (live-keys (mapcar (lambda (c) (alist-get 'key c)) live))
+           (columns (cl-loop for c in live
+                             when (alist-get 'prop c)
+                             collect (cons (alist-get 'prop c) (alist-get 'header c))))
+           (hidden (cl-remove-if
+                    (lambda (k) (member k live-keys))
+                    (mapcar (lambda (c) (alist-get 'key c))
+                            (org-glance-table--base-columns org-glance-view--graph)))))
       (with-demoted-errors "org-glance: table schema save failed: %S"
-        (org-glance-table--schema-put org-glance-view--graph
-                                      org-glance-table--spec columns)))))
+        (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
+                                      :columns columns :hidden hidden)))))
 
 (cl-defun org-glance-table--act-delcolumn ()
-  "`-' handler: remove the custom property column at point (built-ins are fixed)."
-  (let* ((key (get-text-property (point) 'table-view-col))
-         (col (and key (table-view--column table-view--spec key))))
+  "`C-u -' handler: remove the column at point.  Title is mandatory and refused."
+  (let ((key (get-text-property (point) 'table-view-col)))
     (cond
-     ((null col) (message "Point is not on a column"))
-     ((not (alist-get 'prop col))
-      (message "Only added property columns are removable (%s is built-in)" key))
+     ((null key) (message "Point is not on a column"))
+     ((equal key "title") (user-error "The Title column cannot be removed"))
      (t (table-view-remove-column key)))))
+
+(cl-defun org-glance-table--act-deltag (graph id spec)
+  "Bare `-' handler: drop the view's tag from the headline ID at point.
+Mirror of the bare `+' capture -- the headline leaves the view but is NOT
+deleted.  With several filter tags, ask which; unsaved material edits abort the
+drop (retag's `user-error')."
+  (let* ((tags (org-glance-filter:tags spec))
+         (tag (cond ((null tags) (user-error "This view has no tag to remove"))
+                    ((null (cdr tags)) (format "%s" (car tags)))
+                    (t (completing-read "Remove which tag: "
+                                        (mapcar (lambda (x) (format "%s" x)) tags)
+                                        nil t)))))
+    (when (y-or-n-p (format "Remove tag `%s' from the headline at point? " tag))
+      (let ((buf (current-buffer)))
+        (condition-case nil
+            (progn (org-glance-material:retag graph id tag :remove t)
+                   (org-glance-table--reload buf)
+                   (message "Removed tag `%s'" tag))
+          (user-error (message "Headline `%s' has unsaved edits; save it first" id)))))))
 
 ;;; Browser
 
@@ -545,7 +593,13 @@ Honours the same filter language as the overview (see
                                                    (org-glance-table--act-todo graph (alist-get 'id row) row)))))
                          (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
                          (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
-                         (cons "delcolumn"   (lambda (_id _row) (org-glance-table--act-delcolumn)))
+                         (cons "remove"      (lambda (id _row)
+                                               ;; `C-u -' removes the column at point; a bare
+                                               ;; `-' drops the view's tag off the headline
+                                               ;; (mirror of `+' / `C-u +').
+                                               (if current-prefix-arg
+                                                   (org-glance-table--act-delcolumn)
+                                                 (org-glance-table--act-deltag graph id spec))))
                          (cons "capture"     (lambda (_id _row)
                                                ;; `C-u +' adds a custom property column; a bare `+' captures.
                                                (if current-prefix-arg

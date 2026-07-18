@@ -798,5 +798,91 @@ final rows -- the equivalence the in-place fast path relies on."
         (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
         (should (equal "Ann" (org-glance-test:table-cell buf "x1" "AUTHOR")))))))
 
+;;; `-' : bare removes the view's tag, `C-u -' removes the column at point
+
+(ert-deftest org-glance-test:table-minus-dispatch ()
+  "`C-u -' routes to column removal; a bare `-' to tag removal."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (let (called)
+          (cl-letf (((symbol-function 'org-glance-table--act-delcolumn)
+                     (lambda () (setq called 'col)))
+                    ((symbol-function 'org-glance-table--act-deltag)
+                     (lambda (&rest _) (setq called 'tag))))
+            (let ((current-prefix-arg '(4))) (funcall (key-binding (kbd "-"))))
+            (should (eq called 'col))
+            (let ((current-prefix-arg nil)) (funcall (key-binding (kbd "-"))))
+            (should (eq called 'tag))))))))
+
+(ert-deftest org-glance-test:table-cu-minus-removes-column-title-fixed ()
+  "`C-u -' removes any column except the mandatory Title."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO X :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: x1" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        ;; a built-in column is removable
+        (should (member "tags" (org-glance-test:table-col-keys buf)))
+        (table-view-remove-column "tags")
+        (should-not (member "tags" (org-glance-test:table-col-keys buf)))
+        ;; Title is refused (errors before touching the spec)
+        (cl-letf (((symbol-function 'get-text-property) (lambda (&rest _) "title")))
+          (should-error (org-glance-table--act-delcolumn) :type 'user-error))
+        (should (member "title" (org-glance-test:table-col-keys buf)))))))
+
+(ert-deftest org-glance-test:table-builtin-removal-persists-per-tag ()
+  "Removing a built-in column persists per tag: gone on reopen, other tags intact."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-headline--from-lines
+       "* TODO The Hobbit :book:" ":PROPERTIES:" ":ORG_GLANCE_ID: bk1" ":END:")
+      (org-glance-headline--from-lines
+       "* TODO Essay :article:" ":PROPERTIES:" ":ORG_GLANCE_ID: ar1" ":END:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (should (member "tags" (org-glance-test:table-col-keys buf)))
+        (table-view-remove-column "tags")
+        (should (equal '("tags") (org-glance-table--schema-hidden graph 'book)))))
+    (org-glance-test:with-table-filter graph 'book buf   ; reopen: still hidden
+      (should-not (member "tags" (org-glance-test:table-col-keys buf))))
+    (org-glance-test:with-table-filter graph 'article buf ; other tag unaffected
+      (should (member "tags" (org-glance-test:table-col-keys buf))))))
+
+(ert-deftest org-glance-test:table-bare-minus-removes-view-tag ()
+  "A bare `-' drops the view's tag off the headline at point: it leaves the view
+but stays live in the graph (mirror of the bare `+' capture)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "bk1" "* TODO The Hobbit :book:"))
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (should (= 1 (length table-view--rows)))
+        (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+          (org-glance-table--act-deltag graph "bk1" '(:tags ("book"))))
+        (should (null (org-glance-headline-metadata:tags        ; survives, untagged
+                       (org-glance-graph:get-headline graph "bk1"))))
+        (should (= 0 (length table-view--rows)))))))            ; left the view
+
+(ert-deftest org-glance-test:table-add-tag-excludes-own ()
+  "Bare `:' offers only tags the headline does not already carry."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A :book:read:")
+      (org-glance-test:headline "b" "* TODO B :film:"))   ; widens the tag universe
+    (org-glance-test:with-table-filter graph 'book buf
+      (with-current-buffer buf
+        (let (offered)
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_p coll &rest _) (setq offered coll) "")))
+            (org-glance-table--act-tag graph "a"))       ; bare `:' (no prefix)
+          (should (member "film" offered))                ; another headline's tag
+          (should-not (member "book" offered))            ; own tags excluded
+          (should-not (member "read" offered)))))))
+
 (provide 'test-table)
 ;;; test-table.el ends here
