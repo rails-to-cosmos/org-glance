@@ -168,8 +168,8 @@ MUTATES the buffer (deletes those properties), so call it LAST when sharing one.
                  (org-glance-headline--encrypted-here))))
 
 (cl-defun org-glance-headline--content-facts (headline)
-  "HEADLINE's five content-derived metadata facts, in ONE org-mode pass.
-Returns a plist (:relations RS :linked L :propertized P :encrypted E :hash H),
+  "HEADLINE's content-derived metadata facts, in ONE org-mode pass.
+Returns (:relations RS :links LS :linked L :propertized P :encrypted E :hash H),
 sharing one `with-contents' buffer + `org-mode' init across all five (the
 store's metadata build reparses the same blob otherwise).  The links parse
 once, feeding both `linked?' and the relation edges.  Hash is LAST: it deletes
@@ -177,6 +177,7 @@ the id/hash drawer properties in place, after the read-only facts."
   (org-glance-headline:with-contents headline
     (let ((links (org-glance--buffer-links)))    ; with-contents is at point-min
       (list :relations   (org-glance--links->edges links)
+            :links       (org-glance--links->plain links)
             :linked      (and links t)
             :propertized (org-glance-headline--propertized-here)
             :encrypted   (org-glance-headline--encrypted-here)

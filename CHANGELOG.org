@@ -6,6 +6,11 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- The overview is self-sufficient for agenda + links: each heading carries its
+  priority cookie, the single planning line, its relations (pretty kind +
+  edge link, live target titles) and its plain body links as list items --
+  no materialization needed to follow links or build =org-agenda=.  Backed by
+  a new =links= metadata field (non-edge links; edges stay in =relations=).
 - =C-c C-s= / =C-c C-d= in the overview AND table set the row's schedule /
   deadline exactly like org (=C-u= clears); runs org's own planner on the blob.
 - Material buffers conceal bookkeeping drawer lines

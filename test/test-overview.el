@@ -587,5 +587,44 @@ when it is (re)displayed or selected."
           (should (s-contains? "2026-09-15"
                                (org-glance-headline-metadata:deadline meta))))))))
 
+(ert-deftest org-glance-test:overview-self-sufficient-headline ()
+  "The overview heading carries agenda properties (priority cookie, single
+planning line), the relations with pretty kinds + LIVE target titles, and the
+plain body links -- agenda and link-following need no materialization."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "c1" "* TODO [#A] Kebena Decaf :coffee:"
+        "SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>"
+        "roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan]]"
+        "[[https://example.com][Homepage]]")
+      (org-glance-test:headline "r1" "* Manhattan Coffee Roasters"))
+    (let ((text (org-glance-overview:render graph '(:tags ("coffee")))))
+      ;; priority cookie + one-line planning (agenda-native)
+      (should (s-contains? "* TODO [#A] Kebena Decaf" text))
+      (should (s-contains? "DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>" text))
+      ;; relation: pretty kind + canonical edge link + LIVE title
+      (should (s-contains?
+               "- roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan Coffee Roasters]]"
+               text))
+      ;; plain link verbatim; the edge link is NOT duplicated into the list
+      (should (s-contains? "- [[https://example.com][Homepage]]" text))
+      (should (= 1 (s-count-matches "r1\\?kind" text))))))
+
+(ert-deftest org-glance-test:metadata-links-field ()
+  "The `links' metadata field carries NON-edge links only; edges live in
+`relations'; both survive a cold reopen."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A"
+        "[[https://example.com][Web]]"
+        "[[org-glance-material:b][B]]"
+        "[[id:xyz][Note]]"))
+    (let* ((cold (org-glance-test:reopen graph))
+           (meta (org-glance-graph:get-headline cold "a")))
+      (should (equal '("[[https://example.com][Web]]" "[[id:xyz][Note]]")
+                     (org-glance-headline-metadata:links meta)))
+      (should (equal '(("b" . nil))
+                     (org-glance-headline-metadata:relations meta))))))
+
 (provide 'test-overview)
 ;;; test-overview.el ends here

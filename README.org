@@ -47,7 +47,9 @@ org-glance never loads vterm at startup.
 
 Reach everything through the =org-glance-transient= transient (=C-x j= above).
 
-- *Overview* (=o=) — the org-text overview of a chosen tag; toggle it (=T=) to a
+- *Overview* (=o=) — the org-text overview of a chosen tag: each heading is
+  self-sufficient (priority + planning for =org-agenda=, clickable body links,
+  relations with kinds and live titles — no materialization needed); toggle it (=T=) to a
   sortable headline *table* with custom drawer-property columns and bulk state
   change.  =C-u += adds and =C-u -= removes a table column — a drawer property the
   view's headlines carry for add (completion, backed by a persisted property

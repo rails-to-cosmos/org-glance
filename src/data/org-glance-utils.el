@@ -186,6 +186,14 @@ The decode half of the edge wire format; `--edge->link-path' encodes."
   (concat org-glance-link-material-type ":" id
           (and kind (concat "?kind=" (org-glance--kind-slug kind)))))
 
+(cl-defun org-glance--links->plain (links)
+  "Raw bracket texts of the NON-edge links among LINKS (the tuple shape).
+Edge links (`org-glance-material:'/`org-glance-visit:') live in the
+`relations' metadata instead; together the two fields cover every link."
+  (cl-loop for (text _title _pos type _path) in links
+           unless (member type org-glance--link-edge-types)
+           collect text))
+
 (cl-defun org-glance--links->edges (links)
   "Distinct relation edges among LINKS (the `--buffer-links' tuple shape)."
   (-distinct (cl-loop for (_link _title _pos type path) in links

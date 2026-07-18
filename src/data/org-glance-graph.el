@@ -68,7 +68,11 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   (encrypted? nil :read-only t :type boolean)
   ;; Relation edges (TARGET-ID . KIND-or-nil); the body link is canonical
   ;; (`org-glance--link-edge').  nil on pre-field records; reindex backfills.
-  (relations nil :read-only t :type list))
+  (relations nil :read-only t :type list)
+  ;; NON-edge body links, as raw bracket texts (edges live in `relations';
+  ;; together they cover every link).  The overview renders them clickable
+  ;; without materializing.  nil on pre-field records; reindex backfills.
+  (links nil :read-only t :type list))
 
 (defconst org-glance-headline-metadata:fields
   ;; SLOT          JSON-KEY      FROM-HEADLINE                                                ENCODE       DECODE
@@ -83,7 +87,9 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
     (linked?       :linked       :linked                                                   nil          bool)
     (propertized?  :propertized  :propertized                                              nil          bool)
     (encrypted?    :encrypted    :encrypted                                                nil          bool)
-    (relations     :relations    :relations                                                edges-vector edges-list))
+    (relations     :relations    :relations                                                edges-vector edges-list)
+    ;; tags-vector/tags-list are generic string-list codecs; links reuse them.
+    (links         :links        :links                                                    tags-vector  tags-list))
   "The single source of truth for the metadata projection's shape.
 Drives the `org-glance-headline:metadata' constructor, `serialize' and
 `deserialize' together, so the four can never drift (a hand-written

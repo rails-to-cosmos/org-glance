@@ -97,13 +97,19 @@ which filter a cache directory holds."
   (when-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
     (format "  :%s:" (s-join ":" tags))))
 
-(cl-defun org-glance-overview:render-headline (metadata)
-  "Render METADATA as one org heading + planning + ORG_GLANCE_ID property."
+(cl-defun org-glance-overview:render-headline (graph metadata)
+  "Render METADATA as one self-sufficient org heading.
+Carries everything agenda and link-following need WITHOUT materializing:
+state, priority cookie, tags, the single planning line, the id drawer, then
+the relations (pretty kind + canonical edge link, titles resolved live from
+GRAPH) and the plain (non-edge) body links, each as a list item."
   (let ((state (org-glance-headline-metadata:state metadata))
+        (priority (org-glance-headline-metadata:priority metadata))
         (schedule (org-glance-headline-metadata:schedule metadata))
         (deadline (org-glance-headline-metadata:deadline metadata)))
     (concat "* "
             (if (org-glance--present-string? state) (concat state " ") "")
+            (if (integerp priority) (format "[#%c] " priority) "")
             (org-glance-headline-metadata:title metadata)
             (or (org-glance-overview:tag-string metadata) "")
             "\n"
@@ -117,7 +123,20 @@ which filter a cache directory holds."
                              (concat "SCHEDULED: " schedule)))))
               (unless (string-empty-p planning)
                 (concat (s-trim-right planning) "\n")))
-            ":PROPERTIES:\n:ORG_GLANCE_ID: " (org-glance-headline-metadata:id metadata) "\n:END:\n")))
+            ":PROPERTIES:\n:ORG_GLANCE_ID: " (org-glance-headline-metadata:id metadata) "\n:END:\n"
+            ;; Relations: "- roasted by [[org-glance-material:ID][Title]]"
+            (apply #'concat
+                   (cl-loop for (target . kind) in (org-glance-headline-metadata:relations metadata)
+                            collect (concat "- "
+                                            (if kind (concat (org-glance--kind-pretty kind) " ") "")
+                                            (org-link-make-string
+                                             (org-glance--edge->link-path target kind)
+                                             (org-glance-graph:title-or-id graph target))
+                                            "\n")))
+            ;; Plain links, verbatim -- clickable straight from the overview.
+            (apply #'concat
+                   (cl-loop for link in (org-glance-headline-metadata:links metadata)
+                            collect (concat "- " link "\n"))))))
 
 (cl-defun org-glance-overview:render (graph &optional filter)
   "Render GRAPH's live headlines matching FILTER as org text.
@@ -144,7 +163,7 @@ is correct for the tag's keywords without any spec/cache-key change."
            (if cycle (concat "#+TODO: " cycle "\n") "")
            (cl-loop for meta in (org-glance-graph:headlines graph)
                     when (funcall keep? meta)
-                    collect (org-glance-overview:render-headline meta)))))
+                    collect (org-glance-overview:render-headline graph meta)))))
 
 ;;; Cache paths + freshness
 
