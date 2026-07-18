@@ -144,14 +144,12 @@ path; a display-boundary refresh re-fills it and clears the flag."
     (org-glance-graph:add graph
                              (org-glance-test:headline "v1" "* TODO One")
                              (org-glance-test:headline "v2" "* DONE Two"))
-    (org-glance-test:with-table-buffer graph buf
-      (should (buffer-live-p buf))
-      (with-current-buffer buf
-        (should (derived-mode-p 'table-view-mode))
-        (should (= 2 (length table-view--rows)))
-        ;; `!' quietly aliases the `j' open action (dired rhyme)
-        (should (eq (key-binding (kbd "!")) (key-binding (kbd "j"))))
-        (should (key-binding (kbd "j")))))))
+    (org-glance-test:with-table (graph)
+      (should (derived-mode-p 'table-view-mode))
+      (should (= 2 (length table-view--rows)))
+      ;; `!' quietly aliases the `j' open action (dired rhyme)
+      (should (eq (key-binding (kbd "!")) (key-binding (kbd "j"))))
+      (should (key-binding (kbd "j"))))))
 
 (ert-deftest org-glance-test:table-filter-reset ()
   "`C-u /' clears the active substring filter; `/' is bound to the wrapper."
@@ -437,14 +435,13 @@ row leaves the view (DONE under an active filter) point stays on the same line."
                             (org-glance-test:headline "r1" "* TODO A")
                             (org-glance-test:headline "r2" "* TODO B")
                             (org-glance-test:headline "r3" "* TODO C"))
-      (org-glance-test:with-table-filter graph '(:done nil) buf   ; active-only
-        (with-current-buffer buf
+      (org-glance-test:with-table (graph '(:done nil))   ; active-only
           (should (table-view--goto-id "r2"))
           (let ((line (line-number-at-pos)))
             (should (> line 1))                     ; r2 is below the header
             (org-glance-table--act-todo graph "r2")   ; r2 -> DONE, leaves the view
             (should (= (line-number-at-pos) line))  ; point preserved, NOT at the top
-            (should-not (table-view--goto-id "r2")))))))) ; r2 indeed gone
+            (should-not (table-view--goto-id "r2"))))))) ; r2 indeed gone
 
 (ert-deftest org-glance-test:table-refresh-preserves-point ()
   "`g' (refresh) keeps point on the same row even when the sort reorders it -- the
@@ -650,13 +647,13 @@ final rows -- the equivalence the in-place fast path relies on."
 
 ;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
 
-(defun org-glance-test:table-col-keys (buf)
-  "Display-order column keys of table BUF."
+(cl-defun org-glance-test:table-col-keys (&optional (buf (current-buffer)))
+  "Display-order column keys of table BUF (default: current buffer)."
   (with-current-buffer buf
     (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
 
-(defun org-glance-test:table-cell (buf id key)
-  "Cell KEY of row ID in table BUF."
+(cl-defun org-glance-test:table-cell (id key &optional (buf (current-buffer)))
+  "Cell KEY of row ID in table BUF (default: current buffer)."
   (with-current-buffer buf
     (table-view--cell (cl-find id table-view--rows
                                :key (lambda (r) (alist-get 'id r)) :test #'equal)
@@ -674,15 +671,13 @@ final rows -- the equivalence the in-place fast path relies on."
     (org-glance-graph:add graph
       (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien")))
       (org-glance-test:headline-props "bk2" "* TODO Dune :book:" '(("AUTHOR" . "Herbert"))))
-    (org-glance-test:with-table-filter graph 'book buf
-      (with-current-buffer buf
-        (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
-      (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
-      (should (equal "Tolkien" (org-glance-test:table-cell buf "bk1" "AUTHOR")))
-      (should (equal "Herbert" (org-glance-test:table-cell buf "bk2" "AUTHOR")))
-      (with-current-buffer buf
-        (should (string-match-p "Author"  (buffer-string)))
-        (should (string-match-p "Tolkien" (buffer-string)))))))
+    (org-glance-test:with-table (graph 'book)
+      (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))
+      (should (member "AUTHOR" (org-glance-test:table-col-keys)))
+      (should (equal "Tolkien" (org-glance-test:table-cell "bk1" "AUTHOR")))
+      (should (equal "Herbert" (org-glance-test:table-cell "bk2" "AUTHOR")))
+      (should (string-match-p "Author"  (buffer-string)))
+      (should (string-match-p "Tolkien" (buffer-string))))))
 
 (ert-deftest org-glance-test:table-property-column-persists-per-tag ()
   "An added property column is saved per tag and restored (with values) on re-visit."
@@ -692,9 +687,9 @@ final rows -- the equivalence the in-place fast path relies on."
     (org-glance-test:with-table (graph 'book)
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
     ;; re-visit :book -> the AUTHOR column comes back, still reading the drawer
-    (org-glance-test:with-table-filter graph 'book buf
-      (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
-      (should (equal "Tolkien" (org-glance-test:table-cell buf "bk1" "AUTHOR"))))))
+    (org-glance-test:with-table (graph 'book)
+      (should (member "AUTHOR" (org-glance-test:table-col-keys)))
+      (should (equal "Tolkien" (org-glance-test:table-cell "bk1" "AUTHOR"))))))
 
 (ert-deftest org-glance-test:table-property-column-per-tag-isolation ()
   "A column added under one tag does not appear under another."
@@ -704,8 +699,8 @@ final rows -- the equivalence the in-place fast path relies on."
       (org-glance-test:headline-props "wk1" "* TODO Ship it :work:" '(("AUTHOR" . "Me"))))
     (org-glance-test:with-table (graph 'book)
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
-    (org-glance-test:with-table-filter graph 'work buf
-      (should-not (member "AUTHOR" (org-glance-test:table-col-keys buf))))))
+    (org-glance-test:with-table (graph 'work)
+      (should-not (member "AUTHOR" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-remove-property-column ()
   "Removing an added column drops it, and the removal persists across a re-visit."
@@ -717,8 +712,8 @@ final rows -- the equivalence the in-place fast path relies on."
         (should (equal '(("AUTHOR" . "Author")) (org-glance-table--schema-get graph 'book)))
         (table-view-remove-column "AUTHOR")
         (should-not (org-glance-table--schema-get graph 'book)))
-    (org-glance-test:with-table-filter graph 'book buf
-      (should-not (member "AUTHOR" (org-glance-test:table-col-keys buf))))))
+    (org-glance-test:with-table (graph 'book)
+      (should-not (member "AUTHOR" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-add-column-function-wired ()
   "The visited buffer wires `C-u +' to the drawer-property prompt."
@@ -738,13 +733,12 @@ final rows -- the equivalence the in-place fast path relies on."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "Ann"))))
-    (org-glance-test:with-table-filter graph 'book buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph 'book)
         (org-glance-test:answering ((completing-read "AUTHOR"))
           (let ((current-prefix-arg '(4)))
             (funcall (key-binding (kbd "+")))))     ; the `+' action reads current-prefix-arg
-        (should (member "AUTHOR" (org-glance-test:table-col-keys buf)))
-        (should (equal "Ann" (org-glance-test:table-cell buf "x1" "AUTHOR")))))))
+        (should (member "AUTHOR" (org-glance-test:table-col-keys)))
+        (should (equal "Ann" (org-glance-test:table-cell "x1" "AUTHOR"))))))
 
 ;;; `-' : bare removes the view's tag, `C-u -' removes the column at point
 
@@ -769,16 +763,15 @@ final rows -- the equivalence the in-place fast path relies on."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "x1" "* TODO X :book:"))
-    (org-glance-test:with-table-filter graph 'book buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph 'book)
         ;; a built-in column is removable
-        (should (member "tags" (org-glance-test:table-col-keys buf)))
+        (should (member "tags" (org-glance-test:table-col-keys)))
         (table-view-remove-column "tags")
-        (should-not (member "tags" (org-glance-test:table-col-keys buf)))
+        (should-not (member "tags" (org-glance-test:table-col-keys)))
         ;; Title is refused (errors before touching the spec)
         (org-glance-test:answering ((get-text-property "title"))
           (should-error (org-glance-table--act-delcolumn) :type 'user-error))
-        (should (member "title" (org-glance-test:table-col-keys buf)))))))
+        (should (member "title" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-builtin-removal-persists-per-tag ()
   "Removing a built-in column persists per tag: gone on reopen, other tags intact."
@@ -786,15 +779,14 @@ final rows -- the equivalence the in-place fast path relies on."
     (org-glance-graph:add graph
       (org-glance-test:headline "bk1" "* TODO The Hobbit :book:")
       (org-glance-test:headline "ar1" "* TODO Essay :article:"))
-    (org-glance-test:with-table-filter graph 'book buf
-      (with-current-buffer buf
-        (should (member "tags" (org-glance-test:table-col-keys buf)))
+    (org-glance-test:with-table (graph 'book)
+        (should (member "tags" (org-glance-test:table-col-keys)))
         (table-view-remove-column "tags")
-        (should (equal '("tags") (org-glance-table--schema-hidden graph 'book)))))
-    (org-glance-test:with-table-filter graph 'book buf   ; reopen: still hidden
-      (should-not (member "tags" (org-glance-test:table-col-keys buf))))
-    (org-glance-test:with-table-filter graph 'article buf ; other tag unaffected
-      (should (member "tags" (org-glance-test:table-col-keys buf))))))
+        (should (equal '("tags") (org-glance-table--schema-hidden graph 'book))))
+    (org-glance-test:with-table (graph 'book)   ; reopen: still hidden
+      (should-not (member "tags" (org-glance-test:table-col-keys))))
+    (org-glance-test:with-table (graph 'article) ; other tag unaffected
+      (should (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-bare-minus-removes-view-tag ()
   "A bare `-' drops the view's tag off the headline at point: it leaves the view
@@ -817,10 +809,8 @@ but stays live in the graph (mirror of the bare `+' capture)."
       (org-glance-test:headline "a" "* TODO A :book:read:")
       (org-glance-test:headline "b" "* TODO B :film:"))   ; widens the tag universe
     (org-glance-test:with-table (graph 'book)
-        (let (offered)
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_p coll &rest _) (setq offered coll) "")))
-            (org-glance-table--act-tag graph "a"))       ; bare `:' (no prefix)
+        (org-glance-test:offering (offered "")
+          (org-glance-table--act-tag graph "a")          ; bare `:' (no prefix)
           (should (member "film" offered))                ; another headline's tag
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered))))))
@@ -834,16 +824,15 @@ shared picker."
     (org-glance-graph:add graph
       (org-glance-test:headline "rep" "* TODO daily" "SCHEDULED: <2026-06-07 Sun +1d>")
       (org-glance-test:headline "one" "* TODO once"))
-    (org-glance-test:with-table-buffer graph buf
-      (with-current-buffer buf
-        (should (equal "↻" (org-glance-test:table-cell buf "rep" "repeated")))
-        (should (equal ""  (org-glance-test:table-cell buf "one" "repeated")))
+    (org-glance-test:with-table (graph)
+        (should (equal "↻" (org-glance-test:table-cell "rep" "repeated")))
+        (should (equal ""  (org-glance-test:table-cell "one" "repeated")))
         (let (picked)
           (cl-letf (((symbol-function 'org-glance-view:pick-occurrence)
                      (lambda (_g id) (setq picked id))))
             (table-view--goto-id "rep")
             (funcall (key-binding (kbd "l"))))
-          (should (equal "rep" picked)))))))
+          (should (equal "rep" picked))))))
 
 (ert-deftest org-glance-test:table-delete-key ()
   "`D' deletes the row's headline after confirmation and reloads the table."

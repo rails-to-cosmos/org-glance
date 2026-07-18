@@ -98,12 +98,11 @@ self is excluded from the candidates."
     (org-glance-test:with-material (buf graph "me")
       (goto-char (point-max))
       (unless (bolp) (insert "\n"))
-      (let (offered)
-        (cl-letf (((symbol-function 'completing-read)
-                   (lambda (_p coll &rest _) (setq offered (mapcar #'car coll)) (caar coll))))
-          (org-glance-material:refer))
-        (should (cl-some (lambda (c) (s-contains? "Other headline" c)) offered))
-        (should-not (cl-some (lambda (c) (s-contains? "Me" c)) offered))  ; self excluded
+      (org-glance-test:offering (offered (caar offered))
+        (org-glance-material:refer)
+        (let ((names (mapcar #'car offered)))
+          (should (cl-some (lambda (c) (s-contains? "Other headline" c)) names))
+          (should-not (cl-some (lambda (c) (s-contains? "Me" c)) names)))  ; self excluded
         (should (s-contains? "[[org-glance-material:other][Other headline]]"
                              (buffer-string))))
       ;; C-u: kind prompt (second completing-read call) encodes ?kind= and
@@ -133,14 +132,11 @@ self is excluded from the candidates."
     (org-glance-test:with-material (buf graph "me")
       (goto-char (point-max))
       (unless (bolp) (insert "\n"))
-      (let (offered)
-        (cl-letf (((symbol-function 'completing-read)
-                   (lambda (_p coll &rest _)
-                     (setq offered (mapcar #'car coll))
-                     ;; pick the SECOND duplicate by its id suffix
-                     (cl-find "dup-two-" (mapcar #'car coll) :test #'s-contains?))))
-          (org-glance-material:refer))
-        (should (= 2 (cl-count "·" offered :test #'s-contains?)))  ; both disambiguated
+      (org-glance-test:offering
+          ;; pick the SECOND duplicate by its id suffix
+          (offered (cl-find "dup-two-" (mapcar #'car offered) :test #'s-contains?))
+        (org-glance-material:refer)
+        (should (= 2 (cl-count "·" (mapcar #'car offered) :test #'s-contains?)))
         (should (s-contains? "[[org-glance-material:dup-two-yy][Same title]]"
                              (buffer-string)))))))
 
@@ -151,8 +147,7 @@ self is excluded from the candidates."
       (org-glance-test:headline "me" "* TODO Me" "user")
       (org-glance-test:headline "o" "* TODO O"))
     (org-glance-test:with-material (buf graph "me")
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (&rest _) (error "must not prompt"))))
+      (org-glance-test:answering ((completing-read (error "must not prompt")))
         ;; mid-word (an email)
         (goto-char (point-max))
         (unless (eolp) (end-of-line))
@@ -348,29 +343,24 @@ and the per-tag schema round-trips it as an edge column."
         "also [[org-glance-material:gone?kind=roasted-by][Ghost]]")
       (org-glance-test:headline "c2" "* TODO Another Bean :coffee:")
       (org-glance-test:headline "r1" "* Manhattan Coffee Roasters"))
-    (org-glance-test:with-table-filter graph 'coffee buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph 'coffee)
         ;; prompt offers the PRETTY kind
-        (let (offered)
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_p coll &rest _)
-                       (setq offered (mapcar #'car coll)) "roasted by")))
-            (let ((current-prefix-arg '(4)))
-              (funcall (key-binding (kbd "+")))))
-          (should (member "roasted by" offered)))
+        (org-glance-test:offering (offered "roasted by")
+          (let ((current-prefix-arg '(4)))
+            (funcall (key-binding (kbd "+"))))
+          (should (member "roasted by" (mapcar #'car offered))))
         ;; column shows titles; many-to-many joins; gone target -> id
         (should (equal "Manhattan Coffee Roasters, gone"
-                       (org-glance-test:table-cell buf "c1" "kind:roasted-by")))
-        (should (equal "" (org-glance-test:table-cell buf "c2" "kind:roasted-by")))
+                       (org-glance-test:table-cell "c1" "kind:roasted-by")))
+        (should (equal "" (org-glance-test:table-cell "c2" "kind:roasted-by")))
         ;; header is the capitalized pretty form
         (should (cl-find "Roasted by"
                          (alist-get 'columns table-view--spec)
-                         :key (lambda (c) (alist-get 'header c)) :test #'equal))))
+                         :key (lambda (c) (alist-get 'header c)) :test #'equal)))
     ;; persisted per tag: a fresh view of the SAME tag rebuilds the EDGE column
-    (org-glance-test:with-table-filter graph 'coffee buf
-      (with-current-buffer buf
+    (org-glance-test:with-table (graph 'coffee)
         (should (equal "Manhattan Coffee Roasters, gone"
-                       (org-glance-test:table-cell buf "c1" "kind:roasted-by")))))))
+                       (org-glance-test:table-cell "c1" "kind:roasted-by"))))))
 
 (ert-deftest org-glance-test:table-custom-column-kind-vs-property ()
   "Case is the type tag: \"AUTHOR\" builds a drawer column, \"author\" an

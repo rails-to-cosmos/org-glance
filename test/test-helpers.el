@@ -155,11 +155,6 @@ Implemented over `org-glance-test:with-shown' (same show-stubs + kill-all)."
      (setq ,var (org-glance-table:visit ,graph ,filter))
      ,@body))
 
-(cl-defmacro org-glance-test:with-table-buffer (graph var &rest body)
-  "Visit GRAPH's default (unfiltered) table; see the filter variant."
-  (declare (indent 2))
-  `(org-glance-test:with-table-filter ,graph nil ,var ,@body))
-
 (cl-defmacro org-glance-test:with-table ((graph &optional filter) &rest body)
   "Visit GRAPH's table for FILTER; run BODY with the table buffer current,
 kill it afterward.  BODY refers to the buffer via `current-buffer'."

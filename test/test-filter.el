@@ -71,10 +71,8 @@
                  (lambda (&rest _) (car case))))
         (should (equal (cdr case) (org-glance-filter:read-state graph)))))
     ;; the offered candidates are active/done/all + the graph's concrete states
-    (let (offered)
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (setq offered coll) "all")))
-        (org-glance-filter:read-state graph))
+    (org-glance-test:offering (offered "all")
+      (org-glance-filter:read-state graph)
       (dolist (w '("active" "done" "all" "TODO" "DONE")) (should (member w offered))))
     ;; empty input -> user-error (no silent "match everything")
     (org-glance-test:answering ((completing-read ""))
@@ -87,11 +85,9 @@ special symbol, never the literal string.  Documents the deliberate limitation
 \(org todo keywords are uppercase by convention, so this is essentially theoretical)."
   (cl-letf (((symbol-function 'org-glance-graph:states)
              (lambda (&rest _) '("active" "TODO"))))
-    (let (offered)
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (setq offered coll) "active")))
-        ;; selecting the colliding name returns the special symbol, not "active"
-        (should (eq 'active (org-glance-filter:read-state 'dummy-graph))))
+    (org-glance-test:offering (offered "active")
+      ;; selecting the colliding name returns the special symbol, not "active"
+      (should (eq 'active (org-glance-filter:read-state 'dummy-graph)))
       ;; "active" is offered exactly once (the special; the concrete dup is dropped)
       (should (= 1 (cl-count "active" offered :test #'string=)))
       ;; a non-colliding concrete state is still offered as itself

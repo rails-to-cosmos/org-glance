@@ -45,11 +45,10 @@ tags, normalizes case, and rejects empty input."
     (org-glance-graph:add graph
                              (org-glance-test:headline "A" "* foo :task:" "")
                              (org-glance-test:headline "B" "* bar :work:" ""))
-    (let ((org-glance-graph graph) (seen-candidates nil))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (setq seen-candidates coll) "Task")))
-        (should (eq 'task (org-glance-capture:completing-read-tag))))
-      (should (equal '("task" "work") seen-candidates))
+    (let ((org-glance-graph graph))
+      (org-glance-test:offering (seen-candidates "Task")
+        (should (eq 'task (org-glance-capture:completing-read-tag)))
+        (should (equal '("task" "work") seen-candidates)))
       ;; A tag unknown to the graph is fine -- discovery is capture-driven.
       (org-glance-test:answering ((completing-read "fresh"))
         (should (eq 'fresh (org-glance-capture:completing-read-tag))))
