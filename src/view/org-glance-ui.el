@@ -77,10 +77,10 @@ this one update in place."
    ("/" "Title substring" org-glance-transient:filter-by-substring)
    ("c" "Clear (all)" org-glance-transient:filter-clear)]
   ["Overview"
-   [("a" "Agenda" org-glance-agenda)
-    ("o" org-glance-overview :description org-glance-transient--overview-description)
-    ("T" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
-    ("t" "Tags" org-glance-tags)]]
+   [("o" org-glance-overview :description org-glance-transient--overview-description)
+    ("a" "Agenda" org-glance-agenda)
+    ("t" "Tags" org-glance-tags)]
+   [("T" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]
   ["Actions"
    [("+" "Capture headline" org-glance-capture)
     ("e" "Extract property" org-glance-extract)

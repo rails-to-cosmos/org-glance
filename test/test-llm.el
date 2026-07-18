@@ -67,5 +67,30 @@ a session for a different headline already holds the plain slug."
               (should (equal "foo-bar" (org-glance-llm--label md mine))))
           (kill-buffer buf))))))
 
+(ert-deftest org-glance-test:llm-dir-uses-project-property ()
+  "`org-glance-llm--dir' returns `ORG_GLANCE_PROJECT_DIR' when set, else data dir."
+  (org-glance-test:session
+    (org-glance-graph:add org-glance-graph
+      (org-glance-headline--from-lines "* TODO A" ":PROPERTIES:" ":ORG_GLANCE_ID: a"
+                                       ":ORG_GLANCE_PROJECT_DIR: ~/x/proj" ":END:")
+      (org-glance-test:headline "b" "* TODO B"))
+    (should (equal (expand-file-name "~/x/proj") (org-glance-llm--dir org-glance-graph "a")))
+    (should (equal (org-glance-graph:headline-data-path org-glance-graph "b")
+                   (org-glance-llm--dir org-glance-graph "b")))))
+
+(ert-deftest org-glance-test:llm-honours-project-dir ()
+  "`org-glance-llm' opens the session in a headline's `ORG_GLANCE_PROJECT_DIR'."
+  (org-glance-test:session
+    (let ((proj (make-temp-file "og-proj" t)))
+      (org-glance-graph:add org-glance-graph
+        (org-glance-headline--from-lines "* TODO Proj" ":PROPERTIES:" ":ORG_GLANCE_ID: p"
+                                         (format ":ORG_GLANCE_PROJECT_DIR: %s" proj) ":END:"))
+      (let ((root 'unset))
+        (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
+                  ((symbol-function 'switch-to-buffer) (lambda (b &rest _) b))
+                  ((symbol-function 'agnostic-llm-menu) (lambda (&optional dir _lbl) (setq root dir))))
+          (org-glance-llm))
+        (should (file-equal-p root proj))))))
+
 (provide 'test-llm)
 ;;; test-llm.el ends here

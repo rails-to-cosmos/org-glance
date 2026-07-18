@@ -59,6 +59,28 @@
       (should (alist-get 'actions spec))
       (should (alist-get 'sort spec)))))
 
+;;; #+TODO: header line (always-visible subtitle)
+
+(ert-deftest org-glance-test:table-todo-line ()
+  "The spec carries a `#+TODO:'-style subtitle of the graph's states -- active,
+then `|', then done -- coloured; exposed as the `table-view' subtitle."
+  (let ((org-todo-keywords '((sequence "TODO" "NEXT" "|" "DONE")))
+        (org-done-keywords '("DONE")))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph
+                            (org-glance-test:headline "a" "* TODO A")
+                            (org-glance-test:headline "b" "* NEXT B")
+                            (org-glance-test:headline "c" "* DONE C"))
+      (let* ((line (org-glance-table--todo-line graph))
+             (plain (substring-no-properties line)))
+        (should (string-prefix-p "#+TODO: " plain))
+        (should (s-contains? "TODO" plain))
+        (should (s-contains? "NEXT" plain))
+        (should (s-contains? "| DONE" plain))              ; done after the bar
+        (should (text-property-not-all 0 (length line) 'face nil line))  ; coloured
+        ;; the spec exposes it as the always-visible subtitle
+        (should (equal line (alist-get 'subtitle (org-glance-table--spec graph nil))))))))
+
 ;;; Filter
 
 (ert-deftest org-glance-test:table-fill-honours-filter ()

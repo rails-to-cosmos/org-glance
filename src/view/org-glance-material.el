@@ -84,6 +84,13 @@ FILTER, if non-nil, is a predicate on the metadata."
 ;; `C-c #' by context: region -> wrap it in a crypt block; `C-u' -> unwrap the
 ;; block at point; else -> forget the cached password (lock).
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
+;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
+(define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
+
+(defconst org-glance-project-dir-property "ORG_GLANCE_PROJECT_DIR"
+  "Drawer property naming a headline's project directory.
+`org-glance-llm' opens its session there instead of the content-addressable
+data dir; set it with `org-glance-material:set-project-dir' (`C-c d').")
 
 (defvar-local org-glance-material--graph nil
   "Graph backing the current materialized buffer.")
@@ -346,6 +353,29 @@ Otherwise -> forget the cached password (`org-glance-material:lock')."
     (org-glance-material:crypt-region (region-beginning) (region-end)))
    (current-prefix-arg (org-glance-material:crypt-unwrap))
    (t (org-glance-material:lock))))
+
+(cl-defun org-glance-material:set-project-dir (dir)
+  "Set the materialized headline's project directory (`C-c d') to DIR and save.
+DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
+`org-glance-llm' opens its session.  With a prefix arg, clear the property."
+  (interactive
+   (list (unless current-prefix-arg
+           (expand-file-name
+            (read-directory-name
+             "Project dir: "
+             (or (save-excursion
+                   (org-glance-material--goto-first-heading)
+                   (org-entry-get nil org-glance-project-dir-property))
+                 ""))))))
+  (unless (and org-glance-material--graph org-glance-material--id)
+    (user-error "Not a materialized buffer"))
+  (save-excursion
+    (org-glance-material--goto-first-heading)
+    (if (org-glance--present-string? dir)
+        (org-entry-put nil org-glance-project-dir-property dir)
+      (org-entry-delete nil org-glance-project-dir-property)))
+  (let ((inhibit-message t)) (save-buffer))
+  (message "Project dir %s" (if (org-glance--present-string? dir) dir "cleared")))
 
 (cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.

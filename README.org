@@ -36,9 +36,12 @@ MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
 The *LLM session* action (=l=) opens an =agnostic-llm= claude session in the
-selected headline's data directory.  =agnostic-llm= (also on the =rails-to-cosmos=
-archive) is a required dependency; it pulls in =vterm=, loaded lazily the first
-time you run the action, so org-glance never loads vterm at startup.
+selected headline's data directory -- or in its project directory, when the
+headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property (set it from a
+materialized buffer with =C-c d=, `org-glance-material:set-project-dir').
+=agnostic-llm= (also on the =rails-to-cosmos= archive) is a required dependency;
+it pulls in =vterm=, loaded lazily the first time you run the action, so
+org-glance never loads vterm at startup.
 
 * Highlights
 
@@ -46,7 +49,8 @@ Reach everything through the =org-glance-transient= transient (=C-x j= above).
 
 - *Overview* (=o=) — the org-text overview of a chosen tag; toggle it (=T=) to a
   sortable headline *table* with custom drawer-property columns and bulk state
-  change.
+  change.  The table header always shows the sort and a coloured =#+TODO:= line
+  of the graph's states; =?= toggles the action-key legend (RET:Materialize …).
 - *All tags* (=t=) — a table of the tags THEMSELVES: per-tag headline count, todo
   state breakdown, configured cycle, and event-tracked created / last-modified
   timestamps.  State and Cycle cells are colour-coded.  In the buffer: =RET=

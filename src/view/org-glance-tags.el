@@ -34,16 +34,10 @@
   "Format timestamp TS as `YYYY-MM-DD HH:MM', or empty when nil."
   (if ts (format-time-string "%Y-%m-%d %H:%M" ts) ""))
 
-(cl-defun org-glance-tags--colorize-state (state)
-  "STATE (a string) propertized with its todo-state colour.
-Uses the same palette as the headline table's state badges."
-  (propertize state 'face
-              (list :foreground (org-glance-table--state-color state) :weight 'bold)))
-
 (cl-defun org-glance-tags--format-states (states)
   "Format STATES (alist STATE -> COUNT) as coloured `STATE N ...', sorted."
   (if states
-      (mapconcat (lambda (c) (concat (org-glance-tags--colorize-state (car c))
+      (mapconcat (lambda (c) (concat (org-glance-table--colorize-state (car c))
                                      " " (number-to-string (cdr c))))
                  (cl-sort (copy-sequence states) #'string< :key #'car)
                  "  ")
@@ -54,7 +48,7 @@ Uses the same palette as the headline table's state badges."
 The `|' active/done separator is left plain."
   (if (org-glance--present-string? cycle)
       (mapconcat (lambda (tok)
-                   (if (string= tok "|") tok (org-glance-tags--colorize-state tok)))
+                   (if (string= tok "|") tok (org-glance-table--colorize-state tok)))
                  (split-string cycle)
                  " ")
     ""))

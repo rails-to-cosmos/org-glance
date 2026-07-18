@@ -18,6 +18,15 @@ proposal citing `foo.el:365` after a refactor silently misleads the
 next reader, so better use links to git commit itself alongside file +
 line.
 
+## Keep the properties reference current
+
+`docs/properties.org` lists every special drawer property, content
+marker (`#+begin_crypt`, `#+begin_pin`), and file keyword org-glance
+gives meaning to. When a feature adds, renames, or changes the
+semantics of one (e.g. a new `ORG_GLANCE_*` property or `#+begin_*`
+block), update `docs/properties.org` in the **same pass** — the rule
+that ships it, where it is set, and where it is read.
+
 ## Keep the CHANGELOG current
 
 `CHANGELOG.org` is the running summary of the project's actual state

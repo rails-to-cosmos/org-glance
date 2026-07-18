@@ -87,6 +87,27 @@ priority.  The active/done split uses the ambient `org-done-keywords' (bound by
     (cl-loop for state in (append active done)
              collect `((value . ,state) (color . ,(org-glance-table--state-color state))))))
 
+(cl-defun org-glance-table--colorize-state (state)
+  "STATE (a string) propertized with its todo-state colour and bold weight."
+  (propertize state 'face
+              (list :foreground (org-glance-table--state-color state) :weight 'bold)))
+
+(cl-defun org-glance-table--todo-line (graph)
+  "A `#+TODO:'-style line of GRAPH's states -- active, then `|', then done --
+each coloured by the state palette; nil when the graph has no states.  Shown
+always in the table header via the `table-view' `subtitle' (never hidden by the
+`?' action-legend toggle)."
+  (let* ((states (org-glance-graph:states graph))
+         (done-kw (or org-done-keywords (org-glance--done-keywords)))
+         (done (cl-remove-if-not (lambda (s) (member s done-kw)) states))
+         (active (cl-remove-if (lambda (s) (member s done-kw)) states)))
+    (when states
+      (concat "#+TODO: "
+              (mapconcat #'org-glance-table--colorize-state active " ")
+              (when done
+                (concat (if active " " "") "| "
+                        (mapconcat #'org-glance-table--colorize-state done " ")))))))
+
 ;;; Spec + rows (built in pure elisp -- no backend process)
 
 (cl-defun org-glance-table--spec (graph filter)
@@ -97,6 +118,7 @@ scheduled, deadline, priority -- all sortable -- followed by any custom
 property columns saved for its tags (see `org-glance-table--apply-schema').
 Default sort is the state column ascending (active first)."
   `((title . ,(format "org-glance table: %s" (org-glance-filter:describe filter)))
+    (subtitle . ,(org-glance-table--todo-line graph))
     (columns . ,(org-glance-table--apply-schema
                  graph filter
                  `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")

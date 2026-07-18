@@ -1,0 +1,51 @@
+#+TITLE: Special org-glance properties and markers
+
+The drawer properties, content markers and file keywords org-glance gives
+meaning to.  Everything else in a headline is ordinary org.  Keep this current
+when a feature adds or changes one (see [[file:../CLAUDE.md][CLAUDE.md]]).
+
+* Headline drawer properties
+
+Set in a headline's =:PROPERTIES:= drawer.
+
+- =ORG_GLANCE_ID= — the headline's stable store key (content-addressed data
+  dir, WAL id).  Capture generates it; a headline without it is not tracked.
+  Path-safety-checked before it touches the filesystem.  Read by
+  =org-glance-headline:id=.
+- =ORG_GLANCE_PROJECT_DIR= — a project directory for =org-glance-llm= to open its
+  session in, instead of the content data dir.  Set/clear from a materialized
+  buffer with =C-c d= (=org-glance-material:set-project-dir=); read by
+  =org-glance-llm--dir=.  =~= is expanded; the dir is created if missing.
+- =ORG_GLANCE_TITLE= (or =TITLE=) — overrides the displayed title; otherwise the
+  heading text is used.  Read in =org-glance-headline--from-element=.
+- =ORG_GLANCE_HASH= — content hash; written into overview clones and stripped
+  before hashing (=org-glance-headline:hash-ignore-properties=).  Internal — do
+  not set by hand.
+
+* Tag-config headline properties
+
+Only in the tag-config file =<store>/config/tags.org= (see
+[[file:../src/data/org-glance-tag-config.el][org-glance-tag-config]]); one level-1 headline per tag.
+
+- =:TAG:= — keys a per-tag configuration.  This is a drawer PROPERTY, not an org
+  =:tag:=.  A headline without a valid =:TAG:= is not a config.
+- =:TODO_KEYWORDS:= — the tag's =#+TODO:=-style cycle, e.g.
+  =TODO READING | READ ABANDONED=.  NB the key is =TODO_KEYWORDS=, not =TODO= —
+  org reserves =TODO= as a drawer key, so a =:TODO:= drawer is silently ignored
+  (=org-glance-tag-config-lint= flags this).
+
+* Content markers (in a headline's body)
+
+- =#+begin_crypt= … =#+end_crypt= — a secret region: ciphertext at rest,
+  plaintext only in the material buffer.  Several per headline; text outside
+  stays public and indexable.  See [[file:proposals/2026-07-17-crypt-blocks.done.org][crypt-blocks]].
+- =#+begin_pin= … =#+end_pin= — a pinned block: kept when a repeated headline is
+  trimmed on completion (=org-glance-clone-on-repeat-p=), so it survives into the
+  clone instead of being cut with the accumulated history.
+
+* File keywords
+
+- =#+TODO:= — an ordinary org file keyword.  Capture and the overview/agenda
+  emit it from a tag's =:TODO_KEYWORDS:= cycle so org renders, faces and cycles
+  those states natively; the table shows a coloured =#+TODO:= line of the graph's
+  live states in its header (always visible).

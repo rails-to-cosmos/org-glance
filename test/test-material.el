@@ -731,5 +731,23 @@ flips off, so the next open needs no password."
         (should-not (org-glance-headline-metadata:encrypted?
                      (org-glance-graph:get-headline graph "pub")))))))
 
+(ert-deftest org-glance-test:material-set-project-dir ()
+  "`set-project-dir' writes then clears the `ORG_GLANCE_PROJECT_DIR' drawer
+property on the materialized headline; `org-glance-llm--dir' reads it back."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "d" "* TODO Doc" "body"))
+    (org-glance-test:with-material (buffer graph "d")
+      (org-glance-material:set-project-dir "/tmp/proj-x")
+      (should (equal "/tmp/proj-x"
+                     (org-glance-headline:node-property
+                      "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
+      (should (equal "/tmp/proj-x" (org-glance-llm--dir graph "d")))
+      ;; clear (nil dir, as a prefix-arg invocation supplies)
+      (org-glance-material:set-project-dir nil)
+      (should-not (org-glance-headline:node-property
+                   "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d")))
+      (should (equal (org-glance-graph:headline-data-path graph "d")
+                     (org-glance-llm--dir graph "d"))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here
