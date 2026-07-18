@@ -1,0 +1,81 @@
+#+TITLE: Incremental row update for single-row table actions
+#+DATE: 2026-07-06
+
+Status: *proposed* · performance audit 2026-07-06 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Problem
+
+A single-row action in the table — ~C-c C-t~ on one row (no marks), and the ~g~
+refresh — rebuilds the *entire* matching set instead of updating the one row that
+changed:
+
+- ~org-glance-table--act-todo~ / ~--reload~ call ~org-glance-table--rows~, which
+  does ~org-glance-graph:headlines~ (an =O(N)= copy) + the filter predicate over
+  all N + ~--row~ for every match.
+- ~--reload~ then renders *twice*: ~table-view-refresh~ (→ ~set-rows~ → render)
+  followed by ~table-view-apply-sort~ (→ another render). One of the two
+  full in-memory render passes is redundant (Emacs still redisplays once per
+  command, but the string-measure + buffer-insert work is paid twice).
+
+* Proposed change
+
+For a *single-row* change (an action on the row at point, with no marks):
+
+- *Upsert just that row* — ~table-view-upsert-row~ with the row's new
+  ~--row~ metadata, or ~table-view-delete-row~ if the change moved it out of the
+  filter (e.g. now DONE under an active-only filter) — instead of ~--reload~
+  re-deriving the whole set.
+- *Collapse the double render* — apply the sort in the same pass as the row
+  set update, so a reload renders once, not twice.
+
+The changed row's fresh metadata comes from ~org-glance-graph:get-headline~
+(=O(1)= on ~:by-id~), not a whole-store scan.
+
+* Interaction with sort
+
+org-glance's table model is "rows stay put; sorting is explicit (=^=)". So an
+upserted row can stay at its current position until the next explicit sort —
+consistent with the existing contract — or be re-inserted at its sorted position
+if we want live-sorted behavior. Re-sorting is cheap (it reorders *pre-computed*
+cells; no re-derivation), so either is viable; "stay put" matches today's UX.
+
+** Synergy with the store cache
+
+This change's =O(1)= ~get-headline~ is only actually =O(1)= once the store cache
+is patched incrementally — otherwise the read after the save re-scans the store.
+So this pairs with
+[[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]:
+together, a single-row state change becomes =O(1)= end-to-end (patch the cache,
+upsert one row) instead of =O(N)= (rebuild cache + rebuild rows + double render).
+
+* Test plan
+
+- Single-row ~C-c C-t~ (no marks): the row's state/cells update; other rows'
+  cells are *not* re-derived (assert via an instrumented ~--row~ / value-fn call
+  count); point stays on the row (or its line if it left the filter — the
+  existing ~table-todo-preserves-point~ behavior).
+- A row that leaves the filter is *removed* (delete-row), point lands org-agenda
+  style.
+- ~g~ refresh renders the buffer *once* (assert a single render pass), preserving
+  sort + point (the existing ~table-refresh-preserves-point~ behavior).
+
+* Risk
+
+Medium. Must not diverge from a full reload's result (an upserted row's cells
+must equal what a rebuild would produce) and must preserve the sort/point/mark
+behaviors the existing tests lock in. Contained by reusing ~--row~ (same cell
+derivation) and the existing point/sort tests.
+
+* Effort
+
+Medium. ≈ 20–40 LOC in ~org-glance-table.el~ (an upsert path for single-row
+actions, and a single-render reload) + tests. No vendored-file change (~upsert-row~
+/ ~delete-row~ are existing table-view API).
+
+* Related
+
+- Best landed *after* [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]]
+  (which makes the ~get-headline~ read =O(1)=).
+- Complementary to [[file:2026-07-06-table-paging.proposed.org][Table paging]].
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

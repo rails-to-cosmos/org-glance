@@ -1,0 +1,124 @@
+#+TITLE: Full-text search over headline bodies
+#+DATE: 2026-07-09
+
+Status: *proposed* · search 2026-07-09
+
+* Problem
+
+The filter language matches only the *metadata projection*.  ~org-glance-filter:table~
+(~src/data/org-glance-filter.el:44~) enumerates every recognised key -- ~:tags~,
+~:state~, ~:done~, ~:id~, ~:title~ / ~:title-contains~, ~:hash~, ~:priority~, the
+~:linked~ / ~:propertized~ / ~:encrypted~ flags, ~:schedule~ / ~:deadline~ -- and
+every clause tests a metadata accessor (~:accessor~ column), never the headline's
+prose.  ~org-glance-filter:tags~ (~src/data/org-glance-filter.el:274~) is the last
+clause; there is no way to find a headline by *words in its body*.
+
+Bodies are not in the metadata index.  ~org-glance-graph:headlines~
+(~src/data/org-glance-graph.el:620~) serves the in-memory projection cache; the full
+text lives only in the content blobs at ~<store>/data/<shard>/<id>/data.org~
+(~org-glance-graph:content-path~, ~src/data/org-glance-graph.el:537~).  A user who
+remembers a phrase but not the title, tag, or state cannot reach the headline through
+any existing picker (~org-glance-materialize~, ~org-glance-open~,
+~org-glance-extract~).
+
+* Proposed change
+
+Add an ~org-glance-search~ command and an optional ~:text~ clause to the filter
+language.  Over the metadata-filtered candidate set, stream each headline's stored
+body and keep those whose contents match a regexp / substring.  Body reading reuses
+the same path materialize and the hash/flag projection already use
+(~org-glance-graph:get-content~, ~src/data/org-glance-graph.el:557~).  Present the
+survivors through the shared picker (~org-glance-material:completing-read~,
+~src/view/org-glance-material.el:40~) so search, materialize, and open share one UI.
+
+* Design
+
+** The ~:text~ clause is structural, like ~:where~
+
+Body text is not a metadata accessor, so ~:text~ cannot be a plain table row (those
+map ~:accessor~ over metadata, ~src/data/org-glance-filter.el:175-180~).  Register it
+as a *structural special* alongside ~:done~ and ~:where~ in
+~org-glance-filter:predicate~ (~src/data/org-glance-filter.el:150~):
+
+- Add ~(:text)~ to ~org-glance-filter:table~ (~src/data/org-glance-filter.el:70~,
+  next to ~(:where)~) so ~:normalize-spec~ accepts the key
+  (~src/data/org-glance-filter.el:111-113~ rejects unknown keys) and
+  ~org-glance-filter:keys~ includes it.
+- The metadata predicate cannot read a body, so the ~:text~ clause is *not* compiled
+  into the metadata closure.  Instead ~org-glance-filter:predicate~ ignores ~:text~
+  for the metadata pass, and a new ~org-glance-filter:text-predicate~ returns a
+  ~(lambda (CONTENTS) -> bool)~ (regexp via ~string-match-p~, or case-insensitive
+  substring via ~s-contains?~, mirroring the ~substring~ clause at
+  ~src/data/org-glance-filter.el:140~).  Splitting the two keeps the metadata
+  predicate pure and O(1) per candidate; the body read happens only for survivors.
+- ~org-glance-filter:describe~ (~src/data/org-glance-filter.el:260~) gains a ~:text~
+  arm (~text~<NEEDLE>) for transient / menu display.
+
+** The command: metadata filter first, body scan second
+
+~org-glance-search~ (new, ~src/view/org-glance-material.el~, beside
+~org-glance-materialize~ at ~src/view/org-glance-material.el:529~):
+
+1. Prompt for the search string; build ~needle~ = ~org-glance-filter:text-predicate~.
+2. Metadata-filter candidates with the ambient
+   ~(org-glance-filter:predicate org-glance-filter-spec)~ -- the same gate
+   ~org-glance-material--pick-headline~ uses (~src/view/org-glance-material.el:563~).
+3. For each surviving id, ~org-glance-graph:get-content~
+   (~src/data/org-glance-graph.el:557~) streams the blob; keep it when ~needle~
+   matches.  *Skip ~encrypted?~ bodies* -- the flag is already projected
+   (~org-glance-headline-metadata:encrypted?~, filter row at
+   ~src/data/org-glance-filter.el:67~) -- so search never forces a decrypt prompt and
+   never reads ciphertext as if it were prose.
+4. Hand the survivors to ~org-glance-material:completing-read~
+   (~src/view/org-glance-material.el:40~) via its ~:filter~ arg -- reuse its existing
+   candidate loop (~src/view/org-glance-material.el:48~) rather than a parallel one --
+   then materialize / open the choice.
+
+** Optional ripgrep pre-filter
+
+Reading every blob is O(bodies).  When ~executable-find~ locates ~rg~, run it once
+over the data store (~org-glance-graph:data-path~, ~src/data/org-glance-graph.el:500~)
+to get the matching ~data.org~ paths, map each path back to its id (invert the shard
+layout of ~org-glance-graph:headline-data-path~, ~src/data/org-glance-graph.el:518~),
+and intersect with the metadata-filtered set.  Fall back to the elisp scan when ~rg~
+is absent or the pattern is an elisp-only regexp.  This is an optimisation; the
+elisp path is the correctness reference.
+
+* Test plan
+
+- Seed a graph with bodies containing a distinctive phrase absent from every title /
+  tag; ~org-glance-search~ for it returns exactly those headlines.
+- Regexp vs. substring: an anchored regexp matches only where the body matches;
+  a substring is case-insensitive.
+- Metadata gate composes: ~org-glance-filter-spec~ = ~(:done nil)~ excludes a done
+  headline whose body matches.
+- Encrypted skip: an ~encrypted?~ headline whose *ciphertext* happens to contain the
+  needle is never returned and triggers no password prompt.
+- ~:text~ round-trips ~normalize-spec~ / ~identity~ / ~describe~; an unknown-key
+  error is not raised (~src/data/org-glance-filter.el:111~).
+- With ~rg~ stubbed / forced absent, the elisp scan yields identical results.
+
+* Risk
+
+Body scanning is I/O-bound and O(bodies) without ~rg~; scope it to the
+metadata-filtered candidate set, never the whole store, and read lazily.  The
+~:text~ clause must stay *out* of the metadata predicate -- a stray body read on the
+picker's hot path (~src/view/org-glance-material.el:48~) would regress every command.
+No on-disk format change; blobs are read, never written.
+
+* Effort
+
+Medium.  ~20-30 LOC in ~org-glance-filter.el~ (the ~(:text)~ row, ~text-predicate~,
+the ~describe~ arm) + ~30-40 LOC for ~org-glance-search~ and the optional ~rg~
+pre-filter in ~org-glance-material.el~, plus ERT fixtures with known bodies.
+
+* Related
+
+- Reads blobs through the same ~get-content~ path that
+  [[file:2026-07-06-encrypted-materialize-gpg.proposed.org][Encrypted headlines via
+  GPG]] reshapes; the ~encrypted?~ skip keeps the two independent.
+- Shares the picker with ~org-glance-materialize~ / ~org-glance-open~ in
+  ~src/view/org-glance-material.el~ and the filter language in
+  ~src/data/org-glance-filter.el~.
+- Back to the [[file:2026-07-06-performance-audit.org][proposals index]]
+  (docs/proposals).

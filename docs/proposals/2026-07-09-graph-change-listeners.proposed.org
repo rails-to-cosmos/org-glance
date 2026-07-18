@@ -1,0 +1,170 @@
+#+TITLE: Graph change-notification API (pub/sub) + incremental overview render
+#+DATE: 2026-07-09
+
+Status: *proposed* · performance audit 2026-07-09 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Problem
+
+The WAL/compaction half of "mutable states → pub/sub" is done: every commit is a
+single point (a WAL append, a seal, or a MANIFEST swap), and the read cache is
+dropped there in-process (~org-glance-graph--invalidate-cache~). What is missing
+is the *subscribe* half. "A view learns the store changed" is wired two bespoke,
+partial ways:
+
+- *Push is a per-callsite reminder.* The only in-process notification is a hand
+  call to ~org-glance-view:mark-graph-stale~ at the mutation site — today just
+  ~material:sync~ (=material.el:118=). Every future mutation path (capture,
+  delete, reindex, an interactive compaction) that forgets the call leaves open
+  views silently stale until the next boundary. There is no channel the store
+  itself emits on.
+- *The store-change signal is a file-mtime poll.* Out-of-process changes (git
+  sync, another Emacs) are caught only when a view happens to reach a display
+  boundary and re-stats its sources: ~org-glance-overview--stale?~
+  (=overview.el:467=) via ~verify-visited-file-modtime~ + ~overview:fresh?~
+  (=overview.el:178=, an mtime compare against ~headlines.jsonl~). Correct but
+  strictly pull, at second granularity.
+
+The half-generalized primitive already exists: ~org-glance-graph--append~ runs
+~org-glance-graph-before-append-functions~ (=graph.el:438,452=) so a side index
+(tag metrics, =tag-metrics.el:66=) can react *before* a write. There is no
+symmetric *after-commit* emission carrying what changed.
+
+* Proposed change
+
+1. *A store-level change channel.* Add an abnormal hook
+   ~org-glance-graph-after-commit-functions~ run at each commit point with
+   =(GRAPH CHANGED-IDS)=, plus a thin public ~org-glance-graph:add-listener~ /
+   ~:remove-listener~ pair over it. Views subscribe once instead of every
+   mutation site remembering to push; the per-callsite
+   ~org-glance-view:mark-graph-stale~ reminder (=material.el:118=) goes away. The
+   mtime poll (=overview.el:178=) stays as the crash-safe / out-of-process
+   fallback — an in-process hook cannot fire for another Emacs or a git sync.
+
+2. *Incremental overview render (perf, gated).* ~org-glance-overview:render~
+   (=overview.el:116=) re-renders *every* live headline on any staleness — the
+   next perf cliff after the =O(N²)=→=O(N)= concat fix (audit item *C*). Once
+   CHANGED-IDS is on the channel, take a fast path when only known ids changed
+   and the heading set is otherwise unchanged: splice the one re-rendered heading
+   into the cached ~overview.org~ in place, full render on any structural change
+   (add / delete / reorder / compaction). Low priority; land only behind a
+   benchmark (see
+   [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][Dev tooling:
+   benchmark harness]]).
+
+* Design
+
+** Part 1 — the channel
+
+*Hook.* Declare ~org-glance-graph-after-commit-functions~ beside the
+before-append hook (=graph.el:438=). Each function is called with =(GRAPH
+CHANGED-IDS)= where CHANGED-IDS is a list of the ids whose observable record
+changed, or the keyword =:structural= when the id set / ordering changed rather
+than a bounded id list. Errors are demoted exactly like the before-append run
+(=graph.el:452=): a listener must never break a save.
+
+*Emit sites* (the existing single commit points):
+
+- ~org-glance-graph--append~ — after the ~f-append-text~ WAL write and
+  ~--invalidate-cache~ (=graph.el:460–463=): emit CHANGED-IDS = the ids of
+  SPECS. This is the hot path ~material:sync~ / ~graph:insert~ drive
+  (=graph.el:215=).
+- ~org-glance-graph:compact~ — after the MANIFEST swap and ~--invalidate-cache~
+  (=graph.el:825,836=): emit =:structural=. Compaction flips a dropped
+  tombstone's observable read (~tombstone~ → nil) and GCs blobs, so no bounded
+  id list describes it.
+- ~org-glance-graph--seal~ — after its MANIFEST swap (=graph.el:482=): a pure
+  relayout, no observable read changes; emit =:structural= (or skip — seal is
+  reached only from within ~--append~, whose append emit already covers the
+  content change; prefer skipping to avoid a double fire).
+
+*Listener registry.* The hook is a plain global; ~graph:add-listener~ stores the
+callback and ~:remove-listener~ pulls it, each callback self-filtering by its
+GRAPH argument — the same identity match ~mark-graph-stale~ already uses over
+~buffer-local-value~ (=view.el:107=).
+
+*View wiring.* ~org-glance-view~ installs *one* module-level listener at load
+that, on any commit for GRAPH, runs the existing cheap
+~org-glance-view:mark-graph-stale~ (=view.el:99= — a per-view boolean + lighter,
+no I/O, no rebuild). The lazy rebuild at a display boundary
+(~--refresh-when-stale~, =view.el:110=) is unchanged and remains the fallback for
+out-of-process mutations. ~org-glance-view:register~ (=view.el:74=) keeps its
+STALE-FN / RELOAD-FN contract untouched; overview (=overview.el:345=) and table
+(=table.el:521=) register exactly as today.
+
+** Part 2 — incremental overview render (fast path)
+
+~render~ emits headings in ~graph:headlines~ order (insertion order, *not*
+id-sorted) via ~render-headline~ (=overview.el:100=), joined once. For a bounded
+CHANGED-IDS with an unchanged heading set, patch the cached file in place:
+
+1. Locate each changed id's heading in the cached buffer by its
+   ~:ORG_GLANCE_ID:~ property line.
+2. Replace that heading's region with a fresh ~render-headline~ of the current
+   metadata; write back and re-stat so the freshness check
+   (~overview:fresh?~, =overview.el:178=) still holds.
+3. Fall back to a full ~overview:write~ (=overview.el:199=) on =:structural=, on
+   an uncacheable ~:where~ filter, or when a filter's membership could flip
+   (a changed headline entering/leaving the filtered set — checked with
+   ~org-glance-filter:predicate~).
+
+Because headings are insertion-ordered, an id→buffer-offset index (or a linear
+property scan on the small changed set) does the locate; a binary search needs
+the region kept id-sorted, which it is not — noted under Risk.
+
+* Test plan
+
+- ERT: ~graph:add-listener~ receives =(GRAPH ids)= on ~graph:insert~; a second
+  graph's listener is not called; ~:remove-listener~ stops delivery; a listener
+  that signals does not break the append (mirrors the before-append demotion
+  test).
+- ERT: ~compact~ emits =:structural=; ~--seal~ path does not double-fire on a
+  segment roll.
+- ERT: after a materialized save, every open view of the graph is flagged stale
+  with *no* explicit ~mark-graph-stale~ call in ~material:sync~.
+- Part 2: property-level test that the in-place splice yields a file byte
+  identical to a full ~render~ for a single-id content change, and that a
+  membership flip / =:structural= takes the full-render path.
+- ~eask run command test~ (full suite) + ~eask recompile~ warning-free.
+- Benchmark (gate for Part 2): save→refresh render time at N=10^3–10^4, splice
+  vs full render, via the
+  [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][benchmark
+  harness]].
+
+* Risk
+
+- *Double coherence.* Push (hook) + pull (mtime poll) both firing is safe:
+  ~mark-stale~ is idempotent (=view.el:87=) and a display-boundary rebuild is
+  keyed on freshness, so at worst one redundant stale flag. Keeping both is
+  deliberate — the hook cannot see out-of-process writes.
+- *Hook on the hot path.* The emit runs inside every save. Demotion (=graph.el:452=
+  pattern) bounds a bad listener to a logged error; the shipped view listener is
+  a boolean flip.
+- *Part 2 ordering.* Insertion-ordered headings mean the splice locates by
+  ~ORG_GLANCE_ID~, not a sorted binary search; a wrong locate must degrade to a
+  full render, never a silent mis-splice — hence the byte-identical property
+  test as the gate. Part 2 is low priority and independently revertible.
+- *Filter membership.* A changed headline can enter/leave a filtered cache; the
+  fast path must full-render whenever membership could flip, else a cache serves
+  a stale set.
+
+* Effort
+
+Part 1 medium (a hook + three emit sites + one view listener + tests; drops one
+bespoke callsite). Part 2 low priority, medium once benchmarked.
+
+* Related
+
+- [[file:2026-07-06-performance-audit.org][Performance audit]] — parent index;
+  overview render is theme 3 (item *C* done, this is its incremental successor).
+- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental
+  metadata cache]] — the sibling "patch on commit, don't invalidate" for the
+  read cache; a natural place to compute CHANGED-IDS from the same append.
+- [[file:2026-07-06-incremental-row-update.proposed.org][Incremental row
+  update]] — the table analogue of Part 2 (upsert one row on a single-row
+  change); a table listener could drive it off the same channel.
+- [[file:2026-07-09-dev-tooling-benchmarks-linters.proposed.org][Dev tooling:
+  benchmark harness + lint]] — gates Part 2.
+- Touched files: =src/data/org-glance-graph.el= (hook + emit sites),
+  =src/view/org-glance-view.el= (listener), =src/view/org-glance-material.el=
+  (drop the bespoke push), =src/view/org-glance-overview.el= (Part 2 splice).

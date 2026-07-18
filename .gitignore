@@ -18,5 +18,7 @@ devenv.local.nix
 
 *.el#
 /.eask/
-/build/
 /ert-profile
+.llm/
+/.claude/
+.agnostic-llm/

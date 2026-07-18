@@ -2,12 +2,12 @@
 
 ;;; org-glance.el --- Org-mode mindmap.
 
-;; Copyright (C) 2018-2025 Dmitry Akatov
+;; Copyright (C) 2018-2026 Dmitry Akatov
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 0.0.1
-;; Package-Requires: ((emacs "26.1") (org) (aes) (dash) (f) (highlight) (transient) (elsa) (ht) (ert-runner "20231110.1358"))
+;; Version: 1.11.0.0.20260718.0
+;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
@@ -34,574 +34,311 @@
 
 ;;; Code:
 
-(require 'aes)
-(require 'cl-generic)
 (require 'cl-lib)
 (require 'cl-macs)
 (require 'dash)
 (require 'f)
-(require 'json)
 (require 'ol)
 (require 'org)
-(require 'org-element)
-(require 's)
-(require 'seq)
-(require 'subr-x)
-(require 'org-macs)
 
-(require 'org-glance-datetime-mode)
-(require 'org-glance-exception)
-(require 'org-glance-headline)
-(require 'org-glance-material-mode)
-(require 'org-glance-metadata)
-(require 'org-glance-overview)
-(require 'org-glance-tag)
+(require 'org-glance-core)
 (require 'org-glance-ui)
 (require 'org-glance-utils)
+(require 'org-glance-capture)
+(require 'org-glance-headline)
+(require 'org-glance-graph)
+(require 'org-glance-tag-metrics)
+(require 'org-glance-property-index)
+(require 'org-glance-view)
+(require 'org-glance-material)
+(require 'org-glance-llm)
+(require 'org-glance-overview)
+(require 'org-glance-table)
+(require 'org-glance-tags)
 
-;; Major upgrade
-(require 'org-glance-capture-v2)
-(require 'org-glance-headline-v2)
-(require 'org-glance-graph-v2)
-
-(declare-function org-glance--back-to-heading "org-glance-utils.el")
-(declare-function org-glance--buffer-key-value-pairs "org-glance-utils.el")
-(declare-function org-glance--join-leading-separator "org-glance-utils.el" (separator strings))
-(declare-function org-glance--join-leading-separator-but-null "org-glance-utils.el" (spearator strings))
-(declare-function org-glance--list-directories "org-glance-utils.el" (base-dir))
-(declare-function org-glance--make-file-directory "org-glance-utils.el" (file))
-(declare-function org-glance--parse-links "org-glance-utils.el")
-(declare-function org-glance--remove-links "org-glance-utils.el" (&rest types))
-(declare-function org-glance--substitute-links "org-glance-utils.el")
-(declare-function org-glance-headline:at-point "org-glance-headline.el")
-(declare-function org-glance-headline:with-headline-at-point "org-glance-headline.el" (&rest forms))
-(declare-function org-glance-headline:with-narrowed-headline "org-glance-headline.el" (headline &rest forms))
-(declare-function org-glance-headline:not-found! "org-glance-exceptions.el")
-
-(defcustom org-glance-directory org-directory
-  "Main location for all Org mode content managed by `org-glance`."
-  :group 'org-glance
-  :type 'directory)
-
-(defcustom org-glance-clone-on-repeat-p nil
-  "Create a new headline copy when repeating rather than modifying in place."
-  :group 'org-glance
-  :type 'boolean)
-
-(defvar org-glance-graph-v2 (org-glance-graph-v2 org-glance-directory)
-  "Current global instance of `org-glance-graph-v2'.")
-
-(defgroup org-glance nil "Org-mode mindmap explorer."
-  :tag "Org Glance"
-  :group 'org)
-
-(defvar org-glance-tags (make-hash-table) "Hash table {tag -> `org-glance-tag-info'}")
-
-(cl-defun org-glance:tags ()  ;; -> list[symbol]
-  (hash-table-keys org-glance-tags))
-
-(cl-defun org-glance:tags-sorted () ;; -> list[symbol]
-  (sort (org-glance:tags) #'s-less?))
-
-;; TODO refactor is needed for all the filters
-(cl-defun org-glance:tag-filter (tag) ;; -> callable
-  #'(lambda (headline)
-      (when (-contains? (mapcar #'downcase (org-element-property :tags headline)) (symbol-name tag))
-        headline)))
-
-(cl-defun org-glance:tag-headlines (tag) ;; -> list[headline]
-  (org-glance-headlines :db (org-glance-metadata:location tag)
-                        :scope org-glance-directory
-                        :filter (org-glance:tag-filter tag)))
-
-(cl-defun org-glance-tags:completing-read (&optional (prompt "Tag: ") (require-match t))
-  "Run completing read PROMPT on registered tags filtered by TYPE."
-  (let ((tags (org-glance:tags-sorted)))
-    (org-glance-tag:from-string (completing-read prompt tags nil require-match))))
-
-(cl-defun org-glance:capture-template (tag &key (default ""))
-  (let ((capture-template-config-file (f-join (org-glance-overview:directory tag) "capture-template.org")))
-    (s-replace "%?" (concat default "%?")
-               (cond ((f-exists-p capture-template-config-file) (with-temp-buffer
-                                                                  (insert-file-contents capture-template-config-file)
-                                                                  (buffer-substring-no-properties (point-min) (point-max))))
-                     (t "* %?")))))
-
-(cl-defun org-glance:tag-file-name (&optional (tag (org-glance-tags:completing-read)))
-  "Path to directory where TAG-ID resources and metadata are stored."
-  (abbreviate-file-name (f-join org-glance-directory (s-downcase (format "%s" tag)) "resources")))
-
-(cl-defun org-glance:make-tag-directory (&optional (tag (org-glance-tags:completing-read)))
-  (save-excursion
-    (org-glance--back-to-heading)
-    (save-restriction
-      (org-narrow-to-subtree)
-      (org-glance-headline:make-directory
-       (org-glance:tag-file-name tag)
-       (org-element-property :raw-value (org-element-at-point))))))
-
-(cl-defun org-glance:create-tag (tag)
-  (unless (and (symbolp tag) (org-glance--symbol-downcased? tag))
-    (error "Expected downcased symbol for tag, bug got \"%s\" of type \"%s\"." tag (type-of tag)))
-
-  (when (org-glance-tag:register tag org-glance-tags :namespace org-glance-directory)
-    (org-glance-metadata:create (org-glance-metadata:location tag))
-    (org-glance-overview:create tag)))
-
-(cl-defun org-glance-materialized-headline:preserve-history-before-auto-repeat (&rest _)
-  (when (and org-glance-clone-on-repeat-p
-             (or org-glance-material-mode org-glance-overview-mode)
-             (member (org-get-todo-state) org-done-keywords)
-             (org-glance-headline:repeated-p))
-    (let ((contents (org-glance-headline:contents (org-glance-headline:at-point))))
-      (run-with-idle-timer 1 nil #'(lambda () (save-window-excursion
-                                           (with-temp-buffer
-                                             (insert contents)
-                                             (goto-char (point-min))
-
-                                             (org-glance-datetime-reset-buffer-timestamps-except-earliest)
-
-                                             (cl-loop
-                                              for class in (org-glance-headline:tags (org-glance-headline:at-point))
-                                              do (let ((headline (org-glance-capture-headline-at-point class)))
-                                                   (org-glance-overview:register-headline-in-archive headline class))))))))))
-
-(cl-defun org-glance-materialized-headline:cleanup-after-auto-repeat (&rest _)
-  "Do only if headline has been cloned before auto repeat.
-Cleanup new headline considering auto-repeat ARGS.
-
-- Remove all data but PINNED of cloned headline."
-  (when (and (or org-glance-material-mode org-glance-overview-mode)
-             org-glance-clone-on-repeat-p
-             (org-glance-headline:repeated-p))
-    (let ((contents (org-glance-headline:with-headline-at-point
-                     (let ((header (s-trim (buffer-substring-no-properties (point) (save-excursion (org-end-of-meta-data) (point)))))
-                           (pinned (save-excursion
-                                     (cl-loop
-                                      while (search-forward "#+begin_pin" nil t)
-                                      collect (save-excursion
-                                                (beginning-of-line)
-                                                (buffer-substring-no-properties (point) (save-excursion
-                                                                                          (search-forward "#+end_pin" nil t)
-                                                                                          (point))))))))
-                       (s-join "\n\n" (append (list header) pinned))))))
-      (delete-region (point-min) (point-max))
-      (insert contents)
-      (org-delete-property "LAST_REPEAT"))))
-
-;; TODO refactor
-(cl-defmacro org-glance-choose-and-apply (&key filter action)
-  "If HEADLINE specified, apply ACTION on it.
-
-If HEADLINE is not specified, ask user to choose HEADLINE from
-existing headlines filtered by FILTER.
-
-If user chooses unexisting headline, capture it and apply ACTION
-after capture process has been finished."
-  `(condition-case default
-       (cond (,filter (funcall ,action (org-glance-metadata:completing-read :filter ,filter)))
-             (t (funcall ,action (org-glance-metadata:completing-read))))
-     (org-glance-headline:not-found!
-      (let ((<buffer> (current-buffer))
-            (<point> (point))
-            (tag (org-glance-tags:completing-read "Unknown headline. Please, specify it's tag to capture: ")))
-        (org-glance-capture tag
-          :title (cadr default)
-          :callback (lambda ()
-                      (let ((<hl> (org-glance-overview:original-headline)))
-                        (switch-to-buffer <buffer>)
-                        (goto-char <point>)
-                        (funcall ,action <hl>))))))))
-
+;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
-  "Update all changed entities from `org-glance-directory'."
-
+  "Initialize org-glance in DIRECTORY: bring up the graph store and, when legacy
+metadata is detected, warn that `M-x org-glance-migrate' can convert it."
   (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
-
   (unless (f-exists? directory)
     (mkdir directory t))
+  (setq org-glance-graph (org-glance-graph directory))
+  (org-glance-migrate-maybe directory))
 
-  (org-glance-overview-init)
+;; --- Runtime migration of legacy v1 metadata into the graph -----------------
+;;
+;; The org files are canonical (see docs/archive/MIGRATION-PLAN.md), so migration RE-SCANS the
+;; sources -- it does not trust v1's possibly-stale `begin' pointers and never
+;; reads the v1 positional serialization. Legacy `*.metadata.el' files are merely
+;; the trigger; they are backed up, never deleted.
 
-  (add-hook 'org-glance-material-mode-hook #'org-glance-datetime-mode)
-  (advice-add 'org-auto-repeat-maybe :before #'org-glance-materialized-headline:preserve-history-before-auto-repeat (list :depth -90))
-  (advice-add 'org-auto-repeat-maybe :after #'org-glance-materialized-headline:cleanup-after-auto-repeat)
+(cl-defun org-glance-legacy-metadata-files (&optional (directory org-glance-directory))
+  "Return the list of legacy v1 `*.metadata.el' files under DIRECTORY."
+  (when (f-exists? directory)
+    (cl-loop for file in (directory-files-recursively directory "\\.metadata\\.el\\'")
+             unless (string-match-p "/\\.org-glance/" file)
+             collect file)))
 
-  (cl-loop for dir in (org-glance--list-directories directory)
-           for tag = (org-glance-tag:read dir)
-           do (org-glance:create-tag tag))
+(cl-defun org-glance-migrate--source-files (directory)
+  "Canonical org source files under DIRECTORY, excluding the store."
+  (cl-loop for file in (directory-files-recursively directory "\\.org\\(_archive\\)?\\'")
+           unless (string-match-p "/\\.org-glance/" file)
+           collect file))
 
-  (cl-loop for tag being the hash-keys of org-glance-tags
-           unless (f-exists? (f-join directory (org-glance-tag:to-string tag)))
-           do (org-glance-tag:remove tag org-glance-tags))
-
-  (setq org-agenda-files (mapcar 'org-glance-overview:file-name (org-glance:tags-sorted))))
-
-(cl-defun org-glance-init-v2 (&optional (directory org-glance-directory))
-  "Init global `org-glance-graph-v2' in DIRECTORY."
-  (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
-  (setq org-glance-graph-v2 (org-glance-graph-v2 directory)))
-
-(cl-defun org-glance-initialized?-v2 ()
-  "Return `org-glance-graph' if system is initialized, or else return `nil'."
-  org-glance-graph-v2)
-
-(cl-defun org-glance:@ ()
-  "Choose headline to refer. Insert link to it at point."
-  (interactive)
-  (let ((active-region? (and (not (org-in-src-block-p)) (region-active-p)))
-        (mention? (and (not (org-in-src-block-p)) (or (looking-back "^" 1) (looking-back "[[:space:]]" 1)))))
-    (condition-case nil
-        (cond (active-region? (error "Not implemented")
-                              ;; (let* ((buffer (current-buffer))
-                              ;;        (region-beginning (region-beginning))
-                              ;;        (region-end (region-end))
-                              ;;        (tag (org-glance-tags:completing-read (format "Specify tag for \"%s\": " (buffer-substring-no-properties region-beginning region-end))))
-                              ;;        (callback (lambda () (let ((headline (org-glance-overview:original-headline)))
-                              ;;                          (switch-to-buffer buffer)
-                              ;;                          (goto-char region-beginning)
-                              ;;                          (delete-region region-beginning region-end)
-                              ;;                          (insert (org-glance-headline:with-narrowed-headline headline
-                              ;;                                    (org-glance-headline-reference)))))))
-                              ;;   (org-glance-capture tag
-                              ;;     :default (buffer-substring-no-properties <region-beginning> <region-end>)
-                              ;;     :finalize t
-                              ;;     :callback callback))
-                              )
-
-              (mention? (org-glance-choose-and-apply
-                         :action (lambda (headline)
-                                   (insert
-                                    (org-glance-headline:with-narrowed-headline headline
-                                      (org-glance-headline-reference))))))
-
-              ;; simple @
-              (t (keyboard-quit)))
-      (quit (self-insert-command 1 64)))))
-
-(cl-defun org-glance:materialize (headline)
-  "Materialize HEADLINE in a new buffer."
-  (interactive (list (org-glance-metadata:completing-read)))
-  (cl-check-type headline org-glance-headline)
-  (switch-to-buffer (org-glance-headline:materialize headline))
-  headline)
-
-(cl-defun org-glance:open (headline)
-  "Run `org-open-at-point' on any `org-link' inside HEADLINE's contents.
-If there is only one link, open it.
-If there is more than one link, prompt user to choose which one to open.
-If headline doesn't contain links, role `can-be-opened' should be revoked."
-  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline)
-                                                                    (and
-                                                                     (org-glance-headline:active? headline)
-                                                                     (org-glance-headline:linked? headline))))))
-  (org-glance-headline:with-narrowed-headline headline
-    (cl-loop for (link title pos) in (org-glance--parse-links)
-             unless (s-starts-with-p "[[org-glance-" link)
-             collect (list title pos)
-             into links
-             finally
-             do (goto-char (cond ((> (length links) 1) (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
-                                 ((= (length links) 1) (cadar links))
-                                 (t (user-error "Unable to find links in headline"))))
-             (org-open-at-point))))
-
-(cl-defun org-glance:extract (headline &optional choice)
-  "Materialize HEADLINE and retrieve key-value pairs from its contents."
-  (interactive (list (org-glance-metadata:completing-read :filter (lambda (headline) (and (org-glance-headline:active? headline)
-                                                                                     (or (org-glance-headline:propertized? headline)
-                                                                                         (org-glance-headline:encrypted? headline)))))))
-  (cl-check-type headline org-glance-headline)
-  (org-glance-headline:with-narrowed-headline headline
-    (let* ((pairs (org-glance--buffer-key-value-pairs))
-           (interaction (not choice))
-           result)
-      (condition-case nil
-          (if interaction
-              (while t
-                (let ((choice (completing-read "Extract: " pairs nil t)))
-                  (setq result (alist-get choice pairs nil nil #'string=))
-                  (kill-new result)))
-            (setq result (alist-get choice pairs nil nil #'string=))
-            (kill-new result))
-        (quit (setq kill-ring nil)
-              (message "Kill ring has been cleared")))
-      result)))
-
-;; (cl-defun org-glance:prototype ()
-;;   (interactive)
-;;   "Capture headline based on chosen prototype."
-;;   (org-glance-choose-and-apply
-;;    :action (lambda (headline)
-;;              (org-glance-capture
-;;               :class (org-element-property :class headline)
-;;               :template (org-glance-headline:contents headline)))))
-
-(cl-defun org-glance-capture (tag &key
-                                  (title (cond ((use-region-p) (buffer-substring-no-properties (region-beginning) (region-end)))
-                                               (t "")))
-                                  (callback nil)
-                                  (finalize nil)
-                                  (template (org-glance:capture-template tag :default title)))
-  (declare (indent 1))
-  (interactive)
-  (let ((id (org-glance-tag:generate-id tag))
-        (file (make-temp-file "org-glance-" nil ".org")))
-    (find-file file)
-    (add-hook 'org-capture-prepare-finalize-hook (lambda () (org-glance-capture:prepare-finalize-hook id tag)) 0 t)
-    (add-hook 'org-capture-after-finalize-hook (lambda () (org-glance-capture:after-finalize-hook id tag)) 0 t)
-    (when callback (add-hook 'org-capture-after-finalize-hook callback 1 t))
-
-    (let ((org-capture-templates (list (list "_" "_" 'entry (list 'file file) template))))
-      (org-capture nil "_")
-      (when finalize (org-capture-finalize)))
-
-    id))
-
-(cl-defun org-glance:insert-pin-block ()
-  (interactive)
-  (insert "#+begin_pin" "\n\n" "#+end_pin")
-  (forward-line -1))
-
-(cl-defun org-glance:headline-alias (&optional (headline (org-glance-headline:at-point)))
-  "Get title of HEADLINE considering alias property."
+(cl-defun org-glance-migrate--overview-file? (file)
+  "Non-nil if FILE is a v1 `org-glance-overview' file (a read-only clone store).
+Detected by its prop-line `mode: org-glance-overview' marker."
   (with-temp-buffer
-    (save-excursion
-      (insert (org-glance-headline:alias headline)))
-    (org-glance--remove-links 'org-glance-overview 'org-glance-state)
-    (org-glance--substitute-links)
-    (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
+    (insert-file-contents file nil 0 256)
+    (goto-char (point-min))
+    (re-search-forward "mode:[ \t]*org-glance-overview" nil t)))
 
-;; Relations
+;; --- Persistent migration progress ------------------------------------------
+;;
+;; Migration is journaled so it is idempotent and resumable: each canonical
+;; source file is recorded (by its path relative to the directory) the moment it
+;; is fully ingested.  A re-run -- whether after a crash mid-batch or a normal
+;; second invocation -- skips every already-recorded source, so no headline is
+;; ingested twice.  The journal is an append-only JSONL file at the store root
+;; (one `{"source": "<relpath>"}' per line); appending after each clean file
+;; keeps the record durable across an Emacs restart with at most the in-flight
+;; file to redo.  Even that file cannot duplicate: a headline whose id+hash
+;; already match the store is not re-added (see the ingest loop).
 
-(cl-defun org-glance-headline:repeated-p ()
-  (org-glance-datetime-headline-repeated-p))
+(cl-defun org-glance-migrate--journal-path (graph)
+  "Path of GRAPH's persistent migration-progress journal."
+  (f-join (org-glance-graph:store-path graph) "migration.jsonl"))
 
-(cl-defun org-glance-headline:make-directory (location title)
-  (abbreviate-file-name
-   (make-temp-file
-    (org-glance--make-file-directory
-     (f-join location
-             (concat (format-time-string "%Y-%m-%d_")
-                     (->> title
-                          (replace-regexp-in-string "[^a-z0-9A-Z_]" "-")
-                          (replace-regexp-in-string "\\-+" "-")
-                          (replace-regexp-in-string "\\-+$" "")
-                          (s-truncate 30))
-                     "-")))
-    'directory)))
+(cl-defun org-glance-migrate--migrated-sources (graph)
+  "Hash-table set of source files already migrated into GRAPH's store.
+Keys are paths relative to the graph directory, read from the journal; an empty
+table when nothing has been migrated yet."
+  (let ((path (org-glance-migrate--journal-path graph))
+        (done (make-hash-table :test 'equal)))
+    (when (f-exists? path)
+      (dolist (line (split-string (f-read-text path 'utf-8) "\n" t))
+        (ignore-errors
+          (puthash (plist-get (json-parse-string line :object-type 'plist) :source)
+                   t done))))
+    done))
 
-(cl-defun org-glance-headlines (&key db (scope '(agenda)) (filter #'(lambda (_) t)) (db-init nil))
-  "Deprecated method, refactor it."
-  (let* ((create-db? (or (and db db-init) (and db (not (file-exists-p db)))))
-         (load-db? (and (not (null db)) (file-exists-p db)))
-         (skip-db? (null db)))
-    (cond (create-db? (let ((headlines (org-glance-scope-headlines scope filter)))
-                        (org-glance-metadata:create db headlines)
-                        headlines))
-          (load-db?   (org-glance-metadata:headlines (org-glance-metadata:read db)))
-          (skip-db?   (org-glance-scope-headlines scope filter))
-          (t          (user-error "Nothing to glance at (scope: %s)" scope)))))
+(cl-defun org-glance-migrate--record-source (graph relpath)
+  "Durably append RELPATH to GRAPH's migration journal.
+The file is created on first append; its directory (the store root) already
+exists, having been created when the graph was constructed."
+  (f-append-text (concat (json-serialize (list :source relpath)) "\n")
+                 'utf-8 (org-glance-migrate--journal-path graph)))
 
-;; TODO refactor, slow
-(cl-defun org-glance-metadata:completing-read-options (&optional filter)
-  (cl-loop for tag being the hash-keys of org-glance-tags
-           append (cl-loop for headline-metadata in (org-glance:tag-headlines tag)
-                           when (or (null filter) (funcall filter headline-metadata))
-                           collect (cons (format "[%s] %s" tag (org-glance-headline:plain-title headline-metadata)) headline-metadata))))
+(cl-defun org-glance-migrate--ingest-file (graph file seen)
+  "Ingest ORG_GLANCE_ID-bearing headlines from source FILE into GRAPH.
+SEEN is an id->content-hash table of records already in the store; a headline
+whose id+hash is already present is skipped (so a re-run, or a redo of a file
+interrupted mid-ingest, never appends a duplicate record), and SEEN is updated
+in place as headlines are added.  Return the number of headlines actually added.
 
-(defvar org-glance-scope:extensions
-  '("org" "org_archive"))
+Read-only parse in a temp buffer -- never `find-file' the source.
+`delay-mode-hooks' (via `org-glance--org-mode') suppresses
+`after-change-major-mode-hook', which is what `global-undo-tree-mode' (and other
+globalized minor modes) hook into; combined with the temp buffer, undo-tree
+never activates, no undo is recorded and no `.~undo-tree~' files are written.
+Also skips per-file `org-mode-hook'."
+  (let ((added 0))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (org-glance--org-mode)
+      (dolist (headline (org-glance-graph:capture-buffer (current-buffer)))
+        (when-let ((id (org-glance-headline:id headline)))
+          (let ((hash (org-glance-headline:hash headline)))
+            (unless (equal (gethash id seen) hash)
+              (org-glance-graph:add graph headline)
+              (puthash id hash seen)
+              (cl-incf added))))))
+    added))
 
-(defvar org-glance-scope--default-scope-alist
-  '((file-with-archives . org-glance--file-with-archives)
-    (agenda . org-agenda-files)
-    (agenda-with-archives . org-glance--agenda-with-archives)))
+(cl-defun org-glance-migrate (&optional (directory org-glance-directory))
+  "Rebuild the graph in DIRECTORY from legacy v1 content.
+Scan canonical (non-overview) org files for headlines carrying ORG_GLANCE_ID and
+add them to the graph preserving ids.  Idempotent and resumable: progress is
+journaled per source file, so already-migrated sources are skipped and no
+headline is ever ingested twice (see `org-glance-migrate--migrated-sources').
+Only on a fully clean pass (no source skipped) are the legacy `*.metadata.el'
+indices backed up to `*.metadata.el.bak' (never deleted); a partial or
+interrupted run leaves them in place so it stays detectable and resumable.
+Return the number of headlines ingested this run."
+  (interactive)
+  (let* ((graph (org-glance-graph directory))
+         (done (org-glance-migrate--migrated-sources graph))
+         (pending (cl-remove-if (lambda (f) (gethash (f-relative f directory) done))
+                                (org-glance-migrate--source-files directory)))
+         ;; One id->hash snapshot of the store, built once and updated as we add,
+         ;; so dedup is an O(1) lookup instead of a per-headline segment scan.
+         (seen (and pending
+                    (let ((h (make-hash-table :test 'equal)))
+                      (dolist (meta (org-glance-graph:headlines graph) h)
+                        (puthash (org-glance-headline-metadata:id meta)
+                                 (org-glance-headline-metadata:hash meta) h)))))
+         (total (length pending))
+         (reporter (and (> total 0)
+                        (make-progress-reporter "org-glance: migrating sources... " 0 total)))
+         (count 0)
+         (skipped nil))
+    (cl-loop for file in pending
+             for i from 1
+             for relpath = (f-relative file directory)
+             ;; Per-file `condition-case' so one unreadable/mis-decoded file
+             ;; (e.g. autodetect mis-guesses a non-utf-8 encoding) is logged and
+             ;; skipped instead of aborting the whole batch.  A skipped file is
+             ;; NOT journaled, so a later run retries it.  Overview clones are
+             ;; journaled but never ingested, so a clone can't override its
+             ;; source and is also skipped on resume.
+             do (condition-case err
+                    (progn
+                      (unless (org-glance-migrate--overview-file? file)
+                        (cl-incf count (org-glance-migrate--ingest-file graph file seen)))
+                      (org-glance-migrate--record-source graph relpath))
+                  (error
+                   (push file skipped)
+                   (display-warning 'org-glance
+                                    (format "Skipped %s during migration: %s"
+                                            file (error-message-string err))
+                                    :warning)))
+             (when reporter (progress-reporter-update reporter i)))
+    (when reporter (progress-reporter-done reporter))
+    (let ((legacy (org-glance-legacy-metadata-files directory)))
+      ;; Back up legacy indices only on a clean pass.
+      (unless skipped
+        (dolist (file legacy)
+          (rename-file file (concat file ".bak") t)))
+      (when (called-interactively-p 'any)
+        (message "org-glance: migrated %d headline(s)%s; %s %d legacy file(s)."
+                 count
+                 (if skipped (format ", skipped %d file(s)" (length skipped)) "")
+                 (if skipped "kept" "backed up")
+                 (length legacy))))
+    count))
 
-(cl-defgeneric org-glance-scope (_)
-  "Convert input to list of files if possible.")
+(cl-defun org-glance-reindex (&optional (directory org-glance-directory))
+  "Re-derive metadata for all headlines in DIRECTORY's graph from their stored
+content.  Run once after upgrading to backfill newly-added projection fields
+(e.g. the `linked?'/`propertized?' flags used to filter `org-glance-open'
+and `org-glance-extract')."
+  (interactive)
+  (let* ((graph (org-glance-graph directory))
+         (n (org-glance-graph:reindex graph)))
+    (org-glance-property-index:clear graph)   ; derived; rebuilds lazily
+    (when (called-interactively-p 'any)
+      (message "org-glance: re-indexed %d headline(s)." n))
+    n))
 
-(cl-defmethod org-glance-scope ((file string))
-  "Return list of file S if exists."
-  (let ((files (cond
-                ((not (file-exists-p file)) (message "File \"%s\" does not exist" file) nil)
-                ((not (file-readable-p file)) (message "File \"%s\" is not readable" file) nil)
-                ((f-directory? file) (org-glance-scope (directory-files-recursively file "\\.*.org\\.*")))
-                ((with-temp-buffer
-                   (insert-file-contents file)
-                   (hack-local-variables)
-                   (alist-get 'org-glance-overview-mode (buffer-local-variables))) (message "File \"%s\" is in `org-glance-overview' mode" file) nil)
-                (t (list file)))))
-    (cl-loop
-     for file in files
-     when (member (file-name-extension file) org-glance-scope:extensions)
-     collect file)))
+(cl-defun org-glance-graph-compact (&optional (directory org-glance-directory))
+  "Compact DIRECTORY's metadata store: merge sealed segments into one, drop
+superseded records and tombstones, and reclaim the content of deleted headlines.
+Safe to run anytime; a no-op on an already-compact store."
+  (interactive)
+  (let* ((graph (org-glance-graph directory))
+         (n (org-glance-graph:compact graph)))
+    (when (called-interactively-p 'any)
+      (message "org-glance: compacted; %d live headline(s)." n))
+    n))
 
-(cl-defmethod org-glance-scope ((l sequence))
-  "Convert L to flattened list of files."
-  (-some->> l
-    (-keep #'org-glance-scope)
-    -flatten
-    seq-uniq))
+(defvar org-glance-migrate--warned nil
+  "Non-nil once the legacy-metadata warning has fired this session.
+Keeps `org-glance-migrate-maybe' from re-warning on a repeated init.")
 
-(cl-defmethod org-glance-scope ((s symbol))
-  "Return extracted S from `org-glance-scope--default-scope-alist'."
-  (if-let (reserved-scope (assoc s org-glance-scope--default-scope-alist))
-      (funcall (cdr reserved-scope))
-    (org-glance-scope (symbol-name s))))
-
-(cl-defmethod org-glance-scope ((b buffer))
-  "Return list of files from buffer B."
-  (list (condition-case nil (get-file-buffer b) (error b))))
-
-(cl-defmethod org-glance-scope ((f function))
-  "Adapt result of F."
-  (-some->> f funcall org-glance-scope))
-
-(cl-defun org-glance-scope-headlines (scope &optional (filter (lambda (headline) headline)))
-  (cl-loop for file in (org-glance-scope scope)
-           append (with-temp-buffer
-                    (org-mode)
-                    (insert-file-contents file)
-                    (-non-nil (mapcar filter (org-glance-headline:buffer-headlines (current-buffer)))))))
+(cl-defun org-glance-migrate-maybe (&optional (directory org-glance-directory))
+  "If legacy v1 metadata is present in DIRECTORY, warn that it can be converted.
+Never migrates automatically and never prompts -- the legacy store is left
+untouched.  Emits the warning at most once per session; `M-x org-glance-migrate'
+performs the conversion whenever the user chooses.  Always returns nil."
+  (when (and (not org-glance-migrate--warned)
+             (org-glance-legacy-metadata-files directory))
+    (setq org-glance-migrate--warned t)
+    (display-warning 'org-glance
+                     "Legacy .metadata.el detected; run `M-x org-glance-migrate' to convert it to the graph store."
+                     :warning))
+  nil)
 
 (defface org-glance-link-materialize-face
   '((((background dark)) (:inherit default :underline "MediumPurple3"))
     (t (:inherit default :underline "Magenta")))
-  "*Face used to highlight evaluated paragraph."
+  "Face of `org-glance-material:'/`org-glance-visit:' links (follow = edit)."
   :group 'org-glance
   :group 'faces)
 
 (defface org-glance-link-overview-face
   '((((background dark)) (:inherit default :slant italic))
     (t (:inherit default :slant italic)))
-  "*Face used to highlight evaluated paragraph."
+  "Face of `org-glance-overview:' links (follow = browse a filtered view)."
   :group 'org-glance
   :group 'faces)
 
-(defface org-glance-link-state-face
-  '((((background dark)) (:inherit default :weight bold))
-    (t (:inherit default :weight bold)))
-  "*Face used to highlight evaluated paragraph."
-  :group 'org-glance
-  :group 'faces)
+(cl-defun org-glance-link:complete-material ()
+  "Org link completion for the canonical edge type: pick a headline, return
+an `org-glance-material:ID' link string."
+  (org-glance-ensure-init)
+  (org-glance--edge->link-path
+   (org-glance-headline-metadata:id
+    (org-glance-material:completing-read org-glance-graph))))
 
-(cl-defun org-glance-link:choose-thing-for-materialization ()
-  (concat "org-glance-visit:" (org-glance-headline:id (org-glance-metadata:completing-read))))
-
-(cl-defun org-glance-link:choose-thing-for-opening ()
-  (concat "org-glance-open:" (org-glance-headline:id (org-glance-metadata:completing-read
-                                                      :filter #'(lambda (headline)
-                                                                  (and
-                                                                   (org-glance-headline:active? headline)
-                                                                   (org-glance-headline:linked? headline)))))))
-
+(cl-defun org-glance-link:complete-open ()
+  "Org link completion for `org-glance-open': pick an active, linked headline."
+  (org-glance-ensure-init)
+  (->> (org-glance-material:completing-read
+        org-glance-graph
+        :prompt "Open: "
+        :filter (lambda (m) (and (org-glance-headline-metadata:active? m)
+                            (org-glance-headline-metadata:linked? m))))
+       org-glance-headline-metadata:id
+       (concat "org-glance-open:")))
 
 (org-link-set-parameters
- "org-glance-visit"
- :follow #'org-glance-link:materialize
+ org-glance-link-material-type            ; "org-glance-material" -- the canonical edge
+ :follow #'org-glance-link:material
  :face 'org-glance-link-materialize-face
- :complete 'org-glance-link:choose-thing-for-materialization
- ;; :export #'org-glance-link:export
- ;; :store #'org-glance-link:store-link
- )
+ :complete #'org-glance-link:complete-material)
+
+(org-link-set-parameters
+ "org-glance-visit"                       ; legacy edge type: followed, never completed
+ :follow #'org-glance-link:material
+ :face 'org-glance-link-materialize-face)
 
 (org-link-set-parameters
  "org-glance-open"
  :follow #'org-glance-link:open
- :complete 'org-glance-link:choose-thing-for-opening
- ;; :export #'org-glance-link:export
- ;; :store #'org-glance-link:store-link
- )
+ :complete #'org-glance-link:complete-open)
 
 (org-link-set-parameters
  "org-glance-overview"
  :follow #'org-glance-link:overview
  :face 'org-glance-link-overview-face)
 
-(org-link-set-parameters
- "org-glance-state"
- :follow #'org-glance-link:state
- :face 'org-glance-link-state-face)
-
-;; (defcustom org-glance-link:command 'man
-;;   "The Emacs command to be used to display a man page."
-;;   :group 'org-link
-;;   :type '(choice (const man) (const woman)))
-
-(defun org-glance-link:materialize (id &optional _)
-  "Materialize org-glance headline identified by ID."
-  (org-glance:materialize (org-glance-metadata:headline-metadata id)))
+(defun org-glance-link:material (path &optional _)
+  "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
+The kind annotates the edge (stored in the `relations' metadata), not the jump.
+One handler serves both edge link types (material + legacy visit)."
+  (org-glance-ensure-init)
+  (switch-to-buffer
+   (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
 
 (defun org-glance-link:open (id &optional _)
-  "Open org-glance headline identified by ID."
-  (org-glance:open (org-glance-metadata:headline-metadata id)))
+  "Open a link inside the org-glance headline identified by ID."
+  (org-glance-ensure-init)
+  (let ((headline (org-glance-graph:headline org-glance-graph id)))
+    (unless headline (user-error "org-glance: headline %s not found" id))
+    (org-glance-material:open-link headline)))
 
-(defun org-glance-link:overview (tag &optional _)
-  "Open org-glance headline identified by ID."
-  (org-glance-overview (intern (downcase tag))))
-
-(defun org-glance-link:state (_state &optional _)
-  "Get all headlines with todo state equal STATE."
-  (user-error "Not implemented."))
-
-;; (defun org-glance-link:store-link ()
-;;   "Store a link to a man page."
-;;   (when (memq major-mode '(Man-mode woman-mode))
-;;     ;; This is a man page, we do make this link.
-;;     (let* ((page (org-glance-link:get-page-name))
-;;            (link (concat "man:" page))
-;;            (description (format "Man page for %s" page)))
-;;       (org-link-store-props
-;;        :type "man"
-;;        :link link
-;;        :description description))))
-
-;; (defun org-glance-link:get-page-name ()
-;;   "Extract the page name from the buffer name."
-;;   ;; This works for both `Man-mode' and `woman-mode'.
-;;   (if (string-match " \\(\\S-+\\)\\*" (buffer-name))
-;;       (match-string 1 (buffer-name))
-;;     (error "Cannot create link to this man page")))
-
-;; (defun org-glance-link:export (link description format _)
-;;   "Export a man page link from Org files."
-;;   (let ((path (format "http://man.he.net/?topic=%s&section=all" link))
-;;         (desc (or description link)))
-;;     (pcase format
-;;       (`html (format "<a target=\"_blank\" href=\"%s\">%s</a>" path desc))
-;;       (`latex (format "\\href{%s}{%s}" path desc))
-;;       (`texinfo (format "@uref{%s,%s}" path desc))
-;;       (`ascii (format "%s (%s)" desc path))
-;;       (t path))))
-
-(cl-defun org-glance (&key db
-                           default
-                           (db-init nil)
-                           (filter #'(lambda (_) t))
-                           (scope '(agenda))
-                           (action #'org-glance-headline:visit)
-                           (prompt "Glance: "))
-  "Deprecated main method, refactoring needed."
-  (let ((headlines (org-glance-headlines :db db
-                                         :db-init db-init
-                                         :scope scope
-                                         :filter filter)))
-    (when-let (choice (or default
-                          (completing-read prompt (mapcar #'org-glance-headline:plain-title headlines) nil t)))
-      (if-let (headline (org-glance-headline:select-by-title choice headlines))
-          (condition-case nil
-              (funcall action headline)
-            (DB-OUTDATED (message "Metadata %s is outdated, actualizing..." db)
-                         (redisplay)
-                         (org-glance :scope scope
-                                     :filter filter
-                                     :action action
-                                     :db db
-                                     :db-init t
-                                     :default choice
-                                     :prompt prompt)))
-        (error "Headline not found")))))
+(defun org-glance-link:overview (path &optional _)
+  "Open the overview PATH describes: \"TAG[?KEY=VALUE&...]\".
+A bare TAG merges the ambient `org-glance-filter-spec' exactly like the
+`org-glance-overview' command; a `?'-qualified PATH is explicit — exactly the
+filter it states, no ambient merge.  Both land in
+`org-glance-overview-default-view'.  See `org-glance-filter:from-link-path'."
+  (org-glance-ensure-init)
+  (let ((spec (org-glance-filter:from-link-path path)))
+    (if (string-match-p "[?]" path)
+        (org-glance-overview:visit-default org-glance-graph spec)
+      (org-glance-overview spec))))
 
 (provide 'org-glance)
 ;;; org-glance.el ends here

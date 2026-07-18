@@ -1,0 +1,159 @@
+#+TITLE: First-class typed relations (edge model)
+#+DATE: 2026-07-09
+
+Status: *superseded* by [[file:2026-07-18-relations.done.org][relations]] — the store half survives there (field-table projection); the reverse sidecar and record re-append do not.
+
+* Problem
+
+org-glance calls itself a knowledge *graph*, yet the store holds only *nodes*:
+headline records keyed by ~ORG_GLANCE_ID~, projected through the metadata field
+table at ~src/data/org-glance-graph.el:74-95~. There are *no edges*. Five long
+-standing items in [[file:../../org-glance.org][org-glance.org]] are blocked on
+their absence:
+
+- *Roles for relations* — next / blocked-by / cloned-from / subtask
+  ([[file:../../org-glance.org::*implement roles for relations][org-glance.org:76-80]]).
+- *Fix reverse relation* ([[file:../../org-glance.org::*fix reverse relation][org-glance.org:126]]).
+- *Timedelta for downstream tasks* ([[file:../../org-glance.org::*timedelta for downstream tasks][org-glance.org:109]]).
+- *Build titles from all direct relations* ([[file:../../org-glance.org::*build titles from all direct relations][org-glance.org:235]]).
+- *Resolve title collision by traversing dependencies*
+  ([[file:../../org-glance.org::*Resolve title collision by traversing dependencies][org-glance.org:237]]).
+
+The only relation code that ever existed is commented out and stale at
+~src/data/org-glance-graph.el:839-865~ (~org-glance-graph:add-relation~,
+~:relations~): it re-serializes a record with a ~:relations~ plist entry and
+calls a dead ~org-glance-graph:insert~ API. It predates the WAL store and the
+field-table projection, so it neither persists through ~serialize~ /
+~deserialize~ nor survives compaction.
+
+* Proposed change
+
+Model an edge as a typed pair =[role target-id]= carried *on the source record*,
+so relations ride the existing content store — atomic commit, sealing,
+compaction, read cache — with no new persistence machinery.
+
+1. Add one struct slot ~relations~ (~src/data/org-glance-graph.el:58-72~) and one
+   row to ~org-glance-headline-metadata:fields~ (~:74-95~), *appended at the
+   end* so the on-disk JSON key order — an explicit byte-stability contract with
+   the store (~:92-94~) — is unchanged for every pre-existing field.
+2. Reverse lookup is a *derived read* over an ~id→incoming-edges~ sidecar built
+   by a ~org-glance-graph-before-append-functions~ hook, exactly as tag-metrics
+   maintains its sidecar. One write per relation; bidirectionality is never a
+   dual write that can half-fail.
+3. Auto-derive ~mentions~ edges from the already-parsed
+   ~org-glance-headline:links~ (~src/data/org-glance-headline.el:100~), so links
+   into the graph become first-class edges for free.
+4. First concrete consumer: a ~cloned-from~ back-pointer on clone-on-repeat,
+   which today drops all lineage.
+
+* Design
+
+** Persist the edge on the record (zero new store code)
+
+The field table is the single source of truth driving the constructor,
+~serialize~ (~:147-151~) and ~deserialize~ (~:153-158~) together; the load-time
+guard (~:97-102~) errors unless the struct slots and table rows match in order.
+Adding a field is *one struct slot + one table row*:
+
+#+begin_src elisp
+;; struct, appended after `encrypted?' (org-glance-graph.el:72)
+(relations nil :read-only t :type list)
+
+;; field table, appended as the last row (org-glance-graph.el:86)
+(relations :relations ,(lambda (h) (org-glance-headline--relations h)) rels-vec rels-list)
+#+end_src
+
+A relation value is a list of =[role target-id]= vectors. New ~encode~ /
+~decode~ kinds in ~--encode~ (~:104-108~) and ~--decode~ (~:110-115~) coerce the
+edge list to/from a JSON array-of-arrays (~rels-vec~ / ~rels-list~), mirroring
+the existing ~tags-vector~ / ~tags-list~ pair. Appending the row last keeps every
+prior key's serialized position fixed, so old blobs stay byte-identical and old
+records — lacking the key — deserialize with ~relations = nil~, the same
+absent-field contract the projection flags already rely on (~:68-71~).
+
+*Writing an edge = re-appending the source record.* Last-write-wins over
+~ORG_GLANCE_ID~ (the positional reader ~--latest-records~) means an edge write is
+an ordinary ~org-glance-graph:add~ of the updated metadata: it inherits atomic
+commit, sealing, compaction and read-cache invalidation with no bespoke path.
+This is what the dead ~add-relation~ (~:839-865~) was reaching for; done through
+the field table it actually round-trips.
+
+** Reverse edges: a sidecar, not a dual write
+
+Storing only the forward edge on the source keeps writes single-record. The
+reverse direction (~blocked-by~ ⇔ blocks, ~cloned-from~ ⇔ has-clone) is a
+*derived index*, built the same way ~tag-metrics~ builds its per-tag facts: a
+function on ~org-glance-graph-before-append-functions~
+(~src/data/org-glance-graph.el:438-463~; registered like
+~src/data/org-glance-tag-metrics.el:66~) folds each appended spec's forward
+edges into an ~id→incoming~ map persisted under ~<store>/config/~ via
+~org-glance--write-eld~ (tag-metrics pattern, ~:19-29~). Errors in the hook are
+already demoted (~:452~), so a failing index never breaks a save. A reverse query
+reads the sidecar; it can also be re-folded from live headlines, so it cannot
+permanently drift.
+
+** Mentions from links, for free
+
+~org-glance-headline:links~ (~src/data/org-glance-headline.el:100-101~) already
+forces the parsed link list. ~--relations~ derives a ~mentions~ edge for every
+link whose target resolves to a graph id, so the ~:relations~ field is populated
+without any capture-time UI. Links that resolve to nothing are skipped.
+
+** Backfill
+
+~org-glance-graph:reindex~ (~src/data/org-glance-graph.el:653-670~) re-derives
+every live record from stored content, so it repopulates ~:relations~ (and
+re-folds the reverse sidecar through the append hook) on already-stored
+headlines — the same mechanism that backfills the projection flags.
+
+** First consumer: cloned-from lineage
+
+~org-glance-material:clone-on-repeat~
+(~src/view/org-glance-material.el:133-153~) snapshots a completed repetition,
+strips its ~ORG_GLANCE_ID~ (~:152~) and captures it as a fresh headline, keeping
+*no* link back to the original. With edges, the clone captures a
+=[cloned-from ORIGINAL-ID]= relation, giving the lineage the org-glance.org items
+at [[file:../../org-glance.org::*Cloned headlines should contain pointer on previous][lines 105 and 239]] ask for, and populating the reverse (has-clone) side
+automatically.
+
+* Test plan
+
+- Round-trip: a record with ~relations~ serialize→deserialize is ~equal~;
+  encode/decode of the =[role target-id]= vector list survives JSON.
+- Byte-stability: a record with ~relations = nil~ serializes byte-identically to
+  the pre-change output (locks the append-at-end contract).
+- Load guard stays green (struct/table in sync after the new slot+row).
+- Forward write: ~add~-ing an edge then re-reading returns it; a second edge on
+  the same source last-write-wins without losing the first.
+- Reverse sidecar: after appending =A -[blocked-by]-> B=, B's incoming query
+  yields A; re-folding from live headlines reproduces the map.
+- Mentions: a headline linking to an in-graph id gains a ~mentions~ edge; a
+  dangling link adds none.
+- Reindex backfills ~:relations~ and the sidecar on a store written before the
+  field existed.
+- clone-on-repeat: the clone carries ~cloned-from~ pointing at the original id.
+
+* Risk
+
+- *Low* on persistence: reuses the field table, WAL append, sealing and
+  compaction unchanged; the byte-stability test guards the append-at-end rule.
+- Sidecar can lag after out-of-band edits, mitigated by re-folding from live
+  headlines (same posture as tag-metrics ~:count~/~:states~).
+- Edge target ids can dangle if the target is deleted; reverse queries and
+  ~mentions~ derivation must tolerate unresolved ids (skip, do not error).
+
+* Effort
+
+*Medium.* Slot + row + two encode/decode kinds and ~--relations~ (~half a day);
+the reverse sidecar module modeled on ~org-glance-tag-metrics.el~ (~half a day);
+clone-on-repeat wiring and tests (~half a day).
+
+* Related
+
+- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] — same field-table projection; ~--relations~ should
+  fold into the single content-facts pass it proposes rather than reparse.
+- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] — the read cache an edge write invalidates.
+- [[file:2026-07-06-performance-audit.org][Performance audit]] — the field-table / WAL machinery this reuses.
+- Touched: ~src/data/org-glance-graph.el~, ~src/data/org-glance-headline.el~,
+  ~src/data/org-glance-tag-metrics.el~ (as the sidecar template),
+  ~src/view/org-glance-material.el~.

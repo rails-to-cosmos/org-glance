@@ -1,0 +1,53 @@
+#+TITLE: org-glance documentation index
+
+Entry point for the org-glance design wiki.  Documents live in
+[[file:proposals/][=docs/proposals/=]] and cross-link each other.  Convention:
+proposals are named =YYYY-MM-DD-slug.proposed.org= and renamed to =….done.org=
+when implemented (older ones are =.md=; new ones are =.org=).
+
+* Living indexes
+
+- [[file:proposals/2026-07-06-performance-audit.org][Performance audit]] — the hub for the current performance work; lists the
+  proposals below and tracks what is done, proposed, and refuted.
+- [[file:archive/MIGRATION-PLAN.md][Migration & Stabilization Plan]] (archive) — the v1→v2 migration and path to a
+  stable release.
+
+* Done
+
+- [[file:proposals/2026-07-09-git-sync-merge-resolution.done.org][Auto-resolve git merge conflicts in the synced store]] — =merge=union= for the
+  append-only JSONL + MANIFEST self-heal, so a git-synced store merges without
+  hand-resolution.
+- [[file:proposals/2026-07-06-table-view-git-dependency.done.org][Retire vendoring — table-view as a pinned git dependency]] — drop the vendored
+  copy; declare =table-view= via a MELPA-style pin in =Eask=.
+- [[file:proposals/2026-06-30-material-save-async-sync.done.md][Fast material saves — WAL-commit on the hot path]] — views self-sync off the
+  commit instead of blocking the save.
+- [[file:proposals/2026-06-07-generalize-metadata-field-table.done.md][Field-spec table for the metadata projection]] — one descriptor table drives
+  the metadata fields.
+- [[file:proposals/2026-06-07-generalize-filter-key-table.done.md][One descriptor table for overview filter keys]] — same generalization for the
+  overview filter keys.
+
+* Proposed — performance
+
+Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performance audit]].
+
+- [[file:proposals/2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] — patch the cache on append instead of
+  invalidating it (the structural one).
+- [[file:proposals/2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] — reuse the =--from-string= parse so a build is one
+  parse, not two.
+- [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
+  displayed property column.
+- [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page, not the whole set.
+- [[file:proposals/2026-07-06-incremental-row-update.proposed.org][Incremental row update]] — upsert one row + single render for single-row
+  actions.
+
+* Proposed — other
+
+- [[file:proposals/2026-07-06-encrypted-materialize-gpg.proposed.org][Encrypted headlines via GPG (EasyPG)]] — replace the home-grown AES with
+  EasyPG for encrypted materialization.
+- [[file:proposals/2026-06-19-composable-tag-templates.proposed.md][Composable tag templates]] — tags as Haskell-style type classes.
+
+* Proposed — generalization / refactor
+
+- [[file:proposals/2026-06-07-generalize-core-v2-module.proposed.md][org-glance-core-v2.el for the graph-lifecycle trio]].
+- [[file:proposals/2026-06-07-generalize-graph-content-path.proposed.md][Graph-owned content-path accessor]].
+- [[file:proposals/2026-06-07-generalize-test-fixture-helpers.proposed.md][Shared fixtures for the v2 test suite]].

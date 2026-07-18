@@ -1,0 +1,151 @@
+#+TITLE: Incremental metadata cache — patch on append, don't invalidate
+#+DATE: 2026-07-06
+
+Status: *proposed* · performance audit 2026-07-06 · part of
+[[file:2026-07-06-performance-audit.org][Performance audit]]
+
+* Problem
+
+The in-memory read cache (~org-glance-graph--ensure-cache~) is thrown away on
+*every* write and rebuilt from scratch on the next read.
+
+- ~org-glance-graph--append~ (the WAL insert behind every save/materialize)
+  unconditionally calls ~org-glance-graph--invalidate-cache~, which sets the
+  cache slot to ~nil~ (=graph.el:448,385=).
+- The next read (~:headlines~, ~:get-headline~, ~:states~, ~:tags~) goes through
+  ~--ensure-cache~, which on a snapshot mismatch does a *full rebuild*:
+  ~--latest-records~ → ~--scan-forward~ → ~--scan-file~ re-reads and
+  re-~json-parse~-s *every record in every live segment*, then deserializes
+  *every* live struct into ~:live~ and rebuilds the ~:by-id~ hash.
+
+So editing and saving one headline re-reads and re-parses the entire store to
+redraw one row.
+
+** Cost
+
+- Per rebuild: =O(R)= disk read + ~json-parse~ of all R raw records + =O(N)=
+  struct deserialization, where R = records since the last compaction
+  (≈ =Θ(N)= under the default 4-segment auto-compaction) and N = live headlines.
+- *Hot path* — save→refresh: ~material:sync~ appends one record (invalidate),
+  then the display-boundary pull calls ~:headlines~ → full rebuild. Tens to
+  low-hundreds of ms per save at N = 10^4.
+- *Worst case* — bulk state change: ~set-todo-bulk~ processes rows one at a
+  time, and each row's ~material:open~ → ~:get-headline~ → ~--ensure-cache~
+  re-reads the cache the *previous* row's save just invalidated. So k marked
+  rows cost =O(N·k)= — multi-second latency for one bulk command.
+
+* Proposed change
+
+~--append~ already holds the exact records it just serialized. Instead of
+nulling the cache, *patch it in place*:
+
+- ~:by-id~ — ~puthash~ each appended record (=O(1)= per record).
+- ~:live~ — for each appended record:
+  - a *new* id → deserialize and *append* the struct (first-sighting order = end);
+  - an *existing live* id → *replace* its struct in place (first-sighting position
+    preserved);
+  - a *tombstone* → *remove* the id's struct from ~:live~.
+- ~:snapshot~ — after the write (and any seal), recompute ~--store-snapshot~ and
+  store it, so the next read sees the patched cache as *current* and serves it
+  with no rebuild.
+
+This turns save→refresh from =O(R json-parse + N deserialize + disk)= into
+=O(k)=, and per-row bulk reads (~:get-headline~) into =O(1)= — with *zero* disk
+re-read.
+
+** Wiring (in ~--append~)
+
+#+begin_src emacs-lisp
+;; append the serialized records to the open segment, collecting them
+(org-glance-graph--patch-cache graph appended)   ; :by-id + :live in place
+(org-glance-graph--maybe-seal graph)             ; pure rename; records unchanged
+(org-glance-graph--maybe-compact graph)          ; may invalidate + change records
+(org-glance-graph--refresh-cache-snapshot graph) ; if cache survived, set :snapshot
+#+end_src
+
+- *Seal* renames the full open segment to an immutable ~seg-<gen>~ — a pure
+  rename, records unchanged — so the patched cache stays valid; recomputing the
+  snapshot catches the new segment name.
+- *Compact* drops tombstones and superseded records (an *observable* change), so
+  it must still invalidate. It already does (=graph.el:775=); it is rare
+  (every 4 sealed segments) and amortized.
+
+* Correctness invariant
+
+The patched cache must be *byte-identical* to a full rebuild after the same
+writes. The subtleties are ~:live~ first-sighting order, tombstone removal, and
+the re-add case below.
+
+** The re-add-after-tombstone edge case
+
+A full rebuild places a *re-sighted* id back at its *original* first-sighting
+position. Repositioning incrementally is fiddly and the case is rare (org-glance
+mints fresh UUIDs; a deleted id is never re-used under normal operation).
+
+*Detection + fallback:* appending a *live* record whose current ~:by-id~ entry
+is a *tombstone* → fall back to ~--invalidate-cache~ (rebuild on next read).
+Simple, provably correct, and hit essentially never in practice.
+
+** ~:live~ mutation cost
+
+Finding/replacing/removing an id's struct in the ~:live~ list is =O(position)=
+(a pointer walk) — still a massive win over =O(R json-parse)= + disk, and the
+bulk hot read is ~:get-headline~ (→ ~:by-id~, =O(1)=), so ~:live~ is only walked
+at the *final* reload. *Optional refinement:* an ~id → cons-cell~ index for
+=O(1)= ~:live~ mutation (defer to a follow-up).
+
+* Cross-process correctness
+
+Unchanged. An *external* writer changes the open segment's mtime/size or the
+sealed-segment names, so the next read's freshly-computed ~--store-snapshot~
+differs from the cache's stored ~:snapshot~ → full rebuild → the external write
+is seen. We only ever set ~:snapshot~ to *our own* post-write state (read back
+from disk after the write), and a subsequent external append strictly grows the
+open size — so nothing is missed. This preserves the "segment names change on
+every seal/compaction, independent of clock" guarantee ~--store-snapshot~
+already documents.
+
+* Test plan
+
+- *Invariant / fuzz test (the crux):* run randomized append sequences
+  (new · update · tombstone · re-add) and assert the patched cache's observable
+  reads — ~:headlines~ (order + content), ~:get-headline~ per id, ~:states~,
+  ~:tags~ — are ~equal~ to those of a fresh full rebuild.
+- *Tombstone* → dropped from ~:live~; ~:get-headline~ returns ~'tombstone~.
+- *Update* → ~:live~ struct replaced in place, insertion order preserved.
+- *New id* → appended at the end of ~:live~.
+- *Seal* → cache survives, snapshot recomputed, reads correct.
+- *Compact* → cache invalidated, next read rebuilds, dropped tombstones honored.
+- *Re-add after tombstone* → fallback path; reads correct.
+- *External writer* → simulate a second process appending (write the segment +
+  advance mtime) → next read detects the mismatch → rebuild → sees it.
+- *Bulk* → k appends = k =O(1)= ~:get-headline~ + =O(k)= patches, not k full
+  rebuilds; the final reload is correct.
+- *Opt-in DEBUG assert:* a mode that verifies ~patch == full rebuild~ on every
+  append (for the suite / fuzzing), off in normal use.
+
+* Performance validation
+
+Benchmark save→refresh and bulk-of-k before/after; expect
+=O(N)= / =O(N·k)= → =O(k)=.
+
+* Risk
+
+Highest value but the most correctness-critical change in the store — a subtle
+patch bug serves stale or wrong data *silently*. Mitigations: the invariant/fuzz
+test, the DEBUG assert mode, and the conservative re-add fallback. Land behind
+the existing 211-test guardrail plus the new invariant tests.
+
+* Effort
+
+Medium–high. ≈ 40–70 LOC in ~org-glance-graph.el~ (the patch fn, the ~--append~
+rewiring, the snapshot refresh) + ≈ 60–100 LOC of tests.
+
+* Related
+
+- Builds on [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] —
+  which shrinks the per-record deserialize the patch still pays for touched ids.
+- [[file:2026-07-09-git-sync-merge-resolution.done.org][Git-sync merge resolution]] relies on the same
+  append-only segment layout described here (union-merge the JSONL, self-heal a
+  git-mangled MANIFEST).
+- Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.

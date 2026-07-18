@@ -1,0 +1,106 @@
+#+TITLE: Repeat occurrences: per-headline history instead of clone-on-repeat
+#+DATE: 2026-07-18
+
+Status: *done* · 2026-07-18 · suite 279/279, compile warning-free
+
+Replaces the clone-on-repeat prototype: a repeating headline stays ONE graph
+entity; completed repetitions become immutable snapshot files in its own data
+dir, never new headlines.
+
+* Problem
+
+A repeating headline (=<2026-07-18 Sat +1d>=) is one logical entity with many
+occurrences.  The prototype minted a NEW headline per completed occurrence
+(clone-on-repeat): views fill with ghost clones, and trim/skip machinery fights
+the pollution it created.  Wanted (Google-calendar model): exactly one visible
+headline, a ↻ indicator, and a way to open the exact version for a chosen
+timestamp from the overview, the table and the material buffer.
+
+* Design
+
+** Storage: occurrence snapshots in the headline's data dir
+
+: data/<id>/data.org                       the live headline (unchanged)
+: data/<id>/occurrences/<STAMP>.org        one immutable file per completed
+:                                          occurrence, STAMP = its timestamp
+
+On repeat completion (the existing =org-auto-repeat-maybe= =:before= advice,
+still in its done state), the buffer snapshot is written verbatim to
+=occurrences/=; then the live headline is trimmed to header + =#+begin_pin=
+blocks exactly as before.  STAMP is the earliest active repeated timestamp
+before org advances it (the occurrence being completed); re-completing the same
+occurrence overwrites its file (idempotent).
+
+Rejected alternatives: history inside the body (blob grows without bound and
+every save re-parses it); WAL-preserved superseded records (breaks invariant 1);
+a separate occurrences store (a derived index can be added later if a
+cross-headline day view needs it — [[file:2026-07-09-closed-day-activity-dashboard.proposed.org][closed-day dashboard]]).
+
+Wins by construction: nothing new in the WAL, so views show one headline with
+no exclusion filters; distinct immutable filenames never conflict under git
+sync; deletion GC already removes the id dir, so history dies with its
+headline; invariant 5 intact (snapshots are content, not derived state).
+
+** Retention: =org-glance-repeat-history-depth=
+
+Syncthing-style integer custom, default 0 = disabled.  N > 0 keeps the newest N
+snapshots per headline — after each write the oldest beyond N are deleted.
+Replaces =org-glance-clone-on-repeat-p= (prototype; removed).  The after-repeat
+trim runs only when a snapshot was preserved (depth > 0, not skipped).
+
+** Crypt: skip
+
+An encrypted headline's material buffer is decrypted at repeat time; writing it
+would store plaintext (invariant 14).  Encrypted headlines get no occurrence
+snapshot and no trim — skip with a message (the prototype's gate, kept).
+
+** Indicator: Rep column (↻ cell marker), zero store changes
+
+The repeater already rides the metadata: =schedule= / =deadline= raw strings
+carry =+1d= etc.  =org-glance-headline-metadata:repeated?= is a pure predicate
+over those strings (regexp =[.+]\+?[0-9]+[hdwmy]=); the table gains a sortable
+=Rep= column (=↻= cell marker) like =Enc=.  The org overview already shows the timestamp itself.
+
+** Picker: =l= / =C-c l=
+
+- Table: =l= on the row.  Overview: =l= on the headline.  Material: =C-c l=.
+- =completing-read= over the headline's occurrence stamps (newest first) →
+  open that snapshot READ-ONLY in =*org-glance-occurrence: TITLE [STAMP]*=
+  (org-mode + =view-mode=; snapshots are immutable history, not editables).
+- No occurrences → =user-error= with a hint (depth 0 vs nothing recorded yet).
+
+Data accessor: =org-glance-graph:occurrences graph id= → newest-first list of
+=(STAMP . PATH)= read from the directory listing (the filenames ARE the index).
+
+* Test plan
+
+- Snapshot on repeat: depth 1+ writes =occurrences/<stamp>.org= with the
+  completed state; depth 0 writes nothing and does not trim; depth N prunes to
+  the newest N.
+- Stamp: derived from the pre-advance repeated timestamp; same-occurrence
+  re-completion overwrites, not duplicates.
+- Encrypted: no snapshot, no trim, message (existing test adapted).
+- Trim: unchanged behavior when a snapshot was taken (pin blocks survive).
+- =repeated?=: schedule/deadline with/without repeater; body-only timestamps
+  are NOT flagged (documented limit).
+- Pickers: table =l= / material =C-c l= open a read-only buffer of the chosen
+  stamp; no history → =user-error=.
+- Deletion GC: deleting the headline removes its occurrences with the id dir.
+
+* Effort
+
+*Medium.*  Snapshot+prune+accessor (~half day) · indicator column + three
+pickers (~half day) · tests + prototype removal (~half day).
+
+* Related
+
+- Prototype removed: =org-glance-clone-on-repeat-p=,
+  =org-glance-material--clone-snapshot= (the =:before= advice and trim remain,
+  re-pointed).  CHANGELOG's older clone entries stay as history.
+- [[file:2026-07-09-closed-day-activity-dashboard.proposed.org][closed-day dashboard]] — a future derived index over occurrence files.
+- [[file:2026-07-18-relations.done.org][relations]] — unrelated storage-wise; occurrences are files, not edges.
+- Touched: =src/view/org-glance-material.el=, =org-glance-datetime-mode.el=
+  (stamp extraction), =src/data/org-glance-graph.el= (accessor),
+  =org-glance-headline.el= or =graph.el= (=repeated?= predicate),
+  =org-glance-table.el=, =org-glance-overview.el=, =CHANGELOG.org=,
+  =docs/invariants.org= (note under 5), =README.org=.

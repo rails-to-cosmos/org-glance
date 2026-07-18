@@ -1,0 +1,114 @@
+#+TITLE: Encrypted headlines via GPG (EasyPG) instead of home-grown AES
+#+DATE: 2026-07-06
+
+Status: *proposed* · security 2026-07-06
+
+* Context — what ships today
+
+Materializing an encrypted headline now prompts for a password, decrypts its
+=#+begin_crypt= blocks in the buffer (see
+[[file:2026-07-17-crypt-blocks.done.org][crypt-blocks]]; the pre-block layout
+sealed the whole body), and re-seals on save via a round-trip:
+- ~org-glance-material--maybe-decrypt~ prompts, decrypts, caches the password
+  buffer-local with a TTL (~org-glance-material-password-ttl~, forget early with
+  ~org-glance-material:lock~).
+- ~before-save-hook~ (~--encrypt-buffer~) writes the file as ciphertext;
+  ~after-save-hook~ (~--decrypt-buffer~, after ~sync~) decrypts back.
+- ~--harden-buffer~ disables auto-save, backups and lockfiles so plaintext cannot
+  leak to ~#data.org#~ / ~data.org~~ / lock files.
+- Crypto itself is ~org-glance--crypt-seal-blocks~ / ~--crypt-unseal-blocks~ over the
+  ~aes.el~ package (AES-OCB).
+
+That closes the on-disk leak and bounds the password's residence.  Three risks
+remain, and they are structural.
+
+* Residual risks
+
+1. *Unaudited KDF.*  Ciphertext strength depends on how ~aes.el~ turns a passphrase
+   into a key.  AES-OCB is a sound authenticated mode, but if the key derivation
+   is weak (no salt / no stretching), the passphrase is brute-forceable regardless.
+   We own and must trust unaudited crypto code.
+2. *Secret residence in-process.*  The cached password (until the TTL) and the
+   decrypted body (for the buffer's whole life, plus the undo list) live in Emacs
+   memory — reachable by any elisp, a memory dump, or swap.
+3. *We carry the crypto surface.*  Key handling, mode, format versioning are ours
+   to maintain and get right.
+
+* Proposed change — delegate to GPG
+
+Store an encrypted headline's blob as a GPG file and let EasyPG (~epa-file~) do the
+crypto.  Emacs decrypts transparently on ~find-file~ and encrypts on save, so
+plaintext never touches disk; ~epa~ *auto-disables auto-save* for encrypted files;
+and *gpg-agent* holds the passphrase/key (memory-locked, out of our process, with
+its own configurable cache TTL) — which removes all three residual risks.
+
+** Option A (recommended): whole-blob ~data.org.gpg~
+
+The content blob for an encrypted id is ~data.org.gpg~ instead of ~data.org~.
+- ~org-glance-graph:content-path~ returns the ~.gpg~ path for an encrypted id.
+- ~put-content~ / ~get-content~ / ~material:open~ read/write through ~epa-file~
+  (a plain ~find-file-noselect~ / ~insert-file-contents~ already triggers it when
+  ~epa-file~ is enabled).
+- ~material:sync~ parses the *decrypted* buffer (plaintext in memory) — the file on
+  disk stays ciphertext.  No before/after-save crypto hooks, no cached password,
+  no ~--harden-buffer~: ~epa~ owns all of it.
+- Passphrase (symmetric) or recipient public keys via a defcustom
+  (~org-glance-encrypt-recipients~); gpg-agent caches per its own policy.
+
+Invariant becomes trivial: *the file is always ciphertext; the buffer is
+plaintext only in memory; Emacs+gpg mediate the boundary.*
+
+** Option B: ~org-crypt~ on the entry body
+
+Keep the blob as ~data.org~, tag the entry ~:crypt:~, and let ~org-crypt~
+encrypt/decrypt the entry body (~org-encrypt-entry~ on save, ~org-decrypt-entry~ on
+open).  Less invasive to the store format, but keeps a mixed plaintext-heading /
+ciphertext-body file and still leans on gpg-agent.  Weaker invariant than A.
+
+* Security comparison
+
+| | AES (today) | GPG / EasyPG |
+|--+-------------+--------------|
+| Key derivation | ~aes.el~, unaudited | GnuPG (audited, salted, stretched) |
+| Plaintext on disk | prevented by our hardening | prevented by ~epa~ (and auto-save auto-off) |
+| Passphrase residence | our elisp var, TTL | gpg-agent, memory-locked, agent TTL |
+| Integrity | AES-OCB (AEAD) | GPG MDC/AEAD |
+| Crypto we maintain | all of it | none (delegated) |
+
+* Migration
+
+Existing blobs are ~aes.el~ ciphertext under ~data.org~.  A one-time convert:
+- ~M-x org-glance-reencrypt-to-gpg~ (or fold into ~reindex~): for each headline whose
+  ~encrypted?~ is set, decrypt with the old password (prompt once), re-encrypt via
+  ~epa~ to ~data.org.gpg~, delete the old ~data.org~.
+- ~encrypted?~ detection shifts from the ~aes-encrypted~ body magic to "the blob is
+  a ~.gpg~ file" (or a metadata flag).  Keep reading old aes blobs until converted.
+
+* Test plan
+
+- Open an encrypted (gpg) headline with gpg-agent primed: body shows plaintext,
+  ~data.org.gpg~ on disk stays ciphertext, no ~data.org~ plaintext, no ~#...#~.
+- Edit + save: file still ciphertext, ~encrypted?~ preserved, edit round-trips.
+- Wrong passphrase / cancelled pinentry: open fails cleanly, no plaintext written.
+- Migration: an aes blob converts to gpg and still opens.
+- Batch tests stub ~epa~ / use a throwaway gpg home (~GNUPGHOME~) with a test key.
+
+* Risk
+
+Adds a hard dependency on GnuPG + gpg-agent (present on most dev machines, but a
+new requirement) and changes the on-disk blob format (~.gpg~), so ~content-path~,
+~put-content~, ~get-content~, ~sync~ and the ~encrypted?~ probe all change.  Batch
+testing needs a scratch ~GNUPGHOME~.  Larger than the AES path, but it retires the
+crypto we own.
+
+* Effort
+
+Medium.  ~40-80 LOC in graph.el (paths/put/get) + material.el (drop the hook
+round-trip, read via epa) + a migration command, plus test scaffolding for a
+throwaway gpg home.
+
+* Related
+
+- Supersedes the ~aes.el~ round-trip in ~org-glance-material.el~
+  (~--maybe-decrypt~ / ~--encrypt-buffer~ / ~--decrypt-buffer~ / TTL).
+- Back to the [[file:2026-07-06-performance-audit.org][proposals index]] (docs/proposals).

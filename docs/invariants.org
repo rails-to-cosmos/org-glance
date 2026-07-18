@@ -1,0 +1,169 @@
+#+TITLE: Global invariants
+#+DATE: 2026-07-18
+
+Rules the whole codebase enforces; every change must preserve them.  Each entry:
+the rule, where the code enforces it (symbol anchors, stable across refactors),
+and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]].
+
+* Store
+
+1. *Append-only WAL, positional last-wins.*  Duplicate ids resolve by physical
+   position (oldest→newest segments, last line wins); =seq= is a storage-only
+   ordinal — never read for ordering, never in headline metadata, never
+   re-stamped by compaction.  Enforced: =org-glance-graph--latest-records=,
+   =org-glance-graph--heal=.  Violation: union-merged stores resolve the wrong
+   record; heal misclassifies debris.
+
+2. *Atomic writes; MANIFEST swap is the commit point.*  Every store write is
+   temp-then-rename (=org-glance-graph--atomic-write=, =file-precious-flag= on
+   blobs); compaction commits the MANIFEST *before* truncating the open segment.
+   Violation: crash/ENOSPC truncates data or resurrects a tombstoned headline.
+
+3. *MANIFEST byte-stability.*  A valid MANIFEST is never rewritten; rebuilt only
+   when broken (=org-glance-graph--manifest-broken?=).  Violation: churn that
+   fights compaction and generates sync conflicts.
+
+4. *Schema tables are the single source of truth.*
+   =org-glance-headline-metadata:fields= drives constructor + serialize +
+   deserialize (load-time guard against the struct; row order IS the JSON key
+   order — append new fields at the end only); =org-glance-filter:table= drives
+   keys + predicate + canonicalisation.  Violation: silent drift (always-nil
+   field, match-everything filter) or broken on-disk byte order.
+
+5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical;
+   metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
+   ordering: metadata computed first (fail before any write), blob before WAL
+   append (=org-glance-graph:add=).  The property index
+   (=config/property-index.eld=) is a PURE derived cache: every read is
+   content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
+   cached, and =org-glance-reindex= drops it — so no caller may trust an index
+   value in a durable write/delete without that fallback
+   (=org-glance-property-index--entry=).  Relation edges follow the same rule:
+   the =org-glance-material:= body link is canonical; the =relations= AND
+   =links= metadata fields are projections recomputed on save/reindex — never
+   written independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
+   are canonical content too — immutable files GC'd with the id dir, never
+   indexed state (GC runs at compaction, so a tombstoned id's snapshots linger
+   until then).  Violation: unrebuildable facts or half-states.
+
+6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and
+   =..=) via =error= — never =cl-assert=, which can be compiled out — before
+   feeding any path (=org-glance-graph:headline-data-path=).  Violation: a
+   hand-edited id escapes the store (traversal; an empty id resolves to the
+   data root, which compaction GC would delete).
+
+7. *Single user, no locking.*  Cross-process staleness is detected by the store
+   snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
+   alone (=org-glance-graph--store-snapshot=); in-process mutations call
+   =--invalidate-cache= explicitly.  Violation: same-second external compaction
+   serves deleted data as live.
+
+8. *Git conflicts heal by union merge.*  Gated by
+   =org-glance-conflict-resolution= (ask/union/nil); =.gitattributes= written
+   only if absent; =.eld= sidecar merges are commutative and non-inflating —
+   earliest/latest/=max=, never a sum; a =nil= side never shadows a populated
+   one (=org-glance--read-eld=, =org-glance-tag-metrics--merge-plists=).  The
+   property-index sidecar is the deliberate exception — it reads via the lossy
+   =--read-eld= floor, NOT a union, because a conflict self-heals on the next
+   content-hash miss.  See
+   [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
+
+* Hooks and views
+
+9. *Soft paths are error-demoted.*  Side-index hooks
+   (=org-glance-graph-before-append-functions=,
+   =org-glance-graph-after-open-functions=) and view refresh run under demoted
+   errors — a sidecar or reload may never break a save, an open, or a display.
+
+10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale
+    (boolean; no I/O, never touches point); views re-fill at display boundaries;
+    freshness checks are strict — when in doubt, rebuild (serving stale is the
+    only real bug).  Enforced: =org-glance-view=, =org-glance-material:sync=.
+
+11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a
+    modified buffer must =user-error= or skip that row
+    (=org-glance-material--replace-headline=, =:retag= — its =user-error= trapped
+    by the table's =org-glance-table--act-deltag=, bulk todo); a modified
+    file-backed view is flagged stale, never reverted.  Deletion
+    (=org-glance-material:delete=) names unsaved edits in its consent prompt
+    and tombstones BEFORE discarding the buffer, so a failed append never
+    costs the only unsaved copy.
+
+* Parsing and data hygiene
+
+12. *Store content parses in temp buffers via =org-glance--org-mode=.*
+    =delay-mode-hooks= (no globalized minor modes, no undo-tree litter) and
+    =tab-width 8= set after mode init; sources are never =find-file='d for
+    reading.  Violation: user =tab-width= mis-parses content; hook litter.
+
+13. *Tags are canonical downcased interned symbols; relation kinds are
+    canonical dash-slugs.*  Kinds slug (downcase, spaces→dashes) at EVERY
+    boundary — link encode, link decode, metadata deserialize
+    (=org-glance--kind-slug=); the spaced form is display-only.  Tags:  Coerced via
+    =org-glance-tag:from-string= wherever text enters; serialized back to
+    strings in metadata (so deserialized metadata carries STRING tags — coerce
+    with =(format "%s" tag)= when comparing).  Violation: mixed-case duplicates
+    fragment filters and caches.
+
+14. *Crypt: plaintext never touches disk; secrecy is per-block.*  Material
+    buffers of encrypted headlines are hardened (no auto-save/backup/lockfiles),
+    sealed by =before-save-hook=, unsealed after; =#+begin_crypt= markers are the
+    persistent secrecy annotation, and the legacy upgrade cannot re-wrap
+    plaintext (aes-header guard in =org-glance-headline--crypt-upgrade-legacy=).
+    Only block bodies are secret: text OUTSIDE the blocks stays plaintext on disk
+    and IS indexed even for an =encrypted?= headline (so its links/properties
+    resolve, and the index never holds decrypted plaintext).  Occurrence
+    snapshots are plaintext: an encrypted material buffer never snapshots
+    (=org-glance-material:snapshot-on-repeat=), and BOTH encrypt paths purge
+    existing snapshots (=org-glance-material--purge-occurrences=).  The
+    =links=/=relations= projections compute from SEALED bytes, so a link
+    inside a crypt block is never indexed; capture of content already
+    carrying UNSEALED =#+begin_crypt= markers indexes it as the plaintext it
+    is — markers bind through the material/crypt-set flows only.  Violation:
+    secrets leak to =data.org= / backups / =occurrences/=, or an encrypted
+    headline's intentionally-public regions vanish from search.
+
+* Views and tables
+
+15. *Table Title column is mandatory.*  Never removable or hideable —
+    =org-glance-table--act-delcolumn= refuses =C-u -= on =title=, and
+    =org-glance-table--apply-schema= strips =title= from the persisted hidden set
+    (defence in depth against a hand-edited sidecar).  Violation: rows lose their
+    only human-readable label; a schema file could blank every view of a tag.
+
+16. *Per-tag column schema: hidden is a denylist; candidates are user keys.*  The
+    per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never
+    an allowlist of the visible set — so a built-in shipped in a later version
+    still appears; the =C-u += candidate keys exclude =ORG_GLANCE_*= bookkeeping
+    and org's synthesised =CATEGORY= (=org-glance-property-index--candidate-key?=).
+    Column order + sort persist separately, per filter (=table-views.eld=).
+    Violation: a version upgrade's new column is invisible to anyone with a saved
+    schema; internal keys pollute the column prompt.
+
+17. *Transient filters never persist per-filter state.*  Keys flagged
+    =:transient= in =org-glance-filter:table= (=:where=, =:refers-to=,
+    =:id-any=) are one-off views: the overview never caches them
+    (=org-glance-overview:spec-key= → nil), and the table persists neither
+    their view config (=org-glance-table--persist-config=) nor their column
+    schema (=org-glance-table--persist-schema= — a tagless relation view would
+    edit the shared \":none:\" entry).  Judged by the single predicate
+    =org-glance-filter:transient?=.  Violation: one cache dir / config entry
+    accretes per visited headline (=:id-any= identities embed the target
+    snapshot — one per link-set version), with no pruning pass to reclaim
+    them.
+
+18. *Overview headings are self-sufficient, metadata-only.*  The render
+    (=org-glance-overview:render-headline=) carries state, priority cookie,
+    the SINGLE planning line, the id drawer, relations and plain links — all
+    from metadata, zero blob parses; agenda and link-following work without
+    materializing.  Violation: agenda misses planning, or the render cost
+    becomes O(blobs).
+
+19. *Reserved properties are managed keys.*  The keys in
+    =org-glance-material-hidden-properties= are org-glance's, not the user's:
+    concealed in material buffers (overlays only — file and store keep them),
+    and hand edits to them reverted at =before-save= with a warning
+    (=org-glance-material--restore-reserved= — the sole sanctioned in-buffer
+    edit under invariant 11; it touches only the heading drawer, disjoint from
+    the crypt seal's body blocks).  Violation: a hand-edited or region-killed
+    =ORG_GLANCE_ID= silently orphans the blob from its WAL id.

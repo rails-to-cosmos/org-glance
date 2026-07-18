@@ -1,0 +1,204 @@
+#+TITLE: CLOSED-day projection: done-partition + activity heatmap
+#+DATE: 2026-07-09
+
+Status: *proposed* · feature 2026-07-09
+
+Three ideas from [[file:../../org-glance.org][org-glance.org]] want the same missing datum -- a per-day
+count keyed by when a headline was CLOSED: "CLOSED entries partition by closed
+day" (=org-glance.org:104=), the GitHub-style activity grid
+(=org-glance.org:261-271=), and a done-activity view.  The headline already
+parses CLOSED, but the metadata projection every view reads drops it, so no view
+can group or count by closed day today.
+
+* Problem
+
+- =org-glance-headline= carries a =closed= slot (=src/data/org-glance-headline.el:41=),
+  populated from =(org-element-property :closed element)=
+  (=src/data/org-glance-headline.el:222=).  The value is the org-element
+  timestamp OBJECT, though the slot type is declared =(or null string)= -- a
+  latent mismatch.  The only reader today is a presence check inside
+  =org-glance-headline-metadata:active?= (src/data/org-glance-filter.el), for which
+  any non-nil value works, so the mismatch has stayed invisible.
+- The projection every view reads -- =org-glance-headline-metadata=
+  (=src/data/org-glance-graph.el:58-72=), built from the field table
+  =org-glance-headline-metadata:fields= (=src/data/org-glance-graph.el:74-95=) --
+  has no =closed= field.  =schedule= and =deadline= are projected
+  (=src/data/org-glance-graph.el:81-82=); CLOSED is not.  So no filter, overview,
+  or table can narrow, group, or count by closed day.
+- The filter language (=src/data/org-glance-filter.el:44-70=) has
+  present/absent clauses for =:schedule= and =:deadline=
+  (=src/data/org-glance-filter.el:68-69=) but none for closed.
+- A WRITE-activity grid (append events per calendar day) has no source at all:
+  the store keeps a monotonic =seq= per record and never a wall-clock timestamp
+  (=src/data/org-glance-graph.el:30-33=), the same gap the tag-metrics sidecar
+  was built to fill (=src/data/org-glance-tag-metrics.el:5-9=).
+
+* Proposed change
+
+Four coherent, read-only additions, each mirroring an existing pattern:
+
+1. Project CLOSED as a first-class metadata field, decoded like schedule /
+   deadline; =M-x org-glance-reindex= backfills existing records.
+2. Add a =:closed= present/absent filter clause, one table row, mirroring
+   =:schedule= / =:deadline=.
+3. A done-activity CALENDAR view (7xN grid) over =table-view=: each cell counts
+   headlines CLOSED that day, rendered with green-intensity badge faces reusing
+   the tags-view colorize path.
+4. A global per-day WRITE-activity histogram in the tag-metrics sidecar, bumped
+   in the existing pre-append touch alongside =:captures= / =:removals=.
+
+* Design
+
+** 1. CLOSED in the metadata projection
+
+Two edits, one refactor.
+
+- *Expose CLOSED as a raw string.*  Mirror schedule / deadline exactly: rename
+  the public =closed= slot to a private =-closed= (=src/data/org-glance-headline.el:41=)
+  that holds the org-element timestamp object, and add a
+  =org-glance-headline:closed= method returning =(org-element-property :raw-value
+  ...)= (or nil), paralleling =org-glance-headline:schedule=
+  (=src/data/org-glance-headline.el:124-128=) and =:deadline=
+  (=src/data/org-glance-headline.el:130-134=).  Update the constructor keyword to
+  =:-closed= (=src/data/org-glance-headline.el:248=).  The lone existing caller
+  (=src/data/org-glance-headline.el:88=) is a presence check -- a raw string is
+  still truthy, so it is unaffected.  This resolves the declared-string /
+  stored-object mismatch in the same pass.
+
+- *Add the projection field.*  One struct slot =(closed nil :read-only t :type
+  (or null string))= appended AFTER =encrypted?= in
+  =org-glance-headline-metadata= (=src/data/org-glance-graph.el:58-72=), and one
+  row appended to the END of =org-glance-headline-metadata:fields=
+  (=src/data/org-glance-graph.el:74-95=):
+
+  : (closed :closed ,#'org-glance-headline:closed nil nil)
+
+  CLOSED comes back as a raw string (or nil), JSON-serializable as-is -- no
+  ENCODE / DECODE kind, exactly like schedule / deadline.  Appending at the end
+  honours the byte-stability contract (=src/data/org-glance-graph.el:91-93=): row
+  order IS the serialized JSON key order.  The load-time guard
+  (=src/data/org-glance-graph.el:98-102=) keeps struct and table in lockstep; the
+  constructor (=src/data/org-glance-graph.el:117-132=), =serialize=, and
+  =deserialize= are all table-driven, so no hand-written line can drift.
+
+- *Backfill.*  Records written before the field carry no =:closed= key;
+  =deserialize= reads it as nil (=src/data/org-glance-graph.el:153-158=).  =M-x
+  org-glance-reindex= re-derives every live headline from its stored content
+  (=org-glance-graph:reindex=, =src/data/org-glance-graph.el:653-670=), appending
+  fresh records that populate =:closed= -- the same path that backfilled
+  linked? / propertized? / encrypted?.
+
+- *A day helper.*  Grouping and the calendar want "YYYY-MM-DD", so add a pure
+  =org-glance-headline-metadata:closed-day= that parses the raw string to a day
+  string (or nil).  Derived at read time -- the stored field stays the byte-stable
+  raw timestamp, parallel to schedule / deadline.
+
+** 2. The =:closed= filter clause
+
+One row appended to =org-glance-filter:table= beside the planning clauses
+(=src/data/org-glance-filter.el:68-69=):
+
+: (:closed :match present-absent :accessor ,#'org-glance-headline-metadata:closed)
+
+The =present-absent= match kind already exists
+(=src/data/org-glance-filter.el:142-147=) and tests =org-glance--present-string?=
+on the accessor, so =(:closed :present)= / =(:closed :absent)= work with no new
+match code.  The table drives =:keys=, =:predicate=, and =:canonical-pairs=
+together (=src/data/org-glance-filter.el:71-77=), so the one row is the whole
+change; overviews can then narrow to closed / not-closed headlines.
+
+** 3. The done-activity CALENDAR view
+
+A new =src/view/org-glance-calendar.el= (sister to =org-glance-tags.el=), a
+=table-view= whose rows are weekdays and columns are weeks/months, each cell the
+count of headlines whose =closed-day= falls in that bucket.
+
+- *Data.*  Fold =org-glance-graph:headlines= once into a =("YYYY-MM-DD" . count)=
+  histogram via =org-glance-headline-metadata:closed-day=, then lay it onto a
+  7xN grid (weekday x week), the shape sketched at =org-glance.org:261-271=.
+- *Rendering.*  Colour each cell by count with green-intensity faces, reusing the
+  tags view's colorize path (=org-glance-tags--colorize-state=,
+  =src/view/org-glance-tags.el:41-45=), which propertizes a string with a =face=
+  and survives table-view's text-cell render.  A small ramp of =defface= greens
+  keyed by count bucket replaces the per-state palette lookup
+  (=org-glance-table--state-color=, =src/view/org-glance-table.el:72=).
+- *Coherence.*  Register the buffer with =org-glance-view:register=
+  (=src/view/org-glance-view.el:74=) so it refreshes when the store changes,
+  exactly as the tags and headline tables do.
+
+** 4. The WRITE-activity histogram
+
+The tag-metrics sidecar (=config/tag-metrics.eld=) is an alist of TAG-STRING ->
+plist (=src/data/org-glance-tag-metrics.el:19-29=).  Add ONE global per-day
+counter under a reserved key that cannot collide with a tag (tags are downcased
+symbol names; use a keyword, e.g. =:activity=), whose value is an alist
+=("YYYY-MM-DD" . count)=.
+
+- *Bump.*  =org-glance-tag-metrics--touch= already runs on
+  =org-glance-graph-before-append-functions= (=src/data/org-glance-graph.el:438-453=)
+  and stamps =:captures= / =:removals= per event
+  (=src/data/org-glance-tag-metrics.el:37-64=).  Increment the reserved-key
+  day-count once per touching event there, keyed by =(format-time-string
+  "%Y-%m-%d" now)= (=now= is already bound at =src/data/org-glance-tag-metrics.el:42=).
+- *Read.*  Expose it via a new accessor beside =org-glance-tag-metrics:all=
+  (=src/data/org-glance-tag-metrics.el:99-129=); the same calendar view renders a
+  write-activity grid from it with the identical green ramp.
+
+Both grids are pure projections of already-persisted state -- the CLOSED grid
+from the store, the write grid from the sidecar -- so neither adds a mutation
+path.
+
+* Test plan
+
+- =metadata=: a headline with =CLOSED: [2026-07-09 ...]= round-trips a non-nil
+  =org-glance-headline-metadata:closed=; one without reads nil.
+  serialize -> deserialize is byte-identical; a pre-field record deserializes
+  =:closed= as nil; the load-time guard stays green (struct == table).
+- =closed-day=: raw timestamp string -> "YYYY-MM-DD"; nil -> nil.
+- =reindex=: a store of pre-field records, then =org-glance-graph:reindex=, then
+  every live record carries =:closed=.
+- =filter=: =(:closed :present)= / =(:closed :absent)= select the right headlines;
+  =org-glance-filter:identity= is stable and order-independent for a spec
+  carrying =:closed=.
+- =calendar=: histogram fold counts the right per-day totals from a fixture set;
+  the 7xN layout places a known date in the expected weekday row.
+- =activity=: N appends across two mock days leave the sidecar's =:activity=
+  alist with the right per-day counts; a tombstone append counts too.
+- =eask recompile= warning-free; =eask run command test= green.
+
+* Risk
+
+- *Byte-stability*: appending =closed= at the field-table end is required; an
+  insert in the middle would rewrite every JSON key order and break the on-disk
+  contract (=src/data/org-glance-graph.el:91-93=).  Low risk, guarded by an
+  explicit end-append and a round-trip test.
+- *Slot rename*: moving =closed= -> =-closed= touches the constructor and the
+  =active?= caller; both are in-repo and covered.  =org-glance-headline--copy=
+  (=src/data/org-glance-headline.el:255-267=) is slot-generic, so it follows the
+  rename automatically.
+- *Reserved sidecar key*: a keyword key in a tag-string alist is safe only while
+  tags never stringify to a keyword; =org-glance-tag:from-string= downcases to a
+  plain symbol name, so no collision.  Existing sidecars lack the key and read as
+  an empty history.
+- *Reindex cost*: backfill re-derives every headline (one-time, user-invoked),
+  the same cost the earlier projection fields already incur.
+
+* Effort
+
+Medium.  Items 1-2 are small, mechanical, and heavily pattern-matched to
+schedule / deadline.  Items 3-4 are a new view module plus one sidecar counter;
+the view reuses table-view, the colorize path, and =view:register= wholesale.
+
+* Related
+
+- [[file:2026-07-06-all-tags-overview.done.org][All-tags overview]] -- origin of the tag-metrics sidecar and the
+  =before-append= hook this reuses; the calendar view is its sister.
+- [[file:2026-07-06-lazy-property-columns.proposed.org][Lazy property columns]] -- another additive metadata / table-view feature.
+- [[file:2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] -- the one-pass content-facts build the new field
+  slots into.
+- [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] -- the read cache the projection is served from.
+- [[file:2026-07-06-table-view-git-dependency.done.org][table-view git dependency]] -- the pinned core the calendar grid renders on.
+- Touched: =src/data/org-glance-headline.el=, =src/data/org-glance-graph.el=,
+  =src/data/org-glance-filter.el=, =src/data/org-glance-tag-metrics.el=,
+  =src/view/org-glance-calendar.el= (new), and the ideas in
+  [[file:../../org-glance.org][org-glance.org]] (lines 104, 261-271).

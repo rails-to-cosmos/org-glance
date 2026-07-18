@@ -1,0 +1,9 @@
+# Keep host build artifacts out of the image so the container resolves and
+# compiles dependencies for ITS OWN pinned Emacs version.
+.eask/
+dist/
+*.elc
+.git/
+.github/
+.podman-data/
+*.~undo-tree~

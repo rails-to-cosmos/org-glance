@@ -1,124 +1,9 @@
-;;; test-headline.el --- Tests for `org-glance-headline' model  -*- lexical-binding: t -*-
+;;; test-headline.el --- Tests for the `org-glance-headline' model  -*- lexical-binding: t -*-
 
 (require 'test-helpers)
 
-;; (ert-deftest org-glance-test:initial-state ()
-;;   (org-glance-test:session
-;;     (should (= (length (org-glance:tags)) 0))))
-
-;; (ert-deftest org-glance-test:tag-management ()
-;;   (org-glance-test:session
-;;     (let ((tag 'foo))
-;;       (org-glance:create-tag tag)
-;;       (should (org-glance-tag:exists? tag org-glance-tags)))
-
-;;     ;; (org-glance:remove-tag 'foo)
-;;     ;; (should-not (org-glance-tag:exists? 'foo org-glance-tags))
-
-;;     (should-error (org-glance:create-tag "bar") :type 'error)
-;;     (should-error (org-glance:create-tag 'BAZ) :type 'error)))
-
-(cl-defun org-glance-test:create-tag (tag)
-  (cl-check-type tag org-glance-tag)
-  (org-glance:create-tag tag)
-  (should (org-glance-tag:exists? tag org-glance-tags))
-  (should (= 1 (length (org-glance:tags))))
-  (should (= 0 (length (org-glance:tag-headlines tag))))
-  tag)
-
-(cl-defun org-glance-test:add-headline (tag title &optional contents)
-  (cl-check-type tag org-glance-tag)
-  (cl-check-type title string)
-  (org-glance-capture tag
-    :title (if contents
-               (s-concat title "\n" contents)
-             title)
-    :finalize t))
-
-(cl-defun org-glance-test:headline-overview (tag id)
-  (cl-check-type tag org-glance-tag)
-  (cl-check-type id string)
-  (save-window-excursion
-    (org-glance-overview tag)
-    (org-glance-headline:search-buffer-by-id id)))
-
-(cl-defun org-glance-test:materialize-overview (tag id)
-  (cl-check-type tag org-glance-tag)
-  (cl-check-type id string)
-  (save-window-excursion
-    (org-glance-test:headline-overview tag id)
-    (org-glance-overview:materialize-headline)
-    (org-glance-headline:search-buffer-by-id id)))
-
-(cl-defun org-glance-test:materialize (id)
-  (cl-check-type id string)
-  (let ((headline (org-glance-metadata:headline id)))
-    (org-glance:materialize headline)))
-
-(ert-deftest org-glance-test:consistency ()
-  (org-glance-test:session
-    (let* (;; TODO generate such entities
-           (tag (org-glance-test:create-tag 'foo))
-           (title "Hello, world!")
-           (contents "Some contents")
-           (id (org-glance-test:add-headline tag title contents))
-           (metadata (org-glance-metadata:headline-metadata id))
-           (overview (org-glance-test:headline-overview tag id))
-           (material (org-glance-test:materialize id))
-           (material-overview (org-glance-test:materialize-overview tag id)))
-      (should (= 1 (length (org-glance:tag-headlines tag))))
-      (should (string= (org-glance-headline:title overview) title))
-      (should (org-glance-headline:equal? material overview))
-      (should (org-glance-headline:equal? overview material-overview))
-      (should (org-glance-headline:equal? material material-overview)))))
-
-(ert-deftest org-glance-test:links ()
-  (org-glance-test:session
-    (let* (;; TODO generate such entities
-           (tag (org-glance-test:create-tag 'foo))
-           (title "foo")
-           (temp-file-name (f-join org-glance-directory "tmp.txt"))
-           (contents (format "[[file:%s][tmp.txt]]" temp-file-name))
-           (id (org-glance-test:add-headline tag title contents))
-           (headline (org-glance-test:materialize id)))
-      (should (org-glance-headline:linked? headline))
-      (org-glance:open headline)
-      ;; Seems org-mode opens file-links asynchronously, so it should be enough to see that user-error has not been raised.
-      ;; (should (f-equal? (buffer-file-name) temp-file-name))
-      )))
-
-(ert-deftest org-glance-test:properties ()
-  (org-glance-test:session
-    (let* (;; TODO generate such entities
-           (tag (org-glance-test:create-tag 'foo))
-           (title "Hello, world!")
-           (contents "- foo: bar")
-           (id (org-glance-test:add-headline tag title contents))
-           (headline (org-glance-test:materialize id)))
-      (should (org-glance-headline:propertized? headline))
-      (should (string= "bar" (org-glance:extract headline "foo"))))))
-
-;; (ert-deftest org-glance-test:encryption ()
-;;   (org-glance-test:session
-;;     (let* (;; TODO generate such entities
-;;            (tag (org-glance-test:create-tag 'foo))
-;;            (title "Hello, world!")
-;;            (contents "- foo: bar")
-;;            (id (org-glance-test:add-headline tag title contents))
-;;            (headline (org-glance-test:materialize id))
-;;            (initial-contents (org-glance-headline:contents headline)))
-;;       (org-glance:with-headline-materialized headline
-;;         (org-glance-headline:encrypt "123"))
-;;       (should (string= initial-contents (org-glance-headline:contents headline))))
-
-;;     ;; (should (org-glance-headline:propertized? headline))
-;;     ;; (should (string= "bar" (org-glance:extract headline "foo")))
-;;     ))
-
-;; new headline model
-
 (ert-deftest org-glance-test:headline-parser ()
-  (let ((headline (org-glance-headline-v2--from-lines
+  (let ((headline (org-glance-headline--from-lines
                     ""
                     ""
                     ""
@@ -126,40 +11,115 @@
                     ":PROPERTIES:"
                     ":ORG_GLANCE_ID: bar"
                     ":END:")))
-    (should (equal (org-glance-headline-v2:tags headline) '(a b c)))
-    (should (= (org-glance-headline-v2:priority headline) 65))
-    (should (string= (org-glance-headline-v2:title headline) "bar"))
-    (should (string= (org-glance-headline-v2:state headline) ""))
-    (should (string= (org-glance-headline-v2:id headline) "bar"))
-    (should (string= (org-glance-headline-v2:tag-string headline) ":a:b:c:"))
-    (should (not (org-glance-headline-v2:encrypted? headline)))))
-
-(ert-deftest org-glance-test:headline-active ()
-  (let ((org-done-keywords (list "DONE")))
-    (let ((headline (org-glance-headline-v2--from-lines "* TODO Hello, world!")))
-      (should (string= (org-glance-headline-v2:state headline) "TODO"))
-      (should (org-glance-headline-v2:active? headline))
-      (should (not (org-glance-headline-v2:done? headline))))))
+    (should (equal (org-glance-headline:tags headline) '(a b c)))
+    (should (= (org-glance-headline:priority headline) 65))
+    (should (string= (org-glance-headline:title headline) "bar"))
+    (should (string= (org-glance-headline:state headline) ""))
+    (should (string= (org-glance-headline:id headline) "bar"))
+    (should (not (org-glance-headline:encrypted? headline)))))
 
 (ert-deftest org-glance-test:headline-properties ()
-  (let ((headline (org-glance-headline-v2--from-lines "* TODO Hello, world!" "- foo: bar")))
-    (should (eq 1 (length (org-glance-headline-v2:properties headline))))
-    (should (string= "bar" (org-glance-headline-v2:get-user-property "foo" headline)))))
+  (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "- foo: bar")))
+    (should (eq 1 (length (org-glance-headline:properties headline))))
+    (should (string= "bar" (org-glance-headline:get-user-property "foo" headline)))))
+
+(ert-deftest org-glance-test:headline-node-properties ()
+  "`node-property' reads the `:PROPERTIES:' drawer (case-insensitively); a body
+`KEY: value' pair is NOT a node property (that is `get-user-property')."
+  (let ((headline (org-glance-headline--from-lines
+                    "* TODO Book :read:"
+                    ":PROPERTIES:"
+                    ":ORG_GLANCE_ID: book-1"
+                    ":TODO_KEYWORDS: TODO READING | READ"
+                    ":END:"
+                    "- author: Tolkien")))
+    ;; drawer properties, matched case-insensitively
+    (should (string= "book-1" (org-glance-headline:node-property "ORG_GLANCE_ID" headline)))
+    (should (string= "TODO READING | READ" (org-glance-headline:node-property "todo_keywords" headline)))
+    ;; absent -> nil
+    (should (null (org-glance-headline:node-property "NOPE" headline)))
+    ;; a body `KEY: value' is NOT a drawer/node property ...
+    (should (null (org-glance-headline:node-property "author" headline)))
+    ;; ... it is a user (body) property instead
+    (should (string= "Tolkien" (org-glance-headline:get-user-property "author" headline)))
+    ;; the drawer alist carries the keys, uppercased
+    (should (assoc "TODO_KEYWORDS" (org-glance-headline:node-properties headline)))))
 
 (ert-deftest org-glance-test:headline-links ()
-  (let ((headline (org-glance-headline-v2--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
-    (should (eq 1 (length (org-glance-headline-v2:links headline))))))
+  (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
+    (should (plist-get (org-glance-headline--content-facts headline) :linked))
+    (should (eq 1 (org-glance-headline:with-contents headline
+                    (length (org-glance--parse-links)))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
-  (let* ((orig (org-glance-headline-v2--from-lines "* TODO Hello, world!" "foo bar"))
+  "Encrypt wraps the body in one sealed crypt block; decrypt keeps the markers
+\(plaintext body), decrypt+unwrap restores the original bytes."
+  (let* ((orig (org-glance-headline--from-lines "* TODO Hello, world!" "foo bar"))
          (password "password")
-         (encrypted (org-glance-headline-v2:encrypt orig password))
-         (decrypted (org-glance-headline-v2:decrypt encrypted password)))
-    (should (not (org-glance-headline-v2:encrypted? orig)))
-    (should (org-glance-headline-v2:encrypted? encrypted))
-    (should (not (org-glance-headline-v2:encrypted? decrypted)))
-    (should (not (string= (org-glance-headline-v2:contents orig) (org-glance-headline-v2:contents encrypted))))
-    (should (string= (org-glance-headline-v2:contents decrypted) (org-glance-headline-v2:contents orig)))))
+         (encrypted (org-glance-headline:encrypt orig password))
+         (decrypted (org-glance-headline:decrypt encrypted password))
+         (public (org-glance-headline:decrypt encrypted password t)))
+    (should (not (org-glance-headline:encrypted? orig)))
+    (should (org-glance-headline:encrypted? encrypted))
+    (should (s-contains? "#+begin_crypt" (org-glance-headline:contents encrypted)))
+    (should (not (s-contains? "foo bar" (org-glance-headline:contents encrypted))))
+    ;; decrypt: blocks stay (rekey path), body plaintext again
+    (should (not (org-glance-headline:encrypted? decrypted)))
+    (should (s-contains? "#+begin_crypt" (org-glance-headline:contents decrypted)))
+    (should (s-contains? "foo bar" (org-glance-headline:contents decrypted)))
+    ;; decrypt + unwrap: byte-identical to the original
+    (should (string= (org-glance-headline:contents public)
+                     (org-glance-headline:contents orig)))))
+
+(ert-deftest org-glance-test:headline-crypt-blocks-mixed ()
+  "Several crypt blocks seal independently; plaintext between them stays public,
+so an encrypted headline keeps honest `linked?' metadata.  Rekey (decrypt ->
+encrypt) preserves the block structure; decrypt+unwrap restores the original."
+  (let* ((orig (org-glance-headline--from-lines
+                "* TODO Mixed"
+                "public intro [[https://example.com][site]]"
+                "#+begin_crypt" "secret one" "#+end_crypt"
+                "public middle"
+                "#+begin_crypt" "secret two" "#+end_crypt"))
+         (enc (org-glance-headline:encrypt orig "pw"))
+         (fresh (org-glance-headline--from-string (org-glance-headline:contents enc)))
+         (meta (org-glance-headline:metadata fresh))
+         (cipher (org-glance-headline:contents fresh)))
+    ;; only the blocks sealed; public parts intact
+    (should (s-contains? "example.com" cipher))
+    (should (s-contains? "public middle" cipher))
+    (should-not (s-contains? "secret one" cipher))
+    (should-not (s-contains? "secret two" cipher))
+    (should (= 2 (s-count-matches "#\\+begin_crypt" cipher)))
+    ;; the metadata sees both facts at once -- the point of the feature
+    (should (org-glance-headline-metadata:encrypted? meta))
+    (should (org-glance-headline-metadata:linked? meta))
+    ;; rekey preserves both blocks; the new password opens them
+    (let* ((rekeyed (org-glance-headline:encrypt
+                     (org-glance-headline:decrypt fresh "pw") "new"))
+           (opened (org-glance-headline:contents
+                    (org-glance-headline:decrypt rekeyed "new"))))
+      (should (= 2 (s-count-matches "#\\+begin_crypt"
+                                    (org-glance-headline:contents rekeyed))))
+      (should (s-contains? "secret one" opened))
+      (should (s-contains? "secret two" opened)))
+    ;; decrypt + unwrap: fully public, no markers left
+    (let ((public (org-glance-headline:contents
+                   (org-glance-headline:decrypt fresh "pw" t))))
+      (should (s-contains? "secret one" public))
+      (should (s-contains? "secret two" public))
+      (should-not (s-contains? "#+begin_crypt" public)))))
+
+(ert-deftest org-glance-test:headline-crypt-legacy-layout ()
+  "The pre-block whole-body cipher still detects as encrypted and decrypts."
+  (let* ((orig (org-glance-headline--from-lines "* TODO Old" "old secret"))
+         (legacy (org-glance-test:legacy-encrypt orig "pw")))
+    (should (org-glance-headline:encrypted? legacy))
+    (should-not (s-contains? "old secret" (org-glance-headline:contents legacy)))
+    (should-not (s-contains? "#+begin_crypt" (org-glance-headline:contents legacy)))
+    (should (s-contains? "old secret"
+                         (org-glance-headline:contents
+                          (org-glance-headline:decrypt legacy "pw"))))))
 
 (ert-deftest org-glance-test:headline-search ()
   (with-temp-buffer
@@ -175,71 +135,45 @@
 
     (goto-char (point-min))
 
-    (let ((existing-headline (org-glance-headline-v2:search-forward "quux_id")))
-      (should (string= (org-glance-headline-v2:id existing-headline) "quux_id")))
+    (let ((existing-headline (org-glance-headline:search-forward "quux_id")))
+      (should (string= (org-glance-headline:id existing-headline) "quux_id")))
 
-    (let ((non-existing-headline (org-glance-headline-v2:search-forward "bar")))
+    (let ((non-existing-headline (org-glance-headline:search-forward "bar")))
       (should (eq non-existing-headline nil)))))
 
 (ert-deftest org-glance-test:headline-copy ()
-  (let* ((orig (org-glance-headline-v2--from-string "* TODO foo"))
-         (copy (org-glance-headline-v2--copy orig :state "DONE")))
-    (should (string= (org-glance-headline-v2:state orig) "TODO"))
-    (should (string= (org-glance-headline-v2:state copy) "DONE"))))
+  (let* ((orig (org-glance-headline--from-string "* TODO foo"))
+         (copy (org-glance-headline--copy orig :state "DONE")))
+    (should (string= (org-glance-headline:state orig) "TODO"))
+    (should (string= (org-glance-headline:state copy) "DONE"))))
 
-(ert-deftest org-glance-test:headline-indent-hash ()
-  "Headline hash should change after indentation."
-  (let* ((orig (org-glance-headline-v2--from-string "*** foo"))
-         (copy (org-glance-headline-v2:reset-indent orig)))
-    (should (not (string= (org-glance-headline-v2:hash orig) (org-glance-headline-v2:hash copy))))))
+(ert-deftest org-glance-test:headline-planning ()
+  (pcase-dolist (`(,accessor ,keyword)
+                 '((org-glance-headline:schedule "SCHEDULED")
+                   (org-glance-headline:deadline "DEADLINE")))
+    (let ((h (org-glance-headline--from-lines
+              "* foo" (format "%s: <2025-01-10 Fri>" keyword))))
+      (should (string= (funcall accessor h) "<2025-01-10 Fri>")))))
 
-(ert-deftest org-glance-test:headline-title ()
-  (let ((headline (org-glance-headline-v2--from-string "* foo [[https:google.com]]")))
-    (should (string= (org-glance-headline-v2:title-clean headline) "foo https:google.com"))))
+(ert-deftest org-glance-test:headline-content-facts-matches-thunks ()
+  "The metadata build's single-pass `--content-facts' is byte-identical to forcing
+the -hash/-links/-properties/-encrypted thunks separately, across headline shapes."
+  (dolist (lines '(("* TODO Plain" ":PROPERTIES:" ":ORG_GLANCE_ID: a" ":END:")
+                   ("* TODO Linked [[https://x][d]]" ":PROPERTIES:" ":ORG_GLANCE_ID: b" ":END:"
+                    "See [[file:y.org][y]] and [[id:z][z]].")
+                   ("* TODO Propd" ":PROPERTIES:" ":ORG_GLANCE_ID: c" ":END:"
+                    "author: Tolkien" "pages: 300")
+                   ("* TODO Enc" ":PROPERTIES:" ":ORG_GLANCE_ID: e" ":END:"
+                    "aes-encrypted V 1.3-OCB-B-4-4-Mxxxx" "morebody")
+                   ("* TODO Both [[https://q][q]]" ":PROPERTIES:" ":ORG_GLANCE_ID: d" ":AUTHOR: X" ":END:"
+                    "key: val")))
+    (let* ((h (apply #'org-glance-headline--from-lines lines))
+           (facts (org-glance-headline--content-facts h)))
+      (should (equal (plist-get facts :hash)        (org-glance-headline:hash h)))
+      (should (eq    (plist-get facts :linked)
+                     (and (org-glance-headline:with-contents h (org-glance--buffer-links)) t)))
+      (should (eq    (plist-get facts :propertized) (and (org-glance-headline:properties h) t)))
+      (should (eq    (plist-get facts :encrypted)   (and (org-glance-headline:encrypted? h) t))))))
 
-(ert-deftest org-glance-test:headline-log ()
-  (let ((contents (-> (org-glance-headline-v2--from-string "* foo")
-                      (org-glance-headline-v2:add-note "Log note")
-                      (org-glance-headline-v2:contents))))
-    (should (s-join "\n" '("* foo" ":LOGBOOK:" "- Log note" ":END:")))))
-
-(ert-deftest org-glance-test:headline-timestamps ()
-  (let ((timestamps (-> (org-glance-headline-v2--from-lines "* foo"
-                                                          "<2025-01-01 Wed>"
-                                                          "[2025-01-01 Wed]")
-                        (org-glance-headline-v2:timestamps-raw))))
-    (should (= (length timestamps) 2))
-    (should (member "<2025-01-01 Wed>" timestamps))))
-
-(ert-deftest org-glance-test:headline-clocks ()
-  (let ((clocks (-> (org-glance-headline-v2--from-lines "* foo"
-                                                      ":LOGBOOK:"
-                                                      "- State \"STARTED\"    from \"PENDING\"    [2025-01-10 Fri 14:43]"
-                                                      "CLOCK: [2025-01-10 Fri 14:43]"
-                                                      "- State \"PENDING\"    from \"STARTED\"    [2025-01-10 Fri 14:43]"
-                                                      "- State \"STARTED\"    from \"TODO\"       [2025-01-10 Fri 14:15]"
-                                                      "CLOCK: [2025-01-10 Fri 14:15]--[2025-01-10 Fri 14:43] =>  0:28"
-                                                      ":END:")
-                    (org-glance-headline-v2:clocks))))
-    (should (= (length clocks) 2))))
-
-(ert-deftest org-glance-test:headline-schedule ()
-  (let ((schedule (-> (org-glance-headline-v2--from-lines "* foo" "SCHEDULED: <2025-01-10 Fri>")
-                      (org-glance-headline-v2:schedule))))
-    (should (string= (org-element-property :raw-value schedule) "<2025-01-10 Fri>"))))
-
-(ert-deftest org-glance-test:headline-deadline ()
-  (let ((deadline (-> (org-glance-headline-v2--from-lines "* foo" "DEADLINE: <2025-01-10 Fri>")
-                      (org-glance-headline-v2:deadline))))
-    (should (string= (org-element-property :raw-value deadline) "<2025-01-10 Fri>"))))
-
-(ert-deftest org-glance-test:headline-hash-consistency ()
-  (let* ((headline (org-glance-headline-v2--from-string "* foo"))
-         (overview (org-glance-headline-v2:overview headline)))
-    (should (string= (org-glance-headline-v2:hash headline)
-                     (org-glance-headline-v2:hash (org-glance-headline-v2--from-string overview))))))
-
-
-;; TODO Add tag, add headline, delete tag directory, add another tag, all actions should work fine
-
+(provide 'test-headline)
 ;;; test-headline.el ends here

@@ -1,0 +1,181 @@
+#+TITLE: Relations: @-references with optional kinds, edges derived from links
+#+DATE: 2026-07-18
+
+Status: *done* · 2026-07-18 · design adversarially verified against the code
+(4 reviewers; findings folded in below).  Suite 269/269, compile warning-free.
+
+Supersedes the store half of
+[[file:2026-07-09-relations-edge-model.proposed.org][relations-edge-model]]: same
+field-table projection, but the *body link is the canonical edge* — no reverse
+sidecar, no record re-append on edge write.
+
+* Problem
+
+The store holds only nodes.  The user flow this proposal ships:
+
+1. In a material buffer, =@= completing-reads a headline of the graph (required
+   match) and inserts an org-link to it; following the link materializes the
+   target.
+2. A reference optionally carries a *kind* — for a =book=, several people can be
+   referenced as =author=, =editor=, …
+3. Views: the table of a headline's references (outgoing) and back-references
+   (incoming), via the ordinary filter language.
+
+* Design
+
+** Canonical representation: an org-link in the body
+
+An edge IS a link in the source headline's body (invariant 5: blobs canonical,
+indexes derived).  New org link type in the existing family
+(=org-glance-visit= / =org-glance-open= / =org-glance-overview= are already
+registered in =org-glance.el=):
+
+: [[org-glance-material:ID][Title]]              edge with no kind
+: [[org-glance-material:ID?kind=author][Title]]  edge with kind "author"
+
+=:follow= splits the path at =?=, then materializes ID via
+=org-glance-ensure-init= (NOT the legacy "not initialized" =user-error= — the
+three existing handlers are upgraded to =ensure-init= in the same pass, fixing
+the class).  Dangling ID → =user-error= from =org-glance-material:open=.
+Legacy =org-glance-visit:ID= links count as kindless edges too, so old notes
+gain relations for free; =org-glance-overview:TAG= already covers links to
+overviews.  Registration sits beside the existing three in =org-glance.el=
+(same load coverage).
+
+Inserting/killing a reference is an ordinary body edit: save → new content hash
+→ metadata recomputed — edges can never drift from content; atomic commit, WAL,
+compaction, reindex backfill all apply unchanged.
+
+** =@= in the material buffer
+
+Bound in =org-glance-material-mode-map=.  Behavior (verifier-corrected):
+
+- At a *body* word boundary: completing-read (required match, self excluded,
+  duplicate labels disambiguated with a short id suffix — a same-label pick
+  must be injective, a wrong-target edge is silent data corruption) and insert
+  the link via =org-link-make-string= over =org-glance--title-clean= (escapes
+  =]]=-hazards).
+- Mid-word (emails), at heading bol (=@= is a default org *speed key*,
+  =org-mark-subtree=), and anywhere else: delegate to
+  =(command-remapping 'self-insert-command)= — i.e. =org-self-insert-command=,
+  preserving speed keys, table auto-blank and abbrevs.  =C-q @= is the literal
+  escape at a boundary.
+- =C-u @= additionally prompts for a kind: completion over kinds present in the
+  graph, free input allowed, empty = no kind.  (The prefix is not available for
+  self-insert repeat — acceptable.)
+
+** Metadata projection: =relations= field
+
+One struct slot + one field-table row *appended last* (verified: the load-time
+guard, serialize/deserialize iteration and compaction — which re-serializes
+parsed plists, so pre-existing records never gain the key — all hold; old
+records deserialize =relations = nil=).
+
+Internal value: list of =(TARGET-ID . KIND-or-nil)= conses, deduplicated.
+Encode/decode (verifier-corrected — the tags idioms do NOT transfer):
+
+- =edges-vector= encode: vector of vectors — =[ID]= or =[ID KIND]= per edge
+  (=json-serialize= errors on lists; only vectors are JSON arrays, and the
+  error would fire inside the non-demoted =--append=).
+- =edges-list= decode: normalize BOTH levels — outer vector → list, each inner
+  =[ID]=/=[ID KIND]= → =(ID . nil)=/=(ID . KIND)= — else deserialized metadata
+  carries inner vectors and every relation filter silently matches nothing
+  (the match-nothing drift class of invariant 4).
+
+Derivation (single-parse, verifier-corrected): =--content-facts= gains a
+=:links= fact — =org-glance--buffer-links= runs once, BEFORE =--hash-here=
+(which mutates the buffer), yielding both =linked?= and the edge list; a
+=relations= pcase arm in =org-glance-headline:metadata= reads it.  The field
+table's FROM lambda remains the out-of-band fallback via the =-links= thunk,
+like the existing flag rows.  =org-glance--buffer-links= entries grow to
+=(LINK TITLE POS TYPE PATH)= (existing 3-var =cl-loop= destructurings ignore
+the tail); edges read TYPE/PATH — no regexp re-parse of bracket text.
+
+** Views: filter rows + table commands (not "free" — the cache said no)
+
+- =:refers-to ID= — headlines carrying an edge → ID (back-references), any
+  kind.  New match kind =edge-target= in =--match-clause=.
+- =:id-any (IDS…)= — membership on =:id= (=member= kind), =:canon string-list=
+  (sorted, case-exact — NOT the downcasing =tags= canon); the outgoing view of
+  X is =(:id-any TARGETS-OF-X)= with targets deduped.
+
+Verifier finding (BROKEN as originally claimed): every cacheable filter mints a
+persistent =<store>/overviews/<hash>/= dir with no pruning, and =:id-any='s
+identity embeds the target snapshot — one dir per link-set version.  Fix:
+relation keys are *transient* — a =:transient t= column in
+=org-glance-filter:table= (joining =:where=) makes =overview:spec-key= return
+nil (uncacheable) and the table skip per-filter config persistence.  Compact
+=describe= arms keep buffer names bounded.
+
+Commands (table-only): =org-glance-material:references= / =:backlinks= on
+=C-c @= / =C-u C-c @= — passing the BARE relation filter, no ambient
+=(:done nil)= merge, so DONE referrers stay visible in backlinks.
+
+** Reverse lookup: fold, not sidecar
+
+Incoming edges = one pass over the in-memory metadata structs testing
+=relations= membership.  No persisted reverse index.  If N ever makes this hot,
+[[file:2026-07-09-graph-change-listeners.proposed.org][graph-change-listeners]]
+is the caching layer.
+
+** Crypt
+
+Rule: *relations always derive from the at-rest (sealed) byte form.*  Verified:
+=:sync= parses the sealed file content and reindex parses the sealed blob — a
+link inside a =#+begin_crypt= block is never indexed; a secret reference stays
+secret.  The seal/sync hook ordering this rests on gets a regression test
+(sealed save excludes the edge; reindex agrees byte-for-byte).
+
+Named hole found while verifying (pre-existing, fixed alongside):
+=snapshot-on-repeat= snapshots the LIVE unsealed buffer, so a repeating encrypted
+headline clones as a PLAINTEXT blob (invariant 14 breach independent of
+relations).  Fix here: skip snapshot-on-repeat for encrypted headlines with a
+message; sealing-with-cached-password is follow-up work.
+
+** Non-interactions (verified HOLDS)
+
+Dangling targets tolerated everywhere (delete leaves referrer bodies; GC/heal
+indifferent) · =linked?= flips true, referrers surface in =org-glance-open= ·
+ids are strings end-to-end (no tag-style coercion split) · coherence is the
+ordinary flag-stale + pull-refresh · reindex backfills =relations= on old
+stores · unregistered-type parsing: bracket links parse as links regardless.
+
+* Test plan
+
+- Round-trip: edges (kinded + kindless) survive serialize→deserialize with the
+  filter run against DESERIALIZED structs (the inner-vector trap); old records
+  → nil; byte-stability guard green.
+- =@=: insert at boundary (stubbed completion); self excluded; duplicate labels
+  disambiguated; heading-bol and mid-word delegate to self-insert;
+  =C-u= variant encodes =?kind==.
+- Follow: materializes; =?kind= stripped; dangling → =user-error=; works via
+  =ensure-init= (no "not initialized").
+- Edges: material + legacy visit links (one kinded) → pairs; dedup; other link
+  types → none; description with =]]=-hazard round-trips via
+  =org-link-make-string=.
+- Filters: =:refers-to= exact referrers; =:id-any= targets, order-insensitive
+  identity; compose with =:tags=; transient — overview =spec-key= nil, table
+  config not persisted.
+- Commands open tables with bare filters (DONE referrer visible).
+- Crypt: sealed-block edge excluded on sync AND reindex (byte-equal metadata);
+  encrypted snapshot-on-repeat skips with a message.
+- Reindex backfill.
+
+* Effort
+
+*Medium.*  Data layer (links fact, slot+row, encode/decode) ~half day · filter
+rows + transient plumbing ~half day · link type + =@= + commands + crypt gate +
+tests ~half day.
+
+* Related
+
+- [[file:2026-07-09-relations-edge-model.proposed.org][relations-edge-model]] — superseded store half; its =cloned-from= lineage
+  consumer becomes a follow-up (a capture-time body link).
+- [[file:2026-07-09-graph-change-listeners.proposed.org][graph-change-listeners]] — future reverse-lookup caching.
+- Touched: =src/data/org-glance-utils.el= (=--buffer-links= 5-tuple),
+  =org-glance-headline.el= (=--content-facts= =:links=), =org-glance-graph.el=
+  (slot + row + kinds + pcase arm), =org-glance-filter.el= (rows, match kinds,
+  =:transient=, =describe=), =src/view/org-glance-overview.el= (transient
+  spec-key), =org-glance-table.el= (transient config skip),
+  =org-glance-material.el= (=@=, commands, clone gate), =org-glance.el= (link
+  type + =ensure-init= class fix), =docs/properties.org=, =CHANGELOG.org=.

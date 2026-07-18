@@ -1,0 +1,139 @@
+#+TITLE: Changelog
+
+Notable user-facing changes.  Versions date-based
+=MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV=.  Detail: [[file:docs/proposals/][docs/proposals/]].
+
+* Unreleased
+
+** Added
+- Delete a headline: =D= on a table/overview row, or =M-x org-glance-delete=.
+  Referrer-aware confirmation (names the headlines whose links would dangle);
+  tombstone in the WAL, disk reclaimed at the next compaction; dangling links
+  stay in referrer bodies by design.
+- The overview is self-sufficient for agenda + links: each heading carries its
+  priority cookie, the single planning line, its relations (pretty kind +
+  edge link, live target titles) and its plain body links as list items --
+  no materialization needed to follow links or build =org-agenda=.  Backed by
+  a new =links= metadata field (non-edge links; edges stay in =relations=).
+- =C-c C-s= / =C-c C-d= in the overview AND table set the row's schedule /
+  deadline exactly like org (=C-u= clears); runs org's own planner on the blob.
+- Material buffers conceal bookkeeping drawer lines
+  (=org-glance-material-hidden-properties=, default =ORG_GLANCE_ID= +
+  =ORG_GLANCE_HASH=; overlays only, file content untouched); an all-reserved
+  drawer hides entirely.  Hand edits to these managed keys are reverted on
+  save with a warning.
+- Relations: =@= in a material buffer inserts an =org-glance-material:ID= link
+  to a completing-read headline; =C-u @= adds a =?kind== reference kind that
+  also prefixes the link as prose — =roasted by [[…][Manhattan]]= — with only
+  the name clickable.  Following materializes the target.  Edges derive from body
+  links into new =relations= metadata; =C-c @= / =C-u C-c @= open the
+  references / back-references table (filters =:id-any= / =:refers-to=).
+  Legacy =org-glance-visit:= links count as kindless edges.
+- Repeat occurrence history: completing a repetition snapshots the done state
+  into =data/<id>/occurrences/<STAMP>.org= (one graph headline, never clones);
+  =org-glance-repeat-history-depth= keeps the newest N (0 = off, default;
+  =t= = unlimited); the =ORG_GLANCE_REPEAT_HISTORY_DEPTH= drawer property
+  overrides it per headline (integer or =inf=).
+  Table shows a =Rep= column (=↻= cell marker); =l= (table/overview) / =C-c l= (material) open a
+  chosen occurrence read-only.  Encrypted headlines keep no history (skip +
+  no trim -- plaintext would leak).  Replaces the clone-on-repeat prototype
+  (=org-glance-clone-on-repeat-p= removed).
+- Overview links take a filter: =org-glance-overview:TAG?done=nil&state=READING=
+  (any filter-table key; bare TAG keeps the ambient merge; opens in the default
+  view).  Parser =org-glance-filter:from-link-path=.
+- Crypt blocks: =#+begin_crypt= regions seal at rest, decrypt in the material
+  buffer; several per headline, public text between stays indexable (links open
+  without a password).  =C-c #= wraps region / =C-u C-c #= unwraps / else locks.
+  Legacy whole-body ciphers upgrade on first save.  A bare =C-c #= (no
+  region) in a plaintext buffer encrypts the whole body.
+- Table view: =#= encrypt/decrypt the row; =C-u #= re-key an encrypted headline.
+- Table =Enc= column: 🔒 for encrypted headlines (sortable).
+- Store API =org-glance-material:crypt-set= / =:crypt-rekey=.
+- Transient =T= toggles the default overview view (table ⇄ org), mirroring the
+  in-view =T=.
+- Table header: coloured =#+TODO:= state line always shown (sort too); =?= toggles
+  the action-key legend.  (Needs =table-view= with =table-view-toggle-help= /
+  spec =subtitle=.)
+- =:ORG_GLANCE_PROJECT_DIR:= headline property: =org-glance-llm= opens the session
+  there instead of the data dir.  Set/clear it in a materialized buffer with
+  =C-c d= (=org-glance-material:set-project-dir=).
+- Table =C-u += now completing-reads (required match) a drawer property OR a
+  relation kind the filtered headlines actually carry (drawer values via the
+  derived property index; a kind column shows the target headline TITLES,
+  many-to-many comma-joined).  Column values and the table =e= action read
+  the index instead of re-parsing blobs.  Kinds are dash-slugged in links
+  (=?kind=roasted-by=) and pretty-printed everywhere visible.
+- Table =C-u -= removes the column at point (any but the mandatory Title);
+  built-in removals persist per tag (=table-columns.eld= =:hidden=).
+- Table bare =-= drops the view's tag off the headline at point (leaves the view,
+  not deleted) -- mirror of the bare =+= capture.
+
+** Changed
+- Org link completion (=C-c C-l=) offers the canonical =org-glance-material:=
+  type; legacy =org-glance-visit:= links still follow but are no longer
+  completed.
+- Open-link key in the overview and table is =j= (was =o=), matching the
+  transient (=j= Open link, =o= Overview); =!= is a quiet alias (dired rhyme).
+- Table =:= (add tag) offers only tags the headline does not already carry.
+- Material password lock =C-c C-l= → =C-c #=; forgetting the cached password
+  now asks =y-or-n-p= first.
+- =org-glance-overview-default-view= takes =org-glance-table= / =org-glance-overview=
+  (legacy =table= / =org= still accepted).
+- Transient =o= label shows the current default view (=Overview [table|org]=).
+- =org-glance-llm= materializes the headline, then opens =agnostic-llm-menu= from
+  its blob buffer pinned to the data dir and =*llm:…*= buffer (highlighted);
+  reopening switches to the live session.  Moved to =org-glance-llm.el=.
+
+** Removed
+- =make fat= single-file build (=build/build-fat.el=, =dist/=) — the
+  =rails-to-cosmos= ELPA archive distributes the package properly; from-source
+  users have the load-path/straight recipes.
+- =org-glance-material:apply= — a thin =save-buffer= wrapper; use the ordinary
+  save (=C-x C-s=), which has synced through =write-contents-functions= all
+  along.
+- Dead command =org-glance:insert-pin-block= and the unused legacy headline
+  helpers (=org-glance-headline:overview= chain, =:reset-indent=, =:add-note=,
+  =:active?=, =:done?=, =:tag-string=, =:title-clean=).
+
+** Fixed
+- Overview renders BOTH planning keywords on one line, as org requires --
+  headlines carrying schedule AND deadline had an orphaned property drawer,
+  breaking every at-point action on them (materialize, todo, planning keys).
+- =org-glance-llm= session dir is slash-terminated, as =default-directory=
+  expects (=org-glance-llm--dir=).
+- Capture from table no longer prompts "Buffer modified; kill anyway?".
+- Git-conflicted =config/*.eld= sidecars (e.g. =tag-metrics.eld=) heal at graph
+  open (new =org-glance-graph-after-open-functions= hook), not only lazily on the
+  next append -- where a declined prompt was swallowed by the demoted hook.
+
+* 0.6.0.0.20260716.0 — metadata-migration (major)
+
+v1 =*.metadata.el= → v2 content-addressable graph store.  Migration re-scans the
+canonical org files; legacy files backed up, not deleted.  New layout
+=.org-glance/{meta,data,config}/=.
+
+** Added
+- v2 store: segmented append-only JSONL WAL (=headlines.jsonl=, =seg-*.jsonl=,
+  =MANIFEST=), content =data/= blobs, read cache, atomic writes, compaction,
+  =--heal= recovery.
+- Table view (=org-glance-table=, on =table-view=): sort, badge colours, per-tag
+  custom columns, bulk todo, filters.
+- Overview (=org-glance-overview=): filtered agenda view, cache + pull coherence.
+- Per-tag config (=org-glance-tag-config=): capture skeleton + todo cycle.
+- All-tags overview (=org-glance-tags=, =t=): per-tag metrics; =+= / =-= add/remove.
+- Git-sync conflict auto-resolution: WAL ~merge=union~ driver + =config/*.eld=
+  heal toolkit (=org-glance-conflict-resolution=).
+- =agnostic-llm= (=org-glance-llm=, =l=); =*llm:…*= named by title slug.
+- Encrypted materialization: decrypt on open, re-encrypt on save; password TTL,
+  =C-c #= to forget.
+- =make fat= single-file build; =make major|minor|patch|build|rev= bumpers.
+
+** Changed
+- Materialize = edit content blob as a real file; =after-save= syncs metadata.
+- Date-based versioning.
+- =org-glance-form-action= → =org-glance-transient= (autoloaded).
+- Session primitives → =org-glance-core=.
+- =table-view=, =agnostic-llm= external deps, not vendored.
+
+** Removed
+- v1 =*.metadata.el= read path.

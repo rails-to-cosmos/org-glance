@@ -1,0 +1,55 @@
+#+TITLE: Macro audit: repeated semantic shapes vs elisp macros
+#+DATE: 2026-07-18
+
+Status: *done* · 4 pattern hunters + one adversarial judge per candidate (27
+agents).  Bar: a macro must beat BOTH the status quo AND the best function
+alternative; body-wrapping / binding-introduction / unevaluated args required.
+
+* Adopted (test-helpers.el)
+
+- =org-glance-test:with-table ((graph &optional filter) &rest body)= — 32 sites
+  collapsed: the with-table-filter/-buffer + immediate =with-current-buffer=
+  pair was the entire body of most table tests.  Sites where the buffer var is
+  used outside =with-current-buffer= stay on the filter variant.
+- =org-glance-test:offering ((coll answer) &rest body)= — the arg-INSPECTING
+  complement of =:answering=: stubs =completing-read=, records each prompt's
+  collection in COLL, replies with ANSWER (may read COLL).  Kills the
+  malformed-stub-lambda-list class (hand-written =(_p coll &rest _)= variants)
+  and replaced test-material's local =--seen-ids= macro (+ the shared
+  =org-glance-test:offered-ids= assert helper).
+- =org-glance-test:with-shown ((var) &rest body)= — stubs
+  =switch-to-buffer=/=pop-to-buffer=, tracks shown buffers, kills them ALL on
+  exit (unwind-protect).  Fixed real leaks: two tests leaked a buffer on every
+  run, three more on assertion failure — and =org-glance-llm--label= scans live
+  buffers, so leaks contaminated later tests.
+
+* Anti-candidates (judged; do not re-propose)
+
+1. =org-link-set-parameters= ×4 — top-level data, three distinct keyword sets;
+   a loop would displace load-bearing per-type comments.
+2. overview:schedule/:deadline command twins — 2 sites; logic already shared in
+   =--set-planning=; an interning defcommand macro breaks grep/xref on
+   user-facing command names.
+3. fetch-or-user-error "no longer in graph" — 3 sites, two different fetchers,
+   per-view messages; correct as plain functions.
+4. =with-demoted-errors "org-glance: X: %S"= wrapper — 7 sites; saves 0 LOC,
+   erases greppable prefixes and the inline invariant-9 anchors.
+5. =define-eld-store= codegen over the two table stores — shapes genuinely
+   diverge (key derivation, projections, drop-empty put); costs more than the
+   ~10 shared lines and hides accessors from xref.
+6. =inhibit-read-only= + =revert-buffer= pair — 2 sites, single expression.
+7. lazy-fact thunk builders (headline.el) — 4 one-form bodies; a 4-line plain
+   function (=--lazy-fact=) dominates.  (Optional follow-up, not done.)
+8. graph fold =define-graph-fold= — plain =--distinct (graph extract ids)=
+   function covers all sites with ordinary lambdas.  (Optional follow-up.)
+9. buffer-local guard preambles, act-handler guard+line shape, prefix-arg
+   command dispatch, =def-glance-test= naming enforcer, =with-X-buffer=
+   unification (five helpers diverge on six axes), fixture =with-headlines=,
+   truename-path memo wrap, once-after advice, entry-get/put pair — each fails
+   on sites<3, shape divergence, or function-suffices.
+
+* Related
+
+- Style rule this audit encodes: macros only where BODY forms are wrapped or
+  bindings introduced (the repo's =with-contents=/=with-graph= precedent);
+  everything value→value stays a =cl-defun= (CLAUDE.md conventions).
