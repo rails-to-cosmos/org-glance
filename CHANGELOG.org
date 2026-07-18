@@ -14,8 +14,9 @@ Notable user-facing changes.  Versions date-based
   drawer hides entirely.  Hand edits to these managed keys are reverted on
   save with a warning.
 - Relations: =@= in a material buffer inserts an =org-glance-material:ID= link
-  to a completing-read headline (=C-u @= adds a =?kind== reference kind, e.g.
-  author/editor); following materializes the target.  Edges derive from body
+  to a completing-read headline; =C-u @= adds a =?kind== reference kind that
+  also prefixes the link as prose — =roasted by [[…][Manhattan]]= — with only
+  the name clickable.  Following materializes the target.  Edges derive from body
   links into new =relations= metadata; =C-c @= / =C-u C-c @= open the
   references / back-references table (filters =:id-any= / =:refers-to=).
   Legacy =org-glance-visit:= links count as kindless edges.
@@ -46,10 +47,12 @@ Notable user-facing changes.  Versions date-based
 - =:ORG_GLANCE_PROJECT_DIR:= headline property: =org-glance-llm= opens the session
   there instead of the data dir.  Set/clear it in a materialized buffer with
   =C-c d= (=org-glance-material:set-project-dir=).
-- Table =C-u += now completing-reads (required match) a drawer property the
-  filtered headlines actually carry, backed by a derived, persisted property
-  index (=org-glance-property-index=); column values and the table =e= action
-  read from it instead of re-parsing blobs.
+- Table =C-u += now completing-reads (required match) a drawer property OR a
+  relation kind the filtered headlines actually carry (drawer values via the
+  derived property index; a kind column shows the target headline TITLES,
+  many-to-many comma-joined).  Column values and the table =e= action read
+  the index instead of re-parsing blobs.  Kinds are dash-slugged in links
+  (=?kind=roasted-by=) and pretty-printed everywhere visible.
 - Table =C-u -= removes the column at point (any but the mandatory Title);
   built-in removals persist per tag (=table-columns.eld= =:hidden=).
 - Table bare =-= drops the view's tag off the headline at point (leaves the view,
@@ -76,6 +79,8 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- =org-glance-llm= session dir is slash-terminated, as =default-directory=
+  expects (=org-glance-llm--dir=).
 - Capture from table no longer prompts "Buffer modified; kill anyway?".
 - Git-conflicted =config/*.eld= sidecars (e.g. =tag-metrics.eld=) heal at graph
   open (new =org-glance-graph-after-open-functions= hook), not only lazily on the

@@ -15,7 +15,8 @@ pinned to its data dir and title label."
                  (lambda (&optional dir lbl) (setq root dir label lbl))))
         (org-glance-llm))
       (let ((expected (org-glance-graph:headline-data-path org-glance-graph "llmid")))
-        (should (equal (file-truename root) (file-truename expected)))
+        (should (s-suffix? "/" root))            ; directory-valued, slash-terminated
+        (should (file-equal-p root expected))
         (should (file-directory-p root))
         (should (equal "alpha" label))
         ;; the headline was materialized (its blob buffer) before the menu
@@ -73,8 +74,11 @@ a session for a different headline already holds the plain slug."
     (org-glance-graph:add org-glance-graph
       (org-glance-test:headline-props "a" "* TODO A" '(("ORG_GLANCE_PROJECT_DIR" . "~/x/proj")))
       (org-glance-test:headline "b" "* TODO B"))
-    (should (equal (expand-file-name "~/x/proj") (org-glance-llm--dir org-glance-graph "a")))
-    (should (equal (org-glance-graph:headline-data-path org-glance-graph "b")
+    ;; directory-valued: always trailing-slashed (feeds `default-directory')
+    (should (equal (file-name-as-directory (expand-file-name "~/x/proj"))
+                   (org-glance-llm--dir org-glance-graph "a")))
+    (should (equal (file-name-as-directory
+                    (org-glance-graph:headline-data-path org-glance-graph "b"))
                    (org-glance-llm--dir org-glance-graph "b")))))
 
 (ert-deftest org-glance-test:llm-honours-project-dir ()

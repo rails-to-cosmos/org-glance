@@ -753,7 +753,7 @@ final rows -- the equivalence the in-place fast path relies on."
     (org-glance-test:with-table-filter graph 'book buf
       (with-current-buffer buf
         (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
-        (org-glance-test:answering ((completing-read "author"))
+        (org-glance-test:answering ((completing-read "AUTHOR"))
           (let ((col (org-glance-table--add-column-prompt)))
             (should (equal "AUTHOR" (alist-get 'key col)))
             (should (equal "Author" (alist-get 'header col)))

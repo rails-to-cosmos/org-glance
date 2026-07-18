@@ -56,8 +56,9 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 
 - =org-glance-material:ID= — a relation edge: following materializes ID.  An
   optional =?kind=KIND= suffix types the reference (a book's =author= vs
-  =editor=); the kind annotates the edge, not the jump.  Inserted by =@= in a
-  material buffer (=C-u @= asks the kind); the store derives the =relations=
+  =editor=, =roasted by=); the kind annotates the edge, not the jump.
+  Inserted by =@= in a material buffer; =C-u @= asks the kind and prefixes the
+  link with it as prose (=roasted by [[…][Manhattan]]=).  The store derives the =relations=
   metadata from these links on save/reindex.  See
   [[file:proposals/2026-07-18-relations.done.org][relations]].
 - =org-glance-visit:ID= — legacy materialize link; still followed, and counts

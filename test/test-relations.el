@@ -11,11 +11,12 @@ link types contribute no edge."
     (org-glance-graph:add graph
       (org-glance-test:headline "src" "* TODO Source"
         "[[org-glance-material:t1?kind=author][Ann]]"
+        "roasted by [[org-glance-material:t3?kind=roasted-by][Roastery]]"
         "[[org-glance-material:t2][Base]]"
         "[[org-glance-visit:legacy1][Old note]]"
         "[[org-glance-material:t1?kind=author][Ann again]]"   ; duplicate edge
         "[[https://example.com][Web]]"))
-    (should (equal '(("t1" . "author") ("t2" . nil) ("legacy1" . nil))
+    (should (equal '(("t1" . "author") ("t3" . "roasted-by") ("t2" . nil) ("legacy1" . nil))
                    (org-glance-headline-metadata:relations
                     (org-glance-graph:get-headline graph "src"))))))
 
@@ -116,11 +117,13 @@ self is excluded from the candidates."
                      (lambda (_p coll &rest _)
                        (cl-incf n)
                        (if (= n 1) (caar coll)
-                         (setq kind-coll coll) "editor")))))
+                         (setq kind-coll coll) "roasted by")))))
           (org-glance-material:refer '(4)))
-        (should (member "author" kind-coll)))    ; seeded below via me's own edge
-      (should (s-contains? "[[org-glance-material:other?kind=editor][Other headline]]"
-                           (buffer-string))))))
+        (should (member "author" kind-coll)))    ; seeded above via me's own edge
+      ;; kinded reference reads as prose (pretty), slugged in the wire
+      (should (s-contains?
+               "roasted by [[org-glance-material:other?kind=roasted-by][Other headline]]"
+               (buffer-string))))))
 
 (ert-deftest org-glance-test:material-refer-duplicate-labels-injective ()
   "Same-titled candidates get a short-id suffix, and picking one targets ITS id."
@@ -337,6 +340,50 @@ default view."
         (let ((org-glance-overview-default-view 'org-glance-overview))
           (org-glance-overview:visit-default graph nil))
         (should (equal '(org table) calls))))))
+
+(ert-deftest org-glance-test:table-edge-kind-column ()
+  "A relation kind is a column: `C-u +' offers it pretty, the column shows the
+target TITLES (many-to-many comma-joined, gone targets fall back to the id),
+and the per-tag schema round-trips it as an edge column."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "c1" "* TODO Kebena Decaf :coffee:"
+        "roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan]]"
+        "also [[org-glance-material:gone?kind=roasted-by][Ghost]]")
+      (org-glance-test:headline "c2" "* TODO Another Bean :coffee:")
+      (org-glance-test:headline "r1" "* Manhattan Coffee Roasters"))
+    (org-glance-test:with-table-filter graph 'coffee buf
+      (with-current-buffer buf
+        ;; prompt offers the PRETTY kind
+        (let (offered)
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_p coll &rest _)
+                       (setq offered (mapcar #'car coll)) "roasted by")))
+            (let ((current-prefix-arg '(4)))
+              (funcall (key-binding (kbd "+")))))
+          (should (member "roasted by" offered)))
+        ;; column shows titles; many-to-many joins; gone target -> id
+        (should (equal "Manhattan Coffee Roasters, gone"
+                       (org-glance-test:table-cell buf "c1" "roasted-by")))
+        (should (equal "" (org-glance-test:table-cell buf "c2" "roasted-by")))
+        ;; header is the capitalized pretty form
+        (should (cl-find "Roasted by"
+                         (alist-get 'columns table-view--spec)
+                         :key (lambda (c) (alist-get 'header c)) :test #'equal))))
+    ;; persisted per tag: a fresh view of the SAME tag rebuilds the EDGE column
+    (org-glance-test:with-table-filter graph 'coffee buf
+      (with-current-buffer buf
+        (should (equal "Manhattan Coffee Roasters, gone"
+                       (org-glance-test:table-cell buf "c1" "roasted-by")))))))
+
+(ert-deftest org-glance-test:kind-slug-roundtrip ()
+  "Kind slugs: downcase + dashes in the wire, spaces back for humans."
+  (should (equal "roasted-by" (org-glance--kind-slug "Roasted By")))
+  (should (equal "roasted-by" (org-glance--kind-slug "  roasted by ")))
+  (should (equal "roasted by" (org-glance--kind-pretty "roasted-by")))
+  ;; legacy spaced kind in a stored link normalizes on parse
+  (should (equal '("x" . "roasted-by")
+                 (org-glance--link-edge "org-glance-material" "x?kind=roasted by"))))
 
 (provide 'test-relations)
 ;;; test-relations.el ends here

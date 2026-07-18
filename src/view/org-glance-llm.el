@@ -74,9 +74,11 @@ content-addressable data dir."
          (override (and headline
                         (org-glance-headline:node-property
                          org-glance-project-dir-property headline))))
-    (if (org-glance--present-string? override)
-        (expand-file-name (string-trim override))
-      (org-glance-graph:headline-data-path graph id))))
+    ;; Directory-valued: always trailing-slashed, as `default-directory' expects.
+    (file-name-as-directory
+     (if (org-glance--present-string? override)
+         (expand-file-name (string-trim override))
+       (org-glance-graph:headline-data-path graph id)))))
 
 ;;;###autoload
 (cl-defun org-glance-llm ()

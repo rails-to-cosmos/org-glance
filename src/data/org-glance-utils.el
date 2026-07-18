@@ -160,18 +160,31 @@ start; TYPE and PATH the parsed `org-element' link type and unescaped path."
   (list org-glance-link-material-type "org-glance-visit")
   "Link types that denote a relation edge to another headline.")
 
+(cl-defun org-glance--kind-slug (kind)
+  "Canonical wire form of a reference KIND: downcased, spaces to dashes.
+\"Roasted By\" -> \"roasted-by\".  Applied on BOTH encode and decode, so a
+hand-typed or legacy spaced kind normalizes on the next parse."
+  (replace-regexp-in-string "[ \t]+" "-" (downcase (s-trim kind))))
+
+(cl-defun org-glance--kind-pretty (kind)
+  "Human form of a KIND slug: dashes back to spaces (\"roasted-by\" ->
+\"roasted by\")."
+  (replace-regexp-in-string "-" " " kind))
+
 (cl-defun org-glance--link-edge (type path)
-  "Edge (TARGET-ID . KIND-or-nil) denoted by a TYPE/PATH link, or nil.
+  "Edge (TARGET-ID . KIND-SLUG-or-nil) denoted by a TYPE/PATH link, or nil.
 The decode half of the edge wire format; `--edge->link-path' encodes."
   (when (and (member type org-glance--link-edge-types)
              (stringp path)
              (string-match "\\`\\([^?]+\\)\\(?:\\?kind=\\(.+\\)\\)?\\'" path))
-    (cons (match-string 1 path) (match-string 2 path))))
+    (cons (match-string 1 path)
+          (when-let ((kind (match-string 2 path)))
+            (org-glance--kind-slug kind)))))
 
 (cl-defun org-glance--edge->link-path (id &optional kind)
-  "Link path (TYPE:ID[?kind=KIND]) for an edge to ID; the encode half."
+  "Link path (TYPE:ID[?kind=SLUG]) for an edge to ID; the encode half."
   (concat org-glance-link-material-type ":" id
-          (and kind (concat "?kind=" kind))))
+          (and kind (concat "?kind=" (org-glance--kind-slug kind)))))
 
 (cl-defun org-glance--links->edges (links)
   "Distinct relation edges among LINKS (the `--buffer-links' tuple shape)."

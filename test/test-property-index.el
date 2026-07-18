@@ -51,7 +51,9 @@ column's value-fn reads that property via the index."
       (with-current-buffer buf
         (let (offered)
           (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_p coll &rest _) (setq offered coll) (car coll))))
+                     (lambda (_p coll &rest _)
+                       (setq offered (mapcar #'car coll))   ; display strings
+                       (caar coll))))
             (let ((col (org-glance-table--add-column-prompt)))
               (should (member "AUTHOR" offered))          ; discovered from the headline
               (should-not (member "ORG_GLANCE_ID" offered))

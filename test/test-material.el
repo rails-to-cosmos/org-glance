@@ -902,12 +902,12 @@ property on the materialized headline; `org-glance-llm--dir' reads it back."
       (should (equal "/tmp/proj-x"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
-      (should (equal "/tmp/proj-x" (org-glance-llm--dir graph "d")))
+      (should (equal "/tmp/proj-x/" (org-glance-llm--dir graph "d")))
       ;; clear (nil dir, as a prefix-arg invocation supplies)
       (org-glance-material:set-project-dir nil)
       (should-not (org-glance-headline:node-property
                    "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d")))
-      (should (equal (org-glance-graph:headline-data-path graph "d")
+      (should (equal (file-name-as-directory (org-glance-graph:headline-data-path graph "d"))
                      (org-glance-llm--dir graph "d"))))))
 
 (provide 'test-material)

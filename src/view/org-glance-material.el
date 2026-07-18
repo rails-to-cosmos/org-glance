@@ -964,8 +964,9 @@ GRAPH (`org-glance-graph:edge-kinds'), free input allowed, empty = none."
          (kind (when with-kind
                  (let ((k (s-trim (completing-read
                                    "Reference kind (empty for none): "
-                                   (org-glance-graph:edge-kinds graph)))))
-                   (unless (string-empty-p k) k)))))
+                                   (mapcar #'org-glance--kind-pretty
+                                           (org-glance-graph:edge-kinds graph))))))
+                   (unless (string-empty-p k) (org-glance--kind-slug k))))))
     (list (org-glance-headline-metadata:id meta)
           (org-glance--title-clean (org-glance-headline-metadata:title meta))
           kind)))
@@ -986,7 +987,11 @@ inserts a literal `@' anywhere."
                  (org-glance-material--read-reference
                   org-glance-material--graph org-glance-material--id
                   :with-kind arg)))
-      (insert (org-link-make-string (org-glance--edge->link-path id kind) title)))))
+      ;; A kinded reference reads as prose: "roasted by [[...][Manhattan]]" --
+      ;; the kind prefixes the link as plain text (only the name is clickable);
+      ;; the canonical, machine-readable kind lives in the link path.
+      (insert (concat (and kind (concat (org-glance--kind-pretty kind) " "))
+                      (org-link-make-string (org-glance--edge->link-path id kind) title))))))
 
 (cl-defun org-glance-material:references (&optional arg)
   "Table of the headlines this one refers to; with ARG, its back-references.
