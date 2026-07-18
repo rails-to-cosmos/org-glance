@@ -34,68 +34,127 @@ remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
 MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
-The *LLM session* action (=l=) opens an
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] claude session in the
-selected headline's data directory -- or in its project directory, when the
-headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property (set it from a
-materialized buffer with =C-c d=, `org-glance-material:set-project-dir').
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] (also on the
-=rails-to-cosmos= archive) is a required dependency;
-it pulls in =vterm=, loaded lazily the first time you run the action, so
-org-glance never loads vterm at startup.
+The *LLM session* action (=l=) opens an [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
+selected headline's data directory -- or in its project directory,
+when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
+(set it from a materialized buffer with =C-c d=,
+`org-glance-material:set-project-dir').  [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] (also on the
+=rails-to-cosmos= archive) is a required dependency; it pulls in =vterm=,
+loaded lazily the first time you run the action, so org-glance never
+loads vterm at startup.
 
-* Highlights
+* Usage
 
-Reach everything through the =org-glance-transient= transient (=C-x j= above).
+Everything starts from =org-glance-transient= (=C-x j=):
 
-- *Overview* (=o=) — the org-text overview of a chosen tag: each heading is
-  self-sufficient (priority + planning for =org-agenda=, clickable body links,
-  relations with kinds and live titles — no materialization needed); toggle it (=T=) to a
-  sortable headline *table* with custom drawer-property columns and bulk state
-  change.  =C-u += adds and =C-u -= removes a table column — a drawer property the
-  view's headlines carry for add (completion, backed by a persisted property
-  index), any column but the mandatory Title for remove; both persist per tag.
-  =:= adds a tag to the row (offering only tags it lacks), a bare =-= drops the
-  view's tag off it.  The table header always shows the sort and a coloured
-  =#+TODO:= line of the graph's states; =?= toggles the action-key legend
-  (RET:Materialize …).
-- *All tags* (=t=) — a table of the tags THEMSELVES: per-tag headline count, todo
-  state breakdown, configured cycle, and event-tracked created / last-modified
-  timestamps.  State and Cycle cells are colour-coded.  In the buffer: =RET=
-  opens that tag's headline table, =o= its overview, =+= adds a tag (captures a
-  first headline), =-= removes a tag (a guarded, non-destructive retag).
-- *Agenda* (=a=), *Capture* (=+=), *Extract property* (=e=), *Open link* (=j=),
-  *Materialize* (=m=), *LLM session* (=l=), *Configure tags* (=C=).
+| Key | Action      |                                                  |
+|-----+-------------+--------------------------------------------------|
+| =o=   | Overview    | org-text or table view of a tag (see the toggle) |
+| =m=   | Materialize | edit a headline as a real file; save syncs       |
+| =j=   | Open link   | follow a link inside a chosen headline           |
+| =+=   | Capture     | new headline under a tag                         |
+| =t=   | All tags    | table of the tags themselves, with metrics       |
+| =a=   | Agenda      | org-agenda over the overview                     |
+| =e=   | Extract     | copy a =KEY: value= from a headline                |
+| =l=   | LLM session | [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] in the headline's directory         |
+| =C=   | Configure   | per-tag capture skeleton + todo cycle            |
 
-Other features:
+** Views: overview and table
 
-- *References* — in a materialized buffer, =@= at a word boundary links another
-  headline (completion, required match; mid-word =@= just types); =C-u @= adds a
-  reference *kind* (a book's =author= vs =editor=).  The inserted
-  =[[org-glance-material:ID][Title]]= link materializes its target on follow, and
-  the graph indexes it as an edge — =C-c @= tables the headline's references,
-  =C-u C-c @= its back-references.
-- *Encrypted headlines* — secret regions live in =#+begin_crypt= … =#+end_crypt=
-  blocks: ciphertext at rest, decrypted for editing in the materialized buffer
-  and re-sealed on save (plaintext never touches disk; auto-save/backups are
-  disabled).  Several blocks per headline; everything outside them stays public
-  and indexable, so an encrypted headline with a plaintext link still shows up
-  in =org-glance-open= and the link opens without a password.  In the buffer,
-  =C-c #= is context-aware: wrap the region in a crypt block, =C-u= unwraps the
-  block at point; with no region it encrypts the whole body (plaintext buffer)
-  or forgets the cached password (already encrypted; TTL
-  =org-glance-material-password-ttl=).  In the table, =#= toggles a whole
-  headline (encrypt = one whole-body block; decrypt = open + unwrap), and
-  =C-u #= re-keys.  Pre-block whole-body ciphers upgrade silently on their
-  first save.
-- *Repeat history* — a repeating headline (=+1d=) stays ONE headline; completing
-  a repetition snapshots it under its own data dir
-  (=org-glance-repeat-history-depth= newest kept, 0 = off, =t= = all;
-  per-headline override via =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:=).  The table marks
-  repeaters in the =Rep= column; =l= on a row (or =C-c l= in the material buffer) opens a
-  chosen occurrence read-only.
-- *Crash-safe store* — a segmented, append-only JSONL log with atomic commits and
-  an in-memory read cache.
+=o= opens a tag's view; =T= toggles org-text ⇄ table
+(default: =org-glance-overview-default-view=).  Overview headings are
+self-sufficient — agenda properties, relations, links — no materialization
+needed to act on them:
+
+#+begin_src org
+,* TODO [#A] Kebena Decaf :coffee:
+DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
+- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
+- [[https://example.com][Homepage]]
+#+end_src
+
+The table is sortable (=^=), filterable (=/=), colour-badged, with a =#+TODO:=
+line always in the header and =?= toggling the action legend.  Row actions:
+=RET= materialize · =j=/=!= open link · =e= extract · =:= add tag (only tags it
+lacks) · =-= drop the view's tag · =#= encrypt/decrypt (=C-u #= re-key) ·
+=l= occurrence history · =D= delete (referrer-aware) · =C-c C-t= todo (bulk with
+marks) · =C-c C-s=/=C-c C-d= schedule/deadline (=C-u= clears).
+
+Columns: =C-u += adds one per drawer property OR relation kind the view's
+headlines carry; =C-u -= removes any but Title; both persist per tag.  A kind
+column shows the target titles: "roasted by" → =Manhattan Coffee Roasters=.
+
+** Materialized buffers
+
+=m= opens the headline's content blob as a real file; saving re-indexes it.
+In the buffer: =@= reference (below) · =C-c #= crypt · =C-c d= project dir ·
+=C-c l= occurrence history · =C-c @= references table · =C-c C-s=/=C-c C-d=
+planning.  Bookkeeping drawer keys (=ORG_GLANCE_ID= …) are concealed and hand
+edits to them revert on save with a warning.
+
+** References (the knowledge graph)
+
+=@= at a word boundary completing-reads a headline and inserts a link to it;
+=C-u @= also asks a *kind*:
+
+#+begin_src org
+roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
+#+end_src
+
+Following the link materializes the target.  The store indexes every such link
+as a typed edge: =C-c @= tables what this headline references, =C-u C-c @= what
+references it, and kinds double as table columns.  Overview links take a whole
+filter: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
+
+** Encrypted headlines
+
+Secrets live in =#+begin_crypt= … =#+end_crypt= blocks: ciphertext at rest,
+plaintext only in the material buffer (re-sealed on save; auto-save/backups
+disabled).  Text OUTSIDE blocks stays public and indexed — links still open
+without a password.  =C-c #=: wrap region / =C-u= unwrap block / no region:
+encrypt the whole body, or lock (forget the cached password, TTL
+=org-glance-material-password-ttl=) when already encrypted.
+
+** Repeat history
+
+A repeating headline (=+1d=) stays ONE headline.  Completing a repetition
+snapshots the done state under the headline's data dir;
+=org-glance-repeat-history-depth= keeps the newest N (=0= off, =t= all;
+per-headline =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins).  The table's =Rep=
+column marks repeaters; =l= / =C-c l= opens any occurrence read-only.
+
+** Customization
+
+| Variable                               | Default          |                                                              |
+|----------------------------------------+------------------+--------------------------------------------------------------|
+| =org-glance-directory=                   | =org-directory=    | root of the managed content (store lives in =.org-glance/=)    |
+| =org-glance-overview-default-view=       | =org-glance-table= | what =o= opens; =org-glance-overview= for org-text               |
+| =org-glance-filter-spec=                 | =(:done nil)=      | ambient filter every view starts from (active-only)          |
+| =org-glance-view-fill-frame=             | =t=                | views take the whole frame; =nil= keeps your windows           |
+| =org-glance-repeat-history-depth=        | =0=                | occurrence snapshots kept: N / =t= = all / =0= = off             |
+| =org-glance-material-password-ttl=       | =300=              | seconds a crypt password stays cached; =0= = forever           |
+| =org-glance-material-hidden-properties=  | id + hash        | drawer keys concealed AND edit-protected in material buffers |
+| =org-glance-table-state-colors=          | tokyo-night-ish  | per-state badge colours (=…-default-state-color= for the rest) |
+| =org-glance-conflict-resolution=         | =ask=              | git-conflict healing: =ask= / =union= / =nil= (error)              |
+| =org-glance-tag-config-file=             | =nil=              | override path of =config/tags.org=                             |
+| =org-glance-graph-segment-max-bytes=     | 256k             | WAL segment size before sealing                              |
+| =org-glance-graph-compact-segment-count= | =4=                | sealed segments that trigger auto-compaction                 |
+
+Example — org-text views, everything visible, daily history for a year:
+
+#+begin_src emacs-lisp
+(setq org-glance-overview-default-view 'org-glance-overview
+      org-glance-filter-spec nil               ; show DONE too
+      org-glance-repeat-history-depth 365)
+#+end_src
+
+** Store
+
+A segmented, append-only JSONL log with atomic commits, compaction, crash
+recovery and git-sync conflict healing; content blobs are canonical, all
+indexes derived and rebuildable (=M-x org-glance-reindex=).  Delete is a
+tombstone: =D= or =M-x org-glance-delete= (confirmation names referrers whose
+links would dangle).
 
 * Install from source (development)
 
