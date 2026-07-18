@@ -6,6 +6,13 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Relations: =@= in a material buffer inserts an =org-glance-material:ID= link
+  to a completing-read headline (=C-u @= adds a =?kind== reference kind, e.g.
+  author/editor); following materializes the target.  Edges derive from body
+  links into new =relations= metadata; =C-c @= / =C-u C-c @= open the
+  references / back-references table (filters =:id-any= / =:refers-to=).
+  Legacy =org-glance-visit:= links count as kindless edges.
+- Clone-on-repeat skips encrypted headlines (a clone would store plaintext).
 - Crypt blocks: =#+begin_crypt= regions seal at rest, decrypt in the material
   buffer; several per headline, public text between stays indexable (links open
   without a password).  =C-c #= wraps region / =C-u C-c #= unwraps / else locks.

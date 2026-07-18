@@ -38,6 +38,7 @@
   (load "test/test-capture.el")
   (load "test/test-tag-config.el")
   (load "test/test-property-index.el")
+  (load "test/test-relations.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
   (load "test/test-llm.el")

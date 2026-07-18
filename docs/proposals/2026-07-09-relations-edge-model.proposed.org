@@ -1,7 +1,7 @@
 #+TITLE: First-class typed relations (edge model)
 #+DATE: 2026-07-09
 
-Status: *proposed* · graph model 2026-07-09
+Status: *superseded* by [[file:2026-07-18-relations.done.org][relations]] — the store half survives there (field-table projection); the reverse sidecar and record re-append do not.
 
 * Problem
 

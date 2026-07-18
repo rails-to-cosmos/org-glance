@@ -384,8 +384,11 @@ so a schema change (a new column) degrades gracefully."
   "Buffer-local `post-command-hook': persist the view config iff it changed.
 Cheap on the common path -- compares the (column-order, sort) tuple to the last
 snapshot and writes only on an actual layout change.  (`org-glance-table--spec'
-may be nil -- the \"all\" filter -- so guard only on being a registered view.)"
-  (when org-glance-view--graph
+may be nil -- the \"all\" filter -- so guard only on being a registered view.)
+Transient filters (relation views, `:where') persist nothing -- their identity
+embeds another headline's id/link set and would accrete one entry per visit."
+  (when (and org-glance-view--graph
+             (not (org-glance-filter:transient? org-glance-table--spec)))
     (let ((cur (org-glance-table--current-config)))
       (unless (equal cur org-glance-table--config-snapshot)
         (setq org-glance-table--config-snapshot cur)

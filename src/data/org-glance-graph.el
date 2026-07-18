@@ -65,7 +65,11 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   ;; written before these fields existed -- `M-x org-glance-reindex' backfills them.
   (linked? nil :read-only t :type boolean)
   (propertized? nil :read-only t :type boolean)
-  (encrypted? nil :read-only t :type boolean))
+  (encrypted? nil :read-only t :type boolean)
+  ;; Relation edges (TARGET-ID . KIND-or-nil), derived from the body's
+  ;; `org-glance-material:'/`org-glance-visit:' links -- the link is canonical,
+  ;; this is a projection.  nil on pre-field records; reindex backfills.
+  (relations nil :read-only t :type list))
 
 (defconst org-glance-headline-metadata:fields
   ;; SLOT          JSON-KEY      FROM-HEADLINE                                                ENCODE       DECODE
@@ -79,7 +83,8 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
     (priority      :priority     ,#'org-glance-headline:priority                           nil          nil)
     (linked?       :linked       ,(lambda (h) (and (org-glance-headline:links h) t))       nil          bool)
     (propertized?  :propertized  ,(lambda (h) (and (org-glance-headline:properties h) t))  nil          bool)
-    (encrypted?    :encrypted    ,(lambda (h) (and (org-glance-headline:encrypted? h) t))  nil          bool))
+    (encrypted?    :encrypted    ,(lambda (h) (and (org-glance-headline:encrypted? h) t))  nil          bool)
+    (relations     :relations    ,(lambda (h) (org-glance--links->edges (org-glance-headline:links h))) edges-vector edges-list))
   "The single source of truth for the metadata projection's shape.
 Drives the `org-glance-headline:metadata' constructor, `serialize' and
 `deserialize' together, so the four can never drift (a hand-written
@@ -101,6 +106,13 @@ headline methods, so they are JSON-serializable as-is.")
   "Serialize-side coercion for a field of ENCODE kind KIND."
   (pcase kind
     ('tags-vector (->> value (mapcar (-partial #'format "%s")) (apply #'vector)))
+    ;; Vector of [ID] / [ID KIND] vectors: `json-serialize' renders only
+    ;; vectors as JSON arrays (a list would error inside the non-demoted
+    ;; append, crashing every save).
+    ('edges-vector (apply #'vector
+                          (mapcar (lambda (e) (if (cdr e) (vector (car e) (cdr e))
+                                             (vector (car e))))
+                                  value)))
     (_ value)))
 
 (cl-defun org-glance-headline-metadata--decode (kind value)
@@ -108,13 +120,19 @@ headline methods, so they are JSON-serializable as-is.")
   (pcase kind
     ('bool (eq t value))                ; JSON false/null both read as nil
     ('tags-list (append value nil))
+    ;; Normalize BOTH levels -- outer array to a list, each inner [ID]/[ID KIND]
+    ;; to an (ID . KIND-or-nil) cons; a shallow decode would leave inner vectors
+    ;; and every relation filter would silently match nothing.
+    ('edges-list (cl-loop for edge across (or value [])
+                          for e = (append edge nil)
+                          collect (cons (car e) (cadr e))))
     (_ value)))
 
 (cl-defun org-glance-headline:metadata (headline)
   (cl-check-type headline org-glance-headline)
-  ;; The four content-derived fields (hash/linked?/propertized?/encrypted?) each
-  ;; reparse the same blob via their own thunk; compute them in ONE `org-mode'
-  ;; pass (`--content-facts') -- one reparse per metadata build instead of four
+  ;; The content-derived fields (hash/linked?/propertized?/encrypted?/relations)
+  ;; each reparse the same blob via their own thunk; compute them in ONE
+  ;; `org-mode' pass (`--content-facts') -- one reparse per metadata build
   ;; (matters on save/reindex/bulk).  The rest are cheap struct-slot reads.
   (let ((facts (org-glance-headline--content-facts headline)))
     (apply #'make-org-glance-headline-metadata
@@ -125,6 +143,8 @@ headline methods, so they are JSON-serializable as-is.")
                                    ('linked?      (plist-get facts :linked))
                                    ('propertized? (plist-get facts :propertized))
                                    ('encrypted?   (plist-get facts :encrypted))
+                                   ('relations    (org-glance--links->edges
+                                                   (plist-get facts :links)))
                                    (_             (funcall from headline))))))))
 
 (cl-defun org-glance-headline:metadata* (obj)

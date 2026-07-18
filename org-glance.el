@@ -292,6 +292,11 @@ performs the conversion whenever the user chooses.  Always returns nil."
        (concat "org-glance-open:")))
 
 (org-link-set-parameters
+ org-glance-link-material-type            ; "org-glance-material" -- the canonical edge
+ :follow #'org-glance-link:material
+ :face 'org-glance-link-materialize-face)
+
+(org-link-set-parameters
  "org-glance-visit"
  :follow #'org-glance-link:materialize
  :face 'org-glance-link-materialize-face
@@ -307,16 +312,21 @@ performs the conversion whenever the user chooses.  Always returns nil."
  :follow #'org-glance-link:overview
  :face 'org-glance-link-overview-face)
 
+(defun org-glance-link:material (path &optional _)
+  "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
+The kind annotates the edge (stored in the `relations' metadata), not the jump."
+  (org-glance-ensure-init)
+  (switch-to-buffer
+   (org-glance-material:open org-glance-graph (car (split-string path "[?]")))))
+
 (defun org-glance-link:materialize (id &optional _)
   "Materialize org-glance headline identified by ID."
-  (unless (org-glance-initialized?)
-    (user-error "org-glance: not initialized"))
+  (org-glance-ensure-init)
   (switch-to-buffer (org-glance-material:open org-glance-graph id)))
 
 (defun org-glance-link:open (id &optional _)
   "Open a link inside the org-glance headline identified by ID."
-  (unless (org-glance-initialized?)
-    (user-error "org-glance: not initialized"))
+  (org-glance-ensure-init)
   (let ((headline (org-glance-graph:headline org-glance-graph id)))
     (unless headline (user-error "org-glance: headline %s not found" id))
     (org-glance-material:open-link headline)))

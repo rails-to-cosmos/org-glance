@@ -58,7 +58,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
    before any write, blob lands before its WAL record. The property index is a
    pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
-   trust it in a durable write.
+   trust it in a durable write. Relation edges: the `org-glance-material:` body
+   link is canonical; `relations` metadata is a projection, never written
+   independently.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any
    filesystem use.
 7. Single-user, no locking; staleness detection uses the full store snapshot

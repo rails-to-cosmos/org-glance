@@ -129,6 +129,11 @@ result back, and returns it.  Gated counterpart to the `--read-eld' floor."
                merged))))))))
 
 (cl-defun org-glance--buffer-links ()
+  "Buffer links as (LINK TITLE POS TYPE PATH) tuples, in buffer order.
+LINK is the raw bracket text, TITLE the description (or raw link), POS the
+start; TYPE and PATH are the parsed `org-element' link type and unescaped
+path (relation edges read these — consumers destructuring only the first
+three are unaffected)."
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)
            for end = (org-element-property :end link-element)
@@ -138,10 +143,40 @@ result back, and returns it.  Gated counterpart to the `--read-eld' floor."
                               (org-element-interpret-data))
                             (org-element-property :raw-link link-element)))
            for link = (s-trim (buffer-substring-no-properties beg end))
-           collect title into titles
-           collect link into links
-           collect beg into positions
-           finally return (-zip links titles positions)))
+           collect (list link title beg
+                         (org-element-property :type link-element)
+                         (org-element-property :path link-element))))
+
+;;; Relation edges
+;;
+;; An edge IS an `org-glance-material:' link in the source headline's body
+;; (blobs canonical, indexes derived): `[[org-glance-material:ID][Title]]',
+;; optionally `?kind=KIND' for a typed reference (a book's author vs editor).
+;; Legacy `org-glance-visit:' links count as kindless edges, so old notes gain
+;; relations for free.
+
+(defconst org-glance-link-material-type "org-glance-material"
+  "Org link type materializing a headline by id; the canonical edge form.")
+
+(defconst org-glance--link-edge-types
+  (list org-glance-link-material-type "org-glance-visit")
+  "Link types that denote a relation edge to another headline.")
+
+(cl-defun org-glance--link-edge (type path)
+  "Edge (TARGET-ID . KIND-or-nil) denoted by a TYPE/PATH link, or nil."
+  (when (and (member type org-glance--link-edge-types)
+             (stringp path)
+             (string-match "\\`\\([^?]+\\)\\(?:\\?kind=\\(.+\\)\\)?\\'" path))
+    (cons (match-string 1 path) (match-string 2 path))))
+
+(cl-defun org-glance--links->edges (links)
+  "Distinct relation edges among LINKS (the `--buffer-links' tuple shape)."
+  (cl-loop with seen = nil
+           for (_link _title _pos type path) in links
+           for edge = (org-glance--link-edge type path)
+           when (and edge (not (member edge seen)))
+           do (push edge seen)
+           finally return (nreverse seen)))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Extract key-value pairs from buffer.
@@ -156,15 +191,12 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
              collect (cons key value))))
 
 (cl-defun org-glance--parse-links ()
-  "Simple org-link parser, return list of cons cells (link . contents)."
+  "Buffer links as (LINK DESCRIPTION POS TYPE PATH), preferring a body
+`KEY: value' description over the link's own title when one matches."
   (cl-loop with descriptions = (cl-loop for (key . val) in (org-glance--buffer-key-value-pairs) collect (cons val key))
-           with links = (org-glance--buffer-links)
-           for (link title pos) in links
-           for description = (alist-get link descriptions nil nil #'string=)
-           when description
-           collect (list link description pos)
-           else
-           collect (list link title pos)))
+           for (link title pos type path) in (org-glance--buffer-links)
+           collect (list link (or (alist-get link descriptions nil nil #'string=) title)
+                         pos type path)))
 
 ;;; Crypt blocks
 ;;

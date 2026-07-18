@@ -129,10 +129,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
 ;; buffer for the metadata build; the -hash/-encrypted thunks reuse the same
 ;; helpers, so each computation has a single definition.
 
-(defun org-glance-headline--linked-here ()
-  "Non-nil if the current buffer's headline contains an Org link."
-  (save-excursion (goto-char (point-min)) (and (org-glance--buffer-links) t)))
-
 (defun org-glance-headline--propertized-here ()
   "Non-nil if the current buffer's headline body has a `KEY: value' pair."
   (save-excursion
@@ -181,16 +177,21 @@ MUTATES the buffer (deletes those properties), so call it LAST when sharing one.
                  (org-glance-headline--encrypted-here))))
 
 (cl-defun org-glance-headline--content-facts (headline)
-  "HEADLINE's four content-derived metadata facts, in ONE org-mode pass.
-Returns a plist (:hash H :linked L :propertized P :encrypted E), sharing one
-`with-contents' buffer + `org-mode' init across the four (the store's metadata
-build reparses the same blob otherwise).  Hash is LAST: it deletes the id/hash
+  "HEADLINE's five content-derived metadata facts, in ONE org-mode pass.
+Returns a plist (:links LS :linked L :propertized P :encrypted E :hash H),
+sharing one `with-contents' buffer + `org-mode' init across all five (the
+store's metadata build reparses the same blob otherwise).  LINKS is the
+`org-glance--buffer-links' tuple list, parsed once and feeding both the
+`linked?' flag and the relation edges.  Hash is LAST: it deletes the id/hash
 drawer properties in place, after the read-only facts."
   (org-glance-headline:with-contents headline
-    (list :linked      (org-glance-headline--linked-here)
-          :propertized (org-glance-headline--propertized-here)
-          :encrypted   (org-glance-headline--encrypted-here)
-          :hash        (org-glance-headline--hash-here))))
+    (let ((links (save-excursion (goto-char (point-min))
+                                 (org-glance--buffer-links))))
+      (list :links       links
+            :linked      (and links t)
+            :propertized (org-glance-headline--propertized-here)
+            :encrypted   (org-glance-headline--encrypted-here)
+            :hash        (org-glance-headline--hash-here)))))
 
 (cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)

@@ -75,7 +75,7 @@ which filter a cache directory holds."
   (let ((spec (org-glance-filter:normalize-spec filter)))
     (cond
      ((null spec) "all")
-     ((plist-member spec :where) nil)
+     ((org-glance-filter:transient? spec) nil)   ; :where / relation views: never cached
      (t (substring (secure-hash 'sha1 (org-glance-filter:identity spec))
                    0 12)))))
 

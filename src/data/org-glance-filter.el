@@ -67,7 +67,15 @@ See `org-glance-filter:predicate' for the spec language.")
     (:encrypted      :match bool           :accessor ,#'org-glance-headline-metadata:encrypted?)
     (:schedule       :match present-absent :accessor ,#'org-glance-headline-metadata:schedule)
     (:deadline       :match present-absent :accessor ,#'org-glance-headline-metadata:deadline)
-    (:where))
+    ;; Relation views.  :transient marks keys whose views are one-off (a raw
+    ;; predicate, or an identity embedding another headline's id/link set):
+    ;; the overview never caches them and the table never persists their
+    ;; per-filter config -- both would accrete one entry per visited headline.
+    (:refers-to      :match edge-target    :transient t
+                     :accessor ,#'org-glance-headline-metadata:relations)
+    (:id-any         :match member         :canon string-list :transient t
+                     :accessor ,#'org-glance-headline-metadata:id)
+    (:where          :transient t))
   "The single source of truth for the headline filter language.
 Drives `org-glance-filter:keys', `:predicate' and `--canonical-pairs'
 together -- previously each new key meant four lockstep edits, two of them
@@ -134,6 +142,11 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
                     (lambda (m) (equal want (or (funcall accessor m) "")))))
     ('equal (lambda (m) (equal want (funcall accessor m))))
     ('eql (lambda (m) (eql want (funcall accessor m))))
+    ;; Relation kinds: `edge-target' tests the (TARGET-ID . KIND) edge list for
+    ;; WANT as a target (any kind); `member' tests the scalar accessor value
+    ;; against the WANT list (`:id-any').
+    ('edge-target (lambda (m) (assoc want (funcall accessor m))))
+    ('member (lambda (m) (member (funcall accessor m) want)))
     ('bool (let ((want (and want t)))
              (lambda (m) (eq want (and (funcall accessor m) t)))))
     ;; Case-insensitive substring (the interactive `/' refinement).
@@ -198,6 +211,12 @@ unambiguously."
   (sort (cl-loop for (k v) on spec by #'cddr
                  collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
+
+(cl-defun org-glance-filter:transient? (filter)
+  "Non-nil when FILTER carries a `:transient' key (see the table).
+Transient views are one-off: never overview-cached, no persisted table config."
+  (cl-loop for (k _v) on (org-glance-filter:normalize-spec filter) by #'cddr
+           thereis (plist-get (alist-get k org-glance-filter:table) :transient)))
 
 (cl-defun org-glance-filter:identity (filter)
   "Unambiguous printed identity of FILTER's canonical form.
@@ -266,6 +285,10 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
                      (:state (format "state=%s" v))
                      (:tags (format "tags=%s" (mapconcat (-partial #'format "%s") v "+")))
                      (:title-contains (format "title~%s" v))
+                     ;; Compact: an :id-any value embeds a whole target list and
+                     ;; ids are long -- keep buffer names/titles bounded.
+                     (:refers-to (format "refs->%s" (substring v 0 (min 8 (length v)))))
+                     (:id-any (format "id-any(%d)" (length v)))
                      (:where "where")
                      (_ (format "%s=%s" (substring (symbol-name k) 1) v)))
            into parts

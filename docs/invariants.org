@@ -38,8 +38,10 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
    cached, and =org-glance-reindex= drops it — so no caller may trust an index
    value in a durable write/delete without that fallback
-   (=org-glance-property-index--entry=).  Violation: unrebuildable facts or
-   half-states.
+   (=org-glance-property-index--entry=).  Relation edges follow the same rule:
+   the =org-glance-material:= body link is canonical, the =relations= metadata
+   field is a projection recomputed on save/reindex — never written
+   independently of content.  Violation: unrebuildable facts or half-states.
 
 6. *Path safety before filesystem.*  An id is checked (reject =/= and =..=) via
    =error= — never =cl-assert=, which can be compiled out — before feeding any

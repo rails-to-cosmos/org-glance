@@ -43,6 +43,21 @@ Only in the tag-config file =<store>/config/tags.org= (see
   trimmed on completion (=org-glance-clone-on-repeat-p=), so it survives into the
   clone instead of being cut with the accumulated history.
 
+* Link types (in a headline's body)
+
+Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
+
+- =org-glance-material:ID= — a relation edge: following materializes ID.  An
+  optional =?kind=KIND= suffix types the reference (a book's =author= vs
+  =editor=); the kind annotates the edge, not the jump.  Inserted by =@= in a
+  material buffer (=C-u @= asks the kind); the store derives the =relations=
+  metadata from these links on save/reindex.  See
+  [[file:proposals/2026-07-18-relations.done.org][relations]].
+- =org-glance-visit:ID= — legacy materialize link; still followed, and counts
+  as a kindless relation edge.
+- =org-glance-open:ID= — follows the link INSIDE headline ID.
+- =org-glance-overview:TAG= — opens TAG's overview.
+
 * File keywords
 
 - =#+TODO:= — an ordinary org file keyword.  Capture and the overview/agenda

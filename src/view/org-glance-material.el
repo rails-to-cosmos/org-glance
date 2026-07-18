@@ -86,6 +86,10 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 ;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
+;; `@' at a body word boundary references another headline (C-u adds a kind);
+;; elsewhere it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
+(define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
+(define-key org-glance-material-mode-map (kbd "C-c @") #'org-glance-material:references)
 
 (defconst org-glance-project-dir-property "ORG_GLANCE_PROJECT_DIR"
   "Drawer property naming a headline's project directory.
@@ -154,17 +158,25 @@ capture it into the graph as a new headline."
              org-glance-material--graph
              (member (org-get-todo-state) org-done-keywords)
              (org-glance-datetime-headline-repeated-p))
-    (let ((graph org-glance-material--graph)
-          (contents (buffer-substring-no-properties (point-min) (point-max))))
-      (with-temp-buffer
-        (insert contents)
-        (org-glance--org-mode)
-        (goto-char (point-min))
-        (org-glance-datetime-reset-buffer-timestamps-except-earliest)
-        ;; `org-entry-delete' resolves the sole heading from any point in this
-        ;; single-entry buffer, so no reset to point-min is needed here.
-        (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
-        (org-glance-graph:capture graph (current-buffer))))))
+    ;; This buffer is DECRYPTED plaintext; capturing its snapshot would write a
+    ;; plaintext blob for an encrypted headline (invariant 14).  Skip.
+    (if org-glance-material--encrypted
+        (message "org-glance: encrypted headline not cloned on repeat (would store plaintext)")
+      (org-glance-material--clone-snapshot))))
+
+(cl-defun org-glance-material--clone-snapshot ()
+  "Capture the current material buffer's subtree as a fresh headline."
+  (let ((graph org-glance-material--graph)
+        (contents (buffer-substring-no-properties (point-min) (point-max))))
+    (with-temp-buffer
+      (insert contents)
+      (org-glance--org-mode)
+      (goto-char (point-min))
+      (org-glance-datetime-reset-buffer-timestamps-except-earliest)
+      ;; `org-entry-delete' resolves the sole heading from any point in this
+      ;; single-entry buffer, so no reset to point-min is needed here.
+      (org-delete-property "ORG_GLANCE_ID") ;; the clone gets a fresh id
+      (org-glance-graph:capture graph (current-buffer)))))
 
 (cl-defun org-glance-material:cleanup-after-repeat (&rest _)
   "Trim the repeated materialized headline to its header and pinned blocks.
@@ -766,6 +778,88 @@ With KEY, extract it non-interactively; otherwise prompt."
     "Extract from: "
     (lambda (m) (or (org-glance-headline-metadata:propertized? m)
                     (org-glance-headline-metadata:encrypted? m))))))
+
+;;; References (`@'): edges to other headlines
+;;
+;; A reference IS an `org-glance-material:ID' link in the body (optionally
+;; `?kind=KIND'); the store derives the `relations' metadata from it on save.
+;; See docs/proposals/2026-07-18-relations.done.org.
+
+(cl-defun org-glance-material--edge-kinds (graph)
+  "Distinct reference kinds present in GRAPH's relations, sorted."
+  (org-glance--sorted-distinct
+   (cl-loop for meta in (org-glance-graph:headlines graph)
+            append (cl-loop for (_target . kind) in (org-glance-headline-metadata:relations meta)
+                            when kind collect kind))))
+
+(cl-defun org-glance-material--read-reference (graph self &key with-kind)
+  "Choose a reference target in GRAPH: (ID TITLE KIND-or-nil).
+Required match; SELF's id is excluded; duplicate labels are disambiguated with
+a short id suffix (a same-label pick must be injective -- an edge to the wrong
+id is a silent data error).  WITH-KIND prompts for a kind: completion over the
+kinds already in GRAPH, free input allowed, empty = none."
+  (let* ((metas (cl-remove-if (lambda (m) (equal self (org-glance-headline-metadata:id m)))
+                              (org-glance-graph:headlines graph)))
+         (counts (make-hash-table :test #'equal)))
+    (unless metas (user-error "No other headlines to refer to"))
+    (dolist (m metas) (cl-incf (gethash (org-glance-material:label m) counts 0)))
+    (let* ((candidates
+            (mapcar (lambda (m)
+                      (let ((label (org-glance-material:label m))
+                            (id (org-glance-headline-metadata:id m)))
+                        (cons (if (> (gethash label counts) 1)
+                                  (format "%s ·%s" label (substring id 0 (min 8 (length id))))
+                                label)
+                              m)))
+                    metas))
+           (meta (cdr (assoc (completing-read "Refer to: " candidates nil t) candidates)))
+           (kind (when with-kind
+                   (let ((k (s-trim (completing-read
+                                     "Reference kind (empty for none): "
+                                     (org-glance-material--edge-kinds graph)))))
+                     (unless (string-empty-p k) k)))))
+      (list (org-glance-headline-metadata:id meta)
+            (org-glance--title-clean (org-glance-headline-metadata:title meta))
+            kind))))
+
+(cl-defun org-glance-material:refer (&optional arg)
+  "Insert a reference to another headline at point, or self-insert `@'.
+At a body word boundary: completing-read a headline (required match, self
+excluded) and insert an `org-glance-material:' link; with ARG (`C-u @') also
+prompt for a reference kind.  On a heading line (org speed keys live there) or
+mid-word (emails), delegate to org's own `self-insert' remapping.  `C-q @'
+inserts a literal `@' anywhere."
+  (interactive "P")
+  (if (or (org-at-heading-p)
+          (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n)))))
+      (call-interactively (or (command-remapping 'self-insert-command)
+                              #'self-insert-command))
+    (pcase-let ((`(,id ,title ,kind)
+                 (org-glance-material--read-reference
+                  org-glance-material--graph org-glance-material--id
+                  :with-kind arg)))
+      (insert (org-link-make-string
+               (concat org-glance-link-material-type ":" id
+                       (and kind (concat "?kind=" kind)))
+               title)))))
+
+(cl-defun org-glance-material:references (&optional arg)
+  "Table of the headlines this one refers to; with ARG, its back-references.
+Passes the bare relation filter (no ambient `:done' merge), so DONE headlines
+stay visible.  References read this headline's LAST-SAVED metadata -- save
+first to see edges added in this session."
+  (interactive "P")
+  (require 'org-glance-table)      ; not at top level: table requires material
+  (let ((graph org-glance-material--graph)
+        (id org-glance-material--id))
+    (unless (and graph id) (user-error "Not in a materialized headline buffer"))
+    (if arg
+        (org-glance-table:visit graph `(:refers-to ,id))
+      (let* ((meta (org-glance-graph:get-headline graph id))
+             (targets (and (org-glance-headline-metadata? meta)
+                           (delete-dups (mapcar #'car (org-glance-headline-metadata:relations meta))))))
+        (unless targets (user-error "Headline has no references (save after adding some)"))
+        (org-glance-table:visit graph `(:id-any ,targets))))))
 
 (provide 'org-glance-material)
 ;;; org-glance-material.el ends here

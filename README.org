@@ -66,6 +66,12 @@ Reach everything through the =org-glance-transient= transient (=C-x j= above).
 
 Other features:
 
+- *References* — in a materialized buffer, =@= at a word boundary links another
+  headline (completion, required match; mid-word =@= just types); =C-u @= adds a
+  reference *kind* (a book's =author= vs =editor=).  The inserted
+  =[[org-glance-material:ID][Title]]= link materializes its target on follow, and
+  the graph indexes it as an edge — =C-c @= tables the headline's references,
+  =C-u C-c @= its back-references.
 - *Encrypted headlines* — secret regions live in =#+begin_crypt= … =#+end_crypt=
   blocks: ciphertext at rest, decrypted for editing in the materialized buffer
   and re-sealed on save (plaintext never touches disk; auto-save/backups are
