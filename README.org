@@ -5,9 +5,9 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-[[https://travis-ci.com/rails-to-cosmos/org-glance][https://travis-ci.com/rails-to-cosmos/org-glance.svg?branch=master]]
-
-Emacs front-end for [[https://github.com/rails-to-cosmos/glance][Glance]]. Work in progress.
+A personal knowledge graph for org-mode.  Headlines become nodes in a
+durable plain-text store; typed references between them become edges;
+fast and flexible views show it all without opening a single file.
 
 * Install
 
