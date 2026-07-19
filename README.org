@@ -48,9 +48,16 @@ Light roast, very floral.
 ** 2. Browse a tag
 
 =C-x j o= → pick a tag → its *table*: one row per headline, colour-coded
-todo states.  =O= toggles to the org-text *overview* — a plain org buffer, so
-folding, =C-x j a= (agenda) and link clicking all behave exactly as in org.
-Each overview heading is self-sufficient:
+todo states:
+
+#+begin_example
+State  Title         Tags    Scheduled         Deadline          Pri  Roasted by
+TODO   Kebena Decaf  coffee  <2026-08-01 Sat>  <2026-08-10 Mon>  A    Manhattan Coffee Roasters
+#+end_example
+
+=O= toggles to the org-text *overview* — a plain org buffer, so folding,
+=C-x j a= (agenda) and link clicking all behave exactly as in org.  Each
+overview heading is self-sufficient:
 
 #+begin_src org
 ,* TODO [#A] Kebena Decaf :coffee:
@@ -70,7 +77,7 @@ Act on the row/heading at point without opening anything:
 | =:= / =C-u :=         | add another tag to the headline / remove one                    |
 | =j= (or =!=)          | open a link inside the headline                                 |
 | =e=                 | copy a =KEY: value= from its body                                 |
-| =#= / =C-u #=         | encrypt ⇄ decrypt / re-key                                      |
+| =#= / =C-u #=         | encrypt ⇄ decrypt / change password                             |
 | =l=                 | past occurrences of a repeating headline (step 6)               |
 | =D=                 | delete (referrer-aware confirmation)                            |
 | =O=                 | toggle table ⇄ org overview                                     |
