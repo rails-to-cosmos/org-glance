@@ -79,8 +79,8 @@ Act on the row/heading at point without opening anything:
 | =j= (or =!=)          | open a link inside the headline                                 |                                       |                           |                                              |
 | =e=                 | copy a =KEY: value= from its body                                 |                                       |                           |                                              |
 | =#=                 | encrypt                                                         | change password                       |                           | decrypt                                      |
-| =l=                 | past occurrences of a repeating headline (step 6)               |                                       |                           |                                              |
-| =D=                 | delete (referrer-aware confirmation)                            |                                       |                           |                                              |
+| =l=                 | log occurrences of a repeating headline (step 6)                |                                       |                           |                                              |
+| =D=                 | delete                             |                                       |                           |                                              |
 | =O=                 | switch to the org overview                                      |                                       |                           | back to the table                            |
 | =/=                 | filter by substring                                             | clear the filter                      | narrow to the marked rows | widen the narrowed view                      |
 | =^=                 | sort by the column at point                                     |                                       |                           | flip asc ⇄ desc; off a column: cycle columns |
