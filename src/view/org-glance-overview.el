@@ -284,7 +284,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "e") #'org-glance-overview:extract)
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
-(define-key org-glance-overview-mode-map (kbd "T") #'org-glance-overview:table)
+(define-key org-glance-overview-mode-map (kbd "O") #'org-glance-overview:table)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
 (define-key org-glance-overview-mode-map (kbd "D") #'org-glance-overview:delete)
@@ -431,7 +431,7 @@ returns point to the headline once the change (and any note) is committed."
 Interactively, prompt for a tag (empty input = no tag constraint) and overlay it
 on the ambient `org-glance-filter-spec' (default: active headlines).
 The landing view is `org-glance-overview-default-view' (the table dashboard by
-default); press `T' there to toggle to the other view.  TAG may be a bare tag
+default); press `O' there to toggle to the other view.  TAG may be a bare tag
 (symbol/string) or a full filter plist -- see `org-glance-filter:predicate'."
   (interactive (list (org-glance-view:completing-read-tag "Overview tag (empty for all): ")))
   (org-glance-ensure-init)

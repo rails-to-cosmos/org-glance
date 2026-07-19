@@ -144,7 +144,7 @@ ascending (active first)."
                 ((key . "j")   (command . "open")        (label . "Open link"))
                 ((key . "e")     (command . "extract")   (label . "Extract"))
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))
-                ((key . "T")     (command . "overview")  (label . "Overview"))
+                ((key . "O")     (command . "overview")  (label . "Overview"))
                 ((key . "+")     (command . "capture")   (label . "Capture"))
                 ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
