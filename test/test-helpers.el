@@ -88,6 +88,17 @@ it (caches read as stale)."
   (format "%s\n:PROPERTIES:\n:ORG_GLANCE_ID: %s\n:END:\n%s"
           heading id (if body (concat body "\n") "")))
 
+(cl-defmacro org-glance-test:with-llm-buffer ((var name dir) &rest body)
+  "Create live `*llm:NAME*' buffer VAR rooted at DIR; run BODY; kill it."
+  (declare (indent 1))
+  `(let ((,var (get-buffer-create (format "*llm:%s*" ,name))))
+     (unwind-protect
+         (progn
+           (with-current-buffer ,var
+             (setq default-directory (file-name-as-directory ,dir)))
+           ,@body)
+       (kill-buffer ,var))))
+
 (cl-defmacro org-glance-test:with-material ((buffer graph id) &rest body)
   "Materialize ID from GRAPH into BUFFER, make it current, run BODY, kill it.
 The modified flag is cleared and the buffer unconditionally killed on exit."
@@ -169,6 +180,14 @@ via `current-buffer'."
   "Display-order column keys of table BUF (default: current buffer)."
   (with-current-buffer buf
     (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
+
+(cl-defun org-glance-test:goto-cell (id key)
+  "Move point to row ID's KEY cell in the current table buffer.
+By-key (the `table-view-col' text property), so column reorders never
+silently redirect a test to the wrong cell."
+  (table-view--goto-id id)
+  (table-view--goto-cell key)
+  (should (equal key (get-text-property (point) 'table-view-col))))
 
 (cl-defun org-glance-test:table-cell (id key &optional (buf (current-buffer)))
   "Cell KEY of row ID in table BUF (default: current buffer)."

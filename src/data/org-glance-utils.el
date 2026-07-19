@@ -13,6 +13,11 @@
 Whitespace-only strings count as present (unlike `s-present?')."
   (and (stringp v) (not (string-empty-p v))))
 
+(cl-defun org-glance--property-key (key)
+  "Canonical drawer property KEY: trimmed and upcased.
+The single normalize-on-input rule for user-supplied property names."
+  (upcase (string-trim key)))
+
 (cl-defun org-glance--sorted-distinct (strings)
   "Return STRINGS de-duplicated and sorted with `string<'."
   (sort (-distinct strings)               ; hash-backed O(N) dedup (was O(N^2))

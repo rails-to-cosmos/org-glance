@@ -144,16 +144,14 @@ path; a display-boundary refresh re-fills it and clears the flag."
   "A table is stale when the store's mtime advances past its recorded mtime."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "m1" "* TODO X"))
-    (let ((src (org-glance-graph:headline-meta-path graph))
-          (buf (get-buffer-create "*tv-stale*")))
-      (unwind-protect
-          (with-current-buffer buf
-            (table-view-mode)
-            (org-glance-view:snapshot-mtime src)
-            (should-not (org-glance-view:stale-vs-file? src))
-            (setq org-glance-view--mtime '(0 0 0 0))
-            (should (org-glance-view:stale-vs-file? src)))
-        (kill-buffer buf)))))
+    (let ((src (org-glance-graph:headline-meta-path graph)))
+      (org-glance-test:with-open buf (get-buffer-create "*tv-stale*")
+        (with-current-buffer buf
+          (table-view-mode)
+          (org-glance-view:snapshot-mtime src)
+          (should-not (org-glance-view:stale-vs-file? src))
+          (setq org-glance-view--mtime '(0 0 0 0))
+          (should (org-glance-view:stale-vs-file? src)))))))
 
 ;;; Visit + actions
 
@@ -709,16 +707,14 @@ priority and property columns take a string prompt, derived columns refuse."
     (org-glance-test:with-table (graph 'work)
       (table-view-add-column (org-glance-table--property-column graph "ROAST"))
       ;; state column: routes to the todo flow
-      (table-view--goto-id "a")
-      (table-view-forward-column 1)
+      (org-glance-test:goto-cell "a" "state")
       (let (todo)
         (cl-letf (((symbol-function 'org-glance-table--act-todo)
                    (lambda (_g id) (setq todo id))))
           (org-glance-table--act-edit graph "a"))
         (should (equal "a" todo)))
       ;; title column: string prompt, pre-filled
-      (table-view--goto-id "a")
-      (table-view-forward-column 2)
+      (org-glance-test:goto-cell "a" "title")
       (let (offered)
         (cl-letf (((symbol-function 'read-string)
                    (lambda (_p &optional init &rest _) (setq offered init) "Beta")))
@@ -727,20 +723,16 @@ priority and property columns take a string prompt, derived columns refuse."
       (should (equal "Beta" (org-glance-headline-metadata:title
                              (org-glance-graph:get-headline graph "a"))))
       ;; tags column: derived, refuses
-      (table-view--goto-id "a")
-      (table-view-forward-column 8)
+      (org-glance-test:goto-cell "a" "tags")
       (should-error (org-glance-table--act-edit graph "a") :type 'user-error)
       ;; priority column: empty input clears the cookie
-      (table-view--goto-id "a")
-      (table-view-forward-column 5)
+      (org-glance-test:goto-cell "a" "priority")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
         (org-glance-table--act-edit graph "a"))
       (should-not (org-glance-headline-metadata:priority
                    (org-glance-graph:get-headline graph "a")))
       ;; drawer-property column: string prompt updates the drawer
-      (table-view--goto-id "a")
-      (table-view-forward-column 9)
-      (should (equal "ROAST" (get-text-property (point) 'table-view-col)))
+      (org-glance-test:goto-cell "a" "ROAST")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "dark")))
         (org-glance-table--act-edit graph "a"))
       (should (equal "dark" (org-glance-property-index:property graph "a" "ROAST"))))))

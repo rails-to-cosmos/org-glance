@@ -63,18 +63,13 @@ The legacy `table' / `org' values map the same way."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph (org-glance-test:headline "d1" "* TODO Alpha :work:"))
     (let ((org-glance-filter-spec nil))
-      (cl-letf (((symbol-function 'switch-to-buffer) (lambda (b &rest _) b))
-                ((symbol-function 'pop-to-buffer)     (lambda (b &rest _) b)))
+      (org-glance-test:with-shown (_shown)
         (let* ((org-glance-overview-default-view 'org-glance-table)
                (buf (org-glance-overview "work")))
-          (unwind-protect
-              (with-current-buffer buf (should (derived-mode-p 'table-view-mode)))
-            (when (buffer-live-p buf) (kill-buffer buf))))
+          (with-current-buffer buf (should (derived-mode-p 'table-view-mode))))
         (let* ((org-glance-overview-default-view 'org-glance-overview)
                (buf (org-glance-overview "work")))
-          (unwind-protect
-              (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode)))
-            (when (buffer-live-p buf) (kill-buffer buf))))))))
+          (with-current-buffer buf (should (bound-and-true-p org-glance-overview-mode))))))))
 
 (ert-deftest org-glance-test:overview-default-directory ()
   "The overview buffer's `default-directory' is the graph ROOT, not the hidden

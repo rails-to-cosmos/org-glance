@@ -62,9 +62,9 @@ column's value-fn reads that property via the index."
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A" "- author: Tolkien"))
     (let (killed)
-      (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                ((symbol-function 'kill-new) (lambda (v &rest _) (setq killed v))))
-        (org-glance-table--act-extract graph "a"))
+      (org-glance-test:offering (offered (caar offered))
+        (cl-letf (((symbol-function 'kill-new) (lambda (v &rest _) (setq killed v))))
+          (org-glance-table--act-extract graph "a")))
       (should (equal "Tolkien" killed)))))
 
 (provide 'test-property-index)

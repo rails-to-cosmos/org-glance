@@ -513,8 +513,10 @@ a warning); a tag without a case-twin keeps its case."
                      (puthash canon canon seen)))))
         (when dups
           (org-set-tags (nreverse new))
-          (message "org-glance: case-duplicate tag%s collapsed: %s"
-                   (if (cdr dups) "s" "") (s-join ", " (delete-dups dups))))))))
+          (display-warning 'org-glance
+                           (format "case-duplicate tag%s collapsed: %s"
+                                   (if (cdr dups) "s" "")
+                                   (s-join ", " (delete-dups dups)))))))))
 
 (cl-defun org-glance-material--restore-reserved ()
   "Revert hand edits to reserved properties, warning per reverted KEY.
@@ -698,14 +700,12 @@ A pre-existing materialized buffer is edited in place; the user saves it."
                     (call-interactively #'org-todo)
                     (cond
                      (org-log-setup
-                      ;; Note pending -> persist + finish after it settles (commit OR
-                      ;; abort), via a one-shot self-removing advice on
-                      ;; `org-store-log-note'; DEFER the kill/refresh off org's extent.
-                      (letrec ((adv (lambda (&rest _)
-                                      (advice-remove 'org-store-log-note adv)
-                                      (let ((state (persist)))
-                                        (run-at-time 0 nil (lambda () (finish state)))))))
-                        (advice-add 'org-store-log-note :after adv))
+                      ;; Note pending -> persist + finish after it settles;
+                      ;; DEFER the kill/refresh off org's extent.
+                      (org-glance-material--on-next-log-note
+                       (lambda ()
+                         (let ((state (persist)))
+                           (run-at-time 0 nil (lambda () (finish state))))))
                       (setq owned t))
                      ((buffer-modified-p)
                       (setq owned t commit-now t)))))
@@ -715,6 +715,16 @@ A pre-existing materialized buffer is edited in place; the user saves it."
             ;; org-todo threw (e.g. a dependency block) before ownership passed to
             ;; the note advice / commit -> don't leak the background buffer.
             (unless owned (org-glance--discard-buffer buf))))))))
+
+(cl-defun org-glance-material--on-next-log-note (continuation)
+  "Run CONTINUATION once the pending log note settles (commit OR abort).
+One-shot self-removing `:after' advice on `org-store-log-note'; return the
+advice function so a caller that ends up not suspending can remove it."
+  (letrec ((adv (lambda (&rest _)
+                  (advice-remove 'org-store-log-note adv)
+                  (funcall continuation))))
+    (advice-add 'org-store-log-note :after adv)
+    adv))
 
 (cl-defun org-glance-material:set-todo-bulk (graph ids state finalize)
   "Set every id in IDS to TODO STATE with full `C-c C-t' logging, then FINALIZE.
@@ -763,10 +773,8 @@ the (id . reason) pairs skipped."
                             ;; Interactive note: drive the prompt now; the advice
                             ;; persists + advances the chain once it settles.
                             ((and org-log-setup (eq org-log-note-how 'note))
-                             (letrec ((adv (lambda (&rest _)
-                                             (advice-remove 'org-store-log-note adv)
-                                             (resume buf existing id))))
-                               (advice-add 'org-store-log-note :after adv)
+                             (let ((adv (org-glance-material--on-next-log-note
+                                         (lambda () (resume buf existing id)))))
                                (unwind-protect
                                    (let ((this-command org-log-note-this-command))
                                      (org-add-log-note)  ; pops `*Org Note*'
@@ -806,10 +814,7 @@ Return non-nil when the tag set actually changed."
   (cl-check-type tag string)
   (unless remove (setq tag (org-glance-tag:validate-string tag)))
   (let* ((path (org-glance-graph:content-path graph id))
-         (existing (find-buffer-visiting path)))
-    (when (and existing (buffer-modified-p existing))
-      (user-error "org-glance: %s has unsaved edits"
-                  (file-name-nondirectory path)))
+         (existing (org-glance-material--assert-blob-clean path)))
     (let ((buffer (org-glance-material:open graph id))
           (changed nil))
       (unwind-protect
@@ -831,6 +836,15 @@ Return non-nil when the tag set actually changed."
         (unless existing (org-glance--discard-buffer buffer)))
       changed)))
 
+(cl-defun org-glance-material--assert-blob-clean (path)
+  "Signal a `user-error' when PATH's visiting buffer has unsaved edits.
+Return the visiting buffer, or nil."
+  (let ((existing (find-buffer-visiting path)))
+    (when (and existing (buffer-modified-p existing))
+      (user-error "org-glance: %s has unsaved edits"
+                  (file-name-nondirectory path)))
+    existing))
+
 (cl-defun org-glance-material--replace-headline (graph id transform)
   "Replace headline ID in GRAPH with (TRANSFORM headline), re-indexing it.
 Signal a `user-error' when the blob is open with unsaved edits or ID is dead; a
@@ -839,10 +853,8 @@ Discard a stale open buffer.  Return the new headline."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (let* ((path (org-glance-graph:content-path graph id))
-         (existing (find-buffer-visiting path))
+         (existing (org-glance-material--assert-blob-clean path))
          (headline (org-glance-graph:headline graph id)))
-    (when (and existing (buffer-modified-p existing))
-      (user-error "org-glance: %s has unsaved edits" (file-name-nondirectory path)))
     (unless headline (user-error "No live headline with id %s" id))
     (let ((new (funcall transform headline)))
       (org-glance-graph:add graph new)
@@ -907,11 +919,9 @@ dropped; the hash recomputes).  Occurrence snapshots are not copied."
     (unless headline (user-error "No live headline with id %s" id))
     (org-glance-graph:add
      graph
-     (org-glance-headline--from-string
-      (org-glance-headline:with-contents headline
-        (org-entry-put nil "ORG_GLANCE_ID" new-id)
-        (org-entry-delete nil "ORG_GLANCE_HASH")
-        (buffer-substring-no-properties (point-min) (point-max)))))
+     (org-glance-headline--map-contents headline
+       (org-entry-put nil "ORG_GLANCE_ID" new-id)
+       (org-entry-delete nil "ORG_GLANCE_HASH")))
     new-id))
 
 (cl-defun org-glance-material:set-title (graph id title)
@@ -919,36 +929,30 @@ dropped; the hash recomputes).  Occurrence snapshots are not copied."
   (org-glance-material--replace-headline
    graph id
    (lambda (headline)
-     (org-glance-headline--from-string
-      (org-glance-headline:with-contents headline
-        (org-edit-headline title)
-        (buffer-substring-no-properties (point-min) (point-max)))))))
+     (org-glance-headline--map-contents headline
+       (org-edit-headline title)))))
 
 (cl-defun org-glance-material:set-priority (graph id priority)
   "Set headline ID's PRIORITY cookie (a character); nil clears it."
   (org-glance-material--replace-headline
    graph id
    (lambda (headline)
-     (org-glance-headline--from-string
-      (org-glance-headline:with-contents headline
-        (org-priority (or priority 'remove))
-        (buffer-substring-no-properties (point-min) (point-max)))))))
+     (org-glance-headline--map-contents headline
+       (org-priority (or priority 'remove))))))
 
 (cl-defun org-glance-material:set-property (graph id property value)
   "Set headline ID's drawer PROPERTY to VALUE; blank VALUE deletes the key.
 Managed keys (`org-glance-material-hidden-properties') refuse."
-  (let ((prop (upcase (string-trim property))))
+  (let ((prop (org-glance--property-key property)))
     (when (member prop org-glance-material-hidden-properties)
       (user-error "Property %s is managed by org-glance" prop))
     (org-glance-material--replace-headline
      graph id
      (lambda (headline)
-       (org-glance-headline--from-string
-        (org-glance-headline:with-contents headline
-          (if (org-glance--present-string? value)
-              (org-entry-put nil prop (string-trim value))
-            (org-entry-delete nil prop))
-          (buffer-substring-no-properties (point-min) (point-max))))))))
+       (org-glance-headline--map-contents headline
+         (if (org-glance--present-string? value)
+             (org-entry-put nil prop (string-trim value))
+           (org-entry-delete nil prop)))))))
 
 (cl-defun org-glance-material:set-planning (graph id kind &optional remove)
   "Set headline ID's KIND (`schedule' or `deadline') planning in GRAPH.
@@ -969,10 +973,8 @@ at the prompt land natively.  Errors on unsaved edits
              ;; note buffer -- never let the planner queue one.
              (org-log-reschedule nil)
              (org-log-redeadline nil))
-         (org-glance-headline--from-string
-          (org-glance-headline:with-contents headline
-            (funcall setter (when remove '(4)) time)
-            (buffer-substring-no-properties (point-min) (point-max)))))))))
+         (org-glance-headline--map-contents headline
+           (funcall setter (when remove '(4)) time)))))))
 
 (cl-defun org-glance-material:crypt-set (graph id encrypt password)
   "Encrypt (ENCRYPT non-nil) or decrypt headline ID in GRAPH under PASSWORD.

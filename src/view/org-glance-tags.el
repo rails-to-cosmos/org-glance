@@ -156,26 +156,20 @@ tag vanishes once no live headline carries it."
 
 (cl-defun org-glance-tags:visit (graph)
   "Open GRAPH's all-tags overview in the single `*org-glance-tags*' buffer."
-  (let* ((from-view (and org-glance-view--graph t))
-         (src (org-glance-graph:headline-meta-path graph))
-         (fill-fn (lambda (buf)
-                    (with-current-buffer buf
-                      (table-view-set-rows buf (org-glance-tags--rows graph))
-                      (org-glance-view:snapshot-mtime src))))
-         (handlers (list (cons "table"    (lambda (id _row) (org-glance-tags--act-table graph id)))
-                         (cons "overview" (lambda (id _row) (org-glance-tags--act-overview graph id)))
-                         (cons "add"      (lambda (_id _row) (org-glance-tags--act-add graph)))
-                         (cons "remove"   (lambda (id _row) (org-glance-tags--act-remove graph id)))
-                         (cons "refresh"  (lambda (_id _row) (org-glance-table--reload (current-buffer))))))
-         (buf (table-view-display "*org-glance-tags*" (org-glance-tags--spec) handlers fill-fn)))
-    (with-current-buffer buf
-      (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
-      (org-glance-view:register graph
-                                :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
-                                :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
-      (table-view-apply-sort)
-      (org-glance-view:fill-frame from-view))
-    buf))
+  (let ((src (org-glance-graph:headline-meta-path graph))
+        (handlers (list (cons "table"    (lambda (id _row) (org-glance-tags--act-table graph id)))
+                        (cons "overview" (lambda (id _row) (org-glance-tags--act-overview graph id)))
+                        (cons "add"      (lambda (_id _row) (org-glance-tags--act-add graph)))
+                        (cons "remove"   (lambda (id _row) (org-glance-tags--act-remove graph id)))
+                        (cons "refresh"  (lambda (_id _row) (org-glance-table--reload (current-buffer)))))))
+    (org-glance-view:display-table
+     graph "*org-glance-tags*" (org-glance-tags--spec) handlers
+     (lambda (buf)
+       (with-current-buffer buf
+         (table-view-set-rows buf (org-glance-tags--rows graph))
+         (org-glance-view:snapshot-mtime src)))
+     :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
+     :reload-fn (lambda () (org-glance-table--reload (current-buffer))))))
 
 ;;;###autoload
 (cl-defun org-glance-tags ()

@@ -175,5 +175,23 @@ named by the headline's title (id when the headline is gone) and the stamp."
         (read-only-mode 1))
       (switch-to-buffer buf))))
 
+(cl-defun org-glance-view:display-table (graph name spec handlers fill-fn
+                                               &key stale-fn reload-fn)
+  "Display a `table-view' buffer NAME over GRAPH: the shared visit scaffold.
+SPEC/HANDLERS/FILL-FN go to `table-view-display'; `default-directory' is
+GRAPH's root; the seeded sort applies; the frame fills unless entered from
+another view.  With STALE-FN (and RELOAD-FN), register for pull-refresh
+coherence; without, the view has no file-freshness anchor (`g' refreshes).
+Return the buffer."
+  (let* ((from-view (and org-glance-view--graph t))
+         (buf (table-view-display name spec handlers fill-fn)))
+    (with-current-buffer buf
+      (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
+      (when stale-fn
+        (org-glance-view:register graph :stale-fn stale-fn :reload-fn reload-fn))
+      (table-view-apply-sort)
+      (org-glance-view:fill-frame from-view))
+    buf))
+
 (provide 'org-glance-view)
 ;;; org-glance-view.el ends here

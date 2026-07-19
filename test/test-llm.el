@@ -8,22 +8,20 @@ pinned to its data dir and title label."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph
                           (org-glance-test:headline "llmid" "* TODO Alpha :x:" "body"))
-    (let ((root 'unset) (label 'unset) (mat nil))
-      (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq mat b) b))
-                ((symbol-function 'agnostic-llm-menu)
-                 (lambda (&optional dir lbl) (setq root dir label lbl))))
-        (org-glance-llm))
-      (let ((expected (org-glance-graph:headline-data-path org-glance-graph "llmid")))
-        (should (s-suffix? "/" root))            ; directory-valued, slash-terminated
-        (should (file-equal-p root expected))
-        (should (file-directory-p root))
-        (should (equal "alpha" label))
-        ;; the headline was materialized (its blob buffer) before the menu
-        (should (buffer-live-p mat))
-        (with-current-buffer mat (should org-glance-material-mode))
-        (set-buffer-modified-p nil)
-        (kill-buffer mat)))))
+    (let ((root 'unset) (label 'unset))
+      (org-glance-test:with-shown (mat)
+        (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
+                  ((symbol-function 'agnostic-llm-menu)
+                   (lambda (&optional dir lbl) (setq root dir label lbl))))
+          (org-glance-llm))
+        (let ((expected (org-glance-graph:headline-data-path org-glance-graph "llmid")))
+          (should (s-suffix? "/" root))          ; directory-valued, slash-terminated
+          (should (file-equal-p root expected))
+          (should (file-directory-p root))
+          (should (equal "alpha" label))
+          ;; the headline was materialized (its blob buffer) before the menu
+          (should (buffer-live-p mat))
+          (with-current-buffer mat (should org-glance-material-mode)))))))
 
 (ert-deftest org-glance-test:llm-switches-to-live-session ()
   "When the headline's session buffer is already live (matched by its data dir),
@@ -31,19 +29,16 @@ pinned to its data dir and title label."
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph
                           (org-glance-test:headline "llmid" "* TODO Alpha :x:"))
-    (let* ((dir (org-glance-graph:headline-data-path org-glance-graph "llmid"))
-           (buf (get-buffer-create "*llm:alpha*"))
-           (switched nil) (menu-called nil))
+    (let ((dir (org-glance-graph:headline-data-path org-glance-graph "llmid"))
+          (menu-called nil))
       (make-directory dir t)
-      (with-current-buffer buf (setq default-directory (file-name-as-directory dir)))
-      (unwind-protect
+      (org-glance-test:with-llm-buffer (buf "alpha" dir)
+        (org-glance-test:with-shown (shown)
           (cl-letf (((symbol-function 'completing-read) (lambda (_p coll &rest _) (caar coll)))
-                    ((symbol-function 'switch-to-buffer) (lambda (b &rest _) (setq switched b) b))
                     ((symbol-function 'agnostic-llm-menu) (lambda (&rest _) (setq menu-called t))))
             (org-glance-llm)
-            (should (eq switched buf))
-            (should-not menu-called))
-        (kill-buffer buf)))))
+            (should (eq shown buf))
+            (should-not menu-called)))))))
 
 (ert-deftest org-glance-test:llm-slug-and-collision ()
   "`org-glance-llm--slug' normalises a title; `--label' disambiguates only when
@@ -57,16 +52,12 @@ a session for a different headline already holds the plain slug."
       (make-directory mine t) (make-directory other t)
       ;; no clash -> plain slug
       (should (equal "foo-bar" (org-glance-llm--label md mine)))
-      (let ((buf (get-buffer-create "*llm:foo-bar*")))
-        (unwind-protect
-            (progn
-              ;; a *llm:foo-bar* rooted elsewhere -> disambiguate with the dir leaf
-              (with-current-buffer buf (setq default-directory (file-name-as-directory other)))
-              (should (equal "foo-bar-mine" (org-glance-llm--label md mine)))
-              ;; same root -> reuse the plain slug
-              (with-current-buffer buf (setq default-directory (file-name-as-directory mine)))
-              (should (equal "foo-bar" (org-glance-llm--label md mine))))
-          (kill-buffer buf))))))
+      ;; a *llm:foo-bar* rooted elsewhere -> disambiguate with the dir leaf
+      (org-glance-test:with-llm-buffer (buf "foo-bar" other)
+        (should (equal "foo-bar-mine" (org-glance-llm--label md mine)))
+        ;; same root -> reuse the plain slug
+        (with-current-buffer buf (setq default-directory (file-name-as-directory mine)))
+        (should (equal "foo-bar" (org-glance-llm--label md mine)))))))
 
 (ert-deftest org-glance-test:llm-dir-uses-project-property ()
   "`org-glance-llm--dir' returns `ORG_GLANCE_PROJECT_DIR' when set, else data dir."
@@ -130,21 +121,21 @@ the newest `.jsonl' inside is the transcript; prompt history is empty."
 (ert-deftest org-glance-test:llm-sessions-state ()
   "State machine: no buffer -> stopped; dead buffer -> exited; live -> running."
   (should (equal "stopped" (org-glance-llm--state nil)))
-  (let ((buf (get-buffer-create " *llm-state-test*")))
-    (unwind-protect
-        (progn
-          (should (equal "exited" (org-glance-llm--state buf)))
-          (let ((proc (start-process "llm-state" buf "sleep" "10")))
-            (unwind-protect
-                (should (equal "running" (org-glance-llm--state buf)))
-              (set-process-query-on-exit-flag proc nil)
-              (delete-process proc))))
-      (kill-buffer buf))))
+  (org-glance-test:with-open buf (get-buffer-create " *llm-state-test*")
+    (should (equal "exited" (org-glance-llm--state buf)))
+    (let ((proc (start-process "llm-state" buf "sleep" "10")))
+      (unwind-protect
+          (should (equal "running" (org-glance-llm--state buf)))
+        (set-process-query-on-exit-flag proc nil)
+        (delete-process proc)))))
 
 (ert-deftest org-glance-test:llm-buffer-label ()
   "`--buffer-label' unwraps `*llm:LABEL*', uniquify suffix included."
   (with-temp-buffer
     (rename-buffer "*llm:foo*" t)
+    (should (equal "foo" (org-glance-llm--buffer-label (current-buffer)))))
+  (with-temp-buffer
+    (rename-buffer "*llm:foo*<2>" t)
     (should (equal "foo" (org-glance-llm--buffer-label (current-buffer))))))
 
 (ert-deftest org-glance-test:llm-sessions-rows ()
@@ -157,12 +148,8 @@ buffers appear as `exited'/`running'; headlines without sessions are absent."
     (org-glance-test:llm-stubs (store)
       (org-glance-test:llm-record-session (org-glance-llm--dir graph "a"))
       (with-temp-directory extra
-        (let ((buf (get-buffer-create "*llm:extra*")))
-          (unwind-protect
-              (progn
-                (with-current-buffer buf
-                  (setq default-directory (file-name-as-directory extra)))
-                (let* ((rows (org-glance-llm--session-rows graph))
+        (org-glance-test:with-llm-buffer (buf "extra" extra)
+          (let* ((rows (org-glance-llm--session-rows graph))
                        (arow (cl-find "a" rows :key (lambda (r) (alist-get 'headline r))
                                       :test #'equal))
                        (xrow (cl-find "*llm:extra*" rows
@@ -178,8 +165,7 @@ buffers appear as `exited'/`running'; headlines without sessions are absent."
                   (should-not (alist-get 'headline xrow))
                   (let ((cells (alist-get 'cells xrow)))
                     (should (equal "extra" (alist-get 'title cells)))
-                    (should (equal "exited" (alist-get 'state cells))))))
-            (kill-buffer buf)))))))
+                    (should (equal "exited" (alist-get 'state cells))))))))))
 
 (ert-deftest org-glance-test:llm-sessions-open-restarts-stopped ()
   "RET on a stopped headline session starts `agnostic-llm' with the session

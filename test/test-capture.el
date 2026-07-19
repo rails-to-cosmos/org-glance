@@ -68,8 +68,7 @@ the capture prompt, programmatic capture, and the retag add path.
 Removal stays ungated."
   (org-glance-test:session
     ;; capture prompt
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (&rest _) "albert-heijn")))
+    (org-glance-test:answering ((completing-read "albert-heijn"))
       (should-error (org-glance-capture:completing-read-tag) :type 'user-error))
     ;; programmatic capture
     (should-error (org-glance-capture '(albert-heijn) "x") :type 'user-error)

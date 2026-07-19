@@ -102,8 +102,18 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     (=org-glance--kind-slug=); the spaced form is display-only.  Tags:  Coerced via
     =org-glance-tag:from-string= wherever text enters; serialized back to
     strings in metadata (so deserialized metadata carries STRING tags — coerce
-    with =(format "%s" tag)= when comparing).  Violation: mixed-case duplicates
-    fragment filters and caches.
+    with =(downcase (format "%s" tag))= when comparing, or read through
+    =org-glance-headline-metadata:tag-strings=, the one total coercion).
+    Case-twins collapse at every boundary: parse
+    (=org-glance-headline--from-element= dedupes), read (=tag-strings=
+    downcases + dedupes legacy records), retag compares canonically, and the
+    material save collapses =:Food:food:= in the heading itself
+    (=org-glance-material--dedupe-tags=).  Validation
+    (=org-glance-tag:validate-string=, org's tag grammar) runs ONLY at
+    creation boundaries — capture prompt, programmatic capture, retag add —
+    never on read or removal, so legacy tags stay loadable and removable.
+    Violation: mixed-case duplicates fragment filters and caches, or a stored
+    tag becomes untouchable.
 
 14. *Crypt: plaintext never touches disk; secrecy is per-block.*  Material
     buffers of encrypted headlines are hardened (no auto-save/backup/lockfiles),
@@ -195,3 +205,16 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     edit under invariant 11; it touches only the heading drawer, disjoint from
     the crypt seal's body blocks).  Violation: a hand-edited or region-killed
     =ORG_GLANCE_ID= silently orphans the blob from its WAL id.
+
+22. *Material saves rewrite user content only through announced normalize
+    hooks.*  The =before-save-hook= rewrites are exactly: the reserved-property
+    revert (=org-glance-material--restore-reserved=), the case-twin tag
+    collapse (=org-glance-material--dedupe-tags=) — each raising a
+    =display-warning= — and the crypt seal (invariant 14).  Violation: a
+    silent rewrite clobbers user text with no trace (collides with inv 11).
+
+23. *LLM session state is derived live, never persisted.*  The sessions table
+    (=org-glance-llm--session-rows=) recomputes every row from =buffer-list=,
+    =process-live-p= and the provider's transcript dir on each fill; the
+    module writes no sidecar of its own.  Violation: a killed buffer shows
+    "running", a restarted one "stopped".

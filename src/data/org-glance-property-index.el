@@ -106,7 +106,7 @@ alists at once).  A gone id is not cached.  Does not flush -- a batch op
 
 (cl-defun org-glance-property-index:property (graph id property)
   "Value of ID's drawer PROPERTY in GRAPH (case-insensitive), via the index."
-  (alist-get (upcase (string-trim property))
+  (alist-get (org-glance--property-key property)
              (org-glance-property-index:drawer graph id) nil nil #'string=))
 
 (cl-defun org-glance-property-index:ensure (graph ids)

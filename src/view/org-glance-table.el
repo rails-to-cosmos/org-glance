@@ -450,7 +450,7 @@ nudges, once per change, that `C-c C-c' applies the layout to a scope."
 PROPERTY is upcased for the drawer lookup; HEADER defaults to its capitalised
 form.  Carries a `prop' marker so the per-tag schema can round-trip the column
 without persisting its (unreadable) `value-fn' closure."
-  (let ((prop (upcase (string-trim property))))
+  (let ((prop (org-glance--property-key property)))
     `((key . ,prop)
       (header . ,(or header (capitalize prop)))
       (type . "text")
@@ -480,6 +480,11 @@ the per-tag schema (see `org-glance-table--custom-column')."
                                           collect (org-glance-graph:title-or-id graph target)))
                        ""))))))
 
+(cl-defun org-glance-table--property-key? (key)
+  "Non-nil when KEY names a drawer-property column: the all-UPCASE tag.
+Edge columns carry a `kind:' prefix, built-ins are lowercase."
+  (string= key (upcase key)))
+
 (cl-defun org-glance-table--custom-column (graph name &optional header)
   "Build the custom column NAME; its CASE is the persisted type tag.
 Drawer columns persist UPCASE keys, relation kinds pure-downcase slugs -- so
@@ -487,7 +492,7 @@ an all-upcase NAME is a property column, anything else an edge column.
 Deterministic (no live-graph membership scan, whose answer would flip when a
 kind's last edge disappears), and \"AUTHOR\" the property coexists with
 \"author\" the kind."
-  (if (string= name (upcase name))
+  (if (org-glance-table--property-key? name)
       (org-glance-table--property-column graph name header)
     (org-glance-table--edge-column graph name header)))
 
@@ -776,7 +781,7 @@ enc, rep, relation kinds) refuse."
           graph id (unless (string-empty-p s) (string-to-char (upcase s))))
          (org-glance-table--finish id line "Priority %s"
                                    (if (string-empty-p s) "cleared" "set"))))
-      ((pred (lambda (k) (string= k (upcase k))))   ; drawer-property column
+      ((pred org-glance-table--property-key?)       ; drawer-property column
        (let ((val (read-string (format "%s: " key)
                                (org-glance-property-index:property graph id key))))
          (org-glance-material:set-property graph id key val)
@@ -829,6 +834,64 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
       (table-view-filter "")
     (call-interactively #'table-view-filter-or-narrow)))
 
+(cl-defun org-glance-table--handlers (graph spec)
+  "The action-command handler alist for GRAPH's table under SPEC."
+  (list (cons "materialize" (lambda (id _row) (org-glance-table--act-materialize graph id)))
+        (cons "open"        (lambda (id _row) (org-glance-table--act-open graph id)))
+        (cons "extract"     (lambda (id _row) (org-glance-table--act-extract graph id)))
+        (cons "todo"        (lambda (rows)
+                              ;; `bulk' handler: a row LIST.  With marks -> bulk
+                              ;; (one prompt, all marked); else the row at point
+                              ;; gets the full single-row `C-c C-t' (cycle + note).
+                              (if (table-view-marked-rows)
+                                  (org-glance-table--act-todo-bulk graph rows)
+                                (let ((row (car rows)))
+                                  (org-glance-table--act-todo graph (alist-get 'id row))))))
+        (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
+        (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
+        (cons "remove"      (lambda (id _row)
+                              ;; `C-u -' removes the column at point; a bare
+                              ;; `-' drops the view's tag off the headline
+                              ;; (mirror of `+' / `C-u +').
+                              (if current-prefix-arg
+                                  (org-glance-table--act-delcolumn)
+                                (org-glance-table--act-deltag graph id spec))))
+        (cons "capture"     (lambda (_id _row)
+                              ;; `C-u +' adds a custom property column; a bare `+' captures.
+                              (if current-prefix-arg
+                                  (call-interactively #'table-view-add-column)
+                                (org-glance-capture (or (org-glance-filter:tags spec)
+                                                        (org-glance-capture:completing-read-tag))
+                                                    ""))))
+        (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
+        (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
+        (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
+        (cons "edit"      (lambda (id _row) (org-glance-table--act-edit graph id)))
+        (cons "duplicate" (lambda (id _row) (org-glance-table--act-duplicate graph id)))
+        (cons "delete"   (lambda (id _row) (org-glance-table--act-delete graph id)))
+        (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
+        (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
+
+(cl-defun org-glance-table--visit-spec (graph spec saved ref-entry context)
+  "The display spec for SPEC, its column set resolved by view kind.
+A scoped REF-ENTRY replaces the whole set (built-ins minus its hidden, plus
+its custom columns, its order); a scope-less reference view (CONTEXT) gets
+plain defaults, never the shared untagged (\":none:\") per-tag schema; else
+SAVED's column order is restored."
+  (let ((s (org-glance-table--spec graph spec)))
+    (cond (ref-entry
+           (setf (alist-get 'columns s)
+                 (org-glance-table--refs-columns
+                  graph ref-entry (org-glance-table--base-columns graph))))
+          (context
+           (setf (alist-get 'columns s)
+                 (org-glance-table--base-columns graph)))
+          ((plist-get saved :columns)
+           (setf (alist-get 'columns s)
+                 (org-glance-table--reorder-columns
+                  (alist-get 'columns s) (plist-get saved :columns)))))
+    s))
+
 (cl-defun org-glance-table:visit (graph &optional filter &key context)
   "Open GRAPH's table for FILTER, one buffer per filter description.
 Honours the same filter language as the overview (see
@@ -859,59 +922,11 @@ restore on open, `C-c C-c' to apply."
                         ;; columns' value-fns; persist only if a blob re-parsed.
                         (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))
-         (handlers (list (cons "materialize" (lambda (id _row) (org-glance-table--act-materialize graph id)))
-                         (cons "open"        (lambda (id _row) (org-glance-table--act-open graph id)))
-                         (cons "extract"     (lambda (id _row) (org-glance-table--act-extract graph id)))
-                         (cons "todo"        (lambda (rows)
-                                               ;; `bulk' handler: a row LIST.  With marks -> bulk
-                                               ;; (one prompt, all marked); else the row at point
-                                               ;; gets the full single-row `C-c C-t' (cycle + note).
-                                               (if (table-view-marked-rows)
-                                                   (org-glance-table--act-todo-bulk graph rows)
-                                                 (let ((row (car rows)))
-                                                   (org-glance-table--act-todo graph (alist-get 'id row))))))
-                         (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
-                         (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
-                         (cons "remove"      (lambda (id _row)
-                                               ;; `C-u -' removes the column at point; a bare
-                                               ;; `-' drops the view's tag off the headline
-                                               ;; (mirror of `+' / `C-u +').
-                                               (if current-prefix-arg
-                                                   (org-glance-table--act-delcolumn)
-                                                 (org-glance-table--act-deltag graph id spec))))
-                         (cons "capture"     (lambda (_id _row)
-                                               ;; `C-u +' adds a custom property column; a bare `+' captures.
-                                               (if current-prefix-arg
-                                                   (call-interactively #'table-view-add-column)
-                                                 (org-glance-capture (or (org-glance-filter:tags spec)
-                                                                         (org-glance-capture:completing-read-tag))
-                                                                     ""))))
-                         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
-                         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
-                         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
-                         (cons "edit"      (lambda (id _row) (org-glance-table--act-edit graph id)))
-                         (cons "duplicate" (lambda (id _row) (org-glance-table--act-duplicate graph id)))
-                         (cons "delete"   (lambda (id _row) (org-glance-table--act-delete graph id)))
-                         (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
-                         (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
-         ;; Build the spec.  A scoped reference entry replaces the whole column
-         ;; set (built-ins minus its hidden, plus its custom columns, its
-         ;; order); otherwise restore the saved column order (if any).
-         (tspec (let ((s (org-glance-table--spec graph spec)))
-                  (cond (ref-entry
-                         (setf (alist-get 'columns s)
-                               (org-glance-table--refs-columns
-                                graph ref-entry (org-glance-table--base-columns graph))))
-                        (context   ; no scoped entry: defaults, NOT the shared
-                                   ; untagged (":none:") per-tag schema
-                         (setf (alist-get 'columns s)
-                               (org-glance-table--base-columns graph)))
-                        ((plist-get saved :columns)
-                         (setf (alist-get 'columns s)
-                               (org-glance-table--reorder-columns
-                                (alist-get 'columns s) (plist-get saved :columns)))))
-                  s))
-         (buf (table-view-display buffer-name tspec handlers fill-fn)))
+         (buf (table-view-display
+               buffer-name
+               (org-glance-table--visit-spec graph spec saved ref-entry context)
+               (org-glance-table--handlers graph spec)
+               fill-fn)))
     (with-current-buffer buf
       (setq org-glance-table--context context)
       (local-set-key (kbd "C-c C-c") #'org-glance-table:apply-layout)

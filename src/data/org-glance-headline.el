@@ -256,6 +256,14 @@ the id/hash drawer properties in place, after the read-only facts."
      ,@body
      (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
 
+(cl-defmacro org-glance-headline--map-contents (headline &rest body)
+  "A fresh `org-glance-headline' re-parsed from HEADLINE after BODY edits it.
+BODY runs in a temp org buffer holding HEADLINE's contents
+\(`org-glance-headline--rewrite-contents')."
+  (declare (indent 1))
+  `(org-glance-headline--from-string
+    (org-glance-headline--rewrite-contents ,headline ,@body)))
+
 (cl-defun org-glance-headline--body-region ()
   "Cons (BEG . END) of the current buffer's headline body:
 end of meta-data (planning + drawers) to end of subtree."

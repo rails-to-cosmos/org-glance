@@ -8,8 +8,7 @@
     (org-glance-graph:add graph
                              (org-glance-test:headline "a" "* TODO Alpha :x:")
                              (org-glance-test:headline "b" "* DONE Beta :y:"))
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_prompt collection &rest _) (caar collection))))
+    (org-glance-test:offering (offered (caar offered))
       (let ((meta (org-glance-material:completing-read graph)))
         (should (org-glance-headline-metadata? meta))
         (should (string= "Alpha" (org-glance-headline-metadata:title meta)))))))
@@ -38,18 +37,18 @@
                              (org-glance-test:headline "a" "* TODO Todo")
                              (org-glance-test:headline "b" "* DONE Done"))
     ;; Default: DONE is done, so the active (selectable) headline is the TODO one.
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll))))
+    (org-glance-test:offering (offered (caar offered))
       (should (string= "a" (org-glance-headline-metadata:id
                             (org-glance-material:completing-read
-                             graph :filter #'org-glance-headline-metadata:active?)))))
+                             graph :filter #'org-glance-headline-metadata:active?))))
+      (should (= 1 (length offered))))
     ;; Declaring TODO done flips it: now the DONE headline is the active one.
     (let ((org-done-keywords '("TODO")))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (_p coll &rest _) (should (= 1 (length coll))) (caar coll))))
+      (org-glance-test:offering (offered (caar offered))
         (should (string= "b" (org-glance-headline-metadata:id
                               (org-glance-material:completing-read
-                               graph :filter #'org-glance-headline-metadata:active?))))))))
+                               graph :filter #'org-glance-headline-metadata:active?))))
+        (should (= 1 (length offered)))))))
 
 (ert-deftest org-glance-test:material-completing-read-filter ()
   "The FILTER predicate narrows the candidate list."
@@ -57,14 +56,12 @@
     (org-glance-graph:add graph
                              (org-glance-test:headline "a" "* TODO Alpha")
                              (org-glance-test:headline "b" "* DONE Beta"))
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_prompt collection &rest _)
-                 (should (= 1 (length collection)))
-                 (caar collection))))
+    (org-glance-test:offering (offered (caar offered))
       (let ((meta (org-glance-material:completing-read
                    graph
                    :filter (lambda (m) (string= "TODO" (org-glance-headline-metadata:state m))))))
-        (should (string= "a" (org-glance-headline-metadata:id meta)))))))
+        (should (string= "a" (org-glance-headline-metadata:id meta))))
+      (should (= 1 (length offered))))))
 
 (ert-deftest org-glance-test:material-save-affordance ()
   "A materialized buffer visits its content-blob FILE, runs the minor mode,
@@ -400,18 +397,13 @@ without history it errors with a hint."
         (should (eq (key-binding (kbd "C-c l")) #'org-glance-material:history))
         (should-error (org-glance-material:history) :type 'user-error)  ; no history yet
         (org-glance-test:complete-repetition)
-        (let (shown)
-          (cl-letf (((symbol-function 'completing-read)
-                     (lambda (_p coll &rest _) (car coll)))          ; newest stamp
-                    ((symbol-function 'switch-to-buffer)
-                     (lambda (b) (setq shown b) b)))
+        (org-glance-test:with-shown (shown)
+          (org-glance-test:offering (offered (car offered))          ; newest stamp
             (org-glance-material:history))
-          (unwind-protect
-              (with-current-buffer shown
-                (should buffer-read-only)
-                (should (s-contains? "DONE daily" (buffer-string)))
-                (should (s-contains? "org-glance-occurrence" (buffer-name))))
-            (kill-buffer shown)))))))
+          (with-current-buffer shown
+            (should buffer-read-only)
+            (should (s-contains? "DONE daily" (buffer-string)))
+            (should (s-contains? "org-glance-occurrence" (buffer-name)))))))))
 
 (ert-deftest org-glance-test:material-snapshot-prunes-to-depth ()
   "The newest DEPTH snapshots survive; older ones are pruned on each write."
@@ -985,7 +977,7 @@ state and tags kept, ORG_GLANCE_ID replaced, source untouched."
                        (buffer-string))))
         (should (s-contains? "body line" content))
         (should (string-match-p (concat ":ORG_GLANCE_ID:[ \t]+" (regexp-quote new)) content))
-        (should-not (string-match-p ":ORG_GLANCE_ID:[ \t]+a\b" content))))))
+        (should-not (string-match-p ":ORG_GLANCE_ID:[ \t]+a$" content))))))
 
 (ert-deftest org-glance-test:material-case-duplicate-tags ()
   "Case-duplicate tags collapse everywhere: parse (one canonical tag in

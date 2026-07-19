@@ -41,13 +41,17 @@ Non-alphanumeric runs become one dash, edges trimmed (\"Buy milk (2L)!\" ->
   "The `*llm:...*' session buffer name for LABEL."
   (format "*llm:%s*" label))
 
+(cl-defun org-glance-llm--session-buffer? (buf)
+  "Non-nil when BUF is a `*llm:…*' session buffer."
+  (string-prefix-p "*llm:" (buffer-name buf)))
+
 (cl-defun org-glance-llm--session-buffer (dir)
   "The live agnostic-llm session buffer rooted at DIR, or nil.
 DIR is a headline's content-addressable data dir -- a full-hash path unique to
 the headline -- so matching a `*llm:…*' buffer's `default-directory' against it
 reuses that session, independent of the (cosmetic) title label."
   (cl-find-if (lambda (buf)
-                (and (string-prefix-p "*llm:" (buffer-name buf))
+                (and (org-glance-llm--session-buffer? buf)
                      (ignore-errors
                        (file-equal-p (buffer-local-value 'default-directory buf)
                                      dir))))
@@ -141,9 +145,7 @@ content-addressable data dir; the label is the title slug
 
 (cl-defun org-glance-llm--live-buffers ()
   "Every live `*llm:…*' session buffer."
-  (cl-remove-if-not
-   (lambda (buf) (string-prefix-p "*llm:" (buffer-name buf)))
-   (buffer-list)))
+  (cl-remove-if-not #'org-glance-llm--session-buffer? (buffer-list)))
 
 (cl-defun org-glance-llm--state (buf)
   "Session state for BUF (nil = no buffer): running / exited / stopped."
@@ -152,9 +154,9 @@ content-addressable data dir; the label is the title slug
           ((and proc (process-live-p proc)) "running")
           (t "exited"))))
 
-(cl-defun org-glance-llm--session-row (dir buf transcript title id prompt)
+(cl-defun org-glance-llm--session-row (dir buf transcript title id)
   "Row for the session at DIR: live BUF (or nil), newest TRANSCRIPT file (or
-nil), TITLE, owning headline ID (or nil), last saved PROMPT text (or nil)."
+nil), TITLE, owning headline ID (or nil)."
   `((id . ,dir)
     (headline . ,id)
     (cells . ((title . ,(or title ""))
@@ -166,7 +168,9 @@ nil), TITLE, owning headline ID (or nil), last saved PROMPT text (or nil)."
                             (file-attribute-modification-time
                              (file-attributes transcript)))
                          ""))
-              (prompt . ,(if prompt (truncate-string-to-width prompt 48 nil nil "…") ""))
+              (prompt . ,(if-let ((prompt (org-glance-llm--last-prompt dir)))
+                             (truncate-string-to-width prompt 48 nil nil "…")
+                           ""))
               (dir . ,(abbreviate-file-name dir))))))
 
 (cl-defun org-glance-llm--last-prompt (dir)
@@ -200,21 +204,18 @@ costs one directory listing plus string work per headline."
           (remhash dir buf-by-dir)
           (push (org-glance-llm--session-row
                  dir buf transcript
-                 (org-glance-headline-metadata:title meta) id
-                 (org-glance-llm--last-prompt dir))
+                 (org-glance-headline-metadata:title meta) id)
                 rows))))
     ;; live sessions not owned by any headline
     (maphash (lambda (dir buf)
                (push (org-glance-llm--session-row
                       dir buf (agnostic-llm--session-file dir)
-                      (org-glance-llm--buffer-label buf) nil
-                      (org-glance-llm--last-prompt dir))
+                      (org-glance-llm--buffer-label buf) nil)
                      rows))
              buf-by-dir)
     (nreverse rows)))
 
-(cl-defun org-glance-llm--sessions-spec ()
-  "The `table-view' spec for the LLM sessions table."
+(defconst org-glance-llm--sessions-spec
   '((title . "org-glance llm sessions")
     (columns . (((key . "state")  (header . "State")  (type . "badge") (sortable . t) (align . "left")
                  (badges . (((value . "running") (color . "#9ece6a"))
@@ -229,7 +230,10 @@ costs one directory listing plus string work per headline."
                 ((key . "m")   (command . "materialize") (label . "Materialize"))
                 ((key . "k")   (command . "kill")        (label . "Kill"))
                 ((key . "g")   (command . "refresh")     (label . "Refresh"))))
-    (sort . ((column . "state") (ascending . t)))))
+    (sort . ((column . "state") (ascending . t))))
+  "The `table-view' spec for the LLM sessions table.
+A constant: unlike `org-glance-table--spec' it depends on no graph state,
+and `table-view-display' never mutates a passed spec.")
 
 (cl-defun org-glance-llm--act-open (graph dir row)
   "Pop to DIR's running session; else (re)start it, continuing its transcript.
@@ -265,8 +269,7 @@ else DIR's leaf."
 
 (cl-defun org-glance-llm-sessions:visit (graph)
   "Open GRAPH's LLM sessions table in `*org-glance-llm-sessions*'."
-  (let* ((from-view (and org-glance-view--graph t))
-         (fill-fn (lambda (buf)
+  (let* ((fill-fn (lambda (buf)
                     (with-current-buffer buf
                       (table-view-set-rows buf (org-glance-llm--session-rows graph)))))
          (handlers (list (cons "open" (lambda (id row) (org-glance-llm--act-open graph id row)))
@@ -274,14 +277,9 @@ else DIR's leaf."
                          (cons "kill" (lambda (id _row) (org-glance-llm--act-kill id)))
                          (cons "refresh" (lambda (_id _row)
                                            (table-view-refresh (current-buffer))
-                                           (table-view-apply-sort)))))
-         (buf (table-view-display "*org-glance-llm-sessions*"
-                                  (org-glance-llm--sessions-spec) handlers fill-fn)))
-    (with-current-buffer buf
-      (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
-      (table-view-apply-sort)
-      (org-glance-view:fill-frame from-view))
-    buf))
+                                           (table-view-apply-sort))))))
+    (org-glance-view:display-table graph "*org-glance-llm-sessions*"
+                                   org-glance-llm--sessions-spec handlers fill-fn)))
 
 ;;;###autoload
 (cl-defun org-glance-llm-sessions ()

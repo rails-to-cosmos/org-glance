@@ -75,9 +75,11 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 12. Store content parses in temp buffers via `org-glance--org-mode`
     (`delay-mode-hooks`, `tab-width` 8); never `find-file` sources to read.
 13. Tags are canonical downcased interned symbols at the boundary; deserialized
-    metadata carries STRING tags — coerce with `(format "%s" tag)`. Relation
-    kinds are canonical dash-slugs at every boundary (encode/decode/deserialize);
-    spaced form is display-only.
+    metadata carries STRING tags — coerce with `(downcase (format "%s" tag))`
+    or read via `tag-strings`. Case-twins collapse at every boundary (parse,
+    read, retag, material save); `org-tag-re` validation runs ONLY at creation
+    boundaries, never on read/removal. Relation kinds are canonical dash-slugs
+    at every boundary (encode/decode/deserialize); spaced form is display-only.
 14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the
     persistent secrecy annotation. Secrecy is per-block — text between blocks
     stays plaintext and indexed, even for an encrypted headline.
@@ -107,6 +109,11 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     keys: concealed in material buffers, hand edits reverted on save with a
     warning; the revert touches only the heading drawer (disjoint from the
     crypt seal).
+22. Material saves rewrite user content only through announced normalize hooks
+    (reserved-property revert, case-twin tag collapse — each warns — and the
+    crypt seal).
+23. LLM session state is derived live (buffers + processes + transcripts),
+    never persisted.
 
 ## Fix — and prevent — the whole class
 

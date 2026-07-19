@@ -67,8 +67,7 @@
                              (org-glance-test:headline "r2" "* DONE b"))
     (dolist (case '(("active" . active) ("done" . done)
                     ("all" . all) ("TODO" . "TODO")))
-      (cl-letf (((symbol-function 'completing-read)
-                 (lambda (&rest _) (car case))))
+      (org-glance-test:answering ((completing-read (car case)))
         (should (equal (cdr case) (org-glance-filter:read-state graph)))))
     ;; the offered candidates are active/done/all + the graph's concrete states
     (org-glance-test:offering (offered "all")
