@@ -150,16 +150,44 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     =org-glance-filter:transient?=.  Violation: one cache dir / config entry
     accretes per visited headline (=:id-any= identities embed the target
     snapshot — one per link-set version), with no pruning pass to reclaim
-    them.
+    them.  EXPLICIT scoped persistence is the sanctioned exception: =C-c C-c=
+    in a reference table (=org-glance-table:apply-layout=) saves the
+    layout under a user-chosen scope key (anchor id or tag pair, per
+    direction) in =table-refs.eld= — never under the filter identity, one
+    entry per deliberate apply, so browsing still accretes nothing.
 
-18. *Overview headings are self-sufficient, metadata-only.*  The render
+18. *Scoped reference layouts: out-of-band identity, id > pair, whole-set
+    replace.*  The anchor travels as =:context= into =org-glance-table:visit=
+    — never reconstructed from the filter, which has lost it.  Resolution
+    (=org-glance-table--refs-resolve=): the anchor's own entry beats tag
+    pairs; among pairs the latest =:applied= stamp wins.  A scoped entry
+    REPLACES the whole column set built from base columns — it never merges
+    with =table-columns.eld= — and a scope-less reference view renders plain
+    defaults, never the shared untagged ":none:" schema entry.  Pair keys
+    read in edge direction (referrer > target), single-sourced in
+    =org-glance-table--refs-tag-pairs=, separate per direction; pair tags
+    are sorted, distinct, downcased (mirrors inv 13).  =table-refs.eld= is
+    written only on explicit =C-c C-c=, so a git conflict drops one side
+    with no self-healing rewrite (unlike the constantly-rewritten
+    auto-persisted stores).  Violation: saved layouts that never match on
+    restore, cross-direction leaks, nondeterministic pair resolution.
+
+19. *The table is a pure projection; every mutation routes through the
+    material layer.*  All =org-glance-table--act-*= handlers delegate to
+    =org-glance-material:= functions (todo, bulk todo, retag, crypt, delete,
+    planning) — no table-originated write touches store, blob, or metadata
+    directly, and bulk operations degrade per-row (skip-and-report), never
+    batch-abort.  Violation: bypasses the unsaved-edit guard (inv 11) and
+    the blob-canonical rule (inv 5).
+
+20. *Overview headings are self-sufficient, metadata-only.*  The render
     (=org-glance-overview:render-headline=) carries state, priority cookie,
     the SINGLE planning line, the id drawer, relations and plain links — all
     from metadata, zero blob parses; agenda and link-following work without
     materializing.  Violation: agenda misses planning, or the render cost
     becomes O(blobs).
 
-19. *Reserved properties are managed keys.*  The keys in
+21. *Reserved properties are managed keys.*  The keys in
     =org-glance-material-hidden-properties= are org-glance's, not the user's:
     concealed in material buffers (overlays only — file and store keep them),
     and hand edits to them reverted at =before-save= with a warning

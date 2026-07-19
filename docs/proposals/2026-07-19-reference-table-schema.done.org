@@ -1,0 +1,100 @@
+#+TITLE: Scoped schema for reference tables
+#+DATE: 2026-07-19
+
+* Problem
+
+Reference tables (=C-c @= references, =C-u C-c @= back-references) are
+transient filters (=:id-any= / =:refers-to=,
+[[file:../invariants.org][invariant 17]]): they persist no layout.  Every
+visit rebuilds the default columns; the user's column/sort edits are lost.
+The guard exists for a reason -- their filter identity embeds another
+headline's id or link set, so auto-persisting would accrete one config
+entry per visited headline.
+
+* Design
+
+Keep the no-AUTO-persist rule.  Add an *explicit apply*: =C-c C-c= saves
+the layout in every table (=org-glance-table:apply-layout=).  In a
+persistent view it persists config + schema on the spot; in a reference
+table it prompts for a user-chosen *scope*, and later reference tables that
+match a scope restore it.  An unapplied layout change in a reference view
+nudges once per change in the echo area.
+
+** Scopes
+
+Prompt (=completing-read=, require-match) offers:
+
+1. *This headline* -- the schema applies to reference tables anchored at
+   this specific headline (keyed by its id).
+2. *Tag pair* -- one candidate per (anchor-tag x row-tag) pair, N x M
+   options.  E.g. anchor =:coffee:=, rows tagged =:roaster:= -> candidate
+   "coffee → roaster".  The schema applies to any reference table whose
+   anchor carries the pair's anchor-tag and whose rows carry the row-tag.
+
+Both scopes are per *direction*: a references table (anchor -> targets) and
+a back-references table (sources -> anchor) show different row populations
+(different natural columns), so they never share an entry.
+
+** What persists
+
+One entry = the full layout, the union of what the two persistent-view
+stores keep separately: custom columns ((PROP . HEADER) list), hidden
+built-in keys, column order, sort keys, plus an =:applied= timestamp.
+
+** Storage
+
+New eld sidecar =<store>/config/table-refs.eld= (same
+=org-glance--eld-alist-*= machinery).  Keys are strings:
+
+- =ref:DIRECTION:ID= -- headline scope (=refs= / =backlinks=).
+- =pair:DIRECTION:FROM>TO= -- tag-pair scope, canonical downcased tag
+  symbols.
+
+** Lookup (on visiting a reference table)
+
+1. Exact headline-scope key for (anchor, direction).
+2. Else pair entries whose anchor-tag ∈ anchor's tags and row-tag ∈ the
+   union of the row headlines' tags; several matches -> latest =:applied=
+   wins.
+3. Else default layout (today's behaviour).
+
+Rows are known before display in both reference views (the id set is
+computed from the anchor's relations / the edge-target query), so the row
+tag union costs one =--metas= pass over a small id list.
+
+** Anchor plumbing
+
+=(:id-any TARGETS)= loses the anchor.  The filter language stays untouched;
+instead =org-glance-table:visit= gains =&key context= -- a plist
+=(:anchor ID :dir refs|backlinks)= stored buffer-locally.  Set by
+=org-glance-material:references=; nil everywhere else.  =C-c C-c= is bound
+only when context is present.
+
+** Invariant 17 amendment
+
+Transient filters still never persist per-filter state *automatically*.
+Explicit, scoped apply is allowed: entries are keyed by the chosen scope
+(never by filter identity), one entry per deliberate =C-c C-c=, no
+accretion by browsing.
+
+* Out of scope
+
+- =:where= tables (no natural scope to key on).
+- Sharing one pair entry across both directions (rows differ; revisit if
+  usage shows the layouts converge).
+
+* Steps
+
+1. =table:visit= =&key context=; thread from =material:references=.
+2. =table-refs.eld= store: key builders, get/put, latest-applied
+   resolution.
+3. Restore path in =visit= (custom columns + hidden + order + sort from a
+   scoped entry).
+4. =org-glance-table:apply-layout= command on =C-c C-c= (every table):
+   persistent views save on the spot; reference views scope-prompt,
+   snapshot the layout, persist; other transient views =user-error=.
+   Modified-nudge in =org-glance-table--persist-config=.
+5. Tests: id-scope restore, pair-scope restore across different anchors,
+   id > pair precedence, latest-applied tie-break, no auto-persist,
+   direction separation.
+6. Docs: invariants #17 (+ CLAUDE.md mirror), README step 4, CHANGELOG.

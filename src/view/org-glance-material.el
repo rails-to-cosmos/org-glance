@@ -1064,12 +1064,14 @@ first to see edges added in this session."
         (id org-glance-material--id))
     (unless (and graph id) (user-error "Not in a materialized headline buffer"))
     (if arg
-        (org-glance-table:visit graph `(:refers-to ,id))
+        (org-glance-table:visit graph `(:refers-to ,id)
+                                :context (list :anchor id :dir 'backlinks))
       (let* ((meta (org-glance-graph:get-headline graph id))
              (targets (and (org-glance-headline-metadata? meta)
                            (delete-dups (mapcar #'car (org-glance-headline-metadata:relations meta))))))
         (unless targets (user-error "Headline has no references (save after adding some)"))
-        (org-glance-table:visit graph `(:id-any ,targets))))))
+        (org-glance-table:visit graph `(:id-any ,targets)
+                                :context (list :anchor id :dir 'refs))))))
 
 (provide 'org-glance-material)
 ;;; org-glance-material.el ends here

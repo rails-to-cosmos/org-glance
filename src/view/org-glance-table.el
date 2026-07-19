@@ -346,7 +346,7 @@ passwords (confirmed when setting a new one) and reloads the row."
 ;;; Per-view persistence: column order + sort, keyed by filter identity
 ;;
 ;; The user's column reordering (`table-view' column-move) and sort choice live in
-;; the table buffer (`table-view--spec' columns + `table-view--sort-keys').  Persist
+;; the table buffer (read via `table-view-layout').  Persist
 ;; them PER FILTER so reopening the same view restores the layout across sessions.
 ;; Stored as one `read'-able alist at `<store>/config/table-views.eld', keyed by the
 ;; canonical filter identity (the same key basis the overview cache uses).  A change
@@ -379,28 +379,42 @@ so a schema change (a new column) degrades gracefully."
    (cl-remove-if (lambda (c) (member (alist-get 'key c) order)) columns)))
 
 (defvar-local org-glance-table--config-snapshot nil
-  "Last persisted view config for this buffer (the change-detection baseline).")
+  "Last persisted view config for this buffer (the change-detection baseline).
+In a reference view nothing auto-persists; there it is the last layout the
+modified-nudge reported (see `org-glance-table--persist-config').")
+
+(defvar-local org-glance-table--context nil
+  "Reference-view context plist (`:anchor' ID `:dir' `refs'|`backlinks'), or nil.")
 
 (cl-defun org-glance-table--current-config ()
-  "This buffer's current view config: (:columns KEYS :sort SORT-KEYS)."
-  (list :columns (mapcar (lambda (c) (alist-get 'key c))
-                         (alist-get 'columns table-view--spec))
-        :sort (copy-tree table-view--sort-keys)))
+  "This buffer's current view config: (:columns KEYS :sort SORT-KEYS).
+The cheap change-detection projection of `org-glance-table--layout-snapshot'
+\(no hidden-column diff), safe on the post-command hot path."
+  (let ((layout (table-view-layout)))
+    (list :columns (mapcar (lambda (c) (alist-get 'key c))
+                           (plist-get layout :columns))
+          :sort (plist-get layout :sort))))
 
 (cl-defun org-glance-table--persist-config ()
-  "Buffer-local `post-command-hook': persist the view config iff it changed.
-Cheap on the common path -- compares the (column-order, sort) tuple to the last
-snapshot and writes only on an actual layout change.  (`org-glance-table--spec'
-may be nil -- the \"all\" filter -- so guard only on being a registered view.)
-Transient filters (relation views, `:where') persist nothing -- their identity
-embeds another headline's id/link set and would accrete one entry per visit."
-  (when (and org-glance-view--graph
-             (not (org-glance-filter:transient? org-glance-table--spec)))
+  "Buffer-local `post-command-hook': react to a layout change.
+Cheap on the common path -- one (column-order, sort) tuple comparison against
+the last snapshot.  (`org-glance-table--spec' may be nil -- the \"all\"
+filter -- so guard only on being a registered view.)  Persistent views save
+the changed tuple on the spot.  Transient filters (relation views, `:where')
+persist nothing automatically -- their identity embeds another headline's
+id/link set and would accrete one entry per visit; a reference view instead
+nudges, once per change, that `C-c C-c' applies the layout to a scope."
+  (when org-glance-view--graph
     (let ((cur (org-glance-table--current-config)))
       (unless (equal cur org-glance-table--config-snapshot)
-        (setq org-glance-table--config-snapshot cur)
-        (with-demoted-errors "org-glance: table config save failed: %S"
-          (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur))))))
+        (cond
+         ((not (org-glance-filter:transient? org-glance-table--spec))
+          (setq org-glance-table--config-snapshot cur)
+          (with-demoted-errors "org-glance: table config save failed: %S"
+            (org-glance-table--config-put org-glance-view--graph org-glance-table--spec cur)))
+         (org-glance-table--context
+          (setq org-glance-table--config-snapshot cur)
+          (message "Layout modified — C-c C-c to apply it to a scope")))))))
 
 ;;; Column schema (`C-u +' adds, `C-u -' removes, persisted per tag)
 ;;
@@ -520,16 +534,23 @@ does not accrete empties."
    (org-glance-table--schema-key filter)
    (and (or columns hidden) (list :columns columns :hidden hidden))))
 
-(cl-defun org-glance-table--apply-schema (graph filter columns)
-  "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.
-Drops the columns hidden for FILTER's tags (Title never dropped), then appends
-the saved custom columns via `org-glance-table--custom-column'.  Absent a
-schema, COLUMNS is returned unchanged."
-  (let ((hidden (remove "title" (org-glance-table--schema-hidden graph filter))))
-    (append (cl-remove-if (lambda (c) (member (alist-get 'key c) hidden)) columns)
+(cl-defun org-glance-table--compose-columns (graph base hidden pairs)
+  "BASE columns minus the HIDDEN keys (Title never dropped), plus custom
+columns built from PAIRS ((NAME . HEADER) list) via
+`org-glance-table--custom-column'.  The single column-assembly core shared by
+the per-tag schema and the scoped reference entries."
+  (let ((hidden (remove "title" hidden)))
+    (append (cl-remove-if (lambda (c) (member (alist-get 'key c) hidden)) base)
             (mapcar (lambda (pair)
                       (org-glance-table--custom-column graph (car pair) (cdr pair)))
-                    (org-glance-table--schema-get graph filter)))))
+                    pairs))))
+
+(cl-defun org-glance-table--apply-schema (graph filter columns)
+  "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.
+Absent a schema, COLUMNS is returned unchanged."
+  (org-glance-table--compose-columns graph columns
+                                     (org-glance-table--schema-hidden graph filter)
+                                     (org-glance-table--schema-get graph filter)))
 
 (cl-defun org-glance-table--persist-schema ()
   "Buffer-local `table-view-schema-changed-hook': save this filter's schema per
@@ -539,18 +560,156 @@ filters) persist nothing -- their tagless schema key would edit the shared
 untagged (\":none:\") entry."
   (when (and org-glance-view--graph
              (not (org-glance-filter:transient? org-glance-table--spec)))
-    (let* ((live (table-view--columns table-view--spec))
-           (live-keys (mapcar (lambda (c) (alist-get 'key c)) live))
-           (columns (cl-loop for c in live
-                             when (alist-get 'prop c)
-                             collect (cons (alist-get 'prop c) (alist-get 'header c))))
-           (hidden (cl-remove-if
-                    (lambda (k) (member k live-keys))
-                    (mapcar (lambda (c) (alist-get 'key c))
-                            (org-glance-table--base-columns org-glance-view--graph)))))
+    (let ((snap (org-glance-table--layout-snapshot)))
       (with-demoted-errors "org-glance: table schema save failed: %S"
         (org-glance-table--schema-put org-glance-view--graph org-glance-table--spec
-                                      :columns columns :hidden hidden)))))
+                                      :columns (plist-get snap :columns)
+                                      :hidden (plist-get snap :hidden))))))
+
+;;; Scoped layout for reference tables (`C-c C-c' applies, scope-keyed)
+;;
+;; Reference tables (`C-c @' / `C-u C-c @') are transient: neither persistence
+;; path above may touch them (their filter identity embeds another headline's
+;; id/link set and would accrete one entry per visit).  Instead the user applies
+;; an edited layout EXPLICITLY: `C-c C-c' prompts for a scope -- the anchor
+;; headline itself, or one (anchor-tag x row-tag) pair -- and saves the full
+;; layout (custom columns, hidden built-ins, order, sort) under that scope in
+;; `<store>/config/table-refs.eld'.  A later reference table restores the
+;; anchor's own entry first, else the latest-applied matching pair entry.
+;; Scopes are per direction: references and back-references list different row
+;; populations, so they never share an entry.
+
+(cl-defun org-glance-table--refs-file (graph)
+  "Path of GRAPH's scoped reference-layout store (may not exist)."
+  (org-glance-graph:config-file graph "table-refs.eld"))
+
+(cl-defun org-glance-table--refs-key-id (context)
+  "Headline-scope store key for CONTEXT."
+  (format "ref:%s:%s" (plist-get context :dir) (plist-get context :anchor)))
+
+(cl-defun org-glance-table--refs-key-pair (dir from to)
+  "Tag-pair store key for DIR and the FROM -> TO edge-tag pair."
+  (format "pair:%s:%s>%s" dir from to))
+
+(cl-defun org-glance-table--refs-tags (graph context)
+  "CONTEXT's (ANCHOR-TAGS . ROW-TAGS), each sorted distinct downcased strings.
+Rows are the anchor's edge targets (`refs') or every headline with an edge to
+the anchor (`backlinks')."
+  (cl-flet ((tags-of (meta) (mapcar (lambda (tag) (downcase (format "%s" tag)))
+                                    (org-glance-headline-metadata:tags meta))))
+    (let* ((anchor (plist-get context :anchor))
+           (meta (org-glance-graph:get-headline graph anchor))
+           (meta (and (org-glance-headline-metadata? meta) meta))
+           (row-metas
+            (pcase (plist-get context :dir)
+              ('refs (when-let ((targets (and meta (delete-dups
+                                                   (mapcar #'car (org-glance-headline-metadata:relations meta))))))
+                       (org-glance-graph--metas graph targets)))
+              ('backlinks (cl-remove-if-not
+                           (org-glance-filter:predicate `(:refers-to ,anchor))
+                           (org-glance-graph--metas graph))))))
+      (cons (org-glance--sorted-distinct (and meta (tags-of meta)))
+            (org-glance--sorted-distinct (cl-loop for m in row-metas append (tags-of m)))))))
+
+(cl-defun org-glance-table--refs-tag-pairs (context anchor-tags row-tags)
+  "CONTEXT's candidate tag pairs from ANCHOR-TAGS x ROW-TAGS, as (FROM . TO).
+The single source of the pair order: edge direction, referrer tag first."
+  (let ((refs? (eq (plist-get context :dir) 'refs)))
+    (cl-loop for a in anchor-tags append
+             (cl-loop for r in row-tags collect
+                      (if refs? (cons a r) (cons r a))))))
+
+(cl-defun org-glance-table--refs-pair-keys (context anchor-tags row-tags)
+  "Every pair store key CONTEXT can match."
+  (let ((dir (plist-get context :dir)))
+    (mapcar (lambda (p) (org-glance-table--refs-key-pair dir (car p) (cdr p)))
+            (org-glance-table--refs-tag-pairs context anchor-tags row-tags))))
+
+(cl-defun org-glance-table--refs-resolve (graph context)
+  "Scoped layout entry for CONTEXT, or nil.
+The anchor's own entry wins; else among matching tag-pair entries the latest
+`:applied' wins.  The row-tag scan runs only when pair entries exist for the
+direction."
+  (let ((all (org-glance--read-eld (org-glance-table--refs-file graph))))
+    (or (cdr (assoc (org-glance-table--refs-key-id context) all))
+        (let ((prefix (format "pair:%s:" (plist-get context :dir))))
+          (when (cl-some (lambda (e) (string-prefix-p prefix (car e))) all)
+            (let* ((tags (org-glance-table--refs-tags graph context))
+                   (keys (org-glance-table--refs-pair-keys context (car tags) (cdr tags)))
+                   (hits (cl-remove-if-not (lambda (e) (member (car e) keys)) all)))
+              (cdr (car (cl-sort hits #'>
+                                 :key (lambda (e) (or (plist-get (cdr e) :applied) 0)))))))))))
+
+(cl-defun org-glance-table--refs-columns (graph entry base)
+  "BASE columns filtered and extended per scoped ENTRY, in its saved order."
+  (org-glance-table--reorder-columns
+   (org-glance-table--compose-columns graph base (plist-get entry :hidden)
+                                      (plist-get entry :columns))
+   (plist-get entry :order)))
+
+(cl-defun org-glance-table--layout-snapshot ()
+  "This buffer's full layout as one persistable plist (unstamped).
+`:columns' the custom (PROP . HEADER) pairs (round-tripped via the `prop'
+marker exactly like the per-tag schema), `:hidden' the built-in keys absent
+from the live view, `:order' every live key, `:sort' the sort chain.  Read
+through `table-view-layout' -- no spec internals.  The scoped reference
+entries store this whole plist; the persistent-view stores each persist a
+projection of it."
+  (let* ((layout (table-view-layout))
+         (live (plist-get layout :columns))
+         (live-keys (mapcar (lambda (c) (alist-get 'key c)) live)))
+    (list :columns (cl-loop for c in live
+                            when (alist-get 'prop c)
+                            collect (cons (alist-get 'prop c) (alist-get 'header c)))
+          :hidden (cl-remove-if
+                   (lambda (k) (member k live-keys))
+                   (mapcar (lambda (c) (alist-get 'key c))
+                           (org-glance-table--base-columns org-glance-view--graph)))
+          :order live-keys
+          :sort (plist-get layout :sort))))
+
+(cl-defun org-glance-table:apply-layout ()
+  "Save this table's layout (`C-c C-c').
+A reference view prompts for a scope (required match): the anchor headline
+itself, or one anchor-tag x row-tag pair -- later reference tables matching
+the scope restore the layout (see `org-glance-table--refs-resolve' for
+precedence).  A persistent view saves its per-filter config and per-tag
+schema on the spot -- the same state the automatic hooks persist.  Other
+transient views (`:where') have no scope to save under."
+  (interactive)
+  (unless org-glance-view--graph (user-error "Not in an org-glance table"))
+  (cond
+   (org-glance-table--context (org-glance-table--apply-ref-layout))
+   ((org-glance-filter:transient? org-glance-table--spec)
+    (user-error "This view's layout cannot be persisted"))
+   (t
+    (org-glance-table--persist-schema)
+    (org-glance-table--persist-config)
+    (message "Layout saved for %s"
+             (org-glance-filter:describe org-glance-table--spec)))))
+
+(cl-defun org-glance-table--apply-ref-layout ()
+  "Reference-view arm of `org-glance-table:apply-layout': prompt and persist."
+  (let ((graph org-glance-view--graph)
+        (context org-glance-table--context))
+    (let* ((dir (plist-get context :dir))
+           (tags (org-glance-table--refs-tags graph context))
+           (candidates
+            (cons (cons (format "this headline: %s"
+                                (org-glance-graph:title-or-id
+                                 graph (plist-get context :anchor)))
+                        (org-glance-table--refs-key-id context))
+                  (mapcar (lambda (p)
+                            (cons (format "tag pair: %s → %s" (car p) (cdr p))
+                                  (org-glance-table--refs-key-pair dir (car p) (cdr p))))
+                          (org-glance-table--refs-tag-pairs context (car tags) (cdr tags)))))
+           (choice (completing-read "Apply this layout to: "
+                                    (mapcar #'car candidates) nil t)))
+      (org-glance--eld-alist-set
+       (org-glance-table--refs-file graph)
+       (cdr (assoc choice candidates))
+       (plist-put (org-glance-table--layout-snapshot) :applied (float-time)))
+      (message "Layout applied to %s" choice))))
 
 (cl-defun org-glance-table--act-delete (graph id)
   "`D' handler: delete the headline at point (referrer-aware confirmation)."
@@ -612,13 +771,16 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
       (table-view-filter "")
     (call-interactively #'table-view-filter-or-narrow)))
 
-(cl-defun org-glance-table:visit (graph &optional filter)
+(cl-defun org-glance-table:visit (graph &optional filter &key context)
   "Open GRAPH's table for FILTER, one buffer per filter description.
 Honours the same filter language as the overview (see
-`org-glance-filter:predicate')."
+`org-glance-filter:predicate').  CONTEXT marks a reference view
+\(`:anchor' ID `:dir' `refs'|`backlinks'): it enables the scoped layout --
+restore on open, `C-c C-c' to apply."
   (let* ((from-view (and org-glance-view--graph t))   ; re-navigation from within a view?
          (spec (org-glance-filter:normalize-spec filter))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
+         (ref-entry (and context (org-glance-table--refs-resolve graph context)))
          ;; Resolve the active/done split ONCE -- the single configured tag's todo
          ;; cycle, else the global keywords -- and bind it while the `:done'
          ;; predicate AND the badge split are built, so the table agrees with the
@@ -672,14 +834,27 @@ Honours the same filter language as the overview (see
                          (cons "delete"   (lambda (id _row) (org-glance-table--act-delete graph id)))
                          (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
                          (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
-         ;; Build the spec, restoring the saved column order (if any) before display.
+         ;; Build the spec.  A scoped reference entry replaces the whole column
+         ;; set (built-ins minus its hidden, plus its custom columns, its
+         ;; order); otherwise restore the saved column order (if any).
          (tspec (let ((s (org-glance-table--spec graph spec)))
-                  (when-let ((order (plist-get saved :columns)))
-                    (setf (alist-get 'columns s)
-                          (org-glance-table--reorder-columns (alist-get 'columns s) order)))
+                  (cond (ref-entry
+                         (setf (alist-get 'columns s)
+                               (org-glance-table--refs-columns
+                                graph ref-entry (org-glance-table--base-columns graph))))
+                        (context   ; no scoped entry: defaults, NOT the shared
+                                   ; untagged (":none:") per-tag schema
+                         (setf (alist-get 'columns s)
+                               (org-glance-table--base-columns graph)))
+                        ((plist-get saved :columns)
+                         (setf (alist-get 'columns s)
+                               (org-glance-table--reorder-columns
+                                (alist-get 'columns s) (plist-get saved :columns)))))
                   s))
          (buf (table-view-display buffer-name tspec handlers fill-fn)))
     (with-current-buffer buf
+      (setq org-glance-table--context context)
+      (local-set-key (kbd "C-c C-c") #'org-glance-table:apply-layout)
       (setq org-glance-table--spec spec
             ;; Match the corresponding overview (`org-glance-overview:visit'): run
             ;; directory-relative actions (dired, shell, relative links) from the
@@ -698,9 +873,9 @@ Honours the same filter language as the overview (see
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.
-      (when-let ((sort (plist-get saved :sort)))
-        (setq-local table-view--sort-keys sort))
-      (table-view-apply-sort)
+      (if-let ((sort (or (plist-get ref-entry :sort) (plist-get saved :sort))))
+          (table-view-set-sort sort)
+        (table-view-apply-sort))
       (setq org-glance-table--config-snapshot (org-glance-table--current-config))
       (add-hook 'post-command-hook #'org-glance-table--persist-config nil t)
       (org-glance-view:fill-frame from-view))

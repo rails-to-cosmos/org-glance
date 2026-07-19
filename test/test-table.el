@@ -651,18 +651,6 @@ final rows -- the equivalence the in-place fast path relies on."
 
 ;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
 
-(cl-defun org-glance-test:table-col-keys (&optional (buf (current-buffer)))
-  "Display-order column keys of table BUF (default: current buffer)."
-  (with-current-buffer buf
-    (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
-
-(cl-defun org-glance-test:table-cell (id key &optional (buf (current-buffer)))
-  "Cell KEY of row ID in table BUF (default: current buffer)."
-  (with-current-buffer buf
-    (table-view--cell (cl-find id table-view--rows
-                               :key (lambda (r) (alist-get 'id r)) :test #'equal)
-                      key)))
-
 (ert-deftest org-glance-test:table-schema-key-by-tags ()
   "The schema key is the filter's tags, sorted and joined; none -> \":none:\"."
   (should (equal "book" (org-glance-table--schema-key '(:tags ("book")))))
@@ -874,6 +862,151 @@ shared picker."
         (let ((meta (org-glance-graph:get-headline graph "p1")))
           (should (null (org-glance-headline-metadata:schedule meta)))
           (should (s-contains? "2026-09-01" (org-glance-headline-metadata:deadline meta)))))))
+
+;;; Scoped layout for reference tables (C-c C-c apply)
+
+(cl-defun org-glance-test:ref-fixture (graph)
+  "Two coffees each referencing one roaster."
+  (org-glance-graph:add graph
+    (org-glance-test:headline "c1" "* TODO Coffee1 :coffee:"
+      "[[org-glance-material:r1][R1]]")
+    (org-glance-test:headline "c2" "* TODO Coffee2 :coffee:"
+      "[[org-glance-material:r2][R2]]")
+    (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:")
+    (org-glance-test:headline "r2" "* TODO Roaster2 :roaster:")))
+
+(ert-deftest org-glance-test:ref-layout-id-scope ()
+  "Layout edits persist only on explicit apply; \"this headline\" scope keys on
+the anchor id, so another anchor keeps the default layout."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    ;; edit WITHOUT apply -> the transient guards persist nothing
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (table-view-remove-column "tags")
+      (org-glance-table--persist-schema)          ; what the live hooks would run
+      (org-glance-table--persist-config))
+    ;; nothing written anywhere: not the scoped store, not the per-tag/
+    ;; per-filter stores the transient guards protect
+    (should-not (file-exists-p (org-glance-table--refs-file graph)))
+    (should-not (file-exists-p (org-glance-table--schema-file graph)))
+    (should-not (file-exists-p (org-glance-table--config-file graph)))
+    ;; edit + apply to the anchor headline; assert the offered scopes
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (should (member "tags" (org-glance-test:table-col-keys)))   ; default restored
+      (table-view-remove-column "tags")
+      (org-glance-test:offering (coll (car coll))
+        (org-glance-table:apply-layout)
+        (should (equal coll '("this headline: Coffee1"
+                              "tag pair: coffee → roaster")))))
+    ;; same anchor restores; a different anchor does not
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (should-not (member "tags" (org-glance-test:table-col-keys))))
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+      (should (member "tags" (org-glance-test:table-col-keys))))))
+
+(ert-deftest org-glance-test:ref-layout-ignores-untagged-schema ()
+  "A scope-less reference view shows default columns -- never the shared
+untagged (\":none:\") per-tag schema entry."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    (org-glance-table--schema-put graph nil :hidden '("tags"))   ; the all-view entry
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (should (member "tags" (org-glance-test:table-col-keys))))
+    (org-glance-test:with-table (graph)                          ; all view honours it
+      (should-not (member "tags" (org-glance-test:table-col-keys))))))
+
+(ert-deftest org-glance-test:ref-layout-modified-nudge ()
+  "A layout change in a reference view nudges (once per change) that
+`C-c C-c' applies it; nothing is written."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (let (msgs)
+        (cl-letf (((symbol-function 'message)
+                   (lambda (fmt &rest args) (push (apply #'format fmt args) msgs))))
+          (table-view-remove-column "tags")
+          (org-glance-table--persist-config)
+          (org-glance-table--persist-config))       ; unchanged -> no repeat
+        (should (= 1 (cl-count-if (lambda (m) (s-contains? "C-c C-c" m)) msgs)))))
+    (should-not (file-exists-p (org-glance-table--refs-file graph)))))
+
+(ert-deftest org-glance-test:apply-layout-persistent-view ()
+  "`C-c C-c' in a persistent (tag) view saves config + schema on the spot."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A :work:"))
+    (org-glance-test:with-table (graph '(:tags ("work")))
+      (should (eq (key-binding (kbd "C-c C-c")) #'org-glance-table:apply-layout))
+      (table-view-remove-column "tags")
+      (org-glance-table:apply-layout))
+    (should (equal '("tags")
+                   (org-glance-table--schema-hidden graph '(:tags ("work")))))))
+
+(ert-deftest org-glance-test:ref-layout-pair-scope-and-direction ()
+  "A tag-pair entry restores for ANY matching anchor of that direction, and
+never leaks into the opposite direction."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (table-view-remove-column "tags")
+      (org-glance-test:offering (coll "tag pair: coffee → roaster")
+        (org-glance-table:apply-layout)))
+    ;; another coffee's references table matches the pair
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+      (should-not (member "tags" (org-glance-test:table-col-keys))))
+    ;; the backlinks direction is untouched
+    (org-glance-test:with-table (graph '(:refers-to "r1") '(:anchor "r1" :dir backlinks))
+      (should (member "tags" (org-glance-test:table-col-keys))))))
+
+(ert-deftest org-glance-test:ref-layout-id-beats-pair ()
+  "The anchor's own entry wins over a matching tag-pair entry."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    (let ((file (org-glance-table--refs-file graph)))
+      (org-glance--eld-alist-set file "pair:refs:coffee>roaster"
+                                 '(:hidden ("tags") :applied 1))
+      (org-glance--eld-alist-set file "ref:refs:c2"
+                                 '(:hidden ("state") :applied 2)))
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+      (let ((keys (org-glance-test:table-col-keys)))
+        (should (member "tags" keys))
+        (should-not (member "state" keys))))))
+
+(ert-deftest org-glance-test:ref-layout-latest-pair-wins ()
+  "Among several matching pair entries the latest `:applied' wins."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "c3" "* TODO Coffee3 :coffee:decaf:"
+        "[[org-glance-material:r1][R1]]")
+      (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:"))
+    (let ((file (org-glance-table--refs-file graph)))
+      (org-glance--eld-alist-set file "pair:refs:coffee>roaster"
+                                 '(:hidden ("tags") :applied 1))
+      (org-glance--eld-alist-set file "pair:refs:decaf>roaster"
+                                 '(:hidden ("state") :applied 2)))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c3" :dir refs))
+      (let ((keys (org-glance-test:table-col-keys)))
+        (should (member "tags" keys))
+        (should-not (member "state" keys))))))
+
+(ert-deftest org-glance-test:ref-layout-columns-order-sort-restore ()
+  "A scoped entry restores custom columns, order and sort, exactly."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "c1" "* TODO Coffee1 :coffee:"
+        "[[org-glance-material:r1][R1]]")
+      (org-glance-test:headline-props "r1" "* TODO Roaster1 :roaster:"
+                                      '(("ROAST" . "light"))))
+    (org-glance--eld-alist-set
+     (org-glance-table--refs-file graph) "ref:refs:c1"
+     '(:columns (("ROAST" . "Roast")) :hidden ("tags")
+       :order ("title" "state" "ROAST") :sort (("title" . t)) :applied 1))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+      (let ((keys (org-glance-test:table-col-keys)))
+        (should (equal '("title" "state") (cl-subseq keys 0 2)))   ; saved order
+        (should (member "ROAST" keys))
+        (should-not (member "tags" keys)))
+      (should (equal '(("title" . t)) table-view--sort-keys))
+      (should (equal "light" (org-glance-test:table-cell "r1" "ROAST"))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

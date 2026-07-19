@@ -86,6 +86,7 @@ Act on the row/heading at point without opening anything:
 | =^=                 | sort by the column at point                                     |                                       |                           | flip asc ⇄ desc; off a column: cycle columns |
 | =g=                 | refresh (table)                                                 |                                       |                           |                                              |
 | =?=                 | show the key legend (table)                                     |                                       |                           | hide it                                      |
+| =C-c C-c=           | save the layout (reference tables: prompt for a scope)          |                                       |                           |                                              |
 
 Column layout, sort and added columns persist per tag.
 
@@ -129,6 +130,12 @@ In a materialized buffer:
 | =C-u @=     | same, plus a reference kind (=roasted by=, …)    |
 | =C-c @=     | table of everything this headline references   |
 | =C-u C-c @= | table of everything that references it         |
+
+These reference tables open with the default layout; edits to it are not
+saved automatically (an echo-area nudge reminds you) — =C-c C-c= applies the
+layout (columns, order, sort) to a scope of your choice: this headline, or a
+tag pair (=coffee → roaster=).  Every later reference table matching the
+scope restores it.
 
 A link can also address a whole view:
 =[[org-glance-overview:coffee?done=nil][Active coffees]]=.

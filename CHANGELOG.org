@@ -6,6 +6,11 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- =C-c C-c= in any table saves the layout.  Reference tables prompt for a
+  scope — the anchor headline or an anchor-tag × row-tag pair, per
+  direction; stored in =config/table-refs.eld=, restored on later visits
+  (anchor entry beats pairs, latest applied wins); an echo-area nudge marks
+  an unapplied layout change.
 - Table: =M= marks all visible rows (upstream =table-view=; complements =U=).
 - Delete a headline: =D= on a table/overview row, or =M-x org-glance-delete=.
   Referrer-aware confirmation (names the headlines whose links would dangle);
@@ -101,6 +106,8 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Reference tables no longer inherit the untagged (all-view) column
+  customization; without a scoped entry they render default columns.
 - Overview renders BOTH planning keywords on one line, as org requires --
   headlines carrying schedule AND deadline had an orphaned property drawer,
   breaking every at-point action on them (materialize, todo, planning keys).

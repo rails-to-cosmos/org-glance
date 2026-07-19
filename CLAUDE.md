@@ -88,11 +88,22 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     order + sort persist separately per filter.
 17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
     judged by `org-glance-filter:transient?`) never persist per-filter state:
-    no overview cache, no table config, no column schema.
-18. Overview headings are self-sufficient, metadata-only: state, priority,
+    no overview cache, no table config, no column schema.  Sole exception:
+    explicit `C-c C-c` in a reference table saves the layout under a scope
+    key (anchor id / tag pair, per direction) in `table-refs.eld` — never
+    under the filter identity.
+18. Scoped reference layouts: anchor travels as `:context` (never rebuilt from
+    the filter); resolve = anchor entry > tag pairs > latest `:applied`;
+    a scoped entry replaces the whole column set (never merges with the
+    per-tag schema); scope-less reference views render defaults, never the
+    ":none:" entry; pair order (referrer > target) single-sourced in
+    `org-glance-table--refs-tag-pairs`, separate per direction.
+19. The table is a pure projection: every `--act-*` mutation delegates to the
+    `org-glance-material:` layer; bulk ops degrade per-row, never batch-abort.
+20. Overview headings are self-sufficient, metadata-only: state, priority,
     one planning line, id drawer, relations, plain links — zero blob parses;
     agenda + link-following need no materialization.
-19. Reserved properties (`org-glance-material-hidden-properties`) are managed
+21. Reserved properties (`org-glance-material-hidden-properties`) are managed
     keys: concealed in material buffers, hand edits reverted on save with a
     warning; the revert touches only the heading drawer (disjoint from the
     crypt seal).

@@ -187,7 +187,7 @@ table; both pass the bare relation filter."
     (org-glance-test:with-material (buf graph "a")
       (let (filters)
         (cl-letf (((symbol-function 'org-glance-table:visit)
-                   (lambda (_g filter) (push filter filters) nil)))
+                   (lambda (_g filter &rest _) (push filter filters) nil)))
           (org-glance-material:references)              ; outgoing
           (org-glance-material:references '(4)))        ; backlinks
         (should (equal '((:refers-to "a") (:id-any ("b"))) filters))))

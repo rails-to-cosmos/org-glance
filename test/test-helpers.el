@@ -147,21 +147,35 @@ All other ingests proceed through the real function."
      (unwind-protect (progn ,@body)
        (when (buffer-live-p ,buf) (kill-buffer ,buf)))))
 
-(cl-defmacro org-glance-test:with-table-filter (graph filter var &rest body)
-  "Visit GRAPH's table for FILTER, bind the buffer to VAR, run BODY, kill it.
-Implemented over `org-glance-test:with-shown' (same show-stubs + kill-all)."
-  (declare (indent 3))
+(cl-defmacro org-glance-test:with-table-filter (graph filter var context &rest body)
+  "Visit GRAPH's table for FILTER (reference CONTEXT or nil), bind the buffer
+to VAR, run BODY, kill it.  Implemented over `org-glance-test:with-shown'
+\(same show-stubs + kill-all)."
+  (declare (indent 4))
   `(org-glance-test:with-shown (,var)
-     (setq ,var (org-glance-table:visit ,graph ,filter))
+     (setq ,var (org-glance-table:visit ,graph ,filter :context ,context))
      ,@body))
 
-(cl-defmacro org-glance-test:with-table ((graph &optional filter) &rest body)
-  "Visit GRAPH's table for FILTER; run BODY with the table buffer current,
-kill it afterward.  BODY refers to the buffer via `current-buffer'."
-  (declare (indent 1) (debug ((form &optional form) body)))
+(cl-defmacro org-glance-test:with-table ((graph &optional filter context) &rest body)
+  "Visit GRAPH's table for FILTER (reference-view CONTEXT or nil); run BODY
+with the table buffer current, kill it afterward.  BODY refers to the buffer
+via `current-buffer'."
+  (declare (indent 1) (debug ((form &optional form form) body)))
   (let ((buf (gensym "table-buf")))
-    `(org-glance-test:with-table-filter ,graph ,filter ,buf
+    `(org-glance-test:with-table-filter ,graph ,filter ,buf ,context
        (with-current-buffer ,buf ,@body))))
+
+(cl-defun org-glance-test:table-col-keys (&optional (buf (current-buffer)))
+  "Display-order column keys of table BUF (default: current buffer)."
+  (with-current-buffer buf
+    (mapcar (lambda (c) (alist-get 'key c)) (table-view--columns table-view--spec))))
+
+(cl-defun org-glance-test:table-cell (id key &optional (buf (current-buffer)))
+  "Cell KEY of row ID in table BUF (default: current buffer)."
+  (with-current-buffer buf
+    (table-view--cell (cl-find id table-view--rows
+                               :key (lambda (r) (alist-get 'id r)) :test #'equal)
+                      key)))
 
 (cl-defmacro org-glance-test:offering ((coll answer) &rest body)
   "Stub `completing-read' around BODY, recording what it offers in COLL.
