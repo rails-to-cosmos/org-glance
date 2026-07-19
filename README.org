@@ -15,9 +15,8 @@ If you know org-mode, you know almost everything already:
 
 1. *Headlines are the unit.*  Every captured headline lives as its own small
    org file in a hidden store (=.org-glance/= under =org-glance-directory=),
-   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.  No
-   agenda-files list, no ever-growing monolith files.
-2. *Tags are collections.*  An ordinary org tag (=:book:=, =:coffee:=) groups
+   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.
+2. *Tags are collections.*  An ordinary org tag (=:book:=, =:article:=) groups
    headlines; a tag exists the moment you capture something with it — no
    declaration step.  Optionally give a tag its own todo cycle and capture
    template (=C= in the transient).
