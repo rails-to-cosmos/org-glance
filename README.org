@@ -59,19 +59,12 @@ Everything starts from =org-glance-transient= (=C-x j=):
 | =l=   | LLM session | [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] in the headline's directory         |
 | =C=   | Configure   | per-tag capture skeleton + todo cycle            |
 
-** Views: overview and table
+** Views
 
-=o= opens a tag's view; =T= toggles org-text ⇄ table
+=o= opens a tag's view; O toggles org-text ⇄ table
 (default: =org-glance-overview-default-view=).  Overview headings are
 self-sufficient — agenda properties, relations, links — no materialization
 needed to act on them:
-
-#+begin_src org
-,* TODO [#A] Kebena Decaf :coffee:
-DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
-- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
-- [[https://example.com][Homepage]]
-#+end_src
 
 The table is sortable (=^=), filterable (=/=), colour-badged, with a =#+TODO:=
 line always in the header and =?= toggling the action legend.  Row actions:
