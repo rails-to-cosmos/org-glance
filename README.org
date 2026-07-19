@@ -47,11 +47,10 @@ Light roast, very floral.
 
 ** 2. Browse a tag
 
-=C-x j o= → pick a tag → its *table*: one row per headline, sortable (=^=),
-filterable (=/=), with colour-coded todo states.  =O= toggles to the org-text
-*overview* — a plain org buffer, so folding, =C-x j a= (agenda) and link
-clicking all behave exactly as in org.  Each overview heading is
-self-sufficient:
+=C-x j o= → pick a tag → its *table*: one row per headline, colour-coded
+todo states.  =O= toggles to the org-text *overview* — a plain org buffer, so
+folding, =C-x j a= (agenda) and link clicking all behave exactly as in org.
+Each overview heading is self-sufficient:
 
 #+begin_src org
 ,* TODO [#A] Kebena Decaf :coffee:
@@ -60,15 +59,26 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 - [[https://example.com][Homepage]]
 #+end_src
 
-Act on the row/heading at point without opening anything: =C-c C-t= todo
-(with marks: bulk, org's own fast-selection prompt) · =C-c C-s= / =C-c C-d=
-schedule / deadline · =:= add a tag · =-= drop the view's tag · =D= delete ·
-=j= open a link inside it · =e= copy a =KEY: value= from its body.
+Act on the row/heading at point without opening anything:
 
-In the table, columns are yours: =C-u += adds one for any drawer property or
-relation kind the visible headlines carry (=Roasted by= → target titles),
-=C-u -= removes any column but Title; layout persists per tag.  =?= shows the
-key legend.
+| Key               | Action                                                       |
+|-------------------+--------------------------------------------------------------|
+| =RET=               | materialize (open for editing, step 3)                       |
+| =C-c C-t=           | todo state; with marked rows: bulk (org's fast selection)    |
+| =C-c C-s= / =C-c C-d= | schedule / deadline (=C-u= clears)                             |
+| =:= / =-=             | add a tag / drop the view's tag                              |
+| =j= (or =!=)          | open a link inside the headline                              |
+| =e=                 | copy a =KEY: value= from its body                              |
+| =#= / =C-u #=         | encrypt ⇄ decrypt / re-key                                   |
+| =l=                 | past occurrences of a repeating headline (step 6)            |
+| =D=                 | delete (referrer-aware confirmation)                         |
+| =O=                 | toggle table ⇄ org overview                                  |
+| =^= / =/= / =g=         | sort by column / filter / refresh (table)                    |
+| =C-u += / =C-u -=     | add a column (drawer property or relation kind) / remove one |
+| =?=                 | toggle the key legend (table)                                |
+
+Column layout, sort and added columns persist per tag; a relation-kind column
+(=Roasted by=) shows the target headline titles.
 
 ** 3. Edit a headline
 
@@ -87,10 +97,18 @@ headline and inserts a link to it; =C-u @= also asks a reference *kind*:
 roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
 #+end_src
 
-Clicking the link opens the roaster.  The graph indexes it as a typed edge:
-=C-c @= tables everything this headline references, =C-u C-c @= everything
-that references it, and the kind can become a table column (step 2).  A link
-to a whole view also exists: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
+Clicking the link opens the roaster; the graph indexes it as a typed edge.
+In a materialized buffer:
+
+| Key       | Action                                         |
+|-----------+------------------------------------------------|
+| =@=         | insert a reference (completion, at word start) |
+| =C-u @=     | same, plus a reference kind (=roasted by=, …)    |
+| =C-c @=     | table of everything this headline references   |
+| =C-u C-c @= | table of everything that references it         |
+
+Kinds double as table columns (step 2), and a link can address a whole view:
+=[[org-glance-overview:coffee?done=nil][Active coffees]]=.
 
 ** 5. Keep secrets
 
@@ -104,9 +122,13 @@ bank: 1234-5678
 
 On disk it is ciphertext; in the materialized buffer it is plaintext
 (re-sealed on every save; auto-save and backups are disabled).  Text OUTSIDE
-the blocks stays public and searchable.  =C-u C-c #= unwraps a block;
-=C-c #= again forgets the cached password (TTL
-=org-glance-material-password-ttl=).
+the blocks stays public and searchable.
+
+| Key       | In a materialized buffer                                    |
+|-----------+-------------------------------------------------------------|
+| =C-c #=     | wrap the region in a crypt block; no region: the whole body |
+| =C-u C-c #= | unwrap the block at point                                   |
+| =C-c #=     | (already encrypted, no region) forget the cached password   |
 
 ** 6. Repeating headlines keep their history
 
