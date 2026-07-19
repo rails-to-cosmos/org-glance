@@ -50,7 +50,7 @@ Notable user-facing changes.  Versions date-based
 - Table =Enc= column: 🔒 for encrypted headlines (sortable).
 - Store API =org-glance-material:crypt-set= / =:crypt-rekey=.
 - Transient =T= toggles the default overview view (table ⇄ org), mirroring the
-  in-view =T=.
+  in-view toggle (now =O=).
 - Table header: coloured =#+TODO:= state line always shown (sort too); =?= toggles
   the action-key legend.  (Needs =table-view= with =table-view-toggle-help= /
   spec =subtitle=.)
@@ -69,6 +69,7 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- In-view toggle between the table and the org overview is =O= (was =T=).
 - Bulk todo in the table prompts with org's own fast selection (the =C-c C-t=
   buffer, tag's cycle + keys), replacing =completing-read=; picking "clear"
   removes the state.

@@ -48,7 +48,7 @@ Light roast, very floral.
 ** 2. Browse a tag
 
 =C-x j o= → pick a tag → its *table*: one row per headline, sortable (=^=),
-filterable (=/=), with colour-coded todo states.  =T= toggles to the org-text
+filterable (=/=), with colour-coded todo states.  =O= toggles to the org-text
 *overview* — a plain org buffer, so folding, =C-x j a= (agenda) and link
 clicking all behave exactly as in org.  Each overview heading is
 self-sufficient:
