@@ -87,6 +87,10 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- =L= (LLM sessions) prompts for a tag and overlays the ambient filter, like
+  the table/overview; rows scan only matching headlines (the unfiltered
+  whole-graph scan cold-parsed every blob and could freeze).  Orphan live
+  sessions show only in the unfiltered view; one buffer per filter.
 - Table: Tags is the last built-in column by default (saved layouts keep
   their own order).
 - In-view toggle between the table and the org overview is =O= (was =T=).

@@ -183,7 +183,7 @@ dir and the headline's title-slug label."
         (should (equal "alpha" (cdr started)))))))
 
 (ert-deftest org-glance-test:llm-sessions-visit ()
-  "The sessions table renders one row per session in `*org-glance-llm-sessions*'."
+  "The sessions table renders one row per session, one buffer per filter."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :x:"))
     (org-glance-test:llm-stubs (store)
@@ -191,11 +191,31 @@ dir and the headline's title-slug label."
       (org-glance-test:with-shown (buf)
         (setq buf (org-glance-llm-sessions:visit graph))
         (with-current-buffer buf
-          (should (string= "*org-glance-llm-sessions*" (buffer-name)))
+          (should (string-prefix-p "*org-glance-llm-sessions:" (buffer-name)))
           (should (= 1 (length table-view--rows)))
           (should (equal "stopped"
                          (org-glance-test:table-cell
                           (org-glance-llm--dir graph "a") "state"))))))))
+
+(ert-deftest org-glance-test:llm-sessions-filtered-by-tag ()
+  "A tag filter bounds the sessions table to the tag's headlines; orphan live
+buffers appear only in the unfiltered view."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "c1" "* TODO Coffee :coffee:")
+      (org-glance-test:headline "x1" "* TODO Other :misc:"))
+    (org-glance-test:llm-stubs (store)
+      (org-glance-test:llm-record-session (org-glance-llm--dir graph "c1"))
+      (org-glance-test:llm-record-session (org-glance-llm--dir graph "x1"))
+      (with-temp-directory extra
+        (org-glance-test:with-llm-buffer (buf "orphan" extra)
+          ;; filtered: only the coffee headline's session, no orphan
+          (let ((rows (org-glance-llm--session-rows
+                       graph (org-glance-filter:predicate '(:tags ("coffee"))))))
+            (should (= 1 (length rows)))
+            (should (equal "c1" (alist-get 'headline (car rows)))))
+          ;; unfiltered: both headline sessions + the orphan
+          (should (= 3 (length (org-glance-llm--session-rows graph)))))))))
 
 (provide 'test-llm)
 ;;; test-llm.el ends here
