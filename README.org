@@ -61,21 +61,22 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 
 Act on the row/heading at point without opening anything:
 
-| Key               | Action                                                       |
-|-------------------+--------------------------------------------------------------|
-| =RET=               | materialize (open for editing, step 3)                       |
-| =C-c C-t=           | todo state; with marked rows: bulk (org's fast selection)    |
-| =C-c C-s= / =C-c C-d= | schedule / deadline (=C-u= clears)                             |
-| =:= / =-=             | add a tag / drop the view's tag                              |
-| =j= (or =!=)          | open a link inside the headline                              |
-| =e=                 | copy a =KEY: value= from its body                              |
-| =#= / =C-u #=         | encrypt ⇄ decrypt / re-key                                   |
-| =l=                 | past occurrences of a repeating headline (step 6)            |
-| =D=                 | delete (referrer-aware confirmation)                         |
-| =O=                 | toggle table ⇄ org overview                                  |
-| =^= / =/= / =g=         | sort by column / filter / refresh (table)                    |
-| =C-u += / =C-u -=     | add a column (drawer property or relation kind) / remove one |
-| =?=                 | toggle the key legend (table)                                |
+| Key               | Action                                                          |
+|-------------------+-----------------------------------------------------------------|
+| =RET=               | materialize (open for editing, step 3)                          |
+| =C-c C-t=           | todo state; with marked rows: bulk (org's fast selection)       |
+| =C-c C-s= / =C-c C-d= | schedule / deadline (=C-u= clears)                                |
+| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it |
+| =:= / =C-u :=         | add another tag to the headline / remove one                    |
+| =j= (or =!=)          | open a link inside the headline                                 |
+| =e=                 | copy a =KEY: value= from its body                                 |
+| =#= / =C-u #=         | encrypt ⇄ decrypt / re-key                                      |
+| =l=                 | past occurrences of a repeating headline (step 6)               |
+| =D=                 | delete (referrer-aware confirmation)                            |
+| =O=                 | toggle table ⇄ org overview                                     |
+| =^= / =/= / =g=         | sort by column / filter / refresh (table)                       |
+| =C-u += / =C-u -=     | add a column (drawer property or relation kind) / remove one    |
+| =?=                 | toggle the key legend (table)                                   |
 
 Column layout, sort and added columns persist per tag; a relation-kind column
 (=Roasted by=) shows the target headline titles.
