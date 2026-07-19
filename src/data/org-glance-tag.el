@@ -23,6 +23,17 @@
   "Coerce TAGS (a tag symbol or a list of tag symbols) to a list."
   (if (listp tags) tags (list tags)))
 
+(cl-defun org-glance-tag:validate-string (value)
+  "Return VALUE trimmed when org can parse it as a tag; `user-error' otherwise.
+Org tags allow only letters, digits, `_', `@', `#' and `%' (`org-tag-re');
+any other character (a dash, a space, a dot) breaks heading parsing -- org
+leaves the \":tag:\" text in the title.  Called at every tag CREATION
+boundary; reading stored data never validates."
+  (let ((s (s-trim (format "%s" value))))
+    (unless (string-match-p (format "\\`%s\\'" org-tag-re) s)
+      (user-error "`%s' is not a valid org tag (allowed: letters, digits, _ @ # %%)" s))
+    s))
+
 (cl-defun org-glance-tag:from-string (value)
   "Coerce VALUE (a tag string, or any printable) to its canonical tag symbol.
 Trimmed, downcased and interned, so mixed-case or padded input yields the same

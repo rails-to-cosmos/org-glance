@@ -20,6 +20,7 @@
 (require 'org-glance-headline)
 (require 'org-glance-graph)
 (require 'org-glance-filter)
+(require 'org-glance-tag)
 (require 'org-glance-tag-config)
 (require 'org-glance-datetime-mode)
 (require 'org-glance-view)
@@ -492,6 +493,29 @@ managed by org-glance, concealed in the buffer, and not the user's to change.")
   (mapcar (lambda (key) (cons key (org-glance-material--property key)))
           org-glance-material-hidden-properties))
 
+(cl-defun org-glance-material--dedupe-tags ()
+  "Collapse case-duplicate heading tags to the canonical downcased one.
+Buffer-local `before-save-hook': \":Food:food:\" becomes \":food:\" (with
+a warning); a tag without a case-twin keeps its case."
+  (when org-glance-material--id
+    (save-excursion
+      (org-glance-material--goto-first-heading)
+      (let ((seen (make-hash-table :test 'equal))
+            dups new)
+        (dolist (tag (org-get-tags nil t))
+          (let ((canon (downcase tag)))
+            (cond ((not (gethash canon seen))
+                   (puthash canon tag seen)
+                   (push tag new))
+                  (t (push canon dups)
+                     (setq new (cl-substitute canon (gethash canon seen) new
+                                              :test #'equal))
+                     (puthash canon canon seen)))))
+        (when dups
+          (org-set-tags (nreverse new))
+          (message "org-glance: case-duplicate tag%s collapsed: %s"
+                   (if (cdr dups) "s" "") (s-join ", " (delete-dups dups))))))))
+
 (cl-defun org-glance-material--restore-reserved ()
   "Revert hand edits to reserved properties, warning per reverted KEY.
 Buffer-local `before-save-hook', so the restored value is what lands on disk
@@ -594,7 +618,10 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
           ;; heading drawer, the seal only body crypt blocks -- disjoint regions.
           (setq-local org-glance-material--reserved-values
                       (org-glance-material--reserved-snapshot))
-          (add-hook 'before-save-hook #'org-glance-material--restore-reserved nil t))
+          (add-hook 'before-save-hook #'org-glance-material--restore-reserved nil t)
+          ;; Case-duplicate tags (:Food:food:) collapse to the canonical
+          ;; downcased one before the file is written (invariant 13).
+          (add-hook 'before-save-hook #'org-glance-material--dedupe-tags nil t))
         buffer))))
 
 ;;; TODO state change: exactly `C-c C-t' on the headline (materialize -> sync)
@@ -777,6 +804,7 @@ when a pre-existing blob buffer holds unsaved edits (never clobber live work).
 Return non-nil when the tag set actually changed."
   (cl-check-type graph org-glance-graph)
   (cl-check-type tag string)
+  (unless remove (setq tag (org-glance-tag:validate-string tag)))
   (let* ((path (org-glance-graph:content-path graph id))
          (existing (find-buffer-visiting path)))
     (when (and existing (buffer-modified-p existing))
@@ -788,9 +816,14 @@ Return non-nil when the tag set actually changed."
           (with-current-buffer buffer
             (org-glance-material--goto-first-heading)
             (let* ((tags (org-get-tags nil t))
+                   (canon (lambda (x) (downcase (format "%s" x))))
                    (new (if remove
-                            (remove tag tags)
-                          (if (member tag tags) tags (append tags (list tag))))))
+                            (cl-remove (funcall canon tag) tags
+                                       :key canon :test #'string=)
+                          (if (cl-member (funcall canon tag) tags
+                                         :key canon :test #'string=)
+                              tags
+                            (append tags (list tag))))))
               (unless (equal tags new)
                 (org-set-tags new)
                 (let ((inhibit-message t)) (save-buffer))
@@ -862,6 +895,60 @@ Deliberately ignores the ambient `org-glance-filter-spec' -- filtered-out
    org-glance-graph
    (org-glance-headline-metadata:id (org-glance-material:completing-read
                                      org-glance-graph :prompt "Delete: "))))
+
+(cl-defun org-glance-material:duplicate (graph id)
+  "Add a copy of headline ID to GRAPH under a fresh id; return the new id.
+The copy is the blob verbatim -- body, planning, drawer, crypt blocks --
+with only its ORG_GLANCE_ID replaced (a stale ORG_GLANCE_HASH line is
+dropped; the hash recomputes).  Occurrence snapshots are not copied."
+  (cl-check-type graph org-glance-graph)
+  (let ((headline (org-glance-graph:headline graph id))
+        (new-id (org-glance-graph:make-id graph)))
+    (unless headline (user-error "No live headline with id %s" id))
+    (org-glance-graph:add
+     graph
+     (org-glance-headline--from-string
+      (org-glance-headline:with-contents headline
+        (org-entry-put nil "ORG_GLANCE_ID" new-id)
+        (org-entry-delete nil "ORG_GLANCE_HASH")
+        (buffer-substring-no-properties (point-min) (point-max)))))
+    new-id))
+
+(cl-defun org-glance-material:set-title (graph id title)
+  "Set headline ID's heading TITLE; todo state, priority and tags kept."
+  (org-glance-material--replace-headline
+   graph id
+   (lambda (headline)
+     (org-glance-headline--from-string
+      (org-glance-headline:with-contents headline
+        (org-edit-headline title)
+        (buffer-substring-no-properties (point-min) (point-max)))))))
+
+(cl-defun org-glance-material:set-priority (graph id priority)
+  "Set headline ID's PRIORITY cookie (a character); nil clears it."
+  (org-glance-material--replace-headline
+   graph id
+   (lambda (headline)
+     (org-glance-headline--from-string
+      (org-glance-headline:with-contents headline
+        (org-priority (or priority 'remove))
+        (buffer-substring-no-properties (point-min) (point-max)))))))
+
+(cl-defun org-glance-material:set-property (graph id property value)
+  "Set headline ID's drawer PROPERTY to VALUE; blank VALUE deletes the key.
+Managed keys (`org-glance-material-hidden-properties') refuse."
+  (let ((prop (upcase (string-trim property))))
+    (when (member prop org-glance-material-hidden-properties)
+      (user-error "Property %s is managed by org-glance" prop))
+    (org-glance-material--replace-headline
+     graph id
+     (lambda (headline)
+       (org-glance-headline--from-string
+        (org-glance-headline:with-contents headline
+          (if (org-glance--present-string? value)
+              (org-entry-put nil prop (string-trim value))
+            (org-entry-delete nil prop))
+          (buffer-substring-no-properties (point-min) (point-max))))))))
 
 (cl-defun org-glance-material:set-planning (graph id kind &optional remove)
   "Set headline ID's KIND (`schedule' or `deadline') planning in GRAPH.

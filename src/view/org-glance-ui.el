@@ -87,6 +87,7 @@ this one update in place."
     ("j" "Open link" org-glance-open)
     ("m" "Materialize" org-glance-materialize)
     ("l" "LLM session" org-glance-llm)
+    ("L" "LLM sessions" org-glance-llm-sessions)
     ]]
   ["Config"
    [("C" "Tags" org-glance-tag-config-edit)]]

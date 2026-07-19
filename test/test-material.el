@@ -965,5 +965,62 @@ property on the materialized headline; `org-glance-llm--dir' reads it back."
       (should (equal (file-name-as-directory (org-glance-graph:headline-data-path graph "d"))
                      (org-glance-llm--dir graph "d"))))))
 
+(ert-deftest org-glance-test:material-duplicate ()
+  "`material:duplicate' copies the blob under a fresh id: body, planning,
+state and tags kept, ORG_GLANCE_ID replaced, source untouched."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha :x:"
+                                "SCHEDULED: <2026-08-01 Sat>" "body line"))
+    (let* ((new (org-glance-material:duplicate graph "a"))
+           (meta (org-glance-graph:get-headline graph new)))
+      (should-not (equal "a" new))
+      (should (= 2 (length (org-glance-graph:headlines graph))))
+      (should (equal "Alpha" (org-glance-headline-metadata:title meta)))
+      (should (equal "TODO" (org-glance-headline-metadata:state meta)))
+      (should (equal '("x") (org-glance-headline-metadata:tag-strings meta)))
+      (should (s-contains? "2026-08-01" (org-glance-headline-metadata:schedule meta)))
+      (let ((content (with-temp-buffer
+                       (insert-file-contents (org-glance-graph:content-path graph new))
+                       (buffer-string))))
+        (should (s-contains? "body line" content))
+        (should (string-match-p (concat ":ORG_GLANCE_ID:[ \t]+" (regexp-quote new)) content))
+        (should-not (string-match-p ":ORG_GLANCE_ID:[ \t]+a\b" content))))))
+
+(ert-deftest org-glance-test:material-case-duplicate-tags ()
+  "Case-duplicate tags collapse everywhere: parse (one canonical tag in
+metadata), legacy records (tag-strings dedupes), retag (canonical compare,
+both directions), and the material save (heading rewritten to one tag)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "a" "* TODO A :Food:food:"))
+    ;; parse boundary: metadata carries ONE canonical tag
+    (should (equal '("food") (org-glance-headline-metadata:tag-strings
+                              (org-glance-graph:get-headline graph "a"))))
+    ;; legacy read boundary: stored duplicates read as one
+    (let ((meta (org-glance-headline-metadata:deserialize
+                 '(:id "old" :state "" :title "Old" :tags ["Food" "food"]
+                   :hash "h" :schedule nil :deadline nil :priority nil
+                   :linked nil :propertized nil :encrypted nil))))
+      (should (equal '("food") (org-glance-headline-metadata:tag-strings meta))))
+    ;; retag: adding a case-twin is a no-op; removing hits any case
+    (should-not (org-glance-material:retag graph "a" "FOOD"))
+    (should (org-glance-material:retag graph "a" "food" :remove t))
+    (should-not (org-glance-headline-metadata:tag-strings
+                 (org-glance-graph:get-headline graph "a")))
+    ;; material save: the heading itself collapses to the canonical tag
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "b" "* TODO B :Food:food:"))
+    (org-glance-test:with-material (buf graph "b")
+      (set-buffer-modified-p t)                 ; force the save hooks to run
+      (let ((inhibit-message t)) (save-buffer))
+      (org-glance-material--goto-first-heading)
+      (should (equal '("food") (org-get-tags nil t))))
+    (let ((content (with-temp-buffer
+                     (insert-file-contents (org-glance-graph:content-path graph "b"))
+                     (buffer-string))))
+      (should (s-contains? ":food:" content))
+      (should-not (s-contains? "Food" content)))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

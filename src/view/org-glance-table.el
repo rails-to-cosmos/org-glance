@@ -149,6 +149,8 @@ ascending (active first)."
                 ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
                 ((key . "l")     (command . "history")   (label . "Log"))
+                ((key . "i")     (command . "edit")      (label . "Edit cell"))
+                ((key . "C-c p") (command . "duplicate") (label . "Copy"))
                 ((key . "-")     (command . "remove")    (label . "Untag"))
                 ((key . "C-c C-t") (command . "todo") (bulk . t) (label . "Todo"))
                 ((key . "D")     (command . "delete")    (label . "Delete"))
@@ -727,6 +729,51 @@ transient views (`:where') have no scope to save under."
     (org-glance-table--finish id line "%s %s" (capitalize (symbol-name kind))
                               (if remove "cleared" "set"))))
 
+(cl-defun org-glance-table--act-duplicate (graph id)
+  "`C-c p' handler: add a copy of the row's headline under a fresh id."
+  (unless id (user-error "Point is not on a row"))
+  (let ((line (line-number-at-pos))
+        (new (org-glance-material:duplicate graph id)))
+    (org-glance-table--finish new line "Headline copied")))
+
+(cl-defun org-glance-table--act-edit (graph id)
+  "`i' handler: edit the cell at point in place.
+State reuses the todo flow (`C-c C-t'), schedule/deadline the calendar
+planner (`org-read-date'); title, priority and drawer-property columns take
+a string prompt pre-filled with the current value.  Derived columns (tags,
+enc, rep, relation kinds) refuse."
+  (unless id (user-error "Point is not on a row"))
+  (let ((key (get-text-property (point) 'table-view-col))
+        (line (line-number-at-pos)))
+    (pcase key
+      ('nil (user-error "Point is not on a column"))
+      ("state" (org-glance-table--act-todo graph id))
+      ("schedule" (org-glance-table--act-planning graph id 'schedule))
+      ("deadline" (org-glance-table--act-planning graph id 'deadline))
+      ("title"
+       (org-glance-material:set-title
+        graph id (read-string "Title: "
+                              (org-glance-headline-metadata:title
+                               (org-glance-table--metadata graph id))))
+       (org-glance-table--finish id line "Title set"))
+      ("priority"
+       (let* ((cur (org-glance-headline-metadata:priority
+                    (org-glance-table--metadata graph id)))
+              (s (s-trim (read-string "Priority (empty clears): "
+                                      (and (integerp cur) (char-to-string cur))))))
+         (org-glance-material:set-priority
+          graph id (unless (string-empty-p s) (string-to-char (upcase s))))
+         (org-glance-table--finish id line "Priority %s"
+                                   (if (string-empty-p s) "cleared" "set"))))
+      ((pred (lambda (k) (string= k (upcase k))))   ; drawer-property column
+       (let ((val (read-string (format "%s: " key)
+                               (org-glance-property-index:property graph id key))))
+         (org-glance-material:set-property graph id key val)
+         (org-glance-table--finish id line "%s %s" key
+                                   (if (org-glance--present-string? val)
+                                       "set" "removed"))))
+      (_ (user-error "Column `%s' is not editable here" key)))))
+
 (cl-defun org-glance-table--act-history (graph id)
   "`l' handler: open one of ID's occurrence snapshots, read-only."
   (unless id (user-error "Point is not on a row"))
@@ -831,6 +878,8 @@ restore on open, `C-c C-c' to apply."
                          (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
                          (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
                          (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
+                         (cons "edit"      (lambda (id _row) (org-glance-table--act-edit graph id)))
+                         (cons "duplicate" (lambda (id _row) (org-glance-table--act-duplicate graph id)))
                          (cons "delete"   (lambda (id _row) (org-glance-table--act-delete graph id)))
                          (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
                          (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))

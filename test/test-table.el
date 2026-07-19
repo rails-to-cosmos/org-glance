@@ -671,6 +671,61 @@ final rows -- the equivalence the in-place fast path relies on."
       (should (string-match-p "Author"  (buffer-string)))
       (should (string-match-p "Tolkien" (buffer-string))))))
 
+(ert-deftest org-glance-test:table-duplicate-row ()
+  "`C-c p' adds a copy of the row's headline; the table shows both."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :work:"))
+    (org-glance-test:with-table (graph 'work)
+      (table-view--goto-id "a")
+      (org-glance-table--act-duplicate graph "a")
+      (should (= 2 (length table-view--rows))))))
+
+(ert-deftest org-glance-test:table-edit-cell ()
+  "`i' edits the cell at point: state routes to the todo flow, title and
+priority and property columns take a string prompt, derived columns refuse."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline-props "a" "* TODO [#B] Alpha :work:"
+                                      '(("ROAST" . "light"))))
+    (org-glance-test:with-table (graph 'work)
+      (table-view-add-column (org-glance-table--property-column graph "ROAST"))
+      ;; state column: routes to the todo flow
+      (table-view--goto-id "a")
+      (table-view-forward-column 1)
+      (let (todo)
+        (cl-letf (((symbol-function 'org-glance-table--act-todo)
+                   (lambda (_g id) (setq todo id))))
+          (org-glance-table--act-edit graph "a"))
+        (should (equal "a" todo)))
+      ;; title column: string prompt, pre-filled
+      (table-view--goto-id "a")
+      (table-view-forward-column 2)
+      (let (offered)
+        (cl-letf (((symbol-function 'read-string)
+                   (lambda (_p &optional init &rest _) (setq offered init) "Beta")))
+          (org-glance-table--act-edit graph "a"))
+        (should (equal "Alpha" offered)))
+      (should (equal "Beta" (org-glance-headline-metadata:title
+                             (org-glance-graph:get-headline graph "a"))))
+      ;; tags column: derived, refuses
+      (table-view--goto-id "a")
+      (table-view-forward-column 3)
+      (should-error (org-glance-table--act-edit graph "a") :type 'user-error)
+      ;; priority column: empty input clears the cookie
+      (table-view--goto-id "a")
+      (table-view-forward-column 6)
+      (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
+        (org-glance-table--act-edit graph "a"))
+      (should-not (org-glance-headline-metadata:priority
+                   (org-glance-graph:get-headline graph "a")))
+      ;; drawer-property column: string prompt updates the drawer
+      (table-view--goto-id "a")
+      (table-view-forward-column 9)
+      (should (equal "ROAST" (get-text-property (point) 'table-view-col)))
+      (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "dark")))
+        (org-glance-table--act-edit graph "a"))
+      (should (equal "dark" (org-glance-property-index:property graph "a" "ROAST"))))))
+
 (ert-deftest org-glance-test:table-property-column-persists-per-tag ()
   "An added property column is saved per tag and restored (with values) on re-visit."
   (org-glance-test:with-graph graph

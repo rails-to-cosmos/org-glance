@@ -95,5 +95,121 @@ a session for a different headline already holds the plain slug."
             (org-glance-llm)))
         (should (file-equal-p root proj))))))
 
+;;; Sessions table
+
+(cl-defmacro org-glance-test:llm-stubs ((store) &rest body)
+  "Stub the agnostic-llm seam against temp session store STORE for BODY.
+Mirrors the provider layout: session dirs encode [/.] as dashes under STORE;
+the newest `.jsonl' inside is the transcript; prompt history is empty."
+  (declare (indent 1))
+  `(with-temp-directory ,store
+     (cl-letf* (((symbol-function 'agnostic-llm--provider-get)
+                 (lambda (key) (when (eq key :session-dir) ,store)))
+                ((symbol-function 'agnostic-llm--session-dir)
+                 (lambda (dir)
+                   (expand-file-name
+                    (replace-regexp-in-string
+                     "[/.]" "-" (directory-file-name (expand-file-name dir)))
+                    ,store)))
+                ((symbol-function 'agnostic-llm--session-file)
+                 (lambda (dir)
+                   (let ((sdir (agnostic-llm--session-dir dir)))
+                     (and (file-directory-p sdir)
+                          (car (directory-files sdir t "\\.jsonl\\'" t))))))
+                ((symbol-function 'agnostic-llm--prompt-history-files)
+                 (lambda (&optional _) nil))
+                ((symbol-function 'agnostic-llm--prompt-preview) #'identity))
+       ,@body)))
+
+(cl-defun org-glance-test:llm-record-session (dir)
+  "Record a fake provider transcript for session DIR."
+  (let ((sdir (agnostic-llm--session-dir dir)))
+    (make-directory sdir t)
+    (with-temp-file (expand-file-name "s.jsonl" sdir) (insert "{}"))))
+
+(ert-deftest org-glance-test:llm-sessions-state ()
+  "State machine: no buffer -> stopped; dead buffer -> exited; live -> running."
+  (should (equal "stopped" (org-glance-llm--state nil)))
+  (let ((buf (get-buffer-create " *llm-state-test*")))
+    (unwind-protect
+        (progn
+          (should (equal "exited" (org-glance-llm--state buf)))
+          (let ((proc (start-process "llm-state" buf "sleep" "10")))
+            (unwind-protect
+                (should (equal "running" (org-glance-llm--state buf)))
+              (set-process-query-on-exit-flag proc nil)
+              (delete-process proc))))
+      (kill-buffer buf))))
+
+(ert-deftest org-glance-test:llm-buffer-label ()
+  "`--buffer-label' unwraps `*llm:LABEL*', uniquify suffix included."
+  (with-temp-buffer
+    (rename-buffer "*llm:foo*" t)
+    (should (equal "foo" (org-glance-llm--buffer-label (current-buffer))))))
+
+(ert-deftest org-glance-test:llm-sessions-rows ()
+  "Rows: recorded-but-dead headline sessions are `stopped'; live non-headline
+buffers appear as `exited'/`running'; headlines without sessions are absent."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha :x:")
+      (org-glance-test:headline "b" "* TODO Beta :x:"))
+    (org-glance-test:llm-stubs (store)
+      (org-glance-test:llm-record-session (org-glance-llm--dir graph "a"))
+      (with-temp-directory extra
+        (let ((buf (get-buffer-create "*llm:extra*")))
+          (unwind-protect
+              (progn
+                (with-current-buffer buf
+                  (setq default-directory (file-name-as-directory extra)))
+                (let* ((rows (org-glance-llm--session-rows graph))
+                       (arow (cl-find "a" rows :key (lambda (r) (alist-get 'headline r))
+                                      :test #'equal))
+                       (xrow (cl-find "*llm:extra*" rows
+                                      :key (lambda (r) (alist-get 'buffer (alist-get 'cells r)))
+                                      :test #'equal)))
+                  (should (= 2 (length rows)))          ; b has no session
+                  (should arow)
+                  (let ((cells (alist-get 'cells arow)))
+                    (should (equal "Alpha" (alist-get 'title cells)))
+                    (should (equal "stopped" (alist-get 'state cells)))
+                    (should (s-present? (alist-get 'last cells))))
+                  (should xrow)
+                  (should-not (alist-get 'headline xrow))
+                  (let ((cells (alist-get 'cells xrow)))
+                    (should (equal "extra" (alist-get 'title cells)))
+                    (should (equal "exited" (alist-get 'state cells))))))
+            (kill-buffer buf)))))))
+
+(ert-deftest org-glance-test:llm-sessions-open-restarts-stopped ()
+  "RET on a stopped headline session starts `agnostic-llm' with the session
+dir and the headline's title-slug label."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :x:"))
+    (org-glance-test:llm-stubs (store)
+      (let* ((dir (org-glance-llm--dir graph "a"))
+             (row `((id . ,dir) (headline . "a")))
+             (started nil))
+        (cl-letf (((symbol-function 'agnostic-llm)
+                   (lambda (&optional root label) (setq started (cons root label)))))
+          (org-glance-llm--act-open graph dir row))
+        (should (equal dir (car started)))
+        (should (equal "alpha" (cdr started)))))))
+
+(ert-deftest org-glance-test:llm-sessions-visit ()
+  "The sessions table renders one row per session in `*org-glance-llm-sessions*'."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha :x:"))
+    (org-glance-test:llm-stubs (store)
+      (org-glance-test:llm-record-session (org-glance-llm--dir graph "a"))
+      (org-glance-test:with-shown (buf)
+        (setq buf (org-glance-llm-sessions:visit graph))
+        (with-current-buffer buf
+          (should (string= "*org-glance-llm-sessions*" (buffer-name)))
+          (should (= 1 (length table-view--rows)))
+          (should (equal "stopped"
+                         (org-glance-test:table-cell
+                          (org-glance-llm--dir graph "a") "state"))))))))
+
 (provide 'test-llm)
 ;;; test-llm.el ends here

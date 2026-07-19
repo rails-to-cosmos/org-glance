@@ -77,6 +77,8 @@ Act on the row/heading at point without opening anything:
 | =+= / =-=             | add a headline to the view's tag (capture) / remove one from it | add / remove a column (any but Title) |                           |                                              |
 | =:=                 | add another tag to the headline                                 | remove one                            |                           |                                              |
 | =j= (or =!=)          | open a link inside the headline                                 |                                       |                           |                                              |
+| =i=                 | edit the cell at point (state: todo prompt; dates: calendar; text: minibuffer) |                                       |                           |                                              |
+| =C-c p=             | copy the headline (a fresh id, content verbatim)                |                                       |                           |                                              |
 | =e=                 | copy a =KEY: value= from its body                                 |                                       |                           |                                              |
 | =#=                 | encrypt                                                         | change password                       |                           | decrypt                                      |
 | =l=                 | log occurrences of a repeating headline (step 6)                |                                       |                           |                                              |

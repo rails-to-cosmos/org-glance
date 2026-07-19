@@ -199,7 +199,8 @@ the id/hash drawer properties in place, after the read-only facts."
 (cl-defun org-glance-headline--from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
-        (tags (mapcar #'org-glance-tag:from-string (org-element-property :tags element)))
+        (tags (delete-dups
+               (mapcar #'org-glance-tag:from-string (org-element-property :tags element))))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
         (closed (org-element-property :closed element))

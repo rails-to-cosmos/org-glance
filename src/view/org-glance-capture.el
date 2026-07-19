@@ -46,7 +46,7 @@ registration step is needed.  Errors on empty input."
   (let ((choice (s-trim (completing-read "Tag: " (org-glance-graph:tags org-glance-graph)))))
     (when (string-empty-p choice)
       (user-error "Tag must not be empty"))
-    (org-glance-tag:from-string choice)))
+    (org-glance-tag:from-string (org-glance-tag:validate-string choice))))
 
 (cl-defun org-glance-capture--split-preamble (template)
   "Split TEMPLATE into (PREAMBLE . ENTRY).
@@ -73,6 +73,7 @@ separately."
                            (t ""))))
 
   (cl-check-type title string)
+  (mapc #'org-glance-tag:validate-string (org-glance-tag:as-list tags))
   (org-glance-ensure-init)
 
   (let* ((file (make-temp-file "org-glance-" nil ".org"))

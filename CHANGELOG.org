@@ -6,6 +6,18 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Table: =i= edits the cell at point — state via the todo flow, schedule /
+  deadline via the calendar, title / priority / drawer-property columns via
+  a pre-filled minibuffer prompt; derived columns refuse.
+- Table: =C-c p= copies the headline at point under a fresh id (body,
+  planning, drawer verbatim; snapshots not copied).
+- Tag creation validates against org's tag grammar
+  (letters/digits/=_=/=@=/=#=/=%=, =org-tag-re=): the capture prompt, =:= in
+  views, and programmatic capture reject e.g. =albert-heijn= with a loud
+  =user-error= (org silently leaves such ":tag:" text in the title).
+- =L= in the transient: LLM sessions table — one row per session (running /
+  exited / stopped), with buffer, last-transcript time, last prompt and dir;
+  =RET= pops or (re)starts, =m= materializes the owning headline, =k= kills.
 - =C-c C-c= in any table saves the layout.  Reference tables prompt for a
   scope — the anchor headline or an anchor-tag × row-tag pair, per
   direction; stored in =config/table-refs.eld=, restored on later visits
@@ -106,6 +118,9 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Case-duplicate tags (=:Food:food:=) collapse to one canonical downcased
+  tag: in parsed metadata, in legacy stored records, in =:=/retag compares,
+  and on material save the heading itself is rewritten (with a warning).
 - Reference tables no longer inherit the untagged (all-view) column
   customization; without a scoped entry they render default columns.
 - Overview renders BOTH planning keywords on one line, as org requires --

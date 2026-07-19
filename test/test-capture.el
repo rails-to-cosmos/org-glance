@@ -55,5 +55,34 @@ tags, normalizes case, and rejects empty input."
       (org-glance-test:answering ((completing-read "  "))
         (should-error (org-glance-capture:completing-read-tag) :type 'user-error)))))
 
+(ert-deftest org-glance-test:tag-validate-string ()
+  "Valid org tags pass trimmed; a dash (or space, dot, empty) errors loudly."
+  (should (equal "albertheijn" (org-glance-tag:validate-string " albertheijn ")))
+  (should (equal "a_b@c#1%" (org-glance-tag:validate-string "a_b@c#1%")))
+  (dolist (bad '("albert-heijn" "a b" "a.b" ""))
+    (should-error (org-glance-tag:validate-string bad) :type 'user-error)))
+
+(ert-deftest org-glance-test:tag-invalid-rejected-at-creation ()
+  "Every tag-creation boundary rejects an org-unparsable tag loudly:
+the capture prompt, programmatic capture, and the retag add path.
+Removal stays ungated."
+  (org-glance-test:session
+    ;; capture prompt
+    (cl-letf (((symbol-function 'completing-read)
+               (lambda (&rest _) "albert-heijn")))
+      (should-error (org-glance-capture:completing-read-tag) :type 'user-error))
+    ;; programmatic capture
+    (should-error (org-glance-capture '(albert-heijn) "x") :type 'user-error)
+    ;; retag add path; the graph stays untouched
+    (org-glance-graph:add org-glance-graph
+                          (org-glance-test:headline "a" "* TODO A :shop:"))
+    (should-error (org-glance-material:retag org-glance-graph "a" "albert-heijn")
+                  :type 'user-error)
+    (should (equal '("shop")
+                   (org-glance-headline-metadata:tag-strings
+                    (org-glance-graph:get-headline org-glance-graph "a"))))
+    ;; removal of a valid tag still works
+    (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
+
 (provide 'test-capture)
 ;;; test-capture.el ends here

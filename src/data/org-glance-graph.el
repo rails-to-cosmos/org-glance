@@ -159,9 +159,12 @@ as-is.")
 (cl-defun org-glance-headline-metadata:tag-strings (metadata)
   "METADATA's tags as a list of strings.
 Fresh metadata carries symbol tags, JSON-deserialized metadata carries strings
-\(and a vector until decoded); this is the one total coercion for both."
-  (mapcar (lambda (tag) (format "%s" tag))
-          (append (org-glance-headline-metadata:tags metadata) nil)))
+\(and a vector until decoded); this is the one total coercion for both.
+Case-duplicates collapse (canonical tags are downcased -- invariant 13), so a
+legacy record stored with \"Food\" + \"food\" reads as one tag."
+  (delete-dups
+   (mapcar (lambda (tag) (downcase (format "%s" tag)))
+           (append (org-glance-headline-metadata:tags metadata) nil))))
 
 (cl-defun org-glance-headline-metadata:serialize* (obj)
   "Generic variant of `org-glance-headline-metadata:serialize'."
