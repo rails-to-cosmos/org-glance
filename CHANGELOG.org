@@ -87,6 +87,8 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Table: Tags is the last built-in column by default (saved layouts keep
+  their own order).
 - In-view toggle between the table and the org overview is =O= (was =T=).
 - Bulk todo in the table prompts with org's own fast selection (the =C-c C-t=
   buffer, tag's cycle + keys), replacing =completing-read=; picking "clear"

@@ -709,11 +709,11 @@ priority and property columns take a string prompt, derived columns refuse."
                              (org-glance-graph:get-headline graph "a"))))
       ;; tags column: derived, refuses
       (table-view--goto-id "a")
-      (table-view-forward-column 3)
+      (table-view-forward-column 8)
       (should-error (org-glance-table--act-edit graph "a") :type 'user-error)
       ;; priority column: empty input clears the cookie
       (table-view--goto-id "a")
-      (table-view-forward-column 6)
+      (table-view-forward-column 5)
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
         (org-glance-table--act-edit graph "a"))
       (should-not (org-glance-headline-metadata:priority
