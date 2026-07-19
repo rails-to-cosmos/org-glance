@@ -43,95 +43,127 @@ when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
 loaded lazily the first time you run the action, so org-glance never
 loads vterm at startup.
 
-* Usage
+* How it works
 
-Everything starts from =org-glance-transient= (=C-x j=):
+If you know org-mode, you know almost everything already:
 
-| Key | Action      |                                                  |
-|-----+-------------+--------------------------------------------------|
-| =o=   | Overview    | org-text or table view of a tag (see the toggle) |
-| =m=   | Materialize | edit a headline as a real file; save syncs       |
-| =j=   | Open link   | follow a link inside a chosen headline           |
-| =+=   | Capture     | new headline under a tag                         |
-| =t=   | All tags    | table of the tags themselves, with metrics       |
-| =a=   | Agenda      | org-agenda over the overview                     |
-| =e=   | Extract     | copy a =KEY: value= from a headline                |
-| =l=   | LLM session | [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] in the headline's directory         |
-| =C=   | Configure   | per-tag capture skeleton + todo cycle            |
+1. *Headlines are the unit.*  Every captured headline lives as its own small
+   org file in a hidden store (=.org-glance/= under =org-glance-directory=),
+   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.  No
+   agenda-files list, no ever-growing monolith files.
+2. *Tags are collections.*  An ordinary org tag (=:book:=, =:coffee:=) groups
+   headlines; a tag exists the moment you capture something with it — no
+   declaration step.  Optionally give a tag its own todo cycle and capture
+   template (=C= in the transient).
+3. *Views are projections.*  The table and the overview are generated,
+   read-only summaries built from an index — fast, and always rebuildable.
+   You never edit a view: you open the headline behind it, edit ordinary org,
+   save; views refresh themselves.
+4. *Links are edges.*  A link from one headline to another is indexed as a
+   typed relation, so the graph can answer "what references this?".
 
-** Views
+* Usage, step by step
 
-=o= opens a tag's view; O toggles org-text ⇄ table
-(default: =org-glance-overview-default-view=).  Overview headings are
-self-sufficient — agenda properties, relations, links — no materialization
-needed to act on them:
+Everything is reachable from =org-glance-transient= (=C-x j=).
 
-The table is sortable (=^=), filterable (=/=), colour-badged, with a =#+TODO:=
-line always in the header and =?= toggling the action legend.  Row actions:
-=RET= materialize · =j=/=!= open link · =e= extract · =:= add tag (only tags it
-lacks) · =-= drop the view's tag · =#= encrypt/decrypt (=C-u #= re-key) ·
-=l= occurrence history · =D= delete (referrer-aware) · =C-c C-t= todo (bulk with
-marks) · =C-c C-s=/=C-c C-d= schedule/deadline (=C-u= clears).
+** 1. Capture a headline
 
-Columns: =C-u += adds one per drawer property OR relation kind the view's
-headlines carry; =C-u -= removes any but Title; both persist per tag.  A kind
-column shows the target titles: "roasted by" → =Manhattan Coffee Roasters=.
+=C-x j += → pick (or type) a tag → an org-capture-style buffer opens →
+write an ordinary headline, =C-c C-c=:
 
-** Materialized buffers
+#+begin_src org
+,* TODO Kebena Decaf :coffee:
+SCHEDULED: <2026-08-01 Sat>
+Light roast, very floral.
+#+end_src
 
-=m= opens the headline's content blob as a real file; saving re-indexes it.
-In the buffer: =@= reference (below) · =C-c #= crypt · =C-c d= project dir ·
-=C-c l= occurrence history · =C-c @= references table · =C-c C-s=/=C-c C-d=
-planning.  Bookkeeping drawer keys (=ORG_GLANCE_ID= …) are concealed and hand
-edits to them revert on save with a warning.
+** 2. Browse a tag
 
-** References (the knowledge graph)
+=C-x j o= → pick a tag → its *table*: one row per headline, sortable (=^=),
+filterable (=/=), with colour-coded todo states.  =T= toggles to the org-text
+*overview* — a plain org buffer, so folding, =C-x j a= (agenda) and link
+clicking all behave exactly as in org.  Each overview heading is
+self-sufficient:
 
-=@= at a word boundary completing-reads a headline and inserts a link to it;
-=C-u @= also asks a *kind*:
+#+begin_src org
+,* TODO [#A] Kebena Decaf :coffee:
+DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
+- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
+- [[https://example.com][Homepage]]
+#+end_src
+
+Act on the row/heading at point without opening anything: =C-c C-t= todo
+(with marks: bulk, org's own fast-selection prompt) · =C-c C-s= / =C-c C-d=
+schedule / deadline · =:= add a tag · =-= drop the view's tag · =D= delete ·
+=j= open a link inside it · =e= copy a =KEY: value= from its body.
+
+In the table, columns are yours: =C-u += adds one for any drawer property or
+relation kind the visible headlines carry (=Roasted by= → target titles),
+=C-u -= removes any column but Title; layout persists per tag.  =?= shows the
+key legend.
+
+** 3. Edit a headline
+
+=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file
+opens in a normal org buffer.  Everything org can do works here — this IS
+org-mode.  =C-x C-s= saves and re-indexes; open views refresh on their next
+display.  (The =:ORG_GLANCE_ID:= drawer is concealed and protected: hand
+edits to it revert on save with a warning.)
+
+** 4. Connect headlines
+
+In a materialized buffer, =@= at the start of a word prompts for another
+headline and inserts a link to it; =C-u @= also asks a reference *kind*:
 
 #+begin_src org
 roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
 #+end_src
 
-Following the link materializes the target.  The store indexes every such link
-as a typed edge: =C-c @= tables what this headline references, =C-u C-c @= what
-references it, and kinds double as table columns.  Overview links take a whole
-filter: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
+Clicking the link opens the roaster.  The graph indexes it as a typed edge:
+=C-c @= tables everything this headline references, =C-u C-c @= everything
+that references it, and the kind can become a table column (step 2).  A link
+to a whole view also exists: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
 
-** Encrypted headlines
+** 5. Keep secrets
 
-Secrets live in =#+begin_crypt= … =#+end_crypt= blocks: ciphertext at rest,
-plaintext only in the material buffer (re-sealed on save; auto-save/backups
-disabled).  Text OUTSIDE blocks stays public and indexed — links still open
-without a password.  =C-c #=: wrap region / =C-u= unwrap block / no region:
-encrypt the whole body, or lock (forget the cached password, TTL
-=org-glance-material-password-ttl=) when already encrypted.
+Wrap a region in a crypt block with =C-c #= (no region: the whole body):
 
-** Repeat history
+#+begin_src org
+,#+begin_crypt
+bank: 1234-5678
+,#+end_crypt
+#+end_src
 
-A repeating headline (=+1d=) stays ONE headline.  Completing a repetition
-snapshots the done state under the headline's data dir;
-=org-glance-repeat-history-depth= keeps the newest N (=0= off, =t= all;
-per-headline =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins).  The table's =Rep=
-column marks repeaters; =l= / =C-c l= opens any occurrence read-only.
+On disk it is ciphertext; in the materialized buffer it is plaintext
+(re-sealed on every save; auto-save and backups are disabled).  Text OUTSIDE
+the blocks stays public and searchable.  =C-u C-c #= unwraps a block;
+=C-c #= again forgets the cached password (TTL
+=org-glance-material-password-ttl=).
+
+** 6. Repeating headlines keep their history
+
+A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With
+=org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline
+=:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins), each completion snapshots the done
+state before org resets it; the table's =Rep= column marks repeaters, and
+=l= (=C-c l= in the buffer) opens any past occurrence read-only.
 
 ** Customization
 
-| Variable                               | Default          |                                                              |
-|----------------------------------------+------------------+--------------------------------------------------------------|
-| =org-glance-directory=                   | =org-directory=    | root of the managed content (store lives in =.org-glance/=)    |
-| =org-glance-overview-default-view=       | =org-glance-table= | what =o= opens; =org-glance-overview= for org-text               |
-| =org-glance-filter-spec=                 | =(:done nil)=      | ambient filter every view starts from (active-only)          |
-| =org-glance-view-fill-frame=             | =t=                | views take the whole frame; =nil= keeps your windows           |
-| =org-glance-repeat-history-depth=        | =0=                | occurrence snapshots kept: N / =t= = all / =0= = off             |
-| =org-glance-material-password-ttl=       | =300=              | seconds a crypt password stays cached; =0= = forever           |
-| =org-glance-material-hidden-properties=  | id + hash        | drawer keys concealed AND edit-protected in material buffers |
-| =org-glance-table-state-colors=          | tokyo-night-ish  | per-state badge colours (=…-default-state-color= for the rest) |
-| =org-glance-conflict-resolution=         | =ask=              | git-conflict healing: =ask= / =union= / =nil= (error)              |
-| =org-glance-tag-config-file=             | =nil=              | override path of =config/tags.org=                             |
-| =org-glance-graph-segment-max-bytes=     | 256k             | WAL segment size before sealing                              |
-| =org-glance-graph-compact-segment-count= | =4=                | sealed segments that trigger auto-compaction                 |
+| Variable                                | Default              |                                                        |
+|-----------------------------------------+----------------------+--------------------------------------------------------|
+| =org-glance-directory=                  | =org-directory=      | root of the managed content (store lives in =.org-glance/=) |
+| =org-glance-overview-default-view=      | =org-glance-table=   | what =o= opens; =org-glance-overview= for org-text     |
+| =org-glance-filter-spec=                | =(:done nil)=        | ambient filter every view starts from (active-only)    |
+| =org-glance-view-fill-frame=            | =t=                  | views take the whole frame; =nil= keeps your windows   |
+| =org-glance-repeat-history-depth=       | =0=                  | occurrence snapshots kept: N / =t= = all / =0= = off   |
+| =org-glance-material-password-ttl=      | =300=                | seconds a crypt password stays cached; =0= = forever   |
+| =org-glance-material-hidden-properties= | id + hash            | drawer keys concealed AND edit-protected in material buffers |
+| =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (=…-default-state-color= for the rest) |
+| =org-glance-conflict-resolution=        | =ask=                | git-conflict healing: =ask= / =union= / =nil= (error)  |
+| =org-glance-tag-config-file=            | =nil=                | override path of =config/tags.org=                     |
+| =org-glance-graph-segment-max-bytes=    | 256k                 | WAL segment size before sealing                        |
+| =org-glance-graph-compact-segment-count= | =4=                 | sealed segments that trigger auto-compaction           |
 
 Example — org-text views, everything visible, daily history for a year:
 
@@ -141,13 +173,13 @@ Example — org-text views, everything visible, daily history for a year:
       org-glance-repeat-history-depth 365)
 #+end_src
 
-** Store
+** The store, briefly
 
 A segmented, append-only JSONL log with atomic commits, compaction, crash
-recovery and git-sync conflict healing; content blobs are canonical, all
-indexes derived and rebuildable (=M-x org-glance-reindex=).  Delete is a
-tombstone: =D= or =M-x org-glance-delete= (confirmation names referrers whose
-links would dangle).
+recovery and git-sync conflict healing.  The per-headline org files are
+canonical; every index is derived and rebuildable (=M-x org-glance-reindex=).
+Deletion (=D=, =M-x org-glance-delete=) writes a tombstone after a
+confirmation that names any headlines whose links would dangle.
 
 * Install from source (development)
 
