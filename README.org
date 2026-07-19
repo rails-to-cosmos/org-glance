@@ -64,9 +64,9 @@ when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
 loaded lazily the first time you run the action, so org-glance never
 loads vterm at startup.
 
-* Usage, step by step
+* Usage
 
-Everything is reachable from =org-glance-transient= (=C-x j=).
+Entrypoint is =org-glance-transient= (=C-x j=).
 
 ** 1. Capture a headline
 
