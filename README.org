@@ -40,9 +40,9 @@ Entrypoint is =org-glance-transient= (=C-x j=).
 write an ordinary headline, =C-c C-c=:
 
 #+begin_src org
-,* TODO Kebena Decaf :coffee:
-SCHEDULED: <2026-08-01 Sat>
-Light roast, very floral.
+,* TODO [#A] Kebena Decaf :coffee:
+DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
+Light roast, very floral.  [[https://example.com][Homepage]]
 #+end_src
 
 ** 2. Browse a tag
@@ -51,8 +51,8 @@ Light roast, very floral.
 todo states:
 
 #+begin_example
-State  Title         Tags    Scheduled         Deadline          Pri  Roasted by
-TODO   Kebena Decaf  coffee  <2026-08-01 Sat>  <2026-08-10 Mon>  A    Manhattan Coffee Roasters
+State  Title         Tags    Scheduled         Deadline          Pri
+TODO   Kebena Decaf  coffee  <2026-08-01 Sat>  <2026-08-10 Mon>  A
 #+end_example
 
 =O= toggles to the org-text *overview* — a plain org buffer, so folding,
@@ -62,7 +62,6 @@ overview heading is self-sufficient:
 #+begin_src org
 ,* TODO [#A] Kebena Decaf :coffee:
 DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
-- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
 - [[https://example.com][Homepage]]
 #+end_src
 
@@ -82,11 +81,10 @@ Act on the row/heading at point without opening anything:
 | =D=                 | delete (referrer-aware confirmation)                            |
 | =O=                 | toggle table ⇄ org overview                                     |
 | =^= / =/= / =g=         | sort by column / filter / refresh (table)                       |
-| =C-u += / =C-u -=     | add a column (drawer property or relation kind) / remove one    |
+| =C-u += / =C-u -=     | add / remove a column (any but Title)                           |
 | =?=                 | toggle the key legend (table)                                   |
 
-Column layout, sort and added columns persist per tag; a relation-kind column
-(=Roasted by=) shows the target headline titles.
+Column layout, sort and added columns persist per tag.
 
 ** 3. Edit a headline
 
@@ -105,7 +103,21 @@ headline and inserts a link to it; =C-u @= also asks a reference *kind*:
 roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
 #+end_src
 
-Clicking the link opens the roaster; the graph indexes it as a typed edge.
+Clicking the link opens the roaster; the graph indexes it as a typed edge,
+and the views pick it up.  The overview heading gains a relation line:
+
+#+begin_src org
+- roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
+#+end_src
+
+and =C-u += in the table now offers a =Roasted by= column with the target
+titles:
+
+#+begin_example
+State  Title         ...  Roasted by
+TODO   Kebena Decaf  ...  Manhattan Coffee Roasters
+#+end_example
+
 In a materialized buffer:
 
 | Key       | Action                                         |
@@ -115,7 +127,7 @@ In a materialized buffer:
 | =C-c @=     | table of everything this headline references   |
 | =C-u C-c @= | table of everything that references it         |
 
-Kinds double as table columns (step 2), and a link can address a whole view:
+A link can also address a whole view:
 =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
 
 ** 5. Keep secrets
