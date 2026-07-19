@@ -181,7 +181,7 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 | =org-glance-repeat-history-depth=       | =0=                  | occurrence snapshots kept: N / =t= = all / =0= = off   |
 | =org-glance-material-password-ttl=      | =300=                | seconds a crypt password stays cached; =0= = forever   |
 | =org-glance-material-hidden-properties= | id + hash            | drawer keys concealed AND edit-protected in material buffers |
-| =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (=…-default-state-color= for the rest) |
+| =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
 | =org-glance-conflict-resolution=        | =ask=                | git-conflict healing: =ask= / =union= / =nil= (error)  |
 | =org-glance-tag-config-file=            | =nil=                | override path of =config/tags.org=                     |
 | =org-glance-graph-segment-max-bytes=    | 256k                 | WAL segment size before sealing                        |

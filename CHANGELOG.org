@@ -120,6 +120,9 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Table state badges honour the user's =org-todo-keyword-faces= (colour
+  string, plist, or face) for states missing from
+  =org-glance-table-state-colors=, matching the material buffer's colours.
 - =@= inserts a reference inside the heading title too (any word boundary);
   only the heading's column 0 (org speed keys) and mid-word self-insert.
 - Case-duplicate tags (=:Food:food:=) collapse to one canonical downcased

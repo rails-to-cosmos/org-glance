@@ -70,9 +70,20 @@ States not listed here render in `org-glance-table-default-state-color'."
   :group 'org-glance
   :type 'color)
 
+(cl-defun org-glance-table--face-color (face)
+  "Foreground colour of FACE -- a face symbol, colour string, or attribute
+plist (the three `org-todo-keyword-faces' value forms) -- or nil."
+  (cond ((stringp face) face)
+        ((facep face) (face-foreground face nil t))
+        ((listp face) (plist-get face :foreground))))
+
 (cl-defun org-glance-table--state-color (state)
-  "Badge colour for todo STATE."
+  "Badge colour for todo STATE.
+`org-glance-table-state-colors' first, else the foreground of the user's
+`org-todo-keyword-faces' entry (so a state coloured in org buffers keeps
+its colour here), else `org-glance-table-default-state-color'."
   (or (cdr (assoc state org-glance-table-state-colors))
+      (org-glance-table--face-color (cdr (assoc state org-todo-keyword-faces)))
       org-glance-table-default-state-color))
 
 (cl-defun org-glance-table--split-states (graph)

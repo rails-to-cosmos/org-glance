@@ -47,6 +47,25 @@
       (should (< (cl-position "TODO" values :test #'equal)
                  (cl-position "DONE" values :test #'equal))))))
 
+(defface org-glance-test--review-face '((t :foreground "gold"))
+  "Fixture face for the org-todo-keyword-faces fallback test.")
+
+(ert-deftest org-glance-test:table-state-color-from-org-faces ()
+  "A state absent from the table palette takes its colour from the user's
+`org-todo-keyword-faces' -- colour string, plist, or face symbol -- before
+falling back to the default."
+  (let ((org-todo-keyword-faces '(("DELEGATED" . "orchid")
+                                  ("BLOCKED" . (:foreground "tomato" :weight bold))
+                                  ("REVIEW" . org-glance-test--review-face))))
+    (should (equal "orchid" (org-glance-table--state-color "DELEGATED")))
+    (should (equal "tomato" (org-glance-table--state-color "BLOCKED")))
+    (should (equal "gold" (org-glance-table--state-color "REVIEW")))
+    ;; the explicit palette still wins, and unknowns still get the default
+    (should (equal (cdr (assoc "TODO" org-glance-table-state-colors))
+                   (org-glance-table--state-color "TODO")))
+    (should (equal org-glance-table-default-state-color
+                   (org-glance-table--state-color "NOWHERE")))))
+
 ;;; Spec generation
 
 (ert-deftest org-glance-test:table-spec-shape ()
