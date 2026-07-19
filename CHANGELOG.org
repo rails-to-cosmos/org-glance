@@ -69,6 +69,9 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Bulk todo in the table prompts with org's own fast selection (the =C-c C-t=
+  buffer, tag's cycle + keys), replacing =completing-read=; picking "clear"
+  removes the state.
 - Org link completion (=C-c C-l=) offers the canonical =org-glance-material:=
   type; legacy =org-glance-visit:= links still follow but are no longer
   completed.

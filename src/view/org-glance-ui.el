@@ -80,14 +80,16 @@ this one update in place."
    [("o" org-glance-overview :description org-glance-transient--overview-description)
     ("a" "Agenda" org-glance-agenda)
     ("t" "Tags" org-glance-tags)]
-   [("T" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]
+   [("O" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]
   ["Actions"
-   [("+" "Capture headline" org-glance-capture)
+   [("+" "Capture" org-glance-capture)
     ("e" "Extract property" org-glance-extract)
     ("j" "Open link" org-glance-open)
-    ("m" "Materialize headline" org-glance-materialize)
+    ("m" "Materialize" org-glance-materialize)
     ("l" "LLM session" org-glance-llm)
-    ("C" "Configure tags" org-glance-tag-config-edit)]]
+    ]]
+  ["Config"
+   [("C" "Tags" org-glance-tag-config-edit)]]
   (interactive)
   (transient-setup 'org-glance-transient))
 
