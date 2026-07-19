@@ -67,24 +67,25 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 
 Act on the row/heading at point without opening anything:
 
-| Key               | On the row at point                                             | With marked rows (=m=)      |
-|-------------------+-----------------------------------------------------------------+-----------------------------|
-| =RET=               | materialize (open for editing, step 3)                          |                             |
-| =m= / =u= / =U=         | mark / unmark / unmark all                                      |                             |
-| =C-c C-t=           | change todo state                                               | one prompt sets all         |
-| =C-c C-s= / =C-c C-d= | schedule / deadline (=C-u= clears)                                |                             |
-| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it |                             |
-| =:= / =C-u :=         | add another tag to the headline / remove one                    |                             |
-| =j= (or =!=)          | open a link inside the headline                                 |                             |
-| =e=                 | copy a =KEY: value= from its body                                 |                             |
-| =#= / =C-u #=         | encrypt ⇄ decrypt / change password                             |                             |
-| =l=                 | past occurrences of a repeating headline (step 6)               |                             |
-| =D=                 | delete (referrer-aware confirmation)                            |                             |
-| =O=                 | toggle table ⇄ org overview                                     |                             |
-| =/=                 | filter by substring (=C-u= clears)                              | narrow to the marked rows   |
-| =^= / =g=             | sort by column / refresh (table)                                |                             |
-| =C-u += / =C-u -=     | add / remove a column (any but Title)                           |                             |
-| =?=                 | toggle the key legend (table)                                   |                             |
+| Key               | On the single row at point                                      | With =C-u=                              | With marked rows (=m=)      | Pressed again (toggle)                       |
+|-------------------+-----------------------------------------------------------------+---------------------------------------+---------------------------+----------------------------------------------|
+| =RET=               | materialize (open for editing, step 3)                          |                                       |                           |                                              |
+| =m=                 | mark (=u= unmarks)                                                |                                       |                           | unmark                                       |
+| =M= / =U=             | mark all visible / unmark all                                   |                                       |                           |                                              |
+| =C-c C-t=           | change todo state                                               |                                       | one prompt sets all       |                                              |
+| =C-c C-s= / =C-c C-d= | schedule / deadline                                             | clear it                              |                           |                                              |
+| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it | add / remove a column (any but Title) |                           |                                              |
+| =:=                 | add another tag to the headline                                 | remove one                            |                           |                                              |
+| =j= (or =!=)          | open a link inside the headline                                 |                                       |                           |                                              |
+| =e=                 | copy a =KEY: value= from its body                                 |                                       |                           |                                              |
+| =#=                 | encrypt                                                         | change password                       |                           | decrypt                                      |
+| =l=                 | past occurrences of a repeating headline (step 6)               |                                       |                           |                                              |
+| =D=                 | delete (referrer-aware confirmation)                            |                                       |                           |                                              |
+| =O=                 | switch to the org overview                                      |                                       |                           | back to the table                            |
+| =/=                 | filter by substring                                             | clear the filter                      | narrow to the marked rows | widen the narrowed view                      |
+| =^=                 | sort by the column at point                                     |                                       |                           | flip asc ⇄ desc; off a column: cycle columns |
+| =g=                 | refresh (table)                                                 |                                       |                           |                                              |
+| =?=                 | show the key legend (table)                                     |                                       |                           | hide it                                      |
 
 Column layout, sort and added columns persist per tag.
 

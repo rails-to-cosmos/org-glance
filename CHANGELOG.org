@@ -6,6 +6,7 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Table: =M= marks all visible rows (upstream =table-view=; complements =U=).
 - Delete a headline: =D= on a table/overview row, or =M-x org-glance-delete=.
   Referrer-aware confirmation (names the headlines whose links would dangle);
   tombstone in the WAL, disk reclaimed at the next compaction; dangling links
