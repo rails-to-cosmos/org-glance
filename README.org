@@ -9,6 +9,25 @@ A personal knowledge graph for [[https://orgmode.org/][org-mode]].  Headlines be
 durable plain-text store; typed references between them become edges;
 fast and flexible views show it all without opening a single file.
 
+* How it works
+
+If you know org-mode, you know almost everything already:
+
+1. *Headlines are the unit.*  Every captured headline lives as its own small
+   org file in a hidden store (=.org-glance/= under =org-glance-directory=),
+   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.  No
+   agenda-files list, no ever-growing monolith files.
+2. *Tags are collections.*  An ordinary org tag (=:book:=, =:coffee:=) groups
+   headlines; a tag exists the moment you capture something with it — no
+   declaration step.  Optionally give a tag its own todo cycle and capture
+   template (=C= in the transient).
+3. *Views are projections.*  The table and the overview are generated,
+   read-only summaries built from an index — fast, and always rebuildable.
+   You never edit a view: you open the headline behind it, edit ordinary org,
+   save; views refresh themselves.
+4. *Links are edges.*  A link from one headline to another is indexed as a
+   typed relation, so the graph can answer "what references this?".
+
 * Install
 
 The published package archive is the simplest route.  Add the archive, then let
@@ -42,25 +61,6 @@ when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
 =rails-to-cosmos= archive) is a required dependency; it pulls in =vterm=,
 loaded lazily the first time you run the action, so org-glance never
 loads vterm at startup.
-
-* How it works
-
-If you know org-mode, you know almost everything already:
-
-1. *Headlines are the unit.*  Every captured headline lives as its own small
-   org file in a hidden store (=.org-glance/= under =org-glance-directory=),
-   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.  No
-   agenda-files list, no ever-growing monolith files.
-2. *Tags are collections.*  An ordinary org tag (=:book:=, =:coffee:=) groups
-   headlines; a tag exists the moment you capture something with it — no
-   declaration step.  Optionally give a tag its own todo cycle and capture
-   template (=C= in the transient).
-3. *Views are projections.*  The table and the overview are generated,
-   read-only summaries built from an index — fast, and always rebuildable.
-   You never edit a view: you open the headline behind it, edit ordinary org,
-   save; views refresh themselves.
-4. *Links are edges.*  A link from one headline to another is indexed as a
-   typed relation, so the graph can answer "what references this?".
 
 * Usage, step by step
 
