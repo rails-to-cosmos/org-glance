@@ -251,14 +251,18 @@ row once the change (and any note) is committed."
          (org-glance-table--finish id line "State: %s"
                                    (if (s-present? state) state "(none)")))))))
 
-(cl-defun org-glance-table--todo-candidates (graph filter)
-  "Candidate target states for a bulk change under FILTER.
-FILTER's single todo cycle (active + done keywords) when it has one, else the
-states currently in use across GRAPH -- so the prompt always offers something."
+(cl-defun org-glance-table--read-state-native (graph filter)
+  "Org's own fast TODO selection (the `C-c C-t' buffer) for FILTER's cycle.
+Runs `org-fast-todo-selection' in a temp org buffer initialized with the
+tag's `#+TODO:' cycle (else the global keywords), so keys, faces and the
+active/done split match the material buffer exactly.  Returns a keyword
+string, or the symbol `none' when the user picks \"clear\"."
   (let ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
-    (delete-dups
-     (append (when cycle (remove "|" (split-string cycle)))
-             (org-glance-graph:states graph)))))
+    (with-temp-buffer
+      (let ((org-todo-keywords
+             (org-glance-tag-config:cycle->keywords-or cycle org-todo-keywords)))
+        (org-glance--org-mode))
+      (org-fast-todo-selection))))
 
 (cl-defun org-glance-table--act-todo-bulk (graph rows)
   "Set the marked ROWS to one chosen TODO state, prompted once (org-agenda `B t').
@@ -270,11 +274,8 @@ single-row `org-glance-table--act-todo' (cycle + note)."
     (when ids
       (let ((at-id (get-text-property (point) 'table-view-id))   ; row under point now
             (line (line-number-at-pos))                          ; fallback anchor
-            (state (completing-read
-                    (format "Set %d headline(s) to state: " (length ids))
-                    (org-glance-table--todo-candidates graph org-glance-table--spec)
-                    nil t)))
-        (unless (string-empty-p state)
+            (state (org-glance-table--read-state-native graph org-glance-table--spec)))
+        (when state                       ; `none' clears; C-g aborts before here
           (org-glance-material:set-todo-bulk
            graph ids state
            (lambda (changed skipped)

@@ -474,15 +474,19 @@ after the (no-note) commit the reloaded table shows the new state on the row."
             (should (equal "td1" (alist-get 'id row)))
             (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))))
 
-(ert-deftest org-glance-test:table-todo-candidates-fallback ()
-  "Without a configured cycle, bulk candidates are the states in use."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))))
-    (org-glance-test:with-graph graph
-      (org-glance-graph:add graph
-                            (org-glance-test:headline "c1" "* TODO A")
-                            (org-glance-test:headline "c2" "* DONE B"))
-      (should (equal '("DONE" "TODO")           ; `org-glance-graph:states' sorts
-                     (org-glance-table--todo-candidates graph nil))))))
+(ert-deftest org-glance-test:table-bulk-state-prompt-is-org-native ()
+  "The bulk prompt is org's own fast selection, initialized with the tag's
+cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-tag-config-file (make-temp-file "tags" nil ".org"
+                                       "* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"))
+          seen)
+      (cl-letf (((symbol-function 'org-fast-todo-selection)
+                 (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
+        (should (equal "READING"
+                       (org-glance-table--read-state-native graph '(:tags ("book"))))))
+      ;; the temp selection buffer carried the TAG's cycle, not the global one
+      (should (equal '("TODO" "READING" "READ") seen)))))
 
 (ert-deftest org-glance-test:table-bulk-todo-marked ()
   "`C-c C-t' with marked rows sets them all to a chosen state, then clears marks."
@@ -495,7 +499,7 @@ after the (no-note) commit the reloaded table shows the new state on the row."
       (org-glance-test:with-table (graph)
           (org-glance-test:mark-rows "b1" "b3")
           (should (= 2 (length (table-view-marked-rows))))
-          (org-glance-test:answering ((completing-read "DONE"))
+          (org-glance-test:answering ((org-fast-todo-selection "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))          ; bulk (marks present)
           (should (equal "DONE" (org-glance-headline-metadata:state
                                  (org-glance-graph:get-headline graph "b1"))))
@@ -517,7 +521,7 @@ after the (no-note) commit the reloaded table shows the new state on the row."
       (org-glance-test:with-table (graph)
           (org-glance-test:mark-rows "p1" "p2")
           (should (table-view--goto-id "p4"))            ; park point on an UNMARKED row
-          (org-glance-test:answering ((completing-read "DONE"))
+          (org-glance-test:answering ((org-fast-todo-selection "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))     ; bulk-sets p1,p2 (not p4)
           ;; point followed its row (p4), which survived the change
           (should (equal "p4" (get-text-property (point) 'table-view-id)))
@@ -545,7 +549,7 @@ buffer switching -- which the flush relies on -- runs for real.)"
             (with-current-buffer buf
               (org-glance-test:mark-rows "g1" "g2")
               (table-view--goto-id "g3")                     ; point on the UNMARKED row
-              (org-glance-test:answering ((completing-read "DONE"))
+              (org-glance-test:answering ((org-fast-todo-selection "DONE"))
                 (funcall (key-binding (kbd "C-c C-t"))))
               (run-hooks 'post-command-hook)                 ; must NOT dead-marker
               (should (equal "g3" (get-text-property (point) 'table-view-id)))  ; point kept
