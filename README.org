@@ -5,7 +5,7 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-A personal knowledge graph for org-mode.  Headlines become nodes in a
+A personal knowledge graph for [[https://orgmode.org/][org-mode]].  Headlines become nodes in a
 durable plain-text store; typed references between them become edges;
 fast and flexible views show it all without opening a single file.
 
