@@ -30,40 +30,6 @@ If you know org-mode, you know almost everything already:
 4. *Links are edges.*  A link from one headline to another is indexed as a
    typed relation, so the graph can answer "what references this?".
 
-* Install
-
-The published package archive is the simplest route.  Add the archive, then let
-=use-package= install and set it up:
-
-#+begin_src emacs-lisp
-(add-to-list 'package-archives
-             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
-
-(use-package org-glance
-  :bind (("C-x j" . org-glance-transient))
-  :config (org-glance-init)
-  :ensure t)
-#+end_src
-
-=C-x j= opens =org-glance-transient=, the transient dispatcher (see
-[[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
-
-The =rails-to-cosmos= archive provides =org-glance= and its
-[[https://github.com/rails-to-cosmos/table-view][table-view]] and
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] dependencies; the
-remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
-MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
-and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
-
-The *LLM session* action (=l=) opens an [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
-selected headline's data directory -- or in its project directory,
-when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
-(set it from a materialized buffer with =C-c d=,
-`org-glance-material:set-project-dir').  [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] (also on the
-=rails-to-cosmos= archive) is a required dependency; it pulls in =vterm=,
-loaded lazily the first time you run the action, so org-glance never
-loads vterm at startup.
-
 * Usage
 
 Entrypoint is =org-glance-transient= (=C-x j=).
@@ -183,15 +149,49 @@ canonical; every index is derived and rebuildable (=M-x org-glance-reindex=).
 Deletion (=D=, =M-x org-glance-delete=) writes a tombstone after a
 confirmation that names any headlines whose links would dangle.
 
-* Install from source (development)
+* Install
 
-For hacking on org-glance, clone the repo and load it directly.  It is a
-multi-directory package: =org-glance.el= is at the root, modules under =src/data=
-and =src/view=; it does NOT add those to =load-path= itself, so all three must be
-on it.  [[https://github.com/rails-to-cosmos/table-view][table-view]] and
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] are external
-dependencies from the =rails-to-cosmos= ELPA archive (not on MELPA); the MELPA
-deps above are still needed.  (=Eask= is the dev/test harness, not required to use the package.)
+The published package archive is the simplest route.  Add the archive, then let
+=use-package= install and set it up:
+
+#+begin_src emacs-lisp
+(add-to-list 'package-archives
+             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
+
+(use-package org-glance
+  :bind (("C-x j" . org-glance-transient))
+  :config (org-glance-init)
+  :ensure t)
+#+end_src
+
+=C-x j= opens =org-glance-transient=, the transient dispatcher (see
+[[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
+
+The =rails-to-cosmos= archive provides =org-glance= and its
+[[https://github.com/rails-to-cosmos/table-view][table-view]] and
+[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] dependencies; the
+remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
+MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
+and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
+
+The *LLM session* action (=l=) opens an [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
+selected headline's data directory -- or in its project directory,
+when the headline carries an =:ORG_GLANCE_PROJECT_DIR:= drawer property
+(set it from a materialized buffer with =C-c d=,
+`org-glance-material:set-project-dir').  [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] (also on the
+=rails-to-cosmos= archive) is a required dependency; it pulls in =vterm=,
+loaded lazily the first time you run the action, so org-glance never
+loads vterm at startup.
+
+* Development
+
+For hacking on org-glance, clone the repo and load it directly.  It is
+a multi-directory package: =org-glance.el= is at the root, modules under
+=src/data= and =src/view=; it does NOT add those to =load-path= itself, so
+all three must be on it.  [[https://github.com/rails-to-cosmos/table-view][table-view]] and [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] are external
+dependencies from the =rails-to-cosmos= ELPA archive (not on MELPA); the
+MELPA deps above are still needed.  (=Eask= is the dev/test harness, not
+required to use the package.)
 
 #+begin_src emacs-lisp
 (dolist (dir '("" "src/data" "src/view"))
@@ -199,9 +199,7 @@ deps above are still needed.  (=Eask= is the dev/test harness, not required to u
 (require 'org-glance)
 #+end_src
 
-With =straight.el= (also needs recipes for
-[[https://github.com/rails-to-cosmos/table-view][table-view]] and
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]]):
+With =straight.el= (also needs recipes for [[https://github.com/rails-to-cosmos/table-view][table-view]] and [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]]):
 
 #+begin_src emacs-lisp
 (use-package org-glance
@@ -209,6 +207,7 @@ With =straight.el= (also needs recipes for
                         :files ("*.el" "src/data/*.el" "src/view/*.el")))
 (use-package table-view
   :straight (table-view :type git :host github :repo "rails-to-cosmos/table-view"))
+
 (use-package agnostic-llm
   :straight (agnostic-llm :type git :host github :repo "rails-to-cosmos/agnostic-llm"))
 #+end_src
