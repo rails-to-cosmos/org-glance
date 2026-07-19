@@ -122,6 +122,36 @@ self is excluded from the candidates."
                "roasted by [[org-glance-material:other?kind=roasted-by][Other headline]]"
                (buffer-string))))))
 
+(ert-deftest org-glance-test:material-refer-in-title ()
+  "`@' works inside the heading title (after a space); at the heading's
+column 0 it self-inserts (org speed keys live there)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "me" "* TODO Coffee from" "body")
+      (org-glance-test:headline "other" "* TODO Roaster"))
+    (org-glance-test:with-material (buf graph "me")
+      ;; end of the title, after a space: inserts the link into the heading
+      (org-glance-material--goto-first-heading)
+      (end-of-line)
+      (insert " ")
+      (org-glance-test:offering (offered (caar offered))
+        (org-glance-material:refer))
+      (org-glance-material--goto-first-heading)
+      (should (s-contains? "Coffee from [[org-glance-material:other][Roaster]]"
+                           (buffer-substring (line-beginning-position)
+                                             (line-end-position))))
+      ;; column 0 of the heading: self-insert delegation, no prompt
+      (goto-char (point-min))
+      (let (prompted)
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (&rest _) (setq prompted t) ""))
+                  ((symbol-function 'self-insert-command)
+                   (lambda (&rest _) (insert "@"))))
+          (call-interactively #'org-glance-material:refer))
+        (should-not prompted))
+      (should (string-prefix-p "@*" (buffer-substring (point-min)
+                                                      (+ (point-min) 2)))))))
+
 (ert-deftest org-glance-test:material-refer-duplicate-labels-injective ()
   "Same-titled candidates get a short-id suffix, and picking one targets ITS id."
   (org-glance-test:with-graph graph

@@ -100,8 +100,8 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 ;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
-;; `@' at a body word boundary references another headline (C-u adds a kind);
-;; elsewhere it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
+;; `@' at a word boundary (body or heading title) references another headline
+;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
 (define-key org-glance-material-mode-map (kbd "C-c @") #'org-glance-material:references)
 
@@ -1122,13 +1122,14 @@ GRAPH (`org-glance-graph:edge-kinds'), free input allowed, empty = none."
 
 (cl-defun org-glance-material:refer (&optional arg)
   "Insert a reference to another headline at point, or self-insert `@'.
-At a body word boundary: completing-read a headline (required match, self
-excluded) and insert an `org-glance-material:' link; with ARG (`C-u @') also
-prompt for a reference kind.  On a heading line (org speed keys live there) or
-mid-word (emails), delegate to org's own `self-insert' remapping.  `C-q @'
-inserts a literal `@' anywhere."
+At a word boundary -- in the body OR inside the heading title: completing-read
+a headline (required match, self excluded) and insert an
+`org-glance-material:' link; with ARG (`C-u @') also prompt for a reference
+kind.  At a heading's column 0 (org speed keys live there) or mid-word
+\(emails), delegate to org's own `self-insert' remapping.  `C-q @' inserts a
+literal `@' anywhere."
   (interactive "P")
-  (if (or (org-at-heading-p)
+  (if (or (and (org-at-heading-p) (bolp))   ; the speed-command position
           (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n)))))
       (call-interactively (or (command-remapping 'self-insert-command)
                               #'self-insert-command))

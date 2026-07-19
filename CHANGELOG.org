@@ -118,6 +118,8 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- =@= inserts a reference inside the heading title too (any word boundary);
+  only the heading's column 0 (org speed keys) and mid-word self-insert.
 - Case-duplicate tags (=:Food:food:=) collapse to one canonical downcased
   tag: in parsed metadata, in legacy stored records, in =:=/retag compares,
   and on material save the heading itself is rewritten (with a warning).

@@ -122,12 +122,12 @@ live spec against these keys to record the hidden ones."
   `(((key . "state")    (header . "State")     (type . "badge") (sortable . t) (align . "left")
      (badges . ,(org-glance-table--state-badges graph)))
     ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
-    ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))
     ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
     ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
     ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
     ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))
-    ((key . "repeated") (header . "Rep")       (type . "text")  (sortable . t) (align . "center"))))
+    ((key . "repeated") (header . "Rep")       (type . "text")  (sortable . t) (align . "center"))
+    ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))))
 
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.

@@ -54,8 +54,8 @@
   (org-glance-test:with-graph graph
     (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
-      (should (equal '("state" "title" "tags" "schedule" "deadline"
-                       "priority" "encrypted" "repeated")
+      (should (equal '("state" "title" "schedule" "deadline"
+                       "priority" "encrypted" "repeated" "tags")
                      (mapcar (lambda (c) (alist-get 'key c))
                              (alist-get 'columns spec))))
       (should (alist-get 'actions spec))
