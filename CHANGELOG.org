@@ -6,6 +6,8 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Material buffers: =C-c e= copies a body =KEY: value= from the headline
+  (the views' =e=, on the buffer at hand).
 - Table: =i= edits the cell at point — state via the todo flow, schedule /
   deadline via the calendar, title / priority / drawer-property columns via
   a pre-filled minibuffer prompt; derived columns refuse.
@@ -124,6 +126,9 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Re-materializing a headline whose material buffer is already open returns
+  that buffer as-is — an encrypted headline no longer re-prompts for its
+  password.
 - Table state badges honour the user's =org-todo-keyword-faces= (colour
   string, plist, or face) for states missing from
   =org-glance-table-state-colors=, matching the material buffer's colours.

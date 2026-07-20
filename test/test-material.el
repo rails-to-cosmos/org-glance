@@ -1014,5 +1014,33 @@ both directions), and the material save (heading rewritten to one tag)."
       (should (s-contains? ":food:" content))
       (should-not (s-contains? "Food" content)))))
 
+(ert-deftest org-glance-test:material-extract-here ()
+  "`C-c e' in a material buffer copies a body KEY: value to the kill ring."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A" "- author: Tolkien"))
+    (org-glance-test:with-material (buf graph "a")
+      (should (eq (key-binding (kbd "C-c e")) #'org-glance-material:extract-here))
+      (org-glance-test:offering (offered (caar offered))
+        (org-glance-material:extract-here)
+        (should (assoc "author" offered)))
+      (should (equal "Tolkien" (current-kill 0))))))
+
+(ert-deftest org-glance-test:material-open-reuses-live-buffer ()
+  "Re-materializing returns the live wired buffer as-is; an encrypted
+headline is NOT re-prompted for its password."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "enc" "* TODO Secret" "plainbody")
+                                 "pw"))
+    (org-glance-test:answering ((read-passwd "pw"))
+      (org-glance-test:with-material (buf graph "enc")
+        (should (s-contains? "plainbody" (buffer-string)))
+        ;; second open: same buffer, no password prompt
+        (cl-letf (((symbol-function 'read-passwd)
+                   (lambda (&rest _) (error "must not re-prompt"))))
+          (should (eq buf (org-glance-material:open graph "enc"))))
+        (should (s-contains? "plainbody" (buffer-string)))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

@@ -100,6 +100,8 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 ;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
+;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
+(define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
 ;; `@' at a word boundary (body or heading title) references another headline
 ;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
@@ -571,7 +573,10 @@ a crypt reseal/unseal rewrites the drawer region and kills its overlays."
 
 (cl-defun org-glance-material:open (graph id)
   "Open headline ID from GRAPH for editing, as its content-blob file.
-Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
+Return the buffer.  A live, already-wired material buffer for ID is returned
+as-is -- no re-setup, and (for an encrypted headline) no password re-prompt:
+its plaintext is already on screen.  Errors if ID is unknown, tombstoned, or
+has no stored blob."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (let ((meta (org-glance-graph:get-headline graph id)))
@@ -582,6 +587,9 @@ Return the buffer.  Errors if ID is unknown, tombstoned, or has no stored blob."
                   graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
+      (when-let ((existing (find-buffer-visiting path)))
+        (when (equal id (buffer-local-value 'org-glance-material--id existing))
+          (cl-return-from org-glance-material:open existing)))
       (let ((buffer
              ;; Initialize the buffer's `org-mode' with the tag's TODO cycle bound
              ;; GLOBALLY: `org-set-regexps-and-options' (run inside `find-file-noselect')
@@ -1088,6 +1096,16 @@ With KEY, take it non-interactively; else completing-read the key.  Signal a
 With KEY, extract it non-interactively; otherwise prompt."
   (cl-check-type headline org-glance-headline)
   (org-glance-material:extract-pairs (org-glance-headline:properties headline) key))
+
+(cl-defun org-glance-material:extract-here ()
+  "Copy a body `KEY: value' pair from this materialized headline (`C-c e').
+Prompts for the key; the value lands on the kill ring."
+  (interactive)
+  (org-glance-material--ensure)
+  (message "Copied: %s"
+           (org-glance-material:extract
+            (org-glance-headline--from-string
+             (buffer-substring-no-properties (point-min) (point-max))))))
 
 ;;;###autoload
 (cl-defun org-glance-extract ()
