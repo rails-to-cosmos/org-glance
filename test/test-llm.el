@@ -215,7 +215,14 @@ buffers appear only in the unfiltered view."
             (should (= 1 (length rows)))
             (should (equal "c1" (alist-get 'headline (car rows)))))
           ;; unfiltered: both headline sessions + the orphan
-          (should (= 3 (length (org-glance-llm--session-rows graph)))))))))
+          (should (= 3 (length (org-glance-llm--session-rows graph))))
+          ;; integration: the filtered path through `:visit' -- per-filter
+          ;; buffer name, filtered row set
+          (org-glance-test:with-shown (vbuf)
+            (setq vbuf (org-glance-llm-sessions:visit graph 'coffee))
+            (with-current-buffer vbuf
+              (should (s-contains? "coffee" (buffer-name)))
+              (should (= 1 (length table-view--rows))))))))))
 
 (provide 'test-llm)
 ;;; test-llm.el ends here

@@ -902,15 +902,12 @@ restore on open, `C-c C-c' to apply."
          (spec (org-glance-filter:normalize-spec filter))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
          (ref-entry (and context (org-glance-table--refs-resolve graph context)))
-         ;; Resolve the active/done split ONCE -- the single configured tag's todo
-         ;; cycle, else the global keywords -- and bind it while the `:done'
+         ;; Resolve the active/done split ONCE and bind it while the `:done'
          ;; predicate AND the badge split are built, so the table agrees with the
          ;; overview (W2).  The predicate is captured in `fill-fn', so a reload
          ;; reuses this exact split with no further bookkeeping.
-         (cycle (org-glance-tag-config:cycle-for-filter graph spec))
-         (done-keywords (if cycle (org-glance-tag-config:done-keywords cycle)
-                          (org-glance--done-keywords)))
-         (org-done-keywords done-keywords)
+         (org-done-keywords
+          (org-glance-tag-config:done-keywords-for-filter graph spec))
          (keep? (org-glance-filter:predicate spec))
          (buffer-name (format "*org-glance-table: %s*" (org-glance-filter:describe spec)))
          (src (org-glance-graph:headline-meta-path graph))

@@ -196,22 +196,21 @@ the slow path."
          rows)
     (dolist (buf (org-glance-llm--live-buffers))
       (puthash (org-glance-llm--buffer-dir buf) buf buf-by-dir))
-    (dolist (meta (if keep?
-                      (cl-remove-if-not keep? (org-glance-graph--metas graph))
-                    (org-glance-graph--metas graph)))
-      (let* ((id (org-glance-headline-metadata:id meta))
+    (dolist (meta (org-glance-graph--metas graph))
+      (when (or (not keep?) (funcall keep? meta))
+        (let* ((id (org-glance-headline-metadata:id meta))
              (dir (org-glance-llm--dir graph id))
              (buf (gethash dir buf-by-dir))
              (transcript (and (member (file-name-nondirectory
                                        (agnostic-llm--session-dir dir))
                                       recorded)
                               (agnostic-llm--session-file dir))))
-        (when (or buf transcript)
-          (remhash dir buf-by-dir)
-          (push (org-glance-llm--session-row
-                 dir buf transcript
-                 (org-glance-headline-metadata:title meta) id)
-                rows))))
+          (when (or buf transcript)
+            (remhash dir buf-by-dir)
+            (push (org-glance-llm--session-row
+                   dir buf transcript
+                   (org-glance-headline-metadata:title meta) id)
+                  rows)))))
     ;; live sessions not owned by any headline -- unfiltered view only
     (unless keep?
       (maphash (lambda (dir buf)
@@ -280,9 +279,8 @@ Honours the same filter language as the overview and table."
   (let* ((spec (org-glance-filter:normalize-spec filter))
          ;; Bind the filter's done split exactly like `org-glance-table:visit',
          ;; so a `:done' clause agrees with the tag's own todo cycle.
-         (cycle (org-glance-tag-config:cycle-for-filter graph spec))
-         (org-done-keywords (if cycle (org-glance-tag-config:done-keywords cycle)
-                              (org-glance--done-keywords)))
+         (org-done-keywords
+          (org-glance-tag-config:done-keywords-for-filter graph spec))
          (keep? (and spec (org-glance-filter:predicate spec)))
          (name (format "*org-glance-llm-sessions: %s*"
                        (org-glance-filter:describe spec)))

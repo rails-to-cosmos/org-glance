@@ -156,6 +156,15 @@ with the global todo keywords -- the graceful-degradation path."
   "CYCLE's `org-todo-keywords' form, or DEFAULT when CYCLE is nil."
   (if cycle (org-glance-tag-config:cycle->keywords cycle) default))
 
+(cl-defun org-glance-tag-config:done-keywords-for-filter (graph filter)
+  "The done-keyword set FILTER's views should honour in GRAPH.
+The single configured tag's cycle when FILTER names one, else the global
+done set (`org-glance--done-keywords').  Bind to `org-done-keywords' while
+building a `:done' predicate or a badge split."
+  (if-let ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
+      (org-glance-tag-config:done-keywords cycle)
+    (org-glance--done-keywords)))
+
 (cl-defun org-glance-tag-config:done-keywords (todo-spec)
   "The done keywords of TODO-SPEC (everything after the last `|'), or nil.
 Derived by org itself from the verbatim cycle string, so the active/done split
