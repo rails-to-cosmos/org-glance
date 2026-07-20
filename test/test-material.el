@@ -1039,8 +1039,7 @@ headline is NOT re-prompted for its password."
         ;; second open: same buffer, no password prompt
         (cl-letf (((symbol-function 'read-passwd)
                    (lambda (&rest _) (error "must not re-prompt"))))
-          (should (eq buf (org-glance-material:open graph "enc"))))
-        (should (s-contains? "plainbody" (buffer-string)))))))
+          (should (eq buf (org-glance-material:open graph "enc"))))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

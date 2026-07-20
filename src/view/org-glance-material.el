@@ -582,15 +582,17 @@ has no stored blob."
   (let ((meta (org-glance-graph:get-headline graph id)))
     (unless (org-glance-headline-metadata? meta)
       (user-error "No live headline with id %s" id))
-    (let ((path (org-glance-graph:content-path graph id))
-          (cycle (org-glance-tag-config:cycle-for-filter
-                  graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))))
+    (let ((path (org-glance-graph:content-path graph id)))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
       (when-let ((existing (find-buffer-visiting path)))
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
           (cl-return-from org-glance-material:open existing)))
-      (let ((buffer
+      ;; Fresh open only: the tag's todo cycle (a stat + possible tag-config
+      ;; parse) is pure waste on the reuse path above.
+      (let* ((cycle (org-glance-tag-config:cycle-for-filter
+                     graph (list :tags (append (org-glance-headline-metadata:tags meta) nil))))
+             (buffer
              ;; Initialize the buffer's `org-mode' with the tag's TODO cycle bound
              ;; GLOBALLY: `org-set-regexps-and-options' (run inside `find-file-noselect')
              ;; reads the DEFAULT value of `org-todo-keywords', not a buffer-local one
@@ -1099,13 +1101,14 @@ With KEY, extract it non-interactively; otherwise prompt."
 
 (cl-defun org-glance-material:extract-here ()
   "Copy a body `KEY: value' pair from this materialized headline (`C-c e').
-Prompts for the key; the value lands on the kill ring."
+Prompts for the key; the value lands on the kill ring.  Reads the LIVE
+buffer (decrypted crypt blocks included) via the same pair scanner the
+stored-headline path uses -- no temp-buffer reparse."
   (interactive)
   (org-glance-material--ensure)
   (message "Copied: %s"
-           (org-glance-material:extract
-            (org-glance-headline--from-string
-             (buffer-substring-no-properties (point-min) (point-max))))))
+           (org-glance-material:extract-pairs
+            (org-glance--buffer-key-value-pairs))))
 
 ;;;###autoload
 (cl-defun org-glance-extract ()
