@@ -191,7 +191,9 @@ the id/hash drawer properties in place, after the read-only facts."
 The headline's interval (`org-tr-regexp').  The search starts after the
 heading's meta-data (`org-end-of-meta-data'), so a range in the title, a
 planning line, the property drawer or the LOGBOOK never projects; ranges
-inside sealed crypt blocks are invisible by construction (invariant 14)."
+inside sealed crypt blocks are invisible by construction (invariant 14).
+The scan spans the whole record -- a parent's contents include its
+descendants (like every content fact), so a child's range can project."
   (save-excursion
     (goto-char (point-min))
     (org-end-of-meta-data t)

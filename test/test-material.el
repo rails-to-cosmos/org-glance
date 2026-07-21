@@ -1069,7 +1069,7 @@ the table cell; `C-c i' inserts/replaces it live, `C-u C-c i' removes it."
       (cl-letf (((symbol-function 'org-read-date)
                  (let ((n 0))
                    (lambda (&rest _)
-                     (encode-time 0 0 0 (if (zerop (cl-incf n)) 1 (if (= n 1) 18 19)) 12 2021)))))
+                     (encode-time 0 0 0 (if (= (cl-incf n) 1) 18 19) 12 2021)))))
         (org-glance-material:set-interval))
       (should (s-contains? "<2021-12-18 Sat>--<2021-12-19 Sun>" (buffer-string)))
       ;; ...replaces on the second call...

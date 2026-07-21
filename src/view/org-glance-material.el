@@ -1109,10 +1109,8 @@ heading's meta-data.  A LIVE buffer edit -- nothing persists until the
 ordinary save."
   (interactive "P")
   (org-glance-material--ensure)
-  (save-restriction
-    (widen)
-    (save-excursion
-      (org-glance-material--goto-first-heading)
+  (org-with-wide-buffer
+    (org-glance-material--goto-first-heading)
       (org-end-of-meta-data t)
       ;; Search the BODY only (title/planning/drawers can carry ranges that
       ;; are not the interval), and never a match inside a decrypted crypt
@@ -1146,7 +1144,7 @@ ordinary save."
                 (goto-char body)
                 (unless (bolp) (insert "\n"))
                 (insert range "\n"))
-              (message "Interval set: %s" range)))))))))
+              (message "Interval set: %s" range))))))))
 
 (cl-defun org-glance-material:extract-here ()
   "Copy a body `KEY: value' pair from this materialized headline (`C-c e').
