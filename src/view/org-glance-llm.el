@@ -214,6 +214,11 @@ table reads only the cache."
   (org-glance--write-eld (org-glance-llm--cache-file graph) entries)
   entries)
 
+(cl-defun org-glance-llm--rescan (graph)
+  "Scan GRAPH's sessions, persist the result, return the entries.
+The expensive full rebuild: the cold-cache path and `g' both come here."
+  (org-glance-llm--cache-write graph (org-glance-llm--scan graph)))
+
 (cl-defun org-glance-llm--row (entry buf)
   "Row for session ENTRY (a cache plist); state and buffer name come from
 live BUF (or nil).  The single row builder -- orphan live sessions route
@@ -241,8 +246,7 @@ session is visible before any rescan."
   (let ((entries (cond (entries? entries)
                        ((f-exists? (org-glance-llm--cache-file graph))
                         (org-glance--read-eld (org-glance-llm--cache-file graph)))
-                       (t (org-glance-llm--cache-write
-                           graph (org-glance-llm--scan graph)))))
+                       (t (org-glance-llm--rescan graph))))
         (buf-by-dir (make-hash-table :test 'equal))
         rows)
     (dolist (buf (org-glance-llm--live-buffers))
@@ -330,8 +334,7 @@ else DIR's leaf."
                                            (table-view-set-rows
                                             (current-buffer)
                                             (org-glance-llm--session-rows
-                                             graph (org-glance-llm--cache-write
-                                                    graph (org-glance-llm--scan graph))))
+                                             graph (org-glance-llm--rescan graph)))
                                            (table-view-apply-sort))))))
     (org-glance-view:display-table graph "*org-glance-llm-sessions*"
                                    org-glance-llm--sessions-spec handlers fill-fn)))
