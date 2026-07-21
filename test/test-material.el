@@ -1041,5 +1041,88 @@ headline is NOT re-prompted for its password."
                    (lambda (&rest _) (error "must not re-prompt"))))
           (should (eq buf (org-glance-material:open graph "enc"))))))))
 
+(ert-deftest org-glance-test:material-interval ()
+  "The body's first active range projects to metadata, the overview line and
+the table cell; `C-c i' inserts/replaces it live, `C-u C-c i' removes it."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "trip" "* DONE Petersburg :travel:"
+                                "<2021-12-18 Sat>--<2021-12-19 Sun>")
+      (org-glance-test:headline "flat" "* TODO No dates :travel:"))
+    ;; metadata round-trip (cold store)
+    (let ((meta (org-glance-graph:get-headline (org-glance-test:reopen graph) "trip")))
+      (should (equal '("<2021-12-18 Sat>" "<2021-12-19 Sun>")
+                     (org-glance-headline-metadata:range meta))))
+    (should-not (org-glance-headline-metadata:range
+                 (org-glance-graph:get-headline graph "flat")))
+    ;; overview heading carries the verbatim range line (agenda span)
+    (should (s-contains? "<2021-12-18 Sat>--<2021-12-19 Sun>"
+                         (org-glance-overview:render-headline
+                          graph (org-glance-graph:get-headline graph "trip"))))
+    ;; table cell: compact ISO, sortable by start
+    (should (equal "2021-12-18..2021-12-19"
+                   (alist-get 'interval
+                              (alist-get 'cells (org-glance-table--row
+                                                 (org-glance-graph:get-headline graph "trip"))))))
+    ;; C-c i inserts on a range-less headline...
+    (org-glance-test:with-material (buf graph "flat")
+      (cl-letf (((symbol-function 'org-read-date)
+                 (let ((n 0))
+                   (lambda (&rest _)
+                     (encode-time 0 0 0 (if (zerop (cl-incf n)) 1 (if (= n 1) 18 19)) 12 2021)))))
+        (org-glance-material:set-interval))
+      (should (s-contains? "<2021-12-18 Sat>--<2021-12-19 Sun>" (buffer-string)))
+      ;; ...replaces on the second call...
+      (cl-letf (((symbol-function 'org-read-date)
+                 (lambda (&rest _) (encode-time 0 0 0 20 12 2021))))
+        (org-glance-material:set-interval))
+      (should (s-contains? "<2021-12-20 Mon>--<2021-12-20 Mon>" (buffer-string)))
+      (should-not (s-contains? "2021-12-18" (buffer-string)))
+      ;; ...and C-u removes the line
+      (org-glance-material:set-interval '(4))
+      (should-not (s-contains? "--<" (buffer-string)))
+      (should-error (org-glance-material:set-interval '(4)) :type 'user-error)
+      ;; persist: save -> metadata reflects the removal
+      (set-buffer-modified-p t)
+      (let ((inhibit-message t)) (save-buffer)))
+    (should-not (org-glance-headline-metadata:range
+                 (org-glance-graph:get-headline graph "flat")))))
+
+(ert-deftest org-glance-test:material-interval-body-scoped ()
+  "Only a BODY range is the interval: ranges in the title, planning line,
+property drawer or a crypt block never project, and `C-c i' never edits
+them -- it inserts a fresh body line instead."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline-props
+       "p" "* TODO Trip <2020-01-01 Wed>--<2020-01-02 Thu>"
+       '(("DATES" . "<2020-02-01 Sat>--<2020-02-02 Sun>"))
+       "SCHEDULED: <2020-03-01 Sun>--<2020-03-02 Mon>"))
+    ;; none of those ranges projects
+    (should-not (org-glance-headline-metadata:range
+                 (org-glance-graph:get-headline graph "p")))
+    (org-glance-test:with-material (buf graph "p")
+      ;; a (decrypted-style) crypt block's range is never editable here
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (insert "#+begin_crypt\n<2020-04-01 Wed>--<2020-04-02 Thu>\n#+end_crypt\n")
+      ;; C-u C-c i finds nothing editable (crypt-block match skipped)
+      (should-error (org-glance-material:set-interval '(4)) :type 'user-error)
+      ;; C-c i inserts a BODY line, leaving title/drawer/planning/crypt alone
+      (cl-letf (((symbol-function 'org-read-date)
+                 (lambda (&rest _) (encode-time 0 0 0 5 5 2020))))
+        (org-glance-material:set-interval))
+      (let ((text (buffer-string)))
+        (should (s-contains? "<2020-05-05 Tue>--<2020-05-05 Tue>" text))
+        (should (s-contains? "Trip <2020-01-01 Wed>--<2020-01-02 Thu>" text))
+        (should (s-contains? ":DATES: <2020-02-01 Sat>--<2020-02-02 Sun>" text))
+        (should (s-contains? "SCHEDULED: <2020-03-01 Sun>--<2020-03-02 Mon>" text))
+        (should (s-contains? "<2020-04-01 Wed>--<2020-04-02 Thu>" text)))
+      (set-buffer-modified-p t)
+      (let ((inhibit-message t)) (save-buffer)))
+    (should (equal '("<2020-05-05 Tue>" "<2020-05-05 Tue>")
+                   (org-glance-headline-metadata:range
+                    (org-glance-graph:get-headline graph "p"))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

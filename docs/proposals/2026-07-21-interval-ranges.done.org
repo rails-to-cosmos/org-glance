@@ -1,0 +1,56 @@
+#+TITLE: Date intervals: org timestamp ranges as first-class metadata
+#+DATE: 2026-07-21
+
+* Problem
+
+A travel-style headline spans dates: =<2021-12-18 Sat>--<2021-12-19 Sun>=.
+The org-native range already sits in bodies (the travel data proves it),
+but org-glance ignores it: no metadata, nothing in the overview (so agenda
+over the overview misses the span) and nothing in the table.
+
+* Design
+
+Org's own range syntax is the source of truth -- no new markers, no drawer
+properties.  *The first active date range in the body is the headline's
+interval* (=org-tr-regexp=, groups 1/2); later ranges are ignored.
+
+1. Metadata: one field =range= -- a list =(FROM TO)= of raw timestamp
+   strings (codec =strings-vector=/=strings-list=, reused), appended at
+   the fields-table END (invariant 4).  Extracted in
+   =org-glance-headline--content-facts= (regex scan; shares the one
+   content pass).  Pre-field records read nil until reindex.
+2. Overview: the heading renders the verbatim =<from>--<to>= body line
+   (after the id drawer, before relations).  Invariant 20 extends: agenda
+   over the overview shows the span on every covered day, natively.
+3. Table: ONE built-in =Interval= column (after Deadline), cells compact
+   =2021-12-18..2021-12-19= (date parts only -- ISO, so string sort orders
+   by start).  Appears everywhere per invariant 16 (empty when no range),
+   hideable per tag with =C-u -=.
+4. Entry: =C-c i= in the material buffer
+   (=org-glance-material:set-interval=) prompts =org-read-date= twice and
+   replaces the buffer's first range line (or inserts one after the
+   meta-data block).  A LIVE-buffer edit -- nothing persists until the
+   ordinary save (invariant 11 untouched); =C-u C-c i= removes the line.
+5. Table =i= on the Interval cell: not editable in v1 (materialize;
+   =C-c i= there).  Separately, =i= on the Tags cell now routes to the
+   =:= tag flow instead of refusing.
+
+* Out of scope (clean later additions)
+
+- =:during DATE= filter key (one =org-glance-filter:table= row, a
+  range-contains match kind).
+- Multiple ranges per headline.
+- Crypt caveat (documented, not fought): a range inside a =#+begin_crypt=
+  block is invisible to the index (invariant 14) -- keep travel dates
+  outside the sealed block.
+
+* Steps
+
+1. =range= field: struct slot + fields row + content-facts fact.
+2. Overview render line + invariant 20 doc.
+3. Table column + row cell + spec-shape test.
+4. =C-c i= / =C-u C-c i= helper + binding.
+5. =i= on Tags cell routes to the tag flow.
+6. Tests: parse/round-trip/absent-nil, overview line, table cell + sort,
+   set-interval insert/replace/remove, tags-cell routing.
+7. Docs: properties.org (range semantics), invariants #20, CHANGELOG.

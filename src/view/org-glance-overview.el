@@ -122,6 +122,11 @@ live from GRAPH (id fallback for gone targets)."
               (unless (string-empty-p planning)
                 (concat (s-trim-right planning) "\n")))
             ":PROPERTIES:\n:ORG_GLANCE_ID: " (org-glance-headline-metadata:id metadata) "\n:END:\n"
+            ;; The date interval, verbatim: agenda over the overview shows the
+            ;; span on every covered day (invariant 20).
+            (pcase (org-glance-headline-metadata:range metadata)
+              (`(,from ,to) (concat from "--" to "\n"))
+              (_ ""))
             ;; Relations: "- roasted by [[org-glance-material:ID][Title]]"
             (apply #'concat
                    (cl-loop for (target . kind) in (org-glance-headline-metadata:relations metadata)

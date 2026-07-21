@@ -135,6 +135,7 @@ live spec against these keys to record the hidden ones."
     ((key . "title")    (header . "Title")     (type . "text")  (sortable . t) (align . "left"))
     ((key . "schedule") (header . "Scheduled") (type . "text")  (sortable . t) (align . "left"))
     ((key . "deadline") (header . "Deadline")  (type . "text")  (sortable . t) (align . "left"))
+    ((key . "interval") (header . "Interval")  (type . "text")  (sortable . t) (align . "left"))
     ((key . "priority") (header . "Pri")       (type . "text")  (sortable . t) (align . "left"))
     ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))
     ((key . "repeated") (header . "Rep")       (type . "text")  (sortable . t) (align . "center"))
@@ -169,6 +170,16 @@ ascending (active first)."
                 ((key . "C-c C-d") (command . "deadline") (label . "Deadline"))))
     (sort . ((column . "state") (ascending . t)))))
 
+(cl-defun org-glance-table--interval-cell (range)
+  "RANGE (FROM TO) as the compact sortable cell `2021-12-18..2021-12-19'.
+Date parts only -- ISO, so the string sort orders by start; \"\" when nil."
+  (pcase range
+    (`(,from ,to)
+     (let ((day (lambda (ts) (if (string-match "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}" ts)
+                                 (match-string 0 ts) ts))))
+       (concat (funcall day from) ".." (funcall day to))))
+    (_ "")))
+
 (cl-defun org-glance-table--row (metadata)
   "Build a `table-view' row alist for headline METADATA.
 The id is the ORG_GLANCE_ID (passed to the action handlers); cells are display
@@ -183,6 +194,8 @@ priority is its letter, absent values are the empty string."
                 (tags     . ,(if tags (s-join ":" tags) ""))
                 (schedule . ,(or (org-glance-headline-metadata:schedule metadata) ""))
                 (deadline . ,(or (org-glance-headline-metadata:deadline metadata) ""))
+                (interval . ,(org-glance-table--interval-cell
+                              (org-glance-headline-metadata:range metadata)))
                 (priority . ,(if (integerp priority) (char-to-string priority) ""))
                 (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" ""))
                 (repeated . ,(if (org-glance-headline-metadata:repeated? metadata) "↻" "")))))))
@@ -755,15 +768,17 @@ transient views (`:where') have no scope to save under."
 (cl-defun org-glance-table--act-edit (graph id)
   "`i' handler: edit the cell at point in place.
 State reuses the todo flow (`C-c C-t'), schedule/deadline the calendar
-planner (`org-read-date'); title, priority and drawer-property columns take
-a string prompt pre-filled with the current value.  Derived columns (tags,
-enc, rep, relation kinds) refuse."
+planner (`org-read-date'), tags the `:' flow (a `C-u' passes through as
+remove); title, priority and drawer-property columns take a string prompt
+pre-filled with the current value.  Derived columns (interval, enc, rep,
+relation kinds) refuse."
   (unless id (user-error "Point is not on a row"))
   (let ((key (get-text-property (point) 'table-view-col))
         (line (line-number-at-pos)))
     (pcase key
       ('nil (user-error "Point is not on a column"))
       ("state" (org-glance-table--act-todo graph id))
+      ("tags" (org-glance-table--act-tag graph id))
       ("schedule" (org-glance-table--act-planning graph id 'schedule))
       ("deadline" (org-glance-table--act-planning graph id 'deadline))
       ("title"

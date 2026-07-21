@@ -169,8 +169,9 @@ MUTATES the buffer (deletes those properties), so call it LAST when sharing one.
 
 (cl-defun org-glance-headline--content-facts (headline)
   "HEADLINE's content-derived metadata facts, in ONE org-mode pass.
-Returns (:relations RS :links LS :linked L :propertized P :encrypted E :hash H),
-sharing one `with-contents' buffer + `org-mode' init across all five (the
+Returns (:relations RS :links LS :linked L :propertized P :encrypted E
+:range R :hash H), sharing one `with-contents' buffer + `org-mode' init
+across all six (the
 store's metadata build reparses the same blob otherwise).  The links parse
 once, feeding both `linked?' and the relation edges.  Hash is LAST: it deletes
 the id/hash drawer properties in place, after the read-only facts."
@@ -182,7 +183,21 @@ the id/hash drawer properties in place, after the read-only facts."
             :linked      (and links t)
             :propertized (org-glance-headline--propertized-here)
             :encrypted   (org-glance-headline--encrypted-here)
+            :range       (org-glance-headline--range-here)
             :hash        (org-glance-headline--hash-here)))))
+
+(cl-defun org-glance-headline--range-here ()
+  "The BODY's first active date range as (FROM TO) with brackets, or nil.
+The headline's interval (`org-tr-regexp').  The search starts after the
+heading's meta-data (`org-end-of-meta-data'), so a range in the title, a
+planning line, the property drawer or the LOGBOOK never projects; ranges
+inside sealed crypt blocks are invisible by construction (invariant 14)."
+  (save-excursion
+    (goto-char (point-min))
+    (org-end-of-meta-data t)
+    (when (re-search-forward org-tr-regexp nil t)
+      (list (concat "<" (match-string-no-properties 1) ">")
+            (concat "<" (match-string-no-properties 2) ">")))))
 
 (cl-defun org-glance-headline--from-string (contents)
   (cl-check-type contents string)

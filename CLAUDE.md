@@ -103,8 +103,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 19. The table is a pure projection: every `--act-*` mutation delegates to the
     `org-glance-material:` layer; bulk ops degrade per-row, never batch-abort.
 20. Overview headings are self-sufficient, metadata-only: state, priority,
-    one planning line, id drawer, relations, plain links — zero blob parses;
-    agenda + link-following need no materialization.
+    one planning line, id drawer, interval line, relations, plain links —
+    zero blob parses; agenda + link-following need no materialization.
 21. Reserved properties (`org-glance-material-hidden-properties`) are managed
     keys: concealed in material buffers, hand edits reverted on save with a
     warning; the revert touches only the heading drawer (disjoint from the

@@ -102,6 +102,8 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
 ;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
+;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
+(define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
 ;; `@' at a word boundary (body or heading title) references another headline
 ;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
@@ -1098,6 +1100,53 @@ With KEY, take it non-interactively; else completing-read the key.  Signal a
 With KEY, extract it non-interactively; otherwise prompt."
   (cl-check-type headline org-glance-headline)
   (org-glance-material:extract-pairs (org-glance-headline:properties headline) key))
+
+(cl-defun org-glance-material:set-interval (&optional remove)
+  "Set this headline's date interval (`C-c i'); with REMOVE (`C-u'), drop it.
+Prompts `org-read-date' twice and replaces the buffer's first active range
+\(`org-tr-regexp'), or inserts a fresh `<from>--<to>' line after the
+heading's meta-data.  A LIVE buffer edit -- nothing persists until the
+ordinary save."
+  (interactive "P")
+  (org-glance-material--ensure)
+  (save-restriction
+    (widen)
+    (save-excursion
+      (org-glance-material--goto-first-heading)
+      (org-end-of-meta-data t)
+      ;; Search the BODY only (title/planning/drawers can carry ranges that
+      ;; are not the interval), and never a match inside a decrypted crypt
+      ;; block -- editing there would silently mutate secret content the
+      ;; index (which reads SEALED bytes, invariant 14) can never reflect.
+      (cl-flet ((goto-body-range ()
+                  (cl-loop while (re-search-forward org-tr-regexp nil t)
+                           unless (org-glance--crypt-block-at (match-beginning 0))
+                           return t
+                           finally return nil)))
+        (let ((body (point)))
+          (cond
+           (remove
+            (if (goto-body-range)
+                (progn
+                  (replace-match "" t t)
+                  (when (string-blank-p (buffer-substring (line-beginning-position)
+                                                          (line-end-position)))
+                    (delete-region (line-beginning-position)
+                                   (min (point-max) (1+ (line-end-position)))))
+                  (message "Interval removed"))
+              (user-error "No interval to remove")))
+           (t
+            (let* ((from (org-read-date nil t nil "Interval from: "))
+                   (to (org-read-date nil t nil "Interval to: "))
+                   (range (concat (format-time-string (org-time-stamp-format) from)
+                                  "--"
+                                  (format-time-string (org-time-stamp-format) to))))
+              (if (goto-body-range)
+                  (replace-match range t t)
+                (goto-char body)
+                (unless (bolp) (insert "\n"))
+                (insert range "\n"))
+              (message "Interval set: %s" range)))))))))
 
 (cl-defun org-glance-material:extract-here ()
   "Copy a body `KEY: value' pair from this materialized headline (`C-c e').

@@ -73,7 +73,7 @@ falling back to the default."
   (org-glance-test:with-graph graph
     (let ((spec (org-glance-table--spec graph nil)))
       (should (alist-get 'title spec))
-      (should (equal '("state" "title" "schedule" "deadline"
+      (should (equal '("state" "title" "schedule" "deadline" "interval"
                        "priority" "encrypted" "repeated" "tags")
                      (mapcar (lambda (c) (alist-get 'key c))
                              (alist-get 'columns spec))))
@@ -722,8 +722,15 @@ priority and property columns take a string prompt, derived columns refuse."
         (should (equal "Alpha" offered)))
       (should (equal "Beta" (org-glance-headline-metadata:title
                              (org-glance-graph:get-headline graph "a"))))
-      ;; tags column: derived, refuses
+      ;; tags column: routes to the `:' tag flow
       (org-glance-test:goto-cell "a" "tags")
+      (let (tagged)
+        (cl-letf (((symbol-function 'org-glance-table--act-tag)
+                   (lambda (_g id) (setq tagged id))))
+          (org-glance-table--act-edit graph "a"))
+        (should (equal "a" tagged)))
+      ;; a truly derived column still refuses
+      (org-glance-test:goto-cell "a" "repeated")
       (should-error (org-glance-table--act-edit graph "a") :type 'user-error)
       ;; priority column: empty input clears the cookie
       (org-glance-test:goto-cell "a" "priority")

@@ -83,3 +83,15 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
   emit it from a tag's =:TODO_KEYWORDS:= cycle so org renders, faces and cycles
   those states natively; the table shows a coloured =#+TODO:= line of the graph's
   live states in its header (always visible).
+
+* Body date interval
+
+=<from>--<to>= — an org-native active timestamp range in the body.  The
+FIRST one is the headline's interval: projected into =range= metadata
+(=org-glance-headline--content-facts=), rendered verbatim in the overview
+heading and as the table's =Interval= column.  Set with =C-c i= in the
+material buffer (=C-u C-c i= removes).  Title, planning-line, drawer and
+LOGBOOK ranges never count (the scan starts after the heading's
+meta-data), and =C-c i= never touches a range inside a crypt block --
+sealed ones are invisible to the index (invariant 14), decrypted ones are
+secret content.

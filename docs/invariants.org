@@ -192,9 +192,10 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 
 20. *Overview headings are self-sufficient, metadata-only.*  The render
     (=org-glance-overview:render-headline=) carries state, priority cookie,
-    the SINGLE planning line, the id drawer, relations and plain links — all
-    from metadata, zero blob parses; agenda and link-following work without
-    materializing.  Violation: agenda misses planning, or the render cost
+    the SINGLE planning line, the id drawer, the verbatim date-interval line
+    (=<from>--<to>=, so agenda shows the span), relations and plain links —
+    all from metadata, zero blob parses; agenda and link-following work
+    without materializing.  Violation: agenda misses planning, or the render cost
     becomes O(blobs).
 
 21. *Reserved properties are managed keys.*  The keys in

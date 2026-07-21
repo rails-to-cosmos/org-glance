@@ -6,6 +6,13 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Date intervals: the body's first org range (=<from>--<to>=) is the
+  headline's interval — new =range= metadata, a sortable table =Interval=
+  column (=2021-12-18..2021-12-19=), the verbatim range line in the
+  overview (agenda shows the span), and =C-c i= / =C-u C-c i= in the
+  material buffer to set / remove it.  Pre-existing records need
+  =M-x org-glance-reindex=.
+- Table: =i= on the Tags cell routes to the =:= tag flow.
 - Material buffers: =C-c e= copies a body =KEY: value= from the headline
   (the views' =e=, on the buffer at hand).
 - Table: =i= edits the cell at point — state via the todo flow, schedule /

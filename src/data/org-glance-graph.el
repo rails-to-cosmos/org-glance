@@ -76,7 +76,10 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
   ;; org's :ARCHIVE: tag / COMMENT keyword flags; the default ambient filter
   ;; excludes both.  nil on pre-field records; reindex backfills.
   (archived? nil :read-only t :type boolean)
-  (commented? nil :read-only t :type boolean))
+  (commented? nil :read-only t :type boolean)
+  ;; The headline's date interval: (FROM TO) raw timestamp strings from the
+  ;; body's FIRST active range (org-tr-regexp), or nil.  See C-c i.
+  (range nil :read-only t :type list))
 
 (defconst org-glance-headline-metadata:fields
   ;; SLOT          JSON-KEY      FROM-HEADLINE                                                ENCODE       DECODE
@@ -95,7 +98,8 @@ accumulate.  Set to a very large value to effectively disable auto-compaction
     (links         :links        :links                                                    strings-vector strings-list)
     ;; append new fields at the END only (row order = JSON key order, inv 4)
     (archived?     :archived     ,#'org-glance-headline:archived?                          nil          bool)
-    (commented?    :commented    ,#'org-glance-headline:commented?                         nil          bool))
+    (commented?    :commented    ,#'org-glance-headline:commented?                         nil          bool)
+    (range         :range        :range                                                    strings-vector strings-list))
   "The single source of truth for the metadata projection's shape.
 Drives the `org-glance-headline:metadata' constructor, `serialize' and
 `deserialize' together, so the four can never drift (a hand-written
