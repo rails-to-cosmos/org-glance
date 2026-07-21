@@ -176,7 +176,7 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 |-----------------------------------------+----------------------+--------------------------------------------------------|
 | =org-glance-directory=                  | =org-directory=      | root of the managed content (store lives in =.org-glance/=) |
 | =org-glance-overview-default-view=      | =org-glance-table=   | what =o= opens; =org-glance-overview= for org-text     |
-| =org-glance-filter-spec=                | =(:done nil)=        | ambient filter every view starts from (active-only)    |
+| =org-glance-filter-spec=                | active, -archived, -commented | ambient filter every view starts from (=nil= = everything) |
 | =org-glance-view-fill-frame=            | =t=                  | views take the whole frame; =nil= keeps your windows   |
 | =org-glance-repeat-history-depth=       | =0=                  | occurrence snapshots kept: N / =t= = all / =0= = off   |
 | =org-glance-material-password-ttl=      | =300=                | seconds a crypt password stays cached; =0= = forever   |

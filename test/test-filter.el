@@ -92,5 +92,46 @@ special symbol, never the literal string.  Documents the deliberate limitation
       ;; a non-colliding concrete state is still offered as itself
       (should (member "TODO" offered)))))
 
+(ert-deftest org-glance-test:filter-archived-commented ()
+  "`:archived' / `:commented' filter on org's ARCHIVE tag and COMMENT keyword;
+the metadata flags round-trip through serialize -> disk -> deserialize, and a
+record from before the fields reads nil (kept by the nil filter)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "live" "* TODO Live")
+      (org-glance-test:headline "arch" "* TODO Old :ARCHIVE:")
+      (org-glance-test:headline "comm" "* COMMENT Draft"))
+    (let ((cold (org-glance-test:reopen graph)))       ; deserialized structs
+      (should (org-glance-headline-metadata:archived?
+               (org-glance-graph:get-headline cold "arch")))
+      (should (org-glance-headline-metadata:commented?
+               (org-glance-graph:get-headline cold "comm")))
+      (should (equal '("arch") (org-glance-test:filter-ids cold '(:archived t))))
+      (should (equal '("comm" "live")
+                     (sort (org-glance-test:filter-ids cold '(:archived nil)) #'string<)))
+      ;; the DEFAULT ambient spec hides both flags
+      (should (equal '("live")
+                     (org-glance-test:filter-ids
+                      cold (default-value 'org-glance-filter-spec)))))
+    ;; pre-field record: absent flags deserialize nil -> nil filter keeps it
+    (let ((meta (org-glance-headline-metadata:deserialize
+                 '(:id "old" :state "TODO" :title "Old" :tags []
+                   :hash "h" :schedule nil :deadline nil :priority nil
+                   :linked nil :propertized nil :encrypted nil))))
+      (should-not (org-glance-headline-metadata:archived? meta))
+      (should-not (org-glance-headline-metadata:commented? meta)))))
+
+(ert-deftest org-glance-test:filter-spec-defcustom ()
+  "`org-glance-filter-spec' is a defcustom whose default hides done, archived
+and commented headlines; `describe' renders the flags compactly."
+  (should (custom-variable-p 'org-glance-filter-spec))
+  (should (equal '(:done nil :archived nil :commented nil)
+                 (default-value 'org-glance-filter-spec)))
+  (should (equal "active, -archived, -commented"
+                 (org-glance-filter:describe
+                  '(:done nil :archived nil :commented nil))))
+  (should (s-contains? "archived"
+                       (org-glance-filter:describe '(:archived t)))))
+
 (provide 'test-filter)
 ;;; test-filter.el ends here

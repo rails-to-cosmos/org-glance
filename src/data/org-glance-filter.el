@@ -32,12 +32,15 @@
 
 ;;; The ambient filter
 
-(defvar org-glance-filter-spec '(:done nil)
+(defcustom org-glance-filter-spec '(:done nil :archived nil :commented nil)
   "Ambient filter applied to headline actions, as a normalized filter spec.
-Defaults to `(:done nil)' -- active (not-done) headlines.  Set via the
-`org-glance-transient' transient; consumed by the picker commands
-\(materialize / open / extract) and overlaid onto the overview and agenda.
-See `org-glance-filter:predicate' for the spec language.")
+Default: active (not-done), unarchived, uncommented headlines.  Set via the
+`org-glance-transient' transient (clear with `c' to see everything);
+consumed by the picker commands (materialize / open / extract) and overlaid
+onto the overview and agenda.  See `org-glance-filter:predicate' for the
+spec language."
+  :group 'org-glance
+  :type 'sexp)
 
 ;;; The language
 
@@ -65,6 +68,8 @@ See `org-glance-filter:predicate' for the spec language.")
     (:linked         :match bool           :accessor ,#'org-glance-headline-metadata:linked?)
     (:propertized    :match bool           :accessor ,#'org-glance-headline-metadata:propertized?)
     (:encrypted      :match bool           :accessor ,#'org-glance-headline-metadata:encrypted?)
+    (:archived       :match bool           :accessor ,#'org-glance-headline-metadata:archived?)
+    (:commented      :match bool           :accessor ,#'org-glance-headline-metadata:commented?)
     (:schedule       :match present-absent :accessor ,#'org-glance-headline-metadata:schedule)
     (:deadline       :match present-absent :accessor ,#'org-glance-headline-metadata:deadline)
     ;; Relation views.  :transient marks keys whose views are one-off (a raw
@@ -336,6 +341,8 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
                      (:refers-to (format "refs->%s" (s-left 8 v)))
                      (:id-any (format "id-any(%d)" (length v)))
                      (:where "where")
+                     (:archived (if v "archived" "-archived"))
+                     (:commented (if v "commented" "-commented"))
                      (_ (format "%s=%s" (substring (symbol-name k) 1) v)))
            into parts
            finally return (if parts (s-join ", " parts) "all")))

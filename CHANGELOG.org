@@ -89,6 +89,11 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- The ambient filter defaults to hiding archived (=:ARCHIVE:= tag) and
+  commented (=COMMENT= keyword) headlines too, and =org-glance-filter-spec=
+  is a =defcustom= now.  New filter keys =:archived= / =:commented=; new
+  metadata fields (pre-existing records read as unflagged until
+  =M-x org-glance-reindex=).
 - =L= (LLM sessions) prompts for a tag and overlays the ambient filter, like
   the table/overview; rows scan only matching headlines (the unfiltered
   whole-graph scan cold-parsed every blob and could freeze).  Orphan live
