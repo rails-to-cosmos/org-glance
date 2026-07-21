@@ -67,5 +67,26 @@ column's value-fn reads that property via the index."
           (org-glance-table--act-extract graph "a")))
       (should (equal "Tolkien" killed)))))
 
+(ert-deftest org-glance-test:cache-dir-split ()
+  "Derived sidecars live under `cache/' (git-ignored, pruned of legacy);
+user config stays under `config/'."
+  (org-glance-test:with-graph graph
+    (should (s-contains? "/cache/" (org-glance-graph:cache-file graph "x.eld")))
+    (should (s-contains? "/config/" (org-glance-graph:config-file graph "x.eld")))
+    (should (s-contains? "/cache/" (org-glance-property-index--file graph)))
+    ;; the store git-ignores cache/ (written once at open, if absent)
+    (should (f-exists? (f-join (org-glance-graph:store-path graph) ".gitignore")))
+    ;; each module prunes ITS pre-split legacy file at graph open
+    (let ((legacy (org-glance-graph:config-file graph "property-index.eld")))
+      (f-mkdir-full-path (f-dirname legacy))
+      (f-write-text "()" 'utf-8 legacy)
+      (org-glance-test:reopen graph)
+      (should-not (f-exists? legacy)))
+    ;; reindex drops the whole derived cache/ dir (llm cache included)
+    (f-mkdir-full-path (org-glance-graph:cache-path graph))
+    (f-write-text "nil" 'utf-8 (org-glance-graph:cache-file graph "llm-sessions.eld"))
+    (org-glance-reindex (org-glance-graph:directory graph))
+    (should-not (f-exists? (org-glance-graph:cache-path graph)))))
+
 (provide 'test-property-index)
 ;;; test-property-index.el ends here

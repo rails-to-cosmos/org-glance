@@ -11,7 +11,7 @@
 ;;   :drawer  the org `:PROPERTIES:' drawer (`node-properties'), shown as columns;
 ;;   :body    org-glance's body `KEY: value' pairs (`properties'), read by extract.
 ;;
-;; Persisted at `<store>/config/property-index.eld' (alist id -> (HASH :drawer AL
+;; Persisted at `<store>/cache/property-index.eld' (alist id -> (HASH :drawer AL
 ;; :body AL)).  Correctness never depends on it: a cold / stale / git-conflicted
 ;; entry falls back to an O(N) blob parse, and `org-glance-reindex' drops it.
 
@@ -41,7 +41,7 @@ Hides org-glance bookkeeping (`ORG_GLANCE_*') and org's synthesised CATEGORY
 
 (cl-defun org-glance-property-index--file (graph)
   "Path of GRAPH's property-index sidecar (may not exist)."
-  (org-glance-graph:config-file graph "property-index.eld"))
+  (org-glance-graph:cache-file graph "property-index.eld"))
 
 (cl-defun org-glance-property-index--table (graph)
   "GRAPH's index as a live hash-table id->entry (loaded from disk on first use)."
@@ -124,6 +124,14 @@ CATEGORY excluded).  Read-only w.r.t. disk -- a following render persists."
             append (cl-loop for kv in (org-glance-property-index:drawer graph id)
                             when (org-glance-property-index--candidate-key? (car kv))
                             collect (car kv)))))
+
+(cl-defun org-glance-property-index--prune-legacy (graph)
+  "Delete the pre-cache/-split location of this module's sidecar, if present.
+`org-glance-graph-after-open-functions' hook; the module owns its filename."
+  (let ((legacy (org-glance-graph:config-file graph "property-index.eld")))
+    (when (f-exists? legacy) (f-delete legacy))))
+(add-hook 'org-glance-graph-after-open-functions
+          #'org-glance-property-index--prune-legacy)
 
 (cl-defun org-glance-property-index:clear (graph)
   "Drop GRAPH's property index (in-session memo + on-disk file); rebuilds lazily."

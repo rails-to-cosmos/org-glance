@@ -34,7 +34,7 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
    ordering: metadata computed first (fail before any write), blob before WAL
    append (=org-glance-graph:add=).  The property index
-   (=config/property-index.eld=) is a PURE derived cache: every read is
+   (=cache/property-index.eld=) is a PURE derived cache: every read is
    content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
    cached, and =org-glance-reindex= drops it — so no caller may trust an index
    value in a durable write/delete without that fallback
@@ -213,8 +213,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     =display-warning= — and the crypt seal (invariant 14).  Violation: a
     silent rewrite clobbers user text with no trace (collides with inv 11).
 
-23. *LLM session state is derived live, never persisted.*  The sessions table
-    (=org-glance-llm--session-rows=) recomputes every row from =buffer-list=,
-    =process-live-p= and the provider's transcript dir on each fill; the
-    module writes no sidecar of its own.  Violation: a killed buffer shows
-    "running", a restarted one "stopped".
+23. *LLM session LIVE state is derived live, never persisted.*  Running /
+    exited / stopped and buffer names always recompute from =buffer-list= +
+    =process-live-p= at fill (=org-glance-llm--session-rows=); live buffers
+    absent from the cache still overlay as live rows.  The headline↔session
+    map and transcript facts persist in =cache/llm-sessions.eld= — a
+    DERIVED, rebuildable cache (invariant-5 class; first =L= scans and
+    writes, =g= rescans) that is never the source of truth.  Violation: a
+    killed buffer shows "running", a restarted one "stopped", or the cache
+    is trusted for anything live.

@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.16.1.0.20260720.0
+;; Version: 1.17.0.0.20260721.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -226,7 +226,13 @@ and `org-glance-extract')."
   (interactive)
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:reindex graph)))
-    (org-glance-property-index:clear graph)   ; derived; rebuilds lazily
+    (org-glance-property-index:clear graph)   ; in-session memo (+ its file)
+    ;; Every on-disk derived cache goes wholesale: the cache/ dir and the
+    ;; overview renders.  Identities change across upgrades (e.g. new
+    ;; ambient-filter keys), so per-key dirs would otherwise accrete forever.
+    (dolist (dir (list (org-glance-graph:cache-path graph)
+                       (org-glance-overview:cache-path graph)))
+      (ignore-errors (f-delete dir t)))
     (when (called-interactively-p 'any)
       (message "org-glance: re-indexed %d headline(s)." n))
     n))

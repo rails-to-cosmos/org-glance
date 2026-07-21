@@ -38,7 +38,7 @@ correctness never depends on it -- a miss falls back to an O(N) blob parse.
 
 ** Storage
 
-=<store>/config/property-index.eld=: an alist =id -> (HASH :drawer AL :body AL)=.
+=<store>/cache/property-index.eld= (originally =config/=): an alist =id -> (HASH :drawer AL :body AL)=.
 - =HASH= is the headline's content hash (=org-glance-headline-metadata:hash=), the
   same invalidation key the per-buffer cache uses.
 - =:drawer= / =:body= are the two property alists, both filled in ONE blob parse.

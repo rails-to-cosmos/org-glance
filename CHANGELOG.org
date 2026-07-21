@@ -89,15 +89,27 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Derived caches split out of =config/= into a git-ignored =cache/= store
+  dir (=property-index.eld=, =llm-sessions.eld=; the store writes
+  =.gitignore= once, if absent).  User state (=tags.org=, table layouts)
+  stays in =config/=.  =M-x org-glance-reindex= prunes the legacy files;
+  caches rebuild themselves either way.
 - The ambient filter defaults to hiding archived (=:ARCHIVE:= tag) and
   commented (=COMMENT= keyword) headlines too, and =org-glance-filter-spec=
   is a =defcustom= now.  New filter keys =:archived= / =:commented=; new
   metadata fields (pre-existing records read as unflagged until
-  =M-x org-glance-reindex=).
-- =L= (LLM sessions) prompts for a tag and overlays the ambient filter, like
-  the table/overview; rows scan only matching headlines (the unfiltered
-  whole-graph scan cold-parsed every blob and could freeze).  Orphan live
-  sessions show only in the unfiltered view; one buffer per filter.
+  =M-x org-glance-reindex=).  One-time side effect: ambient-derived view
+  identities change, so saved column order/sort resets once (column SETS
+  keep -- they are per-tag).  Org's =ARCHIVE= marker tag is no longer a
+  pickable collection tag (the =archived?= flag carries it); the tags
+  dashboard now overlays the ambient filter like every other entry point,
+  and =M-x org-glance-reindex= prunes orphaned overview caches.
+- =L= (LLM sessions) opens instantly from a persisted cache
+  (=cache/llm-sessions.eld=; derived + rebuildable): no tag prompt, all
+  sessions shown; the first-ever =L= scans and writes the cache, =g=
+  rescans.  Running/exited state overlays live, and sessions started since
+  the last scan appear as live rows.  (Replaces the earlier per-tag scan;
+  the whole-graph scan cold-parsed every blob and could freeze.)
 - Table: Tags is the last built-in column by default (saved layouts keep
   their own order).
 - In-view toggle between the table and the org overview is =O= (was =T=).

@@ -95,9 +95,12 @@ The row id is the tag string; the Cycle cell comes from the tag's config."
 ;;; Actions
 
 (cl-defun org-glance-tags--tag-filter (tag)
-  "Normalised single-tag filter spec for TAG (a string)."
-  (org-glance-filter:normalize-spec
-   (list :tags (list (org-glance-tag:from-string tag)))))
+  "TAG's view filter: the tag overlaid on the ambient spec.
+Same merge as the o/table entry points, so RET here and the picker open
+the SAME view (the dashboard previously bypassed the ambient filter and
+showed e.g. archived rows the picker hides)."
+  (org-glance-filter:merge org-glance-filter-spec
+                           (org-glance-tag:from-string tag)))
 
 (cl-defun org-glance-tags--act-table (graph tag)
   "Open TAG's headline table (`org-glance-table' mode) from GRAPH."

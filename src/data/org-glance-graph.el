@@ -246,12 +246,13 @@ so a soft index never breaks graph open.")
       (f-mkdir-full-path (org-glance-graph:meta-path graph))
       (f-touch (org-glance-graph:headline-meta-path graph))
       (org-glance-graph--ensure-gitattributes graph)    ; git union merge for *.jsonl
+      (org-glance-graph--ensure-gitignore graph)         ; cache/ is per-machine
       (org-glance-graph--resolve-jsonl-conflicts graph)  ; heal markers a pre-driver sync left
       (org-glance-graph--migrate-maybe graph)      ; bootstrap MANIFEST / adopt legacy file
       (org-glance-graph--reconcile-manifest graph) ; rebuild a git-mangled MANIFEST
       (org-glance-graph--heal graph)               ; recover seal, derive seq, reap orphans
       (puthash directory graph org-glance-graph:list)
-      ;; Side indexes resolve their own conflicts (config/*.eld) proactively here,
+      ;; Side indexes resolve their own conflicts (*.eld sidecars) proactively here,
       ;; symmetric to the WAL resolver above.  Demoted: a soft index never breaks open.
       (with-demoted-errors "org-glance: after-open hook: %S"
         (run-hook-with-args 'org-glance-graph-after-open-functions graph)))
@@ -559,9 +560,25 @@ Dot-prefixed so `org-agenda' (and legacy v1 tag discovery, which matched
    (lambda () (-> (f-join (org-glance-graph:store-path graph) "meta") (file-truename)))))
 
 (cl-defun org-glance-graph:config-file (graph name)
-  "Path of GRAPH's config sidecar NAME under the store's `config/' (may not exist)."
+  "Path of GRAPH's config sidecar NAME under the store's `config/' (may not exist).
+For user-authored state worth syncing (tag config, table layouts); DERIVED
+rebuildable caches live under `cache/' instead (`org-glance-graph:cache-file')."
   (cl-check-type graph org-glance-graph)
   (f-join (org-glance-graph:store-path graph) "config" name))
+
+(cl-defun org-glance-graph:cache-path (graph)
+  "GRAPH's derived-cache directory (`cache/' under the store).
+Wholesale-deletable: everything inside is rebuildable (invariant 5)."
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:store-path graph) "cache"))
+
+(cl-defun org-glance-graph:cache-file (graph name)
+  "Path of GRAPH's derived-cache sidecar NAME under the store's `cache/'.
+Everything here is rebuildable from canonical data (invariant 5) and
+per-machine; the whole directory is git-ignored
+\(`org-glance-graph--ensure-gitignore') and safe to delete."
+  (cl-check-type graph org-glance-graph)
+  (f-join (org-glance-graph:cache-path graph) name))
 
 (cl-defun org-glance-graph:headline-meta-path (graph)
   (cl-check-type graph org-glance-graph)
@@ -771,16 +788,28 @@ Return the number of headlines re-indexed."
 
 ;;; Store bootstrap / recovery / compaction
 
+(cl-defun org-glance-graph--write-if-absent (path content)
+  "Write CONTENT to PATH unless it exists: never clobber a (maybe
+hand-edited) file.  The idempotent-marker contract of invariant 8."
+  (unless (f-exists? path)
+    (f-write-text content 'utf-8 path)))
+
 (cl-defun org-glance-graph--ensure-gitattributes (graph)
   "Write the `merge=union' git driver for GRAPH's *.jsonl files, if absent.
 Concurrent appends to `headlines.jsonl' on two machines conflict when the store
 dir is synced via git; the built-in `union' driver keeps every line from both
 sides, and the positional last-wins reader (`--latest-records') resolves any
-duplicate id.  Write-if-absent and idempotent: never clobber an existing (maybe
-hand-edited) file.  `union' is built in, so no `git config' is needed."
-  (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes")))
-    (unless (f-exists? path)
-      (f-write-text "*.jsonl merge=union\n" 'utf-8 path))))
+duplicate id.  `union' is built in, so no `git config' is needed."
+  (org-glance-graph--write-if-absent
+   (f-join (org-glance-graph:meta-path graph) ".gitattributes")
+   "*.jsonl merge=union\n"))
+
+(cl-defun org-glance-graph--ensure-gitignore (graph)
+  "Git-ignore the store's derived `cache/' dir, if no ignore file exists yet.
+Caches are per-machine and rebuildable -- syncing them is pure churn."
+  (org-glance-graph--write-if-absent
+   (f-join (org-glance-graph:store-path graph) ".gitignore")
+   "cache/\n"))
 
 (cl-defun org-glance-graph--manifest-broken? (text)
   "Non-nil when MANIFEST TEXT cannot be trusted as the live segment set.

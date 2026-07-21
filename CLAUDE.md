@@ -112,8 +112,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 22. Material saves rewrite user content only through announced normalize hooks
     (reserved-property revert, case-twin tag collapse — each warns — and the
     crypt seal).
-23. LLM session state is derived live (buffers + processes + transcripts),
-    never persisted.
+23. LLM session LIVE state (running/exited, buffer names) is derived live,
+    never persisted; the headline↔session map + transcript facts cache in
+    `cache/llm-sessions.eld` (derived, rebuildable, never source of truth).
 
 ## Fix — and prevent — the whole class
 

@@ -199,8 +199,13 @@ the id/hash drawer properties in place, after the read-only facts."
 (cl-defun org-glance-headline--from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
+        ;; org's ARCHIVE marker tag is bookkeeping (the `archived?' flag below
+        ;; carries it) -- never a collection tag, so no phantom pickable
+        ;; \"archive\" view of headlines the ambient filter hides.
         (tags (delete-dups
-               (mapcar #'org-glance-tag:from-string (org-element-property :tags element))))
+               (cl-remove (org-glance-tag:from-string org-archive-tag)
+                          (mapcar #'org-glance-tag:from-string
+                                  (org-element-property :tags element)))))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
         (closed (org-element-property :closed element))

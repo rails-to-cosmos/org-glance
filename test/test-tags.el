@@ -111,6 +111,13 @@ become untagged but live, and the tag leaves the derived tag set."
 
 ;;; RET -> tag's headline table
 
+(ert-deftest org-glance-test:tags-filter-overlays-ambient ()
+  "The dashboard's per-tag filter overlays the ambient spec (same view as the
+o/table pickers -- archived rows hidden by default here too)."
+  (should (equal (org-glance-filter:identity
+                  (org-glance-filter:merge org-glance-filter-spec 'x))
+                 (org-glance-filter:identity (org-glance-tags--tag-filter "x")))))
+
 (ert-deftest org-glance-test:tags-ret-opens-table ()
   "RET on a tag row opens that tag's `org-glance-table' buffer."
   (org-glance-test:with-graph graph

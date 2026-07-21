@@ -104,6 +104,10 @@ record from before the fields reads nil (kept by the nil filter)."
     (let ((cold (org-glance-test:reopen graph)))       ; deserialized structs
       (should (org-glance-headline-metadata:archived?
                (org-glance-graph:get-headline cold "arch")))
+      ;; the ARCHIVE marker tag never becomes a collection tag
+      (should-not (org-glance-headline-metadata:tag-strings
+                   (org-glance-graph:get-headline cold "arch")))
+      (should-not (member "archive" (org-glance-graph:tags cold)))
       (should (org-glance-headline-metadata:commented?
                (org-glance-graph:get-headline cold "comm")))
       (should (equal '("arch") (org-glance-test:filter-ids cold '(:archived t))))
