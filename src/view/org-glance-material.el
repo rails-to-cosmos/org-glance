@@ -11,7 +11,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'org)
 (require 'ol)
 (require 's)

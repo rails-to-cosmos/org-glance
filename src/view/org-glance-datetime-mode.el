@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'dash)
-(require 'cl-macs)
+(require 'cl-lib)
 (require 'org)
 (require 'org-element)
 

@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 
 (require 'files)
-(require 'cl-macs)
+(require 'cl-lib)
 (require 'org-capture)
 (require 's)
 

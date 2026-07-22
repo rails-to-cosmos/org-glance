@@ -27,7 +27,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'f)
 (require 's)
 

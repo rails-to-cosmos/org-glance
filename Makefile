@@ -1,4 +1,4 @@
-.PHONY: build test info clean lint
+.PHONY: build test info clean lint lint-package bench
 
 info:
 	eask info
@@ -22,18 +22,22 @@ test:
 	eask reinstall
 	eask run command test
 
+# Gate: checkdoc (CLAUDE.md docstring rules) + relint (store regexps).
+# package-lint is advisory only -- its hyphen-separator rule conflicts with
+# the project's documented `:' public-API naming (see CLAUDE.md).
 lint:
 	make clean
 	eask lint checkdoc
+	eask lint regexps
+
+lint-package:
+	eask lint package
+
+bench:
+	eask run command bench
 
 clean:
 	eask clean elc
-
-# --- Fat build: one loadable file --------------------------------------------
-# Concatenate the multi-directory sources into a single `dist/org-glance.el' in
-# load-history order (dependencies precede dependents, so macros are defined
-# before use), then prove it byte-compiles and loads with only itself + its
-# dependencies on `load-path' (sources removed).  Ship dist/org-glance.el(c).
 
 # --- Version bumping ---------------------------------------------------------
 # org-glance versions are MAJOR.MINOR.PATCH.BUILD.YYYYMMDD.REV (package-build /

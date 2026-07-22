@@ -1,8 +1,19 @@
 #+TITLE: Dev tooling: a benchmark harness + a lint command
 #+DATE: 2026-07-09
 
-Status: *proposed* · dev tooling 2026-07-09 · supports
+Status: *done* (2026-07-22) · dev tooling 2026-07-09 · supports
 [[file:2026-07-06-performance-audit.org][Performance audit]]
+
+Landed with amendments: the custom =eask-defcommand lint= design was
+superseded by Eask's built-in =eask lint= subcommands — =make lint= gates
+on checkdoc + relint; package-lint is the advisory =make lint-package=
+(its hyphen-separator rule conflicts with the project's documented =:=
+public-API naming).  The bench set grew two ops the original could not
+foresee: property-index cold fill (the class behind the 2026-07-20 LLM
+sessions freeze) and reindex.  First run immediately measured reindex as
+mildly superlinear (6.5ms → 10.2ms per headline from N=1k → 10k) — a
+follow-up candidate.  package-lint's one substantive finding
+(=(require 'cl-macs)= in 11 files) was fixed in the same pass.
 
 Two low-effort, high-value gaps in the repo's own tooling. Both are pure
 additions — no runtime code changes, no new package dependencies for the shipped

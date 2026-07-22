@@ -35,7 +35,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'dash)
 (require 'f)
 (require 'ol)

@@ -23,7 +23,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 's)
 (require 'dash)
 

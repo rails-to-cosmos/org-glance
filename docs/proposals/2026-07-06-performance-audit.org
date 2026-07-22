@@ -27,7 +27,7 @@ entry point; each non-trivial optimization has its own proposal, linked below.
 | *E* | removed 8 redundant ~(org-glance--org-mode)~ re-inits inside ~with-contents~ bodies | halves the fixed mode-init cost per parse |
 | *D* | metadata build: 4 thunk reparses → one ~--content-facts~ pass | *3.9×* on the content-facts portion; byte-identical (5-shape test) |
 
-All four are org-glance-only, covered by the ERT suite (211 tests) + benchmarks.
+All four are org-glance-only, covered by the ERT suite (327 tests) + benchmarks (=eask bench= / =make bench=, [[file:2026-07-09-dev-tooling-benchmarks-linters.done.org][dev tooling]]).
 
 * Proposed (non-trivial, not yet done)
 

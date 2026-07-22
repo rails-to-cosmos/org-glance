@@ -5,7 +5,6 @@
 (require 'org)
 (require 'org-element)
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'thunk)
 (require 'org-clock)
 

@@ -31,7 +31,6 @@
 (require 's)
 (require 'org)
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'f)
 
 (require 'org-glance-tag)

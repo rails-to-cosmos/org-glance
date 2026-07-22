@@ -24,6 +24,18 @@
 ;; Powers `org-glance-llm' (the `l' action); pulls in vterm.
 (depends-on "agnostic-llm")
 
+;; Dev-only: `eask lint package' / `eask lint regexps' (make lint); never in
+;; the shipped Package-Requires.
+(development
+ (depends-on "package-lint")
+ (depends-on "relint"))
+
+(eask-defcommand bench
+  "Time the store's hot paths over synthetic graphs (see test/bench-graph.el)."
+  (load "test/test-helpers.el")
+  (load "test/bench-graph.el")
+  (org-glance-bench:run))
+
 (eask-defcommand test
   "Run a configured ert test suite."
   (setq ert-batch-backtrace-right-margin 1200

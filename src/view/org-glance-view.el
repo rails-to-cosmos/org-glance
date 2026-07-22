@@ -26,7 +26,6 @@
 ;;; Code:
 
 (require 'cl-lib)
-(require 'cl-macs)
 (require 'org-glance-core)
 (require 'org-glance-utils)
 (require 'org-glance-graph)
