@@ -82,7 +82,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     at every boundary (encode/decode/deserialize); spaced form is display-only.
 14. Crypt: plaintext never touches disk; `#+begin_crypt` markers are the
     persistent secrecy annotation. Secrecy is per-block — text between blocks
-    stays plaintext and indexed, even for an encrypted headline.
+    stays plaintext and indexed, even for an encrypted headline. Materialize
+    opens SEALED; decryption is explicit and hardens the buffer before any
+    plaintext lands.
 15. Table Title column is mandatory — never removable/hideable (`--act-delcolumn`
     refuses it; `--apply-schema` strips it from the hidden set).
 16. Per-tag column schema: `:hidden` is a denylist of removed built-ins (new

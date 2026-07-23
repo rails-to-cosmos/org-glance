@@ -82,14 +82,15 @@ this one update in place."
    [("o" org-glance-overview :description org-glance-transient--overview-description)
     ("a" "Agenda" org-glance-agenda)
     ("T" "All tags" org-glance-tags)]
-   [("O" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
+   [("-o" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
     ("+" "Capture" org-glance-capture)
     ("C" "Configure" org-glance-tag-config-edit)
     ]]
   ["Headline"
    [("m" "Materialize" org-glance-materialize)
     ("j" "Open link" org-glance-open)
-    ("e" "Extract property" org-glance-extract)]]
+    ("e" "Extract property" org-glance-extract)]
+   [("-d" "Decrypt secrets on open" "--decrypt")]]
   ["System"
    [("I" "Install plugin" org-glance-plugin-install)]]
   (interactive)

@@ -248,6 +248,7 @@ time; reindex agrees."
       (org-glance-test:headline "public-ref" "* TODO P"))
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "cs")
+        (org-glance-material:decrypt)
         ;; decrypted buffer shows BOTH links; save reseals before sync reads
         (should (s-contains? "secret-ref" (buffer-string)))
         (org-glance-test:sed "editme" "edited")

@@ -15,6 +15,7 @@
 (require 'ol)
 (require 's)
 
+(require 'transient)   ; `org-glance-materialize' reads the -d switch
 (require 'org-glance-utils)
 (require 'org-glance-headline)
 (require 'org-glance-graph)
@@ -101,6 +102,9 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
 ;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
+;; `C-c u': unseal (decrypt) this headline -- the counterpart of opening
+;; as-is; mirrors the transient's `-d' switch, applied after the fact.
+(define-key org-glance-material-mode-map (kbd "C-c u") #'org-glance-material:decrypt)
 ;; `C-c j': open a link from this headline (the transient's `j', scoped here).
 (define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
 ;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
@@ -394,11 +398,21 @@ Idempotent -- `add-hook' deduplicates and hardening re-runs harmlessly."
   (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
   (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t))
 
+(cl-defun org-glance-material--sealed? ()
+  "Non-nil when the current buffer still holds ciphertext:
+sealed crypt blocks, or a legacy whole-body cipher (`--aes-header-re')."
+  (or (org-glance--crypt-sealed-blocks-p)
+      (save-excursion (goto-char (point-min))
+                      (re-search-forward org-glance--aes-header-re nil t))))
+
 (cl-defun org-glance-material--maybe-decrypt (meta buffer)
-  "When META is encrypted, harden BUFFER, prompt for the password, and decrypt it.
-Caches the password (with TTL) and wires the save-time re-encrypt round-trip.
-A wrong password forgets it, kills BUFFER and re-signals, so `open' fails clean."
-  (when (org-glance-headline-metadata:encrypted? meta)
+  "When META is encrypted and BUFFER still sealed, prompt and decrypt it.
+Hardens BUFFER and wires the save-time re-encrypt round-trip; caches the
+password (with TTL).  Idempotent: an already-decrypted buffer (no sealed
+blocks) never re-prompts.  A wrong password forgets it, kills BUFFER and
+re-signals, so `open' fails clean."
+  (when (and (org-glance-headline-metadata:encrypted? meta)
+             (with-current-buffer buffer (org-glance-material--sealed?)))
     (org-glance-material--wire-crypto)
     (org-glance-material--set-password (read-passwd "Headline password: "))
     (condition-case err
@@ -427,6 +441,20 @@ wires the seal/unseal round-trip.  The region must lie inside the body."
   (deactivate-mark)
   (message "org-glance: region wrapped -- seals on save"))
 
+(cl-defun org-glance-material:decrypt ()
+  "Decrypt this materialized headline's sealed crypt blocks in place.
+The explicit counterpart of opening as-is; prompts once, hardens the
+buffer, wires the seal/unseal round-trip.  No-op message when nothing is
+sealed."
+  (interactive)
+  (org-glance-material--ensure)
+  (if (org-glance-material--sealed?)
+      (org-glance-material--maybe-decrypt
+       (org-glance-graph:get-headline org-glance-material--graph
+                                      org-glance-material--id)
+       (current-buffer))
+    (message "org-glance: nothing sealed here")))
+
 (cl-defun org-glance-material:crypt-unwrap ()
   "Remove the crypt block around point; its body becomes public on save.
 A still-sealed body is decrypted first.  Unwrapping the last block makes the
@@ -435,6 +463,9 @@ whole headline public: the buffer stops sealing and forgets its password."
   (let ((block (org-glance--crypt-block-at (point))))
     (unless block (user-error "Point is not inside a crypt block"))
     (when (org-glance--crypt-sealed? block)
+      ;; As-is-opened buffers arrive unhardened; wire BEFORE any plaintext
+      ;; lands (invariant 14: no autosave/backup may see it).
+      (org-glance-material--wire-crypto)
       (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
       (setq block (org-glance--crypt-block-at (point))))
     (org-glance--crypt-unwrap-block block)
@@ -582,12 +613,15 @@ a crypt reseal/unseal rewrites the drawer region and kills its overlays."
               (overlay-put ov 'evaporate t)
               (overlay-put ov 'org-glance-reserved t))))))))
 
-(cl-defun org-glance-material:open (graph id)
+(cl-defun org-glance-material:open (graph id &key decrypt)
   "Open headline ID from GRAPH for editing, as its content-blob file.
-Return the buffer.  A live, already-wired material buffer for ID is returned
-as-is -- no re-setup, and (for an encrypted headline) no password re-prompt:
-its plaintext is already on screen.  Errors if ID is unknown, tombstoned, or
-has no stored blob."
+Return the buffer.  An encrypted headline opens AS-IS -- sealed crypt
+blocks stay ciphertext, no password prompt -- unless DECRYPT is non-nil
+\(the transient's =-d= switch, or `org-glance-material:decrypt' later in
+the buffer).  A live, already-wired material buffer for ID is returned
+without re-setup; DECRYPT on a still-sealed one decrypts it in place (an
+already-decrypted one never re-prompts).  Errors if ID is unknown,
+tombstoned, or has no stored blob."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
   (let ((meta (org-glance-graph:get-headline graph id)))
@@ -598,6 +632,7 @@ has no stored blob."
         (user-error "No stored content for id %s" id))
       (when-let ((existing (find-buffer-visiting path)))
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
+          (when decrypt (org-glance-material--maybe-decrypt meta existing))
           (cl-return-from org-glance-material:open existing)))
       ;; Fresh open only: the tag's todo cycle (a stat + possible tag-config
       ;; parse) is pure waste on the reuse path above.
@@ -630,7 +665,7 @@ has no stored blob."
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
           (org-glance-material-mode 1)
-          (org-glance-material--maybe-decrypt meta buffer)
+          (when decrypt (org-glance-material--maybe-decrypt meta buffer))
           ;; Conceal bookkeeping drawer lines; re-conceal after every save
           ;; (depth 100: after the crypt unseal hook has restored plaintext).
           (org-glance-material--hide-reserved-properties)
@@ -1046,13 +1081,17 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
 
 ;;;###autoload
 (cl-defun org-glance-materialize ()
-  "Choose a headline from the graph and materialize it."
+  "Choose a headline from the graph and materialize it.
+From the transient with the =-d= switch set, decrypt it on open; the
+default leaves sealed crypt blocks as-is."
   (interactive)
   (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
          (metadata (org-glance-material:pick-metadata graph))
-         (id (org-glance-headline-metadata:id metadata)))
-    (switch-to-buffer (org-glance-material:open graph id))))
+         (id (org-glance-headline-metadata:id metadata))
+         (decrypt (and (eq transient-current-command 'org-glance-transient)
+                       (member "--decrypt" (transient-args 'org-glance-transient)))))
+    (switch-to-buffer (org-glance-material:open graph id :decrypt decrypt))))
 
 ;;; Read commands: open / extract (operate on the stored blob, read-only)
 

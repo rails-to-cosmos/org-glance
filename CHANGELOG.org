@@ -105,6 +105,9 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Encrypted headlines materialize AS-IS (ciphertext, no password prompt).
+  Decrypt on demand: =C-c u= in the buffer, or the transient's =-d=
+  switch before =m=.  Bulk/scripted opens no longer prompt.
 - The transient is grouped by semantic layer: *Tag* (=o= overview, =a=
   agenda, =t= all tags, =+= capture, =C= configure, =O= toggle),
   *Headline* (=m= / =j= / =e=; the =llm= plugin's =l= / =L= row follows

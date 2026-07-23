@@ -682,7 +682,9 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
     (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "enc")
-        ;; Body is decrypted in the buffer; ciphertext never shown.
+        ;; As-is by default: sealed until the explicit decrypt.
+        (should (s-contains? "aes-encrypted" (buffer-string)))
+        (org-glance-material:decrypt)
         (should (string= "pw" org-glance-material--password))
         ;; Hardening: plaintext cannot leak to auto-save/backup/lockfiles.
         (should (null buffer-auto-save-file-name))
@@ -709,8 +711,10 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
         ;; Buffer decrypted back to plaintext with the edit, not left dirty.
         (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
         (should-not (buffer-modified-p)))
-      ;; Reopen: the edited plaintext round-trips through the ciphertext blob.
+      ;; Reopen: as-is (sealed), then the explicit decrypt round-trips the edit.
       (org-glance-test:with-material (buffer graph "enc")
+        (should-not (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
+        (org-glance-material:decrypt)
         (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))))))
 
 (ert-deftest org-glance-test:material-crypt-set-roundtrip ()
@@ -884,6 +888,7 @@ silently upgrades the stored format to crypt blocks (same password works)."
     (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph "leg")))
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "leg")
+        (org-glance-material:decrypt)
         (should (s-contains? "old secret" (buffer-string)))   ; legacy branch decrypted
         (org-glance-test:sed "old secret" "new secret")
         (let ((inhibit-message t)) (save-buffer))
@@ -893,6 +898,8 @@ silently upgrades the stored format to crypt blocks (same password works)."
           (should-not (s-contains? "new secret" blob)))
         (should (s-contains? "new secret" (buffer-string))))  ; buffer plaintext again
       (org-glance-test:with-material (buffer graph "leg")     ; round-trips post-upgrade
+        (should-not (s-contains? "new secret" (buffer-string)))   ; as-is: sealed
+        (org-glance-material:decrypt)
         (should (s-contains? "new secret" (buffer-string)))))))
 
 (ert-deftest org-glance-test:material-crypt-region-command ()
@@ -929,7 +936,7 @@ flips off, so the next open needs no password."
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "pub")
         (goto-char (point-min))
-        (search-forward "plainbody")                          ; inside the block
+        (search-forward "#+begin_crypt")                      ; on the sealed block
         (org-glance-material:crypt-unwrap)
         (let ((inhibit-message t)) (save-buffer))
         (let ((blob (org-glance-graph:get-content graph "pub")))
@@ -1034,12 +1041,19 @@ headline is NOT re-prompted for its password."
                                  (org-glance-test:headline "enc" "* TODO Secret" "plainbody")
                                  "pw"))
     (org-glance-test:answering ((read-passwd "pw"))
-      (org-glance-test:with-material (buf graph "enc")
-        (should (s-contains? "plainbody" (buffer-string)))
-        ;; second open: same buffer, no password prompt
-        (cl-letf (((symbol-function 'read-passwd)
-                   (lambda (&rest _) (error "must not re-prompt"))))
-          (should (eq buf (org-glance-material:open graph "enc"))))))))
+      (let ((buf (org-glance-material:open graph "enc" :decrypt t)))
+        (unwind-protect
+            (with-current-buffer buf
+              (should (s-contains? "plainbody" (buffer-string)))
+              ;; second open: same buffer, no password prompt -- even asking
+              ;; for decrypt again (idempotent: nothing left sealed)
+              (cl-letf (((symbol-function 'read-passwd)
+                         (lambda (&rest _) (error "must not re-prompt"))))
+                (should (eq buf (org-glance-material:open graph "enc")))
+                (should (eq buf (org-glance-material:open graph "enc" :decrypt t)))))
+          (when (buffer-live-p buf)
+            (with-current-buffer buf (set-buffer-modified-p nil))
+            (kill-buffer buf)))))))
 
 (ert-deftest org-glance-test:material-interval ()
   "The body's first active range projects to metadata, the overview line and
@@ -1139,6 +1153,39 @@ them -- it inserts a fresh body line instead."
                                    (point) (min (point-max) (+ (point) 40)))))))
           (org-glance-material:open-link-here))
         (should (s-contains? "example.com/unsaved" opened))))))
+
+(ert-deftest org-glance-test:material-opens-encrypted-as-is ()
+  "An encrypted headline materializes AS-IS: no password prompt, ciphertext
+on screen, unhardened; `:decrypt' (the transient's `-d') opens it unsealed,
+and `C-c u' unseals an as-is buffer after the fact."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "e" "* TODO Secret" "plainbody")
+                                 "pw"))
+    ;; default: as-is, and NOTHING may prompt
+    (cl-letf (((symbol-function 'read-passwd)
+               (lambda (&rest _) (error "must not prompt"))))
+      (org-glance-test:with-material (buf graph "e")
+        (should (s-contains? "aes-encrypted" (buffer-string)))
+        (should-not (s-contains? "plainbody" (buffer-string)))
+        (should-not org-glance-material--encrypted)          ; unwired until asked
+        (should (eq (key-binding (kbd "C-c u")) #'org-glance-material:decrypt))))
+    ;; C-c u on an as-is buffer unseals it (and hardens)
+    (org-glance-test:answering ((read-passwd "pw"))
+      (org-glance-test:with-material (buf graph "e")
+        (org-glance-material:decrypt)
+        (should (s-contains? "plainbody" (buffer-string)))
+        (should org-glance-material--encrypted)
+        (should (null buffer-auto-save-file-name))           ; hardened (inv 14)
+        (org-glance-material:decrypt)))                      ; idempotent, no re-prompt
+    ;; :decrypt opens unsealed straight away
+    (org-glance-test:answering ((read-passwd "pw"))
+      (let ((buf (org-glance-material:open graph "e" :decrypt t)))
+        (unwind-protect
+            (with-current-buffer buf
+              (should (s-contains? "plainbody" (buffer-string))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

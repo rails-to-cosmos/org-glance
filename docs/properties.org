@@ -84,6 +84,16 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
   those states natively; the table shows a coloured =#+TODO:= line of the graph's
   live states in its header (always visible).
 
+* Crypt blocks and materialization
+
+A headline whose blob carries sealed =#+begin_crypt= blocks materializes
+AS-IS: the ciphertext is what you see, no password is requested, and the
+buffer is NOT hardened (nothing secret is in it yet).  Decrypt explicitly
+-- =C-c u= (=org-glance-material:decrypt=), or open with
+=org-glance-material:open ... :decrypt t= (the transient's =-d= switch)
+-- at which point the buffer hardens and the seal/unseal save round-trip
+wires up (invariant 14 unchanged: plaintext never reaches disk).
+
 * Body date interval
 
 =<from>--<to>= — an org-native active timestamp range in the body.  The
