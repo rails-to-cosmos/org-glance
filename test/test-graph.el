@@ -332,5 +332,19 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
       (should (= 2 (length (org-glance-graph:headlines reader))))
       (should (null (org-glance-graph:get-headline reader "A"))))))
 
+(ert-deftest org-glance-test:reindex-leaves-blobs-alone ()
+  "Reindex appends metadata records only: blobs are read, never rewritten."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A :x:" "body"))
+    (let ((blob (org-glance-graph:content-path graph "a"))
+          (past (encode-time 0 0 0 1 1 2020)))
+      (set-file-times blob past)
+      (should (= 1 (org-glance-graph:reindex graph)))
+      (should (time-equal-p past (file-attribute-modification-time
+                                  (file-attributes blob))))
+      ;; the re-derived record is live and correct
+      (should (equal "A" (org-glance-headline-metadata:title
+                          (org-glance-graph:get-headline graph "a")))))))
+
 (provide 'test-graph)
 ;;; test-graph.el ends here

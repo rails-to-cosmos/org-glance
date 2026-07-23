@@ -771,22 +771,44 @@ With IDS, restrict the fold to those headlines.  An edge is (TARGET . KIND);
         (org-glance-headline-metadata:title meta)
       id)))
 
+(defconst org-glance-graph--reindex-batch 500
+  "Headlines per metadata-append batch during `org-glance-graph:reindex'.
+Large enough to amortize the per-append bookkeeping, small enough to keep
+the progress reporter honest; `eask bench' measures the effect.")
+
 (cl-defun org-glance-graph:reindex (graph)
   "Re-derive metadata for every live headline in GRAPH from its stored content,
 appending fresh records so newly-added projection fields get populated.
+Blobs are READ, never rewritten -- the content is already the canonical
+source (invariant 5), so only metadata records append, in batches, with
+auto-compaction held until one explicit compact at the end.  (The old
+per-headline `:add' loop rewrote every blob and compacted the growing
+store repeatedly mid-run -- measurably superlinear under `eask bench'.)
 Return the number of headlines re-indexed."
   (cl-check-type graph org-glance-graph)
   (let* ((metas (org-glance-graph:headlines graph))
          (reporter (and metas (make-progress-reporter "org-glance: re-indexing... " 0 (length metas))))
-         (n 0))
-    (cl-loop for meta in metas
-             for i from 1
-             for id = (org-glance-headline-metadata:id meta)
-             for contents = (org-glance-graph:get-content graph id)
-             do (when contents
-                  (org-glance-graph:add graph (org-glance-headline--from-string contents))
-                  (cl-incf n))
-             do (when reporter (progress-reporter-update reporter i)))
+         (org-glance-graph-compact-segment-count most-positive-fixnum)
+         (batch nil) (fill 0) (n 0))
+    (cl-flet ((flush ()
+                (when batch
+                  (org-glance-graph:insert graph (nreverse batch))
+                  (setq batch nil fill 0))))
+      (cl-loop for meta in metas
+               for i from 1
+               for id = (org-glance-headline-metadata:id meta)
+               for contents = (org-glance-graph:get-content graph id)
+               when contents
+               do (push (org-glance-headline:metadata*
+                         (org-glance-headline--from-string contents))
+                        batch)
+                  (cl-incf n)
+                  (when (= org-glance-graph--reindex-batch (cl-incf fill)) (flush))
+               end
+               do (when reporter (progress-reporter-update reporter i))
+               finally (flush)))
+    ;; One compaction reclaims the superseded records the run just doubled.
+    (org-glance-graph:compact graph)
     (when reporter (progress-reporter-done reporter))
     n))
 
