@@ -53,7 +53,7 @@
 
 (defun org-glance-transient--toggle-view-description (&rest _)
   "Toggle label naming the display mode it would switch TO."
-  (format "Change overview layout: %s"
+  (format "Overview layout -> %s"
           (propertize (if (equal (org-glance-transient--view-mode) "org") "table" "org")
                       'face 'transient-value)))
 
@@ -92,7 +92,8 @@ this one update in place."
     ("e" "Extract property" org-glance-extract)]
    [("-d" "Decrypt secrets on open" "--decrypt")]]
   ["System"
-   [("I" "Install plugin" org-glance-plugin-install)]]
+   [("I" "Install plugin" org-glance-plugin-install)
+    ("q" "Quit" transient-quit-one)]]
   (interactive)
   (transient-setup 'org-glance-transient))
 
