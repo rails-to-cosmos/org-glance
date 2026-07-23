@@ -108,6 +108,11 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- *Core no longer depends on =agnostic-llm= (and so never pulls in
+  =vterm=).*  The LLM integration is now a SEPARATE package,
+  =org-glance-llm= (source: =plugins/=, own archive recipe): install it,
+  then =(setq org-glance-plugins '(llm))= or press =I=.  Existing users
+  must install the new package to keep =l= / =L= / =C-c l=.
 - Encrypted headlines materialize AS-IS (ciphertext, no password prompt).
   Decrypt on demand: =C-c u= in the buffer, or the transient's =-d=
   switch before =m=.  Bulk/scripted opens no longer prompt.

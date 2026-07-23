@@ -226,23 +226,32 @@ The published package archive is the simplest route.  Add the archive, then let
 [[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
 
 The =rails-to-cosmos= archive provides =org-glance= and its
-[[https://github.com/rails-to-cosmos/table-view][table-view]] and
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] dependencies; the
-remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from
-MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
-and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
+[[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the
+remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep
+a MELPA entry in =package-archives= too.  Everything else (=org= and its
+submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
-The *LLM integration* ships as a PLUGIN, off by default -- enable it with
-=(setq org-glance-plugins '(llm))= (or =I= in the transient).  Once
-loaded, =l= in the transient opens an
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the selected headline's data directory -- or in
-its project directory, when the headline carries an
-=:ORG_GLANCE_PROJECT_DIR:= drawer property (set it from a materialized
-buffer with =C-c d=, `org-glance-material:set-project-dir') -- and =L=
-lists every session (running / exited / stopped) from a persisted cache.
-[[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] (also on the =rails-to-cosmos= archive) is a required
-dependency; it pulls in =vterm=, loaded lazily the first time you run the
-action, so org-glance never loads vterm at startup.
+** Plugins
+
+Optional features ship as SEPARATE packages, so a plain install stays
+minimal.  Install the package, then list it in =org-glance-plugins= (or
+press =I= in the transient, which does both steps' second half):
+
+#+begin_src emacs-lisp
+(use-package org-glance-llm
+  :after org-glance
+  :ensure t
+  :init (setq org-glance-plugins '(llm)))
+#+end_src
+
+- [[https://github.com/rails-to-cosmos/org-glance-llm][*org-glance-llm*]] — LLM sessions per headline.  =l= opens an
+  [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
+  headline's data directory (or its =:ORG_GLANCE_PROJECT_DIR:=, set with
+  =C-c d= in a materialized buffer); =L= lists every session (running /
+  exited / stopped) from a persisted cache; =C-c l= opens the session for
+  the headline at hand.  It depends on =agnostic-llm= (also on the
+  =rails-to-cosmos= archive), which pulls in =vterm= — loaded lazily on
+  first use.  Core org-glance does NOT depend on it.
 
 * Development
 

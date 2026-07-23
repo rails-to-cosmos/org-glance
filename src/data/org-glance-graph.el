@@ -576,6 +576,18 @@ Wholesale-deletable: everything inside is rebuildable (invariant 5)."
   (cl-check-type graph org-glance-graph)
   (f-join (org-glance-graph:store-path graph) "cache"))
 
+(cl-defun org-glance-graph:cache-read (graph name)
+  "Read GRAPH's derived-cache sidecar NAME, or nil when absent.
+With `org-glance-graph:cache-write', the public sidecar API: a plugin
+persists its rebuildable state here without touching the eld internals."
+  (let ((path (org-glance-graph:cache-file graph name)))
+    (when (f-exists? path) (org-glance--read-eld path))))
+
+(cl-defun org-glance-graph:cache-write (graph name value)
+  "Persist VALUE as GRAPH's derived-cache sidecar NAME; return VALUE."
+  (org-glance--write-eld (org-glance-graph:cache-file graph name) value)
+  value)
+
 (cl-defun org-glance-graph:cache-file (graph name)
   "Path of GRAPH's derived-cache sidecar NAME under the store's `cache/'.
 Everything here is rebuildable from canonical data (invariant 5) and

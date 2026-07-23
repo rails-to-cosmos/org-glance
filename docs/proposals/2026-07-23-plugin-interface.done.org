@@ -1,9 +1,11 @@
 #+TITLE: Plugin interface: minimal core, LLM as the first plugin
 #+DATE: 2026-07-23
 
-Status: *done* (2026-07-23, phase 1) — phase 2 (package split, dependency
-slimming) remains open.  Amendment: =P= in the transient
-(=org-glance-plugin-install=) installs a plugin interactively.
+Status: *done* (2026-07-23, both phases).  Amendments: =I= in the
+transient (=org-glance-plugin-install=) installs a plugin interactively
+and now reports a missing PACKAGE by name; the plugin lives in
+=plugins/=, excluded from core's =files= and compiled by
+=make compile-plugins=.
 
 * Problem
 
@@ -73,15 +75,36 @@ plus a naming convention and a loader.
   init survives), transient row present iff plugin loaded, llm tests
   require the plugin explicitly.
 
-** Phase 2 (follow-up proposal, archive surgery)
+** Phase 2 (DONE 2026-07-23): the package split
 
-Split =org-glance-llm= into its own package: recipe in the
-=rails-to-cosmos= elpa repo (located in ~/sync/stuff/elpa, same git repo, different =:files=), own
-=Package-Requires: (org-glance agnostic-llm)= — and core DROPS
-=agnostic-llm= / vterm from its dependency set.  That is when "minimal
-core" becomes true at install time.  README install section reworked
-then.  Out of scope here: doing it mid-flight breaks the install story
-until the archive republishes.
+The plugin left the repo entirely: =org-glance-llm= now lives at
+[[https://github.com/rails-to-cosmos/org-glance-llm][its own repository]]
+(=~/sync/stuff/org-glance-llm=), with its own =Eask=, =Makefile=, README
+and 14-test suite.
+
+- Core drops =agnostic-llm= from =Package-Requires= AND from its dev deps;
+  =src/view/org-glance-llm.el= and =test/test-llm.el= are gone.  A plain
+  install no longer pulls =vterm=.
+- The plugin uses core's PUBLIC API only.  Two additions made that
+  possible: =org-glance-material:current= (the materialized buffer's
+  (GRAPH . ID), replacing three buffer-local internals) and
+  =org-glance-graph:cache-read= / =:cache-write= (the sidecar API,
+  replacing the eld internals).  Verified: zero =--= references to core.
+- Core keeps the loader and =org-glance-plugin-install=, which now
+  =user-error=s "install the `org-glance-llm' package first" when the
+  library is absent; =test/test-plugins.el= covers the loader without any
+  plugin present.
+- Archive: =recipes/org-glance-llm= points at the new repo with
+  =:files (:defaults)=.
+- The plugin's dev loop prefers a SIBLING =../org-glance= checkout over the
+  installed package (its =eask test= command and =make compile= both
+  prepend it), so a plugin change is always exercised against the core it
+  ships beside.
+
+Publish order: push org-glance, push org-glance-llm, then =make publish= in
+the elpa repo — the archive must carry the slimmed core and the new package
+together, since an upgraded core alone would drop =l= / =L= for existing
+users until they install the plugin.
 
 * Consequences
 

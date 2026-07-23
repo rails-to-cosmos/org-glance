@@ -21,11 +21,9 @@
 (depends-on "s")
 (depends-on "transient")
 (depends-on "table-view")
-;; Powers `org-glance-llm' (the `l' action); pulls in vterm.
-(depends-on "agnostic-llm")
-
 ;; Dev-only: `eask lint package' / `eask lint regexps' (make lint); never in
-;; the shipped Package-Requires.
+;; the shipped Package-Requires.  Plugins (e.g. `org-glance-llm') are
+;; separate packages with their own repos -- core depends on none of them.
 (development
  (depends-on "package-lint")
  (depends-on "relint"))
@@ -53,9 +51,9 @@
   (load "test/test-relations.el")
   (load "test/test-migrate.el")
   (load "test/test-material.el")
-  (load "test/test-llm.el")
   (load "test/test-overview.el")
   (load "test/test-table.el")
   (load "test/test-tags.el")
   (load "test/test-ui.el")
+  (load "test/test-plugins.el")
   (ert-run-tests-batch-and-exit))

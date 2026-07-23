@@ -948,7 +948,8 @@ flips off, so the next open needs no password."
 
 (ert-deftest org-glance-test:material-set-project-dir ()
   "`set-project-dir' writes then clears the `ORG_GLANCE_PROJECT_DIR' drawer
-property on the materialized headline; `org-glance-llm--dir' reads it back."
+property on the materialized headline.  (Who READS it -- the `llm' plugin --
+tests that end in its own repo.)"
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "d" "* TODO Doc" "body"))
     (org-glance-test:with-material (buffer graph "d")
@@ -956,13 +957,10 @@ property on the materialized headline; `org-glance-llm--dir' reads it back."
       (should (equal "/tmp/proj-x"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
-      (should (equal "/tmp/proj-x/" (org-glance-llm--dir graph "d")))
       ;; clear (nil dir, as a prefix-arg invocation supplies)
       (org-glance-material:set-project-dir nil)
       (should-not (org-glance-headline:node-property
-                   "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d")))
-      (should (equal (file-name-as-directory (org-glance-graph:headline-data-path graph "d"))
-                     (org-glance-llm--dir graph "d"))))))
+                   "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))))
 
 (ert-deftest org-glance-test:material-duplicate ()
   "`material:duplicate' copies the blob under a fresh id: body, planning,

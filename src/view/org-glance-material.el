@@ -127,6 +127,13 @@ data dir; set it with `org-glance-material:set-project-dir' (`C-c d').")
   (unless (and org-glance-material--graph org-glance-material--id)
     (user-error "Not in a materialized headline buffer")))
 
+(cl-defun org-glance-material:current ()
+  "This materialized buffer's (GRAPH . ID); `user-error' when there is none.
+The public entry point for code acting on \"the headline at hand\" --
+plugins should use it instead of the buffer-local internals."
+  (org-glance-material--ensure)
+  (cons org-glance-material--graph org-glance-material--id))
+
 (defvar-local org-glance-material--id nil
   "ORG_GLANCE_ID of the headline materialized in the current buffer.")
 

@@ -7,7 +7,7 @@
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
 ;; Version: 1.24.0.0.20260723.0
-;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0") (agnostic-llm "0"))
+;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
@@ -64,20 +64,25 @@ list is convenience, not a registry.  Available in-tree: `llm'."
   :type '(repeat symbol))
 
 (defconst org-glance-plugins-available '(llm)
-  "Plugin feature-name suffixes shipped in-tree, offered by
-`org-glance-plugin-install'.")
+  "Known org-glance plugins, offered by `org-glance-plugin-install'.
+Each ships as its OWN package (`org-glance-<name>'), so core never carries
+its dependencies -- install the package first, then enable it here.")
 
 ;;;###autoload
 (cl-defun org-glance-plugin-install (plugin)
   "Enable PLUGIN now and remember it in `org-glance-plugins' (`P').
 Prompts from `org-glance-plugins-available'; free input allows an external
-plugin.  Loads immediately -- errors are LOUD here, unlike the demoted
-init-time loader -- and persists via `customize-save-variable' outside
-batch, else says what to add to your init."
+plugin.  Each plugin is a separate PACKAGE: when its library is not on
+`load-path' this says so instead of failing obscurely.  Loads immediately
+-- errors are LOUD here, unlike the demoted init-time loader -- and
+persists via `customize-save-variable' outside batch."
   (interactive
    (list (intern (completing-read "Install plugin: "
                                   (mapcar #'symbol-name org-glance-plugins-available)))))
-  (require (intern (format "org-glance-%s" plugin)))
+  (let ((feature (intern (format "org-glance-%s" plugin))))
+    (unless (require feature nil 'noerror)
+      (user-error "Install the `%s' package first (it is not on `load-path')"
+                  feature)))
   (add-to-list 'org-glance-plugins plugin)
   (if noninteractive
       (message "org-glance: plugin `%s' enabled" plugin)
