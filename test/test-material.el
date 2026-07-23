@@ -1187,5 +1187,46 @@ and `C-c u' unseals an as-is buffer after the fact."
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
 
+(ert-deftest org-glance-test:material-open-link-nested ()
+  "Nested link lists are picked level by level: the first prompt offers the
+top items, the second the chosen branch's children; a lone candidate at any
+depth is taken without asking."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "p" "* TODO Project"
+        "- [[file+emacs:/tmp][Local]]"
+        "- Remote"
+        "  - [[https://example.com/gh][Remote (Github)]]"
+        "  - [[https://example.com/gl][Remote (Gitlab)]]"
+        "- Solo"
+        "  - [[https://example.com/only][Only child]]"))
+    (org-glance-test:with-material (buf graph "p")
+      (cl-flet ((open-with (answers)
+                  (let ((asked nil) (opened nil))
+                    (cl-letf (((symbol-function 'completing-read)
+                               (lambda (_p coll &rest _)
+                                 (push (append coll nil) asked)
+                                 (pop answers)))
+                              ((symbol-function 'org-open-at-point)
+                                (lambda (&rest _)
+                                  (setq opened (buffer-substring-no-properties
+                                                (point) (line-end-position))))))
+                      (org-glance-material:open-link-here))
+                    (cons (nreverse asked) opened))))
+        ;; two levels: group, then the link inside it
+        (pcase-let ((`(,asked . ,opened) (open-with '("Remote" "Remote (Gitlab)"))))
+          (should (equal '(("Local" "Remote" "Solo")
+                           ("Remote (Github)" "Remote (Gitlab)"))
+                         asked))
+          (should (s-contains? "example.com/gl" opened)))
+        ;; a top-level leaf needs one prompt only
+        (pcase-let ((`(,asked . ,opened) (open-with '("Local"))))
+          (should (= 1 (length asked)))
+          (should (s-contains? "file+emacs:/tmp" opened)))
+        ;; a branch with a single child does not ask twice
+        (pcase-let ((`(,asked . ,opened) (open-with '("Solo"))))
+          (should (= 1 (length asked)))
+          (should (s-contains? "example.com/only" opened)))))))
+
 (provide 'test-material)
 ;;; test-material.el ends here

@@ -5,6 +5,7 @@
 (require 'aes)
 (require 'dash)
 (require 'org-element)
+(require 'org-list)
 
 (defconst org-glance:key-value-pair-re "^-?\\([[:word:],[:blank:],_,/,-]+\\)\\:[[:blank:]]*\\(.*\\)$")
 
@@ -220,6 +221,66 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
              for key = (s-trim (substring-no-properties (match-string 1)))
              for value = (s-trim (substring-no-properties (match-string 2)))
              collect (cons key value))))
+
+(cl-defun org-glance--item-label (item)
+  "First-line text of plain-list ITEM, its bullet/checkbox stripped."
+  (save-excursion
+    (goto-char (org-element-property :begin item))
+    (when (looking-at org-list-full-item-re)
+      (goto-char (match-end 0)))
+    (s-trim (buffer-substring-no-properties (point) (line-end-position)))))
+
+(cl-defun org-glance--link-ancestry (element)
+  "Labels of ELEMENT's enclosing list items, outermost first.
+The INNERMOST item is dropped: it is the link's own item, whose text the
+link description already names."
+  (let (items)
+    (cl-loop for parent = (org-element-property :parent element)
+             then (org-element-property :parent parent)
+             while parent
+             when (org-element-type-p parent 'item)
+             do (push parent items))
+    (mapcar #'org-glance--item-label (butlast items))))
+
+(cl-defun org-glance--link-paths ()
+  "Buffer links as (PATH . POS), PATH the enclosing list-item labels plus
+the link's own description.  A link outside any list has a one-element
+PATH, so a flat body and a nested list share one representation."
+  (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
+           for pos = (org-element-property :begin element)
+           for title = (substring-no-properties
+                        (or (-some->> element
+                              (org-element-contents)
+                              (org-element-interpret-data))
+                            (org-element-property :raw-link element)))
+           collect (cons (append (org-glance--link-ancestry element)
+                                 (list (s-trim title)))
+                         (list pos (org-element-property :type element)))))
+
+(cl-defun org-glance--pick-link-pos (entries &optional (prompt "Open link: "))
+  "Recursively PROMPT over ENTRIES ((PATH POS TYPE)...); return the chosen POS.
+Each level offers the paths' next component; picking a branch descends into
+it.  A lone candidate is taken without asking, at any depth."
+  (cond
+   ((null entries) (user-error "No links in headline"))
+   ((null (cdr entries)) (cadr (car entries)))
+   (t
+    (let (groups)
+      (dolist (entry entries)
+        (let* ((key (or (car (car entry)) ""))
+               (cell (assoc key groups)))
+          (if cell
+              (setcdr cell (cons entry (cdr cell)))
+            (push (cons key (list entry)) groups))))
+      (setq groups (nreverse groups))
+      (dolist (group groups) (setcdr group (nreverse (cdr group))))
+      (let ((chosen (if (null (cdr groups))
+                        (cdr (car groups))   ; one branch: descend, do not ask
+                      (cdr (assoc (completing-read prompt (mapcar #'car groups) nil t)
+                                  groups)))))
+        (org-glance--pick-link-pos
+         (mapcar (lambda (entry) (cons (cdr (car entry)) (cdr entry))) chosen)
+         prompt))))))
 
 (cl-defun org-glance--parse-links ()
   "Buffer links as (LINK DESCRIPTION POS TYPE PATH), preferring a body

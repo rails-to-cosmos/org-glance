@@ -185,7 +185,7 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 | =org-glance-material-password-ttl=      | =300=                | seconds a crypt password stays cached; =0= = forever   |
 | =org-glance-material-hidden-properties= | id + hash            | drawer keys concealed AND edit-protected in material buffers |
 | =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
-| =org-glance-plugins=                    | =nil=                | plugins to load at init (e.g. =(llm)=); =P= installs one |
+| =org-glance-plugins=                    | =nil=                | plugins to load at init (e.g. =(llm)=); =I= installs one |
 | =org-glance-conflict-resolution=        | =ask=                | git-conflict healing: =ask= / =union= / =nil= (error)  |
 | =org-glance-tag-config-file=            | =nil=                | override path of =config/tags.org=                     |
 | =org-glance-graph-segment-max-bytes=    | 256k                 | WAL segment size before sealing                        |
@@ -233,7 +233,7 @@ MELPA, so keep a MELPA entry in =package-archives= too.  Everything else (=org=
 and its submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
 The *LLM integration* ships as a PLUGIN, off by default -- enable it with
-=(setq org-glance-plugins '(llm))= (or =P= in the transient).  Once
+=(setq org-glance-plugins '(llm))= (or =I= in the transient).  Once
 loaded, =l= in the transient opens an
 [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the selected headline's data directory -- or in
 its project directory, when the headline carries an

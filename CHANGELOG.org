@@ -6,6 +6,9 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Open link walks NESTED lists: a list item holding sub-items is a group,
+  so =j= / =C-c j= asks for the group first and the link inside it second
+  (any depth; a lone candidate is taken without asking).
 - Material buffers mirror the transient under =C-c=: =C-c j= opens a link
   from THIS headline (live buffer — unsaved links count), joining =C-c e=
   (extract) and, with the =llm= plugin, =C-c l= (this headline's LLM
@@ -109,11 +112,11 @@ Notable user-facing changes.  Versions date-based
   Decrypt on demand: =C-c u= in the buffer, or the transient's =-d=
   switch before =m=.  Bulk/scripted opens no longer prompt.
 - The transient is grouped by semantic layer: *Tag* (=o= overview, =a=
-  agenda, =t= all tags, =+= capture, =C= configure, =O= toggle),
-  *Headline* (=m= / =j= / =e=; the =llm= plugin's =l= / =L= row follows
-  it), *System* (=P= install plugin).
+  agenda, =T= all tags, =+= capture, =C= configure, =-o= view toggle),
+  *Headline* (=m= / =j= / =e=, =-d= decrypt switch; the =llm= plugin's
+  =l= / =L= row follows it), *System* (=I= install plugin, =q= quit).
 - Plugin interface: =org-glance-plugins= (default =nil=, org-modules
-  style) loads =org-glance-<name>= libraries at init, error-demoted; =P=
+  style) loads =org-glance-<name>= libraries at init, error-demoted; =I=
   in the transient installs one interactively
   (=org-glance-plugin-install=).  The LLM integration is the first
   plugin: off unless listed, self-registers its =l= / =L= transient row
@@ -181,6 +184,8 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Table: =g= (and every row action) keeps the cursor on the SAME CELL --
+  point no longer jumps to the start of the line after a refresh.
 - Re-materializing a headline whose material buffer is already open returns
   that buffer as-is — an encrypted headline no longer re-prompts for its
   password.

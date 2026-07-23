@@ -1097,19 +1097,17 @@ default leaves sealed crypt blocks as-is."
 
 (cl-defun org-glance-material--choose-link-and-open ()
   "Prompt over the current buffer's non-org-glance links and open the choice.
-The shared core of `org-glance-material:open-link' (temp parse of stored
-content) and `:open-link-here' (the live buffer)."
-  (cl-loop for (_link title pos type) in (org-glance--parse-links)
-           unless (s-starts-with-p "org-glance-" type)
-           collect (list title pos) into links
-           finally
-           (goto-char (cond ((> (length links) 1)
-                             (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
-                            ((= (length links) 1) (cadar links))
-                            (t (user-error "No links in headline"))))
-           ;; Mirror v1: open `file:' links in the same window.
-           (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-             (org-open-at-point))))
+Nested list items are walked level by level (`org-glance--pick-link-pos'):
+a bare \"- Remote\" holding sub-items asks once for the group, then for the
+link inside it.  The shared core of `org-glance-material:open-link' (temp
+parse of stored content) and `:open-link-here' (the live buffer)."
+  (goto-char (org-glance--pick-link-pos
+              (cl-remove-if (lambda (entry)
+                              (s-starts-with-p "org-glance-" (or (nth 2 entry) "")))
+                            (org-glance--link-paths))))
+  ;; Mirror v1: open `file:' links in the same window.
+  (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+    (org-open-at-point)))
 
 (cl-defun org-glance-material:open-link (headline)
   "Open a non-org-glance link from HEADLINE's contents, prompting if several.
