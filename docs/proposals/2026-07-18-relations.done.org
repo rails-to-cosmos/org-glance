@@ -111,7 +111,7 @@ Commands (table-only): =org-glance-material:references= / =:backlinks= on
 =C-c @= / =C-u C-c @= — passing the BARE relation filter, no ambient
 =(:done nil)= merge, so DONE referrers stay visible in backlinks.
 
-** Reverse lookup: fold, not sidecar
+** Reverse lookup: fold over metadata
 
 Incoming edges = one pass over the in-memory metadata structs testing
 =relations= membership.  No persisted reverse index.  If N ever makes this hot,

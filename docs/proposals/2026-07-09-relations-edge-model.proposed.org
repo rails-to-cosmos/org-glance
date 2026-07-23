@@ -78,7 +78,7 @@ commit, sealing, compaction and read-cache invalidation with no bespoke path.
 This is what the dead ~add-relation~ (~:839-865~) was reaching for; done through
 the field table it actually round-trips.
 
-** Reverse edges: a sidecar, not a dual write
+** Reverse edges: a derived sidecar
 
 Storing only the forward edge on the source keeps writes single-record. The
 reverse direction (~blocked-by~ ⇔ blocks, ~cloned-from~ ⇔ has-clone) is a

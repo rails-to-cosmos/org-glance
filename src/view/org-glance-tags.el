@@ -1,7 +1,7 @@
 ;;; org-glance-tags.el --- all-tags overview (a table-view of tags) -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; A table-view whose rows are TAGS (not headlines): count, todo-state
+;; A table-view whose rows are TAGS: count, todo-state
 ;; breakdown, the tag's configured cycle, and event-tracked created/modified
 ;; timestamps (see `org-glance-tag-metrics').  Row actions: open the tag's
 ;; overview (o/RET), add a tag (+), remove a tag (-, a guarded non-destructive

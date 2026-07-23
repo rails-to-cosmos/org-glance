@@ -70,8 +70,8 @@ order map to the same key, every machine derives the same name for the same
 filter, and the name is filesystem-safe by construction.  The prefix is still
 LOSSY: distinct specs can (astronomically rarely) share a key; the SPEC sidecar
 check in `cached-file' turns such a collision into a rebuild, never into serving
-the wrong overview.  The sidecar, not the name, is the human-readable record of
-which filter a cache directory holds."
+the wrong overview.  The sidecar carries the human-readable record of which
+filter a cache directory holds."
   (let ((spec (org-glance-filter:normalize-spec filter)))
     (cond
      ((null spec) "all")
@@ -90,7 +90,7 @@ which filter a cache directory holds."
          (string= (org-glance-filter:identity filter)
                   (s-trim (f-read-text sidecar 'utf-8))))))
 
-;;; Rendering (from metadata, not content)
+;;; Rendering (from metadata alone; blobs are never read)
 
 (cl-defun org-glance-overview:tag-string (metadata)
   (when-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
@@ -210,8 +210,8 @@ cycle invalidates existing overview caches like a content change."
 (cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE starts with the current `org-glance-overview:header'.
 A cache rendered by an older org-glance (e.g. with the pre-rename
-`org-glance-overview-v2' prop-line mode) must be rebuilt, not served --
-its prop-line would try to enable a mode that no longer exists."
+`org-glance-overview-v2' prop-line mode) must be rebuilt: its prop-line
+would try to enable a mode that no longer exists."
   (let ((prop-line (car (s-lines org-glance-overview:header))))
     (with-temp-buffer
       ;; `insert-file-contents' into an empty buffer leaves point at BOB.

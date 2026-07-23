@@ -27,7 +27,7 @@ Three sidecars share this exposure, all single-form alists under =config/=:
 Two machines that both captured (or both edited a table view) leave git conflict
 markers here, and the reader chokes.
 
-* Design: heal on read, not a git driver
+* Design: heal on read
 
 An =.eld= cannot be git-unioned, so it heals when *read* instead.  Because
 =--write-eld= serialises as one =prin1= line, a conflict is always a whole-line

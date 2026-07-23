@@ -270,7 +270,8 @@ Transient views are one-off: never overview-cached, no persisted table config."
 
 (cl-defun org-glance-filter:identity (filter)
   "Unambiguous printed identity of FILTER's canonical form.
-This -- not the lossy directory name -- is what makes two filters \"the same\"."
+Two filters are \"the same\" when these identities match (the directory
+name is a lossy hash prefix)."
   (->> filter
        org-glance-filter:normalize-spec
        org-glance-filter--canonical-pairs

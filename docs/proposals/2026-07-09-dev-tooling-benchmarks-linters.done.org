@@ -127,7 +127,7 @@ findings and exits non-zero if any linter reports, so it can gate CI.
 
 Low. Both are additive tooling; neither touches shipped runtime code or the
 shipped dependency set (linters are ~development~-scoped). Worst case a benchmark
-is mis-timed — a measurement bug, not a correctness bug. The lint command may
+is mis-timed — a measurement bug, contained to the benchmark numbers. The lint command may
 surface a backlog of pre-existing warnings; that is signal, handled by fixing or
 baselining, and does not block the harness landing.
 

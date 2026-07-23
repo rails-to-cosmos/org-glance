@@ -70,8 +70,8 @@ then see an empty config set."
 
 (cl-defun org-glance-tag-config--headlines (path)
   "The LEVEL-1 headlines in config file PATH, each a full-subtree headline.
-Sub-headings (the capture skeleton's body) are part of their level-1 parent, not
-separate configs."
+One level-1 headline is one config; its sub-headings (the capture skeleton's
+body) belong to that subtree."
   (with-temp-buffer
     (let ((coding-system-for-read 'utf-8))
       (insert-file-contents path))
@@ -82,8 +82,8 @@ separate configs."
 
 (cl-defun org-glance-tag-config--from-headline (headline)
   "Build a config from HEADLINE if it declares a valid `:TAG:' property, else nil.
-Drawer properties are read via `org-glance-headline:node-property' (cached on
-the headline), not a fresh re-parse."
+Drawer properties are read via `org-glance-headline:node-property', which
+reuses the parse cached on the headline."
   (when-let* ((tag-raw (org-glance-headline:node-property "TAG" headline))
               (tag (org-glance-tag:from-string tag-raw))
               ((org-glance-tag? tag)))
@@ -216,7 +216,7 @@ therefore yields exactly one (org-capture honours only the first)."
       (goto-char (point-min))
       ;; Append `%?' to the heading only if the skeleton has NO capture point of
       ;; its own.  Scan the WHOLE buffer (body AND kept drawer properties -- a
-      ;; preserved `:NOTE: %?' counts), not just the post-drawer body; the title is
+      ;; preserved `:NOTE: %?' counts); the title is
       ;; inserted below, so it can't be mistaken for the skeleton's own marker.
       (let ((skeleton-has-point (s-contains? "%?" (buffer-substring-no-properties
                                                    (point-min) (point-max)))))

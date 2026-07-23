@@ -447,8 +447,8 @@ nudges, once per change, that `C-c C-c' applies the layout to a scope."
 ;; Both persist PER TAG (the filter's tags) at `<store>/config/table-columns.eld':
 ;; `:columns' the added custom columns, `:hidden' the removed built-in keys.  So
 ;; every view of a tag inherits its columns; a hidden built-in stays hidden and a
-;; new built-in shipped later still appears (hidden is a denylist, not an
-;; allowlist).  Column ORDER + sort persist separately, per filter (see above).
+;; new built-in shipped later still appears (hidden is a denylist).  Column
+;; ORDER + sort persist separately, per filter (see above).
 
 (cl-defun org-glance-table--property-column (graph property &optional header)
   "A `table-view' column displaying drawer PROPERTY for each row's headline.
@@ -529,8 +529,8 @@ so `C-u +' uses it."
 
 (cl-defun org-glance-table--schema-key (filter)
   "Canonical per-tag key for FILTER: its tags sorted and `+'-joined, or
-\":none:\" when the filter carries no tag constraint.  Keying on the tags (not
-the full filter identity) is what shares a tag's columns across its views."
+\":none:\" when the filter carries no tag constraint.  Keying on the tags
+alone is what shares a tag's columns across all of its views."
   (let ((tags (sort (mapcar #'symbol-name (org-glance-filter:tags filter)) #'string<)))
     (if tags (s-join "+" tags) ":none:")))
 

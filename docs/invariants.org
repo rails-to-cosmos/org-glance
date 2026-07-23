@@ -209,7 +209,7 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     becomes O(blobs).
 
 21. *Reserved properties are managed keys.*  The keys in
-    =org-glance-material-hidden-properties= are org-glance's, not the user's:
+    =org-glance-material-hidden-properties= belong to org-glance:
     concealed in material buffers (overlays only — file and store keep them),
     and hand edits to them reverted at =before-save= with a warning
     (=org-glance-material--restore-reserved= — the sole sanctioned in-buffer
@@ -234,7 +234,7 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     killed buffer shows "running", a restarted one "stopped", or the cache
     is trusted for anything live.
 
-24. *Table point restoration restores the CELL, not just the row.*  Every
+24. *Table point restoration restores the CELL — row AND column.*  Every
     refill captures =org-glance-view:point-context= (ID LINE COL) and
     restores through =org-glance-view:restore-point=, which re-lands on the
     same cell by its =table-view-col= key; a row that left the view falls

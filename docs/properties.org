@@ -56,7 +56,8 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 
 - =org-glance-material:ID= — a relation edge: following materializes ID.  An
   optional =?kind=KIND= suffix types the reference (a book's =author= vs
-  =editor=, =roasted by=); the kind annotates the edge, not the jump.  Kinds
+  =editor=, =roasted by=); the kind annotates the edge, and following behaves
+  the same either way.  Kinds
   are stored dash-slugged and downcased in the path (=?kind=roasted-by=); the
   spaced form is display-only (prose prefix, prompts, column headers).
   Inserted by =@= in a material buffer; =C-u @= asks the kind and prefixes the

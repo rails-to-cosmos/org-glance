@@ -29,8 +29,8 @@ One defcustom (list of symbols, default =nil=) replaces per-feature
 booleans.  =org-glance-init= requires =org-glance-<name>= for each entry,
 *error-demoted*: a broken or missing plugin warns and is skipped — it can
 never break init (the invariant-9 discipline extended to load time).
-Loading manually with =require= works identically; the list is
-convenience, not a registry.
+Loading manually with =require= works identically; the list is a
+convenience.
 
 ** The plugin contract
 
@@ -41,7 +41,7 @@ feature =org-glance-<name>= that confines itself to the PUBLIC surface:
    =org-glance-material:*=, =org-glance-view:*=, ...).  NOT enforced, and
    the in-tree =llm= plugin still reaches for a handful of =--= helpers
    (=material--ensure=, =material--graph=/=--id=, the eld readers): a
-   convention to shrink, not an invariant — see
+   convention to shrink — see
    [[file:../invariants.org][invariant 26]] for the clauses the repo does
    enforce.
 2. *Store sidecars*: =org-glance-graph:config-file= for user state,
@@ -111,7 +111,7 @@ users until they install the plugin.
 - New optional features get a home that costs core nothing (candidates:
   the tags dashboard, future integrations).
 - The public/private naming split (=:= vs =--=) becomes a real API
-  boundary, not just a convention — plugin authors are its consumers.
+  boundary — plugin authors are its consumers.
 - One-line migration for current LLM users:
   =(setq org-glance-llm-enabled t)= → =(setq org-glance-plugins '(llm))=.
 

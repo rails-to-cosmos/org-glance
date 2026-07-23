@@ -59,7 +59,7 @@
 `org-glance-init' requires `org-glance-<name>' for each entry, error-demoted
 -- a broken or missing plugin warns and is skipped, never breaking init.
 Loading a plugin library manually with `require' works identically; this
-list is convenience, not a registry.  Available in-tree: `llm'."
+list is a convenience.  Available: `llm'."
   :group 'org-glance
   :type '(repeat symbol))
 
