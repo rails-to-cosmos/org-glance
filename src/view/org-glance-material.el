@@ -464,10 +464,18 @@ DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
 `org-glance-llm' opens its session.  With a prefix arg, clear the property."
   (interactive
    (list (unless current-prefix-arg
-           (expand-file-name
-            (read-directory-name
-             "Project dir: "
-             (or (org-glance-material--property org-glance-project-dir-property) ""))))))
+           ;; Directory-valued throughout: the stored default AND the stored
+           ;; result keep a trailing "/", so the minibuffer opens INSIDE the
+           ;; directory (completing its contents) instead of offering the
+           ;; directory itself as the pending selection.
+           (file-name-as-directory
+            (expand-file-name
+             (read-directory-name
+              "Project dir: "
+              (if-let ((cur (org-glance-material--property
+                             org-glance-project-dir-property)))
+                  (file-name-as-directory cur)
+                "./")))))))
   (org-glance-material--ensure)
   (save-excursion
     (org-glance-material--goto-first-heading)

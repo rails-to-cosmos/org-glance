@@ -101,6 +101,10 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Table header is readable: the action-key legend wraps to the window
+  width on its own lines BELOW the =#+TODO:= line; line 2 keeps only the
+  status (sort / filter / marks) with the =?= toggle (upstream
+  =table-view=).
 - =M-x org-glance-reindex= is ~2x faster and scales linearly (12.6 → 5.8
   ms/headline at 10k): metadata-only batched appends — blobs are read,
   never rewritten — with auto-compaction held until one compact at the end.
