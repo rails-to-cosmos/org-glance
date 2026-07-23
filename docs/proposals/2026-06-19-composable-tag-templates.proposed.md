@@ -99,7 +99,7 @@ commutative and idempotent **by construction** — `travel+baby ≡ baby+travel`
 (`(phase, priority, tag-name)`), which is where org-capture's positional grammar is
 honored — so order-independence stays a structural property of the value.
 
-### 4. Conflicts: a join-semilattice, not last-writer-wins
+### 4. Conflicts: a join-semilattice
 
 Fields are **namespaced by their defining tag**, so the common case is conflict-free.
 A field two classes both declare `:shared` is merged per-attribute as a least-upper-bound:

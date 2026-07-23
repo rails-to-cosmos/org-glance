@@ -17,14 +17,14 @@ optional Phase 3 (in-place reparse, §"Secondary win").
 >   view-specific thunks buffer-local, installs the `window-buffer-change` /
 >   `window-selection-change` hooks, and one shared `org-glance-view--refresh-when-stale`
 >   dispatches to them. Each view (overview, table) supplies only its STALE-FN + RELOAD-FN; the
->   window wiring, the data-loss guard and the error demotion live once — a new view type adds a
->   `register` call, not a coherence skeleton.
+>   window wiring, the data-loss guard and the error demotion live once — a new view type adds
+>   only a `register` call.
 > - **The data-loss guard is `(and buffer-file-name (buffer-modified-p))`, centralized** in the
 >   shared refresh. A modified FILE-backed view (the overview cache) is never reverted — only
 >   re-flagged; a NON-FILE projection (the table, always "modified" after its programmatic fill,
 >   holding no user data) reloads freely. (Generalizes the original "two deltas": push-not-poll,
 >   and file-backed-only guard.)
-> - **The lighter is the native mode-line construct, not a helper + `:eval`:**
+> - **The lighter is the native mode-line construct:**
 >   `(cl-pushnew '(org-glance-view--stale " glance:stale") mode-line-misc-info :test #'equal)` —
 >   a buffer-local variable read at redisplay, with no per-buffer funcall.
 > - **Verified:** 174/174 tests green, clean compile (the surgical-push subsystem and the
