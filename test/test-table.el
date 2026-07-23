@@ -1081,5 +1081,20 @@ never leaks into the opposite direction."
       (should (equal '(("title" . t)) table-view--sort-keys))
       (should (equal "light" (org-glance-test:table-cell "r1" "ROAST"))))))
 
+(ert-deftest org-glance-test:table-reload-keeps-cell ()
+  "`g' (and every action's reload) returns point to the same CELL, not to
+column 0; a row that left the view still falls back to its screen line."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO Alpha :work:")
+      (org-glance-test:headline "b" "* TODO Beta :work:"))
+    (org-glance-test:with-table (graph 'work)
+      (org-glance-test:goto-cell "b" "tags")
+      (let ((col (current-column)))
+        (org-glance-table--reload (current-buffer))
+        (should (equal "b" (get-text-property (point) 'table-view-id)))
+        (should (equal "tags" (get-text-property (point) 'table-view-col)))
+        (should (= col (current-column)))))))
+
 (provide 'test-table)
 ;;; test-table.el ends here
