@@ -67,8 +67,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    (mtime + size + segment names), never mtime alone.
 8. Git conflicts heal by union merge; `.eld` sidecar merges are commutative and
    non-inflating (earliest/latest/`max`, never a sum).
-9. Side-index hooks and view refresh are error-demoted — they may never break
-   a save, an open, or a display.
+9. Side-index hooks, view refresh, occurrence snapshots and the plugin loader
+   are error-demoted — they may never break a save, an open, a display or
+   init; `org-glance-plugin-install` is the deliberate loud counterpart.
 10. View coherence is flag-stale + pull-refresh; when freshness is in doubt,
     rebuild.
 11. Never clobber unsaved user edits: `user-error` or skip, never overwrite.
@@ -117,6 +118,13 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 23. LLM session LIVE state (running/exited, buffer names) is derived live,
     never persisted; the headline↔session map + transcript facts cache in
     `cache/llm-sessions.eld` (derived, rebuildable, never source of truth).
+24. Table refills restore the (row, CELL) pair via
+    `org-glance-view:point-context` / `:restore-point` — never just the row.
+25. Links are addressed by their enclosing list-item path plus their own
+    description (the link's own item label is dropped); the picker descends
+    one component per prompt and breaks path ties by target.
+26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
+    remove-then-append, and never unload.
 
 ## Fix — and prevent — the whole class
 

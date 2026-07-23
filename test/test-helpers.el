@@ -99,11 +99,12 @@ it (caches read as stale)."
            ,@body)
        (kill-buffer ,var))))
 
-(cl-defmacro org-glance-test:with-material ((buffer graph id) &rest body)
+(cl-defmacro org-glance-test:with-material ((buffer graph id &rest opts) &rest body)
   "Materialize ID from GRAPH into BUFFER, make it current, run BODY, kill it.
+OPTS pass through to `org-glance-material:open' (e.g. `:decrypt t').
 The modified flag is cleared and the buffer unconditionally killed on exit."
   (declare (indent 1))
-  `(let ((,buffer (org-glance-material:open ,graph ,id)))
+  `(let ((,buffer (org-glance-material:open ,graph ,id ,@opts)))
      (unwind-protect
          (with-current-buffer ,buffer ,@body)
        (when (buffer-live-p ,buffer)

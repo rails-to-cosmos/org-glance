@@ -343,12 +343,18 @@ else DIR's leaf."
          (handlers (list (cons "open" (lambda (id row) (org-glance-llm--act-open graph id row)))
                          (cons "materialize" (lambda (_id row) (org-glance-llm--act-materialize graph row)))
                          (cons "kill" (lambda (id _row) (org-glance-llm--act-kill id)))
-                         (cons "refresh" (lambda (_id _row)
-                                           (table-view-set-rows
-                                            (current-buffer)
-                                            (org-glance-llm--session-rows
-                                             graph (org-glance-llm--rescan graph)))
-                                           (table-view-apply-sort))))))
+                         (cons "refresh"
+                               (lambda (_id _row)
+                                 ;; Keep point on the same CELL, like the
+                                 ;; headline table's `g' (invariant 24).
+                                 (pcase-let ((`(,id ,line ,col)
+                                              (org-glance-view:point-context)))
+                                   (table-view-set-rows
+                                    (current-buffer)
+                                    (org-glance-llm--session-rows
+                                     graph (org-glance-llm--rescan graph)))
+                                   (table-view-apply-sort)
+                                   (org-glance-view:restore-point id line col)))))))
     (org-glance-view:display-table graph "*org-glance-llm-sessions*"
                                    org-glance-llm--sessions-spec handlers fill-fn)))
 

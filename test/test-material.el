@@ -1041,19 +1041,14 @@ headline is NOT re-prompted for its password."
                                  (org-glance-test:headline "enc" "* TODO Secret" "plainbody")
                                  "pw"))
     (org-glance-test:answering ((read-passwd "pw"))
-      (let ((buf (org-glance-material:open graph "enc" :decrypt t)))
-        (unwind-protect
-            (with-current-buffer buf
-              (should (s-contains? "plainbody" (buffer-string)))
-              ;; second open: same buffer, no password prompt -- even asking
-              ;; for decrypt again (idempotent: nothing left sealed)
-              (cl-letf (((symbol-function 'read-passwd)
-                         (lambda (&rest _) (error "must not re-prompt"))))
-                (should (eq buf (org-glance-material:open graph "enc")))
-                (should (eq buf (org-glance-material:open graph "enc" :decrypt t)))))
-          (when (buffer-live-p buf)
-            (with-current-buffer buf (set-buffer-modified-p nil))
-            (kill-buffer buf)))))))
+      (org-glance-test:with-material (buf graph "enc" :decrypt t)
+        (should (s-contains? "plainbody" (buffer-string)))
+        ;; second open: same buffer, no password prompt -- even asking for
+        ;; decrypt again (idempotent: nothing left sealed)
+        (cl-letf (((symbol-function 'read-passwd)
+                   (lambda (&rest _) (error "must not re-prompt"))))
+          (should (eq buf (org-glance-material:open graph "enc")))
+          (should (eq buf (org-glance-material:open graph "enc" :decrypt t))))))))
 
 (ert-deftest org-glance-test:material-interval ()
   "The body's first active range projects to metadata, the overview line and
@@ -1176,16 +1171,17 @@ and `C-c u' unseals an as-is buffer after the fact."
         (org-glance-material:decrypt)
         (should (s-contains? "plainbody" (buffer-string)))
         (should org-glance-material--encrypted)
-        (should (null buffer-auto-save-file-name))           ; hardened (inv 14)
-        (org-glance-material:decrypt)))                      ; idempotent, no re-prompt
-    ;; :decrypt opens unsealed straight away
-    (org-glance-test:answering ((read-passwd "pw"))
-      (let ((buf (org-glance-material:open graph "e" :decrypt t)))
-        (unwind-protect
-            (with-current-buffer buf
-              (should (s-contains? "plainbody" (buffer-string))))
-          (with-current-buffer buf (set-buffer-modified-p nil))
-          (kill-buffer buf))))))
+        ;; idempotent: a second decrypt has nothing sealed left to ask about
+        (cl-letf (((symbol-function 'read-passwd)
+                   (lambda (&rest _) (error "must not re-prompt"))))
+          (org-glance-material:decrypt))))
+    ;; a bare `C-c #' on a still-sealed buffer refuses instead of wrapping the
+    ;; ciphertext in a second block under a second password
+    (cl-letf (((symbol-function 'read-passwd)
+               (lambda (&rest _) (error "must not prompt"))))
+      (org-glance-test:with-material (buf graph "e")
+        (org-glance-material:crypt)
+        (should (= 1 (length (org-glance--crypt-block-regions))))))))
 
 (ert-deftest org-glance-test:material-open-link-nested ()
   "Nested link lists are picked level by level: the first prompt offers the
@@ -1227,6 +1223,27 @@ depth is taken without asking."
         (pcase-let ((`(,asked . ,opened) (open-with '("Solo"))))
           (should (= 1 (length asked)))
           (should (s-contains? "example.com/only" opened)))))))
+
+(ert-deftest org-glance-test:material-open-link-identical-paths ()
+  "Two links that end up with the SAME path (same description, same depth)
+are offered by their targets instead of recursing forever."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "d" "* TODO Docs"
+        "- [[https://example.com/a][docs]]"
+        "- [[https://example.com/b][docs]]"))
+    (org-glance-test:with-material (buf graph "d")
+      (let (offered opened)
+        (cl-letf (((symbol-function 'completing-read)
+                   (lambda (_p coll &rest _) (setq offered (append coll nil))
+                     (cadr coll)))
+                  ((symbol-function 'org-open-at-point)
+                   (lambda (&rest _)
+                     (setq opened (buffer-substring-no-properties
+                                   (point) (line-end-position))))))
+          (org-glance-material:open-link-here))
+        (should (equal '("https://example.com/a" "https://example.com/b") offered))
+        (should (s-contains? "example.com/b" opened))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

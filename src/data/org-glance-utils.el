@@ -141,11 +141,7 @@ start; TYPE and PATH the parsed `org-element' link type and unescaped path."
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)
            for end = (org-element-property :end link-element)
-           for title = (substring-no-properties
-                        (or (-some->> link-element
-                              (org-element-contents)
-                              (org-element-interpret-data))
-                            (org-element-property :raw-link link-element)))
+           for title = (org-glance--link-title link-element)
            for link = (s-trim (buffer-substring-no-properties beg end))
            collect (list link title beg
                          (org-element-property :type link-element)
@@ -222,6 +218,12 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
              for value = (s-trim (substring-no-properties (match-string 2)))
              collect (cons key value))))
 
+(cl-defun org-glance--link-title (element)
+  "Display text of link ELEMENT: its description, else the raw link."
+  (substring-no-properties
+   (or (-some->> element (org-element-contents) (org-element-interpret-data))
+       (org-element-property :raw-link element))))
+
 (cl-defun org-glance--item-label (item)
   "First-line text of plain-list ITEM, its bullet/checkbox stripped."
   (save-excursion
@@ -234,61 +236,50 @@ Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
   "Labels of ELEMENT's enclosing list items, outermost first.
 The INNERMOST item is dropped: it is the link's own item, whose text the
 link description already names."
-  (let (items)
-    (cl-loop for parent = (org-element-property :parent element)
-             then (org-element-property :parent parent)
-             while parent
-             when (org-element-type-p parent 'item)
-             do (push parent items))
-    (mapcar #'org-glance--item-label (butlast items))))
+  (mapcar #'org-glance--item-label
+          (nreverse (cdr (cl-loop for parent = (org-element-property :parent element)
+                                  then (org-element-property :parent parent)
+                                  while parent
+                                  when (org-element-type-p parent 'item)
+                                  collect parent)))))
 
 (cl-defun org-glance--link-paths ()
-  "Buffer links as (PATH . POS), PATH the enclosing list-item labels plus
-the link's own description.  A link outside any list has a one-element
-PATH, so a flat body and a nested list share one representation."
+  "Buffer links as (PATH POS TYPE TARGET) tuples.
+PATH is the enclosing list-item labels plus the link's own description, so
+a link outside any list has a one-element PATH and a flat body and a
+nested list share one representation.  TARGET (the raw link) disambiguates
+links that end up with identical PATHs."
   (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
-           for pos = (org-element-property :begin element)
-           for title = (substring-no-properties
-                        (or (-some->> element
-                              (org-element-contents)
-                              (org-element-interpret-data))
-                            (org-element-property :raw-link element)))
-           collect (cons (append (org-glance--link-ancestry element)
-                                 (list (s-trim title)))
-                         (list pos (org-element-property :type element)))))
+           collect (list (append (org-glance--link-ancestry element)
+                                 (list (s-trim (org-glance--link-title element))))
+                         (org-element-property :begin element)
+                         (org-element-property :type element)
+                         (org-element-property :raw-link element))))
 
-(cl-defun org-glance--pick-link-pos (entries &optional (prompt "Open link: "))
-  "Recursively PROMPT over ENTRIES ((PATH POS TYPE)...); return the chosen POS.
+(cl-defun org-glance--pick-link-pos (entries)
+  "Recursively prompt over ENTRIES ((PATH POS TYPE TARGET)...); return the POS.
 Each level offers the paths' next component; picking a branch descends into
-it.  A lone candidate is taken without asking, at any depth."
+it.  A lone candidate is taken without asking, at any depth.  Entries whose
+PATHs are exhausted yet still ambiguous (same description at the same depth)
+are offered by TARGET -- without that base case the descent would never
+shrink them."
   (cond
    ((null entries) (user-error "No links in headline"))
    ((null (cdr entries)) (cadr (car entries)))
+   ((null (car (car entries)))
+    (let ((by-target (cl-loop for entry in entries
+                              collect (cons (format "%s" (or (nth 3 entry) (cadr entry)))
+                                            entry))))
+      (cadr (cdr (assoc (completing-read "Open link: " (mapcar #'car by-target) nil t)
+                        by-target)))))
    (t
-    (let (groups)
-      (dolist (entry entries)
-        (let* ((key (or (car (car entry)) ""))
-               (cell (assoc key groups)))
-          (if cell
-              (setcdr cell (cons entry (cdr cell)))
-            (push (cons key (list entry)) groups))))
-      (setq groups (nreverse groups))
-      (dolist (group groups) (setcdr group (nreverse (cdr group))))
-      (let ((chosen (if (null (cdr groups))
-                        (cdr (car groups))   ; one branch: descend, do not ask
-                      (cdr (assoc (completing-read prompt (mapcar #'car groups) nil t)
-                                  groups)))))
-        (org-glance--pick-link-pos
-         (mapcar (lambda (entry) (cons (cdr (car entry)) (cdr entry))) chosen)
-         prompt))))))
-
-(cl-defun org-glance--parse-links ()
-  "Buffer links as (LINK DESCRIPTION POS TYPE PATH), preferring a body
-`KEY: value' description over the link's own title when one matches."
-  (cl-loop with descriptions = (cl-loop for (key . val) in (org-glance--buffer-key-value-pairs) collect (cons val key))
-           for (link title pos type path) in (org-glance--buffer-links)
-           collect (list link (or (alist-get link descriptions nil nil #'string=) title)
-                         pos type path)))
+    (let* ((groups (--group-by (or (car (car it)) "") entries))
+           (chosen (if (null (cdr groups))
+                       (cdr (car groups))   ; one branch: descend, do not ask
+                     (cdr (assoc (completing-read "Open link: " (mapcar #'car groups) nil t)
+                                 groups)))))
+      (org-glance--pick-link-pos
+       (mapcar (lambda (entry) (cons (cdr (car entry)) (cdr entry))) chosen))))))
 
 ;;; Crypt blocks
 ;;

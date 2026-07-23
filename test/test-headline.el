@@ -49,7 +49,7 @@
   (let ((headline (org-glance-headline--from-lines "* TODO Hello, world!" "[[https:duckduckgo.com][ddg]]")))
     (should (plist-get (org-glance-headline--content-facts headline) :linked))
     (should (eq 1 (org-glance-headline:with-contents headline
-                    (length (org-glance--parse-links)))))))
+                    (length (org-glance--buffer-links)))))))
 
 (ert-deftest org-glance-test:headline-encryption ()
   "Encrypt wraps the body in one sealed crypt block; decrypt keeps the markers

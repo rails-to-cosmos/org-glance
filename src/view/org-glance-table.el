@@ -209,30 +209,13 @@ priority is its letter, absent values are the empty string."
            when (funcall keep? meta)
            collect (org-glance-table--row meta)))
 
-(cl-defun org-glance-table--restore-point (id line &optional col)
-  "Return point to the row with ID; if that row is gone, to screen LINE.
-COL (a `table-view-col' key) puts point back on the same CELL, so a refresh
-never yanks the cursor to the start of the line.  The row may have left the
-current filter (e.g. now DONE under an active filter); fall back to the same
-screen line, org-agenda-style, instead of the buffer top."
-  (unless (and id (table-view--goto-id id))
-    (goto-char (point-min))
-    (forward-line (1- line)))
-  (when col (table-view--goto-cell col)))
-
-(cl-defun org-glance-table--point-context ()
-  "Point's restorable position: (ID LINE COL) for `--restore-point'."
-  (list (get-text-property (point) 'table-view-id)
-        (line-number-at-pos)
-        (get-text-property (point) 'table-view-col)))
-
 (cl-defun org-glance-table--finish (id line fmt &rest args)
   "Reload the table, return point to row ID (else screen LINE), message FMT ARGS.
 The CELL under point is kept too -- an action never moves the cursor to
 column 0."
   (let ((col (get-text-property (point) 'table-view-col)))
     (org-glance-table--reload (current-buffer))
-    (org-glance-table--restore-point id line col))
+    (org-glance-view:restore-point id line col))
   (message "%s" (apply #'format fmt args)))
 
 (cl-defun org-glance-table--reload (buffer)
@@ -244,11 +227,11 @@ return to it afterwards, since the intermediate render + sort restore point by
 LINE, which drifts to another row once the sort reorders them."
   (when-let ((buf (get-buffer buffer)))
     (with-current-buffer buf
-      (pcase-let ((`(,id ,line ,col) (org-glance-table--point-context)))
+      (pcase-let ((`(,id ,line ,col) (org-glance-view:point-context)))
         (table-view-refresh buf)
         (table-view-apply-sort)
         (org-glance-view:mark-fresh)
-        (org-glance-table--restore-point id line col)))))
+        (org-glance-view:restore-point id line col)))))
 
 ;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
 ;;
@@ -308,7 +291,7 @@ Bound to `C-c C-t' with rows marked; with none, a bare `C-c C-t' stays the
 single-row `org-glance-table--act-todo' (cycle + note)."
   (let ((ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows))))
     (when ids
-      (pcase-let ((`(,at-id ,line ,col) (org-glance-table--point-context))
+      (pcase-let ((`(,at-id ,line ,col) (org-glance-view:point-context))
                   (state (org-glance-table--read-state-native graph org-glance-table--spec)))
         (when state                       ; `none' clears; C-g aborts before here
           (org-glance-material:set-todo-bulk
@@ -316,7 +299,7 @@ single-row `org-glance-table--act-todo' (cycle + note)."
            (lambda (changed skipped)
              (org-glance-table--reload (current-buffer))
              (table-view-unmark-all)
-             (org-glance-table--restore-point at-id line col)
+             (org-glance-view:restore-point at-id line col)
              (message "Set %d headline(s) to %s%s"
                       (length changed) state
                       (if skipped (format " (%d skipped)" (length skipped)) "")))))))))

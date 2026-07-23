@@ -5,6 +5,13 @@ Entry point for the org-glance design wiki.  Documents live in
 proposals are named =YYYY-MM-DD-slug.proposed.org= and renamed to =….done.org=
 when implemented (older ones are =.md=; new ones are =.org=).
 
+* Rules of the codebase
+
+- [[file:invariants.org][Global invariants]] — the 26 rules every change must preserve (rule,
+  evidence anchors, what breaks); compact index in [[file:../CLAUDE.md][CLAUDE.md]].
+- [[file:properties.org][Properties reference]] — every special drawer property, content marker
+  (=#+begin_crypt=) and file keyword org-glance gives meaning to.
+
 * Living indexes
 
 - [[file:proposals/2026-07-06-performance-audit.org][Performance audit]] — the hub for the current performance work; lists the
@@ -14,9 +21,39 @@ when implemented (older ones are =.md=; new ones are =.org=).
 
 * Done
 
+Newest first.
+
+- [[file:proposals/2026-07-23-plugin-interface.done.org][Plugin interface — minimal core, LLM as the first plugin]] —
+  =org-glance-plugins= loads =org-glance-<name>= libraries error-demoted;
+  plugins self-register their transient rows and keys.
+- [[file:proposals/2026-07-21-interval-ranges.done.org][Date intervals as first-class metadata]] — the body's first org timestamp
+  range becomes the =range= field, the table's =Interval= column and the
+  overview's span line (=C-c i= sets it).
+- [[file:proposals/2026-07-19-reference-table-schema.done.org][Scoped schema for reference tables]] — =C-c C-c= saves a reference table's
+  layout under a chosen scope (anchor headline or tag pair, per direction).
+- [[file:proposals/2026-07-18-relations.done.org][Relations — typed edges between headlines]] — =@= inserts an
+  =org-glance-material:= link, kinds become table columns, =C-c @= opens the
+  references / back-references tables.
+- [[file:proposals/2026-07-18-repeat-occurrences.done.org][Repeat occurrence history]] — a completed repetition snapshots into
+  =data/<id>/occurrences/=; one headline, never clones.
+- [[file:proposals/2026-07-18-property-index.done.org][Property index]] — a derived, hash-guarded cache of each headline's drawer
+  and body properties, feeding the table's custom columns.
+- [[file:proposals/2026-07-18-macro-audit.done.org][Macro audit of the test suite]] — 27 candidate patterns reviewed; three
+  adopted (=with-table=, =offering=, =with-shown=), the rest recorded as
+  rejected with reasons.
+- [[file:proposals/2026-07-17-crypt-blocks.done.org][Crypt blocks — per-block secrecy]] — =#+begin_crypt= regions seal at rest;
+  public text between blocks stays indexed.
+- [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][Auto-resolve git conflicts in the =.eld= sidecars]] — commutative,
+  non-inflating merges for the derived sidecars the union driver cannot cover.
+- [[file:proposals/2026-07-09-dev-tooling-benchmarks-linters.done.org][Dev tooling — a benchmark harness and a lint gate]] — =make bench= times the
+  store's hot paths; =make lint= gates checkdoc + relint.
+- [[file:proposals/2026-07-09-delete-headline-command.done.org][Delete a headline]] — =D= / =M-x org-glance-delete= with referrer-aware
+  confirmation and a WAL tombstone.
 - [[file:proposals/2026-07-09-git-sync-merge-resolution.done.org][Auto-resolve git merge conflicts in the synced store]] — =merge=union= for the
   append-only JSONL + MANIFEST self-heal, so a git-synced store merges without
   hand-resolution.
+- [[file:proposals/2026-07-06-all-tags-overview.done.org][All-tags overview]] — a table whose rows are TAGS (count, states, cycle,
+  timestamps), bound to =T= in the transient.
 - [[file:proposals/2026-07-06-table-view-git-dependency.done.org][Retire vendoring — table-view as a pinned git dependency]] — drop the vendored
   copy; declare =table-view= via a MELPA-style pin in =Eask=.
 - [[file:proposals/2026-06-30-material-save-async-sync.done.md][Fast material saves — WAL-commit on the hot path]] — views self-sync off the

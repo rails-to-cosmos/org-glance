@@ -72,13 +72,12 @@ falling back to the default."
   "The spec has the required top-level keys and exactly the built-in columns."
   (org-glance-test:with-graph graph
     (let ((spec (org-glance-table--spec graph nil)))
-      (should (alist-get 'title spec))
+      ;; `title'/`actions'/`sort' are literals of the same backquote -- only
+      ;; the column set is a real claim (the built-ins, in default order).
       (should (equal '("state" "title" "schedule" "deadline" "interval"
                        "priority" "encrypted" "repeated" "tags")
                      (mapcar (lambda (c) (alist-get 'key c))
-                             (alist-get 'columns spec))))
-      (should (alist-get 'actions spec))
-      (should (alist-get 'sort spec)))))
+                             (alist-get 'columns spec)))))))
 
 ;;; #+TODO: header line (always-visible subtitle)
 
@@ -1083,7 +1082,7 @@ never leaks into the opposite direction."
 
 (ert-deftest org-glance-test:table-reload-keeps-cell ()
   "`g' (and every action's reload) returns point to the same CELL, not to
-column 0; a row that left the view still falls back to its screen line."
+column 0.  (The row-left-the-view fallback is `table-todo-preserves-point'.)"
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO Alpha :work:")

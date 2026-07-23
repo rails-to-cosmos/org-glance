@@ -27,6 +27,7 @@
 
 (require 'cl-lib)
 (require 'org-glance-core)
+(require 'table-view)
 (require 'org-glance-utils)
 (require 'org-glance-graph)
 
@@ -173,6 +174,24 @@ named by the headline's title (id when the headline is gone) and the stamp."
           (goto-char (point-min)))
         (read-only-mode 1))
       (switch-to-buffer buf))))
+
+(cl-defun org-glance-view:point-context ()
+  "Point's restorable position in a `table-view' buffer: (ID LINE COL).
+Capture it BEFORE a refill, restore with `org-glance-view:restore-point'."
+  (list (get-text-property (point) 'table-view-id)
+        (line-number-at-pos)
+        (get-text-property (point) 'table-view-col)))
+
+(cl-defun org-glance-view:restore-point (id line &optional col)
+  "Return point to row ID, else to screen LINE; COL re-lands on that CELL.
+Every table refill restores the (row, cell) pair -- a bare row restore
+would drop the cursor to column 0, where the next `i' / `C-u -' would act
+on the wrong column.  A row that left the view (now DONE under an active
+filter) falls back to its screen line, org-agenda-style."
+  (unless (and id (table-view--goto-id id))
+    (goto-char (point-min))
+    (forward-line (1- line)))
+  (when col (table-view--goto-cell col)))
 
 (cl-defun org-glance-view:display-table (graph name spec handlers fill-fn
                                                &key stale-fn reload-fn)

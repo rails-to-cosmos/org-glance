@@ -244,20 +244,35 @@ then never rescans on plain re-fills."
 (ert-deftest org-glance-test:llm-plugin-registration ()
   "Loading the plugin registers `l' / `L' in the transient; the loader
 survives an unknown plugin; `org-glance-plugin-install' enables + records."
-  ;; self-registered transient row (org-glance-ui + this plugin are loaded)
-  (should (transient-get-suffix 'org-glance-transient "l"))
-  (should (transient-get-suffix 'org-glance-transient "L"))
+  ;; self-registered transient row (org-glance-ui + this plugin are loaded).
+  ;; `transient-get-suffix' SIGNALS when absent, so the calls are the check.
+  (transient-get-suffix 'org-glance-transient "l")
+  (transient-get-suffix 'org-glance-transient "L")
   ;; ...and the material-buffer key: C-c l = this headline's session
   (should (eq (lookup-key org-glance-material-mode-map (kbd "C-c l"))
               #'org-glance-llm-here))
   ;; demoted loader: unknown plugin never breaks init
   (let ((org-glance-plugins '(no-such-plugin-xyz)))
-    (should-not (org-glance--load-plugins)))
+    (org-glance--load-plugins))                ; demoted: must not signal
   ;; install command: loads + records (batch skips customize-save)
   (let ((org-glance-plugins nil))
     (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "llm")))
       (call-interactively #'org-glance-plugin-install))
     (should (equal '(llm) org-glance-plugins))))
+
+(ert-deftest org-glance-test:llm-sessions-refresh-keeps-cell ()
+  "`g' in the sessions table restores the (row, cell) pair like the
+headline table -- point never drops to the buffer top."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha"))
+    (org-glance-test:llm-stubs (store)
+      (org-glance-test:llm-record-session (org-glance-llm--dir graph "a"))
+      (org-glance-test:with-shown (buf)
+        (setq buf (org-glance-llm-sessions:visit graph))
+        (with-current-buffer buf
+          (org-glance-test:goto-cell (org-glance-llm--dir graph "a") "title")
+          (funcall (cdr (assoc "refresh" table-view--handlers)) nil nil)
+          (should (equal "title" (get-text-property (point) 'table-view-col))))))))
 
 (provide 'test-llm)
 ;;; test-llm.el ends here

@@ -398,28 +398,23 @@ Idempotent -- `add-hook' deduplicates and hardening re-runs harmlessly."
   (add-hook 'after-save-hook #'org-glance-material--decrypt-buffer t t)
   (add-hook 'kill-buffer-hook #'org-glance-material--clear-password nil t))
 
-(cl-defun org-glance-material--sealed? ()
-  "Non-nil when the current buffer still holds ciphertext:
-sealed crypt blocks, or a legacy whole-body cipher (`--aes-header-re')."
-  (or (org-glance--crypt-sealed-blocks-p)
-      (save-excursion (goto-char (point-min))
-                      (re-search-forward org-glance--aes-header-re nil t))))
-
 (cl-defun org-glance-material--maybe-decrypt (meta buffer)
   "When META is encrypted and BUFFER still sealed, prompt and decrypt it.
+Return non-nil when it decrypted, nil when there was nothing to do.
 Hardens BUFFER and wires the save-time re-encrypt round-trip; caches the
 password (with TTL).  Idempotent: an already-decrypted buffer (no sealed
 blocks) never re-prompts.  A wrong password forgets it, kills BUFFER and
 re-signals, so `open' fails clean."
   (when (and (org-glance-headline-metadata:encrypted? meta)
-             (with-current-buffer buffer (org-glance-material--sealed?)))
+             (with-current-buffer buffer (org-glance-headline--encrypted-here)))
     (org-glance-material--wire-crypto)
     (org-glance-material--set-password (read-passwd "Headline password: "))
     (condition-case err
         (org-glance-material--decrypt-buffer)
       (error (org-glance-material--clear-password)
              (org-glance--discard-buffer buffer)
-             (signal (car err) (cdr err))))))
+             (signal (car err) (cdr err))))
+    t))
 
 (cl-defun org-glance-material:crypt-region (beg end)
   "Wrap BEG..END in a `#+begin_crypt' block; it seals on the next save.
@@ -448,11 +443,10 @@ buffer, wires the seal/unseal round-trip.  No-op message when nothing is
 sealed."
   (interactive)
   (org-glance-material--ensure)
-  (if (org-glance-material--sealed?)
-      (org-glance-material--maybe-decrypt
-       (org-glance-graph:get-headline org-glance-material--graph
-                                      org-glance-material--id)
-       (current-buffer))
+  (unless (org-glance-material--maybe-decrypt
+           (org-glance-graph:get-headline org-glance-material--graph
+                                          org-glance-material--id)
+           (current-buffer))
     (message "org-glance: nothing sealed here")))
 
 (cl-defun org-glance-material:crypt-unwrap ()
@@ -481,13 +475,17 @@ Active region -> wrap it in a crypt block (`org-glance-material:crypt-region').
 Prefix arg -> unwrap the block at point (`org-glance-material:crypt-unwrap').
 No region, plaintext buffer -> encrypt the WHOLE body (one block).
 No region, already encrypted -> forget the cached password
-\(`org-glance-material:lock')."
+\(`org-glance-material:lock'); when the buffer opened AS-IS its ciphertext
+is still sealed and unwired, so ask to decrypt rather than wrapping the
+ciphertext in a SECOND block under a second password."
   (interactive)
   (cond
    ((use-region-p)
     (org-glance-material:crypt-region (region-beginning) (region-end)))
    (current-prefix-arg (org-glance-material:crypt-unwrap))
    (org-glance-material--encrypted (org-glance-material:lock))
+   ((org-glance-headline--encrypted-here)
+    (message "org-glance: sealed -- `C-c u' decrypts it first"))
    (t (pcase-let ((`(,beg . ,end) (org-glance-headline--body-region)))
         (org-glance-material:crypt-region beg end)))))
 

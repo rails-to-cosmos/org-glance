@@ -72,8 +72,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 
 9. *Soft paths are error-demoted.*  Side-index hooks
    (=org-glance-graph-before-append-functions=,
-   =org-glance-graph-after-open-functions=) and view refresh run under demoted
-   errors — a sidecar or reload may never break a save, an open, or a display.
+   =org-glance-graph-after-open-functions=), view refresh, the occurrence
+   snapshot (=org-glance-material:snapshot-on-repeat=) and the PLUGIN loader
+   (=org-glance--load-plugins=) all run under demoted errors — a sidecar, a
+   reload or a third-party plugin may never break a save, an open, a display
+   or init.  The deliberate loud counterpart is =org-glance-plugin-install=:
+   an explicit install reports its failure.
 
 10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale
     (boolean; no I/O, never touches point); views re-fill at display boundaries;
@@ -142,7 +146,8 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 
 15. *Table Title column is mandatory.*  Never removable or hideable —
     =org-glance-table--act-delcolumn= refuses =C-u -= on =title=, and
-    =org-glance-table--apply-schema= strips =title= from the persisted hidden set
+    =org-glance-table--compose-columns= (shared by the per-tag schema and the
+    scoped reference layouts) strips =title= from the hidden set
     (defence in depth against a hand-edited sidecar).  Violation: rows lose their
     only human-readable label; a schema file could blank every view of a tag.
 
@@ -189,8 +194,8 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 
 19. *The table is a pure projection; every mutation routes through the
     material layer.*  All =org-glance-table--act-*= handlers delegate to
-    =org-glance-material:= functions (todo, bulk todo, retag, crypt, delete,
-    planning) — no table-originated write touches store, blob, or metadata
+    =org-glance-material:= functions (todo, bulk todo, retag, crypt, delete, planning,
+    title/priority/property edits, duplicate) — no table-originated write touches store, blob, or metadata
     directly, and bulk operations degrade per-row (skip-and-report), never
     batch-abort.  Violation: bypasses the unsaved-edit guard (inv 11) and
     the blob-canonical rule (inv 5).
@@ -228,3 +233,32 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     writes, =g= rescans) that is never the source of truth.  Violation: a
     killed buffer shows "running", a restarted one "stopped", or the cache
     is trusted for anything live.
+
+24. *Table point restoration restores the CELL, not just the row.*  Every
+    refill captures =org-glance-view:point-context= (ID LINE COL) and
+    restores through =org-glance-view:restore-point=, which re-lands on the
+    same cell by its =table-view-col= key; a row that left the view falls
+    back to its screen line.  Both tables obey it — the headline table's
+    =--finish= / =--reload= / bulk-todo paths and the LLM sessions table's
+    =g=.  Violation: the cursor drops to column 0, where the next =i= (edit
+    cell) or =C-u -= (remove column) acts on the WRONG column.
+
+25. *Links are addressed by their list path; the link's own item label is
+    dropped.*  =org-glance--link-paths= gives every link a PATH of enclosing
+    plain-list item labels plus its own description —
+    =org-glance--link-ancestry= drops the innermost item (the description
+    already names it), and a link outside any list gets a one-element path,
+    so flat and nested bodies share one representation.
+    =org-glance--pick-link-pos= descends one component per prompt, takes a
+    lone candidate at any depth without asking, and offers exhausted-path
+    ties by TARGET — without that base case identical paths recurse forever.
+    Violation: every leaf becomes a one-option prompt, or the picker hangs.
+
+26. *Plugins load error-demoted, self-register, and never unload.*  A plugin
+    is =org-glance-<name>.el= listed in =org-glance-plugins= and =require=-d
+    by =org-glance--load-plugins= (inv 9) before the graph opens; it appends
+    its own transient entries at load (remove-then-append, so a reload never
+    duplicates) and binds its own keys.  There is no unload protocol:
+    disabling = dropping it from the list and restarting.  Violation: a
+    broken third-party plugin bricks =org-glance-init=, or reloading
+    duplicates its UI.

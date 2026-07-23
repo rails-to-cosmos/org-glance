@@ -35,9 +35,13 @@ convenience, not a registry.
 A plugin is an ordinary library named =org-glance-<name>.el= providing
 feature =org-glance-<name>= that confines itself to the PUBLIC surface:
 
-1. *API*: the =:=-named functions only (=org-glance-graph:*=,
-   =org-glance-material:*=, =org-glance-view:display-table=, ...).
-   =--= names are off-limits.
+1. *API*: prefer the =:=-named functions (=org-glance-graph:*=,
+   =org-glance-material:*=, =org-glance-view:*=, ...).  NOT enforced, and
+   the in-tree =llm= plugin still reaches for a handful of =--= helpers
+   (=material--ensure=, =material--graph=/=--id=, the eld readers): a
+   convention to shrink, not an invariant — see
+   [[file:../invariants.org][invariant 26]] for the clauses the repo does
+   enforce.
 2. *Store sidecars*: =org-glance-graph:config-file= for user state,
    =org-glance-graph:cache-file= for derived caches (invariant-5 class);
    never a hand-built store path.

@@ -184,6 +184,13 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Open link no longer hangs when two links share a description at the same
+  depth -- such ties are offered by their target.
+- A bare =C-c #= in a headline that opened sealed says =C-c u= decrypts it
+  first, instead of wrapping the ciphertext in a SECOND crypt block under a
+  second password.
+- LLM sessions table: =g= keeps the cursor on the same cell (it previously
+  jumped to the buffer top).
 - Table: =g= (and every row action) keeps the cursor on the SAME CELL --
   point no longer jumps to the start of the line after a refresh.
 - Re-materializing a headline whose material buffer is already open returns
