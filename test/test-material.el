@@ -387,14 +387,14 @@ removed, and ordinary edits persist under the original id."
     (should-not (rep? "* TODO E" "SCHEDULED: <2026-06-07 Sun +0d>"))))  ; disarmed
 
 (ert-deftest org-glance-test:material-history-picker ()
-  "`C-c l' completing-reads an occurrence stamp and opens it READ-ONLY;
+  "`C-c h' completing-reads an occurrence stamp and opens it READ-ONLY;
 without history it errors with a hint."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "R" "* TODO daily"
                                                              "SCHEDULED: <2026-06-07 Sun +1d>"))
     (org-glance-test:with-repeat (buffer graph "R" 3)
       (progn
-        (should (eq (key-binding (kbd "C-c l")) #'org-glance-material:history))
+        (should (eq (key-binding (kbd "C-c h")) #'org-glance-material:history))
         (should-error (org-glance-material:history) :type 'user-error)  ; no history yet
         (org-glance-test:complete-repetition)
         (org-glance-test:with-shown (shown)
@@ -1123,6 +1123,22 @@ them -- it inserts a fresh body line instead."
     (should (equal '("<2020-05-05 Tue>" "<2020-05-05 Tue>")
                    (org-glance-headline-metadata:range
                     (org-glance-graph:get-headline graph "p"))))))
+
+(ert-deftest org-glance-test:material-open-link-here ()
+  "`C-c j' opens a link from the LIVE buffer -- unsaved links count."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A" "body"))
+    (org-glance-test:with-material (buf graph "a")
+      (should (eq (key-binding (kbd "C-c j")) #'org-glance-material:open-link-here))
+      (goto-char (point-max))
+      (insert "\n[[https://example.com/unsaved][Unsaved]]\n")   ; NOT saved
+      (let (opened)
+        (cl-letf (((symbol-function 'org-open-at-point)
+                   (lambda (&rest _)
+                     (setq opened (buffer-substring-no-properties
+                                   (point) (min (point-max) (+ (point) 40)))))))
+          (org-glance-material:open-link-here))
+        (should (s-contains? "example.com/unsaved" opened))))))
 
 (provide 'test-material)
 ;;; test-material.el ends here

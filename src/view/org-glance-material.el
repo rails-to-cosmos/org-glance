@@ -101,6 +101,8 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
 ;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
+;; `C-c j': open a link from this headline (the transient's `j', scoped here).
+(define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
 ;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
 (define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
 ;; `@' at a word boundary (body or heading title) references another headline
@@ -164,7 +166,7 @@ ORG_GLANCE_ID was changed."
 ;; snapshots the done state VERBATIM into `data/<id>/occurrences/<STAMP>.org'
 ;; (immutable files, newest `org-glance-repeat-history-depth' kept), then the
 ;; live headline is trimmed to its header + pinned blocks.  Pick a snapshot
-;; with `l' (table/overview) or `C-c l' (here).  See
+;; with `l' (table/overview) or `C-c h' (here).  See
 ;; docs/proposals/2026-07-18-repeat-occurrences.done.org.
 
 (defcustom org-glance-repeat-history-depth 0
@@ -254,7 +256,7 @@ flag."
   (org-glance-material--ensure)
   (org-glance-view:pick-occurrence org-glance-material--graph org-glance-material--id))
 
-(define-key org-glance-material-mode-map (kbd "C-c l") #'org-glance-material:history)
+(define-key org-glance-material-mode-map (kbd "C-c h") #'org-glance-material:history)
 
 (cl-defun org-glance-material:cleanup-after-repeat (&rest _)
   "Trim the repeated materialized headline to its header and pinned blocks.
@@ -1054,23 +1056,36 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
 
 ;;; Read commands: open / extract (operate on the stored blob, read-only)
 
+(cl-defun org-glance-material--choose-link-and-open ()
+  "Prompt over the current buffer's non-org-glance links and open the choice.
+The shared core of `org-glance-material:open-link' (temp parse of stored
+content) and `:open-link-here' (the live buffer)."
+  (cl-loop for (_link title pos type) in (org-glance--parse-links)
+           unless (s-starts-with-p "org-glance-" type)
+           collect (list title pos) into links
+           finally
+           (goto-char (cond ((> (length links) 1)
+                             (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
+                            ((= (length links) 1) (cadar links))
+                            (t (user-error "No links in headline"))))
+           ;; Mirror v1: open `file:' links in the same window.
+           (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
+             (org-open-at-point))))
+
 (cl-defun org-glance-material:open-link (headline)
   "Open a non-org-glance link from HEADLINE's contents, prompting if several.
 Reconstructs the content in a temp buffer and runs `org-open-at-point' at the
 chosen link, mirroring the v1 behaviour."
   (cl-check-type headline org-glance-headline)
   (org-glance-headline:with-contents headline
-    (cl-loop for (_link title pos type) in (org-glance--parse-links)
-             unless (s-starts-with-p "org-glance-" type)
-             collect (list title pos) into links
-             finally
-             (goto-char (cond ((> (length links) 1)
-                               (cadr (assoc (completing-read "Open link: " links nil t) links #'string=)))
-                              ((= (length links) 1) (cadar links))
-                              (t (user-error "No links in headline"))))
-             ;; Mirror v1: open `file:' links in the same window.
-             (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
-               (org-open-at-point)))))
+    (org-glance-material--choose-link-and-open)))
+
+(cl-defun org-glance-material:open-link-here ()
+  "Open a link from this materialized headline (`C-c j', the transient's `j').
+Reads the LIVE buffer, so links typed since the last save count."
+  (interactive)
+  (org-glance-material--ensure)
+  (save-excursion (org-glance-material--choose-link-and-open)))
 
 (cl-defun org-glance-material--pick-headline (prompt extra-pred)
   "Read a graph headline matching the ambient filter AND EXTRA-PRED under PROMPT."

@@ -50,16 +50,53 @@
 (require 'org-glance-property-index)
 (require 'org-glance-view)
 (require 'org-glance-material)
-(require 'org-glance-llm)
 (require 'org-glance-overview)
 (require 'org-glance-table)
 (require 'org-glance-tags)
 
+(defcustom org-glance-plugins nil
+  "Optional org-glance plugins to load at init, as feature-name suffixes.
+`org-glance-init' requires `org-glance-<name>' for each entry, error-demoted
+-- a broken or missing plugin warns and is skipped, never breaking init.
+Loading a plugin library manually with `require' works identically; this
+list is convenience, not a registry.  Available in-tree: `llm'."
+  :group 'org-glance
+  :type '(repeat symbol))
+
+(defconst org-glance-plugins-available '(llm)
+  "Plugin feature-name suffixes shipped in-tree, offered by
+`org-glance-plugin-install'.")
+
+;;;###autoload
+(cl-defun org-glance-plugin-install (plugin)
+  "Enable PLUGIN now and remember it in `org-glance-plugins' (`P').
+Prompts from `org-glance-plugins-available'; free input allows an external
+plugin.  Loads immediately -- errors are LOUD here, unlike the demoted
+init-time loader -- and persists via `customize-save-variable' outside
+batch, else says what to add to your init."
+  (interactive
+   (list (intern (completing-read "Install plugin: "
+                                  (mapcar #'symbol-name org-glance-plugins-available)))))
+  (require (intern (format "org-glance-%s" plugin)))
+  (add-to-list 'org-glance-plugins plugin)
+  (if noninteractive
+      (message "org-glance: plugin `%s' enabled" plugin)
+    (customize-save-variable 'org-glance-plugins org-glance-plugins)
+    (message "org-glance: plugin `%s' installed and saved" plugin)))
+
+(cl-defun org-glance--load-plugins ()
+  "Require every `org-glance-plugins' entry, each under demoted errors."
+  (dolist (plugin org-glance-plugins)
+    (with-demoted-errors "org-glance: plugin load failed: %S"
+      (require (intern (format "org-glance-%s" plugin))))))
+
 ;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
   "Initialize org-glance in DIRECTORY: bring up the graph store and, when legacy
-metadata is detected, warn that `M-x org-glance-migrate' can convert it."
+metadata is detected, warn that `M-x org-glance-migrate' can convert it.
+Loads `org-glance-plugins' first, so plugin hooks see the graph open."
   (load-library "org-element.el")  ;; temp fix https://github.com/doomemacs/doomemacs/issues/7347
+  (org-glance--load-plugins)
   (unless (f-exists? directory)
     (mkdir directory t))
   (setq org-glance-graph (org-glance-graph directory))

@@ -53,7 +53,7 @@
 
 (defun org-glance-transient--toggle-view-description (&rest _)
   "Toggle label naming the display mode it would switch TO."
-  (format "Toggle view -> %s"
+  (format "Change overview layout: %s"
           (propertize (if (equal (org-glance-transient--view-mode) "org") "table" "org")
                       'face 'transient-value)))
 
@@ -76,21 +76,22 @@ this one update in place."
    ("s" "Todo state" org-glance-transient:filter-by-state)
    ("/" "Title substring" org-glance-transient:filter-by-substring)
    ("c" "Clear (all)" org-glance-transient:filter-clear)]
-  ["Overview"
+  ;; Three semantic layers: TAG (collections), HEADLINE (one node; the
+  ;; material buffer mirrors these under C-c), SYSTEM (the install).
+  ["Tag"
    [("o" org-glance-overview :description org-glance-transient--overview-description)
     ("a" "Agenda" org-glance-agenda)
-    ("t" "Tags" org-glance-tags)]
-   [("O" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]
-  ["Actions"
-   [("+" "Capture" org-glance-capture)
-    ("e" "Extract property" org-glance-extract)
-    ("j" "Open link" org-glance-open)
-    ("m" "Materialize" org-glance-materialize)
-    ("l" "LLM session" org-glance-llm)
-    ("L" "LLM sessions" org-glance-llm-sessions)
+    ("T" "All tags" org-glance-tags)]
+   [("O" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
+    ("+" "Capture" org-glance-capture)
+    ("C" "Configure" org-glance-tag-config-edit)
     ]]
-  ["Config"
-   [("C" "Tags" org-glance-tag-config-edit)]]
+  ["Headline"
+   [("m" "Materialize" org-glance-materialize)
+    ("j" "Open link" org-glance-open)
+    ("e" "Extract property" org-glance-extract)]]
+  ["System"
+   [("I" "Install plugin" org-glance-plugin-install)]]
   (interactive)
   (transient-setup 'org-glance-transient))
 

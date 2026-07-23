@@ -96,9 +96,12 @@ content-addressable data dir; the label is the title slug
 (`org-glance-llm--label').  The menu highlights the override."
   (interactive)
   (org-glance-ensure-init)
-  (let* ((graph org-glance-graph)
-         (metadata (org-glance-material:pick-metadata graph))
-         (id (org-glance-headline-metadata:id metadata))
+  (org-glance-llm--open-session org-glance-graph
+                                (org-glance-material:pick-metadata org-glance-graph)))
+
+(cl-defun org-glance-llm--open-session (graph metadata)
+  "Open (or switch to) METADATA's `agnostic-llm' session in GRAPH."
+  (let* ((id (org-glance-headline-metadata:id metadata))
          (dir (org-glance-llm--dir graph id))
          (label (org-glance-llm--label metadata dir))
          (existing (org-glance-llm--session-buffer dir)))
@@ -109,6 +112,16 @@ content-addressable data dir; the label is the title slug
       ;; project dir, or the data dir) as the session root.
       (switch-to-buffer (org-glance-material:open graph id))
       (agnostic-llm-menu dir label))))
+
+(cl-defun org-glance-llm-here ()
+  "Open THIS materialized headline's LLM session (`C-c l').
+The transient's `l', scoped to the buffer at hand."
+  (interactive)
+  (org-glance-material--ensure)
+  (org-glance-llm--open-session
+   org-glance-material--graph
+   (org-glance-graph:get-headline org-glance-material--graph
+                                  org-glance-material--id)))
 
 ;;; Sessions table (`L' in the transient)
 ;;
@@ -352,6 +365,21 @@ session or (re)starts a stopped one; `m' materializes the owning headline;
   (org-glance-ensure-init)
   (require 'agnostic-llm)
   (org-glance-llm-sessions:visit org-glance-graph))
+
+;; Plugin self-registration: `C-c l' in material buffers (the core freed it;
+;; history is `C-c h') opens THIS headline's session.
+(define-key org-glance-material-mode-map (kbd "C-c l") #'org-glance-llm-here)
+
+;; Plugin self-registration: the core transient hardcodes no plugin keys;
+;; this plugin appends its own `l' / `L' row after the Actions group.
+;; Remove-then-append keeps a reload from duplicating the row.
+(with-eval-after-load 'org-glance-ui
+  (ignore-errors (transient-remove-suffix 'org-glance-transient "l"))
+  (ignore-errors (transient-remove-suffix 'org-glance-transient "L"))
+  (transient-append-suffix 'org-glance-transient '(2)
+    [:class transient-row
+     ("l" "LLM session" org-glance-llm)
+     ("L" "LLM sessions" org-glance-llm-sessions)]))
 
 (provide 'org-glance-llm)
 ;;; org-glance-llm.el ends here

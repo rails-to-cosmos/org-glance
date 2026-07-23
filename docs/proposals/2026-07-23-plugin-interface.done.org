@@ -1,0 +1,108 @@
+#+TITLE: Plugin interface: minimal core, LLM as the first plugin
+#+DATE: 2026-07-23
+
+Status: *done* (2026-07-23, phase 1) — phase 2 (package split, dependency
+slimming) remains open.  Amendment: =P= in the transient
+(=org-glance-plugin-install=) installs a plugin interactively.
+
+* Problem
+
+org-glance's core is a store + views.  The LLM integration is a feature on
+top: it pulls the heaviest dependency chain in the package
+(=agnostic-llm= → =vterm=, a module-compiling C dependency), most users
+never touch it, and it is currently gated by a bespoke boolean
+(=org-glance-llm-enabled=) while still loading eagerly and still weighing
+down =Package-Requires=.  Every future optional feature would grow its own
+boolean and its own hardcoded transient entry.
+
+* Design
+
+** The user model: =org-glance-plugins=, org-modules style
+
+#+begin_src emacs-lisp
+(setq org-glance-plugins '(llm))
+#+end_src
+
+One defcustom (list of symbols, default =nil=) replaces per-feature
+booleans.  =org-glance-init= requires =org-glance-<name>= for each entry,
+*error-demoted*: a broken or missing plugin warns and is skipped — it can
+never break init (the invariant-9 discipline extended to load time).
+Loading manually with =require= works identically; the list is
+convenience, not a registry.
+
+** The plugin contract
+
+A plugin is an ordinary library named =org-glance-<name>.el= providing
+feature =org-glance-<name>= that confines itself to the PUBLIC surface:
+
+1. *API*: the =:=-named functions only (=org-glance-graph:*=,
+   =org-glance-material:*=, =org-glance-view:display-table=, ...).
+   =--= names are off-limits.
+2. *Store sidecars*: =org-glance-graph:config-file= for user state,
+   =org-glance-graph:cache-file= for derived caches (invariant-5 class);
+   never a hand-built store path.
+3. *Hooks*: =org-glance-graph-after-open-functions= /
+   =org-glance-graph-before-append-functions= for per-store housekeeping
+   (both already error-demoted, invariant 9).
+4. *UI*: self-register transient entries at load via
+   =transient-append-suffix= / =transient-remove-suffix=
+   (remove-then-append, so reloading never duplicates).  The core
+   transient hardcodes no plugin keys.
+5. *Teardown-free*: plugins are load-only (Emacs idiom); disabling =
+   removing from the list + restart.  No unload protocol.
+
+Nothing new is invented: the contract is the existing public surface
+plus a naming convention and a loader.
+
+** Phase 1 (this proposal): mechanism + LLM converted
+
+- Core: =org-glance-plugins= defcustom + demoted loader in
+  =org-glance-init=; =org-glance.el= stops requiring =org-glance-llm=;
+  =org-glance-ui.el= drops the hardcoded =l= / =L= row.
+- =org-glance-llm.el= becomes the first plugin: appends its own
+  =l= / =L= transient row on load; =org-glance-llm-enabled= and its
+  predicate/guards are REMOVED (loaded = enabled; the custom is days
+  old, no deprecation shim).
+- Packaging unchanged: the file still ships in the tarball,
+  =agnostic-llm= stays in =Package-Requires=.  Dormant unless listed.
+- Tests: loader (listed plugin loads, unknown plugin warns + skips,
+  init survives), transient row present iff plugin loaded, llm tests
+  require the plugin explicitly.
+
+** Phase 2 (follow-up proposal, archive surgery)
+
+Split =org-glance-llm= into its own package: recipe in the
+=rails-to-cosmos= elpa repo (located in ~/sync/stuff/elpa, same git repo, different =:files=), own
+=Package-Requires: (org-glance agnostic-llm)= — and core DROPS
+=agnostic-llm= / vterm from its dependency set.  That is when "minimal
+core" becomes true at install time.  README install section reworked
+then.  Out of scope here: doing it mid-flight breaks the install story
+until the archive republishes.
+
+* Consequences
+
+- New optional features get a home that costs core nothing (candidates:
+  the tags dashboard, future integrations).
+- The public/private naming split (=:= vs =--=) becomes a real API
+  boundary, not just a convention — plugin authors are its consumers.
+- One-line migration for current LLM users:
+  =(setq org-glance-llm-enabled t)= → =(setq org-glance-plugins '(llm))=.
+
+* Out of scope
+
+- Unload/disable-at-runtime protocol.
+- Plugin dependency ordering (load order = list order; sufficient).
+- Third-party plugin distribution story beyond "it is a package".
+
+* Steps
+
+1. =org-glance-plugins= defcustom + =org-glance--load-plugins= (demoted)
+   called from =org-glance-init=.
+2. De-hardcode: drop the llm require from =org-glance.el=, the =l=/=L=
+   row from =org-glance-ui.el=.
+3. llm self-registration (=transient-remove-suffix= +
+   =transient-append-suffix= after the Actions group, at load).
+4. Remove =org-glance-llm-enabled= / =org-glance-llm-enabled?= /
+   =--ensure-enabled= + their tests; add loader + registration tests.
+5. Docs: README (Plugins section, Customization row swap, install
+   prose), CHANGELOG, this file → =.done=.

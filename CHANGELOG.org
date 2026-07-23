@@ -6,6 +6,10 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Material buffers mirror the transient under =C-c=: =C-c j= opens a link
+  from THIS headline (live buffer — unsaved links count), joining =C-c e=
+  (extract) and, with the =llm= plugin, =C-c l= (this headline's LLM
+  session).  Occurrence history moved =C-c l= → =C-c h=.
 - Dev tooling: =make bench= / =eask bench= time the store's hot paths
   (insert+seal, cold fold, warm get, property-index cold fill, reindex,
   compaction; N=1k/10k, =OG_BENCH_LARGE=1= for 100k).  =make lint= now
@@ -101,6 +105,18 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- The transient is grouped by semantic layer: *Tag* (=o= overview, =a=
+  agenda, =t= all tags, =+= capture, =C= configure, =O= toggle),
+  *Headline* (=m= / =j= / =e=; the =llm= plugin's =l= / =L= row follows
+  it), *System* (=P= install plugin).
+- Plugin interface: =org-glance-plugins= (default =nil=, org-modules
+  style) loads =org-glance-<name>= libraries at init, error-demoted; =P=
+  in the transient installs one interactively
+  (=org-glance-plugin-install=).  The LLM integration is the first
+  plugin: off unless listed, self-registers its =l= / =L= transient row
+  on load, and core no longer requires it eagerly.
+- =C-c d= (project dir) prompts and stores directory paths
+  slash-terminated, so the minibuffer completes INSIDE the directory.
 - Table header is readable: the action-key legend wraps to the window
   width on its own lines BELOW the =#+TODO:= line; line 2 keeps only the
   status (sort / filter / marks) with the =?= toggle (upstream

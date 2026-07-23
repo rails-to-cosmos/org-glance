@@ -1,6 +1,7 @@
 ;;; test-llm.el --- Tests for the LLM session command  -*- lexical-binding: t -*-
 
 (require 'test-helpers)
+(require 'org-glance-llm)   ; the plugin under test -- core no longer loads it
 
 (ert-deftest org-glance-test:llm-materializes-then-opens-menu ()
   "`org-glance-llm' materializes the headline, then opens `agnostic-llm-menu'
@@ -239,6 +240,24 @@ then never rescans on plain re-fills."
       (cl-letf (((symbol-function 'org-glance-llm--scan)
                  (lambda (&rest _) (error "must not rescan"))))
         (should-not (org-glance-llm--session-rows graph))))))
+
+(ert-deftest org-glance-test:llm-plugin-registration ()
+  "Loading the plugin registers `l' / `L' in the transient; the loader
+survives an unknown plugin; `org-glance-plugin-install' enables + records."
+  ;; self-registered transient row (org-glance-ui + this plugin are loaded)
+  (should (transient-get-suffix 'org-glance-transient "l"))
+  (should (transient-get-suffix 'org-glance-transient "L"))
+  ;; ...and the material-buffer key: C-c l = this headline's session
+  (should (eq (lookup-key org-glance-material-mode-map (kbd "C-c l"))
+              #'org-glance-llm-here))
+  ;; demoted loader: unknown plugin never breaks init
+  (let ((org-glance-plugins '(no-such-plugin-xyz)))
+    (should-not (org-glance--load-plugins)))
+  ;; install command: loads + records (batch skips customize-save)
+  (let ((org-glance-plugins nil))
+    (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "llm")))
+      (call-interactively #'org-glance-plugin-install))
+    (should (equal '(llm) org-glance-plugins))))
 
 (provide 'test-llm)
 ;;; test-llm.el ends here
