@@ -6,6 +6,15 @@ implementation-update note below and "Implementation status" at the end) · Phas
 **proposed** · original design exploration 2026-06-19 (5 approaches → 3 adversarial judges
 → synthesis)
 
+> **Implementation update (2026-07-24) — config is now ONE FILE PER TAG.**
+> The single `config/tags.org` below was replaced by `config/tags/<tag>.org` (file
+> name = tag). `#+TITLE:` = label, `#+TODO:` = the cycle (an org-native file
+> keyword, retiring the `:TODO_KEYWORDS:` drawer), body from the first `*` heading
+> = the capture entry. Legacy `tags.org` auto-splits on graph open (backed up as
+> `tags.org.bak`). `org-glance-tag-config-file` → `org-glance-tag-config-dir`.
+> The `:TAG:`/`:TODO_KEYWORDS:` schema in the 2026-06-22 note below is legacy —
+> read for migration only.
+
 > **Implementation update (2026-06-22) — supersedes §1's `:class:`-tag mechanism.**
 > The original Phase-1 design marked a class prototype with a RESERVED `:class:`
 > tag. That coupled config to the content tag namespace: it reserved a common

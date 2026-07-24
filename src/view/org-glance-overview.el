@@ -143,7 +143,7 @@ live from GRAPH (id fallback for gone targets)."
 FILTER is nil (all), a bare tag, or a filter plist -- see
 `org-glance-filter:predicate'.
 
-When FILTER resolves to a single tag with a configured `:TODO_KEYWORDS:' cycle
+When FILTER resolves to a single tag with a configured `#+TODO:' cycle
 (see `org-glance-tag-config'), a `#+TODO:' file keyword for it is emitted in the
 header -- so org, on opening the cached file (overview OR agenda, both of which
 read this text), cycles and faces those states natively -- and the cycle's
@@ -199,13 +199,15 @@ source (clock skew / restored backup) also rebuilds."
 
 (cl-defun org-glance-overview:fresh? (graph file)
   "Non-nil if FILE exists and is newer than every source it is rendered from.
-The sources: GRAPH's `headlines.jsonl' (content) and the tag-config `tags.org'
+The sources: GRAPH's `headlines.jsonl' (content) and the per-tag config files
 (the `#+TODO:' header + per-tag done-set render depends on), so editing a tag's
 cycle invalidates existing overview caches like a content change."
   (cl-check-type graph org-glance-graph)
   (and (f-exists? file)
        (org-glance-overview--fresher-than? file (org-glance-graph:headline-meta-path graph))
-       (org-glance-overview--fresher-than? file (org-glance-tag-config:file graph))))
+       (let ((cfg-mtime (org-glance-tag-config:source-mtime graph)))
+         (or (null cfg-mtime)
+             (time-less-p cfg-mtime (org-glance--file-mtime file))))))
 
 (cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE starts with the current `org-glance-overview:header'.

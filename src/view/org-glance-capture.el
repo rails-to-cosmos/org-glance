@@ -22,7 +22,7 @@
   "`org-capture' template for a new headline with TAGS, pre-filled with TITLE.
 TAGS is a tag symbol or a list of tag symbols.  When TAGS is a SINGLE tag with a
 configuration (see `org-glance-tag-config'), the template is rendered from that
-config's skeleton, and -- if the config declares a `:TODO_KEYWORDS:' cycle -- a
+config's skeleton, and -- if the config declares a `#+TODO:' cycle -- a
 `#+TODO:' file keyword is prepended so the capture buffer cycles the tag states.
 Otherwise the default `* TITLE%?  :tags:' is used, so an unconfigured tag is
 byte-identical to before.  Multi-tag composition is deferred to Phase 2."

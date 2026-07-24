@@ -494,9 +494,11 @@ after the (no-note) commit the reloaded table shows the new state on the row."
   "The bulk prompt is org's own fast selection, initialized with the tag's
 cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
   (org-glance-test:with-graph graph
-    (let ((org-glance-tag-config-file (make-temp-file "tags" nil ".org"
-                                       "* Book\n:PROPERTIES:\n:TAG: book\n:TODO_KEYWORDS: TODO READING | READ\n:END:\n"))
+    (let ((org-glance-tag-config-dir (make-temp-file "tags" t))
           seen)
+      (f-write-text "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n"
+                    'utf-8 (f-join org-glance-tag-config-dir "book.org"))
+      (org-glance-tag-config--invalidate)
       (cl-letf (((symbol-function 'org-fast-todo-selection)
                  (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
         (should (equal "READING"

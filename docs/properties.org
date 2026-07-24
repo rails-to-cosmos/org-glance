@@ -28,17 +28,23 @@ Set in a headline's =:PROPERTIES:= drawer.
   skipped by the tag-config lint, concealed and edit-reverted in material
   buffers.  Internal — do not set by hand.
 
-* Tag-config headline properties
+* Tag-config files
 
-Only in the tag-config file =<store>/config/tags.org= (see
-[[file:../src/data/org-glance-tag-config.el][org-glance-tag-config]]); one level-1 headline per tag.
+One file per tag, =<store>/config/tags/<tag>.org= (see
+[[file:../src/data/org-glance-tag-config.el][org-glance-tag-config]]); the file
+name is the tag.  Format:
 
-- =:TAG:= — keys a per-tag configuration.  This is a drawer PROPERTY, not an org
-  =:tag:=.  A headline without a valid =:TAG:= is not a config.
-- =:TODO_KEYWORDS:= — the tag's =#+TODO:=-style cycle, e.g.
-  =TODO READING | READ ABANDONED=.  NB the key is =TODO_KEYWORDS=, not =TODO= —
-  org reserves =TODO= as a drawer key, so a =:TODO:= drawer is silently ignored
-  (=org-glance-tag-config-lint= flags this).
+- =#+TITLE:= — the tag's human label (falls back to the tag symbol).
+- =#+TODO:= — the tag's todo cycle, e.g. =TODO READING | READ ABANDONED=; an
+  ordinary org file keyword, prepended to the capture buffer and emitted in the
+  overview/agenda header.
+- The body from the first =*= heading is the =org-capture= entry skeleton;
+  capture fills that heading's text with the instance title + =:tags:=.
+
+Legacy: a single =config/tags.org= with =:TAG:=-keyed level-1 headlines and a
+=:TODO_KEYWORDS:= drawer is split into per-tag files on graph open and backed
+up as =tags.org.bak=.  A residual =:TAG:=/=:TODO_KEYWORDS:= drawer in a per-tag
+file is ignored (=org-glance-tag-config-lint= flags it).
 
 * Content markers (in a headline's body)
 
@@ -81,9 +87,9 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 * File keywords
 
 - =#+TODO:= — an ordinary org file keyword.  Capture and the overview/agenda
-  emit it from a tag's =:TODO_KEYWORDS:= cycle so org renders, faces and cycles
-  those states natively; the table shows a coloured =#+TODO:= line of the graph's
-  live states in its header (always visible).
+  emit it from a tag's =#+TODO:= cycle (its config file) so org renders, faces
+  and cycles those states natively; the table shows a coloured =#+TODO:= line of
+  the graph's live states in its header (always visible).
 
 * Crypt blocks and materialization
 

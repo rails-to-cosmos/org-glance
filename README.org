@@ -20,7 +20,7 @@ If you know org-mode, you know almost everything already:
 2. *Tags are collections.* An ordinary org tag (=:book:=, =:article:=)
    groups headlines; a tag exists the moment you capture something
    with it.  Optionally give a tag its own config: todo cycle and capture
-   template (=T= in the transient).
+   template (=C= in the transient).
 
 3. *Views are projections.*  The table and the overview are generated,
    read-only summaries built from an index — fast, and always rebuildable.
@@ -187,7 +187,7 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 | =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
 | =org-glance-plugins=                    | =nil=                | plugins to load at init (e.g. =(llm)=); =I= installs one |
 | =org-glance-conflict-resolution=        | =ask=                | git-conflict healing: =ask= / =union= / =nil= (error)  |
-| =org-glance-tag-config-file=            | =nil=                | override path of =config/tags.org=                     |
+| =org-glance-tag-config-dir=             | =nil=                | override dir of per-tag config files (=config/tags/=)   |
 | =org-glance-graph-segment-max-bytes=    | 256k                 | WAL segment size before sealing                        |
 | =org-glance-graph-compact-segment-count= | =4=                 | sealed segments that trigger auto-compaction           |
 
