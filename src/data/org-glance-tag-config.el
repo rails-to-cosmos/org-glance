@@ -19,8 +19,10 @@
 ;;       %?
 ;;
 ;; The first heading's text is a placeholder; capture overwrites it with the
-;; instance title + tags and prepends
-;; the `#+TODO:' as a file keyword.  `#+TITLE:' is the human label for the file.
+;; instance title + tags and prepends the `#+TODO:' as a file keyword.
+;; `#+TITLE:' is the human label.  Every header pragma is OPTIONAL: a freshly
+;; stubbed file carries only the capture template (a bare `* %?'), so the tag
+;; inherits the global defaults until a pragma overrides one.
 ;;
 ;; A legacy single-file `config/tags.org' (level-1 `:TAG:' headlines) is split
 ;; into per-tag files at graph open (`--migrate-on-open') and backed up.
@@ -238,9 +240,11 @@ keyword, never an instance drawer property.")
 TITLE pre-fills the entry heading; TAGS are the instance org tags.  The
 config's capture entry (its `%^{...}' prompts, property defaults and body
 skeleton) is preserved verbatim; residual config drawer keys are stripped.
-A `%?' is appended to the heading only when the skeleton carries none of its
-own (in its body OR a kept drawer property); a well-formed skeleton therefore
-yields exactly one (org-capture honours only the first)."
+A `%?' is appended to the heading only when the skeleton carries none BELOW the
+heading (its body OR a kept drawer property) -- a `%?' in the heading itself is
+overwritten by TITLE, so a bare `* %?' correctly yields `* TITLE%?'.  A
+well-formed skeleton therefore yields exactly one (org-capture honours only the
+first)."
   (cl-check-type config org-glance-tag-config)
   (cl-check-type title string)
   (let ((template (org-glance-tag-config:template config))
@@ -255,12 +259,15 @@ yields exactly one (org-capture honours only the first)."
         (goto-char (point-min))
         (org-entry-delete nil property))
       (goto-char (point-min))
-      ;; Append `%?' to the heading only if the skeleton has NO capture point of
-      ;; its own.  Scan the WHOLE entry (body AND kept drawer properties -- a
-      ;; preserved `:NOTE: %?' counts); the title is inserted below, so it can't
-      ;; be mistaken for the skeleton's own marker.
-      (let ((skeleton-has-point (s-contains? "%?" (buffer-substring-no-properties
-                                                   (point-min) (point-max)))))
+      ;; Append `%?' to the heading only if the skeleton has NO capture point
+      ;; BELOW the heading line (body AND kept drawer properties -- a preserved
+      ;; `:NOTE: %?' counts).  A `%?' in the heading itself is overwritten by
+      ;; `org-edit-headline', so it does not count: a bare `* %?' skeleton
+      ;; correctly yields `* TITLE%?'.
+      (let ((skeleton-has-point (save-excursion
+                                  (end-of-line)
+                                  (s-contains? "%?" (buffer-substring-no-properties
+                                                     (point) (point-max))))))
         (org-edit-headline (concat title (if skeleton-has-point "" "%?")))
         (goto-char (point-min))
         (org-set-tags (mapcar #'org-glance-tag:to-string tags)))
@@ -320,20 +327,27 @@ never deleted -- migration discipline)."
 
 ;;; Authoring
 
-(defconst org-glance-tag-config--stub-header
-  "# This file is TAG's config (its name is the tag).  The `#+TODO:' cycle is
-# org-native (edit or delete it to use the global keywords).  The body below
-# the first `*' is the org-capture skeleton: the heading is filled with the
-# captured title + tags; use %^{...} prompts and one %?.
-"
-  "Comment header written at the top of a freshly-stubbed per-tag config.")
-
 (cl-defun org-glance-tag-config--stub (tag)
-  "Worked-example contents for a freshly-created config file of TAG."
-  (concat "#+TITLE: " (capitalize (symbol-name tag)) "\n"
-          "#+TODO:  TODO | DONE\n\n"
-          org-glance-tag-config--stub-header
-          "\n* " (capitalize (symbol-name tag)) "\n*** Notes\n    %?\n"))
+  "Default contents for a freshly-created config file of TAG.
+Comments then the org-capture template only -- no active pragmas, so the tag
+inherits every global default.  The comment documents the pragmas one MAY add
+above the heading to override those defaults."
+  (let ((name (symbol-name tag)))
+    (concat
+     "# Config for the `" name "' tag (the file name is the tag).\n"
+     "# Below the comments is the org-capture template only.\n"
+     "#\n"
+     "# Optional pragmas to add ABOVE the `*' heading (each overrides a default):\n"
+     "#   #+TITLE:    a human label for the tag (default: the tag name).\n"
+     "#   #+TODO:     a per-tag todo cycle, e.g. `TODO DOING | DONE'\n"
+     "#               (absent = the global `org-todo-keywords').\n"
+     "#   #+CATEGORY: agenda category, default the tag name (planned).\n"
+     "#   #+AUTHOR:   planned.\n"
+     "#\n"
+     "# The heading below is the skeleton: its text is filled with the captured\n"
+     "# title + tags.  Add `%^{...}' prompts and keep exactly one `%?'.\n"
+     "\n"
+     "* %?\n")))
 
 (cl-defun org-glance-tag-config--edit-candidates (graph)
   "Sorted tags to offer for configuration: GRAPH's live tags + existing configs."

@@ -108,11 +108,12 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
-- Tag config is one file per tag, =config/tags/<tag>.org=: =#+TITLE:= label,
-  =#+TODO:= cycle, body from the first =*= heading is the capture entry.
-  Legacy =config/tags.org= auto-splits on graph open, backed up as
-  =tags.org.bak=.  =org-glance-tag-config-file= replaced by
-  =org-glance-tag-config-dir=; =C= (Configure) prompts for the tag.
+- Tag config is one file per tag, =config/tags/<tag>.org=: optional =#+TITLE:=
+  label and =#+TODO:= cycle pragmas, body from the first =*= heading is the
+  capture entry.  A freshly stubbed file carries only the capture template
+  (=* %?=); pragmas are opt-in overrides.  Legacy =config/tags.org= auto-splits
+  on graph open, backed up as =tags.org.bak=.  =org-glance-tag-config-file=
+  replaced by =org-glance-tag-config-dir=; =C= (Configure) prompts for the tag.
 - *Core no longer depends on =agnostic-llm= (and so never pulls in
   =vterm=).*  The LLM integration is now a SEPARATE package,
   =org-glance-llm= (source: =plugins/=, own archive recipe): install it,

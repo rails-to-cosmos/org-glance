@@ -96,6 +96,20 @@ must NOT append a second one (org-capture honours only the first)."
       (should (= 1 (s-count-matches "%\\?" template)))
       (should (s-contains? ":RECORD:  %?" template)))))
 
+(ert-deftest org-glance-test:tag-config-render-bare-capture-point ()
+  "A minimal `* %?' skeleton with no pragmas renders to the default entry:
+TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
+  (org-glance-test:with-tag-config
+      (org-glance-test:one-config
+       "task"
+       "# only a capture template below\n\n* %?\n")
+    (let* ((org-glance-graph nil)
+           (template (org-glance-capture:template 'task "Buy milk")))
+      (should (s-contains? "* Buy milk%?" template))   ; TITLE fills heading, %? survives
+      (should (s-contains? ":task:" template))
+      (should (= 1 (s-count-matches "%\\?" template)))
+      (should-not (s-contains? "#+TODO:" template)))))
+
 ;;; Multi-tag resolution
 
 (ert-deftest org-glance-test:tag-config-cycle-for-filter ()

@@ -32,14 +32,20 @@ Set in a headline's =:PROPERTIES:= drawer.
 
 One file per tag, =<store>/config/tags/<tag>.org= (see
 [[file:../src/data/org-glance-tag-config.el][org-glance-tag-config]]); the file
-name is the tag.  Format:
+name is the tag.  Every pragma is OPTIONAL — a freshly stubbed file carries only
+the capture template (comments plus a =* %?= heading), so the tag inherits every
+global default.  Pragmas, above the first =*= heading, override those defaults:
 
-- =#+TITLE:= — the tag's human label (falls back to the tag symbol).
+- =#+TITLE:= — the tag's human label (default: the tag name).
 - =#+TODO:= — the tag's todo cycle, e.g. =TODO READING | READ ABANDONED=; an
   ordinary org file keyword, prepended to the capture buffer and emitted in the
-  overview/agenda header.
-- The body from the first =*= heading is the =org-capture= entry skeleton;
-  capture fills that heading's text with the instance title + =:tags:=.
+  overview/agenda header (absent = the global =org-todo-keywords=).
+- =#+CATEGORY:= (planned) — agenda category, default the tag name.
+- =#+AUTHOR:= (planned).
+
+The body from the first =*= heading is the =org-capture= entry skeleton; capture
+fills that heading's text with the instance title + =:tags:= (a bare =* %?= is
+the default entry).
 
 Legacy: a single =config/tags.org= with =:TAG:=-keyed level-1 headlines and a
 =:TODO_KEYWORDS:= drawer is split into per-tag files on graph open and backed
