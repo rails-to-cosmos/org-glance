@@ -131,12 +131,12 @@ reaped, not adopted; pre-crash data stays intact."
 in place: same reads, order preserved, next insert continues cleanly."
   (with-temp-directory dir
     (let ((meta (f-join dir ".org-glance" "meta")))
-      (f-mkdir-full-path meta)
-      (f-write-text (concat "{\"id\":\"l1\",\"state\":\"TODO\",\"title\":\"Legacy один\",\"tags\":[\"work\"],\"hash\":\"h1\"}\n"
-                            "{\"id\":\"l2\",\"state\":\"\",\"title\":\"Legacy two\",\"tags\":[],\"hash\":\"h2\"}\n"
-                            "{\"id\":\"l1\",\"state\":\"DONE\",\"title\":\"Legacy один\",\"tags\":[\"work\"],\"hash\":\"h3\"}\n"
-                            "{\"id\":\"l3\",\"tombstone\":true}\n")
-                    'utf-8 (f-join meta "headlines.jsonl")))
+      (org-glance-test:write
+       (f-join meta "headlines.jsonl")
+       (concat "{\"id\":\"l1\",\"state\":\"TODO\",\"title\":\"Legacy один\",\"tags\":[\"work\"],\"hash\":\"h1\"}\n"
+               "{\"id\":\"l2\",\"state\":\"\",\"title\":\"Legacy two\",\"tags\":[],\"hash\":\"h2\"}\n"
+               "{\"id\":\"l1\",\"state\":\"DONE\",\"title\":\"Legacy один\",\"tags\":[\"work\"],\"hash\":\"h3\"}\n"
+               "{\"id\":\"l3\",\"tombstone\":true}\n")))
     (let ((graph (org-glance-graph dir)))
       (should (f-exists? (org-glance-graph--manifest-path graph)))
       (should (null (org-glance-test:sealed-segments graph)))

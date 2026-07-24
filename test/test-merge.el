@@ -17,8 +17,7 @@
 (cl-defun org-glance-test-merge:write-metrics-conflict (graph ours theirs)
   "Write a conflict-marked tag-metrics sidecar for GRAPH; return its path."
   (let ((file (org-glance-tag-metrics--file graph)))
-    (f-mkdir-full-path (f-dirname file))
-    (f-write-text (org-glance-test-merge:conflict-eld ours theirs) 'utf-8 file)
+    (org-glance-test:write file (org-glance-test-merge:conflict-eld ours theirs))
     file))
 
 (cl-defun org-glance-test-merge:seg-names (graph)
@@ -130,14 +129,13 @@ position: the last record per id wins and no data is lost."
 \(conflict-marked) are both adopted on open -- records visible, none deleted."
   (with-temp-directory dir
     (let ((meta (f-join dir ".org-glance" "meta")))
-      (f-mkdir-full-path meta)
-      (f-write-text (org-glance-test-merge:record :id "m1" :state "" :title "Machine one" :hash "h1" :seq 1)
-                    'utf-8 (f-join meta "seg-0000000001.jsonl"))
-      (f-write-text (org-glance-test-merge:record :id "m2" :state "" :title "Machine two" :hash "h2" :seq 2)
-                    'utf-8 (f-join meta "seg-0000000002.jsonl"))
+      (org-glance-test:write (f-join meta "seg-0000000001.jsonl")
+                             (org-glance-test-merge:record :id "m1" :state "" :title "Machine one" :hash "h1" :seq 1))
+      (org-glance-test:write (f-join meta "seg-0000000002.jsonl")
+                             (org-glance-test-merge:record :id "m2" :state "" :title "Machine two" :hash "h2" :seq 2))
       ;; MANIFEST as git left it: neither side lists both segments
-      (f-write-text (org-glance-test-merge:conflict-manifest '() '("seg-0000000001.jsonl"))
-                    'utf-8 (f-join meta "MANIFEST"))
+      (org-glance-test:write (f-join meta "MANIFEST")
+                             (org-glance-test-merge:conflict-manifest '() '("seg-0000000001.jsonl")))
       (let ((graph (org-glance-graph dir)))
         ;; both segments now live
         (should (member "seg-0000000001.jsonl"

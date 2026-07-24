@@ -54,7 +54,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 3. A valid MANIFEST is byte-stable — rebuilt only when broken.
 4. Schema tables (`org-glance-headline-metadata:fields`,
    `org-glance-filter:table`) are the single source of truth; append new
-   metadata fields at the end only (row order = JSON key order).
+   metadata fields at the end only (row order = JSON key order). A list-valued
+   field MUST encode to a JSON vector — `--append`'s `json-serialize` runs
+   outside the error-demoted hook, so a nil/list encoder crashes every save.
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
    before any write, blob lands before its WAL record. The property index is a
    pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
@@ -118,6 +120,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 23. LLM session LIVE state (running/exited, buffer names) is derived live,
     never persisted; the headline↔session map + transcript facts cache in
     `cache/llm-sessions.eld` (derived, rebuildable, never source of truth).
+    Enforcing code now lives in the external `org-glance-llm` plugin repo
+    (loaded via `org-glance-plugins`); the rule governs that plugin.
 24. Table refills restore the (row, CELL) pair via
     `org-glance-view:point-context` / `:restore-point` — never just the row.
 25. Links are addressed by their enclosing list-item path plus their own

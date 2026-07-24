@@ -211,5 +211,21 @@ Return the buffer."
       (org-glance-view:fill-frame from-view))
     buf))
 
+;;; Staleness guard (a view's cached snapshot can outlive the graph)
+
+(cl-defun org-glance-view:live-headline (graph id)
+  "The live `org-glance-headline' for ID in GRAPH, or a `user-error'.
+A view is a cached snapshot that can outlive the graph, so ID may name a
+headline since deleted; error clearly rather than passing nil downstream."
+  (or (org-glance-graph:headline graph id)
+      (user-error "Headline no longer in graph (view is stale; press `g' to refresh)")))
+
+(cl-defun org-glance-view:live-metadata (graph id)
+  "The live headline metadata for ID in GRAPH, or a `user-error' when gone."
+  (let ((meta (org-glance-graph:get-headline graph id)))
+    (if (org-glance-headline-metadata? meta)
+        meta
+      (user-error "Headline no longer in graph (view is stale; press `g' to refresh)"))))
+
 (provide 'org-glance-view)
 ;;; org-glance-view.el ends here

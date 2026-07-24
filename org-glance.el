@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.25.1.0.20260724.0
+;; Version: 1.25.2.0.20260724.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance

@@ -47,9 +47,8 @@ timestamps.  One `org-element' parse of the narrowed subtree."
   (let ((standard-output 'ignore)
         (tss* (org-glance-datetime-active-repeated-timestamps)))
     (cl-loop
-       for tsi from 1 below (length tss*)
-       for ts = (nth tsi -org-glance-datetime:local-timestamps)
-       for ts* = (nth tsi tss*)
+       for ts in (cdr -org-glance-datetime:local-timestamps)
+       for ts* in (cdr tss*)
        do (save-excursion
             (goto-char (org-element-property :begin ts*))
             (delete-region (org-element-property :begin ts*)

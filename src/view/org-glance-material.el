@@ -50,15 +50,15 @@ FILTER, if non-nil, is a predicate on the metadata."
          ;; Duplicate labels get a short-id suffix so the pick is injective --
          ;; resolving a collision to the FIRST metadata would silently act on
          ;; the wrong headline.
-         (counts (-frequencies (mapcar #'org-glance-material:label metas)))
-         (candidates (mapcar (lambda (meta)
-                               (let ((label (org-glance-material:label meta)))
-                                 (cons (if (> (alist-get label counts 0 nil #'equal) 1)
-                                           (format "%s ·%s" label
-                                                   (s-left 8 (org-glance-headline-metadata:id meta)))
-                                         label)
-                                       meta)))
-                             metas)))
+         (labels (mapcar #'org-glance-material:label metas))
+         (counts (-frequencies labels))
+         (candidates (cl-mapcar (lambda (meta label)
+                                  (cons (if (> (alist-get label counts 0 nil #'equal) 1)
+                                            (format "%s ·%s" label
+                                                    (s-left 8 (org-glance-headline-metadata:id meta)))
+                                          label)
+                                        meta))
+                                metas labels)))
     (unless candidates
       (let ((total (length (org-glance-graph:headlines graph)))
             (dir (org-glance-graph:directory graph)))
@@ -1290,7 +1290,7 @@ first to see edges added in this session."
                                 :context (list :anchor id :dir 'backlinks))
       (let* ((meta (org-glance-graph:get-headline graph id))
              (targets (and (org-glance-headline-metadata? meta)
-                           (delete-dups (mapcar #'car (org-glance-headline-metadata:relations meta))))))
+                           (org-glance-headline-metadata:relation-targets meta))))
         (unless targets (user-error "Headline has no references (save after adding some)"))
         (org-glance-table:visit graph `(:id-any ,targets)
                                 :context (list :anchor id :dir 'refs))))))

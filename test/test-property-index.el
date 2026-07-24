@@ -78,8 +78,7 @@ user config stays under `config/'."
     (should (f-exists? (f-join (org-glance-graph:store-path graph) ".gitignore")))
     ;; each module prunes ITS pre-split legacy file at graph open
     (let ((legacy (org-glance-graph:config-file graph "property-index.eld")))
-      (f-mkdir-full-path (f-dirname legacy))
-      (f-write-text "()" 'utf-8 legacy)
+      (org-glance-test:write legacy "()")
       (org-glance-test:reopen graph)
       (should-not (f-exists? legacy)))
     ;; reindex drops the whole derived cache/ dir (llm cache included)

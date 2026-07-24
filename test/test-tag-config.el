@@ -239,14 +239,13 @@ the skeleton body, and no config-internal drawer keys."
 entry) and backs the legacy file up, leaving resolution intact."
   (org-glance-test:with-graph graph
     (let ((legacy (org-glance-graph:config-file graph "tags.org")))
-      (f-mkdir-full-path (f-dirname legacy))
-      (f-write-text
+      (org-glance-test:write
+       legacy
        (concat "#+TITLE: tags\n\n"
                "* Book\n:PROPERTIES:\n:TAG: book\n"
                ":TODO_KEYWORDS: TODO READING | READ\n:LOCATION: %^{Where}\n:END:\n"
                "*** Notes\n    %?\n"
-               "* Film\n:PROPERTIES:\n:TAG: film\n:TODO_KEYWORDS: TODO | SEEN\n:END:\n")
-       'utf-8 legacy)
+               "* Film\n:PROPERTIES:\n:TAG: film\n:TODO_KEYWORDS: TODO | SEEN\n:END:\n"))
       (org-glance-tag-config--invalidate)
       (org-glance-tag-config--migrate-on-open graph)
       ;; per-tag files written; legacy backed up, not deleted

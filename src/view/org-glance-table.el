@@ -248,8 +248,7 @@ LINE, which drifts to another row once the sort reorders them."
 
 (cl-defun org-glance-table--headline (graph id)
   "The live headline for ID, or a `user-error' (the table can outlive the graph)."
-  (or (org-glance-graph:headline graph id)
-      (user-error "Headline no longer in graph (table is stale; press `g' to refresh)")))
+  (org-glance-view:live-headline graph id))
 
 (cl-defun org-glance-table--act-open (graph id)
   (when id (org-glance-material:open-link (org-glance-table--headline graph id))))
@@ -306,10 +305,7 @@ single-row `org-glance-table--act-todo' (cycle + note)."
 
 (cl-defun org-glance-table--metadata (graph id)
   "Return live headline metadata for ID in GRAPH, or a `user-error' when gone."
-  (let ((meta (org-glance-graph:get-headline graph id)))
-    (if (org-glance-headline-metadata? meta)
-        meta
-      (user-error "Headline no longer in graph (table is stale; press `g' to refresh)"))))
+  (org-glance-view:live-metadata graph id))
 
 (cl-defun org-glance-table--act-tag (graph id)
   "Add a tag to headline ID at point, or remove one of its tags with a prefix.
@@ -618,21 +614,20 @@ untagged (\":none:\") entry."
   "CONTEXT's (ANCHOR-TAGS . ROW-TAGS), each sorted distinct downcased strings.
 Rows are the anchor's edge targets (`refs') or every headline with an edge to
 the anchor (`backlinks')."
-  (cl-flet ((tags-of (meta) (mapcar (lambda (tag) (downcase (format "%s" tag)))
-                                    (org-glance-headline-metadata:tags meta))))
-    (let* ((anchor (plist-get context :anchor))
-           (meta (org-glance-graph:get-headline graph anchor))
-           (meta (and (org-glance-headline-metadata? meta) meta))
-           (row-metas
-            (pcase (plist-get context :dir)
-              ('refs (when-let ((targets (and meta (delete-dups
-                                                   (mapcar #'car (org-glance-headline-metadata:relations meta))))))
-                       (org-glance-graph--metas graph targets)))
-              ('backlinks (cl-remove-if-not
-                           (org-glance-filter:predicate `(:refers-to ,anchor))
-                           (org-glance-graph--metas graph))))))
-      (cons (org-glance--sorted-distinct (and meta (tags-of meta)))
-            (org-glance--sorted-distinct (cl-loop for m in row-metas append (tags-of m)))))))
+  (let* ((anchor (plist-get context :anchor))
+         (meta (org-glance-graph:get-headline graph anchor))
+         (meta (and (org-glance-headline-metadata? meta) meta))
+         (row-metas
+          (pcase (plist-get context :dir)
+            ('refs (when-let ((targets (and meta (org-glance-headline-metadata:relation-targets meta))))
+                     (org-glance-graph--metas graph targets)))
+            ('backlinks (cl-remove-if-not
+                         (org-glance-filter:predicate `(:refers-to ,anchor))
+                         (org-glance-graph--metas graph))))))
+    (cons (org-glance--sorted-distinct
+           (and meta (org-glance-headline-metadata:tag-strings meta)))
+          (org-glance--sorted-distinct
+           (cl-loop for m in row-metas append (org-glance-headline-metadata:tag-strings m))))))
 
 (cl-defun org-glance-table--refs-tag-pairs (context anchor-tags row-tags)
   "CONTEXT's candidate tag pairs from ANCHOR-TAGS x ROW-TAGS, as (FROM . TO).

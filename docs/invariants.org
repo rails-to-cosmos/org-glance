@@ -28,7 +28,11 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    deserialize (load-time guard against the struct; row order IS the JSON key
    order — append new fields at the end only); =org-glance-filter:table= drives
    keys + predicate + canonicalisation.  Violation: silent drift (always-nil
-   field, match-everything filter) or broken on-disk byte order.
+   field, match-everything filter) or broken on-disk byte order.  A list-valued
+   field MUST encode to a JSON *vector* (=org-glance-graph--encode= builds
+   =vector=s): =--append= calls =json-serialize= OUTSIDE the error-demoted hook,
+   so a nil/list encoder crashes *every* save — and the load-time guard checks
+   slot ORDER, not encode kinds, so it will not catch this.
 
 5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical;
    metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
@@ -232,7 +236,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     DERIVED, rebuildable cache (invariant-5 class; first =L= scans and
     writes, =g= rescans) that is never the source of truth.  Violation: a
     killed buffer shows "running", a restarted one "stopped", or the cache
-    is trusted for anything live.
+    is trusted for anything live.  (The enforcing symbols now live in the
+    external =org-glance-llm= plugin repo, loaded via =org-glance-plugins=;
+    this invariant governs that plugin's contract, not core.)
 
 24. *Table point restoration restores the CELL — row AND column.*  Every
     refill captures =org-glance-view:point-context= (ID LINE COL) and

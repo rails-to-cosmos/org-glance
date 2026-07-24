@@ -12,6 +12,11 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
          (progn ,@body)
        (delete-directory ,dir t))))
 
+(cl-defun org-glance-test:write (path text)
+  "Write TEXT to PATH, creating parent directories."
+  (f-mkdir-full-path (f-dirname path))
+  (f-write-text text 'utf-8 path))
+
 (cl-defmacro org-glance-test:session (&rest body)
   (declare (indent 0))
   `(with-temp-directory org-glance-directory

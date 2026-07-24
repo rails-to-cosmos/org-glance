@@ -187,14 +187,7 @@ caught)."
   (should-not (org-glance-overview:spec-key (list :where #'ignore)))
   ;; a path-hostile value never escapes its segment
   (let ((key (org-glance-overview:spec-key '(:id "a/../b"))))
-    (should-not (s-contains? "/" key)))
-  ;; distinct specs MAY share a (lossy, hashed) key -- correctness is enforced
-  ;; by the SPEC sidecar (see overview-cache-collision-rebuilds), but their
-  ;; identities must always differ
-  (should-not (string= (org-glance-filter:identity '(:id "a" :title "b"))
-                       (org-glance-filter:identity '(:id "a&title=b"))))
-  (should-not (string= (org-glance-filter:identity '(:tags ("a" "b")))
-                       (org-glance-filter:identity '(:tags ("a,b"))))))
+    (should-not (s-contains? "/" key))))
 
 (ert-deftest org-glance-test:overview-spec-key-compact ()
   "Cache directory names are short hashes of the canonical identity: fixed

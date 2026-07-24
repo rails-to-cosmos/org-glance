@@ -207,10 +207,8 @@ cover every link."
            finally return (cons (-distinct (delq nil edges)) plain)))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
-  "Extract key-value pairs from buffer.
-Run completing read on keys and copy selected values to kill ring.
-
-Assume string is a key-value pair if it matches `org-glance:key-value-pair-re'."
+  "Return an alist of (KEY . VALUE) for buffer lines matching the pair regexp.
+A line is a pair when it matches `org-glance:key-value-pair-re'."
   (save-excursion
     (goto-char (point-min))
     (cl-loop while (re-search-forward org-glance:key-value-pair-re nil t)

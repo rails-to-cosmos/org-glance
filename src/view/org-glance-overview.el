@@ -331,8 +331,7 @@ re-renders."
 The overview is a cached snapshot that can outlive the graph, so a heading may
 name a headline that has since been deleted; error clearly rather than passing
 nil into the material layer."
-  (or (org-glance-graph:headline org-glance-graph (org-glance-overview:id-at-point))
-      (user-error "Headline no longer in graph (overview is stale; press `g' to refresh)")))
+  (org-glance-view:live-headline org-glance-graph (org-glance-overview:id-at-point)))
 
 (cl-defun org-glance-overview:open ()
   "Open a link inside the headline at point."

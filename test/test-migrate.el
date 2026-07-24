@@ -2,11 +2,6 @@
 
 (require 'test-helpers)
 
-(cl-defun org-glance-test:write (path text)
-  "Write TEXT to PATH, creating parent directories."
-  (f-mkdir-full-path (f-dirname path))
-  (f-write-text text 'utf-8 path))
-
 (ert-deftest org-glance-test:migrate-detect ()
   "Legacy .metadata.el files are detected; backed-up .bak files are not."
   (with-temp-directory dir

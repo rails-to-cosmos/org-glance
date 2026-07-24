@@ -177,6 +177,10 @@ legacy record stored with \"Food\" + \"food\" reads as one tag."
    (mapcar (lambda (tag) (downcase (format "%s" tag)))
            (append (org-glance-headline-metadata:tags metadata) nil))))
 
+(cl-defun org-glance-headline-metadata:relation-targets (metadata)
+  "METADATA's distinct relation target ids (the `car' of each edge)."
+  (delete-dups (mapcar #'car (org-glance-headline-metadata:relations metadata))))
+
 (cl-defun org-glance-headline-metadata:serialize* (obj)
   "Generic variant of `org-glance-headline-metadata:serialize'."
   (cl-typecase obj

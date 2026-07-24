@@ -29,7 +29,6 @@
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
   (priority nil :read-only t :type number)
-  (indent nil :read-only t :type number)
   ;; Hold the parsed org-element timestamp object (or nil); the public
   ;; `org-glance-headline:schedule' / `:deadline' methods expose raw strings.
   (-schedule nil :read-only t :type (or null list))
@@ -37,7 +36,6 @@
 
   ;; Metadata
   (archived? nil :read-only t :type bool)
-  (closed nil :read-only t :type (or null string))
   (commented? nil :read-only t :type bool)
 
   ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline--<slot-name>'
@@ -209,8 +207,7 @@ descendants (like every content fact), so a child's range can project."
 
 (cl-defun org-glance-headline--from-lines (&rest lines)
   (declare (indent 0))
-  (cl-check-type lines list)
-  (org-glance-headline--from-string (apply (lambda (&rest tokens) (s-join "\n" tokens)) lines)))
+  (org-glance-headline--from-string (s-join "\n" lines)))
 
 (cl-defun org-glance-headline--from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
@@ -224,10 +221,8 @@ descendants (like every content fact), so a child's range can project."
                                   (org-element-property :tags element)))))
         (archived? (not (null (org-element-property :archivedp element))))
         (commented? (not (null (org-element-property :commentedp element))))
-        (closed (org-element-property :closed element))
         (state (substring-no-properties (or (org-element-property :todo-keyword element) "")))
         (priority (org-element-property :priority element))
-        (indent (or (org-element-property :level element) 1))
         (schedule (org-element-property :scheduled element))
         (deadline (org-element-property :deadline element))
         (title (or (org-element-property :ORG_GLANCE_TITLE element)
@@ -244,13 +239,11 @@ descendants (like every content fact), so a child's range can project."
                                  :tags tags
                                  :state state
                                  :priority priority
-                                 :indent indent
                                  :-schedule schedule
                                  :-deadline deadline
                                  :contents contents
                                  :archived? archived?
                                  :commented? commented?
-                                 :closed closed
                                  :-hash (org-glance-headline--hash contents)
                                  :-properties (org-glance-headline--properties contents)
                                  :-node-properties (org-glance-headline--node-properties contents)
