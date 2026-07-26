@@ -83,5 +83,34 @@ Removal stays ungated."
     ;; removal of a valid tag still works
     (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
 
+(ert-deftest org-glance-test:capture-refer-inserts-link ()
+  "In a capture buffer `org-glance-capture-mode' is on and `@' at a body
+boundary inserts a material link to a graph headline; finalize projects it
+into the captured headline's relations metadata (invariant 5)."
+  (org-glance-test:session
+    (org-glance-graph:add org-glance-graph
+                          (org-glance-test:headline "target" "* TODO Target headline"))
+    (org-glance-capture 'test "Note")
+    ;; the mode is active in the (current) capture buffer, binding `@'
+    (should org-glance-capture-mode)
+    ;; drop to the body, at a word boundary, and insert a reference
+    (goto-char (point-max))
+    (unless (bolp) (insert "\n"))
+    (insert "refers ")
+    (org-glance-test:offering (offered (caar offered))
+      (org-glance-capture:refer)
+      (should (cl-some (lambda (c) (s-contains? "Target headline" c))
+                       (mapcar #'car offered))))
+    (should (s-contains? "[[org-glance-material:target][Target headline]]"
+                         (buffer-string)))
+    (org-capture-finalize)
+    ;; the freshly captured headline carries the edge as relations metadata
+    (let ((captured (cl-find-if
+                     (lambda (m) (string= "Note" (org-glance-headline-metadata:title m)))
+                     (org-glance-graph:headlines org-glance-graph))))
+      (should captured)
+      (should (equal '(("target" . nil))
+                     (org-glance-headline-metadata:relations captured))))))
+
 (provide 'test-capture)
 ;;; test-capture.el ends here

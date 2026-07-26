@@ -104,8 +104,9 @@ edits to it revert on save with a warning.)
 
 ** 4. Connect headlines
 
-In a materialized buffer, =@= at the start of a word prompts for another
-headline and inserts a link to it; =C-u @= also asks a reference *kind*:
+In a materialized buffer — or while capturing (step 1) — =@= at the start of
+a word prompts for another headline and inserts a link to it; =C-u @= also
+asks a reference *kind*:
 
 #+begin_src org
 roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]

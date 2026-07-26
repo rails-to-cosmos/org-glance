@@ -10,6 +10,9 @@ Notable user-facing changes.  Versions date-based
   at point.
 - Relation tables carry a =Relation= column: =>= for an edge from the anchor,
   =<= for one to it, with the edge kind (=> roasted by=).
+- Capture buffers: =@= references another graph headline (=C-u @= adds a
+  kind), mirroring the materialized buffer's =@=; bound via
+  =org-glance-capture-mode=.
 - =C= in overview / table configures the current view's tag directly — the
   prompt-free counterpart to the transient's =C=; the unfiltered or multi-tag
   view falls back to the tag prompt.

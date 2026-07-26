@@ -13,6 +13,32 @@
 
 (require 'org-glance-core)
 
+(declare-function org-glance-material:insert-reference "org-glance-material")
+
+(defvar org-glance-capture-mode-map (make-sparse-keymap)
+  "Keymap for `org-glance-capture-mode'.")
+
+;; `@' at a word boundary references a graph headline (C-u adds a kind); at a
+;; heading's column 0 or mid-word it self-inserts, mirroring a materialized
+;; buffer's `@' (see `org-glance-material:refer').
+(define-key org-glance-capture-mode-map (kbd "@") #'org-glance-capture:refer)
+
+(define-minor-mode org-glance-capture-mode
+  "Minor mode for an org-glance capture buffer.
+Enabled by `org-glance-capture' in the capture buffer only, so `@' references
+a graph headline there without leaking the binding into other org buffers."
+  :lighter " glance-capture"
+  :keymap org-glance-capture-mode-map)
+
+(cl-defun org-glance-capture:refer (&optional arg)
+  "Insert a reference to another graph headline at point, or self-insert `@'.
+Run `org-glance-material:insert-reference' (which see, for the word-boundary
+rules) on the global `org-glance-graph'; the captured headline has no id until
+ingest, so nothing is excluded.  With ARG (`C-u @') also prompt for a kind."
+  (interactive "P")
+  (require 'org-glance-material)
+  (org-glance-material:insert-reference org-glance-graph nil :with-kind arg))
+
 (cl-defun org-glance-capture--format-tags (tags)
   "Format TAGS (a symbol or list of symbols) as an org tag string `:a:b:'."
   (let ((tags (org-glance-tag:as-list tags)))
@@ -99,6 +125,8 @@ separately."
                    (f-delete ,file)))
               0 t)
     (org-capture nil capture-token)
+    ;; org-capture leaves its buffer current; enable `@' references there.
+    (org-glance-capture-mode 1)
     (when finalize (org-capture-finalize))))
 
 (provide 'org-glance-capture)
