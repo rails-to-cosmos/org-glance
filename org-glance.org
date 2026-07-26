@@ -259,7 +259,7 @@ CLOSED: [2021-08-26 Thu 10:40]
 ** TODO Agenda and Notifications
 ** Completing Read [0/1]
 *** TODO build titles from all direct relations
-** Unsorted [5/18]
+** Unsorted [13/21]
 *** TODO Resolve title collision by traversing dependencies
 *** DONE Handle capture cancelling
 CLOSED: [2026-07-09]
@@ -300,16 +300,34 @@ CLOSED: [2021-09-12 Sun 13:45]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2021-09-12 Sun 13:45]
 :END:
-*** TODO refactor capture with org-refile
-*** TODO [#C] If summary is unregistered, prompt to register it before any user action
-*** TODO Read views from directory to minimize config
+*** DONE refactor capture with org-refile
+CLOSED: [2026-07-26 Sun 08:29]
 :LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:29]
+:END:
+*** DONE [#C] If summary is unregistered, prompt to register it before any user action
+CLOSED: [2026-07-26 Sun 08:29]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:29]
+:END:
+*** DONE Read views from directory to minimize config
+CLOSED: [2026-07-26 Sun 08:29]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:29]
 - State "STARTED"    from "TODO"       [2021-09-03 Fri 09:46]
 CLOCK: [2021-09-03 Fri 09:46]--[2021-09-03 Fri 18:15] =>  8:29
 - Clocked out on [2021-09-03 Fri 19:15]
 :END:
-*** TODO [#C] lexical binding breaks formatting
-*** TODO view-based materialized view buffer names: *materialized-event*
+*** DONE [#C] lexical binding breaks formatting
+CLOSED: [2026-07-26 Sun 08:29]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:29]
+:END:
+*** DONE view-based materialized view buffer names: *materialized-event*
+CLOSED: [2026-07-26 Sun 08:29]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:29]
+:END:
 *** TODO views github-like dashboards
 
 | #   | Jul   | Aug | Sep | Oct | Nov | Dec |
