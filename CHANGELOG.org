@@ -6,6 +6,9 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- =C= in overview / table configures the current view's tag directly — the
+  prompt-free counterpart to the transient's =C=; the unfiltered or multi-tag
+  view falls back to the tag prompt.
 - Open link walks NESTED lists: a list item holding sub-items is a group,
   so =j= / =C-c j= asks for the group first and the link inside it second
   (any depth; a lone candidate is taken without asking).
@@ -195,6 +198,8 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Plugin loader demotes a missing plugin library (=require= NOERROR), so an
+  absent =org-glance-plugins= entry no longer breaks init on Emacs 29.
 - Open link no longer hangs when two links share a description at the same
   depth -- such ties are offered by their target.
 - A bare =C-c #= in a headline that opened sealed says =C-c u= decrypts it

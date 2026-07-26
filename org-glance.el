@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.25.3.0.20260724.0
+;; Version: 1.26.0.0.20260726.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -90,10 +90,14 @@ persists via `customize-save-variable' outside batch."
     (message "org-glance: plugin `%s' installed and saved" plugin)))
 
 (cl-defun org-glance--load-plugins ()
-  "Require every `org-glance-plugins' entry, each under demoted errors."
+  "Require every `org-glance-plugins' entry, each under demoted errors.
+A missing plugin library uses `require's own NOERROR, so it returns nil rather
+than signalling -- `with-demoted-errors' catches errors raised while an existing
+library loads, but its `(debug error)' handler re-signals a `file-missing' under
+Emacs 29's ERT, and a missing plugin must never break init (invariants 9, 26)."
   (dolist (plugin org-glance-plugins)
     (with-demoted-errors "org-glance: plugin load failed: %S"
-      (require (intern (format "org-glance-%s" plugin))))))
+      (require (intern (format "org-glance-%s" plugin)) nil t))))
 
 ;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))

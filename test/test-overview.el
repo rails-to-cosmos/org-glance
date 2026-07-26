@@ -648,5 +648,18 @@ plain body links -- agenda and link-following need no materialization."
       (should (equal '(("b" . nil))
                      (org-glance-headline-metadata:relations meta))))))
 
+(ert-deftest org-glance-test:overview-configure-tag ()
+  "`C' edits the overview's sole tag directly; multi/no tag re-prompts (nil)."
+  (let (captured)
+    (cl-letf (((symbol-function 'org-glance-tag-config-edit)
+               (lambda (&optional tag) (push tag captured))))
+      (let ((org-glance-overview--spec '(:tags ("work"))))
+        (org-glance-overview:configure-tag))
+      (let ((org-glance-overview--spec '(:done nil)))
+        (org-glance-overview:configure-tag))
+      (let ((org-glance-overview--spec '(:tags ("a" "b"))))
+        (org-glance-overview:configure-tag)))
+    (should (equal '(nil nil "work") captured))))
+
 (provide 'test-overview)
 ;;; test-overview.el ends here

@@ -36,6 +36,7 @@
 (require 'org-glance-property-index)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
+(require 'org-glance-tag-config)
 (require 'org-glance-material)
 (require 'org-glance-view)
 
@@ -944,6 +945,9 @@ restore on open, `C-c C-c' to apply."
       (local-set-key "/" #'org-glance-table:filter-or-reset)
       ;; `!' quietly aliases `j' (open link) -- dired's execute rhyme.
       (local-set-key (kbd "!") (lookup-key (current-local-map) (kbd "j")))
+      ;; `C' configures the table's tag directly -- the prompt-free `C' of the
+      ;; transient, symmetric with the overview binding.
+      (local-set-key (kbd "C") #'org-glance-table:configure-tag)
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.
@@ -954,6 +958,14 @@ restore on open, `C-c C-c' to apply."
       (add-hook 'post-command-hook #'org-glance-table--persist-config nil t)
       (org-glance-view:fill-frame from-view))
     buf))
+
+(cl-defun org-glance-table:configure-tag ()
+  "Configure this table's tag directly, skipping the tag prompt.
+Bound to `C' -- the prompt-free counterpart to the transient's `C'.  Edit the
+config of the sole tag this table filters on; the unfiltered or multi-tag view
+names no single tag, so fall back to the tag prompt."
+  (interactive)
+  (org-glance-tag-config-edit (org-glance-filter:sole-tag org-glance-table--spec)))
 
 ;;;###autoload
 (cl-defun org-glance-table (&optional tag)

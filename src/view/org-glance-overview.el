@@ -291,6 +291,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
 (define-key org-glance-overview-mode-map (kbd "O") #'org-glance-overview:table)
+(define-key org-glance-overview-mode-map (kbd "C") #'org-glance-overview:configure-tag)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
 (define-key org-glance-overview-mode-map (kbd "D") #'org-glance-overview:delete)
@@ -429,6 +430,15 @@ returns point to the headline once the change (and any note) is committed."
   (org-glance-capture (or (org-glance-filter:tags org-glance-overview--spec)
                           (org-glance-capture:completing-read-tag))
                       ""))
+
+(cl-defun org-glance-overview:configure-tag ()
+  "Configure this overview's tag directly, skipping the tag prompt.
+Bound to `C' -- the prompt-free counterpart to the transient's `C'.  Edit the
+config of the sole tag this overview filters on; the unfiltered or multi-tag
+view names no single tag, so fall back to the tag prompt."
+  (interactive)
+  (org-glance-tag-config-edit
+   (org-glance-filter:sole-tag org-glance-overview--spec)))
 
 ;;;###autoload
 (cl-defun org-glance-overview (&optional tag)

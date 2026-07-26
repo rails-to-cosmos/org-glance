@@ -20,7 +20,8 @@ If you know org-mode, you know almost everything already:
 2. *Tags are collections.* An ordinary org tag (=:book:=, =:article:=)
    groups headlines; a tag exists the moment you capture something
    with it.  Optionally give a tag its own config: todo cycle and capture
-   template (=C= in the transient).
+   template (=C= in the transient — or =C= in that tag's overview / table to
+   edit it directly).
 
 3. *Views are projections.*  The table and the overview are generated,
    read-only summaries built from an index — fast, and always rebuildable.

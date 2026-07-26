@@ -1097,5 +1097,16 @@ column 0.  (The row-left-the-view fallback is `table-todo-preserves-point'.)"
         (should (equal "tags" (get-text-property (point) 'table-view-col)))
         (should (= col (current-column)))))))
 
+(ert-deftest org-glance-test:table-configure-tag ()
+  "`C' edits the table's sole tag directly; multi/no tag re-prompts (nil)."
+  (let (captured)
+    (cl-letf (((symbol-function 'org-glance-tag-config-edit)
+               (lambda (&optional tag) (push tag captured))))
+      (let ((org-glance-table--spec '(:tags ("work"))))
+        (org-glance-table:configure-tag))
+      (let ((org-glance-table--spec nil))
+        (org-glance-table:configure-tag)))
+    (should (equal '(nil "work") captured))))
+
 (provide 'test-table)
 ;;; test-table.el ends here

@@ -355,5 +355,13 @@ than a spurious symbol."
   (let ((tags (plist-get (org-glance-filter:normalize-spec filter) :tags)))
     (mapcar #'org-glance-tag:from-string tags)))
 
+(cl-defun org-glance-filter:sole-tag (filter)
+  "Return FILTER's sole tag as a string, or nil unless it names exactly one.
+Backs the prompt-free `C' in overview / table: a single-tag view names its tag,
+while the unfiltered or multi-tag view has none, so the caller re-prompts."
+  (let ((tags (org-glance-filter:tags filter)))
+    (when (and tags (null (cdr tags)))
+      (symbol-name (car tags)))))
+
 (provide 'org-glance-filter)
 ;;; org-glance-filter.el ends here

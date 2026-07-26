@@ -48,6 +48,15 @@
   (should (equal '(:tags ("a")) (org-glance-filter:merge nil "a")))
   (should (equal '(:done t) (org-glance-filter:merge '(:done nil) '(:done t)))))
 
+(ert-deftest org-glance-test:filter-sole-tag ()
+  "sole-tag names the tag only for a single-tag filter (downcased); else nil."
+  (should (string= "work" (org-glance-filter:sole-tag '(:tags ("work")))))
+  (should (string= "work" (org-glance-filter:sole-tag "work")))
+  (should (string= "work" (org-glance-filter:sole-tag '(:tags ("Work")))))
+  (should-not (org-glance-filter:sole-tag nil))
+  (should-not (org-glance-filter:sole-tag '(:done nil)))
+  (should-not (org-glance-filter:sole-tag '(:tags ("a" "b")))))
+
 (ert-deftest org-glance-test:filter-describe ()
   "describe renders a compact human label for a spec."
   (should (string= "all" (org-glance-filter:describe nil)))
