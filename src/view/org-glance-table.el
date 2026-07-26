@@ -36,7 +36,6 @@
 (require 'org-glance-property-index)
 (require 'org-glance-filter)
 (require 'org-glance-tag-config)
-(require 'org-glance-tag-config)
 (require 'org-glance-material)
 (require 'org-glance-view)
 

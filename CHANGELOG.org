@@ -198,8 +198,9 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
-- Plugin loader demotes a missing plugin library (=require= NOERROR), so an
-  absent =org-glance-plugins= entry no longer breaks init on Emacs 29.
+- Plugin loader error-demotes a broken or missing plugin via a plain
+  =condition-case=, so a bad =org-glance-plugins= entry never breaks init (even
+  under =debug-on-error= / ERT).
 - Open link no longer hangs when two links share a description at the same
   depth -- such ties are offered by their target.
 - A bare =C-c #= in a headline that opened sealed says =C-c u= decrypts it

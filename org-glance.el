@@ -90,14 +90,15 @@ persists via `customize-save-variable' outside batch."
     (message "org-glance: plugin `%s' installed and saved" plugin)))
 
 (cl-defun org-glance--load-plugins ()
-  "Require every `org-glance-plugins' entry, each under demoted errors.
-A missing plugin library uses `require's own NOERROR, so it returns nil rather
-than signalling -- `with-demoted-errors' catches errors raised while an existing
-library loads, but its `(debug error)' handler re-signals a `file-missing' under
-Emacs 29's ERT, and a missing plugin must never break init (invariants 9, 26)."
+  "Require every `org-glance-plugins' entry, each error-demoted.
+A broken or missing plugin must never break init (invariants 9, 26).  A plain
+`condition-case' demotes even under `debug-on-error'; `with-demoted-errors'
+re-raises there, so under ERT or user debugging a plugin's load error would
+abort init.  `require's NOERROR keeps an absent plugin silent."
   (dolist (plugin org-glance-plugins)
-    (with-demoted-errors "org-glance: plugin load failed: %S"
-      (require (intern (format "org-glance-%s" plugin)) nil t))))
+    (condition-case err
+        (require (intern (format "org-glance-%s" plugin)) nil t)
+      (error (message "org-glance: plugin load failed: %S" err)))))
 
 ;;;###autoload
 (cl-defun org-glance-init (&optional (directory org-glance-directory))
