@@ -194,26 +194,65 @@ dangling id errors."
             (should (equal "t" org-glance-material--id)))
           (should-error (org-glance-link:material "no-such-id") :type 'user-error))))))
 
-;;; References / back-references commands
+;;; Relations command (`C-c @')
 
 (ert-deftest org-glance-test:material-references-commands ()
-  "`C-c @' opens the outgoing-references table, `C-u C-c @' the backlinks
-table; both pass the bare relation filter."
+  "`C-c @' opens ONE relation table -- outgoing edges and referrers merged --
+under the bare relation filter, anchored on this headline.  A headline related
+to nothing in either direction errors."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
-      (org-glance-test:headline "b" "* DONE B"))       ; DONE must stay visible
-    (org-glance-test:with-material (buf graph "a")
-      (let (filters)
-        (cl-letf (((symbol-function 'org-glance-table:visit)
-                   (lambda (_g filter &rest _) (push filter filters) nil)))
-          (org-glance-material:references)              ; outgoing
-          (org-glance-material:references '(4)))        ; backlinks
-        (should (equal '((:refers-to "a") (:id-any ("b"))) filters))))
-    ;; no references -> friendly error
-    (org-glance-test:with-material (buf graph "b")
+      (org-glance-test:headline "b" "* DONE B")        ; DONE must stay visible
+      (org-glance-test:headline "c" "* TODO C"))       ; related to nothing
+    (let (calls)
+      (cl-letf (((symbol-function 'org-glance-table:visit)
+                 (lambda (_g filter &rest args)
+                   (push (cons filter (plist-get args :context)) calls)
+                   nil)))
+        (org-glance-test:with-material (buf graph "a")
+          (org-glance-material:references))
+        ;; the SAME command on the target sees the incoming edge -- no prefix arg
+        (org-glance-test:with-material (buf graph "b")
+          (org-glance-material:references)))
+      (setq calls (nreverse calls))
+      (should (equal '(:id-any ("b")) (car (nth 0 calls))))
+      (should (equal '(:anchor "a" :dir relations) (cdr (nth 0 calls))))
+      (should (equal '(:id-any ("a")) (car (nth 1 calls))))
+      (should (equal '(:anchor "b" :dir relations) (cdr (nth 1 calls)))))
+    ;; unrelated in both directions -> friendly error
+    (org-glance-test:with-material (buf graph "c")
       (cl-letf (((symbol-function 'org-glance-table:visit) #'ignore))
         (should-error (org-glance-material:references) :type 'user-error)))))
+
+(ert-deftest org-glance-test:relations-table-relation-column ()
+  "The relation table's `Relation' cell names direction and kind: `>' for an
+edge FROM the anchor, `<' for one TO it, both for a mutual pair, the bare arrow
+for a kindless edge.  Rows merge both directions."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A"
+                                "roasted by [[org-glance-material:b?kind=roasted-by][B]]"
+                                "[[org-glance-material:c][C]]")
+      (org-glance-test:headline "b" "* TODO B" "[[org-glance-material:a][A]]")
+      (org-glance-test:headline "c" "* TODO C"))
+    ;; mutual: kinded out, kindless back -- pretty (spaced) kind form
+    (should (equal "> roasted by, <" (org-glance-table--relation-cell graph "a" "b")))
+    (should (equal ">" (org-glance-table--relation-cell graph "a" "c")))
+    (should (equal "<" (org-glance-table--relation-cell graph "c" "a")))
+    ;; row population is the union of targets and referrers, distinct
+    (should (equal '("b" "c") (sort (copy-sequence (org-glance-table--related-ids graph "a"))
+                                    #'string<)))
+    (should (equal '("a") (org-glance-table--related-ids graph "b")))
+    (should (equal '("a") (org-glance-table--related-ids graph "c")))
+    ;; the column reaches the VIEW: a relation table renders it, and it holds
+    ;; the cell above (a plain table has no such column)
+    (org-glance-test:with-table (graph '(:id-any ("b")) '(:anchor "a" :dir relations))
+      (should (member "relation" (org-glance-test:table-col-keys)))
+      (should (equal "> roasted by, <"
+                     (alist-get 'relation (alist-get 'cells (car table-view--rows))))))
+    (org-glance-test:with-table (graph)
+      (should-not (member "relation" (org-glance-test:table-col-keys))))))
 
 ;;; Crypt: a sealed reference is not an edge
 
@@ -252,7 +291,7 @@ time; reindex agrees."
         ;; decrypted buffer shows BOTH links; save reseals before sync reads
         (should (s-contains? "secret-ref" (buffer-string)))
         (org-glance-test:sed "editme" "edited")
-        (let ((inhibit-message t)) (save-buffer))))
+        (org-glance-test:save)))
     (let ((after-sync (org-glance-headline-metadata:relations
                        (org-glance-graph:get-headline graph "cs"))))
       (should (equal '(("public-ref" . nil)) after-sync))

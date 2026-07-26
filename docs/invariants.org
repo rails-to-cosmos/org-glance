@@ -180,21 +180,23 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     direction) in =table-refs.eld= — never under the filter identity, one
     entry per deliberate apply, so browsing still accretes nothing.
 
-18. *Scoped reference layouts: out-of-band identity, id > pair, whole-set
+18. *Scoped relation layouts: out-of-band identity, id > pair, whole-set
     replace.*  The anchor travels as =:context= into =org-glance-table:visit=
     — never reconstructed from the filter, which has lost it.  Resolution
     (=org-glance-table--refs-resolve=): the anchor's own entry beats tag
     pairs; among pairs the latest =:applied= stamp wins.  A scoped entry
     REPLACES the whole column set built from base columns — it never merges
-    with =table-columns.eld= — and a scope-less reference view renders plain
-    defaults, never the shared untagged ":none:" schema entry.  Pair keys
-    read in edge direction (referrer > target), single-sourced in
-    =org-glance-table--refs-tag-pairs=, separate per direction; pair tags
-    are sorted, distinct, downcased (mirrors inv 13).  =table-refs.eld= is
-    written only on explicit =C-c C-c=, so a git conflict drops one side
-    with no self-healing rewrite (unlike the constantly-rewritten
-    auto-persisted stores).  Violation: saved layouts that never match on
-    restore, cross-direction leaks, nondeterministic pair resolution.
+    with =table-columns.eld= — and a scope-less relation view renders plain
+    defaults, never the shared untagged ":none:" schema entry.  A relation
+    table lists BOTH directions in one view (=org-glance-table--related-ids=),
+    so pair keys read anchor tag > row tag — scope, never edge direction —
+    single-sourced in =org-glance-table--refs-tag-pairs=; the mirrored pair
+    (anchored on the other side) is a DIFFERENT scope.  Pair tags are sorted,
+    distinct, downcased (mirrors inv 13).  =table-refs.eld= is written only on
+    explicit =C-c C-c=, so a git conflict drops one side with no self-healing
+    rewrite (unlike the constantly-rewritten auto-persisted stores).
+    Violation: saved layouts that never match on restore, cross-scope leaks,
+    nondeterministic pair resolution.
 
 19. *The table is a pure projection; every mutation routes through the
     material layer.*  All =org-glance-table--act-*= handlers delegate to
@@ -268,3 +270,45 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     disabling = dropping it from the list and restarting.  Violation: a
     broken third-party plugin bricks =org-glance-init=, or reloading
     duplicates its UI.
+
+* Confirmed by the 2026-07-26 sweep
+
+Rules the code already enforced without being written down here.  Each was
+verified against its evidence site before being added.
+
+27. *Save-hook depth ordering is load-bearing.*  =org-glance-material:sync=
+    runs at depth 0, =--decrypt-buffer= at 90, =--hide-reserved-properties=
+    at 100, so =sync= reads the buffer while it is still SEALED and the WAL,
+    the property index and every projection see ciphertext.  This is the
+    concrete mechanism behind invariant 14's "plaintext never touches disk".
+    Violation: lowering =--decrypt-buffer= below =sync= indexes decrypted
+    plaintext into =headlines.jsonl= and the property cache.
+
+28. *Multi-block crypt rewrites iterate LAST to FIRST.*  Both
+    =org-glance--crypt--transform-blocks= and =--crypt-unwrap-blocks= walk
+    =(reverse (block-regions))=: any length-changing rewrite invalidates the
+    recorded positions of blocks after it.  Violation: a headline with two or
+    more =#+begin_crypt= blocks is corrupted on seal/unseal.
+
+29. *org's =ARCHIVE= marker is never a collection tag.*
+    =org-glance-headline--from-element= removes it from the parsed tag set
+    (the =archived?= flag carries it).  Violation: a phantom =archive= tag
+    appears in =graph:tags=, the capture picker and every per-tag view, over
+    headlines the ambient filter hides.
+
+30. *=graph:get-headline= is tri-state: nil / =tombstone= / metadata.*
+    Read-only callers collapse the first two through
+    =org-glance-graph:live-meta=; =org-glance-graph:delete= needs the
+    distinction (it guards on =(memq meta '(nil tombstone))=).  Violation:
+    collapsing tombstone to nil resurrects deleted ids in derived indexes and
+    appends duplicate tombstones.
+
+31. *=org-glance-material= must never top-level =require= =org-glance-table=.*
+    The dependency runs table -> material; the relation pivot
+    (=org-glance-material:references=) requires table at CALL time.
+    Violation: a circular load that breaks byte-compilation and init.
+
+32. *Torn-line tolerance is scoped to the open segment's FINAL line.*
+    =org-glance-graph--scan-file= swallows a =json-error= only for the last
+    line of the open segment and re-signals everywhere else.  Violation:
+    tolerating a torn line mid-file silently masks real store corruption.

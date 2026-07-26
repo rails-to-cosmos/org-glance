@@ -99,12 +99,12 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     explicit `C-c C-c` in a reference table saves the layout under a scope
     key (anchor id / tag pair, per direction) in `table-refs.eld` — never
     under the filter identity.
-18. Scoped reference layouts: anchor travels as `:context` (never rebuilt from
+18. Scoped relation layouts: anchor travels as `:context` (never rebuilt from
     the filter); resolve = anchor entry > tag pairs > latest `:applied`;
     a scoped entry replaces the whole column set (never merges with the
-    per-tag schema); scope-less reference views render defaults, never the
-    ":none:" entry; pair order (referrer > target) single-sourced in
-    `org-glance-table--refs-tag-pairs`, separate per direction.
+    per-tag schema); scope-less relation views render defaults, never the
+    ":none:" entry; pair order (anchor tag > row tag) single-sourced in
+    `org-glance-table--refs-tag-pairs`.
 19. The table is a pure projection: every `--act-*` mutation delegates to the
     `org-glance-material:` layer; bulk ops degrade per-row, never batch-abort.
 20. Overview headings are self-sufficient, metadata-only: state, priority,
@@ -129,6 +129,20 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     one component per prompt and breaks path ties by target.
 26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
     remove-then-append, and never unload.
+27. `after-save-hook` depth order is load-bearing: `material:sync` (0) runs
+    BEFORE `--decrypt-buffer` (90) and `--hide-reserved-properties` (100), so
+    the WAL and every index see SEALED bytes — the mechanism behind inv 14.
+28. Crypt block rewrites iterate blocks LAST-to-FIRST; forward iteration
+    invalidates later blocks' recorded positions after any length change.
+29. `--from-element` strips org's `ARCHIVE` marker from the parsed tag set;
+    it is bookkeeping (the `archived?` flag), never a collection tag.
+30. `org-glance-graph:get-headline` is tri-state — nil (unknown) /
+    `tombstone` / metadata. Read-only callers collapse it via
+    `org-glance-graph:live-meta`; `graph:delete` needs the tombstone case.
+31. `org-glance-material` never top-level `require`s `org-glance-table`
+    (table requires material); the relation pivot requires it at call time.
+32. Torn-line tolerance is scoped to the OPEN segment's FINAL line; a JSON
+    error anywhere else re-signals rather than masking store corruption.
 
 ## Fix — and prevent — the whole class
 

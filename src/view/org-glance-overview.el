@@ -92,10 +92,6 @@ filter a cache directory holds."
 
 ;;; Rendering (from metadata alone; blobs are never read)
 
-(cl-defun org-glance-overview:tag-string (metadata)
-  (when-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
-    (format "  :%s:" (s-join ":" tags))))
-
 (cl-defun org-glance-overview:render-headline (graph metadata)
   "Render METADATA as one self-sufficient org heading.
 Agenda and link-following need no materialization; relation titles resolve
@@ -108,7 +104,8 @@ live from GRAPH (id fallback for gone targets)."
             (if (org-glance--present-string? state) (concat state " ") "")
             (if (integerp priority) (format "[#%c] " priority) "")
             (org-glance-headline-metadata:title metadata)
-            (or (org-glance-overview:tag-string metadata) "")
+            (if-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
+                (format "  :%s:" (s-join ":" tags)) "")
             "\n"
             ;; ONE planning line: org recognises planning keywords only on the
             ;; single line right after the heading -- a second line would be
@@ -291,6 +288,7 @@ re-renders."
 (define-key org-glance-overview-mode-map (kbd "a") #'org-glance-agenda)
 (define-key org-glance-overview-mode-map (kbd "g") #'org-glance-overview:refresh)
 (define-key org-glance-overview-mode-map (kbd "O") #'org-glance-overview:table)
+(define-key org-glance-overview-mode-map (kbd "@") #'org-glance-overview:relations)
 (define-key org-glance-overview-mode-map (kbd "C") #'org-glance-overview:configure-tag)
 (define-key org-glance-overview-mode-map (kbd "+") #'org-glance-overview:capture)
 (define-key org-glance-overview-mode-map (kbd "l") #'org-glance-overview:history)
@@ -423,6 +421,12 @@ returns point to the headline once the change (and any note) is committed."
   "Open the table view with the same filter as the current overview."
   (interactive)
   (org-glance-table:visit org-glance-graph org-glance-overview--spec))
+
+(cl-defun org-glance-overview:relations ()
+  "Open the relation table of the headline at point (`@'), both directions."
+  (interactive)
+  (org-glance-table:visit-relations org-glance-graph
+                                    (org-glance-overview:id-at-point)))
 
 (cl-defun org-glance-overview:capture ()
   "Capture a headline pre-tagged with this overview's tags."

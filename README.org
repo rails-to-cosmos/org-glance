@@ -78,6 +78,7 @@ Act on the row/heading at point without opening anything:
 | =+= / =-=             | add a headline to the view's tag (capture) / remove one from it | add / remove a column (any but Title) |                           |                                              |
 | =:=                 | add another tag to the headline                                 | remove one                            |                           |                                              |
 | =j= (or =!=)          | open a link inside the headline                                 |                                       |                           |                                              |
+| =@=                 | table of everything the headline relates to (both directions)   |                                       |                           |                                              |
 | =i=                 | edit the cell at point (state: todo prompt; dates: calendar; text: minibuffer) |                                       |                           |                                              |
 | =C-c p=             | copy the headline (a fresh id, content verbatim)                |                                       |                           |                                              |
 | =e=                 | copy a =KEY: value= from its body                                 |                                       |                           |                                              |
@@ -131,14 +132,18 @@ In a materialized buffer:
 |-----------+------------------------------------------------|
 | =@=         | insert a reference (completion, at word start) |
 | =C-u @=     | same, plus a reference kind (=roasted by=, …)    |
-| =C-c @=     | table of everything this headline references   |
-| =C-u C-c @= | table of everything that references it         |
+| =C-c @=     | table of everything this headline relates to   |
 
-These reference tables open with the default layout; edits to it are not
-saved automatically (an echo-area nudge reminds you) — =C-c C-c= applies the
-layout (columns, order, sort) to a scope of your choice: this headline, or a
-tag pair (=coffee → roaster=).  Every later reference table matching the
-scope restores it.
+A relation table lists both directions in one view — the headlines this one
+refers to AND the ones referring to it — and its =Relation= column names each
+row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or
+the overview opens the same view for that headline.
+
+Relation tables open with the default layout; edits to it are not saved
+automatically (an echo-area nudge reminds you) — =C-c C-c= applies the layout
+(columns, order, sort) to a scope of your choice: this headline, or a tag pair
+(=coffee → roaster=, the anchor's tag first).  Every later relation table
+matching the scope restores it.
 
 A link can also address a whole view:
 =[[org-glance-overview:coffee?done=nil][Active coffees]]=.

@@ -126,18 +126,14 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
       out))
    (t (error "Invalid filter: %S" filter))))
 
-(defsubst org-glance-filter--downcased-string (x)
-  "Coerce X to a downcased string (the filter language's tag/title canon form)."
-  (downcase (format "%s" x)))
-
 (cl-defun org-glance-filter--match-clause (kind accessor want)
   "Build one predicate clause testing ACCESSOR's value against WANT, per KIND."
   (pcase kind
     ;; Tags are stored interned + downcased, so compare case-insensitively
     ;; (mirrors v1's `org-glance:tag-filter').
-    ('member-all (let ((want (mapcar #'org-glance-filter--downcased-string want)))
+    ('member-all (let ((want (mapcar #'org-glance--downcased-string want)))
                    (lambda (m)
-                     (let ((have (mapcar #'org-glance-filter--downcased-string
+                     (let ((have (mapcar #'org-glance--downcased-string
                                          (append (funcall accessor m) nil))))
                        (cl-every (lambda (tag) (member tag have)) want)))))
     ;; A headline with no todo keyword carries state "" (not nil); treat a nil
@@ -154,7 +150,7 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
     ('bool (let ((want (and want t)))
              (lambda (m) (eq want (and (funcall accessor m) t)))))
     ;; Case-insensitive substring (the interactive `/' refinement).
-    ('substring (let ((needle (org-glance-filter--downcased-string want)))
+    ('substring (let ((needle (org-glance--downcased-string want)))
                   (lambda (m) (s-contains? needle (downcase (or (funcall accessor m) ""))))))
     ('present-absent (lambda (m)
                        (let ((present (org-glance--present-string? (funcall accessor m))))
@@ -203,9 +199,9 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
   "Canonical form of VALUE under KEY, per the table's :canon kind.
 Shared by the spec identity and the cache key (a hash of that identity)."
   (pcase (plist-get (alist-get key org-glance-filter:table) :canon)
-    ('tags (sort (mapcar #'org-glance-filter--downcased-string value) #'string<))
+    ('tags (sort (mapcar #'org-glance--downcased-string value) #'string<))
     ('string-list (sort (mapcar (lambda (x) (format "%s" x)) value) #'string<))
-    ('downcase (org-glance-filter--downcased-string value))
+    ('downcase (org-glance--downcased-string value))
     (_ value)))
 
 (cl-defun org-glance-filter--canonical-pairs (spec)

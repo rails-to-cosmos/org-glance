@@ -174,7 +174,7 @@ Fresh metadata carries symbol tags, JSON-deserialized metadata carries strings
 Case-duplicates collapse (canonical tags are downcased -- invariant 13), so a
 legacy record stored with \"Food\" + \"food\" reads as one tag."
   (delete-dups
-   (mapcar (lambda (tag) (downcase (format "%s" tag)))
+   (mapcar #'org-glance--downcased-string
            (append (org-glance-headline-metadata:tags metadata) nil))))
 
 (cl-defun org-glance-headline-metadata:relation-targets (metadata)
@@ -690,13 +690,21 @@ record written for each id, tombstones included."
           ((plist-get record :tombstone) 'tombstone)
           (t (org-glance-headline-metadata:deserialize record)))))
 
+(cl-defun org-glance-graph:live-meta (graph id)
+  "GRAPH's metadata for ID, or nil when the id is unknown or tombstoned.
+The nil-or-metadata half of `org-glance-graph:get-headline', whose tri-state
+result (nil / `tombstone' / metadata) every read-only caller collapses the
+same way."
+  (let ((meta (org-glance-graph:get-headline graph id)))
+    (and (org-glance-headline-metadata? meta) meta)))
+
 (cl-defun org-glance-graph:headline (graph id)
   "Return the full live `org-glance-headline' stored for ID, or nil.
 Reconstructs the headline from its persisted contents; returns nil for
 unknown or tombstoned ids."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (when (org-glance-headline-metadata? (org-glance-graph:get-headline graph id))
+  (when (org-glance-graph:live-meta graph id)
     (-some-> (org-glance-graph:get-content graph id)
       (org-glance-headline--from-string))))
 
@@ -766,9 +774,7 @@ The filenames ARE the index (STAMP is a lexically-sortable timestamp)."
 (cl-defun org-glance-graph--metas (graph &optional ids)
   "GRAPH's live headline metadata; with IDS, just those (unknown ids skipped)."
   (if ids
-      (cl-loop for id in ids
-               for meta = (org-glance-graph:get-headline graph id)
-               when (org-glance-headline-metadata? meta) collect meta)
+      (delq nil (mapcar (lambda (id) (org-glance-graph:live-meta graph id)) ids))
     (org-glance-graph:headlines graph)))
 
 (cl-defun org-glance-graph:edge-kinds (graph &optional ids)
@@ -782,10 +788,9 @@ With IDS, restrict the fold to those headlines.  An edge is (TARGET . KIND);
 
 (cl-defun org-glance-graph:title-or-id (graph id)
   "ID's headline title in GRAPH, or ID itself when the headline is gone."
-  (let ((meta (org-glance-graph:get-headline graph id)))
-    (if (org-glance-headline-metadata? meta)
-        (org-glance-headline-metadata:title meta)
-      id)))
+  (if-let ((meta (org-glance-graph:live-meta graph id)))
+      (org-glance-headline-metadata:title meta)
+    id))
 
 (defconst org-glance-graph--reindex-batch 500
   "Headlines per metadata-append batch during `org-glance-graph:reindex'.

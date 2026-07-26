@@ -6,6 +6,10 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- =@= in the table and the overview opens the relation table of the headline
+  at point.
+- Relation tables carry a =Relation= column: =>= for an edge from the anchor,
+  =<= for one to it, with the edge kind (=> roasted by=).
 - =C= in overview / table configures the current view's tag directly — the
   prompt-free counterpart to the transient's =C=; the unfiltered or multi-tag
   view falls back to the tag prompt.
@@ -111,6 +115,10 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- =C-c @= in a material buffer opens ONE relation table (outgoing edges and
+  referrers merged) instead of the outgoing-only table.  Scoped layouts key on
+  =relations= and pair on anchor tag > row tag, so entries saved under the old
+  =refs= / =backlinks= scopes no longer match.
 - Tag config is one file per tag, =config/tags/<tag>.org=: optional =#+TITLE:=
   label and =#+TODO:= cycle pragmas, body from the first =*= heading is the
   capture entry.  A freshly stubbed file carries only the capture template
@@ -187,6 +195,7 @@ Notable user-facing changes.  Versions date-based
   reopening switches to the live session.  Moved to =org-glance-llm.el=.
 
 ** Removed
+- =C-u C-c @= (back-references table) — =C-c @= now lists both directions.
 - =make fat= single-file build (=build/build-fat.el=, =dist/=) — the
   =rails-to-cosmos= ELPA archive distributes the package properly; from-source
   users have the load-path/straight recipes.

@@ -110,7 +110,8 @@ FILTER, if non-nil, is a predicate on the metadata."
 ;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
 (define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
 ;; `@' at a word boundary (body or heading title) references another headline
-;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.  `C-c @' views references, `C-u C-c @' back-references.
+;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.
+;; `C-c @' views this headline's relations (both directions).
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
 (define-key org-glance-material-mode-map (kbd "C-c @") #'org-glance-material:references)
 
@@ -629,8 +630,8 @@ already-decrypted one never re-prompts).  Errors if ID is unknown,
 tombstoned, or has no stored blob."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((meta (org-glance-graph:get-headline graph id)))
-    (unless (org-glance-headline-metadata? meta)
+  (let ((meta (org-glance-graph:live-meta graph id)))
+    (unless meta
       (user-error "No live headline with id %s" id))
     (let ((path (org-glance-graph:content-path graph id)))
       (unless (f-exists? path)
@@ -882,12 +883,12 @@ Return non-nil when the tag set actually changed."
           (with-current-buffer buffer
             (org-glance-material--goto-first-heading)
             (let* ((tags (org-get-tags nil t))
-                   (canon (lambda (x) (downcase (format "%s" x))))
+                   (want (org-glance--downcased-string tag))
                    (new (if remove
-                            (cl-remove (funcall canon tag) tags
-                                       :key canon :test #'string=)
-                          (if (cl-member (funcall canon tag) tags
-                                         :key canon :test #'string=)
+                            (cl-remove want tags
+                                       :key #'org-glance--downcased-string :test #'string=)
+                          (if (cl-member want tags
+                                         :key #'org-glance--downcased-string :test #'string=)
                               tags
                             (append tags (list tag))))))
               (unless (equal tags new)
@@ -1275,25 +1276,17 @@ literal `@' anywhere."
       ;; link; the canonical kind lives in the link path.
       (insert (org-glance--edge->string id kind title)))))
 
-(cl-defun org-glance-material:references (&optional arg)
-  "Table of the headlines this one refers to; with ARG, its back-references.
-Passes the bare relation filter (no ambient `:done' merge), so DONE headlines
-stay visible.  References read this headline's LAST-SAVED metadata -- save
-first to see edges added in this session."
-  (interactive "P")
+(cl-defun org-glance-material:references ()
+  "Table of every headline this one relates to, in both directions.
+`C-c @' -- the rows are this headline's edge targets AND its referrers, each
+row's direction and kind in the `Relation' column
+\(`org-glance-table:visit-relations').  Relations read this headline's
+LAST-SAVED metadata -- save first to see edges added in this session."
+  (interactive)
   (require 'org-glance-table)      ; not at top level: table requires material
-  (let ((graph org-glance-material--graph)
-        (id org-glance-material--id))
-    (unless (and graph id) (user-error "Not in a materialized headline buffer"))
-    (if arg
-        (org-glance-table:visit graph `(:refers-to ,id)
-                                :context (list :anchor id :dir 'backlinks))
-      (let* ((meta (org-glance-graph:get-headline graph id))
-             (targets (and (org-glance-headline-metadata? meta)
-                           (org-glance-headline-metadata:relation-targets meta))))
-        (unless targets (user-error "Headline has no references (save after adding some)"))
-        (org-glance-table:visit graph `(:id-any ,targets)
-                                :context (list :anchor id :dir 'refs))))))
+  (org-glance-material--ensure)
+  (org-glance-table:visit-relations org-glance-material--graph
+                                    org-glance-material--id))
 
 (provide 'org-glance-material)
 ;;; org-glance-material.el ends here

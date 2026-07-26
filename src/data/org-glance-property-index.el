@@ -76,9 +76,8 @@ Mutates the in-session table; a cold/stale/absent id costs ONE blob parse (both
 alists at once).  A gone id is not cached.  Does not flush -- a batch op
 \(`:ensure' / `:keys') or a table render (`--flush-if-dirty') persists."
   (let* ((h (org-glance-property-index--table graph))
-         (meta (org-glance-graph:get-headline graph id))
-         (hash (and (org-glance-headline-metadata? meta)
-                    (org-glance-headline-metadata:hash meta)))
+         (meta (org-glance-graph:live-meta graph id))
+         (hash (and meta (org-glance-headline-metadata:hash meta)))
          (entry (gethash id h)))
     (if (and entry hash (equal (car entry) hash))
         entry

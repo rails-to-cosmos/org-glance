@@ -167,6 +167,34 @@ path; a display-boundary refresh re-fills it and clears the flag."
       (should (eq (key-binding (kbd "!")) (key-binding (kbd "j"))))
       (should (key-binding (kbd "j"))))))
 
+(ert-deftest org-glance-test:table-relations-key ()
+  "`@' in the table and the overview opens the row's relation table, anchored
+on it; a headline related to nothing errors instead."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
+      (org-glance-test:headline "b" "* TODO B")
+      (org-glance-test:headline "z" "* TODO Z"))       ; related to nothing
+    (let (calls)
+      (org-glance-test:with-table (graph)
+        (should (key-binding (kbd "@")))
+        (table-view--goto-id "a")
+        ;; stub only the pivot itself -- the table buffer above needs the real one
+        (cl-letf (((symbol-function 'org-glance-table:visit)
+                   (lambda (_g filter &rest args)
+                     (push (cons filter (plist-get args :context)) calls)
+                     nil)))
+          (funcall (key-binding (kbd "@")))))
+      (should (equal '(:id-any ("b")) (car (car calls))))
+      (should (equal '(:anchor "a" :dir relations) (cdr (car calls)))))
+    ;; a row with no relations errors through the same key
+    (org-glance-test:with-table (graph)
+      (table-view--goto-id "z")
+      (should-error (funcall (key-binding (kbd "@"))) :type 'user-error))
+    ;; the overview's `@' routes to the same entry point
+    (should (eq (lookup-key org-glance-overview-mode-map (kbd "@"))
+                #'org-glance-overview:relations))))
+
 (ert-deftest org-glance-test:table-filter-reset ()
   "`C-u /' clears the active substring filter; `/' is bound to the wrapper."
   (org-glance-test:with-graph graph
@@ -494,17 +522,20 @@ after the (no-note) commit the reloaded table shows the new state on the row."
   "The bulk prompt is org's own fast selection, initialized with the tag's
 cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
   (org-glance-test:with-graph graph
-    (let ((org-glance-tag-config-dir (make-temp-file "tags" t))
-          seen)
-      (f-write-text "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n"
-                    'utf-8 (f-join org-glance-tag-config-dir "book.org"))
-      (org-glance-tag-config--invalidate)
-      (cl-letf (((symbol-function 'org-fast-todo-selection)
-                 (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
-        (should (equal "READING"
-                       (org-glance-table--read-state-native graph '(:tags ("book"))))))
-      ;; the temp selection buffer carried the TAG's cycle, not the global one
-      (should (equal '("TODO" "READING" "READ") seen)))))
+    (with-temp-directory cfg
+      (let ((org-glance-tag-config-dir cfg)
+            seen)
+        (unwind-protect
+            (progn
+              (org-glance-test:write (f-join cfg "book.org")
+                                     "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
+              (org-glance-tag-config--invalidate)
+              (cl-letf (((symbol-function 'org-fast-todo-selection)
+                         (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
+                (org-glance-table--read-state-native graph '(:tags ("book"))))
+              ;; the temp selection buffer carried the TAG's cycle, not the global one
+              (should (equal '("TODO" "READING" "READ") seen)))
+          (org-glance-tag-config--invalidate))))))
 
 (ert-deftest org-glance-test:table-bulk-todo-marked ()
   "`C-c C-t' with marked rows sets them all to a chosen state, then clears marks."
@@ -955,7 +986,7 @@ the anchor id, so another anchor keeps the default layout."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     ;; edit WITHOUT apply -> the transient guards persist nothing
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (table-view-remove-column "tags")
       (org-glance-table--persist-schema)          ; what the live hooks would run
       (org-glance-table--persist-config))
@@ -965,7 +996,7 @@ the anchor id, so another anchor keeps the default layout."
     (should-not (file-exists-p (org-glance-table--schema-file graph)))
     (should-not (file-exists-p (org-glance-table--config-file graph)))
     ;; edit + apply to the anchor headline; assert the offered scopes
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys)))   ; default restored
       (table-view-remove-column "tags")
       (org-glance-test:offering (coll (car coll))
@@ -973,9 +1004,9 @@ the anchor id, so another anchor keeps the default layout."
         (should (equal coll '("this headline: Coffee1"
                               "tag pair: coffee → roaster")))))
     ;; same anchor restores; a different anchor does not
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should-not (member "tags" (org-glance-test:table-col-keys))))
-    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:ref-layout-ignores-untagged-schema ()
@@ -984,7 +1015,7 @@ untagged (\":none:\") per-tag schema entry."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (org-glance-table--schema-put graph nil :hidden '("tags"))   ; the all-view entry
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys))))
     (org-glance-test:with-table (graph)                          ; all view honours it
       (should-not (member "tags" (org-glance-test:table-col-keys))))))
@@ -994,7 +1025,7 @@ untagged (\":none:\") per-tag schema entry."
 `C-c C-c' applies it; nothing is written."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (let (msgs)
         (cl-letf (((symbol-function 'message)
                    (lambda (fmt &rest args) (push (apply #'format fmt args) msgs))))
@@ -1015,20 +1046,35 @@ untagged (\":none:\") per-tag schema entry."
     (should (equal '("tags")
                    (org-glance-table--schema-hidden graph '(:tags ("work")))))))
 
-(ert-deftest org-glance-test:ref-layout-pair-scope-and-direction ()
-  "A tag-pair entry restores for ANY matching anchor of that direction, and
-never leaks into the opposite direction."
+(ert-deftest org-glance-test:ref-layout-hides-relation-column ()
+  "Removing the relation view's own `Relation' column is persisted like any
+built-in: `:hidden' diffs against the view's column set, which includes it, so
+the removal survives `C-c C-c' instead of silently reappearing."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
+      (should (member "relation" (org-glance-test:table-col-keys)))
+      (table-view-remove-column "relation")
+      (org-glance-test:offering (coll (car coll))          ; "this headline: …"
+        (org-glance-table:apply-layout)))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
+      (should-not (member "relation" (org-glance-test:table-col-keys))))))
+
+(ert-deftest org-glance-test:ref-layout-pair-scope-and-tag-order ()
+  "A tag-pair entry restores for ANY matching anchor, and never leaks into the
+mirrored pair: the key is ANCHOR-tag > ROW-tag, so the same two tags viewed
+from the other side is a different scope."
+  (org-glance-test:with-graph graph
+    (org-glance-test:ref-fixture graph)
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (table-view-remove-column "tags")
       (org-glance-test:offering (coll "tag pair: coffee → roaster")
         (org-glance-table:apply-layout)))
-    ;; another coffee's references table matches the pair
-    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+    ;; another coffee's relation table matches the pair
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (should-not (member "tags" (org-glance-test:table-col-keys))))
-    ;; the backlinks direction is untouched
-    (org-glance-test:with-table (graph '(:refers-to "r1") '(:anchor "r1" :dir backlinks))
+    ;; anchored on the roaster instead, the pair reads roaster > coffee -- untouched
+    (org-glance-test:with-table (graph '(:id-any ("c1")) '(:anchor "r1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:ref-layout-id-beats-pair ()
@@ -1036,11 +1082,11 @@ never leaks into the opposite direction."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
     (let ((file (org-glance-table--refs-file graph)))
-      (org-glance--eld-alist-set file "pair:refs:coffee>roaster"
+      (org-glance--eld-alist-set file "pair:relations:coffee>roaster"
                                  '(:hidden ("tags") :applied 1))
-      (org-glance--eld-alist-set file "ref:refs:c2"
+      (org-glance--eld-alist-set file "ref:relations:c2"
                                  '(:hidden ("state") :applied 2)))
-    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))
         (should (member "tags" keys))
         (should-not (member "state" keys))))))
@@ -1053,11 +1099,11 @@ never leaks into the opposite direction."
         "[[org-glance-material:r1][R1]]")
       (org-glance-test:headline "r1" "* TODO Roaster1 :roaster:"))
     (let ((file (org-glance-table--refs-file graph)))
-      (org-glance--eld-alist-set file "pair:refs:coffee>roaster"
+      (org-glance--eld-alist-set file "pair:relations:coffee>roaster"
                                  '(:hidden ("tags") :applied 1))
-      (org-glance--eld-alist-set file "pair:refs:decaf>roaster"
+      (org-glance--eld-alist-set file "pair:relations:decaf>roaster"
                                  '(:hidden ("state") :applied 2)))
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c3" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c3" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))
         (should (member "tags" keys))
         (should-not (member "state" keys))))))
@@ -1071,10 +1117,10 @@ never leaks into the opposite direction."
       (org-glance-test:headline-props "r1" "* TODO Roaster1 :roaster:"
                                       '(("ROAST" . "light"))))
     (org-glance--eld-alist-set
-     (org-glance-table--refs-file graph) "ref:refs:c1"
+     (org-glance-table--refs-file graph) "ref:relations:c1"
      '(:columns (("ROAST" . "Roast")) :hidden ("tags")
        :order ("title" "state" "ROAST") :sort (("title" . t)) :applied 1))
-    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir refs))
+    (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (let ((keys (org-glance-test:table-col-keys)))
         (should (equal '("title" "state") (cl-subseq keys 0 2)))   ; saved order
         (should (member "ROAST" keys))

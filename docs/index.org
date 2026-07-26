@@ -29,11 +29,12 @@ Newest first.
 - [[file:proposals/2026-07-21-interval-ranges.done.org][Date intervals as first-class metadata]] — the body's first org timestamp
   range becomes the =range= field, the table's =Interval= column and the
   overview's span line (=C-c i= sets it).
-- [[file:proposals/2026-07-19-reference-table-schema.done.org][Scoped schema for reference tables]] — =C-c C-c= saves a reference table's
-  layout under a chosen scope (anchor headline or tag pair, per direction).
+- [[file:proposals/2026-07-19-reference-table-schema.done.org][Scoped schema for reference tables]] — =C-c C-c= saves a relation table's
+  layout under a chosen scope (anchor headline or tag pair).
 - [[file:proposals/2026-07-18-relations.done.org][Relations — typed edges between headlines]] — =@= inserts an
-  =org-glance-material:= link, kinds become table columns, =C-c @= opens the
-  references / back-references tables.
+  =org-glance-material:= link, kinds become table columns, and =@= (table,
+  overview) / =C-c @= (material) opens one relation table for a headline —
+  both directions, each row's direction and kind in the =Relation= column.
 - [[file:proposals/2026-07-18-repeat-occurrences.done.org][Repeat occurrence history]] — a completed repetition snapshots into
   =data/<id>/occurrences/=; one headline, never clones.
 - [[file:proposals/2026-07-18-property-index.done.org][Property index]] — a derived, hash-guarded cache of each headline's drawer

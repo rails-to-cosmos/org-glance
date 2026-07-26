@@ -16,7 +16,6 @@
 
 (cl-defun org-glance-tag:to-string (tag)
   (cl-check-type tag org-glance-tag)
-
   (symbol-name tag))
 
 (cl-defun org-glance-tag:as-list (tags)

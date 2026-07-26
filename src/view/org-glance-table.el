@@ -157,6 +157,7 @@ ascending (active first)."
                 ((key . "g")     (command . "refresh")   (label . "Refresh"))
                 ((key . "O")     (command . "overview")  (label . "Overview"))
                 ((key . "+")     (command . "capture")   (label . "Capture"))
+                ((key . "@")     (command . "relations") (label . "Relations"))
                 ((key . ":")     (command . "tag")       (label . "Tag"))
                 ((key . "#")     (command . "crypt")     (label . "Crypt"))
                 ((key . "l")     (command . "history")   (label . "Log"))
@@ -174,9 +175,9 @@ ascending (active first)."
 Date parts only -- ISO, so the string sort orders by start; \"\" when nil."
   (pcase range
     (`(,from ,to)
-     (let ((day (lambda (ts) (if (string-match "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}" ts)
-                                 (match-string 0 ts) ts))))
-       (concat (funcall day from) ".." (funcall day to))))
+     (cl-flet ((day (ts) (if (string-match "[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}" ts)
+                             (match-string 0 ts) ts)))
+       (concat (day from) ".." (day to))))
     (_ "")))
 
 (cl-defun org-glance-table--row (metadata)
@@ -246,12 +247,8 @@ LINE, which drifts to another row once the sort reorders them."
 (cl-defun org-glance-table--act-materialize (graph id)
   (when id (switch-to-buffer (org-glance-material:open graph id))))
 
-(cl-defun org-glance-table--headline (graph id)
-  "The live headline for ID, or a `user-error' (the table can outlive the graph)."
-  (org-glance-view:live-headline graph id))
-
 (cl-defun org-glance-table--act-open (graph id)
-  (when id (org-glance-material:open-link (org-glance-table--headline graph id))))
+  (when id (org-glance-material:open-link (org-glance-view:live-headline graph id))))
 
 (cl-defun org-glance-table--act-extract (graph id)
   (when id (org-glance-material:extract-pairs (org-glance-property-index:body graph id))))
@@ -274,7 +271,8 @@ row once the change (and any note) is committed."
 Runs `org-fast-todo-selection' in a temp org buffer initialized with the
 tag's `#+TODO:' cycle (else the global keywords), so keys, faces and the
 active/done split match the material buffer exactly.  Returns a keyword
-string, or the symbol `none' when the user picks \"clear\"."
+string, or nil when the user clears the state (org's own `SPC\' answer) --
+which the bulk caller treats as \"no change\"."
   (let ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
     (with-temp-buffer
       (let ((org-todo-keywords
@@ -303,10 +301,6 @@ single-row `org-glance-table--act-todo' (cycle + note)."
                       (length changed) state
                       (if skipped (format " (%d skipped)" (length skipped)) "")))))))))
 
-(cl-defun org-glance-table--metadata (graph id)
-  "Return live headline metadata for ID in GRAPH, or a `user-error' when gone."
-  (org-glance-view:live-metadata graph id))
-
 (cl-defun org-glance-table--act-tag (graph id)
   "Add a tag to headline ID at point, or remove one of its tags with a prefix.
 Bare `:' completing-reads a tag the headline does NOT already carry (GRAPH's tag
@@ -317,7 +311,7 @@ On a change, reload the table and keep point on the row."
   (let* ((line (line-number-at-pos))
          (remove current-prefix-arg)
          (own (org-glance-headline-metadata:tag-strings
-               (org-glance-table--metadata graph id)))
+               (org-glance-view:live-metadata graph id)))
          (tag (if remove
                   (if own
                       (completing-read "Remove tag: " own nil t)
@@ -339,7 +333,7 @@ passwords (confirmed when setting a new one) and reloads the row."
   (unless id (user-error "Point is not on a row"))
   (let* ((line (line-number-at-pos))
          (encrypted (org-glance-headline-metadata:encrypted?
-                     (org-glance-table--metadata graph id)))
+                     (org-glance-view:live-metadata graph id)))
          (done (cond
                 (current-prefix-arg
                  (unless encrypted
@@ -398,7 +392,7 @@ In a reference view nothing auto-persists; there it is the last layout the
 modified-nudge reported (see `org-glance-table--persist-config').")
 
 (defvar-local org-glance-table--context nil
-  "Reference-view context plist (`:anchor' ID `:dir' `refs'|`backlinks'), or nil.")
+  "Relation-view context plist (`:anchor' ID `:dir' `relations'), or nil.")
 
 (cl-defun org-glance-table--current-config ()
   "This buffer's current view config: (:columns KEYS :sort SORT-KEYS).
@@ -473,13 +467,65 @@ the per-tag schema (see `org-glance-table--custom-column')."
     (align . "left")
     (prop . ,kind)
     (value-fn . ,(lambda (id _row)
-                   (let ((meta (org-glance-graph:get-headline graph id)))
-                     (if (org-glance-headline-metadata? meta)
-                         (s-join ", "
-                                 (cl-loop for (target . k) in (org-glance-headline-metadata:relations meta)
-                                          when (equal k kind)
-                                          collect (org-glance-graph:title-or-id graph target)))
-                       ""))))))
+                   (if-let ((meta (org-glance-graph:live-meta graph id)))
+                       (s-join ", "
+                               (cl-loop for (target . k) in (org-glance-headline-metadata:relations meta)
+                                        when (equal k kind)
+                                        collect (org-glance-graph:title-or-id graph target)))
+                     "")))))
+
+(cl-defun org-glance-table--edges-between (graph from to)
+  "Kinds of FROM's edges to TO in GRAPH, or nil when there is no edge.
+One element per edge, `nil' for a kindless one -- so a single kindless edge
+reads as the non-empty list (nil)."
+  (when-let ((meta (org-glance-graph:live-meta graph from)))
+    (cl-loop for (target . kind) in (org-glance-headline-metadata:relations meta)
+             when (equal target to) collect kind)))
+
+(cl-defun org-glance-table--relation-cell (graph anchor id)
+  "ID's relation to ANCHOR in GRAPH as a display string.
+`> KIND' when ANCHOR refers to ID, `< KIND' when ID refers to ANCHOR; a
+kindless edge shows the arrow alone, and a mutual pair shows both, joined
+with `, '.  Kinds display in their spaced form (`org-glance--kind-pretty')."
+  (cl-flet ((edges (arrow kinds)
+              (mapcar (lambda (kind)
+                        (if kind
+                            (concat arrow " " (org-glance--kind-pretty kind))
+                          arrow))
+                      kinds)))
+    (s-join ", " (append (edges ">" (org-glance-table--edges-between graph anchor id))
+                         (edges "<" (org-glance-table--edges-between graph id anchor))))))
+
+(cl-defun org-glance-table--relation-column (graph anchor)
+  "A `table-view' column showing each row's relation to ANCHOR.
+Only relation tables carry it (`org-glance-table:visit-relations'), where the
+rows are exactly ANCHOR's neighbours in both directions; the cell names the
+direction and the edge kind (`org-glance-table--relation-cell').  Pure
+metadata reads -- no blob parses."
+  `((key . "relation")
+    (header . "Relation")
+    (type . "text")
+    (sortable . t)
+    (align . "left")
+    (value-fn . ,(lambda (id _row)
+                   (org-glance-table--relation-cell graph anchor id)))))
+
+(cl-defun org-glance-table--context-columns (graph context)
+  "Built-in columns for a relation view of CONTEXT: the base plus `Relation'."
+  (append (org-glance-table--base-columns graph)
+          (list (org-glance-table--relation-column
+                 graph (plist-get context :anchor)))))
+
+(cl-defun org-glance-table--related-ids (graph id)
+  "Distinct ids related to ID in GRAPH, in both directions.
+ID's own edge targets (outgoing) first, then every headline carrying an edge
+to ID (incoming) -- the row population of a relation table."
+  (delete-dups
+   (append (when-let ((meta (org-glance-graph:live-meta graph id)))
+             (org-glance-headline-metadata:relation-targets meta))
+           (mapcar #'org-glance-headline-metadata:id
+                   (cl-remove-if-not (org-glance-filter:predicate `(:refers-to ,id))
+                                     (org-glance-graph--metas graph))))))
 
 (cl-defun org-glance-table--property-key? (key)
   "Non-nil when KEY names a drawer-property column: the all-UPCASE tag.
@@ -567,9 +613,10 @@ the per-tag schema and the scoped reference entries."
 (cl-defun org-glance-table--apply-schema (graph filter columns)
   "GRAPH's saved per-tag schema for FILTER applied to built-in COLUMNS.
 Absent a schema, COLUMNS is returned unchanged."
-  (org-glance-table--compose-columns graph columns
-                                     (org-glance-table--schema-hidden graph filter)
-                                     (org-glance-table--schema-get graph filter)))
+  (let ((entry (org-glance-table--schema-entry graph filter)))   ; one eld read
+    (org-glance-table--compose-columns graph columns
+                                       (plist-get entry :hidden)
+                                       (plist-get entry :columns))))
 
 (cl-defun org-glance-table--persist-schema ()
   "Buffer-local `table-view-schema-changed-hook': save this filter's schema per
@@ -587,16 +634,14 @@ untagged (\":none:\") entry."
 
 ;;; Scoped layout for reference tables (`C-c C-c' applies, scope-keyed)
 ;;
-;; Reference tables (`C-c @' / `C-u C-c @') are transient: neither persistence
-;; path above may touch them (their filter identity embeds another headline's
+;; Relation tables (`@' / `C-c @') are transient: neither persistence path
+;; above may touch them (their filter identity embeds another headline's
 ;; id/link set and would accrete one entry per visit).  Instead the user applies
 ;; an edited layout EXPLICITLY: `C-c C-c' prompts for a scope -- the anchor
 ;; headline itself, or one (anchor-tag x row-tag) pair -- and saves the full
 ;; layout (custom columns, hidden built-ins, order, sort) under that scope in
-;; `<store>/config/table-refs.eld'.  A later reference table restores the
+;; `<store>/config/table-refs.eld'.  A later relation table restores the
 ;; anchor's own entry first, else the latest-applied matching pair entry.
-;; Scopes are per direction: references and back-references list different row
-;; populations, so they never share an entry.
 
 (cl-defun org-glance-table--refs-file (graph)
   "Path of GRAPH's scoped reference-layout store (may not exist)."
@@ -604,59 +649,45 @@ untagged (\":none:\") entry."
 
 (cl-defun org-glance-table--refs-key-id (context)
   "Headline-scope store key for CONTEXT."
-  (format "ref:%s:%s" (plist-get context :dir) (plist-get context :anchor)))
+  (format "ref:relations:%s" (plist-get context :anchor)))
 
-(cl-defun org-glance-table--refs-key-pair (dir from to)
-  "Tag-pair store key for DIR and the FROM -> TO edge-tag pair."
-  (format "pair:%s:%s>%s" dir from to))
+(cl-defun org-glance-table--refs-key-pair (from to)
+  "Tag-pair store key for the FROM (anchor) -> TO (row) tag pair."
+  (format "pair:relations:%s>%s" from to))
 
 (cl-defun org-glance-table--refs-tags (graph context)
   "CONTEXT's (ANCHOR-TAGS . ROW-TAGS), each sorted distinct downcased strings.
-Rows are the anchor's edge targets (`refs') or every headline with an edge to
-the anchor (`backlinks')."
+Rows are the anchor's neighbours in both directions
+\(`org-glance-table--related-ids')."
   (let* ((anchor (plist-get context :anchor))
-         (meta (org-glance-graph:get-headline graph anchor))
-         (meta (and (org-glance-headline-metadata? meta) meta))
-         (row-metas
-          (pcase (plist-get context :dir)
-            ('refs (when-let ((targets (and meta (org-glance-headline-metadata:relation-targets meta))))
-                     (org-glance-graph--metas graph targets)))
-            ('backlinks (cl-remove-if-not
-                         (org-glance-filter:predicate `(:refers-to ,anchor))
-                         (org-glance-graph--metas graph))))))
+         (meta (org-glance-graph:live-meta graph anchor))
+         (row-metas (org-glance-graph--metas
+                     graph (org-glance-table--related-ids graph anchor))))
     (cons (org-glance--sorted-distinct
            (and meta (org-glance-headline-metadata:tag-strings meta)))
           (org-glance--sorted-distinct
            (cl-loop for m in row-metas append (org-glance-headline-metadata:tag-strings m))))))
 
-(cl-defun org-glance-table--refs-tag-pairs (context anchor-tags row-tags)
-  "CONTEXT's candidate tag pairs from ANCHOR-TAGS x ROW-TAGS, as (FROM . TO).
-The single source of the pair order: edge direction, referrer tag first."
-  (let ((refs? (eq (plist-get context :dir) 'refs)))
-    (cl-loop for a in anchor-tags append
-             (cl-loop for r in row-tags collect
-                      (if refs? (cons a r) (cons r a))))))
-
-(cl-defun org-glance-table--refs-pair-keys (context anchor-tags row-tags)
-  "Every pair store key CONTEXT can match."
-  (let ((dir (plist-get context :dir)))
-    (mapcar (lambda (p) (org-glance-table--refs-key-pair dir (car p) (cdr p)))
-            (org-glance-table--refs-tag-pairs context anchor-tags row-tags))))
+(cl-defun org-glance-table--refs-tag-pairs (anchor-tags row-tags)
+  "Candidate tag pairs from ANCHOR-TAGS x ROW-TAGS, as (FROM . TO).
+The single source of the pair order: the anchor's tag first, the row's second.
+A relation table lists both directions, so the pair is scope, never direction."
+  (cl-loop for a in anchor-tags append
+           (cl-loop for r in row-tags collect (cons a r))))
 
 (cl-defun org-glance-table--refs-resolve (graph context)
   "Scoped layout entry for CONTEXT, or nil.
 The anchor's own entry wins; else among matching tag-pair entries the latest
-`:applied' wins.  The row-tag scan runs only when pair entries exist for the
-direction."
+`:applied' wins.  The row-tag scan runs only when pair entries exist."
   (let ((all (org-glance--read-eld (org-glance-table--refs-file graph))))
     (or (cdr (assoc (org-glance-table--refs-key-id context) all))
-        (let ((prefix (format "pair:%s:" (plist-get context :dir))))
-          (when (cl-some (lambda (e) (string-prefix-p prefix (car e))) all)
-            (let* ((tags (org-glance-table--refs-tags graph context))
-                   (keys (org-glance-table--refs-pair-keys context (car tags) (cdr tags)))
-                   (hits (cl-remove-if-not (lambda (e) (member (car e) keys)) all)))
-              (cdr (car (cl-sort hits #'>
-                                 :key (lambda (e) (or (plist-get (cdr e) :applied) 0)))))))))))
+        (when (cl-some (lambda (e) (string-prefix-p "pair:relations:" (car e))) all)
+          (let* ((tags (org-glance-table--refs-tags graph context))
+                 (keys (mapcar (lambda (p) (org-glance-table--refs-key-pair (car p) (cdr p)))
+                               (org-glance-table--refs-tag-pairs (car tags) (cdr tags))))
+                 (hits (cl-remove-if-not (lambda (e) (member (car e) keys)) all)))
+            (cdr (car (cl-sort hits #'>
+                               :key (lambda (e) (or (plist-get (cdr e) :applied) 0))))))))))
 
 (cl-defun org-glance-table--refs-columns (graph entry base)
   "BASE columns filtered and extended per scoped ENTRY, in its saved order."
@@ -670,19 +701,24 @@ direction."
 `:columns' the custom (PROP . HEADER) pairs (round-tripped via the `prop'
 marker exactly like the per-tag schema), `:hidden' the built-in keys absent
 from the live view, `:order' every live key, `:sort' the sort chain.  Read
-through `table-view-layout' -- no spec internals.  The scoped reference
+through `table-view-layout' -- no spec internals.  The scoped relation
 entries store this whole plist; the persistent-view stores each persist a
-projection of it."
+projection of it.  `:hidden' diffs against the view's OWN built-in set --
+a relation view's includes `Relation', so removing that column is recorded
+like any other built-in instead of silently reappearing on restore."
   (let* ((layout (table-view-layout))
          (live (plist-get layout :columns))
-         (live-keys (mapcar (lambda (c) (alist-get 'key c)) live)))
+         (live-keys (mapcar (lambda (c) (alist-get 'key c)) live))
+         (built-in (if org-glance-table--context
+                       (org-glance-table--context-columns org-glance-view--graph
+                                                          org-glance-table--context)
+                     (org-glance-table--base-columns org-glance-view--graph))))
     (list :columns (cl-loop for c in live
                             when (alist-get 'prop c)
                             collect (cons (alist-get 'prop c) (alist-get 'header c)))
           :hidden (cl-remove-if
                    (lambda (k) (member k live-keys))
-                   (mapcar (lambda (c) (alist-get 'key c))
-                           (org-glance-table--base-columns org-glance-view--graph)))
+                   (mapcar (lambda (c) (alist-get 'key c)) built-in))
           :order live-keys
           :sort (plist-get layout :sort))))
 
@@ -710,8 +746,7 @@ transient views (`:where') have no scope to save under."
   "Reference-view arm of `org-glance-table:apply-layout': prompt and persist."
   (let ((graph org-glance-view--graph)
         (context org-glance-table--context))
-    (let* ((dir (plist-get context :dir))
-           (tags (org-glance-table--refs-tags graph context))
+    (let* ((tags (org-glance-table--refs-tags graph context))
            (candidates
             (cons (cons (format "this headline: %s"
                                 (org-glance-graph:title-or-id
@@ -719,8 +754,8 @@ transient views (`:where') have no scope to save under."
                         (org-glance-table--refs-key-id context))
                   (mapcar (lambda (p)
                             (cons (format "tag pair: %s → %s" (car p) (cdr p))
-                                  (org-glance-table--refs-key-pair dir (car p) (cdr p))))
-                          (org-glance-table--refs-tag-pairs context (car tags) (cdr tags)))))
+                                  (org-glance-table--refs-key-pair (car p) (cdr p))))
+                          (org-glance-table--refs-tag-pairs (car tags) (cdr tags)))))
            (choice (completing-read "Apply this layout to: "
                                     (mapcar #'car candidates) nil t)))
       (org-glance--eld-alist-set
@@ -772,11 +807,11 @@ relation kinds) refuse."
        (org-glance-material:set-title
         graph id (read-string "Title: "
                               (org-glance-headline-metadata:title
-                               (org-glance-table--metadata graph id))))
+                               (org-glance-view:live-metadata graph id))))
        (org-glance-table--finish id line "Title set"))
       ("priority"
        (let* ((cur (org-glance-headline-metadata:priority
-                    (org-glance-table--metadata graph id)))
+                    (org-glance-view:live-metadata graph id)))
               (s (s-trim (read-string "Priority (empty clears): "
                                       (and (integerp cur) (char-to-string cur))))))
          (org-glance-material:set-priority
@@ -865,6 +900,9 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
                                 (org-glance-capture (or (org-glance-filter:tags spec)
                                                         (org-glance-capture:completing-read-tag))
                                                     ""))))
+        (cons "relations" (lambda (id _row)
+                            (unless id (user-error "Point is not on a row"))
+                            (org-glance-table:visit-relations graph id)))
         (cons "tag"      (lambda (id _row) (org-glance-table--act-tag graph id)))
         (cons "crypt"    (lambda (id _row) (org-glance-table--act-crypt graph id)))
         (cons "history"  (lambda (id _row) (org-glance-table--act-history graph id)))
@@ -877,17 +915,17 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
 (cl-defun org-glance-table--visit-spec (graph spec saved ref-entry context)
   "The display spec for SPEC, its column set resolved by view kind.
 A scoped REF-ENTRY replaces the whole set (built-ins minus its hidden, plus
-its custom columns, its order); a scope-less reference view (CONTEXT) gets
-plain defaults, never the shared untagged (\":none:\") per-tag schema; else
-SAVED's column order is restored."
+its custom columns, its order); a scope-less relation view (CONTEXT) gets
+plain defaults, never the shared untagged (\":none:\") per-tag schema.  Both
+relation paths carry the extra `Relation' column
+\(`org-glance-table--context-columns'); else SAVED's column order is restored."
   (let ((s (org-glance-table--spec graph spec)))
-    (cond (ref-entry
-           (setf (alist-get 'columns s)
-                 (org-glance-table--refs-columns
-                  graph ref-entry (org-glance-table--base-columns graph))))
-          (context
-           (setf (alist-get 'columns s)
-                 (org-glance-table--base-columns graph)))
+    (cond (context
+           (let ((cols (org-glance-table--context-columns graph context)))
+             (setf (alist-get 'columns s)
+                   (if ref-entry
+                       (org-glance-table--refs-columns graph ref-entry cols)
+                     cols))))
           ((plist-get saved :columns)
            (setf (alist-get 'columns s)
                  (org-glance-table--reorder-columns
@@ -897,9 +935,9 @@ SAVED's column order is restored."
 (cl-defun org-glance-table:visit (graph &optional filter &key context)
   "Open GRAPH's table for FILTER, one buffer per filter description.
 Honours the same filter language as the overview (see
-`org-glance-filter:predicate').  CONTEXT marks a reference view
-\(`:anchor' ID `:dir' `refs'|`backlinks'): it enables the scoped layout --
-restore on open, `C-c C-c' to apply."
+`org-glance-filter:predicate').  CONTEXT marks a relation view
+\(`:anchor' ID `:dir' `relations'): it enables the scoped layout -- restore on
+open, `C-c C-c' to apply -- and the `Relation' column."
   (let* ((from-view (and org-glance-view--graph t))   ; re-navigation from within a view?
          (spec (org-glance-filter:normalize-spec filter))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
@@ -957,6 +995,20 @@ restore on open, `C-c C-c' to apply."
       (add-hook 'post-command-hook #'org-glance-table--persist-config nil t)
       (org-glance-view:fill-frame from-view))
     buf))
+
+(cl-defun org-glance-table:visit-relations (graph id)
+  "Open GRAPH's table of every headline related to ID, in both directions.
+The single entry point behind `@' in the table and the overview and `C-c @'
+in a material buffer: rows are ID's edge targets plus its referrers, and the
+`Relation' column names each row's direction and kind.  Relations read
+LAST-SAVED metadata -- save a material buffer first to see edges added in this
+session.  The bare relation filter passes (no ambient `:done' merge), so DONE
+headlines stay visible."
+  (let ((related (org-glance-table--related-ids graph id)))
+    (unless related
+      (user-error "Headline has no relations (save after adding some)"))
+    (org-glance-table:visit graph `(:id-any ,related)
+                            :context (list :anchor id :dir 'relations))))
 
 (cl-defun org-glance-table:configure-tag ()
   "Configure this table's tag directly, skipping the tag prompt.

@@ -50,19 +50,6 @@
                                graph :filter #'org-glance-headline-metadata:active?))))
         (should (= 1 (length offered)))))))
 
-(ert-deftest org-glance-test:material-completing-read-filter ()
-  "The FILTER predicate narrows the candidate list."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-                             (org-glance-test:headline "a" "* TODO Alpha")
-                             (org-glance-test:headline "b" "* DONE Beta"))
-    (org-glance-test:offering (offered (caar offered))
-      (let ((meta (org-glance-material:completing-read
-                   graph
-                   :filter (lambda (m) (string= "TODO" (org-glance-headline-metadata:state m))))))
-        (should (string= "a" (org-glance-headline-metadata:id meta))))
-      (should (= 1 (length offered))))))
-
 (ert-deftest org-glance-test:material-save-affordance ()
   "A materialized buffer visits its content-blob FILE, runs the minor mode,
 and is editable; saving persists to the graph and survives re-materialize.
@@ -75,7 +62,7 @@ This guards the interactive save path users actually hit."
       (should buffer-file-name)            ; a real file -> the standard save works
       (should (s-contains? "TODO foo" (buffer-string)))
       (org-glance-test:sed "TODO" "DONE")
-      (let ((inhibit-message t)) (save-buffer)))
+      (org-glance-test:save))
     (should (string= "DONE" (org-glance-headline-metadata:state
                              (org-glance-graph:get-headline graph "s1"))))
     ;; persisted: re-materializing shows the edited state
@@ -88,7 +75,7 @@ This guards the interactive save path users actually hit."
     (org-glance-graph:add graph (org-glance-test:headline "u1" "* TODO foo"))
     (org-glance-test:with-material (buffer graph "u1")
       (org-glance-test:sed "TODO foo" "DONE bar")
-      (let ((inhibit-message t)) (save-buffer)))
+      (org-glance-test:save))
     (let ((meta (org-glance-graph:get-headline graph "u1")))
       (should (string= "DONE" (org-glance-headline-metadata:state meta)))
       (should (string= "bar" (org-glance-headline-metadata:title meta))))))
@@ -118,19 +105,6 @@ graph.  Drives the real command + the real keybinding."
     (should (string= "DONE" (org-glance-headline-metadata:state
                              (org-glance-graph:get-headline graph "e2e1"))))))
 
-(ert-deftest org-glance-test:material-save-via-save-buffer ()
-  "`save-buffer' (the standard save mechanism, whatever key invokes it) syncs the
-materialized buffer through `write-contents-functions' -- robust to configs that
-rebind/shadow C-x C-s, and no \"not visiting a file\" prompt on this non-file buffer."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "sb1" "* TODO foo"))
-    (org-glance-test:with-material (buffer graph "sb1")
-      (org-glance-test:sed "TODO" "DONE")
-      (set-buffer-modified-p t)
-      (let ((inhibit-message t)) (save-buffer)))
-    (should (string= "DONE" (org-glance-headline-metadata:state
-                             (org-glance-graph:get-headline graph "sb1"))))))
-
 (ert-deftest org-glance-test:material-id-change-skips-metadata ()
   "If the ORG_GLANCE_ID is edited, saving does not corrupt the metadata index
 for the original id (the sync hook skips a mismatched id)."
@@ -138,7 +112,7 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-graph:add graph (org-glance-test:headline "m1" "* TODO foo"))
     (org-glance-test:with-material (buffer graph "m1")
       (org-glance-test:sed "^:ORG_GLANCE_ID:.*$" ":ORG_GLANCE_ID: changed")
-      (let ((inhibit-message t)) (save-buffer)))
+      (org-glance-test:save))
     ;; the original id's metadata is left untouched
     (should (string= "foo" (org-glance-headline-metadata:title
                             (org-glance-graph:get-headline graph "m1"))))))
@@ -321,7 +295,7 @@ concealment survives a save."
         ;; still concealed after an edit + save (overlays re-applied)
         (goto-char (point-max))
         (insert "\nnote")
-        (let ((inhibit-message t)) (save-buffer))
+        (org-glance-test:save)
         (should (line-invisible? ":ORG_GLANCE_ID:")))
       ;; all-reserved drawer: the whole drawer hides, delimiters included
       (org-glance-test:with-material (buf graph "bare")
@@ -348,7 +322,7 @@ removed, and ordinary edits persist under the original id."
           (org-glance-test:sed ":ORG_GLANCE_ID: vis" ":ORG_GLANCE_ID: hacked")
           (org-glance-test:sed ":AUTHOR: Tolkien"
                                ":ORG_GLANCE_HASH: fake\n:AUTHOR: Le Guin")
-          (let ((inhibit-message t)) (save-buffer))
+          (org-glance-test:save)
           ;; both managed edits reverted in the BUFFER...
           (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
           (should-not (s-contains? "hacked" (buffer-string)))
@@ -359,14 +333,14 @@ removed, and ordinary edits persist under the original id."
           (should (cl-some (lambda (w) (s-contains? "ORG_GLANCE_HASH" w)) warnings))
           ;; a CLEAN save is silent (pins the equal-gate: always-revert would warn)
           (set-buffer-modified-p t)
-          (let ((inhibit-message t)) (save-buffer))
+          (org-glance-test:save)
           (should (= 2 (length warnings)))
           ;; a region kill can take the INVISIBLE id line; save resurrects it
           (goto-char (point-min))
           (re-search-forward ":ORG_GLANCE_ID: vis")
           (delete-region (line-beginning-position) (1+ (line-end-position)))
           (should-not (s-contains? ":ORG_GLANCE_ID:" (buffer-string)))
-          (let ((inhibit-message t)) (save-buffer))
+          (org-glance-test:save)
           (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
           (should (= 3 (length warnings)))))
       ;; disk agrees; the ordinary edit persisted under the ORIGINAL id
@@ -703,7 +677,7 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
         (should-not (save-excursion (goto-char (point-min)) (re-search-forward "aes-encrypted" nil t)))
         ;; Edit + save: before-save encrypts, after-save decrypts back.
         (org-glance-test:sed "plainbody" "editedbody")
-        (let ((inhibit-message t)) (save-buffer))
+        (org-glance-test:save)
         ;; Disk stays ciphertext; metadata still flagged encrypted.
         (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
         (should (org-glance-headline-metadata:encrypted?
@@ -806,7 +780,7 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
           (org-glance-material:crypt))
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (string= "pw" org-glance-material--password))
-        (let ((inhibit-message t)) (save-buffer))))
+        (org-glance-test:save)))
     (let ((blob (org-glance-graph:get-content graph "wb")))
       (should (s-contains? "aes-encrypted" blob))
       (should-not (s-contains? "line one" blob)))
@@ -891,7 +865,7 @@ silently upgrades the stored format to crypt blocks (same password works)."
         (org-glance-material:decrypt)
         (should (s-contains? "old secret" (buffer-string)))   ; legacy branch decrypted
         (org-glance-test:sed "old secret" "new secret")
-        (let ((inhibit-message t)) (save-buffer))
+        (org-glance-test:save)
         (let ((blob (org-glance-graph:get-content graph "leg")))
           (should (s-contains? "#+begin_crypt" blob))         ; upgraded at rest
           (should (s-contains? "aes-encrypted" blob))
@@ -915,7 +889,7 @@ plaintext at rest and the metadata keeps `linked?' alongside `encrypted?'."
         (goto-char (point-min))
         (re-search-forward "secret line")
         (org-glance-material:crypt-region (match-beginning 0) (match-end 0))
-        (let ((inhibit-message t)) (save-buffer))
+        (org-glance-test:save)
         (let ((blob (org-glance-graph:get-content graph "mix")))
           (should (s-contains? "example.com" blob))           ; public link at rest
           (should (s-contains? "#+begin_crypt" blob))
@@ -938,7 +912,7 @@ flips off, so the next open needs no password."
         (goto-char (point-min))
         (search-forward "#+begin_crypt")                      ; on the sealed block
         (org-glance-material:crypt-unwrap)
-        (let ((inhibit-message t)) (save-buffer))
+        (org-glance-test:save)
         (let ((blob (org-glance-graph:get-content graph "pub")))
           (should (s-contains? "plainbody" blob))
           (should-not (s-contains? "#+begin_crypt" blob))
@@ -1010,7 +984,7 @@ both directions), and the material save (heading rewritten to one tag)."
                           (org-glance-test:headline "b" "* TODO B :Food:food:"))
     (org-glance-test:with-material (buf graph "b")
       (set-buffer-modified-p t)                 ; force the save hooks to run
-      (let ((inhibit-message t)) (save-buffer))
+      (org-glance-test:save)
       (org-glance-material--goto-first-heading)
       (should (equal '("food") (org-get-tags nil t))))
     (let ((content (with-temp-buffer
@@ -1091,7 +1065,7 @@ the table cell; `C-c i' inserts/replaces it live, `C-u C-c i' removes it."
       (should-error (org-glance-material:set-interval '(4)) :type 'user-error)
       ;; persist: save -> metadata reflects the removal
       (set-buffer-modified-p t)
-      (let ((inhibit-message t)) (save-buffer)))
+      (org-glance-test:save))
     (should-not (org-glance-headline-metadata:range
                  (org-glance-graph:get-headline graph "flat")))))
 
@@ -1126,7 +1100,7 @@ them -- it inserts a fresh body line instead."
         (should (s-contains? "SCHEDULED: <2020-03-01 Sun>--<2020-03-02 Mon>" text))
         (should (s-contains? "<2020-04-01 Wed>--<2020-04-02 Thu>" text)))
       (set-buffer-modified-p t)
-      (let ((inhibit-message t)) (save-buffer)))
+      (org-glance-test:save))
     (should (equal '("<2020-05-05 Tue>" "<2020-05-05 Tue>")
                    (org-glance-headline-metadata:range
                     (org-glance-graph:get-headline graph "p"))))))

@@ -44,8 +44,7 @@ timestamps.  One `org-element' parse of the narrowed subtree."
               (org-glance-datetime-active-repeated-timestamps)))
 
 (cl-defun org-glance-datetime-restore (&rest _args)
-  (let ((standard-output 'ignore)
-        (tss* (org-glance-datetime-active-repeated-timestamps)))
+  (let ((tss* (org-glance-datetime-active-repeated-timestamps)))
     (cl-loop
        for ts in (cdr -org-glance-datetime:local-timestamps)
        for ts* in (cdr tss*)

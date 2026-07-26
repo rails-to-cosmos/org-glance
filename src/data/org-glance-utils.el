@@ -206,6 +206,13 @@ cover every link."
            else collect text into plain
            finally return (cons (-distinct (delq nil edges)) plain)))
 
+(defsubst org-glance--downcased-string (x)
+  "Coerce X to a downcased string -- the canonical tag/title form.
+The one spelling of invariant 13\'s coercion: tags are stored interned and
+downcased, deserialized metadata carries strings, so every boundary that
+compares them funnels through here."
+  (downcase (format "%s" x)))
+
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Return an alist of (KEY . VALUE) for buffer lines matching the pair regexp.
 A line is a pair when it matches `org-glance:key-value-pair-re'."
