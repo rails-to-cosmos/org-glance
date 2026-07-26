@@ -1238,9 +1238,10 @@ stored-headline path uses -- no temp-buffer reparse."
 
 (cl-defun org-glance-material--read-reference (graph self &key with-kind)
   "Choose a reference target in GRAPH: (ID TITLE KIND-or-nil).
-Required match, SELF's id excluded (the shared picker disambiguates duplicate
-labels).  WITH-KIND prompts for a kind: completion over the kinds already in
-GRAPH (`org-glance-graph:edge-kinds'), free input allowed, empty = none."
+Required match, SELF's id excluded (nil SELF excludes nothing; the shared
+picker disambiguates duplicate labels).  WITH-KIND prompts for a kind:
+completion over the kinds already in GRAPH (`org-glance-graph:edge-kinds'),
+free input allowed, empty = none."
   (let* ((meta (org-glance-material:completing-read
                 graph :prompt "Refer to: "
                 :filter (lambda (m) (not (equal self (org-glance-headline-metadata:id m))))))
@@ -1254,26 +1255,34 @@ GRAPH (`org-glance-graph:edge-kinds'), free input allowed, empty = none."
           (org-glance--title-clean (org-glance-headline-metadata:title meta))
           kind)))
 
-(cl-defun org-glance-material:refer (&optional arg)
-  "Insert a reference to another headline at point, or self-insert `@'.
-At a word boundary -- in the body OR inside the heading title: completing-read
-a headline (required match, self excluded) and insert an
-`org-glance-material:' link; with ARG (`C-u @') also prompt for a reference
-kind.  At a heading's column 0 (org speed keys live there) or mid-word
-\(emails), delegate to org's own `self-insert' remapping.  `C-q @' inserts a
-literal `@' anywhere."
-  (interactive "P")
+(cl-defun org-glance-material:insert-reference (graph self &key with-kind)
+  "Insert a reference edge at point, or self-insert `@'.
+At a word boundary -- in the body OR inside a heading title: completing-read
+a headline from GRAPH (SELF's id excluded; nil SELF excludes nothing) and
+insert an `org-glance-material:' link; with WITH-KIND also prompt for a
+reference kind.  At a heading's column 0 (org speed keys live there) or
+mid-word (emails), delegate to the buffer's own `self-insert' remapping.
+The core behind the materialized buffer's `@' and the capture buffer's `@'."
   (if (or (and (org-at-heading-p) (bolp))   ; the speed-command position
           (not (or (bolp) (memq (char-before) '(?\s ?\t ?\n)))))
       (call-interactively (or (command-remapping 'self-insert-command)
                               #'self-insert-command))
     (pcase-let ((`(,id ,title ,kind)
-                 (org-glance-material--read-reference
-                  org-glance-material--graph org-glance-material--id
-                  :with-kind arg)))
+                 (org-glance-material--read-reference graph self
+                                                      :with-kind with-kind)))
       ;; Prose edge: "roasted by [[...][Manhattan]]" -- only the name is a
       ;; link; the canonical kind lives in the link path.
       (insert (org-glance--edge->string id kind title)))))
+
+(cl-defun org-glance-material:refer (&optional arg)
+  "Insert a reference to another headline at point, or self-insert `@'.
+Run `org-glance-material:insert-reference' (which see, for the word-boundary
+rules) on this buffer's graph, its own id excluded; with ARG (`C-u @') also
+prompt for a reference kind.  `C-q @' inserts a literal `@' anywhere."
+  (interactive "P")
+  (org-glance-material:insert-reference org-glance-material--graph
+                                        org-glance-material--id
+                                        :with-kind arg))
 
 (cl-defun org-glance-material:references (&optional arg)
   "Table of the headlines this one refers to; with ARG, its back-references.

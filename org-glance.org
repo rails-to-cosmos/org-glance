@@ -58,7 +58,11 @@ reference + CHANGELOG · broad ERT suite.
   matters + own in-memory fold cache; ht/map not needed)
 - [ ] [[https://elpa.gnu.org/packages/persist.html][Persist]] / [[https://github.com/doublep/extmap/blob/master/extmap.el][Extmap]] for caching -- superseded by
   the segment store + in-memory fold cache + per-filter overview cache
-** TODO Thunkify headline derivative properties if possible
+** DONE Thunkify headline derivative properties if possible
+CLOSED: [2026-07-26 Sun 08:33]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:33]
+:END:
 ** DONE ability to encrypt regions, not only headlines
 CLOSED: [2026-07-18]
 =#+begin_crypt= … =#+end_crypt= blocks seal only their body; several per headline,
@@ -101,9 +105,21 @@ CLOSED: [2022-02-15 Tue 23:03]
   (insert-file-literally "/tmp/result.bin")
   (bindat-unpack data-spec (buffer-string)))
 #+end_src
-** TODO [#A] class settings
-** TODO [#A] class sources
-** TODO [#A] implement roles for relations
+** DONE [#A] class settings
+CLOSED: [2026-07-26 Sun 08:34]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:34]
+:END:
+** DONE [#A] class sources
+CLOSED: [2026-07-26 Sun 08:34]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:34]
+:END:
+** DONE [#A] implement roles for relations
+CLOSED: [2026-07-26 Sun 08:34]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:34]
+:END:
 1. Next: _ (downstream)
 2. Blocked by _ (upstream)
 3. Cloned from _
@@ -125,8 +141,10 @@ Use posits in logbook drawer: [
 ]
 
 Cache roles: employee/employer, contact/task
-** PENDING high-level agenda
+** DONE high-level agenda
+CLOSED: [2026-07-26 Sun 08:34]
 :LOGBOOK:
+- State "DONE"       from "PENDING"    [2026-07-26 Sun 08:34]
 - State "PENDING"    from "STARTED"    [2022-01-05 Wed 21:32]
 CLOCK: [2022-01-05 Wed 18:40]--[2022-01-05 Wed 21:32] =>  2:52
 - State "STARTED"    from "TODO"       [2022-01-05 Wed 18:40]
@@ -143,21 +161,43 @@ CLOSED: [2026-07-09]
 CLOSED: [2026-07-18]
 No =org-completing-read= remains; plain =completing-read= throughout.
 ** TODO domains. domain borders. cross-domain classes.
-** PENDING [#A] capture through materialization
+** DONE [#A] capture through materialization
+CLOSED: [2026-07-26 Sun 08:35]
 :LOGBOOK:
+- State "DONE"       from "PENDING"    [2026-07-26 Sun 08:35]
 - State "PENDING"    from "STARTED"    [2021-12-26 Sun 13:30]
 CLOCK: [2021-12-26 Sun 12:11]--[2021-12-26 Sun 13:30] =>  1:19
 - State "STARTED"    from "TODO"       [2021-12-26 Sun 12:11]
 :END:
 make materialization a single thing that can modify headlines
-** TODO multiple repeated tasks of one project
-** TODO repeated tasks: clone subtasks
-** TODO when do i need to create a new class?
+** DONE multiple repeated tasks of one project
+CLOSED: [2026-07-26 Sun 08:35]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:35]
+:END:
+** DONE repeated tasks: clone subtasks
+CLOSED: [2026-07-26 Sun 08:35]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:35]
+:END:
+** DONE when do i need to create a new class?
+CLOSED: [2026-07-26 Sun 08:35]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:35]
+:END:
 - when you want to start answering specific requests:
-** TODO quick-insert on material sync
+** DONE quick-insert on material sync
+CLOSED: [2026-07-26 Sun 08:36]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:36]
+:END:
 assume overview is sorted
 perform quick insert instead of tail insert
-** TODO fix reverse relation
+** DONE fix reverse relation
+CLOSED: [2026-07-26 Sun 08:36]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:36]
+:END:
 ** TODO save checkboxes history when :RESET_CHECK_BOXES: t
 ** text props magic
 https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
@@ -165,7 +205,11 @@ https://ftp.gnu.org/old-gnu/Manuals/elisp-manual-21-2.8/html_node/elisp_530.html
 CLOSED: [2026-06-18]
 =org-glance-table= renders the graph as a sortable, badge-coloured table over the
 generic =table-view= core (a pinned git dependency; sister to the org-text overview).
-** TODO mentions in capture
+** DONE mentions in capture
+CLOSED: [2026-07-26 Sun 08:36]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-07-26 Sun 08:36]
+:END:
 ** DONE material mode: proper tags removal
 CLOSED: [2026-07-09]
 Non-destructive retag in the all-tags view (=org-glance-tags--retag-remove=).  The
