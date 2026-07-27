@@ -185,7 +185,7 @@ Capture it BEFORE a refill, restore with `org-glance-view:restore-point'."
 (cl-defun org-glance-view:restore-point (id line &optional col)
   "Return point to row ID, else to screen LINE; COL re-lands on that CELL.
 Every table refill restores the (row, cell) pair -- a bare row restore
-would drop the cursor to column 0, where the next `i' / `C-u -' would act
+would drop the cursor to column 0, where the next `i' / `C-c -' would act
 on the wrong column.  A row that left the view (now DONE under an active
 filter) falls back to its screen line, org-agenda-style."
   (unless (and id (table-view--goto-id id))

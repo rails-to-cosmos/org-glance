@@ -115,7 +115,7 @@ alists at once).  A gone id is not cached.  Does not flush -- a batch op
 
 (cl-defun org-glance-property-index:keys (graph ids)
   "Sorted union of candidate drawer KEYS across IDS.
-The candidate set for the table's `C-u +' column prompt: every user-authored
+The candidate set for the table's `C-c +' column prompt: every user-authored
 drawer key the headlines matching the current filter carry (bookkeeping and
 CATEGORY excluded).  Read-only w.r.t. disk -- a following render persists."
   (org-glance--sorted-distinct

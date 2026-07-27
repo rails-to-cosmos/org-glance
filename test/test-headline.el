@@ -175,5 +175,37 @@ the -hash/-links/-properties/-encrypted thunks separately, across headline shape
       (should (eq    (plist-get facts :propertized) (and (org-glance-headline:properties h) t)))
       (should (eq    (plist-get facts :encrypted)   (and (org-glance-headline:encrypted? h) t))))))
 
+(ert-deftest org-glance-test:headline-hash-ignores-logbook ()
+  "Clock lines and drawer notes never move the content hash: the LOGBOOK is
+bookkeeping nothing derived reads, so hashing it would churn the hash-guarded
+property index on every clock-in/out.  Real content still changes it."
+  (let* ((bare (org-glance-test:headline "h" "* TODO Task" "body"))
+         (logged (org-glance-test:headline
+                  "h" "* TODO Task"
+                  ":LOGBOOK:"
+                  "CLOCK: [2026-07-27 Mon 10:00]--[2026-07-27 Mon 11:00] =>  1:00"
+                  ":END:"
+                  "body"))
+         (more (org-glance-test:headline
+                "h" "* TODO Task"
+                ":LOGBOOK:"
+                "CLOCK: [2026-07-27 Mon 10:00]--[2026-07-27 Mon 11:00] =>  1:00"
+                "CLOCK: [2026-07-27 Mon 12:00]--[2026-07-27 Mon 12:30] =>  0:30"
+                "- Note taken on [2026-07-27 Mon 12:31] \\\\"
+                "  a state note"
+                ":END:"
+                "body"))
+         (edited (org-glance-test:headline "h" "* TODO Task" "body edited")))
+    (should (equal (org-glance-headline:hash bare) (org-glance-headline:hash logged)))
+    (should (equal (org-glance-headline:hash bare) (org-glance-headline:hash more)))
+    ;; the drawer is ignored, not the body
+    (should-not (equal (org-glance-headline:hash bare) (org-glance-headline:hash edited)))
+    ;; ... and a custom logbook drawer name is honoured
+    (let ((org-log-into-drawer "MYLOG"))
+      (should (equal (org-glance-headline:hash bare)
+                     (org-glance-headline:hash
+                      (org-glance-test:headline "h" "* TODO Task"
+                                                ":MYLOG:" "- note" ":END:" "body")))))))
+
 (provide 'test-headline)
 ;;; test-headline.el ends here

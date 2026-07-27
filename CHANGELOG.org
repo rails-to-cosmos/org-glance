@@ -6,6 +6,10 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Table column keys are =C-c += (add) and =C-c -= (remove: the column at
+  point, or by name when point is off one; =C-u C-c -= always prompts).
+  The bare =+= / =-= act on the headline (capture / untag) regardless of a
+  prefix arg.
 - =@= in the table and the overview opens the relation table of the headline
   at point.
 - Relation tables carry a =Relation= column: =>= for an edge from the anchor,
@@ -106,18 +110,23 @@ Notable user-facing changes.  Versions date-based
 - =:ORG_GLANCE_PROJECT_DIR:= headline property: =org-glance-llm= opens the session
   there instead of the data dir.  Set/clear it in a materialized buffer with
   =C-c d= (=org-glance-material:set-project-dir=).
-- Table =C-u += now completing-reads (required match) a drawer property OR a
+- The table's add-column prompt completing-reads (required match) a drawer property OR a
   relation kind the filtered headlines actually carry (drawer values via the
   derived property index; a kind column shows the target headline TITLES,
   many-to-many comma-joined).  Column values and the table =e= action read
   the index instead of re-parsing blobs.  Kinds are dash-slugged in links
   (=?kind=roasted-by=) and pretty-printed everywhere visible.
-- Table =C-u -= removes the column at point (any but the mandatory Title);
-  built-in removals persist per tag (=table-columns.eld= =:hidden=).
+- Column removal persists per tag (=table-columns.eld= =:hidden=), any column
+  but the mandatory Title.
 - Table bare =-= drops the view's tag off the headline at point (leaves the view,
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- The content hash ignores the =LOGBOOK= drawer, so clocking in and out no
+  longer invalidates the property index or any hash-guarded projection.
+- Table =g= now resets the view to the filter it was opened with: the =/=
+  substring filter and a narrow-to-marked view are cleared (marks survive).
+  Reloads behind an edit still preserve them.
 - =C-c @= in a material buffer opens ONE relation table (outgoing edges and
   referrers merged) instead of the outgoing-only table.  Scoped layouts key on
   =relations= and pair on anchor tag > row tag, so entries saved under the old
@@ -210,6 +219,13 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- Link picker (=j= / =C-c j=) labels a link with no description by the =KEY:=
+  text introducing it in its list item — =- Local: [[file:~/x]]= offers
+  "Local" instead of the raw URL.
+- Killing a materialized buffer with a running clock no longer errors
+  =Marker does not point anywhere= after the clock-out prompt: a log note
+  queued into the dying buffer is dropped with a message (org's own
+  =org-check-running-clock= queues it; the =CLOCK= line is unaffected).
 - Plugin loader error-demotes a broken or missing plugin via a plain
   =condition-case=, so a bad =org-glance-plugins= entry never breaks init (even
   under =debug-on-error= / ERT).

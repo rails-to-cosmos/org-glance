@@ -81,13 +81,11 @@ TAG is a tag symbol; the file is `<dir>/<tag>.org'."
   "Newest mtime across GRAPH's per-tag config files, or nil when none exist.
 Overview caches compare against this: editing any tag's cycle invalidates
 them like a content change (a directory mtime alone misses in-file edits)."
-  (when-let ((dir (org-glance-tag-config:dir graph)))
-    (when (f-directory? dir)
-      (cl-loop for path in (directory-files dir t "\\.org\\'")
-               for m = (org-glance--file-mtime path)
-               with newest = nil
-               do (when (or (null newest) (time-less-p newest m)) (setq newest m))
-               finally return newest))))
+  (cl-loop for (_name mtime _size) in (org-glance-tag-config--snapshot
+                                       (org-glance-tag-config:dir graph))
+           with newest = nil
+           do (when (or (null newest) (time-less-p newest mtime)) (setq newest mtime))
+           finally return newest))
 
 ;;; Parse: config/tags/<tag>.org -> tag-symbol -> config
 

@@ -111,9 +111,7 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
       (when (or tags-seen tag)
         ;; An empty tag list is no constraint -- drop it so `(:tags nil)' folds
         ;; to the "all" key and shares the unfiltered cache (like `(:tag nil)').
-        (when-let ((all (append (cond ((null tags) nil)
-                                      ((listp tags) tags)
-                                      (t (list tags)))
+        (when-let ((all (append (org-glance-tag:as-list tags)
                                 (when tag (list tag)))))
           (setq out (plist-put out :tags all))))
       ;; :done-keywords only parameterises :done; without :done it changes

@@ -42,12 +42,14 @@ drops both."
     (should-not (f-exists? (org-glance-property-index--file graph)))))
 
 (ert-deftest org-glance-test:table-add-column-completing ()
-  "`C-u +' completing-reads a drawer property the visible headlines carry; the
+  "`C-c +' completing-reads a drawer property the visible headlines carry; the
 column's value-fn reads that property via the index."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "a" "* TODO A" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table (graph)
+        ;; the visited buffer wires this prompt as its add-column function
+        (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
         (org-glance-test:offering (offered (caar offered))
           (let ((col (org-glance-table--add-column-prompt))
                 (names (mapcar #'car offered)))             ; display strings

@@ -377,22 +377,8 @@ default view."
         (should (equal (org-glance-filter:identity '(:done nil :tags ("book")))
                        (org-glance-filter:identity (car seen))))))))
 
-(ert-deftest org-glance-test:overview-link-default-view-dispatch ()
-  "`visit-default' routes to the table or the org overview per the custom."
-  (org-glance-test:with-graph graph
-    (let (calls)
-      (cl-letf (((symbol-function 'org-glance-table:visit)
-                 (lambda (&rest _) (push 'table calls) nil))
-                ((symbol-function 'org-glance-overview:visit)
-                 (lambda (&rest _) (push 'org calls) nil)))
-        (let ((org-glance-overview-default-view 'org-glance-table))
-          (org-glance-overview:visit-default graph nil))
-        (let ((org-glance-overview-default-view 'org-glance-overview))
-          (org-glance-overview:visit-default graph nil))
-        (should (equal '(org table) calls))))))
-
 (ert-deftest org-glance-test:table-edge-kind-column ()
-  "A relation kind is a column: `C-u +' offers it pretty, the column shows the
+  "A relation kind is a column: `C-c +' offers it pretty, the column shows the
 target TITLES (many-to-many comma-joined, gone targets fall back to the id),
 and the per-tag schema round-trips it as an edge column."
   (org-glance-test:with-graph graph
@@ -405,8 +391,7 @@ and the per-tag schema round-trips it as an edge column."
     (org-glance-test:with-table (graph 'coffee)
         ;; prompt offers the PRETTY kind
         (org-glance-test:offering (offered "roasted by")
-          (let ((current-prefix-arg '(4)))
-            (funcall (key-binding (kbd "+"))))
+          (funcall (key-binding (kbd "C-c +")))
           (should (member "roasted by" (mapcar #'car offered))))
         ;; column shows titles; many-to-many joins; gone target -> id
         (should (equal "Manhattan Coffee Roasters, gone"

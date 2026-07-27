@@ -68,29 +68,31 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 
 Act on the row/heading at point without opening anything:
 
-| Key               | On the single row at point                                      | With =C-u=                              | With marked rows (=m=)      | Pressed again (toggle)                       |
-|-------------------+-----------------------------------------------------------------+---------------------------------------+---------------------------+----------------------------------------------|
-| =RET=               | materialize (open for editing, step 3)                          |                                       |                           |                                              |
-| =m=                 | mark (=u= unmarks)                                                |                                       |                           | unmark                                       |
-| =M= / =U=             | mark all visible / unmark all                                   |                                       |                           |                                              |
-| =C-c C-t=           | change todo state                                               |                                       | one prompt sets all       |                                              |
-| =C-c C-s= / =C-c C-d= | schedule / deadline                                             | clear it                              |                           |                                              |
-| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it | add / remove a column (any but Title) |                           |                                              |
-| =:=                 | add another tag to the headline                                 | remove one                            |                           |                                              |
-| =j= (or =!=)          | open a link inside the headline                                 |                                       |                           |                                              |
-| =@=                 | table of everything the headline relates to (both directions)   |                                       |                           |                                              |
-| =i=                 | edit the cell at point (state: todo prompt; dates: calendar; text: minibuffer) |                                       |                           |                                              |
-| =C-c p=             | copy the headline (a fresh id, content verbatim)                |                                       |                           |                                              |
-| =e=                 | copy a =KEY: value= from its body                                 |                                       |                           |                                              |
-| =#=                 | encrypt                                                         | change password                       |                           | decrypt                                      |
-| =l=                 | log occurrences of a repeating headline (step 6)                |                                       |                           |                                              |
-| =D=                 | delete                             |                                       |                           |                                              |
-| =O=                 | switch to the org overview                                      |                                       |                           | back to the table                            |
-| =/=                 | filter by substring                                             | clear the filter                      | narrow to the marked rows | widen the narrowed view                      |
-| =^=                 | sort by the column at point                                     |                                       |                           | flip asc ⇄ desc; off a column: cycle columns |
-| =g=                 | refresh (table)                                                 |                                       |                           |                                              |
-| =?=                 | show the key legend (table)                                     |                                       |                           | hide it                                      |
-| =C-c C-c=           | save the layout (reference tables: prompt for a scope)          |                                       |                           |                                              |
+| Key               | On the single row at point                                                     | With =C-u=                     | With marked rows (=m=)      | Pressed again (toggle)                       |
+|-------------------+--------------------------------------------------------------------------------+------------------------------+---------------------------+----------------------------------------------|
+| =RET=               | materialize (open for editing, step 3)                                         |                              |                           |                                              |
+| =m=                 | mark (=u= unmarks)                                                               |                              |                           | unmark                                       |
+| =M= / =U=             | mark all visible / unmark all                                                  |                              |                           |                                              |
+| =C-c C-t=           | change todo state                                                              |                              | one prompt sets all       |                                              |
+| =C-c C-s= / =C-c C-d= | schedule / deadline                                                            | clear it                     |                           |                                              |
+| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it                |                                       |                           |                                              |
+| =C-c +=             | add a column (drawer property or relation kind)                  |                                       |                           |                                              |
+| =C-c -=             | remove the column at point (prompts when point is off a column)                | always prompt for the column |                           |                                              |
+| =:=                 | add another tag to the headline                                                | remove one                   |                           |                                              |
+| =j= (or =!=)          | open a link inside the headline                                                |                              |                           |                                              |
+| =@=                 | table of everything the headline relates to (both directions)                  |                              |                           |                                              |
+| =i=                 | edit the cell at point (state: todo prompt; dates: calendar; text: minibuffer) |                              |                           |                                              |
+| =C-c p=             | copy the headline (a fresh id, content verbatim)                               |                              |                           |                                              |
+| =e=                 | copy a =KEY: value= from its body                                                |                              |                           |                                              |
+| =#=                 | encrypt                                                                        | change password              |                           | decrypt                                      |
+| =l=                 | log occurrences of a repeating headline (step 6)                               |                              |                           |                                              |
+| =D=                 | delete                                                                         |                              |                           |                                              |
+| =O=                 | switch to the org overview                                                     |                              |                           | back to the table                            |
+| =/=                 | filter by substring                                                            | clear the filter             | narrow to the marked rows | widen the narrowed view                      |
+| =^=                 | sort by the column at point                                                    |                              |                           | flip asc ⇄ desc; off a column: cycle columns |
+| =g=                 | refresh (table); resets the =/= filter / narrow to the view's own filter         |                              |                           |                                              |
+| =?=                 | show the key legend (table)                                                    |                              |                           | hide it                                      |
+| =C-c C-c=           | save the layout (reference tables: prompt for a scope)                         |                              |                           |                                              |
 
 Column layout, sort and added columns persist per tag.
 
@@ -119,7 +121,7 @@ and the views pick it up.  The overview heading gains a relation line:
 - roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
 #+end_src
 
-and =C-u += in the table now offers a =Roasted by= column with the target
+and =C-c += in the table now offers a =Roasted by= column with the target
 titles:
 
 #+begin_example
@@ -129,11 +131,11 @@ TODO   Kebena Decaf  ...  Manhattan Coffee Roasters
 
 In a materialized buffer:
 
-| Key       | Action                                         |
-|-----------+------------------------------------------------|
-| =@=         | insert a reference (completion, at word start) |
-| =C-u @=     | same, plus a reference kind (=roasted by=, …)    |
-| =C-c @=     | table of everything this headline relates to   |
+| Key   | Action                                         |
+|-------+------------------------------------------------|
+| =@=     | insert a reference (completion, at word start) |
+| =C-u @= | same, plus a reference kind (=roasted by=, …)    |
+| =C-c @= | table of everything this headline relates to   |
 
 A relation table lists both directions in one view — the headlines this one
 refers to AND the ones referring to it — and its =Relation= column names each
@@ -165,12 +167,12 @@ buffer, or materialize with the transient's =-d= switch to open decrypted;
 then it re-seals on every save (auto-save and backups disabled).  Text
 OUTSIDE the blocks stays public and searchable.
 
-| Key       | In a materialized buffer                                    |
-|-----------+-------------------------------------------------------------|
+| Key       | In a materialized buffer                                     |
+|-----------+--------------------------------------------------------------|
 | =C-c u=     | unseal (decrypt) this headline -- it opens sealed by default |
-| =C-c #=     | wrap the region in a crypt block; no region: the whole body |
-| =C-u C-c #= | unwrap the block at point                                   |
-| =C-c #=     | (already encrypted, no region) forget the cached password   |
+| =C-c #=     | wrap the region in a crypt block; no region: the whole body  |
+| =C-u C-c #= | unwrap the block at point                                    |
+| =C-c #=     | (already encrypted, no region) forget the cached password    |
 
 ** 6. Repeating headlines keep their history
 
@@ -182,21 +184,21 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 
 ** Customization
 
-| Variable                                | Default              |                                                        |
-|-----------------------------------------+----------------------+--------------------------------------------------------|
-| =org-glance-directory=                  | =org-directory=      | root of the managed content (store lives in =.org-glance/=) |
-| =org-glance-overview-default-view=      | =org-glance-table=   | what =o= opens; =org-glance-overview= for org-text     |
-| =org-glance-filter-spec=                | active, -archived, -commented | ambient filter every view starts from (=nil= = everything) |
-| =org-glance-view-fill-frame=            | =t=                  | views take the whole frame; =nil= keeps your windows   |
-| =org-glance-repeat-history-depth=       | =0=                  | occurrence snapshots kept: N / =t= = all / =0= = off   |
-| =org-glance-material-password-ttl=      | =300=                | seconds a crypt password stays cached; =0= = forever   |
-| =org-glance-material-hidden-properties= | id + hash            | drawer keys concealed AND edit-protected in material buffers |
-| =org-glance-table-state-colors=         | tokyo-night-ish      | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
-| =org-glance-plugins=                    | =nil=                | plugins to load at init (e.g. =(llm)=); =I= installs one |
-| =org-glance-conflict-resolution=        | =ask=                | git-conflict healing: =ask= / =union= / =nil= (error)  |
-| =org-glance-tag-config-dir=             | =nil=                | override dir of per-tag config files (=config/tags/=)   |
-| =org-glance-graph-segment-max-bytes=    | 256k                 | WAL segment size before sealing                        |
-| =org-glance-graph-compact-segment-count= | =4=                 | sealed segments that trigger auto-compaction           |
+| Variable                               | Default                       |                                                                                            |
+|----------------------------------------+-------------------------------+--------------------------------------------------------------------------------------------|
+| =org-glance-directory=                   | =org-directory=                 | root of the managed content (store lives in =.org-glance/=)                                  |
+| =org-glance-overview-default-view=       | =org-glance-table=              | what =o= opens; =org-glance-overview= for org-text                                             |
+| =org-glance-filter-spec=                 | active, -archived, -commented | ambient filter every view starts from (=nil= = everything)                                   |
+| =org-glance-view-fill-frame=             | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
+| =org-glance-repeat-history-depth=        | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
+| =org-glance-material-password-ttl=       | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
+| =org-glance-material-hidden-properties=  | id + hash                     | drawer keys concealed AND edit-protected in material buffers                               |
+| =org-glance-table-state-colors=          | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
+| =org-glance-plugins=                     | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= installs one                                       |
+| =org-glance-conflict-resolution=         | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
+| =org-glance-tag-config-dir=              | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
+| =org-glance-graph-segment-max-bytes=     | 256k                          | WAL segment size before sealing                                                            |
+| =org-glance-graph-compact-segment-count= | =4=                             | sealed segments that trigger auto-compaction                                               |
 
 Example — org-text views, everything visible, daily history for a year:
 

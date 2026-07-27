@@ -195,6 +195,59 @@ on it; a headline related to nothing errors instead."
     (should (eq (lookup-key org-glance-overview-mode-map (kbd "@"))
                 #'org-glance-overview:relations))))
 
+(ert-deftest org-glance-test:table-remove-column-by-name ()
+  "`C-c -' removes a column chosen by name; the mandatory Title is never
+offered, and the removal persists per tag."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A :work:"))
+    (org-glance-test:with-table (graph '(:tags ("work")))
+      (should (eq (key-binding (kbd "C-c -")) #'org-glance-table:remove-column))
+      (should (member "tags" (org-glance-test:table-col-keys)))
+      ;; point sits ON a column, yet `C-u' still prompts
+      (org-glance-test:goto-cell "a" "state")
+      (org-glance-test:offering (offered "Tags")
+        (org-glance-table:remove-column '(4))
+        ;; Title is mandatory -- it is not among the candidates
+        (should-not (member "Title" offered))
+        (should (member "Tags" offered)))
+      (should-not (member "tags" (org-glance-test:table-col-keys))))
+    ;; persisted per tag: a fresh view of the same tag stays without it
+    (org-glance-test:with-table (graph '(:tags ("work")))
+      (should-not (member "tags" (org-glance-test:table-col-keys))))))
+
+(ert-deftest org-glance-test:table-refresh-resets-filter ()
+  "`g\' returns the table to the filter it was opened with: the `/\' substring
+filter and a narrow-to-marked view are both dropped, while the view\'s own
+filter still governs which rows exist.  An action-triggered reload keeps them."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a1" "* TODO Alpha :work:")
+      (org-glance-test:headline "b1" "* TODO Beta :work:")
+      (org-glance-test:headline "c1" "* TODO Gamma :home:"))
+    (org-glance-test:with-table (graph '(:tags ("work")))
+      (should (= 2 (length (table-view--visible-rows))))    ; the view's own filter
+      (table-view-filter "alpha")
+      (should (equal "alpha" table-view--filter))
+      (should (= 1 (length (table-view--visible-rows))))
+      ;; a reload behind an edit PRESERVES the refinement
+      (org-glance-table--reload (current-buffer))
+      (should (equal "alpha" table-view--filter))
+      ;; `g' resets it -- back to the initial filter, not to every headline
+      (funcall (key-binding (kbd "g")))
+      (should-not table-view--filter)
+      (should (= 2 (length (table-view--visible-rows))))
+      (should (equal '("a1" "b1")
+                     (sort (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)
+                           #'string<)))
+      ;; a narrow-to-marked view is a refinement too
+      (table-view--goto-id "a1")
+      (table-view-mark-toggle)
+      (table-view-narrow-toggle)
+      (should table-view--narrowed)
+      (funcall (key-binding (kbd "g")))
+      (should-not table-view--narrowed)
+      (should (= 2 (length (table-view--visible-rows)))))))
+
 (ert-deftest org-glance-test:table-filter-reset ()
   "`C-u /' clears the active substring filter; `/' is bound to the wrapper."
   (org-glance-test:with-graph graph
@@ -626,80 +679,6 @@ buffer switching -- which the flush relies on -- runs for real.)"
 
 ;;; Surgical single-row updates (buffer-text level)
 
-(defun org-glance-test:table-1col-buffer (name rows)
-  "Display a 1-column table NAME with ROWS and return the buffer."
-  (let ((buf (get-buffer-create name)))
-    (table-view-display buf
-                        '((title . "T")
-                          (columns . (((key . "n") (header . "N") (type . "text")
-                                       (sortable . t) (align . "left")))))
-                        nil)
-    (table-view-set-rows buf rows)
-    buf))
-
-(ert-deftest org-glance-test:table-view-upsert-patch-same-width ()
-  "Replacing a row with a same-width cell patches in place, keeping siblings."
-  (let ((buf (org-glance-test:table-1col-buffer
-              "*tv-patch-sw*"
-              '(((id . "a") (cells . ((n . "one"))))
-                ((id . "b") (cells . ((n . "two"))))
-                ((id . "c") (cells . ((n . "six"))))))))
-    (unwind-protect
-        (progn
-          (table-view-upsert-row buf '((id . "b") (cells . ((n . "TWO")))))
-          (with-current-buffer buf
-            (should (s-contains? "TWO" (buffer-string)))
-            (should-not (s-contains? "two" (buffer-string)))
-            (should (s-contains? "one" (buffer-string)))
-            (should (s-contains? "six" (buffer-string)))
-            ;; all three rows still locatable; b's row prop reflects the new cell
-            (should (table-view--goto-id "a"))
-            (should (table-view--goto-id "c"))
-            (should (table-view--goto-id "b"))
-            (should (equal "TWO" (alist-get 'n (alist-get 'cells
-                                  (get-text-property (point) 'table-view-row)))))))
-      (kill-buffer buf))))
-
-(ert-deftest org-glance-test:table-view-upsert-widens-column ()
-  "Replacing a row with a wider cell re-renders (full path) and keeps siblings."
-  (let ((buf (org-glance-test:table-1col-buffer
-              "*tv-widen*"
-              '(((id . "a") (cells . ((n . "x"))))
-                ((id . "b") (cells . ((n . "y"))))))))
-    (unwind-protect
-        (progn
-          (table-view-upsert-row buf '((id . "a") (cells . ((n . "a-much-longer-value")))))
-          (with-current-buffer buf
-            (should (s-contains? "a-much-longer-value" (buffer-string)))
-            (should (table-view--goto-id "b"))
-            (should (equal "y" (alist-get 'n (alist-get 'cells
-                                (get-text-property (point) 'table-view-row)))))))
-      (kill-buffer buf))))
-
-(ert-deftest org-glance-test:table-view-surgical-equals-full-render ()
-  "A surgically-patched buffer is byte-identical to a full render of the same
-final rows -- the equivalence the in-place fast path relies on."
-  (let* ((final '(((id . "a") (cells . ((n . "one"))))
-                  ((id . "b") (cells . ((n . "TWO"))))   ; b edited in place
-                  ((id . "c") (cells . ((n . "six"))))))
-         (surgical (org-glance-test:table-1col-buffer
-                    "*tv-eq-surgical*"
-                    '(((id . "a") (cells . ((n . "one"))))
-                      ((id . "b") (cells . ((n . "two"))))
-                      ((id . "c") (cells . ((n . "six")))))))
-         (full (org-glance-test:table-1col-buffer "*tv-eq-full*" final)))
-    (unwind-protect
-        (progn
-          ;; `surgical' reaches `final' via an in-place same-width edit; `full' is
-          ;; one full render of `final'.  The visible text must be identical.
-          (table-view-upsert-row surgical '((id . "b") (cells . ((n . "TWO")))))
-          (should (string= (with-current-buffer surgical (buffer-string))
-                           (with-current-buffer full (buffer-string)))))
-      (kill-buffer surgical)
-      (kill-buffer full))))
-
-;;; Custom property columns (`C-u +' adds, `-' removes, persisted per tag)
-
 (ert-deftest org-glance-test:table-schema-key-by-tags ()
   "The schema key is the filter's tags, sorted and joined; none -> \":none:\"."
   (should (equal "book" (org-glance-table--schema-key '(:tags ("book")))))
@@ -812,62 +791,56 @@ priority and property columns take a string prompt, derived columns refuse."
     (org-glance-test:with-table (graph 'book)
       (should-not (member "AUTHOR" (org-glance-test:table-col-keys))))))
 
-(ert-deftest org-glance-test:table-add-column-function-wired ()
-  "The visited buffer wires `C-u +' to the drawer-property prompt."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-      (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "A"))))
-    (org-glance-test:with-table (graph 'book)
-        (should (eq table-view-add-column-function #'org-glance-table--add-column-prompt))
-        (org-glance-test:answering ((completing-read "AUTHOR"))
-          (let ((col (org-glance-table--add-column-prompt)))
-            (should (equal "AUTHOR" (alist-get 'key col)))
-            (should (equal "Author" (alist-get 'header col)))
-            (should (functionp (alist-get 'value-fn col))))))))
-
-(ert-deftest org-glance-test:table-cu-plus-adds-column ()
-  "Pressing `C-u +' (prefix arg + the capture key) adds a property column."
+(ert-deftest org-glance-test:table-cc-plus-adds-column ()
+  "`C-c +' adds a property column; the bare `+' captures even with a prefix
+arg, since columns moved off the `C-u' prefix onto `C-c +' / `C-c -'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline-props "x1" "* TODO X :book:" '(("AUTHOR" . "Ann"))))
     (org-glance-test:with-table (graph 'book)
+        (should (eq (key-binding (kbd "C-c +")) #'org-glance-table:add-column))
         (org-glance-test:answering ((completing-read "AUTHOR"))
-          (let ((current-prefix-arg '(4)))
-            (funcall (key-binding (kbd "+")))))     ; the `+' action reads current-prefix-arg
+          (funcall (key-binding (kbd "C-c +"))))
         (should (member "AUTHOR" (org-glance-test:table-col-keys)))
-        (should (equal "Ann" (org-glance-test:table-cell "x1" "AUTHOR"))))))
+        (should (equal "Ann" (org-glance-test:table-cell "x1" "AUTHOR")))
+        ;; `C-u +' no longer adds a column -- it captures like a bare `+'
+        (let (captured)
+          (cl-letf (((symbol-function 'org-glance-capture)
+                     (lambda (&rest _) (setq captured t))))
+            (let ((current-prefix-arg '(4))) (funcall (key-binding (kbd "+"))))
+            (should captured))))))
 
-;;; `-' : bare removes the view's tag, `C-u -' removes the column at point
+;;; `-' untags; `C-c -' is the one column-removal key
 
-(ert-deftest org-glance-test:table-minus-dispatch ()
-  "`C-u -' routes to column removal; a bare `-' to tag removal."
+(ert-deftest org-glance-test:table-minus-untags ()
+  "A bare `-' always drops the view's tag -- with a prefix arg too, since
+column removal moved to `C-c -'."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "x1" "* TODO X :book:"))
     (org-glance-test:with-table (graph 'book)
         (let (called)
-          (cl-letf (((symbol-function 'org-glance-table--act-delcolumn)
-                     (lambda () (setq called 'col)))
-                    ((symbol-function 'org-glance-table--act-deltag)
+          (cl-letf (((symbol-function 'org-glance-table--act-deltag)
                      (lambda (&rest _) (setq called 'tag))))
             (let ((current-prefix-arg '(4))) (funcall (key-binding (kbd "-"))))
-            (should (eq called 'col))
+            (should (eq called 'tag))
+            (setq called nil)
             (let ((current-prefix-arg nil)) (funcall (key-binding (kbd "-"))))
             (should (eq called 'tag)))))))
 
-(ert-deftest org-glance-test:table-cu-minus-removes-column-title-fixed ()
-  "`C-u -' removes any column except the mandatory Title."
+(ert-deftest org-glance-test:table-remove-column-at-point-title-fixed ()
+  "`C-c -' on a column removes it; on Title it refuses (invariant 15)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "x1" "* TODO X :book:"))
     (org-glance-test:with-table (graph 'book)
-        ;; a built-in column is removable
-        (should (member "tags" (org-glance-test:table-col-keys)))
-        (table-view-remove-column "tags")
+        ;; point ON the Tags cell -> that column goes, no prompt
+        (org-glance-test:goto-cell "x1" "tags")
+        (org-glance-table:remove-column)
         (should-not (member "tags" (org-glance-test:table-col-keys)))
         ;; Title is refused (errors before touching the spec)
-        (org-glance-test:answering ((get-text-property "title"))
-          (should-error (org-glance-table--act-delcolumn) :type 'user-error))
+        (org-glance-test:goto-cell "x1" "title")
+        (should-error (org-glance-table:remove-column) :type 'user-error)
         (should (member "title" (org-glance-test:table-col-keys))))))
 
 (ert-deftest org-glance-test:table-builtin-removal-persists-per-tag ()

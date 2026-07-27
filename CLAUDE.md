@@ -58,7 +58,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    field MUST encode to a JSON vector — `--append`'s `json-serialize` runs
    outside the error-demoted hook, so a nil/list encoder crashes every save.
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
-   before any write, blob lands before its WAL record. The property index is a
+   before any write, blob lands before its WAL record. The content hash ignores
+   the id/hash properties and the LOGBOOK drawers, so clock churn never
+   invalidates it. The property index is a
    pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
    trust it in a durable write. The `org-glance-material:` body link is
    canonical; `relations` AND `links` metadata are projections, never written
@@ -88,10 +90,11 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     stays plaintext and indexed, even for an encrypted headline. Materialize
     opens SEALED; decryption is explicit and hardens the buffer before any
     plaintext lands.
-15. Table Title column is mandatory — never removable/hideable (`--act-delcolumn`
-    refuses it; `--apply-schema` strips it from the hidden set).
+15. Table Title column is mandatory — never removable/hideable; the rule is
+    spelled once, in `org-glance-table--mandatory-column?` (remove-column
+    refuses it, the prompt never offers it, compose-columns un-hides it).
 16. Per-tag column schema: `:hidden` is a denylist of removed built-ins (new
-    built-ins still appear); `C-u +` candidates exclude `ORG_GLANCE_*` + CATEGORY;
+    built-ins still appear); `C-c +` candidates exclude `ORG_GLANCE_*` + CATEGORY;
     order + sort persist separately per filter.
 17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
     judged by `org-glance-filter:transient?`) never persist per-filter state:
@@ -124,8 +127,9 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     (loaded via `org-glance-plugins`); the rule governs that plugin.
 24. Table refills restore the (row, CELL) pair via
     `org-glance-view:point-context` / `:restore-point` — never just the row.
-25. Links are addressed by their enclosing list-item path plus their own
-    description (the link's own item label is dropped); the picker descends
+25. Links are addressed by their enclosing list-item path plus their own label
+    — description, else the `KEY:` text introducing them in their item, else
+    the raw link (the link's own item label is dropped); the picker descends
     one component per prompt and breaks path ties by target.
 26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
     remove-then-append, and never unload.

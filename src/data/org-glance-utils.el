@@ -135,15 +135,13 @@ result back, and returns it.  Gated counterpart to the `--read-eld' floor."
                merged))))))))
 
 (cl-defun org-glance--buffer-links ()
-  "Buffer links as (LINK TITLE POS TYPE PATH) tuples, in buffer order.
-LINK is the raw bracket text, TITLE the description (or raw link), POS the
-start; TYPE and PATH the parsed `org-element' link type and unescaped path."
+  "Buffer links as (LINK TYPE PATH) tuples, in buffer order.
+LINK is the raw bracket text; TYPE and PATH the parsed `org-element' link type
+and unescaped path -- exactly what `org-glance--links-partition' reads."
   (cl-loop for link-element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            for beg = (org-element-property :begin link-element)
            for end = (org-element-property :end link-element)
-           for title = (org-glance--link-title link-element)
-           for link = (s-trim (buffer-substring-no-properties beg end))
-           collect (list link title beg
+           collect (list (s-trim (buffer-substring-no-properties beg end))
                          (org-element-property :type link-element)
                          (org-element-property :path link-element))))
 
@@ -200,7 +198,7 @@ canonical link.  Used by the overview render and the `@' inserter."
 EDGES are the distinct (TARGET . KIND) pairs of the edge-typed links; PLAIN
 the raw bracket texts of everything else.  One pass; together the halves
 cover every link."
-  (cl-loop for (text _title _pos type path) in links
+  (cl-loop for (text type path) in links
            if (member type org-glance--link-edge-types)
            collect (org-glance--link-edge type path) into edges
            else collect text into plain
@@ -223,18 +221,19 @@ A line is a pair when it matches `org-glance:key-value-pair-re'."
              for value = (s-trim (substring-no-properties (match-string 2)))
              collect (cons key value))))
 
-(cl-defun org-glance--link-title (element)
-  "Display text of link ELEMENT: its description, else the raw link."
-  (substring-no-properties
-   (or (-some->> element (org-element-contents) (org-element-interpret-data))
-       (org-element-property :raw-link element))))
-
-(cl-defun org-glance--item-label (item)
-  "First-line text of plain-list ITEM, its bullet/checkbox stripped."
+(cl-defun org-glance--item-body-start (item)
+  "Buffer position where plain-list ITEM's own text begins.
+Past its bullet, counter and checkbox (`org-list-full-item-re')."
   (save-excursion
     (goto-char (org-element-property :begin item))
     (when (looking-at org-list-full-item-re)
       (goto-char (match-end 0)))
+    (point)))
+
+(cl-defun org-glance--item-label (item)
+  "First-line text of plain-list ITEM, its bullet/checkbox stripped."
+  (save-excursion
+    (goto-char (org-glance--item-body-start item))
     (s-trim (buffer-substring-no-properties (point) (line-end-position)))))
 
 (cl-defun org-glance--link-ancestry (element)
@@ -248,15 +247,46 @@ link description already names."
                                   when (org-element-type-p parent 'item)
                                   collect parent)))))
 
+(cl-defun org-glance--link-item-prefix (element)
+  "Text introducing ELEMENT inside its own list item, or nil.
+The item text BEFORE the link, other bracket links removed, a trailing `:' or
+`-' dropped: `- Local: [[file:~/x]]' introduces its link as \"Local\".  Nil when
+ELEMENT is in no list item, or nothing precedes it there."
+  (when-let ((item (org-element-lineage element '(item))))
+    (let ((start (org-glance--item-body-start item))
+          (end (org-element-property :begin element)))
+      (when (< start end)
+        (let ((text (s-trim (replace-regexp-in-string
+                             org-link-bracket-re ""
+                             (buffer-substring-no-properties start end)))))
+          (unless (string-empty-p text)
+            (let ((label (s-trim (replace-regexp-in-string "[:-]+\\'" "" text))))
+              (unless (string-empty-p label) label))))))))
+
+(cl-defun org-glance--link-label (element)
+  "Label naming ELEMENT in the link picker.
+Its description when it has one; else the `KEY:' text introducing it in its
+list item (`org-glance--link-item-prefix') -- a bare link takes its meaning
+from that text, and the raw URL is a poor label; else the raw link."
+  (let ((description (-some->> element
+                       (org-element-contents)
+                       (org-element-interpret-data)
+                       (substring-no-properties)
+                       (s-trim))))
+    (or (and (org-glance--present-string? description) description)
+        (org-glance--link-item-prefix element)
+        (substring-no-properties (org-element-property :raw-link element)))))
+
 (cl-defun org-glance--link-paths ()
   "Buffer links as (PATH POS TYPE TARGET) tuples.
-PATH is the enclosing list-item labels plus the link's own description, so
-a link outside any list has a one-element PATH and a flat body and a
-nested list share one representation.  TARGET (the raw link) disambiguates
-links that end up with identical PATHs."
+PATH is the enclosing list-item labels plus the link's own label
+\(`org-glance--link-label': its description, else the `KEY:' text introducing
+it, else the raw link), so a link outside any list has a one-element PATH and
+a flat body and a nested list share one representation.  TARGET (the raw link)
+disambiguates links that end up with identical PATHs."
   (cl-loop for element in (org-element-map (org-element-parse-buffer) 'link #'identity)
            collect (list (append (org-glance--link-ancestry element)
-                                 (list (s-trim (org-glance--link-title element))))
+                                 (list (s-trim (org-glance--link-label element))))
                          (org-element-property :begin element)
                          (org-element-property :type element)
                          (org-element-property :raw-link element))))

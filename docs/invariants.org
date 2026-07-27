@@ -42,7 +42,12 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
    cached, and =org-glance-reindex= drops it — so no caller may trust an index
    value in a durable write/delete without that fallback
-   (=org-glance-property-index--entry=).  Relation edges follow the same rule:
+   (=org-glance-property-index--entry=).  The content hash covers what the
+   headline SAYS: the id/hash bookkeeping properties
+   (=org-glance-headline:hash-ignore-properties=) and the LOGBOOK drawers
+   (=org-glance-headline:hash-ignore-drawers=) are stripped before hashing, so
+   clocking in and out never churns the hash or the caches keyed on it --
+   nothing derived reads the logbook.  Relation edges follow the same rule:
    the =org-glance-material:= body link is canonical; the =relations= AND
    =links= metadata fields are projections recomputed on save/reindex — never
    written independently of content.  Occurrence snapshots (=data/<id>/occurrences/=)
@@ -149,7 +154,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 * Views and tables
 
 15. *Table Title column is mandatory.*  Never removable or hideable —
-    =org-glance-table--act-delcolumn= refuses =C-u -= on =title=, and
+    =org-glance-table--mandatory-column?= is the single spelling of the rule --
+    =:remove-column= refuses it (at point or by name), =--read-column= never
+    offers it, =--compose-columns= strips it from any hidden set, and
     =org-glance-table--compose-columns= (shared by the per-tag schema and the
     scoped reference layouts) strips =title= from the hidden set
     (defence in depth against a hand-edited sidecar).  Violation: rows lose their
@@ -158,7 +165,7 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 16. *Per-tag column schema: hidden is a denylist; candidates are user keys.*  The
     per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never
     an allowlist of the visible set — so a built-in shipped in a later version
-    still appears; the =C-u += candidate keys exclude =ORG_GLANCE_*= bookkeeping
+    still appears; the =C-c += candidate keys exclude =ORG_GLANCE_*= bookkeeping
     and org's synthesised =CATEGORY= (=org-glance-property-index--candidate-key?=).
     Column order + sort persist separately, per filter (=table-views.eld=).
     Violation: a version upgrade's new column is invisible to anyone with a saved
@@ -249,13 +256,16 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     back to its screen line.  Both tables obey it — the headline table's
     =--finish= / =--reload= / bulk-todo paths and the LLM sessions table's
     =g=.  Violation: the cursor drops to column 0, where the next =i= (edit
-    cell) or =C-u -= (remove column) acts on the WRONG column.
+    cell) or =C-c -= (remove column) acts on the WRONG column.
 
 25. *Links are addressed by their list path; the link's own item label is
     dropped.*  =org-glance--link-paths= gives every link a PATH of enclosing
-    plain-list item labels plus its own description —
-    =org-glance--link-ancestry= drops the innermost item (the description
-    already names it), and a link outside any list gets a one-element path,
+    plain-list item labels plus its own LABEL (=org-glance--link-label=): its
+    description, else the =KEY:= text introducing it in its own item
+    (=- Local: [[file:~/x]]= reads "Local" — a bare link takes its meaning
+    from that text, and the raw URL is a poor label), else the raw link.
+    =org-glance--link-ancestry= drops the innermost item (the label already
+    names it), and a link outside any list gets a one-element path,
     so flat and nested bodies share one representation.
     =org-glance--pick-link-pos= descends one component per prompt, takes a
     lone candidate at any depth without asking, and offers exhausted-path

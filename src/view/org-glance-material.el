@@ -92,7 +92,10 @@ FILTER, if non-nil, is a predicate on the metadata."
     ;; org requires tab-width 8; no tabs.
     (setq tab-width 8 indent-tabs-mode nil)
     ;; Advance only the earliest of multiple repeatable timestamps on repeat.
-    (org-glance-datetime-mode 1)))
+    (org-glance-datetime-mode 1)
+    ;; Appended, so it runs AFTER org's own `org-check-running-clock' -- which
+    ;; is what queues the note this drops.
+    (add-hook 'kill-buffer-hook #'org-glance-material--cancel-pending-log-note t t)))
 
 ;; `C-c #' by context: region -> wrap it in a crypt block; `C-u' -> unwrap the
 ;; block at point; else encrypt the whole body (plaintext buffer) or forget
@@ -500,26 +503,28 @@ ciphertext in a SECOND block under a second password."
 (cl-defun org-glance-material:set-project-dir (dir)
   "Set the materialized headline's project directory (`C-c d') to DIR and save.
 DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
-`org-glance-llm' opens its session.  With a prefix arg, clear the property."
+`org-glance-llm' opens its session.  With a prefix arg, clear the property.
+The stored value carries NO trailing slash (`directory-file-name'), whichever
+way it arrives; consumers re-add it (`file-name-as-directory') when they need
+a `default-directory'."
   (interactive
    (list (unless current-prefix-arg
-           ;; Directory-valued throughout: the stored default AND the stored
-           ;; result keep a trailing "/", so the minibuffer opens INSIDE the
-           ;; directory (completing its contents) instead of offering the
-           ;; directory itself as the pending selection.
-           (file-name-as-directory
-            (expand-file-name
-             (read-directory-name
-              "Project dir: "
-              (if-let ((cur (org-glance-material--property
-                             org-glance-project-dir-property)))
-                  (file-name-as-directory cur)
-                "./")))))))
+           (expand-file-name
+            (read-directory-name
+             "Project dir: "
+             ;; The PROMPT's default keeps its trailing "/", so the minibuffer
+             ;; opens INSIDE the directory (completing its contents) instead of
+             ;; offering the directory itself as the pending selection.
+             (if-let ((cur (org-glance-material--property
+                            org-glance-project-dir-property)))
+                 (file-name-as-directory cur)
+               "./"))))))
   (org-glance-material--ensure)
   (save-excursion
     (org-glance-material--goto-first-heading)
     (if (org-glance--present-string? dir)
-        (org-entry-put nil org-glance-project-dir-property dir)
+        (org-entry-put nil org-glance-project-dir-property
+                       (directory-file-name dir))
       (org-entry-delete nil org-glance-project-dir-property)))
   (let ((inhibit-message t)) (save-buffer))
   (message "Project dir %s" (if (org-glance--present-string? dir) dir "cleared")))
@@ -711,7 +716,27 @@ tombstoned, or has no stored blob."
 (defvar org-log-setup)         ; org.el: non-nil while an interactive note is queued
 (defvar org-log-note-how)      ; org.el: `note' (prompt) vs `time'/`state' (timestamp)
 (defvar org-log-note-this-command) ; org.el: command that queued the note
+(defvar org-log-note-marker)   ; org.el: where the queued note will be inserted
 (declare-function org-add-log-note "org" (&optional purpose))
+
+(cl-defun org-glance-material--cancel-pending-log-note ()
+  "Drop a log note queued INTO this buffer, on `kill-buffer-hook'.
+Org queues a note by pointing `org-log-note-marker' at the entry and putting
+`org-add-log-note' on `post-command-hook' -- it runs AFTER the current command.
+When that command is the buffer's own kill, the marker dies with the buffer and
+the hook errors \"Marker does not point anywhere\".  The standard way in is org's
+`org-check-running-clock' (its own `kill-buffer-hook'): it clocks out while the
+buffer is being killed, and a configured `org-log-note-clock-out' queues the
+note.  The CLOCK line itself is already written -- only the optional note is
+dropped, and only when its target is the dying buffer.  A note aimed elsewhere
+is left alone."
+  (when (and (bound-and-true-p org-log-setup)
+             (markerp (bound-and-true-p org-log-note-marker))
+             (eq (marker-buffer org-log-note-marker) (current-buffer)))
+    (remove-hook 'post-command-hook #'org-add-log-note)
+    (setq org-log-setup nil)
+    (set-marker org-log-note-marker nil)
+    (message "org-glance: pending log note dropped (its buffer was killed)")))
 
 (cl-defun org-glance-material--goto-first-heading ()
   "Move point to the first heading of the current buffer."

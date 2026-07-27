@@ -97,17 +97,6 @@ it (caches read as stale)."
   (format "%s\n:PROPERTIES:\n:ORG_GLANCE_ID: %s\n:END:\n%s"
           heading id (if body (concat body "\n") "")))
 
-(cl-defmacro org-glance-test:with-llm-buffer ((var name dir) &rest body)
-  "Create live `*llm:NAME*' buffer VAR rooted at DIR; run BODY; kill it."
-  (declare (indent 1))
-  `(let ((,var (get-buffer-create (format "*llm:%s*" ,name))))
-     (unwind-protect
-         (progn
-           (with-current-buffer ,var
-             (setq default-directory (file-name-as-directory ,dir)))
-           ,@body)
-       (kill-buffer ,var))))
-
 (cl-defmacro org-glance-test:with-material ((buffer graph id &rest opts) &rest body)
   "Materialize ID from GRAPH into BUFFER, make it current, run BODY, kill it.
 OPTS pass through to `org-glance-material:open' (e.g. `:decrypt t').
@@ -222,7 +211,7 @@ stays bound around BODY for assertions on what was offered.  Complement of
   "Stub `switch-to-buffer'/`pop-to-buffer' to record shown buffers in VAR
 \(most recent; the stubs still return the buffer).  Run BODY; on exit KILL
 every buffer shown, modified flags cleared -- shown buffers must never leak
-into later tests (`org-glance-llm--label' scans live buffers)."
+into later tests (a stray view buffer changes what later tests observe)."
   (declare (indent 1) (debug ((symbolp) body)))
   (let ((all (gensym "shown-all")))
     `(let (,var ,all)

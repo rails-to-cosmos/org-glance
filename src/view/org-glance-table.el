@@ -125,7 +125,7 @@ always in the table header via the `table-view' `subtitle' (never hidden by the
 
 (cl-defun org-glance-table--base-columns (graph)
   "The fixed built-in table columns for GRAPH, in default order.
-Title is mandatory (`C-u -' refuses it); the rest are removable, and which are
+Title is mandatory (`C-c -' refuses it); the rest are removable, and which are
 hidden persists per tag (see `org-glance-table--apply-schema').  The single
 source of the built-in key set -- `org-glance-table--persist-schema' diffs the
 live spec against these keys to record the hidden ones."
@@ -139,6 +139,13 @@ live spec against these keys to record the hidden ones."
     ((key . "encrypted") (header . "Enc")      (type . "text")  (sortable . t) (align . "center"))
     ((key . "repeated") (header . "Rep")       (type . "text")  (sortable . t) (align . "center"))
     ((key . "tags")     (header . "Tags")      (type . "text")  (sortable . t) (align . "left"))))
+
+(cl-defun org-glance-table--mandatory-column? (key)
+  "Non-nil when column KEY may never be removed or hidden (invariant 15).
+The single spelling of the rule: `--compose-columns' strips it from a hidden
+set, `org-glance-table:remove-column' refuses it, `--read-column' never offers
+it."
+  (equal key "title"))
 
 (cl-defun org-glance-table--spec (graph filter)
   "Build the `table-view' spec (a plain alist) for GRAPH under FILTER.
@@ -424,14 +431,14 @@ nudges, once per change, that `C-c C-c' applies the layout to a scope."
           (setq org-glance-table--config-snapshot cur)
           (message "Layout modified — C-c C-c to apply it to a scope")))))))
 
-;;; Column schema (`C-u +' adds, `C-u -' removes, persisted per tag)
+;;; Column schema (`C-c +' adds, `C-c -' removes, persisted per tag)
 ;;
-;; `C-u +' completing-reads an org drawer property the visible headlines carry
+;; `C-c +' completing-reads an org drawer property the visible headlines carry
 ;; (`org-glance-property-index:keys') and appends a column showing it per row.
 ;; The metadata projection the table renders from does not carry arbitrary drawer
 ;; properties, so the cell is pulled from `org-glance-property-index' -- a derived,
 ;; hash-invalidated, persisted cache of each headline's properties (fallback: an
-;; O(N) blob parse).  `C-u -' removes the column at point -- any column except the
+;; O(N) blob parse).  `C-c -' removes a column -- any column except the
 ;; mandatory Title.
 ;;
 ;; Both persist PER TAG (the filter's tags) at `<store>/config/table-columns.eld':
@@ -547,7 +554,7 @@ kind's last edge disappears), and \"AUTHOR\" the property coexists with
   "Return a `table-view' column chosen by completing-read: a drawer property
 or a relation kind the filtered headlines actually carry.  Required match,
 empty input cancels.  Bound buffer-locally as `table-view-add-column-function'
-so `C-u +' uses it."
+so `C-c +' uses it."
   (let* ((graph org-glance-view--graph)
          (ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
          ;; kinds display PRETTY ("roasted by") but canonicalize to their slug
@@ -604,7 +611,7 @@ does not accrete empties."
 columns built from PAIRS ((NAME . HEADER) list) via
 `org-glance-table--custom-column'.  The single column-assembly core shared by
 the per-tag schema and the scoped reference entries."
-  (let ((hidden (remove "title" hidden)))
+  (let ((hidden (cl-remove-if #'org-glance-table--mandatory-column? hidden)))
     (append (cl-remove-if (lambda (c) (member (alist-get 'key c) hidden)) base)
             (mapcar (lambda (pair)
                       (org-glance-table--custom-column graph (car pair) (cdr pair)))
@@ -731,7 +738,7 @@ precedence).  A persistent view saves its per-filter config and per-tag
 schema on the spot -- the same state the automatic hooks persist.  Other
 transient views (`:where') have no scope to save under."
   (interactive)
-  (unless org-glance-view--graph (user-error "Not in an org-glance table"))
+  (org-glance-table--ensure)
   (cond
    (org-glance-table--context (org-glance-table--apply-ref-layout))
    ((org-glance-filter:transient? org-glance-table--spec)
@@ -832,14 +839,6 @@ relation kinds) refuse."
   (unless id (user-error "Point is not on a row"))
   (org-glance-view:pick-occurrence graph id))
 
-(cl-defun org-glance-table--act-delcolumn ()
-  "`C-u -' handler: remove the column at point.  Title is mandatory and refused."
-  (let ((key (get-text-property (point) 'table-view-col)))
-    (cond
-     ((null key) (message "Point is not on a column"))
-     ((equal key "title") (user-error "The Title column cannot be removed"))
-     (t (table-view-remove-column key)))))
-
 (cl-defun org-glance-table--act-deltag (graph id spec)
   "Bare `-' handler: drop the view's tag from the headline ID at point.
 Mirror of the bare `+' capture -- the headline leaves the view but is NOT
@@ -871,6 +870,22 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
       (table-view-filter "")
     (call-interactively #'table-view-filter-or-narrow)))
 
+(cl-defun org-glance-table--act-refresh (buffer)
+  "`g' handler: drop BUFFER's display refinements, then re-fill from the graph.
+The substring filter (`/') and a narrow-to-marked view refine what the table
+SHOWS on top of the filter it was opened with; `g' resets both, so the view
+returns to exactly that initial filter.  Marks survive -- a selection, not a
+filter.  Reaches into `table-view''s state deliberately: clearing before the
+re-fill renders once (the fill-fn's `table-view-set-rows' re-renders anyway)
+instead of twice.  The lazy display-boundary refresh and the post-action
+reload use `org-glance-table--reload', which PRESERVES the refinements -- an
+edit must not silently widen the view under the user."
+  (when-let ((buf (get-buffer buffer)))
+    (with-current-buffer buf
+      (setq table-view--filter nil
+            table-view--narrowed nil))
+    (org-glance-table--reload buf)))
+
 (cl-defun org-glance-table--handlers (graph spec)
   "The action-command handler alist for GRAPH's table under SPEC."
   (list (cons "materialize" (lambda (id _row) (org-glance-table--act-materialize graph id)))
@@ -884,22 +899,18 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
                                   (org-glance-table--act-todo-bulk graph rows)
                                 (let ((row (car rows)))
                                   (org-glance-table--act-todo graph (alist-get 'id row))))))
-        (cons "refresh"     (lambda (_id _row) (org-glance-table--reload (current-buffer))))
+        (cons "refresh"     (lambda (_id _row) (org-glance-table--act-refresh (current-buffer))))
         (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
+        ;; `-' drops the view's tag off the headline (mirror of the bare `+');
+        ;; column removal lives on `C-c -' (`org-glance-table:remove-column').
         (cons "remove"      (lambda (id _row)
-                              ;; `C-u -' removes the column at point; a bare
-                              ;; `-' drops the view's tag off the headline
-                              ;; (mirror of `+' / `C-u +').
-                              (if current-prefix-arg
-                                  (org-glance-table--act-delcolumn)
-                                (org-glance-table--act-deltag graph id spec))))
+                              (org-glance-table--act-deltag graph id spec)))
+        ;; `+' captures into the view's tag; columns are added with `C-c +'
+        ;; (`org-glance-table:add-column').
         (cons "capture"     (lambda (_id _row)
-                              ;; `C-u +' adds a custom property column; a bare `+' captures.
-                              (if current-prefix-arg
-                                  (call-interactively #'table-view-add-column)
-                                (org-glance-capture (or (org-glance-filter:tags spec)
-                                                        (org-glance-capture:completing-read-tag))
-                                                    ""))))
+                              (org-glance-capture (or (org-glance-filter:tags spec)
+                                                      (org-glance-capture:completing-read-tag))
+                                                  "")))
         (cons "relations" (lambda (id _row)
                             (unless id (user-error "Point is not on a row"))
                             (org-glance-table:visit-relations graph id)))
@@ -975,7 +986,7 @@ open, `C-c C-c' to apply -- and the `Relation' column."
       (org-glance-view:register graph
                                 :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
-      ;; Custom property columns: `C-u +' builds one via the prompt below, and any
+      ;; Custom property columns: `C-c +' builds one via the prompt below, and any
       ;; add/remove is persisted per tag through the schema-changed hook.
       (setq-local table-view-add-column-function #'org-glance-table--add-column-prompt)
       ;; `C-u /' clears the active filter; a bare `/' stays filter-or-narrow.
@@ -985,6 +996,10 @@ open, `C-c C-c' to apply -- and the `Relation' column."
       ;; `C' configures the table's tag directly -- the prompt-free `C' of the
       ;; transient, symmetric with the overview binding.
       (local-set-key (kbd "C") #'org-glance-table:configure-tag)
+      ;; `C-c +' / `C-c -' are the column keys; the bare `+' / `-' act on the
+      ;; headline at point (capture / untag).  `C-u C-c -' always prompts.
+      (local-set-key (kbd "C-c +") #'org-glance-table:add-column)
+      (local-set-key (kbd "C-c -") #'org-glance-table:remove-column)
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
       ;; Restore the saved sort (else the spec default seeded by display), apply it,
       ;; then persist any subsequent layout change (column move / sort) for this filter.
@@ -1009,6 +1024,49 @@ headlines stay visible."
       (user-error "Headline has no relations (save after adding some)"))
     (org-glance-table:visit graph `(:id-any ,related)
                             :context (list :anchor id :dir 'relations))))
+
+(cl-defun org-glance-table--ensure ()
+  "Signal a `user-error' unless the current buffer is an org-glance table."
+  (unless org-glance-view--graph
+    (user-error "Not in an org-glance table")))
+
+(cl-defun org-glance-table:add-column ()
+  "Add a column to the table (`C-c +') -- the mirror of `C-c -'.
+Completing-read a drawer property or a relation kind the visible headlines
+actually carry (`org-glance-table--add-column-prompt') and append it; the
+per-tag schema records it like any other column change."
+  (interactive)
+  (org-glance-table--ensure)
+  (call-interactively #'table-view-add-column))
+
+(cl-defun org-glance-table:remove-column (&optional arg)
+  "Remove a table column (`C-c -') -- the ONE removal entry point.
+The column at POINT; with ARG (`C-u C-c -'), or when point is not on a column,
+completing-read which one.  The mandatory Title column is never removable
+\(invariant 15): refused at point, never offered.  The removal persists per tag
+exactly like the one `C-c +' adds."
+  (interactive "P")
+  (org-glance-table--ensure)
+  (let ((at-point (unless arg (get-text-property (point) 'table-view-col))))
+    (when (org-glance-table--mandatory-column? at-point)
+      (user-error "The Title column cannot be removed"))
+    (let ((key (or at-point (org-glance-table--read-column))))
+      (when key
+        (table-view-remove-column key)
+        (message "Removed column %s" key)))))
+
+(cl-defun org-glance-table--read-column ()
+  "Completing-read one of this view's REMOVABLE column keys, or nil.
+Title is mandatory, so it is never a candidate (invariant 15)."
+  (let ((candidates (cl-loop for c in (plist-get (table-view-layout) :columns)
+                             for key = (alist-get 'key c)
+                             unless (org-glance-table--mandatory-column? key)
+                             collect (cons (or (alist-get 'header c) key) key))))
+    (unless candidates
+      (user-error "No removable columns in this view"))
+    (let ((choice (completing-read "Remove column: " (mapcar #'car candidates) nil t)))
+      (unless (string-empty-p choice)
+        (cdr (assoc choice candidates))))))
 
 (cl-defun org-glance-table:configure-tag ()
   "Configure this table's tag directly, skipping the tag prompt.

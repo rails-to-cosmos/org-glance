@@ -21,6 +21,14 @@
 
 (defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
 
+(defconst org-glance-headline:hash-ignore-drawers (list "LOGBOOK")
+  "Drawer names whose contents never affect the content hash.
+Clock lines and state notes pile up in the logbook without changing what the
+headline SAYS, and nothing derived reads them (`--content-facts' projects the
+body, never the LOGBOOK).  Hashing them would churn the hash on every
+clock-in/out, invalidating the hash-guarded property index and every
+projection keyed on it, for no observable change.")
+
 (cl-defstruct (org-glance-headline (:predicate org-glance-headline?)
                                       (:conc-name org-glance-headline:))
   (contents nil :read-only t :type string)
@@ -135,12 +143,37 @@ Either the whole body is `aes-encrypted' (the legacy layout) or at least one
   (or (org-glance-headline--crypt-legacy-cipher-p)
       (org-glance--crypt-sealed-blocks-p)))
 
+(defun org-glance-headline--hash-log-drawers ()
+  "Drawer names stripped before hashing: LOGBOOK plus org's configured ones.
+`org-log-into-drawer' / `org-clock-into-drawer' may name a custom drawer (t
+means LOGBOOK; an integer clock threshold names none)."
+  (delete-dups
+   (delq nil (append org-glance-headline:hash-ignore-drawers
+                     (mapcar (lambda (v) (cond ((stringp v) v) ((eq v t) "LOGBOOK")))
+                             (list (bound-and-true-p org-log-into-drawer)
+                                   (bound-and-true-p org-clock-into-drawer)))))))
+
+(defun org-glance-headline--delete-log-drawers ()
+  "Delete the current buffer's logbook drawers, contents and all.
+MUTATES the buffer.  See `org-glance-headline:hash-ignore-drawers' for why."
+  (let ((case-fold-search t)
+        (re (concat "^[ \t]*:" (regexp-opt (org-glance-headline--hash-log-drawers) t)
+                    ":[ \t]*$")))
+    (goto-char (point-min))
+    (while (re-search-forward re nil t)
+      (let ((beg (match-beginning 0)))
+        (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
+          (delete-region beg (min (point-max) (1+ (line-end-position)))))))))
+
 (defun org-glance-headline--hash-here ()
-  "Content hash of the current buffer with the id/hash drawer properties removed.
-MUTATES the buffer (deletes those properties), so call it LAST when sharing one."
+  "Content hash of the current buffer, ignoring bookkeeping the reader never sees.
+The id/hash drawer properties and the LOGBOOK drawers are removed first, so
+clocking in and out -- or a state note landing in the drawer -- leaves the hash
+alone.  MUTATES the buffer (deletes both), so call it LAST when sharing one."
   (goto-char (point-min))
   (dolist (property org-glance-headline:hash-ignore-properties)
     (org-entry-delete nil property))
+  (org-glance-headline--delete-log-drawers)
   (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
     (with-temp-buffer (insert data) (buffer-hash))))
 

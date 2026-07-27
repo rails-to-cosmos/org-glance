@@ -50,6 +50,55 @@
                                graph :filter #'org-glance-headline-metadata:active?))))
         (should (= 1 (length offered)))))))
 
+(ert-deftest org-glance-test:material-kill-drops-pending-log-note ()
+  "Killing a materialized buffer with a running clock must not leave a queued
+log note behind.  Org\'s own `org-check-running-clock\' (`kill-buffer-hook\')
+clocks out while the buffer dies; with `org-log-note-clock-out\' set that queues
+`org-add-log-note\' on `post-command-hook\' with a marker into THAT buffer, and
+the command loop then errors \"Marker does not point anywhere\"."
+  (require 'org-clock)
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "ck" "* TODO Task"))
+    (let ((org-log-note-clock-out t)
+          (buf (org-glance-material:open graph "ck")))
+      (unwind-protect
+          (progn
+            (with-current-buffer buf
+              (goto-char (point-min))
+              (org-clock-in))
+            ;; preconditions: without these the should-nots below pass vacuously
+            (should (org-clocking-p))
+            (should (memq #'org-glance-material--cancel-pending-log-note
+                          (buffer-local-value 'kill-buffer-hook buf)))
+            ;; the kill and the hook that follows it are ONE command
+            (let ((this-command 'kill-buffer))
+              (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
+                (kill-buffer buf))
+              (should-not (buffer-live-p buf))
+              ;; nothing left queued against the dead buffer ...
+              (should-not (memq 'org-add-log-note post-command-hook))
+              (should-not org-log-setup)
+              ;; ... so the command loop's next step is quiet
+              (run-hooks 'post-command-hook))
+            ;; a note aimed at ANOTHER buffer is left alone -- the guard drops
+            ;; only what pointed into the buffer it killed
+            (let ((other (generate-new-buffer " *other-note*")))
+              (unwind-protect
+                  (let ((org-log-setup t))
+                    (with-current-buffer other
+                      (set-marker org-log-note-marker (point-min) other))
+                    ;; the guard runs in a DIFFERENT buffer: the queued note is
+                    ;; not aimed here, so it must survive untouched
+                    (with-temp-buffer
+                      (org-glance-material--cancel-pending-log-note))
+                    (should org-log-setup)
+                    (should (eq (marker-buffer org-log-note-marker) other)))
+                (kill-buffer other)
+                (setq org-log-setup nil)
+                (set-marker org-log-note-marker nil))))
+        (when (buffer-live-p buf) (kill-buffer buf))
+        (ignore-errors (when (org-clocking-p) (org-clock-out)))))))
+
 (ert-deftest org-glance-test:material-save-affordance ()
   "A materialized buffer visits its content-blob FILE, runs the minor mode,
 and is editable; saving persists to the graph and survives re-materialize.
@@ -931,6 +980,12 @@ tests that end in its own repo.)"
       (should (equal "/tmp/proj-x"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
+      ;; a trailing slash is stripped -- the stored value is slash-free whichever
+      ;; way it arrives (`read-directory-name' always hands one over)
+      (org-glance-material:set-project-dir "/tmp/proj-y/")
+      (should (equal "/tmp/proj-y"
+                     (org-glance-headline:node-property
+                      "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
       ;; clear (nil dir, as a prefix-arg invocation supplies)
       (org-glance-material:set-project-dir nil)
       (should-not (org-glance-headline:node-property
@@ -1154,6 +1209,38 @@ and `C-c u' unseals an as-is buffer after the fact."
       (org-glance-test:with-material (buf graph "e")
         (org-glance-material:crypt)
         (should (= 1 (length (org-glance--crypt-block-regions))))))))
+
+(ert-deftest org-glance-test:link-label-from-item-prefix ()
+  "A link with NO description is labelled by the `KEY:\' text introducing it in
+its list item -- `- Local: [[file:~/x]]\' offers \"Local\", never the raw URL.
+A description still wins, and a link outside any list keeps the raw link."
+  (with-temp-buffer
+    (insert "* TODO Project\n"
+            "- Local: [[file:/tmp/jupyterhub/]]\n"
+            "- Docs: [[https://example.com/docs][Handbook]]\n"
+            "- [[https://example.com/bare]]\n"
+            "Loose [[https://example.com/loose]]\n")
+    (org-glance--org-mode)
+    (let ((labels (mapcar (lambda (e) (car (last (car e)))) (org-glance--link-paths))))
+      ;; the reported case: the prefix names the link, colon trimmed
+      (should (member "Local" labels))
+      ;; a description still wins over the prefix
+      (should (member "Handbook" labels))
+      (should-not (member "Docs" labels))
+      ;; nothing introduces these two -> the raw link, as before
+      (should (member "https://example.com/bare" labels))
+      (should (member "https://example.com/loose" labels)))))
+
+(ert-deftest org-glance-test:link-label-prefix-nested-path ()
+  "The introducing text is the link\'s OWN path component, under its ancestry:
+a nested `- Local: [[...]]\' reads (\"Remote\" \"Local\")."
+  (with-temp-buffer
+    (insert "* TODO Project\n"
+            "- Remote\n"
+            "  - Local: [[file:/tmp/x]]\n")
+    (org-glance--org-mode)
+    (let ((paths (mapcar #'car (org-glance--link-paths))))
+      (should (equal '(("Remote" "Local")) paths)))))
 
 (ert-deftest org-glance-test:material-open-link-nested ()
   "Nested link lists are picked level by level: the first prompt offers the
