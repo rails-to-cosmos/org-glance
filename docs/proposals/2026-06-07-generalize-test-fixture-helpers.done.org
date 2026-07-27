@@ -51,7 +51,7 @@ The last drift the proposal predicted had already appeared and is now fixed:
 *Deliberately not converted:* five =completing-read= stubs
 (=test-overview.el:403,410,417=, =test-plugins.el:21,29=) are co-bound inside
 larger =cl-letf= blocks with other stubs; wrapping them in =answering= would
-nest a macro around a =cl-letf= rather than replace it — churn, not
+nest a macro around a =cl-letf= rather than replace it — churn without
 simplification.
 
 * Existing precedent

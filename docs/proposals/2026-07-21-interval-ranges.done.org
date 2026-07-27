@@ -40,7 +40,7 @@ interval* (=org-tr-regexp=, groups 1/2); later ranges are ignored.
 - =:during DATE= filter key (one =org-glance-filter:table= row, a
   range-contains match kind).
 - Multiple ranges per headline.
-- Crypt caveat (documented, not fought): a range inside a =#+begin_crypt=
+- Crypt caveat (documented, accepted): a range inside a =#+begin_crypt=
   block is invisible to the index (invariant 14) -- keep travel dates
   outside the sealed block.
 

@@ -80,7 +80,7 @@ existing ~test~ command (=Eask:28=): load ~test/test-helpers.el~ then
 ~test/bench-graph.el~ and call its entry point. Not wired into ~eask test~ (slow,
 non-assertive).
 
-*Payoff:* the seal/compact knobs get a curve instead of a guess, and every perf
+*Payoff:* the seal/compact knobs get a measured curve, and every perf
 proposal gets a before/after number.
 
 ** (2) A lint command — ~eask lint~

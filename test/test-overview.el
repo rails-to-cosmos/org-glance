@@ -192,7 +192,7 @@ caught)."
 (ert-deftest org-glance-test:overview-spec-key-compact ()
   "Cache directory names are short hashes of the canonical identity: fixed
 width, lowercase hex, whatever the filter carries.  The readable filter lives
-in the SPEC sidecar, not in the name."
+in the SPEC sidecar."
   ;; canonical: the bare-tag shorthand and the full form share a key
   (should (string= (org-glance-overview:spec-key 'task)
                    (org-glance-overview:spec-key '(:tags ("task")))))

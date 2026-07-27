@@ -3,7 +3,7 @@
 ;;; Commentary:
 ;; Times the store's hot paths over synthetic graphs so the seal/compact
 ;; knobs (`org-glance-graph-segment-max-bytes',
-;; `org-glance-graph-compact-segment-count') get a curve instead of a guess,
+;; `org-glance-graph-compact-segment-count') get a measured curve,
 ;; and every performance change gets a before/after number.  Reuses the test
 ;; fixtures; `benchmark' ships with Emacs -- no new dependency.
 ;;

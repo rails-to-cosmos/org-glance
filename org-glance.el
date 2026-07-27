@@ -367,7 +367,7 @@ an `org-glance-material:ID' link string."
 
 (defun org-glance-link:material (path &optional _)
   "Materialize the headline PATH refers to; a `?kind=' suffix is ignored.
-The kind annotates the edge (stored in the `relations' metadata), not the jump.
+The kind annotates the edge (stored in the `relations' metadata).
 One handler serves both edge link types (material + legacy visit)."
   (org-glance-ensure-init)
   (switch-to-buffer

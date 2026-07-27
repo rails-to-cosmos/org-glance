@@ -93,6 +93,9 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 
 * Proposed — other
 
+- [[file:proposals/2026-07-27-agent-delegation.proposed.org][Agent delegation — runs, status, lineage, distributed execution]] — a
+  headline delegates to an agent; runs are immutable content-addressed
+  artifacts, lineage is typed edges over hashed inputs, and git is the queue.
 - [[file:proposals/2026-07-06-encrypted-materialize-gpg.proposed.org][Encrypted headlines via GPG (EasyPG)]] — replace the home-grown AES with
   EasyPG for encrypted materialization.
 - [[file:proposals/2026-06-19-composable-tag-templates.proposed.md][Composable tag templates]] — tags as Haskell-style type classes.

@@ -66,7 +66,7 @@ over those strings (regexp =[.+]\+?[0-9]+[hdwmy]=); the table gains a sortable
 - Table: =l= on the row.  Overview: =l= on the headline.  Material: =C-c l=.
 - =completing-read= over the headline's occurrence stamps (newest first) →
   open that snapshot READ-ONLY in =*org-glance-occurrence: TITLE [STAMP]*=
-  (org-mode + =view-mode=; snapshots are immutable history, not editables).
+  (org-mode + =view-mode=; snapshots are immutable history).
 - No occurrences → =user-error= with a hint (depth 0 vs nothing recorded yet).
 
 Data accessor: =org-glance-graph:occurrences graph id= → newest-first list of

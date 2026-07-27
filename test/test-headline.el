@@ -249,7 +249,7 @@ above trusts it, so it must equal what `--content-facts\' actually returns."
   "Building metadata from a parsed headline is ONE org-mode pass, not two.
 The parse that produced the headline captures the content facts in its own
 buffer; `:metadata' reads that memo instead of standing up a second buffer over
-the same string.  Counted, not assumed."
+the same string.  The passes are counted."
   (let* ((contents (org-glance-test:org-with-id "* TODO Task :work:" "p1"
                                                 "body [[https://example.com][X]]"))
          (passes 0))

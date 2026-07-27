@@ -70,9 +70,9 @@ doubt, rebuild."
 
 (defcustom org-glance-view-fill-frame t
   "When non-nil, opening an overview or table view fills the frame.
-The view's window becomes the sole one (via `delete-other-windows'), so a graph
-view takes over the frame instead of sharing it with whatever windows were open.
-Set to nil to leave the existing window layout untouched."
+The view's window becomes the sole one (via `delete-other-windows'), so a
+graph view takes over the frame.  Set to nil to leave the existing window
+layout untouched."
   :group 'org-glance
   :type 'boolean)
 
