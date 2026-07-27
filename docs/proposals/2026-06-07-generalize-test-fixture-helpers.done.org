@@ -1,0 +1,60 @@
+#+TITLE: Shared fixtures for the test suite
+#+DATE: 2026-06-07
+
+Status: *done* · swept incrementally (2026-07-18 macro audit, the 2026-07-24
+and 2026-07-27 cleanup rounds), finished 2026-07-27.  Suite 337/337,
+compile warning-free.
+
+* Problem
+
+=test/test-helpers.el= had only 4 helpers; the growing suite hand-rolled the
+same idioms inline:
+
+- *staleness control* — =set-file-times= on =headlines.jsonl= with a
+  copy-pasted magic =100=;
+- *render spy* — =cl-letf= over the overview render counting calls, ×3
+  verbatim;
+- *=completing-read= stub* — many ad-hoc lambda shapes;
+- *materialized-save simulation* — insert content + =setq-local= the material
+  locals + =:sync=, ×2;
+- *crash injection* — =cl-letf= over =--write-manifest= to error at the commit
+  point, ×2;
+- =reopen= / =sealed-segments= / an inline =count-records= living in
+  =test-segments.el= though all three are general.
+
+Roughly half of every new cache/coherence/recovery test was this boilerplate.
+
+* Outcome
+
+=test-helpers.el= now carries *35* definitions.  The named deliverables, and
+where they landed:
+
+| proposed                   | shipped as                                  |
+|----------------------------+---------------------------------------------|
+| =make-fresh= / =make-stale=    | =org-glance-test:store-mtime= (one signed arg) |
+| =with-render-spy=            | =org-glance-test:counting-renders=            |
+| =stub-completing-read=       | =org-glance-test:answering= + =:offering=       |
+| =simulate-material-save=     | =org-glance-test:simulate-material-save=      |
+| =with-crash-at=              | =org-glance-test:with-crash-at=               |
+| =count-records=              | =org-glance-test:count-records=               |
+| =reopen-graph=               | =org-glance-test:reopen=                      |
+| =sealed-segments=            | =org-glance-test:sealed-segments=             |
+
+Two stubs instead of one for =completing-read=: =answering= replies with
+constants, =offering= also records what was offered — the argument-inspecting
+case the single proposed macro could not serve.
+
+The last drift the proposal predicted had already appeared and is now fixed:
+=test-table.el= had re-copied the raw =set-file-times= idiom instead of calling
+=store-mtime=.
+
+*Deliberately not converted:* five =completing-read= stubs
+(=test-overview.el:403,410,417=, =test-plugins.el:21,29=) are co-bound inside
+larger =cl-letf= blocks with other stubs; wrapping them in =answering= would
+nest a macro around a =cl-letf= rather than replace it — churn, not
+simplification.
+
+* Existing precedent
+
+=org-glance-test:with-graph= / =:headline= — same convention, just
+underpopulated at the time.

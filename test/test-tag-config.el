@@ -297,5 +297,45 @@ READ), persisting each -- not the global TODO/DONE."
       (should (equal "READ" (org-glance-test:change-todo-live graph "b1")))
       (should (s-contains? "* READ Dune" (org-glance-graph:get-content graph "b1"))))))
 
+(ert-deftest org-glance-test:tag-config-fields-table ()
+  "The field table is the single source of the pragma set: it stays in step
+with the struct (guarded at load), and both preamble builders derive from it,
+so a new pragma is one row plus one slot instead of a parse line, a capture
+arm and an overview arm."
+  (should (org-glance-tag-config--check-fields
+           (cdr (cl-struct-slot-info 'org-glance-tag-config))
+           org-glance-tag-config:fields))
+  ;; a forgotten slot fails at load, not silently at read time
+  (should-error (org-glance-tag-config--check-fields
+                 (cdr (cl-struct-slot-info 'org-glance-tag-config))
+                 (butlast org-glance-tag-config:fields))
+                :type 'error)
+  ;; today's vocabulary: TITLE is parsed but never emitted, TODO is both
+  (should (equal '((title . "TITLE") (todo . "TODO"))
+                 (org-glance-tag-config--pragma-slots)))
+  (should (equal '((todo . "TODO")) (org-glance-tag-config--pragma-slots t))))
+
+(ert-deftest org-glance-test:tag-config-preamble ()
+  "`:preamble' renders a config's emittable pragmas; `:preamble-for-filter'
+renders only what the filtered tags AGREE on -- one distinct value or nothing."
+  (org-glance-test:with-tag-config
+      (list (cons "book" "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
+            (cons "note" "#+TITLE: Note\n#+TODO: TODO READING | READ\n\n* Note\n")
+            (cons "film" "#+TITLE: Film\n#+TODO: TODO WATCHING | WATCHED\n\n* Film\n")
+            (cons "bare" "#+TITLE: Bare\n\n* Bare\n"))
+    ;; per-config: the cycle is emitted, the label never is
+    (should (equal "#+TODO: TODO READING | READ\n"
+                   (org-glance-tag-config:preamble
+                    (org-glance-tag-config:resolve nil 'book))))
+    (should-not (org-glance-tag-config:preamble
+                 (org-glance-tag-config:resolve nil 'bare)))
+    ;; per-filter: agreement emits, disagreement stays silent
+    (should (equal "#+TODO: TODO READING | READ\n"
+                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book")))))
+    (should (equal "#+TODO: TODO READING | READ\n"
+                   (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "note")))))
+    (should-not (org-glance-tag-config:preamble-for-filter nil '(:tags ("book" "film"))))
+    (should-not (org-glance-tag-config:preamble-for-filter nil '(:tags ("bare"))))))
+
 (provide 'test-tag-config)
 ;;; test-tag-config.el ends here

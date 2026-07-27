@@ -1,0 +1,98 @@
+#+TITLE: The shared view scaffold, actually shared
+#+DATE: 2026-07-27
+
+* Problem
+
+[[file:../../src/view/org-glance-view.el][=org-glance-view.el:196-212=]] documents =org-glance-view:display-table= as
+"the shared visit scaffold": =from-view= capture, =table-view-display=,
+=default-directory= ← graph root, =:register=, sort, =fill-frame=.
+
+The repo's richest table view does not use it.
+=org-glance-table:visit= ([[file:../../src/view/org-glance-table.el][=table.el:946-1012=]]) re-implements all six steps
+inline (=:952=, =:973=, =:985=, =:986-988=, =:1006-1008=, =:1011=).  Its only
+structural difference is real but small: buffer-locals must be set *before*
+the sort, and a saved layout needs =table-view-set-sort= rather than
+=apply-sort=.
+
+So the scaffold's only in-repo client is the *simplest* view
+([[file:../../src/view/org-glance-tags.el][=tags.el:168-175=]]) — the abstraction is shaped for the case that needed it
+least, while the view a new author will copy teaches the un-scaffolded shape.
+The external =org-glance-llm= plugin does use the scaffold, so it is already
+load-bearing public API.
+
+A second, smaller boundary problem sits next to it: =tags.el= reaches into
+two privates of a sibling view module — =org-glance-table--reload=
+(=tags.el:151, 167, 175=) and =--colorize-state= (=tags.el:40, 51=).
+=--reload= (=table.el:229-242=) contains nothing table-specific: it is
+=point-context= → =table-view-refresh= → =apply-sort= → =mark-fresh= →
+=restore-point=, three of whose five steps already live in
+=org-glance-view.el=.  Invariant 24 names it as the rule *both* tables and the
+plugin's =g= obey — de facto public API living behind a private name in the
+wrong module.
+
+* Design
+
+Two keyword arguments make the scaffold cover =table:visit=:
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-view:display-table (graph name spec handlers fill-fn
+                                               &key stale-fn reload-fn sort setup)
+  "...SETUP is a nullary thunk run in the buffer after registration and
+BEFORE the sort; SORT (a sort-key chain) is restored instead of the spec
+default."
+  (let* ((from-view (and org-glance-view--graph t))
+         (buf (table-view-display name spec handlers fill-fn)))
+    (with-current-buffer buf
+      (setq default-directory (file-name-as-directory (org-glance-graph:directory graph)))
+      (when stale-fn (org-glance-view:register graph :stale-fn stale-fn :reload-fn reload-fn))
+      (when setup (funcall setup))
+      (if sort (table-view-set-sort sort) (table-view-apply-sort))
+      (org-glance-view:fill-frame from-view))
+    buf))
+#+end_src
+
+=org-glance-table:visit= then computes =spec= / =handlers= / =fill-fn= /
+=saved= / =ref-entry= and hands the scaffold a =setup= thunk holding its
+buffer-locals and local keys.
+
+Alongside: move =--reload= to =org-glance-view:reload-table= (beside
+=:point-context= / =:restore-point= / =:display-table=, which it already
+uses) and =--colorize-state= beside the palette customs it reads.  Pure
+moves; =tags.el= then drops its =(require 'org-glance-table)= (=tags.el:25=),
+which exists solely for these two.
+
+* Files
+
+- [[file:../../src/view/org-glance-view.el][=src/view/org-glance-view.el=]] :: =196-212= (scaffold), =178-194= (the point
+  helpers =--reload= joins)
+- [[file:../../src/view/org-glance-table.el][=src/view/org-glance-table.el=]] :: =946-1012= (=visit=), =229-242= (=--reload=),
+  =106-109= (=--colorize-state=)
+- [[file:../../src/view/org-glance-tags.el][=src/view/org-glance-tags.el=]] :: =25= (the require), =40=, =51=, =151=, =167=, =175=
+
+* LOC estimate
+
+- Added: ~10 (two keywords + the moved helpers' new homes)
+- Removed immediately: ~14 from =visit=; the moves are net 0
+- Saved per future view type: the whole entry ritual —
+  =default-directory=, the from-view guard, registration, the sort restore
+  and =fill-frame= — instead of six re-derived steps
+
+* Risk
+
+Medium, the highest of this batch: =visit= is the busiest entry point in the
+repo and the ordering inside it is load-bearing (locals before sort, sort
+before =fill-frame=).  The suite covers it heavily (visit/sort/layout/point
+tests), so a regression should surface; ship it alone.
+
+=org-glance-view:display-table= is called by the external =org-glance-llm=
+plugin — the new arguments must be *optional*, keeping the existing arity
+working.  The file-backed overview (=overview.el:383-410=) stays on its own
+path: invariant 11 forbids reverting a modified file buffer, so the two
+shapes must remain distinct.  Nothing on disk changes.
+
+* Existing precedent
+
+=org-glance-view:register= ([[file:../../src/view/org-glance-view.el][=view.el:99-110=]]) is exactly this idea one layer in,
+and both tables *do* use it: "Each view supplies only what genuinely differs…
+so a new view type adds only a =register= call."  =display-table= is the same
+bargain, left half-adopted.

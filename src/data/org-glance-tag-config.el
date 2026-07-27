@@ -60,6 +60,39 @@ sets an explicit directory (used for tests and non-standard layouts)."
   (todo nil :read-only t :type (or null string))        ; `#+TODO:'-style cycle, or nil
   (template nil :read-only t :type (or null string)))   ; capture entry (from the first `*')
 
+(defconst org-glance-tag-config:fields
+  ;; SLOT       PRAGMA      EMIT?
+  '((tag       nil        nil)     ; supplied by the file NAME
+    (title     "TITLE"    nil)     ; human label; never emitted into a buffer
+    (todo      "TODO"     t)       ; the todo cycle: capture + overview emit it
+    (template  nil        nil))    ; the body from the first `*'
+  "The per-tag config shape: struct SLOT, `#+PRAGMA:' keyword, EMIT? flag.
+Drives `--parse-file' and both preamble builders, so a new pragma is one row
+plus one struct slot (checked against each other at load).  A nil PRAGMA marks
+a slot read from somewhere other than a file keyword.")
+
+(cl-defun org-glance-tag-config--check-fields (slots fields)
+  "Signal unless FIELDS lists struct SLOTS in order; else return t.
+A slot the table forgets reads nil forever.  Runs at load over the real pair;
+tests call it with broken ones."
+  (let ((struct-slots (mapcar #'car slots))
+        (table-slots (mapcar #'car fields)))
+    (unless (equal struct-slots table-slots)
+      (error "org-glance: tag-config field table out of sync with the struct: %S vs %S"
+             table-slots struct-slots)))
+  t)
+
+(org-glance-tag-config--check-fields
+ (cdr (cl-struct-slot-info 'org-glance-tag-config))
+ org-glance-tag-config:fields)
+
+(cl-defun org-glance-tag-config--pragma-slots (&optional emitting)
+  "Slots parsed from a `#+PRAGMA:' keyword, as (SLOT . PRAGMA) pairs.
+With EMITTING, only those a rendered buffer emits as a file keyword."
+  (cl-loop for (slot pragma emit) in org-glance-tag-config:fields
+           when (and pragma (or (not emitting) emit))
+           collect (cons slot pragma)))
+
 ;;; Config file location
 
 (cl-defun org-glance-tag-config:dir (graph)
@@ -113,13 +146,14 @@ EOF (trimmed), or nil when the buffer has no heading."
   (with-temp-buffer
     (let ((coding-system-for-read 'utf-8))
       (insert-file-contents path))
-    (org-glance-tag-config
-     :tag tag
-     :title (org-glance-tag-config--file-keyword "TITLE")
-     ;; NB the cycle is a `#+TODO:' FILE keyword now (org-native), replacing the
-     ;; old `:TODO_KEYWORDS:' drawer.
-     :todo (org-glance-tag-config--file-keyword "TODO")
-     :template (org-glance-tag-config--entry))))
+    ;; NB every cycle-like value is a FILE keyword now (org-native), replacing
+    ;; the old `:TODO_KEYWORDS:' drawer.  One read per pragma row.
+    (apply #'org-glance-tag-config
+           :tag tag
+           :template (org-glance-tag-config--entry)
+           (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots)
+                    append (list (intern (concat ":" (symbol-name slot)))
+                                 (org-glance-tag-config--file-keyword pragma))))))
 
 (cl-defun org-glance-tag-config--tag-of-file (path)
   "The tag symbol a config file PATH configures: its basename, sans `.org'."
@@ -207,21 +241,51 @@ is exactly the one a `#+TODO:' header produces -- single source of truth."
         (delay-mode-hooks (org-mode))
         (copy-sequence org-done-keywords)))))
 
+(cl-defun org-glance-tag-config--sole-value (graph filter slot)
+  "Return SLOT's value across FILTER's tags in GRAPH, if exactly one exists.
+Nil for 0 or >1 distinct values: merging keyword sequences is order-sensitive
+and corrupts the active/done split, so an ambiguous filter falls back to the
+global default."
+  ;; `org-glance-filter:tags' already returns canonical (downcased) tag symbols,
+  ;; so each resolves directly; configs without that pragma drop out.
+  (let ((values (cl-remove-duplicates
+                 (delq nil (mapcar (lambda (tag)
+                                     (when-let ((c (org-glance-tag-config:resolve graph tag)))
+                                       (cl-struct-slot-value 'org-glance-tag-config slot c)))
+                                   (org-glance-filter:tags filter)))
+                 :test #'string=)))
+    (when (= 1 (length values))
+      (car values))))
+
 (cl-defun org-glance-tag-config:cycle-for-filter (graph filter)
   "The single todo cycle configured for FILTER's tags, or nil.
 Returns a cycle only when EXACTLY ONE distinct cycle is configured across the
-filtered tags: merging keyword sequences is order-sensitive and corrupts the
-active/done split, so 0 or >1 distinct cycles fall back to the global keywords."
-  ;; `org-glance-filter:tags' already returns canonical (downcased) tag symbols,
-  ;; so each resolves directly; configs without a `#+TODO:' cycle drop out.
-  (let ((cycles (cl-remove-duplicates
-                 (delq nil (mapcar (lambda (tag)
-                                     (when-let ((c (org-glance-tag-config:resolve graph tag)))
-                                       (org-glance-tag-config:todo c)))
-                                   (org-glance-filter:tags filter)))
-                 :test #'string=)))
-    (when (= 1 (length cycles))
-      (car cycles))))
+filtered tags (`org-glance-tag-config--sole-value')."
+  (org-glance-tag-config--sole-value graph filter 'todo))
+
+(cl-defun org-glance-tag-config:preamble (config)
+  "CONFIG's emittable pragmas as `#+KEY: VALUE' lines, or nil.
+The one spelling shared by the capture template and the overview header."
+  (org-glance-tag-config--preamble-lines
+   (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots t)
+            collect (cons pragma (cl-struct-slot-value 'org-glance-tag-config
+                                                       slot config)))))
+
+(cl-defun org-glance-tag-config:preamble-for-filter (graph filter)
+  "The `#+KEY: VALUE' lines FILTER's tags agree on in GRAPH, or nil.
+Each pragma is emitted only when the filtered tags configure exactly one
+distinct value for it (`org-glance-tag-config--sole-value')."
+  (org-glance-tag-config--preamble-lines
+   (cl-loop for (slot . pragma) in (org-glance-tag-config--pragma-slots t)
+            collect (cons pragma (org-glance-tag-config--sole-value graph filter slot)))))
+
+(cl-defun org-glance-tag-config--preamble-lines (pairs)
+  "PAIRS ((PRAGMA . VALUE)…) as newline-terminated `#+PRAGMA: VALUE' text, or nil.
+Blank values drop out; nil when nothing is left."
+  (let ((lines (cl-loop for (pragma . value) in pairs
+                        when (org-glance--present-string? value)
+                        collect (concat "#+" pragma ": " value "\n"))))
+    (when lines (apply #'concat lines))))
 
 ;;; Render: a config -> an `org-capture' entry template string
 

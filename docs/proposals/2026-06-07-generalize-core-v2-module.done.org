@@ -1,0 +1,52 @@
+#+TITLE: A core module for the graph-lifecycle trio
+#+DATE: 2026-06-07
+
+Status: *done* · shipped in =9fab0c7= ("Content-addressable graph store"),
+verified against the tree 2026-07-27.  Landed under the final names (no =-v2=
+suffix — phase 3 deleted v1 and the suffix with it).
+
+* Problem
+
+Every command module depended on three session primitives that physically
+lived in the top-level =org-glance.el= that loads them — a genuine load cycle
+papered over with declarations:
+
+- the global =(defvar org-glance-graph …)= was re-declared bare in the
+  material and overview modules and read at ~12 sites;
+- =org-glance-initialized?= was =declare-function='d in *three* files
+  (capture, material, overview) and asserted at 9 call sites;
+- =org-glance-init= completed the trio.
+
+* Design
+
+A small base module holding exactly the session primitives.  Every module
+=(require 'org-glance-core)=; the bare defvars and the triplicated
+=declare-function= lines disappear; =org-glance.el= requires it like everything
+else.
+
+Deliberately *not* moved: the v1-coupled tag helpers (phase 3 deleted their
+world).
+
+* Outcome
+
+Shipped as [[file:../../src/data/org-glance-core.el][=src/data/org-glance-core.el=]]:
+
+- =org-glance-graph= is defined once, at =core.el:26= — the only =defvar= of
+  that symbol in the tree.
+- =org-glance-initialized?= at =core.el:30=; zero =declare-function= copies
+  remain anywhere.
+- Ten modules require it (=capture=, =view=, =tag-config=, =graph=, =ui=,
+  =overview=, =tags=, =material=, =table=, and =org-glance.el= itself).
+
+One deliberate deviation: =org-glance-init= stayed in =org-glance.el= (it
+drives migration and SETS the global defined here), with the one-way edge kept
+by a single =declare-function= at =core.el:34= and the rationale in the module
+commentary.
+
+The module grew past the original scope, all of it the same kind of shared
+session primitive: =org-glance-ensure-init= (=core.el:36=, the autoload-init
+guard used across 8 files), the =org-glance= defgroup, =org-glance-directory=,
+and =org-glance-overview-default-view=.
+
+The =org-glance-use-graph-v2= defcustom the proposal wanted moved no longer
+exists — phase 3's v1 deletion removed it outright.

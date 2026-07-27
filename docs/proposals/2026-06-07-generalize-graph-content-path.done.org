@@ -1,0 +1,44 @@
+#+TITLE: A graph-owned content-path accessor
+#+DATE: 2026-06-07
+
+Status: *done* · shipped verbatim to the proposed signature, verified against
+the tree 2026-07-27.
+
+* Problem
+
+The blob filename =data.org=, joined onto =headline-data-path=, appeared three
+times — twice inside the store (=put-content=, =get-content=) and once *across
+the layer boundary* in the material module, which hand-built the path and
+re-implemented the existence check the store already encodes.  The blob layout
+is a storage detail; the view layer should not know it.
+
+* Design
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-graph:content-path (graph id)
+  "Path of ID's content blob (existing or not)."
+  (f-join (org-glance-graph:headline-data-path graph id) "data.org"))
+#+end_src
+
+=put-content= / =get-content= route through it; =material:open= becomes
+"liveness check → =content-path= → error if missing → =find-file=" with zero
+knowledge of =data.org= or the shard layout.
+
+* Outcome
+
+Shipped exactly as sketched — [[file:../../src/data/org-glance-graph.el][=graph.el:628-630=]] — with both store sites
+routed through it (=put-content= =:643=, =get-content= =:653=) and the
+cross-layer hand-build gone from [[file:../../src/view/org-glance-material.el][=material.el:638-643=]].
+
+The prediction that future consumers would get the join for free held: the
+accessor now has *eight* more callers that would each have forked it —
+=material.el:757,844,903,942,959=, =tag-metrics.el:128=, and three tests.
+
+Residual literal =data.org= occurrences are all legitimate: the accessor body,
+doc comments, and one test that deliberately asserts the on-disk layout.
+
+* Existing precedent
+
+The path-accessor chain in the store itself (=store-path= →
+=data-path=/=meta-path= → =headline-meta-path=); =content-path= was the missing
+rung.

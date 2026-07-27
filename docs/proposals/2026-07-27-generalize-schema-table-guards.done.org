@@ -1,0 +1,128 @@
+#+TITLE: Load-time guards for what the schema tables do not check
+#+DATE: 2026-07-27
+
+Status: *done* · 2026-07-27.  Both guards shipped as NAMED checks
+(=org-glance-filter--check-table=, =org-glance-headline-metadata--check-fields=)
+so they run at load over the real tables AND are callable from tests with
+deliberately broken ones, so a test can prove each one fires.  Suite 335/335, compile warning-free.
+
+* Problem
+
+The two schema tables each carry a load-time guard, and each guard has a hole
+that the table's own docstring claims to have closed.
+
+** Filter keys: a nil =:match= makes the filter match EVERYTHING
+
+=org-glance-filter:predicate= ([[file:../../src/data/org-glance-filter.el][=filter.el:186-191=]]) gates on
+=(and kind (plist-member spec key))=.  A row whose =:match= is missing or
+misspelled yields =kind= nil, so *no clause is built and the key silently
+imposes no constraint*.  The =(_ (error …))= fallback at =filter.el:159= never
+fires — it is only reached for a non-nil unknown kind.
+
+Three structural keys (=:done=, =:done-keywords=, =:where=) legitimately have
+no =:match=, so the mistake is indistinguishable from a correct row.  This is
+verbatim the regression =filter.el:83-89= says the table fixed: "a missing
+predicate clause made the filter match EVERYTHING".
+
+** Metadata fields: two unchecked linkages, one fatal
+
+Invariant 4 already states the second one: the guard at [[file:../../src/data/org-glance-graph.el][=graph.el:117-121=]]
+checks slot *order*, not encode kinds.
+
+1. *=FROM= keyword unchecked.*  =graph.el:158-162= does =(plist-get facts from)=
+   against =org-glance-headline--content-facts= ([[file:../../src/data/org-glance-headline.el][=headline.el:167-184=]]).  A
+   misspelled or never-added keyword reads *nil forever, silently* — the
+   "always-nil field" failure the table exists to prevent.
+2. *Encode kind unchecked.*  A list-valued field with a nil encoder crashes
+   =json-serialize= inside the non-demoted =--append= (=graph.el:504-521=),
+   i.e. *every save dies*.  Highest blast radius in the repo.
+
+Evidence the class is live: the hand-maintained fact count in
+=headline.el:121= says "all four" and =:171= says "all six"; there are
+*seven*.
+
+* Design
+
+Two additive load-time checks, at the sites that already guard.
+
+#+begin_src emacs-lisp
+;; filter.el, after the table
+(defconst org-glance-filter--structural-keys '(:done :done-keywords :where)
+  "Keys `org-glance-filter:predicate' handles OUTSIDE the table's `:match'
+dispatch.  Every other row must declare a `:match' kind -- a nil one is
+silently skipped, i.e. the filter matches everything.")
+
+(cl-loop for (key . props) in org-glance-filter:table
+         unless (or (plist-get props :match)
+                    (memq key org-glance-filter--structural-keys))
+         do (error "org-glance: filter key %S declares no :match kind" key))
+#+end_src
+
+#+begin_src emacs-lisp
+;; graph.el, extending the existing guard
+(defconst org-glance-headline--content-fact-keys
+  '(:relations :links :linked :propertized :encrypted :range :hash)
+  "Keys `org-glance-headline--content-facts' returns -- the keyword FROM
+vocabulary of `org-glance-headline-metadata:fields'.")
+
+(cl-loop for (slot _json from encode) in org-glance-headline-metadata:fields
+         for type = (plist-get (cddr (assq slot slots)) :type)
+         do (when (and (keywordp from)
+                       (not (memq from org-glance-headline--content-fact-keys)))
+              (error "org-glance: field %S reads unknown content fact %S" slot from))
+            ;; inv 4: a list slot MUST encode to a JSON vector, or every save dies
+            (when (and (eq type 'list) (not (memq encode '(strings-vector edges-vector))))
+              (error "org-glance: list field %S needs a vector ENCODE kind, got %S"
+                     slot encode)))
+#+end_src
+
+* Files
+
+- [[file:../../src/data/org-glance-filter.el][=src/data/org-glance-filter.el=]] :: table =46-89=, predicate =186-191=
+- [[file:../../src/data/org-glance-graph.el][=src/data/org-glance-graph.el=]] :: guard =117-121=, constructor =152-162=,
+  encode =123-140=
+- [[file:../../src/data/org-glance-headline.el][=src/data/org-glance-headline.el=]] :: =--content-facts= =167-184=; the drifted
+  counts at =121= and =171=
+
+* LOC estimate
+
+- Added: ~20 (two guards + one keyword constant)
+- Removed immediately: 0
+- Saved per future field/key: nothing in lines — this buys *failure at load
+  instead of silently wrong data*, on the two tables every other
+  generalization in this batch is modelled on
+
+* Risk
+
+Lowest of the batch: load-time assertions only, no behaviour change, no
+on-disk or API impact.  The one thing to verify is that the current tables
+*pass* both new checks before shipping (they should — the checks encode
+today's invariants).  Order-preserving and additive, so invariant 4's
+byte-stability contract is untouched.
+
+* Existing precedent
+
+The guard being extended is itself the precedent (=graph.el:117-121=), and it
+is the reason the metadata table is the repo's benchmark family: a
+struct/table mismatch fails =eask recompile= and every =require=.  This
+proposal gives the filter table the same standing and closes the two holes
+the metadata guard leaves.
+
+* Outcome
+
+- [[file:../../src/data/org-glance-filter.el][=filter.el=]] :: =org-glance-filter--structural-keys= names the three keys
+  =predicate= hand-builds (=:done=, =:done-keywords=, =:where=);
+  =--check-table= rejects a value row with no =:match=, a =:match= with no
+  =:accessor= (the clause would call nil), and a structural key that declares
+  =:match=.  Called on the real table right after it.
+- [[file:../../src/data/org-glance-graph.el][=graph.el=]] :: =--check-fields= keeps the slot-order check and adds the two
+  the invariant admits it missed -- a keyword FROM naming no real content fact,
+  and a list-valued slot with a non-vector ENCODE (the one that kills every
+  save).
+- [[file:../../src/data/org-glance-headline.el][=headline.el=]] :: =org-glance-headline--content-fact-keys= names the FROM
+  vocabulary the graph guard trusts.  Its docstring count had already drifted
+  ("all six" for seven facts) -- now derived.
+- Tests :: =test-filter.el= =filter-table-guard-fires= and =test-headline.el=
+  =metadata-field-table-guard-fires= feed each check a broken table and require
+  the error; =content-fact-keys-match-facts= closes the loop by asserting the
+  constant equals what =--content-facts= actually returns.

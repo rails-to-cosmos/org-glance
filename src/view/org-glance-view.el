@@ -218,14 +218,14 @@ Return the buffer."
   "The `user-error' both staleness guards below raise.")
 
 (cl-defun org-glance-view:live-headline (graph id)
-  "The live `org-glance-headline' for ID in GRAPH, or a `user-error'.
+  "Return the live `org-glance-headline' for ID in GRAPH, or `user-error'.
 A view is a cached snapshot that can outlive the graph, so ID may name a
-headline since deleted; error clearly rather than passing nil downstream."
+deleted headline; erroring here keeps nil out of the material layer."
   (or (org-glance-graph:headline graph id)
       (user-error "%s" org-glance-view--stale-message)))
 
 (cl-defun org-glance-view:live-metadata (graph id)
-  "The live headline metadata for ID in GRAPH, or a `user-error' when gone."
+  "Return the live headline metadata for ID in GRAPH, or `user-error' when gone."
   (or (org-glance-graph:live-meta graph id)
       (user-error "%s" org-glance-view--stale-message)))
 

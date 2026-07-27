@@ -88,6 +88,31 @@ EVERYTHING; a missing canonicalisation case fragmented the cache).  Adding a
 plain value-key = one row here.  `:title' is exact; `:title-contains' is a
 case-insensitive substring.")
 
+(defconst org-glance-filter--structural-keys '(:done :done-keywords :where)
+  "Keys `org-glance-filter:predicate' handles outside the `:match' dispatch.
+`:done' is parameterised by `:done-keywords'; `:where' is a raw predicate.
+Every other row MUST declare a `:match' kind: a nil one builds no clause, so
+the key constrains nothing and the filter matches EVERYTHING.")
+
+;; Load-time guard: the table is a single source of truth only if every row
+;; actually reaches `predicate'.  A missing `:match', or a `:match' whose
+;; clause would call a nil accessor, is invisible at runtime -- fail here.
+(cl-defun org-glance-filter--check-table (table)
+  "Signal unless TABLE is a valid filter table; else return t.
+Runs at load over the real table; tests call it with broken ones."
+  (cl-loop for (key . props) in table
+           for kind = (plist-get props :match)
+           do (cond ((memq key org-glance-filter--structural-keys)
+                     (when kind
+                       (error "org-glance: structural filter key %S must not declare :match" key)))
+                    ((null kind)
+                     (error "org-glance: filter key %S declares no :match kind" key))
+                    ((null (plist-get props :accessor))
+                     (error "org-glance: filter key %S declares :match but no :accessor" key))))
+  t)
+
+(org-glance-filter--check-table org-glance-filter:table)
+
 (defconst org-glance-filter:keys
   (mapcar #'car org-glance-filter:table)
   "Recognised keys in a normalised filter spec (`:tag' folds into `:tags').

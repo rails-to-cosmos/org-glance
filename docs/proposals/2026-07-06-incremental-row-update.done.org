@@ -4,6 +4,21 @@
 Status: *proposed* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
+Status: *done* (the org-glance half) · 2026-07-27 · suite 342/342, compile
+warning-free.
+
+A single-row action now upserts THAT row instead of re-deriving every row from
+the graph.  Measured context: deriving rows for a 1000-headline view costs
+≈7.9 ms per action -- invisible at that size, ≈79 ms at 10k, and paid on every
+todo/tag/crypt/planning/edit/duplicate/delete.
+
+*The other half is upstream, deliberately not done here.*  `--reload` renders
+twice (`table-view-refresh` -> `set-rows` -> render, then
+`table-view-apply-sort` -> render).  Collapsing that needs `table-view` to
+apply a known sort during the row set replacement -- a generic table
+capability, so it belongs in the pinned dependency, not in a private patch
+here.
+
 * Problem
 
 A single-row action in the table — ~C-c C-t~ on one row (no marks), and the ~g~
@@ -79,3 +94,26 @@ actions, and a single-render reload) + tests. No vendored-file change (~upsert-r
   (which makes the ~get-headline~ read =O(1)=).
 - Complementary to [[file:2026-07-06-table-paging.proposed.org][Table paging]].
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
+
+* Outcome
+
+- =org-glance-table--keep-fn= :: buffer-local, set by =:visit= to the very
+  predicate the fill-fn uses (with the tag's done-set bound as it was), so an
+  action can judge one headline without rebuilding the view's filter.
+- =org-glance-table--finish= :: upserts the changed row from fresh metadata
+  (=table-view-upsert-row=, which keeps the width cache and re-renders one
+  line), drops it (=table-view-delete-row=) when the headline is gone or no
+  longer matches, and falls back to a full reload when the view has no
+  predicate -- an unregistered view can never show a stale row.
+- Freshness :: the view re-anchors its store mtime, so an action no longer
+  leaves the view flagged stale (invariant 7: single-user, the file mtime is
+  the anchor).
+- =g= and the display-boundary pull still use =--reload=: they re-read the
+  whole store on purpose.
+
+Marks survive, since the upsert is id-keyed; invariant 24's (row, cell) point
+restoration is unchanged.
+
+Test =table-action-upserts-one-row= asserts zero calls to
+=org-glance-table--rows= across an update, a filter-exit and a delete, and
+fails when the upsert path is bypassed.

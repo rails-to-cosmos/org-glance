@@ -4,6 +4,13 @@
 Status: *proposed* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
+Status: *done* · 2026-07-27 · suite 341/341, compile warning-free.
+
+*Measured:* 50 save+read cycles over a 1000-headline store went *2101 ms ->
+265 ms (≈8x)*.  Every save previously dropped the read cache, so the next read
+re-scanned the WAL (JSON parse per record) and re-deserialized every live
+headline; it now folds the records it just wrote into the cache in place.
+
 * Problem
 
 The in-memory read cache (~org-glance-graph--ensure-cache~) is thrown away on
@@ -149,3 +156,36 @@ rewiring, the snapshot refresh) + ≈ 60–100 LOC of tests.
   append-only segment layout described here (union-merge the JSONL, self-heal a
   git-mangled MANIFEST).
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
+
+* Outcome
+
+=org-glance-graph--patch-cache= replaces the unconditional
+=--invalidate-cache= at the end of =--append=.  It folds the records the append
+just wrote into the live cache and re-stamps the store snapshot.
+
+Rules, matching what a rebuild would produce (the rebuild keeps the latest
+record per id in FIRST-SIGHTING id order):
+
+| record            | patch                                            |
+|-------------------+--------------------------------------------------|
+| unknown id        | append -- its first sighting is now              |
+| known and live    | replace in place, order unchanged                 |
+| tombstone         | drop from LIVE, keep in BY-ID (tri-state, inv 30) |
+| re-add after tomb | *fall back to a rebuild*                          |
+
+The fallback is the interesting case: a re-added id's first sighting is its
+ORIGINAL position, which LIVE no longer records, so a patch would re-insert it
+in the wrong place.  Rare, so it rebuilds rather than guesses.  The same
+fallback catches any BY-ID/LIVE disagreement.
+
+Compaction still invalidates on its own -- it REWRITES records (dropping
+tombstones), which no patch can express; =--patch-cache= then finds a cold
+cache and does nothing.  A cold cache stays cold.
+
+Tests: =graph-cache-patched-not-rebuilt= counts rebuilds (0 across append,
+update and tombstone; exactly 1 for the deliberate re-add fallback), and
+=graph-cache-patch-matches-rebuild= runs 50 deterministic random mutations,
+comparing the patched cache against a COLD REBUILD from disk after every one --
+same live set, same order, same states, same tri-state per id.  The audit rated
+this proposal HIGH risk because a patch bug serves stale or deleted rows
+silently; that comparison is what makes it safe.

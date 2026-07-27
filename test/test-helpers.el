@@ -80,6 +80,31 @@ it (caches read as stale)."
   (set-file-times (org-glance-graph:headline-meta-path graph)
                   (time-add (current-time) seconds)))
 
+(cl-defun org-glance-test:sealed-segments (graph)
+  "Names of the sealed segments listed in GRAPH's MANIFEST."
+  (org-glance-graph--sealed-segments graph))
+
+(cl-defun org-glance-test:count-records (graph)
+  "Number of records a forward scan of GRAPH's store yields."
+  (let ((n 0))
+    (org-glance-graph--scan-forward graph (lambda (_r) (cl-incf n)))
+    n))
+
+(cl-defmacro org-glance-test:with-crash-at (fn &rest body)
+  "Run BODY with FN signalling, simulating a crash at that commit point."
+  (declare (indent 1))
+  `(cl-letf (((symbol-function ,fn)
+              (lambda (&rest _) (error "simulated crash at commit"))))
+     ,@body))
+
+(cl-defun org-glance-test:simulate-material-save (graph id contents)
+  "Run `org-glance-material:sync' as if ID's blob were saved as CONTENTS."
+  (with-temp-buffer
+    (insert contents)
+    (setq-local org-glance-material--graph graph
+                org-glance-material--id id)
+    (org-glance-material:sync)))
+
 (cl-defun org-glance-test:open-size (graph)
   "Byte size of GRAPH's open (unsealed) segment file, 0 if absent."
   (or (file-attribute-size

@@ -1,0 +1,83 @@
+#+TITLE: One column table behind the spec, the cells and editability
+#+DATE: 2026-07-27
+
+* Problem
+
+A built-in table column is declared in *three* places that must agree:
+
+1. [[file:../../src/view/org-glance-table.el][=table.el:126-141=]] — =--base-columns=: 9 =(key . "…")= spec rows
+2. [[file:../../src/view/org-glance-table.el][=table.el:190-208=]] — =--row=: 9 matching =cells= entries
+3. [[file:../../src/view/org-glance-table.el][=table.el:797-835=]] — =--act-edit=: a =pcase= over the same key strings
+   deciding how =i= edits each column
+
+None of the three linkages is enforced.  =table-view--cell= is
+=(alist-get (intern key) (alist-get 'cells row))=, so a column with a spec
+row and no cell renders *blank* — no error, no test failure
+(=test-table.el:71-80= asserts the key list only, never that each key
+resolves).  A column missing from the =pcase= is silently uneditable: today
+=interval=, =encrypted=, =repeated= and =relation= all fall into the =_= arm,
+so lists 1 and 3 *already disagree*.
+
+The three custom-column builders repeat the shape a fourth time —
+=--property-column= (=450-463=), =--edge-column= (=465-482=),
+=--relation-column= (=506-518=) share five of seven alist cells verbatim.
+
+* Design
+
+One table carrying the spec row, the cell function and the edit function:
+
+#+begin_src emacs-lisp
+(defconst org-glance-table--builtin-columns
+  ;; KEY         HEADER      TYPE     ALIGN     CELL-FN (of METADATA)          EDIT-FN
+  `(("state"     "State"     "badge"  "left"   ,#'org-glance-table--cell-state    ,#'org-glance-table--edit-state)
+    ("title"     "Title"     "text"   "left"   ,#'org-glance-table--cell-title    ,#'org-glance-table--edit-title)
+    ("schedule"  "Scheduled" "text"   "left"   ,#'org-glance-headline-metadata:schedule ,#'org-glance-table--edit-schedule)
+    ("interval"  "Interval"  "text"   "left"   ,#'org-glance-table--cell-interval nil)  ; derived: `i' refuses
+    ;; ...one row per built-in
+    )
+  "Single source of the built-in column set: the spec row, the row cell AND
+how `i' edits it (nil = derived, refuse).  Adding a column = one row here.")
+#+end_src
+
+=--base-columns= and =--row= both =cl-loop= over it; =--act-edit= becomes a
+lookup plus =funcall= instead of a =pcase=.  A shared
+=--value-column (key header value-fn &key prop align)= constructor then
+absorbs the five identical cells of the three custom builders.
+
+* Files
+
+- [[file:../../src/view/org-glance-table.el][=src/view/org-glance-table.el=]] :: =126-141=, =190-208=, =797-835=,
+  =450-463=, =465-482=, =506-518=, =542-551=
+- [[file:../../test/test-table.el][=test/test-table.el=]] :: =71-80= hardcodes the key list — it becomes a
+  derivation from the table (or an explicit order assertion)
+
+* LOC estimate
+
+- Added: ~14 (the table) + 9 (=--value-column=)
+- Removed immediately: ~30 (=--base-columns= literals, the =--act-edit=
+  =pcase= arms, the three builders' shared cells)
+- Saved per future column: *~12 lines across 3 sites becomes 1 row*, and the
+  blank-cell failure becomes impossible
+
+* Risk
+
+Internal only — no on-disk change.  Two constraints must survive:
+
+- *Invariant 15*: =title= stays mandatory.  =--mandatory-column?=
+  ([[file:../../src/view/org-glance-table.el][=table.el:143-148=]]) remains the single spelling; the table must NOT grow a
+  =:removable= cell that could contradict it.
+- The spec handed to =table-view= must stay byte-identical, including the
+  =badges= cell that only =state= carries.
+
+A third *custom* column kind (beyond drawer-property and relation-kind) is
+NOT proposed here: =--custom-column= (=542-551=) encodes the kind in the
+string's CASE, and the persisted =(NAME . HEADER)= pairs in
+=table-columns.eld= / =table-refs.eld= carry no type — changing that is an
+on-disk migration and is deliberately left out of scope.
+
+* Existing precedent
+
+=--property-column= already carries a per-column closure (=value-fn=) through
+the spec, so the mechanism for a per-column function is present and proven.
+=org-glance-headline-metadata:fields= ([[file:../../src/data/org-glance-graph.el][=graph.el:84-114=]]) is the same
+"one row drives several derived consumers" shape.

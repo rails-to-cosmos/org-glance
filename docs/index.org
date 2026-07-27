@@ -7,7 +7,7 @@ when implemented (older ones are =.md=; new ones are =.org=).
 
 * Rules of the codebase
 
-- [[file:invariants.org][Global invariants]] — the 26 rules every change must preserve (rule,
+- [[file:invariants.org][Global invariants]] — the 32 rules every change must preserve (rule,
   evidence anchors, what breaks); compact index in [[file:../CLAUDE.md][CLAUDE.md]].
 - [[file:properties.org][Properties reference]] — every special drawer property, content marker
   (=#+begin_crypt=) and file keyword org-glance gives meaning to.
@@ -23,6 +23,19 @@ when implemented (older ones are =.md=; new ones are =.org=).
 
 Newest first.
 
+- [[file:proposals/2026-07-06-incremental-row-update.done.org][Incremental row update]] — a single-row action upserts that row instead of
+  re-deriving the whole view (the double-render half is an upstream change).
+- [[file:proposals/2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] — an append patches the read cache instead of
+  dropping it; save+read over 1000 headlines went ≈8× faster.
+- [[file:proposals/2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] — the metadata build is one org-mode pass, not two
+  (measured: ≈7%, not the ≈2× the proposal estimated -- see its outcome).
+- [[file:proposals/2026-06-07-generalize-test-fixture-helpers.done.org][Shared fixtures for the test suite]] — 35 helpers; crash injection, record
+  counting and save simulation are no longer hand-rolled per test.
+- [[file:proposals/2026-07-27-generalize-tag-config-pragmas.done.org][Per-tag config pragmas as a field table]] — one row + one slot instead of a
+  parse line, a capture arm and an overview arm.
+- [[file:proposals/2026-07-27-generalize-schema-table-guards.done.org][Load-time guards for the schema tables]] — a filter row with no =:match= and a
+  list field with a non-vector encoder now fail at load instead of silently
+  matching everything / killing every save.
 - [[file:proposals/2026-07-23-plugin-interface.done.org][Plugin interface — minimal core, LLM as the first plugin]] —
   =org-glance-plugins= loads =org-glance-<name>= libraries error-demoted;
   plugins self-register their transient rows and keys.
@@ -46,6 +59,8 @@ Newest first.
   public text between blocks stays indexed.
 - [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][Auto-resolve git conflicts in the =.eld= sidecars]] — commutative,
   non-inflating merges for the derived sidecars the union driver cannot cover.
+- [[file:proposals/2026-07-09-inactive-archived-commented.done.org][Archived and commented headlines]] — =archived?= / =commented?= metadata plus
+  the =:archived= / =:commented= filter keys; the ambient filter hides both.
 - [[file:proposals/2026-07-09-dev-tooling-benchmarks-linters.done.org][Dev tooling — a benchmark harness and a lint gate]] — =make bench= times the
   store's hot paths; =make lint= gates checkdoc + relint.
 - [[file:proposals/2026-07-09-delete-headline-command.done.org][Delete a headline]] — =D= / =M-x org-glance-delete= with referrer-aware
@@ -59,6 +74,10 @@ Newest first.
   copy; declare =table-view= via a MELPA-style pin in =Eask=.
 - [[file:proposals/2026-06-30-material-save-async-sync.done.md][Fast material saves — WAL-commit on the hot path]] — views self-sync off the
   commit instead of blocking the save.
+- [[file:proposals/2026-06-07-generalize-graph-content-path.done.org][Graph-owned content-path accessor]] — the blob path has one spelling; the view
+  layer no longer knows the shard layout.
+- [[file:proposals/2026-06-07-generalize-core-v2-module.done.org][A core module for the graph-lifecycle trio]] — the session primitives live in
+  =org-glance-core.el=; no module re-declares them.
 - [[file:proposals/2026-06-07-generalize-metadata-field-table.done.md][Field-spec table for the metadata projection]] — one descriptor table drives
   the metadata fields.
 - [[file:proposals/2026-06-07-generalize-filter-key-table.done.md][One descriptor table for overview filter keys]] — same generalization for the
@@ -68,15 +87,9 @@ Newest first.
 
 Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performance audit]].
 
-- [[file:proposals/2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] — patch the cache on append instead of
-  invalidating it (the structural one).
-- [[file:proposals/2026-07-06-single-parse-metadata.proposed.org][Single-parse metadata]] — reuse the =--from-string= parse so a build is one
-  parse, not two.
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
 - [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page, not the whole set.
-- [[file:proposals/2026-07-06-incremental-row-update.proposed.org][Incremental row update]] — upsert one row + single render for single-row
-  actions.
 
 * Proposed — other
 
@@ -86,6 +99,7 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 
 * Proposed — generalization / refactor
 
-- [[file:proposals/2026-06-07-generalize-core-v2-module.proposed.md][org-glance-core-v2.el for the graph-lifecycle trio]].
-- [[file:proposals/2026-06-07-generalize-graph-content-path.proposed.md][Graph-owned content-path accessor]].
-- [[file:proposals/2026-06-07-generalize-test-fixture-helpers.proposed.md][Shared fixtures for the v2 test suite]].
+- [[file:proposals/2026-07-27-generalize-table-action-table.proposed.org][One action table behind the table's keys and handlers]].
+- [[file:proposals/2026-07-27-generalize-table-column-table.proposed.org][One column table behind the spec, the cells and editability]].
+- [[file:proposals/2026-07-27-generalize-view-scaffold.proposed.org][The shared view scaffold, actually shared]].
+- [[file:proposals/2026-07-27-generalize-shared-view-actions.proposed.org][One action body per operation, shared by the overview and the table]].

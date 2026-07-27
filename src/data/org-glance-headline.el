@@ -23,11 +23,10 @@
 
 (defconst org-glance-headline:hash-ignore-drawers (list "LOGBOOK")
   "Drawer names whose contents never affect the content hash.
-Clock lines and state notes pile up in the logbook without changing what the
-headline SAYS, and nothing derived reads them (`--content-facts' projects the
-body, never the LOGBOOK).  Hashing them would churn the hash on every
-clock-in/out, invalidating the hash-guarded property index and every
-projection keyed on it, for no observable change.")
+Clock lines and state notes accumulate here while the headline's own text
+stands still, and nothing derived reads them.  Hashing them would churn the
+hash on every clock-in/out, invalidating the property index and every
+projection keyed on it.")
 
 (cl-defstruct (org-glance-headline (:predicate org-glance-headline?)
                                       (:conc-name org-glance-headline:))
@@ -45,6 +44,12 @@ projection keyed on it, for no observable change.")
   ;; Metadata
   (archived? nil :read-only t :type bool)
   (commented? nil :read-only t :type bool)
+
+  ;; Content facts captured by the parse that built this headline, as
+  ;; (CONTENTS . PLIST) -- see `org-glance-headline--content-facts'.  Held
+  ;; against the exact contents STRING it was computed from, so a copy that
+  ;; rewrites contents (encrypt/decrypt) can never read a stale plist.
+  (-facts nil :read-only t :type list)
 
   ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline--<slot-name>'
   (-hash nil :read-only t :type (or string function))
@@ -144,9 +149,10 @@ Either the whole body is `aes-encrypted' (the legacy layout) or at least one
       (org-glance--crypt-sealed-blocks-p)))
 
 (defun org-glance-headline--hash-log-drawers ()
-  "Drawer names stripped before hashing: LOGBOOK plus org's configured ones.
-`org-log-into-drawer' / `org-clock-into-drawer' may name a custom drawer (t
-means LOGBOOK; an integer clock threshold names none)."
+  "Return the drawer names stripped before hashing.
+LOGBOOK plus any custom drawer `org-log-into-drawer' or
+`org-clock-into-drawer' names (t means LOGBOOK; an integer threshold names
+none)."
   (delete-dups
    (delq nil (append org-glance-headline:hash-ignore-drawers
                      (mapcar (lambda (v) (cond ((stringp v) v) ((eq v t) "LOGBOOK")))
@@ -155,7 +161,7 @@ means LOGBOOK; an integer clock threshold names none)."
 
 (defun org-glance-headline--delete-log-drawers ()
   "Delete the current buffer's logbook drawers, contents and all.
-MUTATES the buffer.  See `org-glance-headline:hash-ignore-drawers' for why."
+MUTATES the buffer.  Rationale: `org-glance-headline:hash-ignore-drawers'."
   (let ((case-fold-search t)
         (re (concat "^[ \t]*:" (regexp-opt (org-glance-headline--hash-log-drawers) t)
                     ":[ \t]*$")))
@@ -166,10 +172,9 @@ MUTATES the buffer.  See `org-glance-headline:hash-ignore-drawers' for why."
           (delete-region beg (min (point-max) (1+ (line-end-position)))))))))
 
 (defun org-glance-headline--hash-here ()
-  "Content hash of the current buffer, ignoring bookkeeping the reader never sees.
-The id/hash drawer properties and the LOGBOOK drawers are removed first, so
-clocking in and out -- or a state note landing in the drawer -- leaves the hash
-alone.  MUTATES the buffer (deletes both), so call it LAST when sharing one."
+  "Return the content hash of the current buffer.
+Strips the id/hash drawer properties and the LOGBOOK drawers first, so clocking
+leaves the hash alone.  MUTATES the buffer, so call it LAST when sharing one."
   (goto-char (point-min))
   (dolist (property org-glance-headline:hash-ignore-properties)
     (org-entry-delete nil property))
@@ -197,24 +202,38 @@ alone.  MUTATES the buffer (deletes both), so call it LAST when sharing one."
   (thunk-delay (org-glance-headline:with-contents contents
                  (org-glance-headline--encrypted-here))))
 
+(defconst org-glance-headline--content-fact-keys
+  '(:relations :links :linked :propertized :encrypted :range :hash)
+  "Keys `org-glance-headline--content-facts' returns.
+The keyword FROM vocabulary of `org-glance-headline-metadata:fields'; a row
+naming anything else reads nil forever.  Checked at load with the table.")
+
 (cl-defun org-glance-headline--content-facts (headline)
-  "HEADLINE's content-derived metadata facts, in ONE org-mode pass.
-Returns (:relations RS :links LS :linked L :propertized P :encrypted E
-:range R :hash H), sharing one `with-contents' buffer + `org-mode' init
-across all six (the
-store's metadata build reparses the same blob otherwise).  The links parse
-once, feeding both `linked?' and the relation edges.  Hash is LAST: it deletes
-the id/hash drawer properties in place, after the read-only facts."
-  (org-glance-headline:with-contents headline
-    (pcase-let* ((links (org-glance--buffer-links))   ; with-contents is at point-min
-                 (`(,edges . ,plain) (org-glance--links-partition links)))
-      (list :relations   edges
-            :links       plain
-            :linked      (and links t)
-            :propertized (org-glance-headline--propertized-here)
-            :encrypted   (org-glance-headline--encrypted-here)
-            :range       (org-glance-headline--range-here)
-            :hash        (org-glance-headline--hash-here)))))
+  "Return HEADLINE's content-derived facts, computed once.
+Reuses the plist its parse captured (`--content-facts-here'), else computes
+them in one org-mode buffer now.  The memo is keyed by the exact contents
+STRING, so a copy that rewrote contents recomputes."
+  (let ((memo (org-glance-headline:-facts headline)))
+    (if (and memo (eq (car memo) (org-glance-headline:contents headline)))
+        (cdr memo)
+      (org-glance-headline:with-contents headline
+        (org-glance-headline--content-facts-here)))))
+
+(cl-defun org-glance-headline--content-facts-here ()
+  "Return the content facts of the headline filling the CURRENT buffer.
+One plist keyed by `org-glance-headline--content-fact-keys', from a single
+org-mode pass: the links parse feeds both `linked?' and the relation edges.
+Hash runs LAST -- it deletes drawer properties in place."
+  (goto-char (point-min))
+  (pcase-let* ((links (org-glance--buffer-links))
+               (`(,edges . ,plain) (org-glance--links-partition links)))
+    (list :relations   edges
+          :links       plain
+          :linked      (and links t)
+          :propertized (org-glance-headline--propertized-here)
+          :encrypted   (org-glance-headline--encrypted-here)
+          :range       (org-glance-headline--range-here)
+          :hash        (org-glance-headline--hash-here))))
 
 (cl-defun org-glance-headline--range-here ()
   "The BODY's first active date range as (FROM TO) with brackets, or nil.
@@ -236,7 +255,24 @@ descendants (like every content fact), so a child's range can project."
   (org-glance-headline:with-contents contents      ; with-contents already entered org-mode
     (unless (or (org-at-heading-p) (re-search-forward org-heading-regexp nil t))
       (error "Unable to find `org-element' of type `headline' in the provided contents"))
-    (org-glance-headline:at-point)))
+    (let* ((headline (org-glance-headline:at-point))
+           (parsed (org-glance-headline:contents headline)))
+      ;; This buffer already holds exactly one headline's text in the common
+      ;; case (one headline per blob), and it is already in org-mode: compute
+      ;; the content facts HERE instead of standing up a second buffer over the
+      ;; same string.  Runs AFTER `at-point' captured CONTENTS, since the hash
+      ;; pass mutates.
+      ;;
+      ;; The guard is EXACT string equality, not a trim: computing in place is
+      ;; identical to computing in a fresh buffer holding CONTENTS only when the
+      ;; buffer holds CONTENTS and nothing else.  Anything before the heading
+      ;; (blank lines, a preamble) is outside CONTENTS but inside this buffer,
+      ;; and the hash covers the whole buffer -- so those cases fall through to
+      ;; the on-demand parse in `--content-facts', exactly as before.
+      (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
+          (org-glance-headline--copy headline
+            :-facts (cons parsed (org-glance-headline--content-facts-here)))
+        headline))))
 
 (cl-defun org-glance-headline--from-lines (&rest lines)
   (declare (indent 0))
@@ -282,10 +318,32 @@ descendants (like every content fact), so a child's range can project."
                                  :-node-properties (org-glance-headline--node-properties contents)
                                  :-encrypted? (org-glance-headline--encrypted contents))))
 
+(defconst org-glance-headline--contents-derived-slots
+  `((-facts           . nil)
+    (-hash            . ,#'org-glance-headline--hash)
+    (-properties      . ,#'org-glance-headline--properties)
+    (-node-properties . ,#'org-glance-headline--node-properties)
+    (-encrypted?      . ,#'org-glance-headline--encrypted))
+  "Slots computed FROM `contents', each with the builder that recomputes it.
+A copy replacing `:contents' rebuilds them: each is a memo or a thunk closed
+over the OLD string.  A nil builder means drop the slot.  The pairs are
+spelled out because the names differ -- `-encrypted?' is built by
+`--encrypted'.  An explicit UPDATE-PLIST value wins.")
+
 (cl-defun org-glance-headline--copy (headline &rest update-plist)
-  "Copy HEADLINE but replace slot values described in UPDATE-PLIST."
+  "Copy HEADLINE, replacing the slots described by UPDATE-PLIST.
+Replacing `:contents' rebuilds the contents-derived slots
+(`org-glance-headline--contents-derived-slots') UPDATE-PLIST leaves out."
   (declare (indent 1))
   (cl-check-type headline org-glance-headline)
+  (when (plist-member update-plist :contents)
+    (let ((contents (plist-get update-plist :contents)))
+      (pcase-dolist (`(,slot . ,builder) org-glance-headline--contents-derived-slots)
+        (let ((key (intern (format ":%s" slot))))
+          (unless (plist-member update-plist key)
+            (setq update-plist
+                  (plist-put update-plist key
+                             (and builder (funcall builder contents)))))))))
   (cl-loop for slot-info in (cdr (cl-struct-slot-info 'org-glance-headline))
            for slot-name = (car slot-info)
            for slot-property = (intern (format ":%s" slot-name))

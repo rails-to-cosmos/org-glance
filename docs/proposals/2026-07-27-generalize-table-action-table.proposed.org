@@ -1,0 +1,95 @@
+#+TITLE: One action table behind the table's keys and handlers
+#+DATE: 2026-07-27
+
+* Problem
+
+Every table view declares its action vocabulary *twice*, in two functions,
+joined only by an untyped string:
+
+- [[file:../../src/view/org-glance-table.el][=table.el:161-177=]] — the =actions= cell of =--spec=: 17 rows of
+  =((key . K) (command . C) (label . L))=
+- [[file:../../src/view/org-glance-table.el][=table.el:889-924=]] — =--handlers=: 17 =(cons "C" (lambda …))= rows
+- [[file:../../src/view/org-glance-tags.el][=tags.el:67-71= and =163-167=]] — the same split, 5 rows each
+
+Adding an action is two lockstep edits.  A typo in either =command= string
+produces a *bound key that dispatches to nothing* — and nothing catches it:
+=table-view--dispatch= only =message=s on a missing handler, and
+=test-table.el:75-76= explicitly opts out of checking, verbatim: "=title=
+/=actions=/=sort= are literals of the same backquote -- only the column set
+is a real claim".
+
+The handler bodies then repeat a third thing.  The nil-id guard appears 8×
+(=table.el:317, 340, 776, 783, 792, 804, 839, 915=) and the
+capture-line-then-=--finish= pairing 7× (=:269, 318, 341, 777, 784, 793,
+806=).  That capture is load-bearing: the reload re-renders from the top, so
+a handler that forgets it drops the cursor — *invariant 24's exact failure
+mode, currently enforced by copy-paste discipline in seven bodies*.
+
+* Design
+
+One =defconst= per view drives both lists, with two derivers shared in
+[[file:../../src/view/org-glance-view.el][=org-glance-view.el=]]:
+
+#+begin_src emacs-lisp
+(defconst org-glance-table--actions
+  ;; KEY        COMMAND       LABEL         BULK  NEEDS-ID  HANDLER
+  `(("RET"      "materialize" "Materialize" nil   t   ,#'org-glance-table--act-materialize)
+    ("j"        "open"        "Open link"   nil   t   ,#'org-glance-table--act-open)
+    ("C-c C-t"  "todo"        "Todo"        t     nil ,#'org-glance-table--act-todo-dispatch)
+    ;; ...one row per action
+    )
+  "Single source of the table's action vocabulary: the spec `actions' cell
+AND the handler alist.  Adding an action = one row here + its `--act-*'.")
+
+(cl-defun org-glance-view:action-spec (rows)
+  "ROWS as a `table-view' spec `actions' list."
+  (cl-loop for (key command label bulk _id _fn) in rows
+           collect (append `((key . ,key) (command . ,command) (label . ,label))
+                           (when bulk '((bulk . t))))))
+
+(cl-defun org-glance-view:action-handlers (rows &rest ctx)
+  "ROWS as a handler alist; each HANDLER is applied to CTX plus the row args.
+A NEEDS-ID row gets the nil-id guard for free, so no handler body repeats it."
+  (cl-loop for (_key command _label bulk needs-id fn) in rows
+           collect (cons command
+                         (if bulk
+                             (lambda (rws) (apply fn (append ctx (list rws))))
+                           (lambda (id row)
+                             (when (and needs-id (null id))
+                               (user-error "Point is not on a row"))
+                             (apply fn (append ctx (list id row))))))))
+#+end_src
+
+The guard moving into the deriver is the point: a new action *cannot* forget
+it.  The same deriver can wrap the =line-number-at-pos= capture so invariant
+24 stops depending on discipline.
+
+* Files
+
+- [[file:../../src/view/org-glance-table.el][=src/view/org-glance-table.el=]] :: =161-177= (spec actions), =889-924=
+  (handlers), the 8 guard sites and 7 capture sites listed above
+- [[file:../../src/view/org-glance-tags.el][=src/view/org-glance-tags.el=]] :: =67-71=, =163-167=
+- [[file:../../src/view/org-glance-view.el][=src/view/org-glance-view.el=]] :: the two new derivers
+
+* LOC estimate
+
+- Added: ~12 (derivers, one-off)
+- Removed immediately: table =17 + 36 → ~22= (*−31*), tags =10 → ~7= (*−3*),
+  guards/captures ~14 more
+- Saved per future action: *one row instead of two edits in two functions*,
+  plus the guard and the point-capture for free
+
+* Risk
+
+Internal only — no public API, no on-disk format, no wire change.  The spec
+and handler shapes handed to =table-view= stay byte-identical, so the pinned
+dependency is unaffected.  Invariant 19 holds (handlers still delegate to
+=org-glance-material:=); invariant 24 is *strengthened*.  Bulk rows must keep
+the per-row =condition-case= degradation (=--act-todo-bulk=, =table.el:301-309=)
+— the deriver must not batch-abort.
+
+* Existing precedent
+
+=org-glance-filter:table= ([[file:../../src/data/org-glance-filter.el][=filter.el:46-89=]]) is this shape, and its docstring
+records the same motivation.  The =bulk= flag already rides in the spec row
+(=table.el:167=), so the table only needs to carry what the spec already models.

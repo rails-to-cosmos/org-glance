@@ -1,0 +1,106 @@
+#+TITLE: One action body per operation, shared by the overview and the table
+#+DATE: 2026-07-27
+
+* Problem
+
+The overview and the table implement *the same twelve operations twice*:
+
+| operation         | overview                | table                   |
+|-------------------+-------------------------+-------------------------|
+| materialize       | =overview.el:312-315=   | =table.el:254-255=      |
+| open link         | =overview.el:335-338=   | =table.el:257-258=      |
+| extract           | =overview.el:340-343=   | =table.el:260-261=      |
+| todo              | =overview.el:345-357=   | =table.el:263-274=      |
+| schedule/deadline | =overview.el:366-381=   | =table.el:781-788=      |
+| history           | =overview.el:323-326=   | =table.el:837-840=      |
+| delete            | =overview.el:317-321=   | =table.el:774-779=      |
+| relations         | =overview.el:425-429=   | =table.el:914-916=      |
+| capture           | =overview.el:431-436=   | =table.el:910-913=      |
+| configure-tag     | =overview.el:438-445=   | =table.el:1071-1077=    |
+| view toggle       | =overview.el:420-423=   | =table.el:903=          |
+| filter spec local | =overview.el:301-303=   | =table.el:212-213=      |
+
+Every pair is the same three steps — get the id at point, call
+=org-glance-material:X=, refresh and message.  Only two things genuinely
+differ: *how the id arrives* (=org-glance-overview:id-at-point=,
+=overview.el:305-310=, vs the row id =table-view= hands the handler) and *how
+the view finishes* (=--refresh-to-id=, =overview.el:359-364=, vs =--finish=,
+=table.el:220-227=).  Both finishers already share a shape: id + format +
+args.
+
+A new operation therefore costs two bodies plus a keybinding, and the two
+copies drift: the table gained =C-c p= (duplicate) and =i= (edit cell) that
+the overview never got.
+
+* Design
+
+Two buffer-locals in [[file:../../src/view/org-glance-view.el][=org-glance-view.el=]] name the only real variation:
+
+#+begin_src emacs-lisp
+(defvar-local org-glance-view--id-fn nil
+  "Nullary: id of the entity at point in this view.")
+
+(defvar-local org-glance-view--finish-fn nil
+  "(ID FMT &rest ARGS): re-fill this view, return to ID, message FMT ARGS.")
+
+(cl-defun org-glance-view:finish (id fmt &rest args)
+  (apply org-glance-view--finish-fn id fmt args))
+#+end_src
+
+Each operation then exists once:
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-view--act-planning (graph _spec id _row kind)
+  (org-glance-material:set-planning graph id kind current-prefix-arg)
+  (org-glance-view:finish id "%s %s" (capitalize (symbol-name kind))
+                          (if current-prefix-arg "cleared" "set")))
+#+end_src
+
+The overview binds =--id-fn= to =id-at-point= and =--finish-fn= to a wrapper
+over =--refresh-to-id= (which already ignores LINE — it restores by id
+search, =overview.el:363=); the table binds them to the row id and
+=--finish=.  Composed with [[file:2026-07-27-generalize-table-action-table.proposed.org][the action table]], a =:views= cell on each row
+generates the overview keymap too, so an operation appears in both views by
+declaring one row.
+
+* Files
+
+- [[file:../../src/view/org-glance-overview.el][=src/view/org-glance-overview.el=]] :: =301-310=, =312-381=, =420-445=, and the
+  =define-key= block =275-299=
+- [[file:../../src/view/org-glance-table.el][=src/view/org-glance-table.el=]] :: =212-213=, =254-274=, =774-788=,
+  =837-840=, =903-916=, =1071-1077=
+- [[file:../../src/view/org-glance-view.el][=src/view/org-glance-view.el=]] :: the two buffer-locals and the dispatcher
+
+* LOC estimate
+
+- Added: ~14 (buffer-locals + dispatcher)
+- Removed immediately: overview bodies ≈77 + 15 keybinding lines, table's
+  overlapping subset ≈36, against one shared set ≈55 ⇒ *≈ −60*
+- Saved per future operation: *one body instead of two, and it lands in both
+  views* instead of drifting into one
+
+* Risk
+
+Highest of the batch — this is the one to do last, or not at all if the
+appetite is small.
+
+- *Invariant 24 is strengthened*: =--finish-fn= becomes the only
+  path, so a new action cannot forget point restoration.  But the two
+  finishers are not identical today (the table restores a =(row, cell)= pair;
+  the overview searches by id), and that difference must survive the merge.
+- *Invariant 19* holds: bodies still delegate to =org-glance-material:=.
+- *Invariant 11*: the overview is file-backed; anything that reloads it must
+  keep the unsaved-edit guard.
+- The two views deliberately differ in a few places (the overview has no
+  bulk/mark model).  A =:views= cell must be able to say "table only" —
+  otherwise this proposal quietly *adds* keys to the overview.
+
+Nothing on disk changes.
+
+* Existing precedent
+
+=org-glance-view:register= ([[file:../../src/view/org-glance-view.el][=view.el:99-110=]]) already models "each view
+supplies only what genuinely differs" with =:stale-fn= / =:reload-fn= — this
+is the same bargain for =:id-fn= / =:finish-fn=.  The relation pivot is
+already shared this way: =org-glance-table:visit-relations= is called by the
+table, the overview AND the material buffer from one definition.

@@ -205,10 +205,10 @@ cover every link."
            finally return (cons (-distinct (delq nil edges)) plain)))
 
 (defsubst org-glance--downcased-string (x)
-  "Coerce X to a downcased string -- the canonical tag/title form.
+  "Coerce X to a downcased string, the canonical tag/title form.
 The one spelling of invariant 13\'s coercion: tags are stored interned and
-downcased, deserialized metadata carries strings, so every boundary that
-compares them funnels through here."
+downcased while deserialized metadata carries strings, so every boundary
+comparing them funnels through here."
   (downcase (format "%s" x)))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
@@ -248,10 +248,10 @@ link description already names."
                                   collect parent)))))
 
 (cl-defun org-glance--link-item-prefix (element)
-  "Text introducing ELEMENT inside its own list item, or nil.
-The item text BEFORE the link, other bracket links removed, a trailing `:' or
-`-' dropped: `- Local: [[file:~/x]]' introduces its link as \"Local\".  Nil when
-ELEMENT is in no list item, or nothing precedes it there."
+  "Return the text introducing ELEMENT inside its own list item, or nil.
+The item text BEFORE the link, other bracket links removed and a trailing `:'
+or `-' dropped: `- Local: [[file:~/x]]' introduces its link as \"Local\".  Nil
+when ELEMENT is in no list item, or nothing precedes it there."
   (when-let ((item (org-element-lineage element '(item))))
     (let ((start (org-glance--item-body-start item))
           (end (org-element-property :begin element)))
@@ -264,10 +264,10 @@ ELEMENT is in no list item, or nothing precedes it there."
               (unless (string-empty-p label) label))))))))
 
 (cl-defun org-glance--link-label (element)
-  "Label naming ELEMENT in the link picker.
-Its description when it has one; else the `KEY:' text introducing it in its
-list item (`org-glance--link-item-prefix') -- a bare link takes its meaning
-from that text, and the raw URL is a poor label; else the raw link."
+  "Return the label naming ELEMENT in the link picker.
+Its description; else the `KEY:' text introducing it in its list item
+(`org-glance--link-item-prefix'), which is where a bare link carries its
+meaning; else the raw link."
   (let ((description (-some->> element
                        (org-element-contents)
                        (org-element-interpret-data)

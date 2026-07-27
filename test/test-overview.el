@@ -424,14 +424,6 @@ view `org-glance-overview-default-view' selects, so both view-openers are stubbe
 ;; path -- it only flags them stale (the `glance:stale' lighter); each rebuilds
 ;; itself lazily at its next display boundary (`--refresh-when-stale').
 
-(cl-defun org-glance-test:overview--simulate-save (graph id contents)
-  "Run `org-glance-material:sync' as if ID's blob were saved as CONTENTS."
-  (with-temp-buffer
-    (insert contents)
-    (setq-local org-glance-material--graph graph
-                org-glance-material--id id)
-    (org-glance-material:sync)))
-
 (ert-deftest org-glance-test:overview-stale-flag-on-save ()
   "A materialized save FLAGS open overviews stale without rewriting them on the
 hot path: post-sync the buffer carries the stale flag, its content is unchanged,
@@ -443,7 +435,7 @@ and its on-disk cache still holds the OLD render (no eager write)."
     (org-glance-test:with-overview (all graph nil)
       (should (s-contains? "TODO Alpha" (with-current-buffer all (buffer-string))))
       (should-not (with-current-buffer all org-glance-view--stale))
-      (org-glance-test:overview--simulate-save
+      (org-glance-test:simulate-material-save
        graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
       (with-current-buffer all
         ;; flagged stale, but neither buffer NOR cache file rewritten by sync
@@ -462,7 +454,7 @@ filtered-out headlines drop, and the stale flag clears."
                              (org-glance-test:headline "b1" "* TODO Beta :work:"))
     (org-glance-test:with-overview (all graph nil)
       (org-glance-test:with-overview (todo graph '(:state "TODO"))
-        (org-glance-test:overview--simulate-save
+        (org-glance-test:simulate-material-save
          graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
         ;; "all": display boundary rebuilds in place, flag clears, not modified
         (with-current-buffer all
@@ -484,7 +476,7 @@ the next display boundary."
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
     (org-glance-test:with-overview (done graph '(:state "DONE"))
       (should-not (s-contains? "Alpha" (with-current-buffer done (buffer-string))))
-      (org-glance-test:overview--simulate-save
+      (org-glance-test:simulate-material-save
        graph "a1" "* DONE Alpha\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
       (with-current-buffer done
         (org-glance-view--refresh-when-stale)

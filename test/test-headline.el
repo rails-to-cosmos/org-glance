@@ -207,5 +207,78 @@ property index on every clock-in/out.  Real content still changes it."
                       (org-glance-test:headline "h" "* TODO Task"
                                                 ":MYLOG:" "- note" ":END:" "body")))))))
 
+(ert-deftest org-glance-test:metadata-field-table-guard-fires ()
+  "The load-time guard catches the two linkages the slot-order check misses:
+a keyword FROM naming no real content fact (the field would read nil forever)
+and a list-valued slot with a non-vector ENCODE (which kills EVERY save, since
+`--append\' calls `json-serialize\' outside the error-demoted hook)."
+  (let ((slots (cdr (cl-struct-slot-info 'org-glance-headline-metadata))))
+    ;; the shipped pair is valid
+    (should (org-glance-headline-metadata--check-fields
+             slots org-glance-headline-metadata:fields))
+    ;; unknown content fact
+    (should-error
+     (org-glance-headline-metadata--check-fields
+      slots (cl-loop for (slot json from encode decode) in org-glance-headline-metadata:fields
+                     collect (list slot json (if (eq slot 'hash) :no-such-fact from)
+                                   encode decode)))
+     :type 'error)
+    ;; a list field demoted to a nil encoder
+    (should-error
+     (org-glance-headline-metadata--check-fields
+      slots (cl-loop for (slot json from encode decode) in org-glance-headline-metadata:fields
+                     collect (list slot json from (if (eq slot 'tags) nil encode) decode)))
+     :type 'error)
+    ;; slot order still guarded
+    (should-error
+     (org-glance-headline-metadata--check-fields
+      slots (reverse org-glance-headline-metadata:fields))
+     :type 'error)))
+
+(ert-deftest org-glance-test:content-fact-keys-match-facts ()
+  "`org-glance-headline--content-fact-keys\' is the real vocabulary: the guard
+above trusts it, so it must equal what `--content-facts\' actually returns."
+  (let* ((facts (org-glance-headline--content-facts
+                 (org-glance-test:headline "f" "* TODO F" "body")))
+         (keys (cl-loop for (k _v) on facts by #'cddr collect k)))
+    (should (equal (sort (copy-sequence keys) #'string<)
+                   (sort (copy-sequence org-glance-headline--content-fact-keys)
+                         #'string<)))))
+
+(ert-deftest org-glance-test:metadata-build-parses-once ()
+  "Building metadata from a parsed headline is ONE org-mode pass, not two.
+The parse that produced the headline captures the content facts in its own
+buffer; `:metadata' reads that memo instead of standing up a second buffer over
+the same string.  Counted, not assumed."
+  (let* ((contents (org-glance-test:org-with-id "* TODO Task :work:" "p1"
+                                                "body [[https://example.com][X]]"))
+         (passes 0))
+    (cl-letf* ((orig (symbol-function 'org-glance--org-mode))
+               ((symbol-function 'org-glance--org-mode)
+                (lambda (&rest args) (cl-incf passes) (apply orig args))))
+      (let* ((headline (org-glance-headline--from-string contents))
+             (meta (org-glance-headline:metadata headline)))
+        (should (org-glance-headline-metadata? meta))
+        ;; one buffer for the parse; the facts rode along with it
+        (should (= 1 passes))))))
+
+(ert-deftest org-glance-test:content-facts-memo-is-contents-keyed ()
+  "The facts memo is held against the exact contents string, so a copy that
+rewrites contents recomputes rather than describing the old bytes."
+  (let* ((contents (org-glance-test:org-with-id "* TODO Task" "p2" "plain body"))
+         (headline (org-glance-headline--from-string contents))
+         (memoized (org-glance-headline--content-facts headline))
+         ;; same headline, memo dropped: the on-demand parse must agree
+         (fresh (org-glance-headline--content-facts
+                 (org-glance-headline--copy headline :-facts nil))))
+    (should (equal memoized fresh))
+    ;; a contents rewrite drops the memo (and the thunks built from it)
+    (let ((rewritten (org-glance-headline--copy headline
+                       :contents (org-glance-test:org-with-id
+                                  "* TODO Task" "p2" "a different body"))))
+      (should-not (org-glance-headline:-facts rewritten))
+      (should-not (equal (plist-get memoized :hash)
+                         (plist-get (org-glance-headline--content-facts rewritten) :hash))))))
+
 (provide 'test-headline)
 ;;; test-headline.el ends here

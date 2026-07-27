@@ -346,5 +346,68 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
       (should (equal "A" (org-glance-headline-metadata:title
                           (org-glance-graph:get-headline graph "a")))))))
 
+(cl-defun org-glance-test:tri-state (graph id)
+  "GRAPH's answer for ID as a comparable value: nil, `tombstone', or the state."
+  (let ((r (org-glance-graph:get-headline graph id)))
+    (cond ((null r) nil)
+          ((eq r 'tombstone) 'tombstone)
+          (t (org-glance-headline-metadata:state r)))))
+
+(ert-deftest org-glance-test:graph-cache-patched-not-rebuilt ()
+  "An append PATCHES the read cache instead of dropping it: the next read does
+not re-scan the WAL.  Counted -- `--latest-records' is the rebuild."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A"))
+    (should (org-glance-graph:headlines graph))          ; warm the cache
+    (let ((rebuilds 0))
+      (cl-letf* ((orig (symbol-function 'org-glance-graph--latest-records))
+                 ((symbol-function 'org-glance-graph--latest-records)
+                  (lambda (&rest args) (cl-incf rebuilds) (apply orig args))))
+        (org-glance-graph:add graph (org-glance-test:headline "b" "* TODO B"))
+        (should (equal '("a" "b") (org-glance-test:ids graph)))
+        (should (= 0 rebuilds))
+        ;; an update patches in place, keeping first-sighting order
+        (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE A"))
+        (should (equal '("a" "b") (org-glance-test:ids graph)))
+        (should (equal "DONE" (org-glance-headline-metadata:state
+                               (org-glance-graph:get-headline graph "a"))))
+        (should (= 0 rebuilds))
+        ;; a tombstone drops it from LIVE but keeps the tri-state in BY-ID
+        (org-glance-graph:delete graph "a")
+        (should (equal '("b") (org-glance-test:ids graph)))
+        (should (eq 'tombstone (org-glance-graph:get-headline graph "a")))
+        (should (= 0 rebuilds))
+        ;; a re-add after a tombstone cannot keep its slot -> deliberate rebuild
+        (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO A again"))
+        (should (equal '("a" "b") (org-glance-test:ids graph)))
+        (should (= 1 rebuilds))))))
+
+(ert-deftest org-glance-test:graph-cache-patch-matches-rebuild ()
+  "Randomized: after EVERY mutation the patched cache answers exactly like a
+cold rebuild from disk -- same live set, same order, same state, same
+tri-state per id.  A patch bug serves stale or deleted rows silently, so this
+compares the two paths rather than trusting either."
+  (org-glance-test:with-graph graph
+    (random "org-glance-cache-fuzz")            ; deterministic sequence
+    (let ((ids '("a" "b" "c" "d" "e"))
+          (n 0))
+      (dotimes (_ 50)
+        (let ((id (nth (random (length ids)) ids)))
+          (pcase (random 3)
+            (0 (org-glance-graph:add graph (org-glance-test:headline
+                                            id (format "* TODO %s %d" id (cl-incf n)))))
+            (1 (org-glance-graph:add graph (org-glance-test:headline
+                                            id (format "* DONE %s %d" id (cl-incf n)))))
+            (_ (org-glance-graph:delete graph id))))
+        (let ((live (org-glance-test:ids graph))
+              (states (mapcar #'org-glance-headline-metadata:state
+                              (org-glance-graph:headlines graph)))
+              (tri (mapcar (lambda (i) (org-glance-test:tri-state graph i)) ids))
+              (fresh (org-glance-test:reopen graph)))
+          (should (equal live (org-glance-test:ids fresh)))
+          (should (equal states (mapcar #'org-glance-headline-metadata:state
+                                        (org-glance-graph:headlines fresh))))
+          (should (equal tri (mapcar (lambda (i) (org-glance-test:tri-state fresh i)) ids))))))))
+
 (provide 'test-graph)
 ;;; test-graph.el ends here

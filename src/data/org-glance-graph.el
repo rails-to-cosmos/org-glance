@@ -113,12 +113,37 @@ store; append new fields at the end.  SCHEDULE/DEADLINE come back as raw
 strings (or nil) from the headline methods, so they are JSON-serializable
 as-is.")
 
-;; Load-time guard: the struct and the table must list the same slots, in order.
-(let ((struct-slots (mapcar #'car (cdr (cl-struct-slot-info 'org-glance-headline-metadata))))
-      (table-slots (mapcar #'car org-glance-headline-metadata:fields)))
-  (unless (equal struct-slots table-slots)
-    (error "org-glance: metadata field table out of sync with the struct: %S vs %S"
-           table-slots struct-slots)))
+;; Load-time guard.  Three things the table cannot enforce by being read:
+;;   1. slot ORDER == table order (the JSON key order, invariant 4);
+;;   2. a keyword FROM must name a real `--content-facts' fact, else the field
+;;      reads nil forever -- the "always-nil field" this table exists to kill;
+;;   3. a LIST-valued slot must encode to a JSON vector: `--append' calls
+;;      `json-serialize' OUTSIDE the error-demoted hook, so a nil encoder
+;;      crashes EVERY save (invariant 4 names this and notes the order check
+;;      does not catch it).
+(cl-defun org-glance-headline-metadata--check-fields (slots fields)
+  "Signal unless FIELDS is a valid field table for struct SLOTS; else return t.
+SLOTS is `cl-struct-slot-info' minus its tag slot.  Runs at load over the real
+pair; tests call it with deliberately broken tables."
+  (let ((struct-slots (mapcar #'car slots))
+        (table-slots (mapcar #'car fields)))
+    (unless (equal struct-slots table-slots)
+      (error "org-glance: metadata field table out of sync with the struct: %S vs %S"
+             table-slots struct-slots))
+    (cl-loop for (slot _json from encode) in fields
+             for type = (plist-get (cddr (assq slot slots)) :type)
+             do (when (and (keywordp from)
+                           (not (memq from org-glance-headline--content-fact-keys)))
+                  (error "org-glance: metadata field %S reads unknown content fact %S"
+                         slot from))
+                (when (and (eq type 'list) (not (memq encode '(strings-vector edges-vector))))
+                  (error "org-glance: list-valued metadata field %S needs a vector ENCODE kind, got %S"
+                         slot encode)))
+    t))
+
+(org-glance-headline-metadata--check-fields
+ (cdr (cl-struct-slot-info 'org-glance-headline-metadata))
+ org-glance-headline-metadata:fields)
 
 (cl-defun org-glance-headline-metadata--encode (kind value)
   "Serialize-side coercion for a field of ENCODE kind KIND."
@@ -444,6 +469,50 @@ is always current."
 write is reflected immediately, independent of filesystem mtime resolution."
   (setf (org-glance-graph:-meta-cache graph) nil))
 
+(cl-defun org-glance-graph--patch-cache (graph records)
+  "Fold just-appended RECORDS into GRAPH's read cache, then re-stamp its snapshot.
+RECORDS are the plists `--append' wrote, in write order; a cold cache stays
+cold.  The rebuild keeps the latest record per id in FIRST-SIGHTING order, so:
+an unknown id appends, a live one is replaced in place, a tombstone leaves LIVE
+but stays in BY-ID (the tri-state, invariant 30).  Re-adding a tombstoned id
+falls back to `--invalidate-cache': its first sighting is its ORIGINAL slot,
+which LIVE no longer records.  Any other doubt takes the same fallback."
+  (when-let ((cache (org-glance-graph:-meta-cache graph)))
+    (let ((by-id (plist-get cache :by-id))
+          (live (plist-get cache :live))
+          (bail nil))
+      (cl-loop for record in records
+               for id = (plist-get record :id)
+               for prev = (gethash id by-id)
+               until bail
+               do (cond
+                   ;; a re-add after a tombstone cannot keep its original slot
+                   ((and prev (plist-get prev :tombstone)
+                         (not (plist-get record :tombstone)))
+                    (setq bail t))
+                   (t
+                    (puthash id record by-id)
+                    (cond
+                     ((plist-get record :tombstone)
+                      (setq live (cl-remove-if
+                                  (lambda (m) (equal id (org-glance-headline-metadata:id m)))
+                                  live)))
+                     ((null prev)
+                      (setq live (append live (list (org-glance-headline-metadata:deserialize record)))))
+                     (t
+                      (let ((cell (cl-member id live :key #'org-glance-headline-metadata:id
+                                             :test #'equal)))
+                        (if cell
+                            (setcar cell (org-glance-headline-metadata:deserialize record))
+                          ;; live and by-id disagree -- do not guess
+                          (setq bail t))))))))
+      (if bail
+          (org-glance-graph--invalidate-cache graph)
+        (setf (org-glance-graph:-meta-cache graph)
+              (list :snapshot (org-glance-graph--store-snapshot graph)
+                    :by-id by-id
+                    :live live))))))
+
 (cl-defun org-glance-graph--ensure-cache (graph)
   "Return GRAPH's read cache, rebuilding it iff the store snapshot changed.
 The cache is a plist (:snapshot S :by-id HASH :live LIVE).  The latest record
@@ -509,16 +578,22 @@ fresh monotonic `seq' on each, then maybe seal and compact."
   ;; never break a save.
   (with-demoted-errors "org-glance: before-append hook: %S"
     (run-hook-with-args 'org-glance-graph-before-append-functions graph specs))
-  (let ((open (org-glance-graph--open-segment-path graph)))
+  (let ((open (org-glance-graph--open-segment-path graph))
+        (written nil))
     (org-glance-graph--ensure-newline-terminated open)
     (cl-loop for spec in specs
              for record = (plist-put (copy-sequence (org-glance-headline-metadata:serialize* spec))
                                      :seq (cl-incf (org-glance-graph:seq graph)))
+             collect record into records
              collect (json-serialize record) into jsons
-             finally (f-append-text (concat (s-join "\n" jsons) "\n") 'utf-8 open)))
-  (org-glance-graph--maybe-seal graph)
-  (org-glance-graph--maybe-compact graph)
-  (org-glance-graph--invalidate-cache graph))
+             finally (progn (f-append-text (concat (s-join "\n" jsons) "\n") 'utf-8 open)
+                            (setq written records)))
+    ;; Seal/compact first: they change the store snapshot, and compaction
+    ;; REWRITES records (dropping tombstones), which no patch can express -- it
+    ;; invalidates on its own, and the patch below then finds no cache.
+    (org-glance-graph--maybe-seal graph)
+    (org-glance-graph--maybe-compact graph)
+    (org-glance-graph--patch-cache graph written)))
 
 (cl-defun org-glance-graph--maybe-seal (graph)
   (let ((open (org-glance-graph--open-segment-path graph)))
@@ -691,10 +766,9 @@ record written for each id, tombstones included."
           (t (org-glance-headline-metadata:deserialize record)))))
 
 (cl-defun org-glance-graph:live-meta (graph id)
-  "GRAPH's metadata for ID, or nil when the id is unknown or tombstoned.
+  "Return GRAPH's metadata for ID, or nil when unknown or tombstoned.
 The nil-or-metadata half of `org-glance-graph:get-headline', whose tri-state
-result (nil / `tombstone' / metadata) every read-only caller collapses the
-same way."
+every read-only caller collapses this way."
   (let ((meta (org-glance-graph:get-headline graph id)))
     (and (org-glance-headline-metadata? meta) meta)))
 

@@ -48,8 +48,9 @@ ingest, so nothing is excluded.  With ARG (`C-u @') also prompt for a kind."
   "`org-capture' template for a new headline with TAGS, pre-filled with TITLE.
 TAGS is a tag symbol or a list of tag symbols.  When TAGS is a SINGLE tag with a
 configuration (see `org-glance-tag-config'), the template is rendered from that
-config's skeleton, and -- if the config declares a `#+TODO:' cycle -- a
-`#+TODO:' file keyword is prepended so the capture buffer cycles the tag states.
+config's skeleton, and the config's emittable pragmas
+\(`org-glance-tag-config:preamble' -- the `#+TODO:' cycle today) are prepended,
+so the capture buffer cycles the tag states.
 Otherwise the default `* TITLE%?  :tags:' is used, so an unconfigured tag is
 byte-identical to before.  Multi-tag composition is deferred to Phase 2."
   (cl-check-type title string)
@@ -58,9 +59,11 @@ byte-identical to before.  Multi-tag composition is deferred to Phase 2."
                    (org-glance-tag-config:resolve org-glance-graph (car tags)))))
     (if config
         (let ((body (org-glance-tag-config:render config title tags))
-              (todo (org-glance-tag-config:todo config)))
-          (if (and todo (not (s-contains? "#+TODO:" body)))
-              (concat "#+TODO: " todo "\n" body)
+              (preamble (org-glance-tag-config:preamble config)))
+          ;; A skeleton that already carries a pragma keeps its own (the entry
+          ;; is the user's text); otherwise the config's pragmas lead.
+          (if (and preamble (not (s-contains? "#+TODO:" body)))
+              (concat preamble body)
             body))
       (format "* %s%%?  :%s:" title (org-glance-capture--format-tags tags)))))
 

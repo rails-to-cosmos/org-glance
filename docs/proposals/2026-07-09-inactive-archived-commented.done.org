@@ -1,6 +1,11 @@
 #+TITLE: Hide ARCHIVED / COMMENTED headlines from pickers
 #+DATE: 2026-07-09
 
+Status: *done* · shipped, verified against the tree 2026-07-27: slots
+=archived?=/=commented?= (=graph.el:78-79=), field rows (=:100-101=), filter
+rows (=filter.el:70-71=), the ambient defcustom default (=filter.el:34-42=)
+and tests (=test-filter.el:105-147=).
+
 Status: *proposed* · metadata 2026-07-09
 
 * Problem

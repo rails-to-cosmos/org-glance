@@ -1,0 +1,136 @@
+#+TITLE: Per-tag config pragmas as a field table
+#+DATE: 2026-07-27
+
+Status: *done* · 2026-07-27 · suite 337/337, compile warning-free.  The table
+and both preamble builders shipped; =#+CATEGORY:= itself is deliberately NOT
+enabled here -- the point was to make it one row, and "default = the tag name"
+is a product decision.
+
+* Problem
+
+[[file:../../src/data/org-glance-tag-config.el][=org-glance-tag-config.el=]] parses two pragmas today (=#+TITLE:=, =#+TODO:=),
+and the stub it generates already advertises two more as PLANNED
+(=tag-config.el:342-343=):
+
+#+begin_example
+#   #+CATEGORY: agenda category, default the tag name (planned).
+#   #+AUTHOR:   planned.
+#+end_example
+
+Shipping =#+CATEGORY:= today costs *4 files, 5 sites*, three of them
+silently forgettable:
+
+1. =tag-config.el:54-61= — a struct slot
+2. =tag-config.el:116-122= — a =:category (--file-keyword "CATEGORY")=
+   constructor line.  *Unenforced*: omit it and the slot reads nil forever,
+   the exact "always-nil field" failure invariant 4's guard exists to stop
+3. =tag-config.el:342= — drop "(planned)" from the stub.  *Unenforced*
+4. [[file:../properties.org][=docs/properties.org=]] — drop "(planned)".  *Unenforced* (a CLAUDE.md rule,
+   no test)
+5. Emission, hand-written *per consumer*: [[file:../../src/view/org-glance-capture.el][=capture.el:59-65=]] prepends
+   =#+TODO:= with a bespoke =if=; [[file:../../src/view/org-glance-overview.el][=overview.el:150-163=]] emits it with
+   another.  Each new pragma needs a parallel arm in *both*
+
+The class is already visible: the =title= slot has *no production consumer*
+— only =test-tag-config.el:55,259= reads it.  A member was added and never
+wired, which is what an unguarded hand-written parse produces.
+
+* Design
+
+A field table, mirroring the two the repo already trusts —
+=org-glance-headline-metadata:fields= ([[file:../../src/data/org-glance-graph.el][=graph.el:84-114=]]) and
+=org-glance-filter:table= ([[file:../../src/data/org-glance-filter.el][=filter.el:46-89=]]) — plus their load-time guard.
+
+#+begin_src emacs-lisp
+(defconst org-glance-tag-config:fields
+  ;; SLOT      PRAGMA      EMIT-AS-FILE-KEYWORD?
+  '((tag       nil        nil)              ; the file name, not a pragma
+    (title     "TITLE"    nil)
+    (todo      "TODO"     t)
+    (category  "CATEGORY" t))
+  "The single source of the per-tag pragma set: struct slot, `#+PRAGMA:'
+keyword, and whether capture/overview headers emit it.  Adding a pragma =
+one row here + one struct slot (checked against this table at load).")
+
+(let ((struct-slots (mapcar #'car (cdr (cl-struct-slot-info 'org-glance-tag-config))))
+      (table-slots (mapcar #'car org-glance-tag-config:fields)))
+  (unless (equal struct-slots table-slots)
+    (error "org-glance: tag-config field table out of sync with the struct: %S vs %S"
+           table-slots struct-slots)))
+#+end_src
+
+=--parse-file= derives from the table instead of naming each pragma, and the
+per-consumer emission collapses into one shared spelling:
+
+#+begin_src emacs-lisp
+(cl-defun org-glance-tag-config:preamble (config)
+  "CONFIG's emittable pragmas as `#+KEY: VALUE' lines -- the one spelling
+shared by the capture template and the overview/agenda header."
+  (mapconcat #'identity
+             (cl-loop for (slot pragma emit) in org-glance-tag-config:fields
+                      for v = (and emit (cl-struct-slot-value
+                                         'org-glance-tag-config slot config))
+                      when (org-glance--present-string? v)
+                      collect (concat "#+" pragma ": " v))
+             "\n"))
+#+end_src
+
+Note =template= stays outside the table: it is the body from the first =*=,
+not a pragma.  The struct keeps it as a slot; the guard compares the pragma
+rows against the pragma slots only.
+
+* Files
+
+- [[file:../../src/data/org-glance-tag-config.el][=src/data/org-glance-tag-config.el=]] :: struct =54-61=, =--parse-file= =111-122=,
+  stub =328-348=
+- [[file:../../src/view/org-glance-capture.el][=src/view/org-glance-capture.el=]] :: =59-65= (the =#+TODO:= preamble)
+- [[file:../../src/view/org-glance-overview.el][=src/view/org-glance-overview.el=]] :: =150-163= (the header =#+TODO:=)
+- [[file:../properties.org][=docs/properties.org=]] :: the pragma reference must stay in step (CLAUDE.md)
+
+* LOC estimate
+
+- Added: ~24 (table + guard + =:preamble=)
+- Removed immediately: ~18 (two bespoke emission arms, the per-pragma parse
+  lines)
+- Saved per future pragma: *~14 lines across 4 files becomes 2 lines in 1*,
+  and two of the three unenforced steps become load-time errors
+
+* Risk
+
+None on disk: config files are user-authored org, and pragma parsing is
+additive — an unknown pragma is ignored exactly as today.  =#+CATEGORY:=
+would newly reach the capture buffer and the overview header, so ship the
+table first (pure refactor, tests green) and enable the pragma second.
+
+* Existing precedent
+
+Both schema tables cite this exact motivation in their docstrings:
+=filter.el:83-89= ("previously each new key meant four lockstep edits, two of
+them silently forgettable") and =graph.el:103-114= ("a hand-written
+=deserialize= line was silently forgettable -- the field then read as
+always-nil").
+
+* Outcome
+
+Shipped in [[file:../../src/data/org-glance-tag-config.el][=org-glance-tag-config.el=]]:
+
+- =org-glance-tag-config:fields= :: SLOT / PRAGMA / EMIT? rows, with
+  =--check-fields= run at load against the struct (same shape as the metadata
+  and filter guards, and callable from tests with a broken table).
+- =--parse-file= :: derives its reads from the table -- no per-pragma line.
+- =--sole-value= :: generalizes "the one value the filtered tags agree on";
+  =:cycle-for-filter= is now a one-line wrapper over it, so every pragma
+  inherits the same 0-or->1-distinct rule the cycle needed.
+- =:preamble= / =:preamble-for-filter= :: the emission spelling, once.
+  [[file:../../src/view/org-glance-capture.el][=capture.el=]] and [[file:../../src/view/org-glance-overview.el][=overview.el=]] both call them instead of
+  hand-writing a =#+TODO:= arm each.
+
+*Cost of the next pragma, measured against the proposal's own count:* the 5
+sites become *2* -- one table row and one struct slot.  Parse, capture
+emission and overview emission all follow from the row; the load guard turns
+the forgotten-slot case into a load error.  The stub comment and
+=docs/properties.org= remain hand-maintained (they are prose, not code).
+
+Tests: =tag-config-fields-table= (guard fires, table drives the pragma sets)
+and =tag-config-preamble= (per-config emission; per-filter agreement, where
+two tags sharing a cycle emit it and two disagreeing tags emit nothing).

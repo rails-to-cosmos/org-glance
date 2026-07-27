@@ -2,10 +2,6 @@
 
 (require 'test-helpers)
 
-(defun org-glance-test:sealed-segments (graph)
-  "Names of the sealed segments listed in GRAPH's MANIFEST."
-  (org-glance-graph--sealed-segments graph))
-
 (ert-deftest org-glance-test:segments-manifest-bootstrap ()
   "A fresh store gets a MANIFEST with no sealed segments; reopening is a no-op."
   (org-glance-test:with-graph graph
@@ -234,8 +230,7 @@ listed segment still held the headline live)."
     (org-glance-graph:delete graph "x")
     (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
     ;; crash compact at its commit point
-    (cl-letf (((symbol-function 'org-glance-graph--write-manifest)
-               (lambda (&rest _) (error "simulated crash at commit"))))
+    (org-glance-test:with-crash-at #'org-glance-graph--write-manifest
       (should-error (org-glance-graph:compact graph)))
     ;; recover: x must STILL be dead, y alive, and the orphan merged seg reaped
     (let ((graph (org-glance-test:reopen graph)))
@@ -255,19 +250,14 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
           (org-glance-graph-compact-segment-count 1000))
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))   ; seals
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta")))   ; seals -> open empty
-    (let ((segments-before (org-glance-test:sealed-segments graph))
-          (count-records (lambda (graph)
-                           (let ((n 0))
-                             (org-glance-graph--scan-forward graph (lambda (_r) (cl-incf n)))
-                             n))))
-      (should (= 2 (funcall count-records graph)))
-      (cl-letf (((symbol-function 'org-glance-graph--write-manifest)
-                 (lambda (&rest _) (error "simulated crash at commit"))))
+    (let ((segments-before (org-glance-test:sealed-segments graph)))
+      (should (= 2 (org-glance-test:count-records graph)))
+      (org-glance-test:with-crash-at #'org-glance-graph--write-manifest
         (should-error (org-glance-graph:compact graph)))
       (let ((graph (org-glance-test:reopen graph)))
         ;; the orphan shares seqs with listed segments -> reaped, not adopted
         (should (equal segments-before (org-glance-test:sealed-segments graph)))
-        (should (= 2 (funcall count-records graph)))
+        (should (= 2 (org-glance-test:count-records graph)))
         (should (equal '("a" "b") (org-glance-test:ids graph)))))))
 
 (ert-deftest org-glance-test:segments-freshness-signal ()

@@ -146,5 +146,25 @@ and commented headlines; `describe' renders the flags compactly."
   (should (s-contains? "archived"
                        (org-glance-filter:describe '(:archived t)))))
 
+(ert-deftest org-glance-test:filter-table-guard-fires ()
+  "The load-time guard rejects a row that would never reach `predicate\'.
+A nil `:match\' builds no clause, so the key silently constrains nothing and
+the filter matches EVERYTHING -- the regression the table exists to prevent."
+  ;; the shipped table is valid
+  (should (org-glance-filter--check-table org-glance-filter:table))
+  ;; a value key with no :match
+  (should-error (org-glance-filter--check-table
+                 '((:colour :accessor identity)))
+                :type 'error)
+  ;; :match with no accessor -- the clause would call nil
+  (should-error (org-glance-filter--check-table '((:colour :match equal)))
+                :type 'error)
+  ;; a structural key must NOT declare one (predicate hand-builds it)
+  (should-error (org-glance-filter--check-table
+                 '((:where :match equal :accessor identity)))
+                :type 'error)
+  ;; structural keys are legal without :match
+  (should (org-glance-filter--check-table '((:where) (:done) (:done-keywords)))))
+
 (provide 'test-filter)
 ;;; test-filter.el ends here

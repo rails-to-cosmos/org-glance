@@ -126,8 +126,7 @@ path; a display-boundary refresh re-fills it and clears the flag."
         (should-not org-glance-view--stale)
         ;; the store advances (a new headline) and views are flagged
         (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
-        (set-file-times (org-glance-graph:headline-meta-path graph)
-                        (time-add (current-time) 100))
+        (org-glance-test:store-mtime graph 100)
         (org-glance-view:mark-graph-stale graph)
         ;; flagged stale, but NOT re-filled on the hot path (still 1 row)
         (should org-glance-view--stale)
@@ -1126,6 +1125,36 @@ column 0.  (The row-left-the-view fallback is `table-todo-preserves-point'.)"
       (let ((org-glance-table--spec nil))
         (org-glance-table:configure-tag)))
     (should (equal '(nil "work") captured))))
+
+(ert-deftest org-glance-test:table-action-upserts-one-row ()
+  "A single-row action updates THAT row from fresh metadata instead of
+re-deriving every row from the graph, and drops the row when the headline
+leaves the view (deleted, or no longer matching the filter)."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph
+      (org-glance-test:headline "a1" "* TODO Alpha :work:")
+      (org-glance-test:headline "b1" "* TODO Beta :work:"))
+    (org-glance-test:with-table (graph '(:tags ("work")))
+      (let ((derivations 0))
+        (cl-letf* ((orig (symbol-function 'org-glance-table--rows))
+                   ((symbol-function 'org-glance-table--rows)
+                    (lambda (&rest args) (cl-incf derivations) (apply orig args))))
+          ;; the store advances, then the action finishes on that one row
+          (org-glance-graph:add graph (org-glance-test:headline "a1" "* DONE Alpha :work:"))
+          (org-glance-table--finish "a1" 1 "State: %s" "DONE")
+          (should (= 0 derivations))                     ; no whole-set rebuild
+          (should (equal "DONE" (org-glance-test:table-cell "a1" "state")))
+          (should (equal "TODO" (org-glance-test:table-cell "b1" "state")))
+          ;; leaving the filter drops the row (here: the tag goes away)
+          (org-glance-graph:add graph (org-glance-test:headline "a1" "* DONE Alpha"))
+          (org-glance-table--finish "a1" 1 "Removed tag")
+          (should (= 0 derivations))
+          (should (equal '("b1") (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
+          ;; a deleted headline drops too
+          (org-glance-graph:delete graph "b1")
+          (org-glance-table--finish "b1" 1 "Headline deleted")
+          (should (= 0 derivations))
+          (should (null table-view--rows)))))))
 
 (provide 'test-table)
 ;;; test-table.el ends here

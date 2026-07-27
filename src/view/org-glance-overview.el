@@ -140,9 +140,9 @@ live from GRAPH (id fallback for gone targets)."
 FILTER is nil (all), a bare tag, or a filter plist -- see
 `org-glance-filter:predicate'.
 
-When FILTER resolves to a single tag with a configured `#+TODO:' cycle
-(see `org-glance-tag-config'), a `#+TODO:' file keyword for it is emitted in the
-header -- so org, on opening the cached file (overview OR agenda, both of which
+Pragmas FILTER's tags agree on (`org-glance-tag-config:preamble-for-filter';
+the `#+TODO:' cycle today) are emitted as file keywords in the header -- so
+org, on opening the cached file (overview OR agenda, both of which
 read this text), cycles and faces those states natively -- and the cycle's
 done-set is bound while the `:done'/`active?' predicate is built, so selection
 is correct for the tag's keywords without any spec/cache-key change."
@@ -157,7 +157,7 @@ is correct for the tag's keywords without any spec/cache-key change."
     ;; in the output size (seconds at 10^4 headlines).
     (apply #'concat
            org-glance-overview:header
-           (if cycle (concat "#+TODO: " cycle "\n") "")
+           (or (org-glance-tag-config:preamble-for-filter graph filter) "")
            (cl-loop for meta in (org-glance-graph:headlines graph)
                     when (funcall keep? meta)
                     collect (org-glance-overview:render-headline graph meta)))))

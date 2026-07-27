@@ -142,9 +142,8 @@ live spec against these keys to record the hidden ones."
 
 (cl-defun org-glance-table--mandatory-column? (key)
   "Non-nil when column KEY may never be removed or hidden (invariant 15).
-The single spelling of the rule: `--compose-columns' strips it from a hidden
-set, `org-glance-table:remove-column' refuses it, `--read-column' never offers
-it."
+The single spelling of the rule, read by `--compose-columns',
+`org-glance-table:remove-column' and `--read-column'."
   (equal key "title"))
 
 (cl-defun org-glance-table--spec (graph filter)
@@ -218,11 +217,28 @@ priority is its letter, absent values are the empty string."
            collect (org-glance-table--row meta)))
 
 (cl-defun org-glance-table--finish (id line fmt &rest args)
-  "Reload the table, return point to row ID (else screen LINE), message FMT ARGS.
-The CELL under point is kept too -- an action never moves the cursor to
-column 0."
-  (let ((col (get-text-property (point) 'table-view-col)))
-    (org-glance-table--reload (current-buffer))
+  "Update row ID, return point to it (else screen LINE), message FMT ARGS.
+A single-row action changes one headline, so the row is upserted from its fresh
+metadata, or dropped when the headline is gone or has left this view's filter;
+a full reload would re-derive all N rows for that one change.  The CELL under
+point is kept (invariant 24).  A view with no predicate to judge by falls back
+to a full reload, so it can never show a stale row."
+  (let* ((buf (current-buffer))
+         (col (get-text-property (point) 'table-view-col))
+         (graph org-glance-view--graph)
+         (meta (and graph (org-glance-graph:live-meta graph id))))
+    (cond
+     ((null org-glance-table--keep-fn)
+      (org-glance-table--reload buf))
+     ((and meta (funcall org-glance-table--keep-fn meta))
+      (table-view-upsert-row buf (org-glance-table--row meta))
+      (table-view-apply-sort))
+     (t (table-view-delete-row buf id)))
+    ;; This view now reflects the store our own write just advanced (invariant
+    ;; 7: single-user, so the file mtime is the anchor).
+    (when graph
+      (org-glance-view:snapshot-mtime (org-glance-graph:headline-meta-path graph)))
+    (org-glance-view:mark-fresh)
     (org-glance-view:restore-point id line col))
   (message "%s" (apply #'format fmt args)))
 
@@ -398,6 +414,12 @@ so a schema change (a new column) degrades gracefully."
 In a reference view nothing auto-persists; there it is the last layout the
 modified-nudge reported (see `org-glance-table--persist-config').")
 
+(defvar-local org-glance-table--keep-fn nil
+  "This view's row predicate, as the fill-fn built it.
+`org-glance-filter:predicate' of its spec, with the tag's done-set bound.  Kept
+so a single-row action can ask whether one changed headline still belongs here,
+using no other row.")
+
 (defvar-local org-glance-table--context nil
   "Relation-view context plist (`:anchor' ID `:dir' `relations'), or nil.")
 
@@ -482,18 +504,18 @@ the per-tag schema (see `org-glance-table--custom-column')."
                      "")))))
 
 (cl-defun org-glance-table--edges-between (graph from to)
-  "Kinds of FROM's edges to TO in GRAPH, or nil when there is no edge.
-One element per edge, `nil' for a kindless one -- so a single kindless edge
-reads as the non-empty list (nil)."
+  "Return the kinds of FROM's edges to TO in GRAPH, nil when there is no edge.
+One element per edge, `nil' for a kindless one, so a single kindless edge
+reads as the one-element list (nil)."
   (when-let ((meta (org-glance-graph:live-meta graph from)))
     (cl-loop for (target . kind) in (org-glance-headline-metadata:relations meta)
              when (equal target to) collect kind)))
 
 (cl-defun org-glance-table--relation-cell (graph anchor id)
-  "ID's relation to ANCHOR in GRAPH as a display string.
+  "Return ID's relation to ANCHOR in GRAPH as a display string.
 `> KIND' when ANCHOR refers to ID, `< KIND' when ID refers to ANCHOR; a
-kindless edge shows the arrow alone, and a mutual pair shows both, joined
-with `, '.  Kinds display in their spaced form (`org-glance--kind-pretty')."
+kindless edge shows the arrow alone, a mutual pair both, joined with `, '.
+Kinds display in their spaced form (`org-glance--kind-pretty')."
   (cl-flet ((edges (arrow kinds)
               (mapcar (lambda (kind)
                         (if kind
@@ -504,11 +526,10 @@ with `, '.  Kinds display in their spaced form (`org-glance--kind-pretty')."
                          (edges "<" (org-glance-table--edges-between graph id anchor))))))
 
 (cl-defun org-glance-table--relation-column (graph anchor)
-  "A `table-view' column showing each row's relation to ANCHOR.
-Only relation tables carry it (`org-glance-table:visit-relations'), where the
-rows are exactly ANCHOR's neighbours in both directions; the cell names the
-direction and the edge kind (`org-glance-table--relation-cell').  Pure
-metadata reads -- no blob parses."
+  "Return a `table-view' column showing each row's relation to ANCHOR.
+Carried only by relation tables (`org-glance-table:visit-relations'), whose
+rows are ANCHOR's neighbours in both directions; the cell names the direction
+and kind (`org-glance-table--relation-cell').  Metadata reads only."
   `((key . "relation")
     (header . "Relation")
     (type . "text")
@@ -524,9 +545,9 @@ metadata reads -- no blob parses."
                  graph (plist-get context :anchor)))))
 
 (cl-defun org-glance-table--related-ids (graph id)
-  "Distinct ids related to ID in GRAPH, in both directions.
-ID's own edge targets (outgoing) first, then every headline carrying an edge
-to ID (incoming) -- the row population of a relation table."
+  "Return the distinct ids related to ID in GRAPH, in both directions.
+ID's edge targets first, then every headline carrying an edge to ID: the row
+population of a relation table."
   (delete-dups
    (append (when-let ((meta (org-glance-graph:live-meta graph id)))
              (org-glance-headline-metadata:relation-targets meta))
@@ -871,15 +892,13 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
     (call-interactively #'table-view-filter-or-narrow)))
 
 (cl-defun org-glance-table--act-refresh (buffer)
-  "`g' handler: drop BUFFER's display refinements, then re-fill from the graph.
-The substring filter (`/') and a narrow-to-marked view refine what the table
-SHOWS on top of the filter it was opened with; `g' resets both, so the view
-returns to exactly that initial filter.  Marks survive -- a selection, not a
-filter.  Reaches into `table-view''s state deliberately: clearing before the
-re-fill renders once (the fill-fn's `table-view-set-rows' re-renders anyway)
-instead of twice.  The lazy display-boundary refresh and the post-action
-reload use `org-glance-table--reload', which PRESERVES the refinements -- an
-edit must not silently widen the view under the user."
+  "Drop BUFFER's display refinements, then re-fill it from the graph (`g').
+The `/' substring filter and a narrow-to-marked view refine what the table
+shows on top of the filter it was opened with; `g' clears both, returning the
+view to that filter.  Marks survive, being a selection.  Clearing `table-view''s
+state directly keeps this to one render.
+`org-glance-table--reload' PRESERVES the refinements, so neither an edit nor
+the display-boundary refresh widens the view under the user."
   (when-let ((buf (get-buffer buffer)))
     (with-current-buffer buf
       (setq table-view--filter nil
@@ -978,7 +997,8 @@ open, `C-c C-c' to apply -- and the `Relation' column."
     (with-current-buffer buf
       (setq org-glance-table--context context)
       (local-set-key (kbd "C-c C-c") #'org-glance-table:apply-layout)
-      (setq org-glance-table--spec spec
+      (setq org-glance-table--keep-fn keep?
+            org-glance-table--spec spec
             ;; Match the corresponding overview (`org-glance-overview:visit'): run
             ;; directory-relative actions (dired, shell, relative links) from the
             ;; graph's ROOT, not wherever this non-file buffer happened to spawn.
@@ -1013,12 +1033,11 @@ open, `C-c C-c' to apply -- and the `Relation' column."
 
 (cl-defun org-glance-table:visit-relations (graph id)
   "Open GRAPH's table of every headline related to ID, in both directions.
-The single entry point behind `@' in the table and the overview and `C-c @'
-in a material buffer: rows are ID's edge targets plus its referrers, and the
-`Relation' column names each row's direction and kind.  Relations read
-LAST-SAVED metadata -- save a material buffer first to see edges added in this
-session.  The bare relation filter passes (no ambient `:done' merge), so DONE
-headlines stay visible."
+The entry point behind `@' (table, overview) and `C-c @' (material): rows are
+ID's edge targets plus its referrers, each row's direction and kind in the
+`Relation' column.  Relations read LAST-SAVED metadata, so save a material
+buffer to see edges added in this session.  The bare relation filter passes,
+keeping DONE headlines visible."
   (let ((related (org-glance-table--related-ids graph id)))
     (unless related
       (user-error "Headline has no relations (save after adding some)"))
@@ -1031,20 +1050,19 @@ headlines stay visible."
     (user-error "Not in an org-glance table")))
 
 (cl-defun org-glance-table:add-column ()
-  "Add a column to the table (`C-c +') -- the mirror of `C-c -'.
+  "Add a column to the table (`C-c +'), the mirror of `C-c -'.
 Completing-read a drawer property or a relation kind the visible headlines
-actually carry (`org-glance-table--add-column-prompt') and append it; the
-per-tag schema records it like any other column change."
+carry (`org-glance-table--add-column-prompt') and append it; the per-tag
+schema records it like any other column change."
   (interactive)
   (org-glance-table--ensure)
   (call-interactively #'table-view-add-column))
 
 (cl-defun org-glance-table:remove-column (&optional arg)
-  "Remove a table column (`C-c -') -- the ONE removal entry point.
-The column at POINT; with ARG (`C-u C-c -'), or when point is not on a column,
-completing-read which one.  The mandatory Title column is never removable
-\(invariant 15): refused at point, never offered.  The removal persists per tag
-exactly like the one `C-c +' adds."
+  "Remove a table column (`C-c -'), the one removal entry point.
+The column at POINT; with ARG (`C-u C-c -'), or off a column, completing-read
+which one.  Title stays mandatory (invariant 15): refused at point, never
+offered.  The removal persists per tag, like the column `C-c +' adds."
   (interactive "P")
   (org-glance-table--ensure)
   (let ((at-point (unless arg (get-text-property (point) 'table-view-col))))

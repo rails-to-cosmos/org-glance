@@ -4,6 +4,21 @@
 Status: *proposed* · performance audit 2026-07-06 · part of
 [[file:2026-07-06-performance-audit.org][Performance audit]]
 
+Status: *done* · 2026-07-27 · suite 339/339, compile warning-free.
+
+*Measured outcome, correcting this proposal's own estimate.*  The build is now
+ONE org-mode pass instead of two (counted by a test:
+=metadata-build-parses-once= asserts exactly 1 and reads 2 with the change
+backed out).  But the wall-clock gain is *≈7%*, not the ≈2× estimated here:
+2000 builds of a representative headline went 8396 ms → 7786 ms.
+
+The estimate assumed the two passes cost the same.  They do not.  The second
+pass was a fresh =with-contents= buffer + =org-mode= init over a string the
+first pass had already set up; the expensive part -- =org-element-parse-buffer=
+inside =--buffer-links=, plus the four content scans -- happens exactly once
+either way.  What this removed is the redundant BUFFER SETUP, which is real and
+permanent (every save, every reindexed headline) but not half the cost.
+
 * Context
 
 The audit's item *D* is *done*: ~org-glance-headline:metadata~ now computes the
@@ -75,3 +90,28 @@ Medium. ≈ 25–40 LOC in ~org-glance-headline.el~ (share the buffer, attach fa
 - Complements [[file:2026-07-06-incremental-metadata-cache.proposed.org][Incremental metadata cache]] —
   fewer per-record parses make both the rebuild and the incremental patch cheaper.
 - Back to the [[file:2026-07-06-performance-audit.org][Performance audit]] index.
+
+* Outcome
+
+- =org-glance-headline--content-facts-here= :: the facts computation, split out
+  of its buffer so a caller that already HAS the right buffer can run it there.
+- =org-glance-headline--from-string= :: computes the facts in its own parse
+  buffer and attaches them, guarded by EXACT string equality between the
+  headline's captured contents and the buffer -- computing in place equals
+  computing in a fresh buffer only when the buffer holds the contents and
+  nothing else.  A string with a preamble before the heading falls through to
+  the on-demand parse (a real case: it broke =headline-parser= when the guard
+  was a looser =s-trim= comparison).
+- =-facts= slot :: the memo, held as =(CONTENTS . PLIST)= and read back only
+  when =eq= to the headline's current contents.
+- =org-glance-headline--copy= :: now rebuilds every contents-derived slot when
+  =:contents= is replaced (=--contents-derived-slots=).  Pre-existing latent
+  bug, surfaced by this work: =encrypt=/=decrypt= copy a headline with NEW
+  contents while carrying the OLD =-hash=, =-properties=, =-node-properties=
+  thunks.  Metadata was unaffected (it recomputes), so nothing observable was
+  wrong, but a direct =org-glance-headline:hash= on an encrypted copy returned
+  the plaintext hash.
+
+Tests: =metadata-build-parses-once= (counts passes) and
+=content-facts-memo-is-contents-keyed= (memo equals the fresh computation; a
+contents rewrite drops it and changes the hash).

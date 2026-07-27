@@ -503,10 +503,9 @@ ciphertext in a SECOND block under a second password."
 (cl-defun org-glance-material:set-project-dir (dir)
   "Set the materialized headline's project directory (`C-c d') to DIR and save.
 DIR is stored in the `ORG_GLANCE_PROJECT_DIR' drawer property, where
-`org-glance-llm' opens its session.  With a prefix arg, clear the property.
-The stored value carries NO trailing slash (`directory-file-name'), whichever
-way it arrives; consumers re-add it (`file-name-as-directory') when they need
-a `default-directory'."
+`org-glance-llm' opens its session; a prefix arg clears it.  The stored value
+carries no trailing slash (`directory-file-name'), whichever way it arrives;
+consumers re-add one (`file-name-as-directory') for a `default-directory'."
   (interactive
    (list (unless current-prefix-arg
            (expand-file-name
@@ -721,15 +720,13 @@ tombstoned, or has no stored blob."
 
 (cl-defun org-glance-material--cancel-pending-log-note ()
   "Drop a log note queued INTO this buffer, on `kill-buffer-hook'.
-Org queues a note by pointing `org-log-note-marker' at the entry and putting
-`org-add-log-note' on `post-command-hook' -- it runs AFTER the current command.
-When that command is the buffer's own kill, the marker dies with the buffer and
-the hook errors \"Marker does not point anywhere\".  The standard way in is org's
-`org-check-running-clock' (its own `kill-buffer-hook'): it clocks out while the
-buffer is being killed, and a configured `org-log-note-clock-out' queues the
-note.  The CLOCK line itself is already written -- only the optional note is
-dropped, and only when its target is the dying buffer.  A note aimed elsewhere
-is left alone."
+Org queues a note by pointing `org-log-note-marker' at the entry and adding
+`org-add-log-note' to `post-command-hook', which runs AFTER the current
+command.  When that command is the buffer's own kill, the marker dies with the
+buffer and the hook errors \"Marker does not point anywhere\".  Org's own
+`org-check-running-clock' is the usual way in: it clocks out mid-kill, and
+`org-log-note-clock-out' queues the note.  The CLOCK line is already written,
+so this drops only the note, and only when it targets the dying buffer."
   (when (and (bound-and-true-p org-log-setup)
              (markerp (bound-and-true-p org-log-note-marker))
              (eq (marker-buffer org-log-note-marker) (current-buffer)))
@@ -1311,11 +1308,10 @@ prompt for a reference kind.  `C-q @' inserts a literal `@' anywhere."
                                         :with-kind arg))
 
 (cl-defun org-glance-material:references ()
-  "Table of every headline this one relates to, in both directions.
-`C-c @' -- the rows are this headline's edge targets AND its referrers, each
-row's direction and kind in the `Relation' column
-\(`org-glance-table:visit-relations').  Relations read this headline's
-LAST-SAVED metadata -- save first to see edges added in this session."
+  "Open the table of every headline this one relates to (`C-c @').
+Rows are this headline's edge targets and its referrers, each row's direction
+and kind in the `Relation' column (`org-glance-table:visit-relations').
+Relations read LAST-SAVED metadata, so save first to see this session's edges."
   (interactive)
   (require 'org-glance-table)      ; not at top level: table requires material
   (org-glance-material--ensure)
