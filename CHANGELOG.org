@@ -6,6 +6,11 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Transient: =U= disables a plugin, and the *System* heading lists the enabled
+  plugins, marking any whose library failed to load.  =I= reports when every
+  known plugin is already enabled instead of prompting with nothing to offer.
+  The two commands are =org-glance-plugin-enable= / =-disable=: installing the
+  package stays the package manager's job.
 - Table column keys are =C-c += (add) and =C-c -= (remove: the column at
   point, or by name when point is off one; =C-u C-c -= always prompts).
   The bare =+= / =-= act on the headline (capture / untag) regardless of a
@@ -152,7 +157,7 @@ Notable user-facing changes.  Versions date-based
 - Plugin interface: =org-glance-plugins= (default =nil=, org-modules
   style) loads =org-glance-<name>= libraries at init, error-demoted; =I=
   in the transient installs one interactively
-  (=org-glance-plugin-install=).  The LLM integration is the first
+  (=org-glance-plugin-enable=).  The LLM integration is the first
   plugin: off unless listed, self-registers its =l= / =L= transient row
   on load, and core no longer requires it eagerly.
 - =C-c d= (project dir) prompts and stores directory paths

@@ -292,8 +292,7 @@ READ), persisting each -- not the global TODO/DONE."
     (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Dune :book:"))
     (org-glance-test:with-tag-config (org-glance-test:one-config "book" org-glance-test:book-config-min)
       (should (equal "READING" (org-glance-test:change-todo-live graph "b1")))
-      (should (equal "READING" (org-glance-headline-metadata:state
-                                (org-glance-graph:get-headline graph "b1"))))
+      (should (equal "READING" (org-glance-test:field graph "b1" state)))
       (should (equal "READ" (org-glance-test:change-todo-live graph "b1")))
       (should (s-contains? "* READ Dune" (org-glance-graph:get-content graph "b1"))))))
 

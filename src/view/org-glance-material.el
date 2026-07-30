@@ -417,7 +417,7 @@ password (with TTL).  Idempotent: an already-decrypted buffer (no sealed
 blocks) never re-prompts.  A wrong password forgets it, kills BUFFER and
 re-signals, so `open' fails clean."
   (when (and (org-glance-headline-metadata:encrypted? meta)
-             (with-current-buffer buffer (org-glance-headline--encrypted-here)))
+             (with-current-buffer buffer (org-glance-headline--buffer-encrypted?)))
     (org-glance-material--wire-crypto)
     (org-glance-material--set-password (read-passwd "Headline password: "))
     (condition-case err
@@ -455,8 +455,8 @@ sealed."
   (interactive)
   (org-glance-material--ensure)
   (unless (org-glance-material--maybe-decrypt
-           (org-glance-graph:get-headline org-glance-material--graph
-                                          org-glance-material--id)
+           (org-glance-graph:live-meta org-glance-material--graph
+                                       org-glance-material--id)
            (current-buffer))
     (message "org-glance: nothing sealed here")))
 
@@ -495,7 +495,7 @@ ciphertext in a SECOND block under a second password."
     (org-glance-material:crypt-region (region-beginning) (region-end)))
    (current-prefix-arg (org-glance-material:crypt-unwrap))
    (org-glance-material--encrypted (org-glance-material:lock))
-   ((org-glance-headline--encrypted-here)
+   ((org-glance-headline--buffer-encrypted?)
     (message "org-glance: sealed -- `C-c u' decrypts it first"))
    (t (pcase-let ((`(,beg . ,end) (org-glance-headline--body-region)))
         (org-glance-material:crypt-region beg end)))))
@@ -1179,7 +1179,7 @@ With KEY, take it non-interactively; else completing-read the key.  Signal a
   (let* ((key (or key (completing-read "Extract: " pairs nil t)))
          (value (alist-get key pairs nil nil #'string=)))
     (kill-new value)
-    (when (called-interactively-p 'any) (message "Copied: %s" value))
+    (message "Copied: %s" value)
     value))
 
 (cl-defun org-glance-material:extract (headline &optional key)
@@ -1240,9 +1240,7 @@ buffer (decrypted crypt blocks included) via the same pair scanner the
 stored-headline path uses -- no temp-buffer reparse."
   (interactive)
   (org-glance-material--ensure)
-  (message "Copied: %s"
-           (org-glance-material:extract-pairs
-            (org-glance--buffer-key-value-pairs))))
+  (org-glance-material:extract-pairs (org-glance--buffer-key-value-pairs)))
 
 ;;;###autoload
 (cl-defun org-glance-extract ()

@@ -185,14 +185,15 @@ filter gets `<cache-path>/<key>/overview.org'."
      ((string= key "all") (org-glance-overview:file graph))
      (t (f-join (org-glance-overview:cache-path graph) key "overview.org")))))
 
-(cl-defun org-glance-overview--fresher-than? (file src)
-  "Non-nil if SRC is absent or FILE is STRICTLY newer than SRC.
+(cl-defun org-glance-overview--fresher-than? (file-mtime src-mtime)
+  "Non-nil if SRC-MTIME is absent or FILE-MTIME is STRICTLY newer.
 Strict, so a same-second source treats the cache as stale and rebuilds: serving
 stale content is the only real bug, a rebuild is just a perf cost.  A future
-source (clock skew / restored backup) also rebuilds."
-  (or (not (f-exists? src))
-      (time-less-p (org-glance--file-mtime src)
-                   (org-glance--file-mtime file))))
+source (clock skew / restored backup) also rebuilds.  Takes mtimes rather than
+paths so every source dimension -- a file, or a folded set like the per-tag
+configs -- runs through this one comparison."
+  (or (null src-mtime)
+      (time-less-p src-mtime file-mtime)))
 
 (cl-defun org-glance-overview:fresh? (graph file)
   "Non-nil if FILE exists and is newer than every source it is rendered from.
@@ -200,11 +201,11 @@ The sources: GRAPH's `headlines.jsonl' (content) and the per-tag config files
 (the `#+TODO:' header + per-tag done-set render depends on), so editing a tag's
 cycle invalidates existing overview caches like a content change."
   (cl-check-type graph org-glance-graph)
-  (and (f-exists? file)
-       (org-glance-overview--fresher-than? file (org-glance-graph:headline-meta-path graph))
-       (let ((cfg-mtime (org-glance-tag-config:source-mtime graph)))
-         (or (null cfg-mtime)
-             (time-less-p cfg-mtime (org-glance--file-mtime file))))))
+  (when-let ((mtime (org-glance--file-mtime file)))
+    (cl-every (lambda (src) (org-glance-overview--fresher-than? mtime src))
+              (list (org-glance--file-mtime
+                     (org-glance-graph:headline-meta-path graph))
+                    (org-glance-tag-config:source-mtime graph)))))
 
 (cl-defun org-glance-overview--header-current? (file)
   "Non-nil if FILE starts with the current `org-glance-overview:header'.

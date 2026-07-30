@@ -85,8 +85,8 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    snapshot (=org-glance-material:snapshot-on-repeat=) and the PLUGIN loader
    (=org-glance--load-plugins=) all run under demoted errors — a sidecar, a
    reload or a third-party plugin may never break a save, an open, a display
-   or init.  The deliberate loud counterpart is =org-glance-plugin-install=:
-   an explicit install reports its failure.
+   or init.  The deliberate loud counterpart is =org-glance-plugin-enable=:
+   an explicit enable reports its failure.
 
 10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale
     (boolean; no I/O, never touches point); views re-fill at display boundaries;
@@ -237,17 +237,20 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     =display-warning= — and the crypt seal (invariant 14).  Violation: a
     silent rewrite clobbers user text with no trace (collides with inv 11).
 
-23. *LLM session LIVE state is derived live, never persisted.*  Running /
-    exited / stopped and buffer names always recompute from =buffer-list= +
-    =process-live-p= at fill (=org-glance-llm--session-rows=); live buffers
-    absent from the cache still overlay as live rows.  The headline↔session
-    map and transcript facts persist in =cache/llm-sessions.eld= — a
-    DERIVED, rebuildable cache (invariant-5 class; first =L= scans and
-    writes, =g= rescans) that is never the source of truth.  Violation: a
-    killed buffer shows "running", a restarted one "stopped", or the cache
-    is trusted for anything live.  (The enforcing symbols now live in the
-    external =org-glance-llm= plugin repo, loaded via =org-glance-plugins=;
-    this invariant governs that plugin's contract, not core.)
+23. *LLM session state is derived live, never persisted.*  Running /
+    exited / stopped, buffer names and titles all recompute at fill
+    (=org-glance-llm--session-rows=) from two cheap sources: the provider's
+    recorded sessions filtered to this graph's data dirs (=--recorded=,
+    O(recorded)) for the historical =stopped= rows, overlaid with live
+    =*llm:…*= buffers for running/exited state.  Nothing persists and
+    nothing scans the whole graph, so there is no cache to go stale.
+    Violation: a killed buffer shows "running", a restarted one "stopped",
+    or a stored row is trusted for anything live.  (The enforcing symbols
+    live in the external =org-glance-llm= plugin repo, loaded via
+    =org-glance-plugins=; this invariant governs that plugin's contract,
+    not core.  =org-glance-graph:cache-read= / =:cache-write= remain the
+    public sidecar API for a plugin that does want a derived, rebuildable
+    cache under =cache/= — invariant-5 class, dropped by reindex.)
 
 24. *Table point restoration restores the CELL — row AND column.*  Every
     refill captures =org-glance-view:point-context= (ID LINE COL) and

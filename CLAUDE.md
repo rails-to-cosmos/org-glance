@@ -73,7 +73,7 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
    non-inflating (earliest/latest/`max`, never a sum).
 9. Side-index hooks, view refresh, occurrence snapshots and the plugin loader
    are error-demoted — they may never break a save, an open, a display or
-   init; `org-glance-plugin-install` is the deliberate loud counterpart.
+   init; `org-glance-plugin-enable` is the deliberate loud counterpart.
 10. View coherence is flag-stale + pull-refresh; when freshness is in doubt,
     rebuild.
 11. Never clobber unsaved user edits: `user-error` or skip, never overwrite.
@@ -120,11 +120,13 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 22. Material saves rewrite user content only through announced normalize hooks
     (reserved-property revert, case-twin tag collapse — each warns — and the
     crypt seal).
-23. LLM session LIVE state (running/exited, buffer names) is derived live,
-    never persisted; the headline↔session map + transcript facts cache in
-    `cache/llm-sessions.eld` (derived, rebuildable, never source of truth).
-    Enforcing code now lives in the external `org-glance-llm` plugin repo
-    (loaded via `org-glance-plugins`); the rule governs that plugin.
+23. LLM session state (running/exited/stopped, buffer names, titles) derives
+    live at fill from two cheap sources — the provider's recorded sessions for
+    this graph, overlaid with live `*llm:…*` buffers — never persisted, never a
+    full-graph scan. Enforcing code lives in the external `org-glance-llm`
+    plugin repo (loaded via `org-glance-plugins`); the rule governs that
+    plugin. `org-glance-graph:cache-read`/`:cache-write` stay the public
+    sidecar API for a plugin that does want a derived cache under `cache/`.
 24. Table refills restore the (row, CELL) pair via
     `org-glance-view:point-context` / `:restore-point` — never just the row.
 25. Links are addressed by their enclosing list-item path plus their own label

@@ -93,7 +93,7 @@ Medium. ≈ 25–40 LOC in ~org-glance-headline.el~ (share the buffer, attach fa
 
 * Outcome
 
-- =org-glance-headline--content-facts-here= :: the facts computation, split out
+- =org-glance-headline--buffer-content-facts= :: the facts computation, split out
   of its buffer so a caller that already HAS the right buffer can run it there.
 - =org-glance-headline--from-string= :: computes the facts in its own parse
   buffer and attaches them, guarded by EXACT string equality between the

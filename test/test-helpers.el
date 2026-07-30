@@ -308,6 +308,34 @@ plain `cl-letf'."
   (sort (mapcar (lambda (c) (org-glance-headline-metadata:id (cdr c))) candidates)
         #'string<))
 
+(cl-defmacro org-glance-test:field (graph id field)
+  "GRAPH's stored metadata FIELD for ID.
+FIELD is the unquoted slot name (`title', `state', `encrypted?' ...); it
+expands to the `org-glance-headline-metadata:' accessor at compile time."
+  `(,(intern (format "org-glance-headline-metadata:%s" field))
+    (org-glance-graph:get-headline ,graph ,id)))
+
+(cl-defmacro org-glance-test:with-todo-done (&rest body)
+  "Run BODY under a plain TODO/DONE cycle with done-logging off."
+  (declare (indent 0))
+  `(let ((org-todo-keywords '((sequence "TODO" "DONE")))
+         (org-log-done nil))
+     ,@body))
+
+(cl-defmacro org-glance-test:with-seal-each-insert (&rest body)
+  "Run BODY with every insert sealing its segment and auto-compaction off."
+  (declare (indent 0))
+  `(let ((org-glance-graph-segment-max-bytes 1)
+         (org-glance-graph-compact-segment-count 1000))
+     ,@body))
+
+(cl-defun org-glance-test:meta-cell (graph id key)
+  "The KEY cell string of headline ID's `org-glance-table' row in GRAPH.
+Reads the row GRAPH derives fresh from metadata, unlike
+`org-glance-test:table-cell', which reads the row a table buffer holds."
+  (alist-get key (alist-get 'cells
+                            (org-glance-table--row (org-glance-graph:get-headline graph id)))))
+
 (defun org-glance-test:row-ids (rows)
   "The `id' cell of each row in ROWS."
   (mapcar (lambda (r) (alist-get 'id r)) rows))

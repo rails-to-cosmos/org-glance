@@ -194,7 +194,7 @@ state before org resets it; the table's =Rep= column marks repeaters, and
 | =org-glance-material-password-ttl=       | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
 | =org-glance-material-hidden-properties=  | id + hash                     | drawer keys concealed AND edit-protected in material buffers                               |
 | =org-glance-table-state-colors=          | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
-| =org-glance-plugins=                     | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= installs one                                       |
+| =org-glance-plugins=                     | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
 | =org-glance-conflict-resolution=         | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
 | =org-glance-tag-config-dir=              | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
 | =org-glance-graph-segment-max-bytes=     | 256k                          | WAL segment size before sealing                                                            |
@@ -242,9 +242,12 @@ submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
 ** Plugins
 
-Optional features ship as SEPARATE packages, so a plain install stays
-minimal.  Install the package, then list it in =org-glance-plugins= (or
-press =I= in the transient, which does both steps' second half):
+Optional features ship as SEPARATE packages, so a plain install stays minimal.
+Two steps, and they belong to different tools: your package manager installs
+the package, org-glance enables it.  Install it, then list it in
+=org-glance-plugins= — or press =I= in the transient (=U= disables).  The
+transient's *System* heading lists what is enabled and marks any plugin whose
+library failed to load:
 
 #+begin_src emacs-lisp
 (use-package org-glance-llm

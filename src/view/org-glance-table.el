@@ -224,7 +224,7 @@ a full reload would re-derive all N rows for that one change.  The CELL under
 point is kept (invariant 24).  A view with no predicate to judge by falls back
 to a full reload, so it can never show a stale row."
   (let* ((buf (current-buffer))
-         (col (get-text-property (point) 'table-view-col))
+         (col (org-glance-view:column-at-point))
          (graph org-glance-view--graph)
          (meta (and graph (org-glance-graph:live-meta graph id))))
     (cond
@@ -309,7 +309,7 @@ Delegates to `org-glance-material:set-todo-bulk': materialize + set + sync each
 row (timestamps, no note), then reload the table and clear the marks.
 Bound to `C-c C-t' with rows marked; with none, a bare `C-c C-t' stays the
 single-row `org-glance-table--act-todo' (cycle + note)."
-  (let ((ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows))))
+  (let ((ids (org-glance-table--row-ids rows)))
     (when ids
       (pcase-let ((`(,at-id ,line ,col) (org-glance-view:point-context))
                   (state (org-glance-table--read-state-native graph org-glance-table--spec)))
@@ -398,6 +398,14 @@ passwords (confirmed when setting a new one) and reloads the row."
   (org-glance--eld-alist-set (org-glance-table--config-file graph)
                              (org-glance-filter:identity spec) config))
 
+(cl-defun org-glance-table--column-keys (columns)
+  "COLUMNS' key strings, in order."
+  (mapcar (lambda (c) (alist-get 'key c)) columns))
+
+(cl-defun org-glance-table--row-ids (rows)
+  "The ids of ROWS, id-less rows dropped."
+  (delq nil (mapcar (lambda (r) (alist-get 'id r)) rows)))
+
 (cl-defun org-glance-table--reorder-columns (columns order)
   "COLUMNS reordered so their `key's follow ORDER (a list of keys).
 Columns whose key is absent from ORDER keep their relative position at the end,
@@ -428,8 +436,7 @@ using no other row.")
 The cheap change-detection projection of `org-glance-table--layout-snapshot'
 \(no hidden-column diff), safe on the post-command hot path."
   (let ((layout (table-view-layout)))
-    (list :columns (mapcar (lambda (c) (alist-get 'key c))
-                           (plist-get layout :columns))
+    (list :columns (org-glance-table--column-keys (plist-get layout :columns))
           :sort (plist-get layout :sort))))
 
 (cl-defun org-glance-table--persist-config ()
@@ -577,7 +584,7 @@ or a relation kind the filtered headlines actually carry.  Required match,
 empty input cancels.  Bound buffer-locally as `table-view-add-column-function'
 so `C-c +' uses it."
   (let* ((graph org-glance-view--graph)
-         (ids (delq nil (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
+         (ids (org-glance-table--row-ids table-view--rows))
          ;; kinds display PRETTY ("roasted by") but canonicalize to their slug
          (candidates (append (mapcar (lambda (k) (cons (org-glance--kind-pretty k) k))
                                      (org-glance-graph:edge-kinds graph ids))
@@ -605,18 +612,11 @@ alone is what shares a tag's columns across all of its views."
     (if tags (s-join "+" tags) ":none:")))
 
 (cl-defun org-glance-table--schema-entry (graph filter)
-  "FILTER's saved schema plist (:columns PROPS :hidden KEYS) for its tags, or nil."
+  "FILTER's saved schema plist for its tags, or nil.
+`:columns' is an ordered ((PROP . HEADER)) list of custom columns, `:hidden'
+the built-in column keys removed for those tags."
   (org-glance--eld-alist-ref (org-glance-table--schema-file graph)
                              (org-glance-table--schema-key filter)))
-
-(cl-defun org-glance-table--schema-get (graph filter)
-  "Ordered custom columns saved for FILTER's tags.
-A list of (PROP . HEADER), or nil."
-  (plist-get (org-glance-table--schema-entry graph filter) :columns))
-
-(cl-defun org-glance-table--schema-hidden (graph filter)
-  "Built-in column keys hidden for FILTER's tags (a list of key strings), or nil."
-  (plist-get (org-glance-table--schema-entry graph filter) :hidden))
 
 (cl-defun org-glance-table--schema-put (graph filter &key columns hidden)
   "Persist FILTER's per-tag schema: custom COLUMNS ((PROP . HEADER) list) and
@@ -736,7 +736,7 @@ a relation view's includes `Relation', so removing that column is recorded
 like any other built-in instead of silently reappearing on restore."
   (let* ((layout (table-view-layout))
          (live (plist-get layout :columns))
-         (live-keys (mapcar (lambda (c) (alist-get 'key c)) live))
+         (live-keys (org-glance-table--column-keys live))
          (built-in (if org-glance-table--context
                        (org-glance-table--context-columns org-glance-view--graph
                                                           org-glance-table--context)
@@ -746,7 +746,7 @@ like any other built-in instead of silently reappearing on restore."
                             collect (cons (alist-get 'prop c) (alist-get 'header c)))
           :hidden (cl-remove-if
                    (lambda (k) (member k live-keys))
-                   (mapcar (lambda (c) (alist-get 'key c)) built-in))
+                   (org-glance-table--column-keys built-in))
           :order live-keys
           :sort (plist-get layout :sort))))
 
@@ -823,7 +823,7 @@ remove); title, priority and drawer-property columns take a string prompt
 pre-filled with the current value.  Derived columns (interval, enc, rep,
 relation kinds) refuse."
   (unless id (user-error "Point is not on a row"))
-  (let ((key (get-text-property (point) 'table-view-col))
+  (let ((key (org-glance-view:column-at-point))
         (line (line-number-at-pos)))
     (pcase key
       ('nil (user-error "Point is not on a column"))
@@ -869,7 +869,7 @@ drop (retag's `user-error')."
          (tag (cond ((null tags) (user-error "This view has no tag to remove"))
                     ((null (cdr tags)) (format "%s" (car tags)))
                     (t (completing-read "Remove which tag: "
-                                        (mapcar (lambda (x) (format "%s" x)) tags)
+                                        (org-glance--strings tags)
                                         nil t)))))
     (when (y-or-n-p (format "Remove tag `%s' from the headline at point? " tag))
       (let ((buf (current-buffer)))
@@ -891,19 +891,17 @@ rows, or prompt for a substring filter when none are marked.  With a prefix arg
       (table-view-filter "")
     (call-interactively #'table-view-filter-or-narrow)))
 
-(cl-defun org-glance-table--act-refresh (buffer)
-  "Drop BUFFER's display refinements, then re-fill it from the graph (`g').
+(cl-defun org-glance-table--act-refresh ()
+  "Drop this buffer's display refinements, then re-fill it from the graph (`g').
 The `/' substring filter and a narrow-to-marked view refine what the table
 shows on top of the filter it was opened with; `g' clears both, returning the
 view to that filter.  Marks survive, being a selection.  Clearing `table-view''s
 state directly keeps this to one render.
 `org-glance-table--reload' PRESERVES the refinements, so neither an edit nor
 the display-boundary refresh widens the view under the user."
-  (when-let ((buf (get-buffer buffer)))
-    (with-current-buffer buf
-      (setq table-view--filter nil
-            table-view--narrowed nil))
-    (org-glance-table--reload buf)))
+  (setq table-view--filter nil
+        table-view--narrowed nil)
+  (org-glance-table--reload (current-buffer)))
 
 (cl-defun org-glance-table--handlers (graph spec)
   "The action-command handler alist for GRAPH's table under SPEC."
@@ -918,7 +916,7 @@ the display-boundary refresh widens the view under the user."
                                   (org-glance-table--act-todo-bulk graph rows)
                                 (let ((row (car rows)))
                                   (org-glance-table--act-todo graph (alist-get 'id row))))))
-        (cons "refresh"     (lambda (_id _row) (org-glance-table--act-refresh (current-buffer))))
+        (cons "refresh"     (lambda (_id _row) (org-glance-table--act-refresh)))
         (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
         ;; `-' drops the view's tag off the headline (mirror of the bare `+');
         ;; column removal lives on `C-c -' (`org-glance-table:remove-column').
@@ -942,7 +940,7 @@ the display-boundary refresh widens the view under the user."
         (cons "schedule" (lambda (id _row) (org-glance-table--act-planning graph id 'schedule)))
         (cons "deadline" (lambda (id _row) (org-glance-table--act-planning graph id 'deadline)))))
 
-(cl-defun org-glance-table--visit-spec (graph spec saved ref-entry context)
+(cl-defun org-glance-table--visit-spec (graph spec &key saved ref-entry context)
   "The display spec for SPEC, its column set resolved by view kind.
 A scoped REF-ENTRY replaces the whole set (built-ins minus its hidden, plus
 its custom columns, its order); a scope-less relation view (CONTEXT) gets
@@ -991,7 +989,9 @@ open, `C-c C-c' to apply -- and the `Relation' column."
                         (org-glance-view:snapshot-mtime src)))))
          (buf (table-view-display
                buffer-name
-               (org-glance-table--visit-spec graph spec saved ref-entry context)
+               (org-glance-table--visit-spec graph spec :saved saved
+                                            :ref-entry ref-entry
+                                            :context context)
                (org-glance-table--handlers graph spec)
                fill-fn)))
     (with-current-buffer buf
@@ -1065,7 +1065,7 @@ which one.  Title stays mandatory (invariant 15): refused at point, never
 offered.  The removal persists per tag, like the column `C-c +' adds."
   (interactive "P")
   (org-glance-table--ensure)
-  (let ((at-point (unless arg (get-text-property (point) 'table-view-col))))
+  (let ((at-point (unless arg (org-glance-view:column-at-point))))
     (when (org-glance-table--mandatory-column? at-point)
       (user-error "The Title column cannot be removed"))
     (let ((key (or at-point (org-glance-table--read-column))))

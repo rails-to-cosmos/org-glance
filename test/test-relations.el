@@ -17,8 +17,7 @@ link types contribute no edge."
         "[[org-glance-material:t1?kind=author][Ann again]]"   ; duplicate edge
         "[[https://example.com][Web]]"))
     (should (equal '(("t1" . "author") ("t3" . "roasted-by") ("t2" . nil) ("legacy1" . nil))
-                   (org-glance-headline-metadata:relations
-                    (org-glance-graph:get-headline graph "src"))))))
+                   (org-glance-test:field graph "src" relations)))))
 
 (ert-deftest org-glance-test:relations-round-trip-deserialized ()
   "Edges survive serialize→disk→deserialize; the `:refers-to' filter matches on
@@ -62,28 +61,6 @@ relation keys are transient (never overview-cached, no table config)."
     (should (org-glance-filter:transient? '(:id-any ("x"))))
     (should-not (org-glance-filter:transient? '(:tags ("book"))))
     (should (null (org-glance-overview:spec-key '(:refers-to "x"))))))
-
-(ert-deftest org-glance-test:relations-transient-no-table-config ()
-  "A relation view persists NO per-filter table config on layout changes."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-      (org-glance-test:headline "a" "* TODO A" "[[org-glance-material:b][B]]")
-      (org-glance-test:headline "b" "* TODO B"))
-    (org-glance-test:with-table (graph '(:refers-to "b"))
-        (let (saved)
-          (cl-letf (((symbol-function 'org-glance-table--config-put)
-                     (lambda (&rest _) (setq saved t))))
-            (setq org-glance-table--config-snapshot nil)   ; force "layout changed"
-            (org-glance-table--persist-config)
-            (should-not saved))))                          ; transient: never persisted
-    ;; a plain tag view under the same forced change DOES persist
-    (org-glance-test:with-table (graph nil)
-        (let (saved)
-          (cl-letf (((symbol-function 'org-glance-table--config-put)
-                     (lambda (&rest _) (setq saved t))))
-            (setq org-glance-table--config-snapshot nil)
-            (org-glance-table--persist-config)
-            (should saved))))))
 
 ;;; The `@' command
 
@@ -257,18 +234,24 @@ for a kindless edge.  Rows merge both directions."
 ;;; Crypt: a sealed reference is not an edge
 
 (ert-deftest org-glance-test:relations-crypt-sealed-excluded ()
-  "A material link inside a SEALED crypt block is not indexed; one outside is."
+  "A link inside a SEALED crypt block is not indexed; one outside is.
+Both projections of the sealed bytes are checked: `relations' (material links)
+and `links' (plain ones)."
   (org-glance-test:with-graph graph
-    (let* ((plain (org-glance-test:headline "s" "* TODO Secret"
-                    "[[org-glance-material:public-ref][Public]]"
-                    "#+begin_crypt"
-                    "[[org-glance-material:secret-ref][Secret]]"
-                    "#+end_crypt"))
-           (sealed (org-glance-headline:encrypt plain "pw")))
-      (org-glance-graph:add graph sealed)
-      (let ((rels (org-glance-headline-metadata:relations
-                   (org-glance-graph:get-headline graph "s"))))
-        (should (equal '(("public-ref" . nil)) rels))))))
+    (org-glance-graph:add graph
+      (org-glance-headline:encrypt
+       (org-glance-test:headline "s" "* TODO Secret"
+         "[[org-glance-material:public-ref][Public]]"
+         "[[https://public.example][P]]"
+         "#+begin_crypt"
+         "[[org-glance-material:secret-ref][Secret]]"
+         "[[https://secret.example][S]]"
+         "#+end_crypt")
+       "pw"))
+    (should (equal '(("public-ref" . nil))
+                   (org-glance-test:field graph "s" relations)))
+    (should (equal '("[[https://public.example][P]]")
+                   (org-glance-test:field graph "s" links)))))
 
 (ert-deftest org-glance-test:relations-crypt-sync-parses-sealed ()
   "The LIVE SAVE path (sync) derives relations from the SEALED bytes: a link
@@ -292,12 +275,10 @@ time; reindex agrees."
         (should (s-contains? "secret-ref" (buffer-string)))
         (org-glance-test:sed "editme" "edited")
         (org-glance-test:save)))
-    (let ((after-sync (org-glance-headline-metadata:relations
-                       (org-glance-graph:get-headline graph "cs"))))
+    (let ((after-sync (org-glance-test:field graph "cs" relations)))
       (should (equal '(("public-ref" . nil)) after-sync))
       (org-glance-graph:reindex graph)
-      (should (equal after-sync (org-glance-headline-metadata:relations
-                                 (org-glance-graph:get-headline graph "cs")))))))
+      (should (equal after-sync (org-glance-test:field graph "cs" relations))))))
 
 ;;; Snapshot-on-repeat: encrypted headlines keep no occurrence history
 

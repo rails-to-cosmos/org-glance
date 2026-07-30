@@ -43,7 +43,7 @@ the zero-markup idiom for public links.
 - =org-glance-headline= — =encrypt= seals the body's blocks (no blocks: wraps
   the whole body in one, the fail-closed one-shot); =decrypt= unseals, keeping
   markers unless UNWRAP — rekey composes decrypt→encrypt and so preserves
-  structure; =--encrypted-here= = legacy whole-body cipher OR a sealed block.
+  structure; =--buffer-encrypted?= = legacy whole-body cipher OR a sealed block.
 - =org-glance-material= — save/open round-trip runs per block; a decrypted
   legacy buffer is wrapped on its next save (silent format upgrade, flagged by
   =--crypt-legacy=).  =C-c #= is context-aware: region → wrap it in a crypt

@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.31.0.0.20260730.0
+;; Version: 1.33.0.0.20260730.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -63,34 +63,76 @@ list is a convenience.  Available: `llm'."
   :group 'org-glance
   :type '(repeat symbol))
 
+(cl-defun org-glance-plugin-feature (plugin)
+  "The library feature PLUGIN names: `org-glance-<plugin>'.
+The one spelling of the plugin naming ABI -- the loader, the enable command and
+the transient's System heading all resolve a plugin through it."
+  (intern (format "org-glance-%s" plugin)))
+
+(cl-defun org-glance--read-plugin (prompt candidates empty &optional require-match)
+  "Completing-read one of CANDIDATES (symbols) under PROMPT; return a symbol.
+Signals EMPTY when CANDIDATES is nil -- with nothing to offer there is no
+prompt to raise -- and rejects empty input, which would intern the empty
+symbol and report on `org-glance-'."
+  (unless candidates (user-error "%s" empty))
+  (let ((choice (completing-read prompt (mapcar #'symbol-name candidates)
+                                 nil require-match)))
+    (when (string-empty-p choice) (user-error "No plugin given"))
+    (intern choice)))
+
+(cl-defun org-glance--plugins-persist (plugin verb &optional note)
+  "Save `org-glance-plugins' and report PLUGIN's new state as VERB, plus NOTE.
+Batch skips `customize-save-variable' (it would write the user's custom file
+from a test run), so the policy lives here rather than in each mutator."
+  (unless noninteractive
+    (customize-save-variable 'org-glance-plugins org-glance-plugins))
+  (message "org-glance: plugin `%s' %s%s" plugin verb
+           (if (and note (not noninteractive)) (concat " " note) "")))
+
 (defconst org-glance-plugins-available '(llm)
-  "Known org-glance plugins, offered by `org-glance-plugin-install'.
+  "Known org-glance plugins, offered by `org-glance-plugin-enable'.
 Each ships as its OWN package (`org-glance-<name>'), so core never carries
-its dependencies -- install the package first, then enable it here.")
+its dependencies: the package manager installs the package, org-glance
+enables it.")
 
 ;;;###autoload
-(cl-defun org-glance-plugin-install (plugin)
-  "Enable PLUGIN now and remember it in `org-glance-plugins' (`P').
-Prompts from the not-yet-installed entries of `org-glance-plugins-available'
-\(those absent from `org-glance-plugins'); free input allows an external
-plugin.  Each plugin is a separate PACKAGE: when its library is not on
-`load-path' this says so instead of failing obscurely.  Loads immediately
--- errors are LOUD here, unlike the demoted init-time loader -- and
-persists via `customize-save-variable' outside batch."
+(cl-defun org-glance-plugin-enable (plugin)
+  "Load PLUGIN now and remember it in `org-glance-plugins' (`I').
+Prompts from the entries of `org-glance-plugins-available' still absent from
+`org-glance-plugins'; free input allows an external plugin.  With every known
+plugin already enabled there is nothing to offer, so it reports that and stops.
+
+Installing the package is the package manager's job (`:ensure t', straight,
+elpaca, ...); this enables what is already on `load-path' and says so when the
+library is missing.  Loads immediately -- errors are LOUD here, unlike the
+demoted init-time loader -- and persists via `customize-save-variable' outside
+batch."
   (interactive
-   (list (intern (completing-read "Install plugin: "
-                                  (mapcar #'symbol-name
-                                          (cl-remove-if (lambda (p) (memq p org-glance-plugins))
-                                                        org-glance-plugins-available))))))
-  (let ((feature (intern (format "org-glance-%s" plugin))))
+   (list (org-glance--read-plugin
+          "Enable plugin: "
+          (cl-remove-if (lambda (p) (memq p org-glance-plugins))
+                        org-glance-plugins-available)
+          (format "Every known plugin is already enabled: %s"
+                  (mapconcat #'symbol-name org-glance-plugins-available ", ")))))
+  (let ((feature (org-glance-plugin-feature plugin)))
     (unless (require feature nil 'noerror)
-      (user-error "Install the `%s' package first (it is not on `load-path')"
+      (user-error "Install the `%s' package first (e.g. `M-x package-install' or `:ensure t'); it is not on `load-path'"
                   feature)))
   (add-to-list 'org-glance-plugins plugin)
-  (if noninteractive
-      (message "org-glance: plugin `%s' enabled" plugin)
-    (customize-save-variable 'org-glance-plugins org-glance-plugins)
-    (message "org-glance: plugin `%s' installed and saved" plugin)))
+  (org-glance--plugins-persist plugin "enabled" "and saved"))
+
+;;;###autoload
+(cl-defun org-glance-plugin-disable (plugin)
+  "Drop PLUGIN from `org-glance-plugins' and persist the change (`U').
+Prompts from the enabled plugins (required match).  The package stays installed
+and its library stays loaded for this session -- plugins never unload
+(invariant 26) -- so its keys and transient rows remain until Emacs restarts;
+the next init skips it."
+  (interactive
+   (list (org-glance--read-plugin "Disable plugin: " org-glance-plugins
+                                  "No plugins are enabled" t)))
+  (setq org-glance-plugins (remq plugin org-glance-plugins))
+  (org-glance--plugins-persist plugin "disabled" "(its code stays until restart)"))
 
 (cl-defun org-glance--load-plugins ()
   "Require every `org-glance-plugins' entry, each error-demoted.
@@ -100,7 +142,7 @@ re-raises there, so under ERT or user debugging a plugin's load error would
 abort init.  `require's NOERROR keeps an absent plugin silent."
   (dolist (plugin org-glance-plugins)
     (condition-case err
-        (require (intern (format "org-glance-%s" plugin)) nil t)
+        (require (org-glance-plugin-feature plugin) nil t)
       (error (message "org-glance: plugin load failed: %S" err)))))
 
 ;;;###autoload

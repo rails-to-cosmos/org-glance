@@ -63,8 +63,7 @@ line, and a second open never clobbers a hand-edited file (write-if-absent)."
 on-disk non-empty seg-*.jsonl becomes visible again, live records are restored,
 and the rewritten MANIFEST is valid canonical JSON."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)       ; seal every insert
-          (org-glance-graph-compact-segment-count 1000)) ; no auto-compaction
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
       (org-glance-graph:add graph (org-glance-test:headline "c" "* Gamma")))
@@ -115,10 +114,8 @@ position: the last record per id wins and no data is lost."
         (should (string= "A-newer" (org-glance-headline-metadata:title a)))
         (should (string= "DONE" (org-glance-headline-metadata:state a))))
       ;; nothing dropped
-      (should (string= "B-orig" (org-glance-headline-metadata:title
-                                 (org-glance-graph:get-headline graph "b"))))
-      (should (string= "C-new" (org-glance-headline-metadata:title
-                                (org-glance-graph:get-headline graph "c"))))
+      (should (string= "B-orig" (org-glance-test:field graph "b" title)))
+      (should (string= "C-new" (org-glance-test:field graph "c" title)))
       (should (equal '("a" "b" "c")
                      (sort (mapcar #'org-glance-headline-metadata:id
                                    (org-glance-graph:headlines graph))
@@ -143,10 +140,8 @@ position: the last record per id wins and no data is lost."
         (should (member "seg-0000000002.jsonl"
                         (org-glance-graph--sealed-segments graph)))
         ;; records from both readable
-        (should (string= "Machine one" (org-glance-headline-metadata:title
-                                        (org-glance-graph:get-headline graph "m1"))))
-        (should (string= "Machine two" (org-glance-headline-metadata:title
-                                        (org-glance-graph:get-headline graph "m2"))))
+        (should (string= "Machine one" (org-glance-test:field graph "m1" title)))
+        (should (string= "Machine two" (org-glance-test:field graph "m2" title)))
         (should (equal '("m1" "m2")
                        (sort (mapcar #'org-glance-headline-metadata:id
                                      (org-glance-graph:headlines graph))

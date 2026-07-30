@@ -111,14 +111,11 @@ record from before the fields reads nil (kept by the nil filter)."
       (org-glance-test:headline "arch" "* TODO Old :ARCHIVE:")
       (org-glance-test:headline "comm" "* COMMENT Draft"))
     (let ((cold (org-glance-test:reopen graph)))       ; deserialized structs
-      (should (org-glance-headline-metadata:archived?
-               (org-glance-graph:get-headline cold "arch")))
+      (should (org-glance-test:field cold "arch" archived?))
       ;; the ARCHIVE marker tag never becomes a collection tag
-      (should-not (org-glance-headline-metadata:tag-strings
-                   (org-glance-graph:get-headline cold "arch")))
+      (should-not (org-glance-test:field cold "arch" tag-strings))
       (should-not (member "archive" (org-glance-graph:tags cold)))
-      (should (org-glance-headline-metadata:commented?
-               (org-glance-graph:get-headline cold "comm")))
+      (should (org-glance-test:field cold "comm" commented?))
       (should (equal '("arch") (org-glance-test:filter-ids cold '(:archived t))))
       (should (equal '("comm" "live")
                      (sort (org-glance-test:filter-ids cold '(:archived nil)) #'string<)))

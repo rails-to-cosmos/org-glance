@@ -223,7 +223,7 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
 Shared by the spec identity and the cache key (a hash of that identity)."
   (pcase (plist-get (alist-get key org-glance-filter:table) :canon)
     ('tags (sort (mapcar #'org-glance--downcased-string value) #'string<))
-    ('string-list (sort (mapcar (lambda (x) (format "%s" x)) value) #'string<))
+    ('string-list (sort (org-glance--strings value) #'string<))
     ('downcase (org-glance--downcased-string value))
     (_ value)))
 

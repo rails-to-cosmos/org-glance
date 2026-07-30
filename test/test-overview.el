@@ -28,18 +28,22 @@
       (should (string= "o1" (org-glance-overview:id-at-point))))))
 
 (ert-deftest org-glance-test:overview-materialize-at-point ()
-  "Materializing from the overview opens the headline under point."
+  "Materializing from the overview opens the headline under point.
+Two headlines, point on the second: the buffer shown carries ITS id."
   (org-glance-test:with-graph graph
-    (org-glance-graph:add graph (org-glance-test:headline "o1" "* TODO Alpha"))
+    (org-glance-graph:add graph
+                          (org-glance-test:headline "o1" "* TODO Alpha")
+                          (org-glance-test:headline "o2" "* TODO Beta"))
     (let ((org-glance-graph graph))
       (org-glance-test:with-shown (opened)
         (with-temp-buffer
           (insert (org-glance-overview:render graph))
           (delay-mode-hooks (org-mode))
           (goto-char (point-min))
-          (re-search-forward "Alpha")
+          (re-search-forward "Beta")
           (org-glance-overview:materialize))
-        (should (bufferp opened))))))
+        (should (bufferp opened))
+        (should (equal "o2" (buffer-local-value 'org-glance-material--id opened)))))))
 
 (ert-deftest org-glance-test:overview-write-file ()
   "The overview is materialized to a file under the store."
@@ -565,15 +569,13 @@ when it is (re)displayed or selected."
         (org-glance-test:answering ((org-read-date "2026-08-15"))
           (funcall (key-binding (kbd "C-c C-s"))))
         (should (s-contains? "2026-08-15"
-                             (org-glance-headline-metadata:schedule
-                              (org-glance-graph:get-headline graph "p1"))))
+                             (org-glance-test:field graph "p1" schedule)))
         ;; point restored onto the headline after the refresh
         (should (org-at-heading-p))
         (org-glance-test:answering ((org-read-date "2026-09-15"))
           (funcall (key-binding (kbd "C-c C-d"))))
         (should (s-contains? "2026-09-15"
-                             (org-glance-headline-metadata:deadline
-                              (org-glance-graph:get-headline graph "p1"))))
+                             (org-glance-test:field graph "p1" deadline)))
         ;; C-u through the interactive frontend clears; the other survives
         (let ((current-prefix-arg '(4)))
           (org-glance-overview:schedule current-prefix-arg))
@@ -608,21 +610,6 @@ plain body links -- agenda and link-following need no materialization."
       ;; plain link verbatim; the edge link is NOT duplicated into the list
       (should (s-contains? "- [[https://example.com][Homepage]]" text))
       (should (= 1 (s-count-matches "r1\\?kind" text))))))
-
-(ert-deftest org-glance-test:metadata-links-sealed-excluded ()
-  "A URL inside a SEALED crypt block never reaches the `links' field."
-  (org-glance-test:with-graph graph
-    (org-glance-graph:add graph
-      (org-glance-headline:encrypt
-       (org-glance-test:headline "s" "* TODO Secret"
-         "[[https://public.example][P]]"
-         "#+begin_crypt"
-         "[[https://secret.example][S]]"
-         "#+end_crypt")
-       "pw"))
-    (should (equal '("[[https://public.example][P]]")
-                   (org-glance-headline-metadata:links
-                    (org-glance-graph:get-headline graph "s"))))))
 
 (ert-deftest org-glance-test:metadata-links-field ()
   "The `links' metadata field carries NON-edge links only; edges live in

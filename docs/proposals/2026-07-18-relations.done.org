@@ -83,7 +83,7 @@ Encode/decode (verifier-corrected — the tags idioms do NOT transfer):
   (the match-nothing drift class of invariant 4).
 
 Derivation (single-parse, verifier-corrected): =--content-facts= gains a
-=:links= fact — =org-glance--buffer-links= runs once, BEFORE =--hash-here=
+=:links= fact — =org-glance--buffer-links= runs once, BEFORE =--buffer-hash=
 (which mutates the buffer), yielding both =linked?= and the edge list; a
 =relations= pcase arm in =org-glance-headline:metadata= reads it.  The field
 table's FROM lambda remains the out-of-band fallback via the =-links= thunk,

@@ -32,6 +32,9 @@
   (-paths nil)
   ;; In-memory read cache: nil (cold), else a plist
   ;; (:snapshot S :by-id HASH :live LIVE-STRUCTS).
+  ;; LIVE is held NEWEST-FIRST so a first sighting is an O(1) push
+  ;; (`--patch-cache'); `:headlines' reverses it into first-sighting order,
+  ;; which also gives the caller the fresh list it promises.
   ;; Valid while the store SNAPSHOT (`--store-snapshot') is unchanged; cleared
   ;; in-process by every mutation (`--invalidate-cache').  See `--ensure-cache'.
   (-meta-cache nil))
@@ -148,7 +151,7 @@ pair; tests call it with deliberately broken tables."
 (cl-defun org-glance-headline-metadata--encode (kind value)
   "Serialize-side coercion for a field of ENCODE kind KIND."
   (pcase kind
-    ('strings-vector (->> value (mapcar (-partial #'format "%s")) (apply #'vector)))
+    ('strings-vector (apply #'vector (org-glance--strings value)))
     ;; Vector of [ID] / [ID KIND] vectors: `json-serialize' renders only
     ;; vectors as JSON arrays (a list would error inside the non-demoted
     ;; append, crashing every save).
@@ -376,10 +379,15 @@ are invisible."
          (all (append sealed (when (f-exists? open) (list open)))))
     (if newest-first (reverse all) all)))
 
+(cl-defun org-glance-graph--segment-names (graph)
+  "Sealed-segment file NAMES on disk, whatever the MANIFEST lists.
+Filenames are the authority for generation numbers and for adoption."
+  (directory-files (org-glance-graph:meta-path graph) nil
+                   org-glance-graph--segment-name-re))
+
 (cl-defun org-glance-graph--next-generation (graph)
   "1 + the highest seg-NNN generation on disk (filenames are the authority)."
-  (1+ (or (cl-loop for f in (directory-files (org-glance-graph:meta-path graph) nil
-                                             org-glance-graph--segment-name-re)
+  (1+ (or (cl-loop for f in (org-glance-graph--segment-names graph)
                    maximize (org-glance-graph--segment-generation f))
           0)))
 
@@ -498,7 +506,8 @@ which LIVE no longer records.  Any other doubt takes the same fallback."
                                   (lambda (m) (equal id (org-glance-headline-metadata:id m)))
                                   live)))
                      ((null prev)
-                      (setq live (append live (list (org-glance-headline-metadata:deserialize record)))))
+                      ;; O(1): LIVE is newest-first, so a first sighting is a push.
+                      (push (org-glance-headline-metadata:deserialize record) live))
                      (t
                       (let ((cell (cl-member id live :key #'org-glance-headline-metadata:id
                                              :test #'equal)))
@@ -527,9 +536,10 @@ metadata in the same order, exactly what `:headlines' returns)."
             (live nil))
         (dolist (record records)
           (puthash (plist-get record :id) record by-id))
-        (setq live (cl-loop for record in records
-                            unless (plist-get record :tombstone)
-                            collect (org-glance-headline-metadata:deserialize record)))
+        (setq live (nreverse
+                    (cl-loop for record in records
+                             unless (plist-get record :tombstone)
+                             collect (org-glance-headline-metadata:deserialize record))))
         (setf cache (list :snapshot snap :by-id by-id :live live)
               (org-glance-graph:-meta-cache graph) cache)))
     cache))
@@ -799,23 +809,27 @@ call (a shallow copy of the cached live list), so a caller may sort/nreverse the
 result without corrupting the cache; the metadata structs are shared but
 immutable (`:read-only' slots)."
   (cl-check-type graph org-glance-graph)
-  (copy-sequence (plist-get (org-glance-graph--ensure-cache graph) :live)))
+  (reverse (plist-get (org-glance-graph--ensure-cache graph) :live)))
+
+(cl-defun org-glance-graph--distinct (graph extract &optional ids)
+  "Sorted distinct strings EXTRACT yields over GRAPH's live headline metadata.
+EXTRACT returns a LIST per metadata; with IDS, fold only those headlines.
+The one shape behind the `:tags' / `:states' / `:edge-kinds' projections."
+  (cl-check-type graph org-glance-graph)
+  (org-glance--sorted-distinct
+   (cl-loop for meta in (org-glance-graph--metas graph ids)
+            append (funcall extract meta))))
 
 (cl-defun org-glance-graph:tags (graph)
   "Distinct tags across GRAPH's live headlines, sorted."
-  (cl-check-type graph org-glance-graph)
-  (org-glance--sorted-distinct
-   (cl-loop for meta in (org-glance-graph:headlines graph)
-            append (org-glance-headline-metadata:tag-strings meta))))
+  (org-glance-graph--distinct graph #'org-glance-headline-metadata:tag-strings))
 
 (cl-defun org-glance-graph:states (graph)
   "Distinct non-empty todo states across GRAPH's live headlines, sorted."
-  (cl-check-type graph org-glance-graph)
-  (org-glance--sorted-distinct
-   (cl-loop for meta in (org-glance-graph:headlines graph)
-            for state = (org-glance-headline-metadata:state meta)
-            when (org-glance--present-string? state)
-            collect state)))
+  (org-glance-graph--distinct
+   graph (lambda (meta)
+           (let ((state (org-glance-headline-metadata:state meta)))
+             (when (org-glance--present-string? state) (list state))))))
 
 (defconst org-glance--org-repeater-re "[.+]\\+?0*[1-9][0-9]*[hdwmy]"
   "Matches a NONZERO org repeater cookie (+1d, ++1w, .+2m) in a timestamp
@@ -855,10 +869,9 @@ The filenames ARE the index (STAMP is a lexically-sortable timestamp)."
   "Distinct relation kinds across GRAPH's live headlines, sorted.
 With IDS, restrict the fold to those headlines.  An edge is (TARGET . KIND);
 `-keep #\='cdr' collects the non-nil kinds."
-  (cl-check-type graph org-glance-graph)
-  (org-glance--sorted-distinct
-   (cl-loop for meta in (org-glance-graph--metas graph ids)
-            append (-keep #'cdr (org-glance-headline-metadata:relations meta)))))
+  (org-glance-graph--distinct
+   graph (lambda (meta) (-keep #'cdr (org-glance-headline-metadata:relations meta)))
+   ids))
 
 (cl-defun org-glance-graph:title-or-id (graph id)
   "ID's headline title in GRAPH, or ID itself when the headline is gone."
@@ -961,8 +974,7 @@ another machine and synced in is adopted here, never reaped as an orphan."
       (let ((meta (org-glance-graph:meta-path graph)))
         (org-glance-graph--write-manifest
          graph
-         (sort (cl-loop for name in (directory-files
-                                     meta nil org-glance-graph--segment-name-re)
+         (sort (cl-loop for name in (org-glance-graph--segment-names graph)
                         when (> (or (f-size (f-join meta name)) 0) 0)
                         collect name)
                #'string<))))))
@@ -1039,14 +1051,13 @@ COMPACTION debris must NOT be adopted: it is told apart because compaction
 copies records (it never re-stamps `seq'), so its output shares `seq' ordinals
 with the listed segments, whereas a genuinely sealed open segment only holds
 ordinals no listed segment has.  Non-adopted orphans are reaped."
-  (let* ((meta (org-glance-graph:meta-path graph))
-         (listed (org-glance-graph--sealed-segments graph))
+  (let* ((listed (org-glance-graph--sealed-segments graph))
          (listed-max (or (cl-loop for n in listed
                                   maximize (org-glance-graph--segment-generation n))
                          0))
          (open-empty (org-glance-graph--open-empty? graph))
          (adopt (and open-empty
-                     (cl-loop for f in (directory-files meta nil org-glance-graph--segment-name-re)
+                     (cl-loop for f in (org-glance-graph--segment-names graph)
                               when (and (not (member f listed))
                                         (> (org-glance-graph--segment-generation f) listed-max))
                               collect f))))

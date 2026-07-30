@@ -5,12 +5,14 @@
 (require 'org)
 (require 'org-element)
 
-(defvar-local -org-glance-datetime:local-timestamps '())
+(defvar-local org-glance-datetime--local-timestamps '()
+  "Repeatable timestamps captured before `org-auto-repeat-maybe' ran.
+`--restore' writes them back, so only the earliest repeater advances.")
 
 (define-minor-mode org-glance-datetime-mode "Handle multiple repeatable timestamps."
   :lighter nil
   :global nil
-  :group 'glance
+  :group 'org-glance
   (cond (org-glance-datetime-mode (advice-add 'org-auto-repeat-maybe :before #'org-glance-datetime-capture)
                                   (advice-add 'org-auto-repeat-maybe :after #'org-glance-datetime-restore))
         (t (advice-remove 'org-auto-repeat-maybe #'org-glance-datetime-capture)
@@ -40,13 +42,13 @@ timestamps.  One `org-element' parse of the narrowed subtree."
                (org-time-string-to-time (org-element-property :raw-value rhs))))))))
 
 (cl-defun org-glance-datetime-capture (&rest _args)
-  (setq-local -org-glance-datetime:local-timestamps
+  (setq-local org-glance-datetime--local-timestamps
               (org-glance-datetime-active-repeated-timestamps)))
 
 (cl-defun org-glance-datetime-restore (&rest _args)
   (let ((tss* (org-glance-datetime-active-repeated-timestamps)))
     (cl-loop
-       for ts in (cdr -org-glance-datetime:local-timestamps)
+       for ts in (cdr org-glance-datetime--local-timestamps)
        for ts* in (cdr tss*)
        do (save-excursion
             (goto-char (org-element-property :begin ts*))

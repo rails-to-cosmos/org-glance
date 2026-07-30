@@ -48,8 +48,7 @@
 (ert-deftest org-glance-test:segments-multi-segment-read-and-order ()
   "Reads merge all segments: latest-per-id wins, insertion order preserved."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1) ; seal after every insert
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha"))
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta"))
       (org-glance-graph:add graph (org-glance-test:headline "c" "* Gamma"))
@@ -57,8 +56,7 @@
       (org-glance-graph:delete graph "b")
       (should (>= (length (org-glance-test:sealed-segments graph)) 3))
       ;; point lookups across segment boundaries
-      (should (string= "DONE" (org-glance-headline-metadata:state
-                               (org-glance-graph:get-headline graph "a"))))
+      (should (string= "DONE" (org-glance-test:field graph "a" state)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "b")))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "c")))
       (should (null (org-glance-graph:get-headline graph "nope")))
@@ -70,16 +68,13 @@
 (ert-deftest org-glance-test:segments-utf8-across-segments ()
   "Multibyte titles survive seals and cross-segment reads."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "ru" "* Заголовок по-русски"))
       (org-glance-graph:add graph (org-glance-test:headline "emoji" "* Headline 🎯 with emoji"))
       (should (string= "Заголовок по-русски"
-                       (org-glance-headline-metadata:title
-                        (org-glance-graph:get-headline graph "ru"))))
+                       (org-glance-test:field graph "ru" title)))
       (should (string= "Headline 🎯 with emoji"
-                       (org-glance-headline-metadata:title
-                        (org-glance-graph:get-headline graph "emoji")))))))
+                       (org-glance-test:field graph "emoji" title))))))
 
 (ert-deftest org-glance-test:segments-torn-line-recovery ()
   "A torn (newline-less, half-JSON) final line is ignored by reads and healed by
@@ -150,8 +145,7 @@ in place: same reads, order preserved, next insert continues cleanly."
   "Compaction merges sealed segments to one, drops superseded records and
 tombstones, GCs dead blobs, and keeps live data intact."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha" "alpha body"))
       (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE Alpha" "alpha body v2"))
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta" "beta body"))
@@ -178,8 +172,7 @@ tombstones, GCs dead blobs, and keeps live data intact."
 ORIGINAL first-sighting position (regression: leaving the open out re-sighted
 such ids after everything else)."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha")) ; seals
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta")))      ; seals
     ;; update a with the default cap: the record stays in the OPEN segment
@@ -196,8 +189,7 @@ such ids after everything else)."
 (ert-deftest org-glance-test:segments-compaction-noop ()
   "Compacting an already-compact store changes nothing on disk."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
       (org-glance-graph:compact graph))
     (let* ((manifest-path (org-glance-graph--manifest-path graph))
@@ -222,8 +214,7 @@ headline whose tombstone's only copy is in the open segment (regression: the
 open was truncated BEFORE the commit, destroying the tombstone while an old
 listed segment still held the headline live)."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "x" "* TODO Doomed" "body"))  ; seals
       (org-glance-graph:add graph (org-glance-test:headline "y" "* Alive" "body")))       ; seals
     ;; tombstone for x lands in the OPEN segment only (default cap: no seal)
@@ -246,8 +237,7 @@ listed segment still held the headline live)."
   "Compaction debris (same `seq' ordinals as listed segments) is never adopted by
 heal, even in the ambiguous empty-open state; the store does not bloat."
   (org-glance-test:with-graph graph
-    (let ((org-glance-graph-segment-max-bytes 1)
-          (org-glance-graph-compact-segment-count 1000))
+    (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))   ; seals
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta")))   ; seals -> open empty
     (let ((segments-before (org-glance-test:sealed-segments graph)))

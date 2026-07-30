@@ -175,12 +175,18 @@ named by the headline's title (id when the headline is gone) and the stamp."
         (read-only-mode 1))
       (switch-to-buffer buf))))
 
+(cl-defun org-glance-view:column-at-point ()
+  "Key of the `table-view' column under point, or nil when point is off one.
+The single spelling of the text-property lookup every column-aware command
+\(`i', `C-c -', the single-row upsert) shares."
+  (get-text-property (point) 'table-view-col))
+
 (cl-defun org-glance-view:point-context ()
   "Point's restorable position in a `table-view' buffer: (ID LINE COL).
 Capture it BEFORE a refill, restore with `org-glance-view:restore-point'."
   (list (get-text-property (point) 'table-view-id)
         (line-number-at-pos)
-        (get-text-property (point) 'table-view-col)))
+        (org-glance-view:column-at-point)))
 
 (cl-defun org-glance-view:restore-point (id line &optional col)
   "Return point to row ID, else to screen LINE; COL re-lands on that CELL.

@@ -90,9 +90,8 @@ cache) bump :removals; both stamp :created once and :modified now.  Runs on
          ((org-glance-headline-metadata? spec)
           (bump-tags (org-glance-headline-metadata:tags spec) :captures))
          ((plist-get spec :tombstone)
-          (let ((meta (org-glance-graph:get-headline graph (plist-get spec :id))))
-            (when (org-glance-headline-metadata? meta)
-              (bump-tags (org-glance-headline-metadata:tags meta) :removals)))))))
+          (when-let ((meta (org-glance-graph:live-meta graph (plist-get spec :id))))
+            (bump-tags (org-glance-headline-metadata:tags meta) :removals))))))
     (when changed (org-glance-tag-metrics--write graph map))))
 
 (add-hook 'org-glance-graph-before-append-functions #'org-glance-tag-metrics--touch)

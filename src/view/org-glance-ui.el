@@ -10,6 +10,9 @@
 (declare-function org-glance-table "org-glance-table")
 (declare-function org-glance-tags "org-glance-tags")
 (declare-function org-glance-tag-config-edit "org-glance-tag-config")
+(defvar org-glance-plugins)   ; org-glance.el: the enabled plugin list, read by
+                              ; the System heading (that file requires this one)
+(declare-function org-glance-plugin-feature "org-glance")
 
 ;;; Ambient filter controls
 ;;
@@ -43,7 +46,9 @@
   (setq org-glance-filter-spec nil))
 
 (defun org-glance-transient--view-mode ()
-  "Current overview display mode as a short string: \"table\" or \"org\"."
+  "Current overview display mode as a short string: \"table\" or \"org\".
+Display only -- the toggle and its label branch on
+`org-glance-overview--default-table?' directly."
   (if (org-glance-overview--default-table?) "table" "org"))
 
 (defun org-glance-transient--overview-description (&rest _)
@@ -54,7 +59,7 @@
 (defun org-glance-transient--toggle-view-description (&rest _)
   "Toggle label naming the display mode it would switch TO."
   (format "Switch layout -> %s"
-          (propertize (if (equal (org-glance-transient--view-mode) "org") "table" "org")
+          (propertize (if (org-glance-overview--default-table?) "org" "table")
                       'face 'transient-value)))
 
 (transient-define-suffix org-glance-transient:toggle-view ()
@@ -64,10 +69,24 @@ this one update in place."
   :transient t
   (interactive)
   (setq org-glance-overview-default-view
-        (if (equal (org-glance-transient--view-mode) "org")
-            'org-glance-table
-          'org-glance-overview))
+        (if (org-glance-overview--default-table?)
+            'org-glance-overview
+          'org-glance-table))
   (message "Overview default view: %s" (org-glance-transient--view-mode)))
+
+(defun org-glance-transient--plugins-description (&rest _)
+  "The System group heading, naming the enabled plugins.
+A plugin whose library failed to load is marked: the init loader is
+error-demoted (invariant 9), so a broken or missing one stays enabled yet
+absent, and this heading is where that shows."
+  (concat "System   plugins: "
+          (if org-glance-plugins
+              (mapconcat (lambda (plugin)
+                           (if (featurep (org-glance-plugin-feature plugin))
+                               (symbol-name plugin)
+                             (format "%s (not loaded)" plugin)))
+                         org-glance-plugins ", ")
+            "none")))
 
 ;;;###autoload
 (transient-define-prefix org-glance-transient ()
@@ -77,7 +96,7 @@ this one update in place."
    ("/" "Title substring" org-glance-transient:filter-by-substring)
    ("c" "Clear (all)" org-glance-transient:filter-clear)]
   ;; Three semantic layers: TAG (collections), HEADLINE (one node; the
-  ;; material buffer mirrors these under C-c), SYSTEM (the install).
+  ;; material buffer mirrors these under C-c), SYSTEM (the installation).
   ["Tag"
    [("o" org-glance-overview :description org-glance-transient--overview-description)
     ;; ("a" "Agenda" org-glance-agenda)
@@ -90,8 +109,9 @@ this one update in place."
     ("j" "Open link" org-glance-open)
     ("e" "Extract property" org-glance-extract)]
    [("-d" "Decrypt" "--decrypt")]]
-  ["System"
-   [("I" "Install plugin" org-glance-plugin-install)
+  [:description org-glance-transient--plugins-description
+   [("I" "Enable plugin" org-glance-plugin-enable)
+    ("U" "Disable plugin" org-glance-plugin-disable)
     ("q" "Quit" transient-quit-one)]]
   (interactive)
   (transient-setup 'org-glance-transient))

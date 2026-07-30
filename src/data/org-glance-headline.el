@@ -131,17 +131,19 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
     (org-element-property :raw-value)))
 
 ;; The four content-derived facts, each computed in the CURRENT `org-mode' buffer
-;; (holding one headline).  `--content-facts' composes all four in one shared
-;; buffer for the metadata build; the -hash/-encrypted thunks reuse the same
-;; helpers, so each computation has a single definition.
+;; (holding one headline) -- hence the `--buffer-' prefix they share with
+;; `org-glance--buffer-links' and `--buffer-key-value-pairs'.
+;; `--buffer-content-facts' composes all four in one shared buffer for the
+;; metadata build; the -hash/-encrypted thunks reuse the same helpers, so each
+;; computation has a single definition.
 
-(defun org-glance-headline--propertized-here ()
+(defun org-glance-headline--buffer-propertized? ()
   "Non-nil if the current buffer's headline body has a `KEY: value' pair."
   (save-excursion
     (goto-char (point-min))
     (and (re-search-forward org-glance:key-value-pair-re nil t) t)))
 
-(defun org-glance-headline--encrypted-here ()
+(defun org-glance-headline--buffer-encrypted? ()
   "Non-nil if the current buffer's headline carries ciphertext.
 Either the whole body is `aes-encrypted' (the legacy layout) or at least one
 `#+begin_crypt' block is sealed (see `org-glance--crypt-block-regions')."
@@ -171,7 +173,7 @@ MUTATES the buffer.  Rationale: `org-glance-headline:hash-ignore-drawers'."
         (when (re-search-forward "^[ \t]*:END:[ \t]*$" nil t)
           (delete-region beg (min (point-max) (1+ (line-end-position)))))))))
 
-(defun org-glance-headline--hash-here ()
+(defun org-glance-headline--buffer-hash ()
   "Return the content hash of the current buffer.
 Strips the id/hash drawer properties and the LOGBOOK drawers first, so clocking
 leaves the hash alone.  MUTATES the buffer, so call it LAST when sharing one."
@@ -182,25 +184,38 @@ leaves the hash alone.  MUTATES the buffer, so call it LAST when sharing one."
   (let ((data (s-trim (buffer-substring-no-properties (point-min) (point-max)))))
     (with-temp-buffer (insert data) (buffer-hash))))
 
+(cl-defmacro org-glance-headline--lazy-fact (contents &rest body)
+  "A thunk computing BODY in an org buffer holding CONTENTS.
+The one spelling of a lazy content fact: the type check, the delay and the
+buffer.  Forced through `thunk-force' by the accessor that owns the slot."
+  (declare (indent 1))
+  `(progn
+     (cl-check-type ,contents string)
+     (thunk-delay (org-glance-headline:with-contents ,contents ,@body))))
+
 (cl-defun org-glance-headline--hash (contents)
-  (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (org-glance-headline--hash-here))))
+  (org-glance-headline--lazy-fact contents (org-glance-headline--buffer-hash)))
 
 (cl-defun org-glance-headline--properties (contents)
-  (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (org-glance--buffer-key-value-pairs))))
+  (org-glance-headline--lazy-fact contents (org-glance--buffer-key-value-pairs)))
 
 (cl-defun org-glance-headline--node-properties (contents)
-  (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (org-entry-properties nil 'standard))))
+  (org-glance-headline--lazy-fact contents (org-entry-properties nil 'standard)))
 
 (cl-defun org-glance-headline--encrypted (contents)
-  (cl-check-type contents string)
-  (thunk-delay (org-glance-headline:with-contents contents
-                 (org-glance-headline--encrypted-here))))
+  (org-glance-headline--lazy-fact contents (org-glance-headline--buffer-encrypted?)))
+
+(defconst org-glance-headline--contents-derived-slots
+  `((-facts           . nil)
+    (-hash            . ,#'org-glance-headline--hash)
+    (-properties      . ,#'org-glance-headline--properties)
+    (-node-properties . ,#'org-glance-headline--node-properties)
+    (-encrypted?      . ,#'org-glance-headline--encrypted))
+  "Slots computed FROM `contents', each with the builder that recomputes it.
+A copy replacing `:contents' rebuilds them: each is a memo or a thunk closed
+over the OLD string.  A nil builder means drop the slot.  The pairs are
+spelled out because the names differ -- `-encrypted?' is built by
+`--encrypted'.  An explicit UPDATE-PLIST value wins.")
 
 (defconst org-glance-headline--content-fact-keys
   '(:relations :links :linked :propertized :encrypted :range :hash)
@@ -210,16 +225,16 @@ naming anything else reads nil forever.  Checked at load with the table.")
 
 (cl-defun org-glance-headline--content-facts (headline)
   "Return HEADLINE's content-derived facts, computed once.
-Reuses the plist its parse captured (`--content-facts-here'), else computes
+Reuses the plist its parse captured (`--buffer-content-facts'), else computes
 them in one org-mode buffer now.  The memo is keyed by the exact contents
 STRING, so a copy that rewrote contents recomputes."
   (let ((memo (org-glance-headline:-facts headline)))
     (if (and memo (eq (car memo) (org-glance-headline:contents headline)))
         (cdr memo)
       (org-glance-headline:with-contents headline
-        (org-glance-headline--content-facts-here)))))
+        (org-glance-headline--buffer-content-facts)))))
 
-(cl-defun org-glance-headline--content-facts-here ()
+(cl-defun org-glance-headline--buffer-content-facts ()
   "Return the content facts of the headline filling the CURRENT buffer.
 One plist keyed by `org-glance-headline--content-fact-keys', from a single
 org-mode pass: the links parse feeds both `linked?' and the relation edges.
@@ -230,12 +245,12 @@ Hash runs LAST -- it deletes drawer properties in place."
     (list :relations   edges
           :links       plain
           :linked      (and links t)
-          :propertized (org-glance-headline--propertized-here)
-          :encrypted   (org-glance-headline--encrypted-here)
-          :range       (org-glance-headline--range-here)
-          :hash        (org-glance-headline--hash-here))))
+          :propertized (org-glance-headline--buffer-propertized?)
+          :encrypted   (org-glance-headline--buffer-encrypted?)
+          :range       (org-glance-headline--buffer-range)
+          :hash        (org-glance-headline--buffer-hash))))
 
-(cl-defun org-glance-headline--range-here ()
+(cl-defun org-glance-headline--buffer-range ()
   "The BODY's first active date range as (FROM TO) with brackets, or nil.
 The headline's interval (`org-tr-regexp').  The search starts after the
 heading's meta-data (`org-end-of-meta-data'), so a range in the title, a
@@ -271,7 +286,7 @@ descendants (like every content fact), so a child's range can project."
       ;; the on-demand parse in `--content-facts', exactly as before.
       (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
           (org-glance-headline--copy headline
-            :-facts (cons parsed (org-glance-headline--content-facts-here)))
+            :-facts (cons parsed (org-glance-headline--buffer-content-facts)))
         headline))))
 
 (cl-defun org-glance-headline--from-lines (&rest lines)
@@ -303,32 +318,24 @@ descendants (like every content fact), so a child's range can project."
                         (end (org-element-property :end element)))
                     (with-current-buffer buffer
                       (buffer-substring-no-properties begin end)))))
-    (make-org-glance-headline :id id
-                                 :title title
-                                 :tags tags
-                                 :state state
-                                 :priority priority
-                                 :-schedule schedule
-                                 :-deadline deadline
-                                 :contents contents
-                                 :archived? archived?
-                                 :commented? commented?
-                                 :-hash (org-glance-headline--hash contents)
-                                 :-properties (org-glance-headline--properties contents)
-                                 :-node-properties (org-glance-headline--node-properties contents)
-                                 :-encrypted? (org-glance-headline--encrypted contents))))
-
-(defconst org-glance-headline--contents-derived-slots
-  `((-facts           . nil)
-    (-hash            . ,#'org-glance-headline--hash)
-    (-properties      . ,#'org-glance-headline--properties)
-    (-node-properties . ,#'org-glance-headline--node-properties)
-    (-encrypted?      . ,#'org-glance-headline--encrypted))
-  "Slots computed FROM `contents', each with the builder that recomputes it.
-A copy replacing `:contents' rebuilds them: each is a memo or a thunk closed
-over the OLD string.  A nil builder means drop the slot.  The pairs are
-spelled out because the names differ -- `-encrypted?' is built by
-`--encrypted'.  An explicit UPDATE-PLIST value wins.")
+    (apply #'make-org-glance-headline
+           :id id
+           :title title
+           :tags tags
+           :state state
+           :priority priority
+           :-schedule schedule
+           :-deadline deadline
+           :contents contents
+           :archived? archived?
+           :commented? commented?
+           ;; The lazy slots come from the same table `--copy' rebuilds them
+           ;; with, so a new one is declared once.  A nil builder (`-facts')
+           ;; is skipped and stays nil.
+           (cl-loop for (slot . builder) in org-glance-headline--contents-derived-slots
+                    when builder
+                    append (list (intern (format ":%s" slot))
+                                 (funcall builder contents))))))
 
 (cl-defun org-glance-headline--copy (headline &rest update-plist)
   "Copy HEADLINE, replacing the slots described by UPDATE-PLIST.

@@ -280,5 +280,17 @@ rewrites contents recomputes rather than describing the old bytes."
       (should-not (equal (plist-get memoized :hash)
                          (plist-get (org-glance-headline--content-facts rewritten) :hash))))))
 
+(ert-deftest org-glance-test:lazy-slots-come-from-the-table ()
+  "The parser fills every lazy slot the contents-derived table declares, so a
+new one cannot be added to the table and forgotten in the constructor -- the
+always-nil-slot class the metadata field guard exists to kill."
+  (let ((headline (org-glance-headline--from-string
+                   (org-glance-test:org-with-id "* TODO T" "lz" "body"))))
+    (pcase-dolist (`(,slot . ,builder) org-glance-headline--contents-derived-slots)
+      (when builder
+        (should (cl-struct-slot-value 'org-glance-headline slot headline))))
+    ;; the nil-builder slot is the parse-time memo, filled separately
+    (should (assq '-facts org-glance-headline--contents-derived-slots))))
+
 (provide 'test-headline)
 ;;; test-headline.el ends here

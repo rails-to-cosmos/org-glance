@@ -2,8 +2,10 @@
 #+DATE: 2026-07-23
 
 Status: *done* (2026-07-23, both phases).  Amendments: =I= in the
-transient (=org-glance-plugin-install=) installs a plugin interactively
-and now reports a missing PACKAGE by name; the plugin lives in
+transient enables a plugin interactively and reports a missing PACKAGE by
+name; the command was renamed =org-glance-plugin-enable= on 2026-07-30
+(with =U= / =org-glance-plugin-disable=) once it was clear it enables what
+the package manager installed; the plugin lives in
 =plugins/=, excluded from core's =files= and compiled by
 =make compile-plugins=.
 
@@ -90,7 +92,7 @@ and 14-test suite.
   (GRAPH . ID), replacing three buffer-local internals) and
   =org-glance-graph:cache-read= / =:cache-write= (the sidecar API,
   replacing the eld internals).  Verified: zero =--= references to core.
-- Core keeps the loader and =org-glance-plugin-install=, which now
+- Core keeps the loader and =org-glance-plugin-enable=, which
   =user-error=s "install the `org-glance-llm' package first" when the
   library is absent; =test/test-plugins.el= covers the loader without any
   plugin present.

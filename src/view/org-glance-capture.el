@@ -39,11 +39,6 @@ ingest, so nothing is excluded.  With ARG (`C-u @') also prompt for a kind."
   (require 'org-glance-material)
   (org-glance-material:insert-reference org-glance-graph nil :with-kind arg))
 
-(cl-defun org-glance-capture--format-tags (tags)
-  "Format TAGS (a symbol or list of symbols) as an org tag string `:a:b:'."
-  (let ((tags (org-glance-tag:as-list tags)))
-    (mapconcat #'org-glance-tag:to-string tags ":")))
-
 (cl-defun org-glance-capture:template (tags &optional (title ""))
   "`org-capture' template for a new headline with TAGS, pre-filled with TITLE.
 TAGS is a tag symbol or a list of tag symbols.  When TAGS is a SINGLE tag with a
@@ -65,7 +60,8 @@ byte-identical to before.  Multi-tag composition is deferred to Phase 2."
           (if (and preamble (not (s-contains? "#+TODO:" body)))
               (concat preamble body)
             body))
-      (format "* %s%%?  :%s:" title (org-glance-capture--format-tags tags)))))
+      (format "* %s%%?  :%s:" title
+              (mapconcat #'org-glance-tag:to-string tags ":")))))
 
 (cl-defun org-glance-capture:completing-read-tag ()
   "Prompt for a tag; candidates come from the graph's live headlines.
@@ -120,12 +116,12 @@ separately."
     ;; -- is silent, with no `Buffer modified; kill anyway?' confirmation.
     (add-hook 'kill-buffer-query-functions #'org-glance--kill-buffer-noconfirm nil t)
     (add-hook 'org-capture-after-finalize-hook
-              `(lambda ()
-                 (unwind-protect
-                     (when-let ((buffer (get-file-buffer ,file)))
-                       (org-glance-graph:capture org-glance-graph buffer))
-                   (org-glance--discard-buffer (get-file-buffer ,file))
-                   (f-delete ,file)))
+              (lambda ()
+                (unwind-protect
+                    (when-let ((buffer (get-file-buffer file)))
+                      (org-glance-graph:capture org-glance-graph buffer))
+                  (org-glance--discard-buffer (get-file-buffer file))
+                  (f-delete file)))
               0 t)
     (org-capture nil capture-token)
     ;; org-capture leaves its buffer current; enable `@' references there.

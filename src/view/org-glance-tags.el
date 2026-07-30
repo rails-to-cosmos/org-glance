@@ -110,18 +110,11 @@ showed e.g. archived rows the picker hides)."
   "Open the overview of TAG (a string) from GRAPH."
   (org-glance-overview:visit graph (org-glance-tags--tag-filter tag)))
 
-(cl-defun org-glance-tags--act-add (_graph)
-  "Add a tag by capturing a first headline that carries it.
-A tag exists only by carrying a headline, so this runs the standard capture
-(prompting for the tag -- new tags allowed -- and a title)."
-  (call-interactively #'org-glance-capture))
-
-(cl-defun org-glance-tags--retag-remove (graph tag ids)
-  "Drop TAG (a symbol) off each headline in IDS via `org-glance-material:retag'.
+(cl-defun org-glance-tags--retag-remove (graph tag-string ids)
+  "Drop TAG-STRING off each headline in IDS via `org-glance-material:retag'.
 An id whose blob buffer has unsaved edits (retag's `user-error') is skipped.
 Return (CHANGED . SKIPPED)."
-  (let ((tag-string (format "%s" tag))
-        (changed 0) (skipped 0))
+  (let ((changed 0) (skipped 0))
     (dolist (id ids)
       (condition-case nil
           (when (org-glance-material:retag graph id tag-string :remove t)
@@ -162,7 +155,10 @@ tag vanishes once no live headline carries it."
   (let ((src (org-glance-graph:headline-meta-path graph))
         (handlers (list (cons "table"    (lambda (id _row) (org-glance-tags--act-table graph id)))
                         (cons "overview" (lambda (id _row) (org-glance-tags--act-overview graph id)))
-                        (cons "add"      (lambda (_id _row) (org-glance-tags--act-add graph)))
+                        ;; a tag exists only by carrying a headline, so "add a
+                        ;; tag" is the standard capture (new tags allowed)
+                        (cons "add"      (lambda (_id _row)
+                                           (call-interactively #'org-glance-capture)))
                         (cons "remove"   (lambda (id _row) (org-glance-tags--act-remove graph id)))
                         (cons "refresh"  (lambda (_id _row) (org-glance-table--reload (current-buffer)))))))
     (org-glance-view:display-table

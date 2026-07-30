@@ -271,8 +271,7 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
           (org-glance-test:answering ((completing-read "urgent"))
             (org-glance-table--act-tag graph id))
           (should (member "urgent"
-                          (org-glance-headline-metadata:tag-strings
-                           (org-glance-graph:get-headline graph id))))))))
+                          (org-glance-test:field graph id tag-strings)))))))
 
 (ert-deftest org-glance-test:table-remove-tag ()
   "`C-u :' removes one of the headline's own tags, keeping the others."
@@ -284,8 +283,7 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
           (org-glance-test:answering ((completing-read "work"))
             (let ((current-prefix-arg '(4)))
               (org-glance-table--act-tag graph id)))
-          (let ((tags (org-glance-headline-metadata:tag-strings
-                       (org-glance-graph:get-headline graph id))))
+          (let ((tags (org-glance-test:field graph id tag-strings)))
             (should-not (member "work" tags))
             (should (member "home" tags)))))))
 
@@ -298,22 +296,15 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
         (let ((id (org-glance-test:first-row-id)))
           (org-glance-test:answering ((read-passwd "pw"))
             (org-glance-table--act-crypt graph id)          ; encrypt
-            (should (org-glance-headline-metadata:encrypted?
-                     (org-glance-graph:get-headline graph id)))
+            (should (org-glance-test:field graph id encrypted?))
             (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph id)))
             (should (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
             (should (equal "🔒" (org-glance-test:meta-cell graph id 'encrypted)))
             (org-glance-table--act-crypt graph id)          ; decrypt -> fully public
-            (should-not (org-glance-headline-metadata:encrypted?
-                         (org-glance-graph:get-headline graph id)))
+            (should-not (org-glance-test:field graph id encrypted?))
             (should (s-contains? "body" (org-glance-graph:get-content graph id)))
             (should-not (s-contains? "#+begin_crypt" (org-glance-graph:get-content graph id)))
             (should (equal "" (org-glance-test:meta-cell graph id 'encrypted))))))))
-
-(cl-defun org-glance-test:meta-cell (graph id key)
-  "The KEY cell string of headline ID's `org-glance-table' row in GRAPH."
-  (alist-get key (alist-get 'cells
-                            (org-glance-table--row (org-glance-graph:get-headline graph id)))))
 
 (ert-deftest org-glance-test:table-crypt-rekey ()
   "`C-u #' on an encrypted row re-keys it: it stays encrypted and decrypts with
@@ -327,8 +318,7 @@ the new password."
           (org-glance-test:answering ((read-passwd (pop pws)))
             (let ((current-prefix-arg '(4)))
               (org-glance-table--act-crypt graph id)))
-          (should (org-glance-headline-metadata:encrypted?
-                   (org-glance-graph:get-headline graph id)))
+          (should (org-glance-test:field graph id encrypted?))
           (should (s-contains? "body" (org-glance-headline:contents
                                        (org-glance-headline:decrypt
                                         (org-glance-graph:headline graph id) "new"))))))))
@@ -395,18 +385,15 @@ the table (`table-view' link support), not as raw `[[...]]' markup."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
       (org-glance-test:headline "k1" "* TODO Read [[https://example.com][The Book]]"))
-    (let ((buf (org-glance-table:visit graph)))
-      (unwind-protect
-          (with-current-buffer buf
-            (let ((txt (buffer-string)))
-              (should (string-match-p "The Book" txt))            ; description shown
-              (should-not (string-match-p "\\[\\[https" txt)))    ; raw markup hidden
-            (goto-char (point-min))
-            (should (re-search-forward "The Book" nil t))
-            (should (equal "https://example.com"                   ; followable link property
-                           (get-text-property (match-beginning 0) 'table-view-link)))
-            (should (key-binding (kbd "C-c C-o"))))                ; follow key is bound
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+    (org-glance-test:with-table (graph)
+      (let ((txt (buffer-string)))
+        (should (string-match-p "The Book" txt))            ; description shown
+        (should-not (string-match-p "\\[\\[https" txt)))    ; raw markup hidden
+      (goto-char (point-min))
+      (should (re-search-forward "The Book" nil t))
+      (should (equal "https://example.com"                   ; followable link property
+                     (get-text-property (match-beginning 0) 'table-view-link)))
+      (should (key-binding (kbd "C-c C-o"))))))             ; follow key is bound
 
 (ert-deftest org-glance-test:table-fill-frame ()
   "With `org-glance-view-fill-frame' non-nil, visiting a table fills the frame
@@ -525,7 +512,7 @@ materialize (which stays on RET) -- org-glance no longer binds `m'."
 (ert-deftest org-glance-test:table-todo-preserves-point ()
   "Changing state keeps point where it was instead of jumping to the top: when the
 row leaves the view (DONE under an active filter) point stays on the same line."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+  (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
                             (org-glance-test:headline "r1" "* TODO A")
@@ -557,14 +544,13 @@ re-fill + re-sort restore by line, so without re-anchoring point drifts."
 (ert-deftest org-glance-test:table-action-todo ()
   "The `todo' action advances the row's state (`C-c C-t' via change-todo-live);
 after the (no-note) commit the reloaded table shows the new state on the row."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+  (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
       (org-glance-test:with-table (graph)
           (org-glance-table--act-todo graph "td1")   ; no-note -> synchronous finalize
           ;; persisted in the graph
-          (should (equal "DONE" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "td1"))))
+          (should (equal "DONE" (org-glance-test:field graph "td1" state)))
           ;; reloaded row reflects the new state
           (let ((row (car table-view--rows)))
             (should (equal "td1" (alist-get 'id row)))
@@ -591,7 +577,7 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
 
 (ert-deftest org-glance-test:table-bulk-todo-marked ()
   "`C-c C-t' with marked rows sets them all to a chosen state, then clears marks."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+  (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
                             (org-glance-test:headline "b1" "* TODO A")
@@ -602,17 +588,15 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
           (should (= 2 (length (table-view-marked-rows))))
           (org-glance-test:answering ((org-fast-todo-selection "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))          ; bulk (marks present)
-          (should (equal "DONE" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "b1"))))
-          (should (equal "DONE" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "b3"))))
+          (should (equal "DONE" (org-glance-test:field graph "b1" state)))
+          (should (equal "DONE" (org-glance-test:field graph "b3" state)))
           (should (equal "TODO" (org-glance-headline-metadata:state  ; unmarked, untouched
                                  (org-glance-graph:get-headline graph "b2"))))
           (should (null (table-view-marked-rows)))))))       ; marks cleared
 
 (ert-deftest org-glance-test:table-bulk-todo-preserves-point ()
   "After a bulk change, point stays on the row it was on, not jumping to the top."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+  (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
                             (org-glance-test:headline "p1" "* TODO A")
@@ -626,10 +610,8 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
             (funcall (key-binding (kbd "C-c C-t"))))     ; bulk-sets p1,p2 (not p4)
           ;; point followed its row (p4), which survived the change
           (should (equal "p4" (get-text-property (point) 'table-view-id)))
-          (should (equal "DONE" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "p1"))))
-          (should (equal "TODO" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "p4"))))))))
+          (should (equal "DONE" (org-glance-test:field graph "p1" state)))
+          (should (equal "TODO" (org-glance-test:field graph "p4" state)))))))
 
 (ert-deftest org-glance-test:table-bulk-todo-logs-and-keeps-point ()
   "The reported scenario end-to-end: bulk `C-c C-t' under timestamp logging sets
@@ -638,16 +620,14 @@ it was on -- and never errors on a dangling log marker.  (`org-glance-table:visi
 is used directly, without stubbing `pop-to-buffer', so `org-add-log-note's own
 buffer switching -- which the flush relies on -- runs for real.)"
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))   ; `!' logs a timestamp
-        (org-log-into-drawer nil) (this-command 'org-glance-test-bulk) (buf nil))
+        (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph
                             (org-glance-test:headline "g1" "* TODO A")
                             (org-glance-test:headline "g2" "* TODO B")
                             (org-glance-test:headline "g3" "* TODO C"))
-      (unwind-protect
-          (progn
-            (setq buf (org-glance-table:visit graph))
-            (with-current-buffer buf
+      (org-glance-test:with-open buf (org-glance-table:visit graph)
+          (with-current-buffer buf
               (org-glance-test:mark-rows "g1" "g2")
               (table-view--goto-id "g3")                     ; point on the UNMARKED row
               (org-glance-test:answering ((org-fast-todo-selection "DONE"))
@@ -656,25 +636,22 @@ buffer switching -- which the flush relies on -- runs for real.)"
               (should (equal "g3" (get-text-property (point) 'table-view-id)))  ; point kept
               (should (null (table-view-marked-rows)))       ; marks cleared
               (dolist (id '("g1" "g2"))                      ; both marked: DONE + logged
-                (should (equal "DONE" (org-glance-headline-metadata:state
-                                       (org-glance-graph:get-headline graph id))))
+                (should (equal "DONE" (org-glance-test:field graph id state)))
                 (should (s-contains? "State \"DONE\""
                                      (org-glance-graph:get-content graph id))))
-              (should (equal "TODO" (org-glance-headline-metadata:state  ; unmarked untouched
-                                     (org-glance-graph:get-headline graph "g3"))))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
+              (should (equal "TODO"                          ; unmarked untouched
+                             (org-glance-test:field graph "g3" state))))))))
 
 (ert-deftest org-glance-test:table-todo-single-when-unmarked ()
   "With no marks, `C-c C-t' takes the single-row path (advances the point row)."
-  (let ((org-todo-keywords '((sequence "TODO" "DONE"))) (org-log-done nil))
+  (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "s1" "* TODO A"))
       (org-glance-test:with-table (graph)
           (should (table-view--goto-id "s1"))
           (should (null (table-view-marked-rows)))
           (funcall (key-binding (kbd "C-c C-t")))             ; single (no marks)
-          (should (equal "DONE" (org-glance-headline-metadata:state
-                                 (org-glance-graph:get-headline graph "s1"))))))))
+          (should (equal "DONE" (org-glance-test:field graph "s1" state)))))))
 
 ;;; Surgical single-row updates (buffer-text level)
 
@@ -730,8 +707,7 @@ priority and property columns take a string prompt, derived columns refuse."
                    (lambda (_p &optional init &rest _) (setq offered init) "Beta")))
           (org-glance-table--act-edit graph "a"))
         (should (equal "Alpha" offered)))
-      (should (equal "Beta" (org-glance-headline-metadata:title
-                             (org-glance-graph:get-headline graph "a"))))
+      (should (equal "Beta" (org-glance-test:field graph "a" title)))
       ;; tags column: routes to the `:' tag flow
       (org-glance-test:goto-cell "a" "tags")
       (let (tagged)
@@ -746,8 +722,7 @@ priority and property columns take a string prompt, derived columns refuse."
       (org-glance-test:goto-cell "a" "priority")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
         (org-glance-table--act-edit graph "a"))
-      (should-not (org-glance-headline-metadata:priority
-                   (org-glance-graph:get-headline graph "a")))
+      (should-not (org-glance-test:field graph "a" priority))
       ;; drawer-property column: string prompt updates the drawer
       (org-glance-test:goto-cell "a" "ROAST")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "dark")))
@@ -784,9 +759,10 @@ priority and property columns take a string prompt, derived columns refuse."
       (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table (graph 'book)
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR"))
-        (should (equal '(("AUTHOR" . "Author")) (org-glance-table--schema-get graph 'book)))
+        (should (equal '(("AUTHOR" . "Author"))
+                       (plist-get (org-glance-table--schema-entry graph 'book) :columns)))
         (table-view-remove-column "AUTHOR")
-        (should-not (org-glance-table--schema-get graph 'book)))
+        (should-not (plist-get (org-glance-table--schema-entry graph 'book) :columns)))
     (org-glance-test:with-table (graph 'book)
       (should-not (member "AUTHOR" (org-glance-test:table-col-keys))))))
 
@@ -851,7 +827,8 @@ column removal moved to `C-c -'."
     (org-glance-test:with-table (graph 'book)
         (should (member "tags" (org-glance-test:table-col-keys)))
         (table-view-remove-column "tags")
-        (should (equal '("tags") (org-glance-table--schema-hidden graph 'book))))
+        (should (equal '("tags")
+                       (plist-get (org-glance-table--schema-entry graph 'book) :hidden))))
     (org-glance-test:with-table (graph 'book)   ; reopen: still hidden
       (should-not (member "tags" (org-glance-test:table-col-keys))))
     (org-glance-test:with-table (graph 'article) ; other tag unaffected
@@ -924,14 +901,12 @@ shared picker."
         (org-glance-test:answering ((org-read-date "2026-08-01"))
           (funcall (key-binding (kbd "C-c C-s"))))
         (should (s-contains? "2026-08-01"
-                             (org-glance-headline-metadata:schedule
-                              (org-glance-graph:get-headline graph "p1"))))
+                             (org-glance-test:field graph "p1" schedule)))
         (table-view--goto-id "p1")
         (org-glance-test:answering ((org-read-date "2026-09-01"))
           (funcall (key-binding (kbd "C-c C-d"))))
         (should (s-contains? "2026-09-01"
-                             (org-glance-headline-metadata:deadline
-                              (org-glance-graph:get-headline graph "p1"))))
+                             (org-glance-test:field graph "p1" deadline)))
         ;; C-u clears the schedule, deadline untouched
         (table-view--goto-id "p1")
         (let ((current-prefix-arg '(4)))
@@ -1016,7 +991,8 @@ untagged (\":none:\") per-tag schema entry."
       (table-view-remove-column "tags")
       (org-glance-table:apply-layout))
     (should (equal '("tags")
-                   (org-glance-table--schema-hidden graph '(:tags ("work")))))))
+                   (plist-get (org-glance-table--schema-entry graph '(:tags ("work")))
+                              :hidden)))))
 
 (ert-deftest org-glance-test:ref-layout-hides-relation-column ()
   "Removing the relation view's own `Relation' column is persisted like any

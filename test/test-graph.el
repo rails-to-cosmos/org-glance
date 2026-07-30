@@ -32,8 +32,8 @@
     (org-glance-graph:add graph
                              (org-glance-test:headline "a" "* TODO alpha")
                              (org-glance-test:headline "b" "* DONE beta"))
-    (should (string= "alpha" (org-glance-headline-metadata:title (org-glance-graph:get-headline graph "a"))))
-    (should (string= "beta"  (org-glance-headline-metadata:title (org-glance-graph:get-headline graph "b"))))))
+    (should (string= "alpha" (org-glance-test:field graph "a" title)))
+    (should (string= "beta"  (org-glance-test:field graph "b" title)))))
 
 (ert-deftest org-glance-test:graph-latest-wins ()
   "Re-adding an id appends a record; the most recent one wins (reverse scan)."
@@ -41,7 +41,7 @@
     (let ((headline (org-glance-test:headline "id1" "* TODO foo")))
       (org-glance-graph:add graph headline)
       (org-glance-graph:add graph (org-glance-headline--copy headline :state "DONE"))
-      (should (string= "DONE" (org-glance-headline-metadata:state (org-glance-graph:get-headline graph "id1")))))))
+      (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
 
 (ert-deftest org-glance-test:graph-delete-idempotent ()
   "Deleting an absent or already-deleted id is a no-op (no extra record)."
@@ -61,8 +61,7 @@ Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
     (let ((title "Façade — Facebook’s “data” café"))
       (org-glance-graph:add graph (org-glance-test:headline "u1" (concat "* TODO " title)))
       ;; point lookup (the previously-broken path)
-      (should (string= title (org-glance-headline-metadata:title
-                              (org-glance-graph:get-headline graph "u1"))))
+      (should (string= title (org-glance-test:field graph "u1" title)))
       ;; forward reader
       (should (string= title (org-glance-headline-metadata:title
                               (car (org-glance-graph:headlines graph)))))
@@ -177,9 +176,9 @@ truncate an existing data.org)."
     (org-glance-graph:add graph (org-glance-test:headline "r1" "* foo" "[[https://x.example][x]]"))
     ;; simulate an old record lacking the linked flag (latest wins)
     (org-glance-graph:insert graph (list (list :id "r1" :state "" :title "foo")))
-    (should (not (org-glance-headline-metadata:linked? (org-glance-graph:get-headline graph "r1"))))
+    (should (not (org-glance-test:field graph "r1" linked?)))
     (org-glance-graph:reindex graph)
-    (should (org-glance-headline-metadata:linked? (org-glance-graph:get-headline graph "r1")))))
+    (should (org-glance-test:field graph "r1" linked?))))
 
 (ert-deftest org-glance-test:org-mode-forces-tab-width-8 ()
   "Parsing setup forces tab-width 8 (org requires it) and disables tabs, even
@@ -343,8 +342,7 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
       (should (time-equal-p past (file-attribute-modification-time
                                   (file-attributes blob))))
       ;; the re-derived record is live and correct
-      (should (equal "A" (org-glance-headline-metadata:title
-                          (org-glance-graph:get-headline graph "a")))))))
+      (should (equal "A" (org-glance-test:field graph "a" title))))))
 
 (cl-defun org-glance-test:tri-state (graph id)
   "GRAPH's answer for ID as a comparable value: nil, `tombstone', or the state."
@@ -369,8 +367,7 @@ not re-scan the WAL.  Counted -- `--latest-records' is the rebuild."
         ;; an update patches in place, keeping first-sighting order
         (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE A"))
         (should (equal '("a" "b") (org-glance-test:ids graph)))
-        (should (equal "DONE" (org-glance-headline-metadata:state
-                               (org-glance-graph:get-headline graph "a"))))
+        (should (equal "DONE" (org-glance-test:field graph "a" state)))
         (should (= 0 rebuilds))
         ;; a tombstone drops it from LIVE but keeps the tri-state in BY-ID
         (org-glance-graph:delete graph "a")

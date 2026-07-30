@@ -69,14 +69,13 @@ become untagged but live, and the tag leaves the derived tag set."
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :x:y:")   ; multi
                           (org-glance-test:headline "b" "* TODO B :x:"))    ; single
-    (let ((res (org-glance-tags--retag-remove graph 'x '("a" "b"))))
+    ;; the row id is a STRING, which is what the `-' action forwards
+    (let ((res (org-glance-tags--retag-remove graph "x" '("a" "b"))))
       (should (equal '(2 . 0) res))
       (should-not (member "x" (org-glance-graph:tags graph)))
       (should (member "y" (org-glance-graph:tags graph)))
-      (should (equal '("y") (org-glance-headline-metadata:tags
-                             (org-glance-graph:get-headline graph "a"))))
-      (should (null (org-glance-headline-metadata:tags
-                     (org-glance-graph:get-headline graph "b")))))))
+      (should (equal '("y") (org-glance-test:field graph "a" tags)))
+      (should (null (org-glance-test:field graph "b" tags))))))
 
 ;;; Visit
 
@@ -114,9 +113,8 @@ become untagged but live, and the tag leaves the derived tag set."
 (ert-deftest org-glance-test:tags-filter-overlays-ambient ()
   "The dashboard's per-tag filter overlays the ambient spec (same view as the
 o/table pickers -- archived rows hidden by default here too)."
-  (should (equal (org-glance-filter:identity
-                  (org-glance-filter:merge org-glance-filter-spec 'x))
-                 (org-glance-filter:identity (org-glance-tags--tag-filter "x")))))
+  (should (equal '(:done nil :archived nil :commented nil :tags ("x"))
+                 (org-glance-tags--tag-filter "x"))))
 
 (ert-deftest org-glance-test:tags-ret-opens-table ()
   "RET on a tag row opens that tag's `org-glance-table' buffer."

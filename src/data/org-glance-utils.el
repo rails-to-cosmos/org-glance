@@ -88,16 +88,25 @@ forms back to back once stripped.  Read all, stopping at the first bad tail."
             (setq pos next)))))
     (nreverse forms)))
 
+(cl-defun org-glance--read-eld-with (path conflict-fn)
+  "Read the .eld PATH, handing a CONFLICT-FN the raw TEXT when it is marked.
+Nil when PATH is absent.  A clean file reads its single form; the two readers
+below differ only in what they do with a conflicted one, so the prologue --
+existence, decode, marker test, clean-read -- lives here."
+  (when (f-exists? path)
+    (let ((text (f-read-text path 'utf-8)))
+      (if (org-glance--conflict-marked? text)
+          (funcall conflict-fn text)
+        (ignore-errors (car (read-from-string text)))))))
+
 (cl-defun org-glance--read-eld (path)
   "Read the single Lisp form in the .eld PATH, or nil when absent/unreadable.
 On a git-conflicted PATH keep the first NON-EMPTY side (`consp', so a side
 written as literal `nil' never shadows a populated one) rather than crash on the
 `<<<<<<<' marker symbol.  Callers that union the sides use `--heal-eld' instead."
-  (when (f-exists? path)
-    (let ((text (f-read-text path 'utf-8)))
-      (if (org-glance--conflict-marked? text)
-          (cl-find-if #'consp (org-glance--read-eld-forms text))
-        (ignore-errors (car (read-from-string text)))))))
+  (org-glance--read-eld-with
+   path
+   (lambda (text) (cl-find-if #'consp (org-glance--read-eld-forms text)))))
 
 (cl-defun org-glance--write-eld (path form)
   "Serialize FORM to the .eld PATH, creating parent dirs."
@@ -121,18 +130,17 @@ A clean PATH returns its single form (nil if absent/unreadable).  A conflicted
 one folds its readable side-forms with MERGE-FN (over that LIST) under
 `--resolve-conflict' (SUBJECT names it, default PATH's basename), writes the
 result back, and returns it.  Gated counterpart to the `--read-eld' floor."
-  (when (f-exists? path)
-    (let ((text (f-read-text path 'utf-8)))
-      (if (not (org-glance--conflict-marked? text))
-          (ignore-errors (car (read-from-string text)))
-        (let ((subject (or subject (file-name-nondirectory path))))
-          (org-glance--resolve-conflict
-           subject
-           (lambda ()
-             (let ((merged (funcall merge-fn (org-glance--read-eld-forms text))))
-               (org-glance--write-eld path merged)
-               (message "org-glance: union-resolved git conflict in %s" subject)
-               merged))))))))
+  (org-glance--read-eld-with
+   path
+   (lambda (text)
+     (let ((subject (or subject (file-name-nondirectory path))))
+       (org-glance--resolve-conflict
+        subject
+        (lambda ()
+          (let ((merged (funcall merge-fn (org-glance--read-eld-forms text))))
+            (org-glance--write-eld path merged)
+            (message "org-glance: union-resolved git conflict in %s" subject)
+            merged)))))))
 
 (cl-defun org-glance--buffer-links ()
   "Buffer links as (LINK TYPE PATH) tuples, in buffer order.
@@ -210,6 +218,12 @@ The one spelling of invariant 13\'s coercion: tags are stored interned and
 downcased while deserialized metadata carries strings, so every boundary
 comparing them funnels through here."
   (downcase (format "%s" x)))
+
+(cl-defun org-glance--strings (values)
+  "Coerce VALUES to a list of strings.
+The non-downcasing sibling of `org-glance--downcased-string': serialization and
+display keep a tag's stored case, comparison does not."
+  (mapcar (lambda (value) (format "%s" value)) values))
 
 (cl-defun org-glance--buffer-key-value-pairs ()
   "Return an alist of (KEY . VALUE) for buffer lines matching the pair regexp.
@@ -417,11 +431,11 @@ line without a newline gets one), so the markers sit on their own lines."
   (delete-region (plist-get block :beg) (plist-get block :body-beg)))
 
 (defun org-glance--crypt-unwrap-blocks ()
-  "Remove every crypt block's marker lines, keeping the bodies.  Return count."
-  (let ((count 0))
-    (dolist (block (reverse (org-glance--crypt-block-regions)) count)
-      (org-glance--crypt-unwrap-block block)
-      (cl-incf count))))
+  "Remove every crypt block's marker lines, keeping the bodies.
+Iterates LAST-to-FIRST: any length change invalidates the recorded positions of
+blocks after it (invariant 28)."
+  (dolist (block (reverse (org-glance--crypt-block-regions)))
+    (org-glance--crypt-unwrap-block block)))
 
 (defun org-glance--discard-buffer (buffer)
   "Kill BUFFER without the `Buffer modified; kill anyway?' confirmation.

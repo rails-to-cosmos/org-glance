@@ -78,8 +78,7 @@ Removal stays ungated."
     (should-error (org-glance-material:retag org-glance-graph "a" "albert-heijn")
                   :type 'user-error)
     (should (equal '("shop")
-                   (org-glance-headline-metadata:tag-strings
-                    (org-glance-graph:get-headline org-glance-graph "a"))))
+                   (org-glance-test:field org-glance-graph "a" tag-strings)))
     ;; removal of a valid tag still works
     (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
 
