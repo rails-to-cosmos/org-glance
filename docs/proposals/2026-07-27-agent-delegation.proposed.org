@@ -1,0 +1,620 @@
+#+TITLE: Agent delegation: intake, then fire-and-forget
+#+DATE: 2026-07-27
+
+Status: *proposed*.  Lands entirely in the =llm= plugin
+([[file:2026-07-23-plugin-interface.done.org][plugin interface]]); its tags,
+templates, schema and transition hooks come from
+[[file:2026-07-27-plugin-tag-declarations.proposed.org][plugin tag declarations]].
+Observability — run tables, lineage, distributed execution — is split out into
+[[file:2026-07-27-agent-observability.proposed.org][agent observability]] and
+deliberately deferred.
+
+* Problem
+
+A headline is already a task: TODO state, a per-tag cycle, a body, typed
+relations, its own directory.  What it cannot do is get *done* by an agent.
+The =llm= plugin opens a session per headline and the human then drives it by
+hand — watching a vterm, copying anything worth keeping back into the body.
+
+Delegation is the missing verb.  The naive version is a few lines: a command
+that shells out to an agent CLI with the headline as the prompt.  It fails on
+the thing that actually decides whether delegation is useful.
+
+** Fire-and-forget is only worth having if the agent understood the task
+
+Walking away is the entire value.  Walking away is also what makes
+misunderstanding expensive, and "did the agent understand" hides three distinct
+risks that need three different answers:
+
+- *Divergence* — the agent does the wrong thing.
+- *Blast radius* — the wrong thing causes harm.
+- *Waste* — it burns an hour and real money before anyone notices, and the
+  human then spends review attention discovering where it went off.
+
+Blast radius has an obvious answer: the agent proposes and never writes
+canonical content.  Waste and divergence do not, and two tempting mechanisms
+fail to cover them:
+
+- *Asking mid-run* is reactive.  It fires only when the agent knows it is
+  confused.  Confident misunderstanding produces no questions at all.
+- *Reversibility* bounds the stakes and leaves the waste untouched.  A discarded
+  run still cost its tokens, its wall-clock, and the attention needed to work
+  out that it was wrong.
+
+So the design puts a cheap, bounded, *early* checkpoint in front of the
+expensive part, and then genuinely walks away.
+
+* Agents are effect-free functions
+
+The property the whole design rests on: *an agent's total effect on the world is
+its return value*.
+
+Determinism is unavailable — providers do not reproduce outputs even at
+temperature zero — and it is also unnecessary.  The useful property is the other
+one, effect-freedom: =IO= versus referential transparency, and the second is
+obtainable without the first.
+
+Effects split into two categories that behave completely differently:
+
+- *Inside the run's own workspace* — a worktree, a scratch directory, the run's
+  own =runs/<run-id>/=.  Running tests, building, editing files there.
+  Permitted for every agent, invisible to every other agent, and these effects
+  *become* the return value instead of escaping into shared state.
+- *Outside it* — network egress, brokered secrets, external APIs with real
+  consequences, spend.  These are the only genuine permissions.
+
+Three consequences follow, and each removes work elsewhere in the design.
+
+** One write path to canonical content, and a human holds it
+
+No agent writes a headline, a blob, or the WAL.  A worker returns a proposed
+patch; a reviewer returns findings; applying either is a human action through
+the ordinary material save.  Invariant 7 (single writer) and invariant 11 (never
+clobber unsaved edits) survive delegation untouched, because delegation never
+reaches them.
+
+** Placement becomes a configuration detail by construction
+
+A function with no shared-state effects runs anywhere.  The four environment
+conditions the
+[[file:2026-07-27-agent-observability.proposed.org][observability proposal]]
+lists for distribution mostly fall out of effect-freedom rather than needing
+separate machinery.
+
+** Results are cacheable
+
+The same context hash plus the same agent definition may reuse a prior result.
+This rides the semantic content hash the store already computes, so a
+re-delegation after an unrelated edit avoids paying twice.
+
+** Where effect-freedom leaks
+
+- *Network reads.*  An agent that fetches a page has an input outside the
+  recorded context, so the run is unreproducible and the context hash overstates
+  what it captured.  Record-and-replay into the run directory fixes it and is
+  well-trodden; it stays an option a task declares rather than a requirement,
+  since most tasks never need it.
+- *=ask_human= looks like an effect* and resolves cleanly.  A suspended run is
+  =context → (question, continuation)=, and resumption is
+  =(context + answer) → value= — a function taking more input, which is exactly
+  why the file-state protocol below works.
+
+* The agent registry
+
+Three layers, each with an existing home, each varying independently:
+
+| Layer    | Answers             | Lives in                           |
+|----------+---------------------+------------------------------------|
+| *Provider* | how to invoke a CLI | =agnostic-llm-providers= (exists)    |
+| *Agent*    | a configured worker | =org-glance-graph:config-file= (new) |
+| *Tag*      | what kind of task   | per-tag config (exists)            |
+
+The same agent serves many tags and the same tag is served by different agents,
+so folding either into the other forces a cross-product nobody maintains.
+
+** An agent definition
+
+#+begin_src emacs-lisp
+(:name       opus-worker
+ :provider   claude              ; row in `agnostic-llm-providers'
+ :model      "claude-opus-5"
+ :effort     high
+ :prompt     "..."               ; system-prompt fragment
+ :permits    (:network  allowlist
+              :secrets  (github-token)
+              :tools    (read write bash)
+              :spend    2.00
+              :timeout  1800)
+ :requires   (:fs worktree :gpu no))
+#+end_src
+
+=:permits= lists only effects outside the workspace, per the split above.
+Workspace writes need no grant, since no other agent can observe them.
+
+=:requires= are placement constraints.  The agent declares what it needs, the
+executor table declares what each backend offers, and placement solves for the
+cheapest satisfying executor — Ray's resource model, with capability matching in
+place of a scheduler.  The executor table itself lives in the observability
+proposal; until it lands, =local-process= is the only row.
+
+*Permissions are enforced by the executor, never requested in the prompt.*  A
+prompt saying "do not fetch anything" is a suggestion; a sandbox with no egress
+is a boundary.
+
+*Effective permissions are the intersection of the agent's grant and the
+delegation's need.*  Tag config and the delegation prompt narrow, and neither
+widens.  Otherwise a powerful agent carries full power into a trivial task and
+privilege creeps by default.
+
+** Agents are headlines
+
+An agent is a headline tagged =:llm-agent:=.  Title is the name, the properties
+drawer holds the scalars, and the body is the system-prompt fragment — the one
+field that wants to be long-form prose, which a configuration file would have
+forced into an awkward string.
+
+#+begin_src org
+* opus-worker                                              :llm-agent:
+:PROPERTIES:
+:ORG_GLANCE_ID: ...
+:PROVIDER: claude
+:MODEL:    claude-opus-5
+:EFFORT:   high
+:NETWORK:  allowlist
+:SECRETS:  github-token
+:TOOLS:    read write bash
+:SPEND:    2.00
+:TIMEOUT:  1800
+:FS:       worktree
+:END:
+
+Body is the system-prompt fragment.
+#+end_src
+
+What this buys, all of it existing machinery:
+
+- The tag's capture template fills the drawer skeleton, so creating an agent is
+  one transient key.
+- The property index feeds custom table columns, so the =:llm-agent:= table
+  shows model, effort and spend without new code.
+- Resolution is a hash-guarded property-index lookup, so editing an agent
+  headline invalidates correctly.
+- Definitions version, sync and merge with the store like everything else.
+
+The template, the property schema and the ambient-view exclusion come from the
+plugin's tag declaration, so installing the plugin makes the tag work with no
+manual setup.
+
+*Bootstrap dissolves.*  Tags exist the moment something is captured with them,
+so a fresh store simply has no agents and =d= offers to capture one.  Same model
+as every other tag.
+
+*Validation splits.*  A malformed property warns on save and raises
+=user-error= on use, naming the property and the agent.  Never a silent default:
+an agent quietly falling back to a cheap model or an open network policy is
+worse than one that refuses to run.
+
+Two rules worth fixing now: =:llm-agent:= and =:llm-team:= headlines are
+themselves not delegable, and anyone who can edit the store can widen an agent's
+permits — acceptable while the store is single-user, and worth revisiting before
+the web client makes it shared.
+
+* Teams
+
+A team is *ordered stages of (agent, role) members*.  Stages run in sequence;
+members within a stage run in parallel.  That one shape subsumes several
+patterns that looked separate:
+
+- *fan-out* — one stage, several members.
+- *pipeline* — several stages.
+- *pool* — placement, expressed in the agent's =:FS:= / =:GPU:= properties.
+- *fallback* and *split* — genuinely separate features, deferred.
+
+A team is a headline tagged =:llm-team:=.  An ordered list gives the stages;
+items within one stage are its parallel members; and *the role is the relation
+kind*, which is what typed relations were built for:
+
+#+begin_src org
+* reviewed-work                                            :llm-team:
+1. [[org-glance-material:...][opus-worker]]
+2. [[org-glance-material:...][fable-review]]
+   [[org-glance-material:...][gemini-critic]]
+#+end_src
+
+The relation table then shows members with their roles in the Relation column
+for free, and "which teams use this agent" is a reverse-relation query that
+already exists.  These links are human-authored against canonical content, so by
+the placement test in the
+[[file:2026-07-27-agent-observability.proposed.org][observability proposal]]
+they belong in the WAL — consistent with every other relation.
+
+** Why more than one model
+
+Decorrelation.  A model reviewing its own output shares its own blind spots; a
+different model family fails differently and catches what the first structurally
+cannot.  That is the justification for spending 3× on a task, and it should
+drive the configuration rather than emerge from it by accident.
+
+Hence a *decorrelation warning* at team-definition time: the registry knows each
+member's provider and model, so a team whose reviewers share a model family with
+its worker is flagged.  Three Opus agents cost 3× and resemble rigor while
+buying very little.
+
+** Role determines context and return type, and nothing else
+
+| Role     | Receives                           | Returns           |
+|----------+------------------------------------+-------------------|
+| =worker=   | task, answered intake              | proposed patch    |
+| =reviewer= | task, criteria, the worker's patch | verdict, findings |
+| =critic=   | same as reviewer                   | verdict, findings |
+
+Permissions come from the agent definition alone.  A reviewer that should verify
+the worker's claims by running the test suite is a coherent agent with =bash= in
+its =:permits=; read-only reviewers are a sensible default in a stock team
+rather than a rule of the system.
+
+** Acceptance criteria are the reviewer's rubric
+
+The criteria settled at intake become what reviewers judge against.  That is
+what stops them being decorative: the worker is measured against exactly what
+the human agreed to at the gate.
+
+** Disagreement is surfaced, never synthesized
+
+The tempting design is a loop — work, review, revise, review, until converged.
+It is the wrong default.
+
+When a reviewer and a critic disagree, that disagreement is the most valuable
+thing the team produced.  Reconciling it into one smooth answer destroys the
+signal and hands the human a consensus they cannot audit.  Linear stages with
+every verdict surfaced is simpler and better for the trust model.
+
+The shape mirrors intake one level up: intake shows the delta between what was
+asked and what was understood; the team result shows the delta between what was
+produced and what the reviewers make of it.
+
+A bounded revise loop with an iteration cap stays available later.
+
+** Cost is per delegation
+
+A three-member team against a ceiling written for one agent silently triples the
+bill.  The spend ceiling therefore applies to the delegation, and the intake
+gate reports the estimate — "3 agents, est. EUR 2.40, proceed?" — where the
+human is already stopped and the estimate costs no extra interruption.
+
+* Design: the workflow
+
+#+begin_src
+TODO ──delegate──▶ INTAKE ──questions──▶ WAITING ──human answers──▶ DELEGATED
+                                             ▲                          │
+                                             │                          ▼
+                                     ask_human                       RUNNING
+                                             │                          │
+                                             └──────────────────────────┤
+                                                                        ▼
+                                                        REVIEW ──human──▶ DONE
+                                                             └──────────▶ FAILED
+#+end_src
+
+1. *Delegate.*  =d= in the transient over a headline, targeting an agent or a
+   team.  The default comes from tag config and is overridable at the prompt.
+   State becomes =INTAKE=.
+2. *Intake, read-only.*  The worker assembles context, explores, and writes an
+   intake artifact: a restatement, a question table, and acceptance criteria.
+   State becomes =WAITING=.
+3. *The human answers.*  Every question carries a default, so accepting the
+   whole table is one keystroke.  Setting the state back to =DELEGATED= is the
+   go signal.
+4. *Execution, unattended.*  State becomes =RUNNING=.  Stages run in order.  The
+   worker may call =ask_human= on something material, suspending back to
+   =WAITING= through the same machinery.
+5. *Review.*  Patch and verdicts land as proposals; state becomes =REVIEW=.  A
+   human applies or discards and sets =DONE= or =FAILED=.
+
+The human is interrupted exactly once, at a predictable point, with a bounded
+ask.  Honest fire-and-forget is "answer once, then forget", and saying so beats
+pretending the interruption is absent.
+
+** Intake is per delegation, never per agent
+
+With a three-member team, an intake per member means three question tables and
+the core promise is gone.  So one intake runs — the worker's — and its answered
+artifact is shared by every member of every stage.
+
+Reviewers file findings rather than questions.  =ask_human= belongs to the
+worker alone.
+
+** Why intake explores before it asks
+
+Questions formed before the agent reads anything come from ignorance and land
+generic — "what tone would you like".  Sharp questions arrive after exploration,
+by which time the human has walked away.
+
+Intake is therefore a phase rather than a single call: assemble, explore, form
+understanding, then ask.  Reading is the cheap part of any run, so this costs
+little and it is the difference between a ceremonial question and "these two
+headlines both define the schema and they disagree — which is authoritative?"
+
+Intake runs under a read-only permission set regardless of the agent's grant,
+which the intersection rule already permits and the executor enforces.  An agent
+that can reach the network during intake can act before any human has seen its
+understanding, which removes the only checkpoint the design has.
+
+** The intake artifact
+
+Written to =runs/<run-id>/intake.org= and *nowhere else*.  Mirroring it into a
+drawer would mean an agent writing headline content, which contradicts the one
+write path above.  The human opens the artifact from the transient (or from the
+run's row), edits answers in place, and flips the headline's state.  The
+headline itself carries the TODO keyword and nothing more.
+
+*** Restatement, framed as a delta
+
+A summary invites agreement; a delta invites correction.  Four lines, each
+required to be specific — naming actual files, actual deliverables, actual
+boundaries.  Vagueness is the tell that the agent has not understood.
+
+#+begin_src org
+You asked: <the human's own framing, quoted>
+I read that as: <goal + concrete deliverable>
+Gaps I filled myself: <assumptions the human never stated>
+Explicitly not doing: <negative scope>
+#+end_src
+
+The "not doing" line earns its place: over-reach shows up there more reliably
+than anywhere else.
+
+*** Questions, as a table with defaults
+
+#+begin_src org
+| # | Question                          | Options             | Answer    |
+|---+-----------------------------------+---------------------+-----------|
+| 1 | Which schema headline is source?  | schema-v1/schema-v2 | schema-v2 |
+| 2 | Backfill history, or forward only?| backfill/forward    | forward   |
+#+end_src
+
+Defaults are pre-filled in =Answer=.  Three consequences:
+
+- Answering by selection beats answering by free text, so the human is fast.
+- A hurried human accepts every default and the run degrades cleanly to pure
+  fire-and-forget, with no configuration flag needed.
+- A human who cares edits the two rows that matter and ignores the rest.
+
+=table-view= renders this today, and a future web client renders the same table
+from the same file.
+
+*Question discipline, enforced in the intake prompt:* at most N questions (tag
+config, default 5), and each must state what changes based on the answer.  A
+question that fails to branch the plan is dropped.  Without that rule agents pad
+with ceremony, the human learns to skim, and the mechanism dies.
+
+*** Acceptance criteria
+
+An org checklist.  Written by the human when they bothered; proposed by the
+agent otherwise, in which case the proposal becomes the contract.  Either way
+the run returns with "here is what I took /done/ to mean, and here is whether I
+met it", and reviewers judge against the same list.
+
+*** Zero questions is still an artifact
+
+An empty question table is ambiguous — it means either "the task was clear" or
+"I am confidently wrong".  The restatement separates those two, so it is emitted
+always.  Questions cover known unknowns; the restatement covers the rest.
+
+** The protocol is file state
+
+A web client providing the same experience is the next step after this lands.
+That constrains the design now: suspend and resume expressed in Emacs buffer
+state would make the web client a rewrite, while the same thing expressed in
+*file* state makes it a second reader of one git-synced store.
+
+Every transition is an org TODO keyword on the headline; every payload is a file
+in the run directory.  The headline carries state, and the run directory carries
+content.
+
+| State         | Meaning                  | Payload              |
+|---------------+--------------------------+----------------------|
+| =INTAKE=        | worker is exploring      | —                    |
+| =WAITING=       | human input needed       | =intake.org= / =ask.org= |
+| =DELEGATED=     | answered, cleared to run | =answers.eld=          |
+| =RUNNING=       | executing unattended     | —                    |
+| =REVIEW=        | result ready for a human | =result.org=           |
+| =DONE= / =FAILED= | terminal                 | —                    |
+
+The =WAITING → DELEGATED= transition is the resume signal and carries no Emacs
+semantics.  A browser, a phone, or a second Emacs can drive it: read the state,
+read the file beside it, write the answer, set the keyword.
+
+** Asking: mechanism
+
+Non-interactive agent CLIs cannot ask on their own — they proceed or fail.  The
+ability to ask must be *given* to them as a tool.
+
+- *Primary:* a small MCP server exposed by the plugin, offering =ask_human=.
+  The agent calls it with a question, options and a proposed default; the tool
+  records it and returns "recorded; your turn ends here".  The system prompt
+  instructs the agent to stop after asking.
+- *Fallback:* for providers without MCP, the agent writes =runs/<run-id>/ask.org=
+  and exits with a known code, and the executor picks it up.  Declared per
+  provider as a capability.
+
+Resume rides on what =agnostic-llm= already has: =:session-id-flag= and
+=:resume-flag=, with the bubble already pinning a conversation to one UUID
+across turns.  Delegation reuses that table rather than inventing a second
+provider abstraction.  A provider lacking a resume flag cannot host suspendable
+runs, and the executor refuses to delegate to it.
+
+** The trigger is an intent, never the append hook
+
+Invariant 9 keeps =org-glance-graph-before-append-functions= error-demoted and
+non-blocking: a sidecar may never break a save.  Delegation fails loudly and
+takes minutes, so it cannot live there.
+
+The append writes an *intent*; the executor picks it up.  Effect-freedom keeps
+that from colliding with invariant 7: the executor writes only inside
+=runs/<run-id>/=, which no other process claims, and signals Emacs to append the
+terminal projection through the ordinary single-writer path.
+
+The plugin subscribes to the transitions it cares about through
+=:transitions= in its tag declaration.  Core holds both sides at append time —
+=live-meta= before, the record after — so the comparison happens once in core
+rather than being re-derived inside every plugin's hook.  Handlers signal only;
+the work happens in whatever they wake up, since a save must never wait on a
+plugin.
+
+** Run directory
+
+Minimal for this scope; the observability proposal adds to it.
+
+#+begin_src
+data/<id>/runs/<run-id>/
+├── intake.org     ← restatement, questions, acceptance criteria
+├── answers.eld    ← the human's answers (defaults where untouched)
+├── result.org     ← proposed patch, per-member verdicts and findings
+└── meta.eld       ← state, agent/team, session ids, started, ended, cost
+#+end_src
+
+Immutable once written, canonical in the invariant-5 sense, GC'd with the id
+directory at compaction — the same treatment
+[[file:2026-07-18-repeat-occurrences.done.org][occurrence snapshots]] get.  Run
+ids are opaque and unique, so no two writers ever contend on a path.
+
+** Context assembly
+
+Body, typed relations to depth N (tag config), and the headline's directory.
+One rule bounds it beyond the permission model: *crypt blocks stay sealed*.
+Invariant 14 forbids plaintext reaching disk without an explicit decrypt, and
+delegating is not decrypting.  An agent that structurally cannot read your
+secrets is a property worth keeping.
+
+** Tag configuration
+
+What remains here once agents own their own settings: default agent or team,
+relation depth, question cap, acceptance-criteria style, and any *narrowing* of
+the agent's permissions for this class of task.
+
+The delegable todo cycle
+(=TODO/INTAKE/WAITING/DELEGATED/RUNNING/REVIEW/DONE/FAILED=), the =:llm-agent:=
+and =:llm-team:= templates, their property schema and their table columns all
+arrive through the plugin's tag declaration, so nothing here needs setting up by
+hand after installing the package.
+
+** This lives in the plugin
+
+All of it: the transient row, agent and team resolution, the intake prompt, the
+MCP server, the executor, the run directory.  No core change is required, and
+the public surface already covers every need.
+
+| Need                    | Public API                                               |
+|-------------------------+----------------------------------------------------------|
+| run directory           | =f-join= on =org-glance-graph:headline-data-path=            |
+| agent properties        | =org-glance-property-index:property= / =:drawer= / =:keys=     |
+| find agents by tag      | =org-glance-graph:headlines= + =org-glance-filter:predicate= |
+| team membership + roles | =org-glance-graph:edge-kinds=, relations on =live-meta=      |
+| headline content        | =org-glance-graph:get-content= / =:put-content=              |
+| runs table              | =org-glance-view:display-table= / =:register=                |
+| pick a headline         | =org-glance-material:pick-metadata=                        |
+| transient row           | =transient-append-suffix= (contract point 4)               |
+
+The run directory needs no new accessor: =org-glance-graph:occurrences-path= is
+exactly =(f-join (org-glance-graph:headline-data-path graph id) "occurrences")=,
+so joining =\"runs\"= the same way keeps the shard layout hidden, which is what
+contract point 2 and
+[[file:2026-06-07-generalize-graph-content-path.done.org][graph-owned content path]]
+protect.  Garbage collection also comes free: compaction removes a tombstoned
+id's directory recursively, so =runs/= goes with it.
+
+A =org-glance-graph:headline-subdir= accessor giving the pattern one spelling
+(and applying invariant 6's path safety to NAME) is proposed in
+[[file:2026-07-27-plugin-tag-declarations.proposed.org][plugin tag declarations]]
+as a convenience rather than a prerequisite.
+
+The plugin already reaches for a handful of =--= helpers, which invariant 26
+records as a convention to shrink.  Delegation adds none.
+
+* Testing
+
+The state machine is the part worth testing hard, and the existing 35 shared
+fixtures cover most of the setup.
+
+- *Transitions.*  Every legal edge, and every illegal one rejected: =RUNNING →
+  DONE= without review, =WAITING → RUNNING= without an answer, resume of a run
+  whose session id is gone.
+- *Intake round-trip.*  Artifact serialise and parse, defaults applied when the
+  human touches nothing, partial edits preserved, a malformed answer table
+  refused with a =user-error= rather than a silent default.
+- *Suspend and resume.*  =ask_human= mid-run, Emacs restarted between suspend
+  and answer, two answers racing.
+- *Effect containment.*  An agent writing outside its workspace fails closed; an
+  agent reaching the network without =:network= in =:permits= fails closed; a
+  spend ceiling breach terminates the run into =FAILED=.
+- *Permission intersection.*  A tag narrowing an agent's grant takes effect; a
+  tag attempting to widen it is refused, following the invariant-4 guard
+  discipline.
+- *Agent resolution.*  A malformed =:MODEL:= warns on save and raises
+  =user-error= on use; a missing required property never resolves to a default;
+  an =:llm-agent:= headline refuses to be delegated to; an agent headline edited
+  mid-run does not change the running run's definition.
+- *Teams.*  Stage ordering, parallel members within a stage, one intake for the
+  whole delegation, per-delegation spend ceiling, decorrelation warning fires on
+  a same-family team.
+- *Crypt.*  A headline with a =#+begin_crypt= block assembles sealed, in intake
+  and in execution.
+- *Blob safety.*  A run never rewrites a blob open in a modified buffer
+  (invariant 11), and a failed append never costs an unsaved edit.
+
+Crash injection already exists in the fixtures and applies directly: a crash
+between run-directory write and WAL append must leave a recoverable state.
+
+* Security
+
+** Captured content must never auto-delegate
+
+org-glance captures from outside sources.  If captured text can trigger
+delegation, an arbitrary web page becomes a source of agent instructions.
+
+Provenance is first-class metadata — authored versus captured — and captured
+content never enters =INTAKE= without a human promoting it, whatever its tag
+config says.  Intake helps as a second line of defence, since a human reads the
+restatement before execution, and it does not replace the rule.
+
+** The permission model is the boundary
+
+Effect-freedom means the damage an agent can do is bounded by =:permits= plus
+whatever it can reach through granted tools.  Two things follow: the executor
+enforces rather than the prompt, and =:network= plus =:secrets= deserve more
+scrutiny at definition time than every other field combined, since they are the
+only routes to consequences outside the run.
+
+* Phasing
+
+Each phase is useful standing alone.
+
+1. *Delegate and run* — transient row, agent registry, run directory, subprocess
+   execution, TODO state machine, REVIEW gate.  One agent, one machine, no
+   intake.
+2. *Intake* — read-only phase, artifact, question table with defaults,
+   acceptance criteria, the =WAITING → DELEGATED= go signal.
+3. *Teams* — staged roles, parallel members, shared intake, per-delegation cost,
+   decorrelation warning.
+4. *Ask mid-run* — the MCP =ask_human= tool and session resume.
+5. *Web client* — a second reader of the same store, driving the same file
+   protocol.
+
+Phase 1 is the smallest thing that proves the executor split.  Phase 2 is where
+the design earns its keep.
+
+* Open questions
+
+- Does =INTAKE= deserve its own TODO keyword, or is it =DELEGATED= with an
+  intake sub-state in =meta.eld=?  A separate keyword is visible in every
+  existing view for free, at the cost of one more word in every tag cycle.
+- Where does the answered intake live once the run finishes — folded into the
+  headline as durable context, or left in the run directory?  Keeping it on the
+  headline makes the next delegation of the same task smarter and grows the
+  blob.
+- Should a re-delegation reuse the previous intake and ask only what changed?
+- What happens to a =WAITING= run that is never answered?  A timeout to =FAILED=
+  keeps views honest and risks discarding work the human meant to return to.
+- Is result caching (same context hash + same agent definition) worth building
+  early, or does it mask the nondeterminism that makes a re-run informative?

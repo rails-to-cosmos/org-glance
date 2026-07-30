@@ -1,0 +1,236 @@
+#+TITLE: The outbox protocol, calendar as its first consumer
+#+DATE: 2026-07-30
+
+Status: *proposed*.  Lands as a plugin
+([[file:2026-07-23-plugin-interface.done.org][plugin interface]]) with tag
+configuration through
+[[file:2026-07-27-plugin-tag-declarations.proposed.org][plugin tag declarations]].
+Counterpart to the inbox in
+[[file:2026-07-29-integrations-telegram.proposed.org][integrations]]: that one
+brings content in, this one pushes it out.  Uses the =range= field from
+[[file:2026-07-21-interval-ranges.done.org][interval ranges]].
+
+* Problem
+
+Telegram fixes capture and interaction from a phone.  It does nothing for
+*ambient awareness of schedule* — knowing what is coming without opening
+anything.  That is what a calendar is for, and every phone already has one.
+
+Scheduled and deadlined headlines exist in the store and are visible only in
+Emacs.  Meanwhile a two-way calendar sync is a known swamp: recurrence
+exceptions, timezone shifts, deletion semantics, and org repeaters that map badly
+onto iCal.  =org-gcal= and =org-caldav= have been fighting it for years.
+
+One-way export sidesteps almost all of it.  The store stays the single source of
+truth, the calendar becomes a rendered view, and nothing is ever read back.
+
+* The outbox protocol
+
+Pushing outward has the mirror-image constraint of pulling inward.  An inbox
+producer runs when Emacs does not; an outbox consumer must run *without blocking
+the thing that produced the work*.
+
+A material save is the natural trigger and the wrong place to execute.  An API
+call takes hundreds of milliseconds and fails for reasons unrelated to the user's
+edit, while invariants 9 and 11 require that a save never blocks and never
+breaks.
+
+So *the save enqueues and a worker drains*:
+
+#+begin_src
+<store>/outbox/<uuid>.eld     ← a sync intent; a worker owns its fate
+#+end_src
+
+The network never touches the save path.
+
+** Intents name a subject, never an operation
+
+The intent is =(reconcile . HEADLINE-ID)=, never "create event X" or "delete
+event Y".
+
+Coarse intents are self-correcting.  A replayed intent is harmless, a duplicate
+is harmless, and a *lost* intent is repaired by the next one for that headline.
+Fine-grained deltas would need ordering guarantees, a retry log, and a way to
+recover from a delete that arrived before its create.
+
+Reconciliation is: compute the events this headline should have, ask the
+provider which ones it does have, apply the difference.  Order stops mattering.
+
+** Failure handling
+
+Retry with backoff.  After N attempts the intent moves to =outbox/failed/= with
+its error, so one permanently broken headline never blocks the queue.  A visible
+dead-letter directory beats silent retry forever.
+
+** Why this generalises
+
+Anything that pushes outward wants it — a calendar today, and a message, an
+issue, or a webhook later.  Together with the inbox it is one idea: *the store
+exchanges with the outside world through immutable files and never through a
+blocking call*.  That states without reference to org-mode, so it goes in
+[[file:../extraction.org][extraction]].
+
+* Calendar
+
+** org-glance writes only to calendars it created
+
+One-way means never reading back.  It does not by itself stop a user from
+dragging an exported event and silently losing that edit on the next
+reconciliation.
+
+Ownership is therefore structural: exported events live in calendars org-glance
+created, never alongside hand-made ones.  A full resync may then delete and
+recreate freely, and there is never a question about who owns an event.
+
+Google's OAuth surface appears to offer a scope limited to calendars the
+application itself created (=calendar.app.created=).  Requesting that instead of
+full calendar access would make the ownership rule *enforced by the grant* rather
+than by our own care — worth confirming during implementation, because it turns
+"a bug cannot wipe the user's real calendar" from a promise into a property.
+
+** Repeater expansion, and the form that cannot be expanded
+
+Org's three repeater forms do not behave alike, and one of them is a hard limit:
+
+| Form   | Next occurrence                    | Expandable          |
+|--------+------------------------------------+---------------------|
+| =+1w=  | one week after the scheduled date  | yes                 |
+| =++1w= | shifted forward until future       | yes                 |
+| =.+1w= | one week after *completion*        | *no* — current only |
+
+=.+1w= future occurrences depend on when the user actually finishes, which is
+unknowable, so such a headline exports exactly one event.  Documented rather
+than discovered.
+
+The expandable forms are infinite, so export is a *sliding window* — a
+configurable horizon, re-expanded as time passes.  That makes the sync partly
+time-driven rather than purely edit-driven: advancing the horizon enqueues
+reconcile intents for headlines whose window has moved.
+
+** RRULE considered and rejected
+
+Emitting a recurrence rule would cut API traffic considerably.  Against it:
+=.+1w= has no RRULE equivalent; org cannot express per-occurrence exceptions, so
+=EXDATE= buys nothing; and completing a repeater mutates the timestamp in ways a
+static rule cannot track.  Supporting expansion for one form and RRULE for others
+doubles the code and reintroduces the exception and timezone handling this design
+exists to avoid.
+
+Expand everything, uniformly.
+
+** Deterministic event ids remove the mapping problem
+
+The obvious design needs a stored mapping from (headline, occurrence) to external
+event id.  That mapping cannot be a pure cache — losing it orphans events — so it
+would be durable state to maintain, back up and repair.
+
+Skip it.  Providers accept client-specified event ids, so:
+
+#+begin_src
+event-id = base32hex(hash(ORG_GLANCE_ID + OCCURRENCE-STAMP))
+#+end_src
+
+(Google constrains ids to base32hex characters and a length between 5 and 1024,
+which a truncated hash satisfies.)
+
+Create-or-update becomes idempotent by construction and nothing needs storing.
+Deletion falls out of the same trick: compute the ids this headline should have
+now, ask the provider for the events carrying this headline's =ORG_GLANCE_ID=,
+and delete the difference.
+
+The result is self-healing.  Wipe every local trace and the next reconciliation
+rebuilds the correct set.  It is the same move as the inbox's
+filename-UUID-is-the-headline-id: make the operation idempotent so no state has
+to be tracked.
+
+** What becomes an event
+
+Precedence: =range= (an interval, so it carries a duration), else SCHEDULED, else
+DEADLINE.  A headline with none of these exports nothing.
+
+=DONE= headlines are excluded, with one exception that matters: a completed
+repeater's *next* occurrence still belongs on the calendar.
+
+Past occurrences from =data/<id>/occurrences/= are known facts rather than
+projections, so exporting them as a record of what was done is possible.  Out of
+scope here, and worth remembering.
+
+** Multiple calendars, and opt-in
+
+Same pattern the agent registry uses — the tag supplies a default and a headline
+property overrides it:
+
+#+begin_src org
+tag :work:  →  :CALENDAR: work
+headline    →  :CALENDAR: personal    (wins)
+#+end_src
+
+*Silent by default.*  No =:CALENDAR:= anywhere means no export.  Broadcasting a
+knowledge base into a shared calendar by accident is the failure worth designing
+against, and it is the cousin of the tag-declaration rule: never reduce what the
+user sees, and never broadcast what they did not ask to broadcast.
+
+** Provider surface
+
+Model it on =agnostic-llm-providers= — a table keyed by provider, holding the
+endpoint, the auth method, the id constraints and the calendar-creation call.
+Implement Google first.  CalDAV reaches Fastmail, Nextcloud and iCloud, and both
+protocols accept client-specified ids, so the deterministic-id trick survives the
+abstraction.
+
+* Security
+
+** Titles leak in a way Telegram's questions did not
+
+The Telegram integration sends only a question, so crypt content stays sealed.  A
+calendar event carries the *title*, and titles live in the heading rather than
+inside =#+begin_crypt= blocks.  So a sealed headline would still hand its title to
+a third party.
+
+Rule: a headline containing crypt blocks *refuses to export* unless the user
+opts in per headline, in which case the title is redacted to a fixed placeholder.
+An entry reading "[redacted] 14:00–15:00" still does the job a calendar is for.
+
+** Credentials
+
+OAuth tokens live in =auth-source=, never in the store.  Request the narrowest
+scope that permits creating a calendar and writing to it, per the ownership rule
+above.
+
+* What this is not
+
+- *Not a sync engine.*  Nothing is read back.  A user edit to an exported event
+  is overwritten, which is why exported events live apart from hand-made ones.
+- *Not an agenda replacement.*  The calendar shows scheduled things; the graph
+  keeps the reasoning behind them.
+- *Not a reminder system.*  Whether the provider notifies is the provider's
+  business and the user's setting.
+
+* Phasing
+
+1. *Outbox protocol* — directory, coarse reconcile intents, worker with backoff,
+   visible dead-letter.  Useful alone, and the second half of the exchange the
+   inbox started.
+2. *Single calendar, no repeaters* — =range= / SCHEDULED / DEADLINE for
+   non-repeating headlines, deterministic ids, reconcile-and-diff.  Proves the
+   whole mechanism on the easy cases.
+3. *Repeater expansion* — the two expandable forms, the horizon, and the
+   time-driven trigger that advances it.
+4. *Multiple calendars* — tag default plus headline override.
+5. *Second provider* — CalDAV, which is what tests whether the provider table is
+   real.
+
+* Open questions
+
+- What advances the horizon?  An idle timer, an on-open pass (error-demoted), or
+  an explicit command.  An on-open pass is cheapest and ties the freshness of the
+  calendar to how often Emacs starts.
+- Does the worker live in Emacs or beside it?  In Emacs it inherits the same
+  "only while Emacs runs" limit as the phase-1 executor and the Telegram bot,
+  which is the third instance of that constraint and starts to argue for a
+  daemon.
+- Should completed occurrences export as a record of what was done?  It makes the
+  calendar a log as well as a plan, and doubles the event count.
+- Does =:CALENDAR:= belong in tag config, or is it a =:purpose=-adjacent property
+  that several integrations would want to share (=:EXPORT-TO:=)?  One field per
+  integration is simple until there are three.

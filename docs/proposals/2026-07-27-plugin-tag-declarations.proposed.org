@@ -1,0 +1,222 @@
+#+TITLE: Plugin tag declarations: one form for templates, schema, cycle and columns
+#+DATE: 2026-07-27
+
+Status: *proposed*.  Extends
+[[file:2026-07-23-plugin-interface.done.org][the plugin interface]].  Motivated
+by [[file:2026-07-27-agent-delegation.proposed.org][agent delegation]], which
+needs seven separate things from the current contract and would otherwise grow
+seven bespoke mechanisms.
+
+* Problem
+
+The plugin contract covers code: which functions to call, which hooks to attach,
+how to register a transient row.  It says nothing about *domain concepts*.
+
+A plugin that introduces concepts introduces *tags* — org-glance's unit of
+collection.  The =llm= plugin wants =llm-agent= and =llm-team= headlines, and
+for each it needs a capture template that prompts for the right properties, a
+property schema so a typo fails loudly instead of silently, a todo cycle for
+delegable tasks, table columns, exclusion from ambient views, and a way to react
+to a state transition.
+
+Today every one of those is either configured by hand after installing the
+plugin, or reached through a =--= helper.  Installing a plugin and having its
+concepts simply work is not currently expressible.
+
+* Design
+
+** One declaration, merged as a defaults layer
+
+#+begin_src emacs-lisp
+(org-glance-plugin-declare 'llm
+  :tags
+  '((llm-agent
+     :doc      "A configured agent: provider, model, effort, permissions."
+     :capture  "* %^{Name}\n:PROPERTIES:\n:PROVIDER: %^{Provider}\n..."
+     :schema   ((PROVIDER :type symbol :required t)
+                (MODEL    :type string :required t)
+                (EFFORT   :type (member low medium high))
+                (SPEND    :type number))
+     :columns  (MODEL EFFORT SPEND)
+     :purpose  machinery)
+    (llm-team
+     :doc        "An ordered team of agents; list order gives stages."
+     :capture    "* %^{Name}\n"
+     :edge-kinds (worker reviewer critic)
+     :purpose    machinery))
+  :transitions
+  '(((WAITING . DELEGATED) . org-glance-llm--resume)))
+#+end_src
+
+Declarations are a *lower-priority layer under stored tag config*.  Core merges
+them at read time, so a user edit always wins and no plugin ever writes over a
+choice someone made by hand.
+
+Merging at read time also means the declaration performs no store write at load,
+which keeps load free of side effects and keeps invariant 9 easy to honour.
+
+** A declaration adds interpretation, never storage
+
+The rule that keeps this safe: *removing a plugin must leave its data valid.*
+
+=llm-agent= headlines are ordinary headlines with ordinary properties.  Without
+the plugin they lose their template, their validation and their columns, and
+they remain readable, editable, and deletable.  Nothing about the on-disk shape
+depends on a plugin being installed.
+
+This rules out, by construction, any future extension where a plugin owns a
+storage format.
+
+** =:purpose= — knowledge or machinery
+
+org-glance is a knowledge graph, so =knowledge= is the default and the only
+other value marks the exception: headlines that exist to make the system work
+rather than to record something the user knows.  An =llm-agent= headline is
+configuration wearing a headline's clothes.
+
+Naming the category rather than each of its symptoms pays because three
+unrelated consumers want the same answer:
+
+1. *Ambient views* — machinery clutters a view of what you have captured.
+2. *Context assembly* — a delegated agent has no business receiving other
+   agents' definitions as knowledge context.  This is not a view concern at all.
+3. *Tag metrics* — machinery arguably should not count toward how much the user
+   has captured.
+
+One axis, three consumers.  Growing a separate field per symptom would be the
+worse trade.
+
+** A declaration may never reduce what the user sees
+
+Most declaration fields are safe as defaults because overriding one is visible:
+a column the user dislikes is right there in the table, a capture skeleton is
+edited in the capture buffer.  The merge rule handles them — stored config wins,
+and the user notices what they are winning against.
+
+Hiding breaks that.  A user who never opens the filter has no way to discover
+that headlines are being suppressed, so a default that reduces visibility cannot
+be found by the person it affects.  That asymmetry, rather than mere strength of
+default, is why it needs different treatment.
+
+So the fields divide by what they touch:
+
+- *What a tag means* — =:schema=, =:edge-kinds=, =:capture=, =:cycle=,
+  =:purpose=.  The plugin owns these; without the plugin they carry no meaning
+  anyway.
+- *How it renders when shown* — =:columns=.  A default, overridable, and the
+  override is visible.
+- *Whether it is shown at all* — never a declaration's call.
+
+So =:purpose machinery= *suggests* hiding and never performs it.  The filter UI
+surfaces the suggestion where the user is already making filtering decisions,
+and acting on it writes ordinary tag config like any other filter choice.  The
+other two consumers need no such gate: excluding machinery from an agent's
+context and from capture counts takes nothing away that the user was looking at.
+
+The rule generalises to any field added later: *a declaration may change what a
+tag means and how it renders when shown, and may never reduce what the user
+sees.*
+
+** Declaration rather than reservation
+
+"Tags exist the moment you capture something with them" is a core property, and
+plugin-owned tags must not weaken it.  So a declaration says *what this plugin
+knows about a tag*, never *who may use it*.  A hand-captured =llm-agent=
+headline gets the template and the validation; a user who wants that tag for
+something unrelated is free to have it, with the =llm-= prefix as the practical
+guard against collision.
+
+Two plugins declaring the same tag: first declaration wins, the second warns
+through the demoted path.  Deterministic, and loud enough to notice.
+
+** Schema: warn on save, fail on use
+
+A configuration file gets a load-time guard (invariant 4).  A headline is
+free-form text, so the guard has to move:
+
+- *On save* — a property violating the schema warns.  It never blocks.
+  Invariants 9 and 11 keep saves unbreakable, and a schema is not worth an
+  exception.
+- *On use* — a consumer resolving the headline into a definition raises
+  =user-error=, naming the tag, the property and the headline.
+
+The failure mode being designed against is the silent default: an agent quietly
+falling back to a cheap model or an open network policy is worse than one that
+refuses to run.
+
+** Transitions
+
+Core already holds both sides at append time — =live-meta= before, the record
+after — so it can compute the state change and dispatch.  Plugins declare the
+pairs they care about instead of each re-deriving the comparison inside
+=org-glance-graph-before-append-functions=.
+
+Dispatch is error-demoted like every other soft path (invariant 9), and handlers
+are expected to *signal only*.  Work belongs in whatever the handler wakes up,
+since a save must never wait on a plugin.
+
+This is the subscribe half of
+[[file:2026-07-09-graph-change-listeners.proposed.org][graph change listeners]],
+narrowed to the case plugins actually need.
+
+** Exposing the effective schema outside Emacs
+
+Declarations live in elisp, and the web client from the delegation proposal runs
+outside Emacs.  So core writes the merged result to =cache/plugin-schema.eld= —
+a pure derived cache in the invariant-5 sense: rebuilt on load, dropped by
+=org-glance-reindex=, never trusted for a durable write.
+
+That gives any non-Emacs reader the tag schema, columns and cycles without
+teaching it elisp, and it costs no canonical content.
+
+** One path accessor
+
+Delegation stores per-headline run directories.  This is expressible today —
+=org-glance-graph:occurrences-path= is exactly
+=(f-join (org-glance-graph:headline-data-path graph id) "occurrences")=, and a
+plugin can join the same way without learning the shard layout.
+
+Giving the pattern one spelling is still worth a small accessor, mostly so
+invariant 6's path safety applies to NAME as it already does to ID:
+
+#+begin_src emacs-lisp
+(org-glance-graph:headline-subdir GRAPH ID NAME)
+#+end_src
+
+=occurrences-path= becomes a call to it.
+
+* What this replaces
+
+| Need                  | Today                                  | With declarations |
+|-----------------------+----------------------------------------+-------------------|
+| capture template      | user edits tag config after install    | =:capture=        |
+| property validity     | nothing; typos fail silently           | =:schema=         |
+| todo cycle            | user edits tag config after install    | =:cycle=          |
+| table columns         | user adds custom columns by hand       | =:columns=        |
+| machinery vs content  | nothing; every tag is knowledge        | =:purpose=        |
+| hide from ambient     | user adds a filter, unprompted         | =:purpose= suggests; the user decides |
+| relation kinds        | free-form, discovered from use         | =:edge-kinds=     |
+| react to a transition | plugin re-derives old state in a hook  | =:transitions=    |
+
+* Non-goals
+
+- *No storage ownership.*  Covered above; the constraint is load-bearing.
+- *No silent hiding.*  A plugin cannot remove a headline from a view the user
+  did not ask to filter.
+- *No unload protocol.*  Plugins stay load-only (contract point 5).  Removing a
+  declaration takes effect on restart.
+- *No inheritance between declarations.*  Flat, with defaults from the tag's own
+  entry.  Composition can come later if a second plugin ever wants it.
+
+* Open questions
+
+- Should =:schema= validation run on every save, or only on headlines whose tags
+  are declared?  The latter is cheaper and skips the case nobody configured.
+- Where does the filter UI surface the hide suggestion for a =machinery= tag?  A
+  hint beside the tag in the filter transient is the obvious place; a suggestion
+  that appears nowhere is the same as no suggestion.
+- Is =:purpose= a two-value axis for good, or does a third value arrive (say
+  =archive= or =ephemeral=) the moment a second plugin declares tags?  Two is
+  enough today and the name does not forbid a third.
+- Is =cache/plugin-schema.eld= enough for a non-Emacs client, or does it need
+  the capture templates rendered into something not elisp-specific?

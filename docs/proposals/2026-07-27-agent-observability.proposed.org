@@ -1,0 +1,267 @@
+#+TITLE: Agent observability: runs, status, lineage, distributed execution
+#+DATE: 2026-07-27
+
+Status: *proposed*, *deferred*.  Everything here presumes
+[[file:2026-07-27-agent-delegation.proposed.org][agent delegation]] has landed
+and is in daily use.  Split out so the delegation workflow can ship and be
+tested without it.  Recorded now because several decisions in the delegation
+proposal — immutable run directories, opaque run ids, canonical
+=runs/<run-id>/= content — exist to keep these options open.
+
+* Problem
+
+Once delegation works, three questions arrive that the headline itself cannot
+answer: what is running now, what did a run actually read, and can this run
+somewhere other than the author's laptop.
+
+* Status: hot and cold tiers
+
+A run emits progress for minutes.  That churn must never reach the WAL —
+invariant 3 wants MANIFEST byte-stability, and invariant 5 wants content hashes
+that hold still.  The precedent is the LOGBOOK, which
+=org-glance-headline:hash-ignore-drawers= strips before hashing precisely so
+clocking in and out never invalidates a cache.  Live run progress is the same
+category of noise.
+
+- *Hot* — =runs/<run-id>/status.json=, written by the executor, watched by
+  Emacs.  Never indexed, never hashed, never merged, never durable.  Losing it
+  costs a progress bar.
+- *Cold* — one WAL append on terminal state, carrying the =meta.eld=
+  projection.  That append is the record.
+
+Display reuses what exists: =table-view= renders a runs table (headline, tag,
+state, started, elapsed, cost, model, exit),
+[[file:2026-07-06-incremental-row-update.done.org][incremental row update]]
+upserts the single changed row instead of re-deriving the view, and the
+tag-metrics sidecar is the pattern for an aggregate header line — running,
+waiting, spend today.
+
+* Lineage
+
+** What belongs in the store, and what does not
+
+One test decides placement: *is this a fact a human authored against canonical
+content?*  Existing relations pass it — =@= inserts an =org-glance-material:=
+body link, that link is canonical, and the =relations= / =links= metadata
+fields are projections recomputed from it (invariant 5).  Lineage facts mostly
+fail it: no human types them, and they exist only because an assembler walked
+the graph or an executor finished.
+
+| Fact             | From | To              | Where it lives                               |
+|------------------+------+-----------------+----------------------------------------------|
+| source task      | run  | source headline | the path — =data/<id>/runs/<run-id>/=        |
+| =used-context=   | run  | headline        | =runs/<run-id>/inputs.eld= + derived sidecar |
+| =proposed-patch= | run  | headline        | =runs/<run-id>/meta.eld=                     |
+| =spawned=        | run  | run             | =runs/<run-id>/meta.eld=                     |
+| =superseded-by=  | run  | run             | =runs/<run-id>/meta.eld=                     |
+| =applied-patch=  | run  | headline        | *the WAL* — a human act                      |
+
+=applied-patch= is the only lineage fact reaching the store as an edge: a human
+accepted a change to canonical content, which is what the WAL exists to record.
+The source-task edge is redundant with the run's own path.  Everything else is
+run-local.
+
+** Why =used-context= never touches the WAL
+
+=used-context= records that a run read a headline.  Forward answers "what did
+this run read"; reverse answers "which runs read this headline", and the
+reverse is what drives staleness detection.
+
+A depth-2 assembly over a connected graph pulls tens of headlines, so treating
+these as ordinary relations would append tens of machine-generated records per
+run to a store whose whole design resists churn.  Two independent constraints
+already rule it out:
+
+1. *The executor never writes the store.*  Context edges could reach the WAL
+   only by Emacs appending them on the terminal signal — Emacs authoring dozens
+   of records per run for facts no human wrote.
+2. *Run directories arrive by =git pull=.*  A WAL-based reverse index would
+   require the remote worker to append, which the same decision forbids.
+
+Placement follows:
+
+- *Forward is canonical and costs nothing.*  =runs/<run-id>/inputs.eld= is
+  written by the assembler, immutable, and is the truth of what was read.
+- *Reverse is a derived sidecar.*  =cache/run-inputs.eld= maps headline id to a
+  list of (RUN-ID . HASH-AT-READ), built by scanning =runs/*/inputs.eld=.
+  Invariant-5 class: pure derived cache, content-hash-guarded, dropped by
+  =org-glance-reindex=, never trusted in a durable write without its fallback.
+  It takes the same invariant-8 exception the property index takes — read
+  through the lossy =--read-eld= floor rather than a union merge, because a
+  conflict self-heals on the next scan.
+
+The rebuild fallback is O(runs) rather than O(headlines), and runs accumulate on
+their own curve.  A retention policy bounds it.
+
+** Recording hashes, not just ids
+
+Context assembly already knows the exact input set.  Recording each input's
+*content hash at assembly time* alongside its id costs one field and buys three
+things:
+
+- *Exact lineage.*  Agent frameworks log prompts; this logs a content-addressed
+  input set, so "what did this run actually read" has a byte-precise answer.
+- *Invalidation for free.*  A run whose recorded hashes no longer match the
+  store is stale, detected by the same comparison the property index already
+  performs.  That answers "these twelve runs depended on the headline you just
+  edited", which nothing else can.
+- *Replay.*  Append-only WAL, immutable run directories and hashed inputs
+  together reconstruct exactly what the agent saw at a given point.
+
+The hash recorded is the semantic one — bookkeeping properties and LOGBOOK
+already stripped — so clocking in never marks a run stale.
+
+* Cascade view: d3 + dagre HTML export
+
+The relation table is the working view: keyboard-driven, in Emacs, one headline
+at a time.  A DAG view answers a different question — the shape and health of a
+whole cascade at a glance — and a table cannot show it.
+
+Emacs has no good native DAG renderer, so the view is a generated,
+self-contained HTML file opened in a browser.  That fits the existing model:
+views are projections, read-only, always rebuildable, never edited (invariant
+10).  =org-glance-lineage-export= writes it, and nothing reads it back.
+
+Considered and rejected: an =xwidget-webkit= buffer (needs Emacs built with
+xwidgets, fragile across platforms) and an in-buffer SVG or ASCII DAG (loses the
+interaction that makes the view worth having).
+
+Layout is =dagre= for ranked placement; rendering and interaction are =d3=.
+Both vendored rather than loaded from a CDN, so the export works offline and
+pulls no third-party script at view time.  Licences fit this project: d3 is
+ISC, dagre is MIT.
+
+- *Node health* drives fill, stroke and label colour — one class per state
+  (=waiting=, =running=, =review=, =done=, =failed=, =stale=).  =stale= is the
+  interesting one: it comes from the input-hash comparison above and has no
+  analogue in an ordinary pipeline view.
+- *Edge kind* drives stroke style — solid for =applied-patch=, dashed for
+  =proposed-patch=, dotted for =used-context= (there are many, and they carry
+  context rather than causation), and a distinct colour for =spawned= so
+  sub-agent fan-out reads at a glance.  The run-to-source relation needs no
+  stroke: a run renders inside its source headline's group.
+- *Interaction* — hover highlights the connected sub-graph and dims the rest;
+  click opens the underlying headline or run in Emacs through an =org-protocol=
+  link, so the browser view stays a lens onto the store.
+
+Colours come from the active theme where the export can read it, with a
+high-contrast default that works on light and dark backgrounds.
+
+*Provenance note.*  The idea of a health-coloured cascade DAG with per-kind edge
+styling comes from a production monitoring view the author built elsewhere; the
+implementation here is written from the public d3 and dagre documentation, with
+its own palette, its own node and edge vocabulary, and lineage semantics that
+have no counterpart in that system.  No code, styling or topology is carried
+across.
+
+* Distributed execution
+
+The store is git-synced, so the transport already exists.  A worker pulls, reads
+the headline and its assembled context, runs, writes =runs/<run-id>/=, and
+pushes.  Union merge heals the result.  No broker, no queue service and no
+consensus system is required, because three existing properties do the work:
+
+1. Run directories are immutable and uniquely named, so two workers never
+   contend on a path.
+2. The WAL is append-only with union merge, so terminal projections from
+   several workers merge cleanly.
+3. Recorded input hashes let a worker verify it read what the coordinator
+   intended.
+
+** Claiming
+
+- *Optimistic* — every willing worker runs, duplicates drop at review.  Zero
+  coordination, wasteful, adequate for cheap tasks.
+- *Push-race lease* — a worker writes =runs/<run-id>/claim= and pushes.  A git
+  push is atomic per ref, so the first push wins and the loser backs off on the
+  rejection.  A working distributed lock with no added infrastructure.
+
+** Limits, stated up front
+
+Git polling latency is seconds to minutes, which suits minutes-long agent tasks
+and rules out anything interactive.  Outputs above roughly 64 KiB go to object
+storage keyed by hash, or the repository bloats; the run directory keeps the
+reference.
+
+* Placement: the executor table
+
+Ray is the right interface analogy and the wrong scheduler.  What transfers:
+declared resources, one handle regardless of placement, content-addressed
+result passing, capacity acquired on demand.  What does not: Ray tasks are
+near-pure functions over data, while an agent task mutates a repository and
+reaches the network; Ray assumes a trusted cluster; Ray optimises latency and
+locality, while this optimises cost and capability; and Ray has no
+human-in-the-loop step, which is the entire point of the intake gate.
+
+The mechanism is a table, following invariant 4 and the pattern =agnostic-llm=
+uses for providers and =session-buffer-cycle= uses for kinds:
+
+| Executor          | Start           | Filesystem | Network          | GPU   |
+|-------------------+-----------------+------------+------------------+-------|
+| =local-process=   | subprocess      | host       | host             | no    |
+| =local-container= | =podman run=    | mount      | egress allowlist | no    |
+| =remote-worker=   | git claim + ssh | worktree   | egress allowlist | maybe |
+| =cloud-sandbox=   | provider API    | ephemeral  | none             | yes   |
+
+Placement is a constraint match: tag config declares what a task needs, and the
+cheapest executor satisfying it wins.  A solve rather than a scheduler.  Adding
+a managed sandbox provider later is one more row, which is also the test of
+whether the abstraction is real.
+
+** The environment contract
+
+Effect-freedom (see
+[[file:2026-07-27-agent-delegation.proposed.org][agent delegation]]) already
+supplies most of this: an agent whose total effect is its return value runs
+anywhere by construction, and its external reach is declared in =:permits=.
+What remains is stating the conditions explicitly, since missing one turns "it
+worked locally" into the permanent failure mode:
+
+1. *Context is content-addressed and travels with the task.*  Already true —
+   assembly holds the ids and hashes.
+2. *Workspace is declared, never assumed.*  "Repository X at commit Y", never an
+   absolute path on the author's machine.
+3. *Secrets are brokered.*  The executor receives a token with which to request
+   a secret, never the secret itself.  This extends the crypt-block seal
+   outward to the run.
+4. *Tools are declared.*  The same list serves as the capability specification
+   and as the security boundary.
+
+** Growing capacity, in order
+
+1. *Static pool* — machines listed in configuration.  Trivial, covers a homelab
+   and a couple of boxes, and proves the executor table.
+2. *Managed sandbox provider as one row* — no infrastructure, costs money, and
+   demonstrates that the abstraction absorbs a foreign backend.
+3. *On-demand instances with idle teardown* — the most work and the least
+   learning.  Deferred.
+
+* Security for the distributed phase
+
+A remote worker executes instructions fetched from a git repository, so anyone
+who can push to that repository can execute code on every worker.  Where the
+store is shared, or synced through a host outside the author's control, this is
+remote code execution by design.
+
+Mitigation: signed commits, or an explicit allowlist of identities permitted to
+create delegable headlines.  This compounds with the prompt-injection surface
+described in the delegation proposal — without it, a captured web page reaches a
+worker and runs code there.
+
+Both are requirements for the distributed phase rather than improvements to
+schedule afterwards.  The local phases carry neither risk, which is another
+reason to sequence distribution last.
+
+* Open questions
+
+- What retains runs?  Occurrence snapshots are GC'd with their id directory at
+  compaction; runs may want an explicit retention window, since they carry cost
+  and audit value the source headline does not — and since the
+  =cache/run-inputs.eld= rebuild is O(runs), retention is what bounds that
+  fallback.
+- Does the relation table render run-local facts at all, given that only
+  =applied-patch= reaches the store as an edge?  The lineage viewer may need to
+  read =meta.eld= and the reverse sidecar directly rather than going through the
+  relations projection.
+- Does the web client from the delegation proposal subsume the HTML cascade
+  export, or do they stay separate views with different jobs?

@@ -1,0 +1,117 @@
+#+TITLE: Extraction — what leaves this repo
+#+DATE: 2026-07-29
+
+org-glance doubles as a sandbox: designs get invented here, proven against one
+demanding user, and some of them turn out to be about durable stores in general
+rather than about org-mode.  This file is the ledger for that — what has been
+proven, what is a candidate, and what stays.
+
+The sandbox only earns its keep if extraction is deliberate.  A research vehicle
+with no export path is a hobby with a flattering name, so this file exists to be
+re-read rather than admired.
+
+* Criterion
+
+Elapsed time is a proxy.  Four tests are the criterion, and the fourth is the
+cheap one to apply first.
+
+1. *Survived a restructure.*  The rewrite had every incentive to drop it and did
+   not.  Stronger evidence than any duration.
+2. *Caught something.*  =invariants.org= already records what breaks on
+   violation; an entry with a real incident behind it has evidence rather than
+   intent.
+3. *Generalised past its origin.*  It answers a question it was not written for.
+   =:purpose= qualified by acquiring three unrelated consumers.
+4. *States without org-mode.*  If it cannot be written down without headlines,
+   tags or drawers, it is org-glance-specific.  If it can, it is about stores.
+
+Cadence: review at each release, and whenever an invariant changes.  The tests
+decide what qualifies; the cadence decides when to look.
+
+* Proven
+
+Ideas that pass all four and have a use outside this repo.
+
+- *Append-only WAL, positional last-wins, MANIFEST swap as commit point.*
+  Invariants 1–3.  Survived v1→v2.  Stated with no reference to org.
+- *Canonical blob, everything else derived and rebuildable.*  Invariant 5.  The
+  hash-guarded read with an O(N) fallback is the transferable part: no derived
+  value is trusted in a durable write.
+- *Semantic content hash.*  Bookkeeping properties and LOGBOOK stripped before
+  hashing, so clocking never churns downstream caches.  Generalises to "identity
+  by what a record says, never by its bytes", which is what makes dedup and
+  cache invalidation correct anywhere.
+- *Commutative, non-inflating sidecar merges.*  Invariant 8.  Earliest / latest /
+  =max=, never a sum; =nil= never shadows a populated side.  CRDT reasoning
+  applied to plain files under git, and the hardest part of local-first sync.
+- *Schema tables as the single source of truth.*  Invariant 4.  Row order is
+  wire order, fields append at the end only, guards run at load.  A
+  forward-compatible on-disk format with no code generation.
+
+* Candidates
+
+Passing some tests, wanting more use before they leave.
+
+- *Views as projections; push-flag, pull-refresh.*  Invariant 10.  Proven here;
+  untested against a store with more than one writer.
+- *Per-block secrecy with an indexed public remainder.*  Invariant 14.  Passes
+  test 4 cleanly and has seen light use.  Wants a second consumer.
+- *Effect-freedom for agents.*  From
+  [[file:proposals/2026-07-27-agent-delegation.proposed.org][agent delegation]]:
+  an agent's total effect on the world is its return value; effects inside its
+  own workspace become that value; only external reach is a permission.
+  Designed, unbuilt.  Extraction-shaped from the start — it says nothing about
+  org.
+- *=:purpose= as a category axis.*  Knowledge versus machinery, from
+  [[file:proposals/2026-07-27-plugin-tag-declarations.proposed.org][plugin tag declarations]].
+  Passed test 3 on arrival with three consumers.  Wants a second plugin to
+  confirm two values are enough.
+- *A declaration adds interpretation, never storage.*  The rule that keeps
+  plugin data valid after the plugin is gone.  General to any extension system.
+- *File exchange with the outside world.*  Both halves of one idea: the store
+  trades with anything external through immutable files and never through a
+  blocking call.
+  - *Inbox* — a headless producer writes files; the single writer ingests them,
+    and the filename's UUID being the record's id makes re-ingest a no-op under
+    last-wins.  Consumers: delegation's executor,
+    [[file:proposals/2026-07-29-integrations-telegram.proposed.org][Telegram]].
+  - *Outbox* — a write enqueues a *coarse* intent naming a subject rather than an
+    operation, and a worker reconciles.  Coarse intents are self-correcting: a
+    replay is harmless and a lost one is repaired by the next.  Consumer:
+    [[file:proposals/2026-07-30-outbox-calendar.proposed.org][calendar]].
+  Passed test 3 before either was built.  States without org-mode.
+- *Idempotence in place of tracked state.*  The same move twice: the inbox makes
+  the filename the record id, and the calendar derives the external event id from
+  =hash(id + occurrence)=.  Both replace durable mapping state with a
+  deterministic key, so losing every local trace costs nothing and the next pass
+  reconciles.  General to any integration with an external system.
+
+* The methodology itself
+
+=invariants.org= — a numbered rule, a symbol anchor stable across refactors, and
+what breaks on violation — may outlast every feature listed above.  It is a
+machine-checkable specification of what must not break, which is the missing
+piece for any codebase where agents write the code.
+
+Recorded here because it is the least org-specific thing in the repository and
+the easiest to underestimate.
+
+* Stays
+
+Not everything wants to leave.
+
+- The org-mode surface: headlines as the unit, tags as zero-ceremony
+  collections, capture, the material buffer.  These *are* org-glance.
+- Elisp as the host.  The designs travel; this implementation does not.
+- The transient UI and =table-view= integration.
+
+* Open
+
+- Which host language an extracted store would use.  Rust with an elisp binding
+  follows the =tvx= precedent in =table-view=; Go or Python would follow
+  whichever consumer arrives first.  Undecided, and it gates the licence
+  question below.
+- Licence.  This repo is GPL-3, which suits an Emacs package and would deter the
+  adoption an extracted library needs.  Copyright is undivided and there is no
+  CLA, so relicensing an extracted core is available — and the decision belongs
+  before the extraction, never after files start mixing.

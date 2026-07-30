@@ -14,6 +14,9 @@ when implemented (older ones are =.md=; new ones are =.org=).
 
 * Living indexes
 
+- [[file:extraction.org][Extraction]] — what leaves this repo: the four tests an idea passes before it
+  counts as being about durable stores rather than about org-mode, plus the
+  ledger of proven ideas, candidates, and what deliberately stays.
 - [[file:proposals/2026-07-06-performance-audit.org][Performance audit]] — the hub for the current performance work; lists the
   proposals below and tracks what is done, proposed, and refuted.
 - [[file:archive/MIGRATION-PLAN.md][Migration & Stabilization Plan]] (archive) — the v1→v2 migration and path to a
@@ -93,9 +96,26 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 
 * Proposed — other
 
-- [[file:proposals/2026-07-27-agent-delegation.proposed.org][Agent delegation — runs, status, lineage, distributed execution]] — a
-  headline delegates to an agent; runs are immutable content-addressed
-  artifacts, lineage is typed edges over hashed inputs, and git is the queue.
+- [[file:proposals/2026-07-30-outbox-calendar.proposed.org][The outbox protocol, calendar first]] — a save enqueues a coarse "reconcile
+  this headline" intent and a worker drains it, so the network never touches the
+  save path; deterministic event ids make the export idempotent and self-healing
+  with no mapping to store.
+- [[file:proposals/2026-07-29-integrations-telegram.proposed.org][Integrations — the inbox protocol, Telegram first]] — a headless producer
+  writes immutable files into =inbox/=; Emacs ingests them idempotently through
+  the single writer.  Telegram becomes the capture path and the client that
+  answers a =WAITING= run.
+- [[file:proposals/2026-07-27-plugin-tag-declarations.proposed.org][Plugin tag declarations]] — one form by which a plugin declares its tags'
+  capture templates, property schema, todo cycle, columns and transition hooks;
+  merged as a defaults layer under stored tag config, adding interpretation and
+  never storage, and never reducing what the user sees.
+- [[file:proposals/2026-07-27-agent-delegation.proposed.org][Agent delegation — intake, then fire-and-forget]] — agents are effect-free
+  functions declared once in a registry (model, effort, permissions, placement)
+  and composed into teams of staged roles; a read-only intake phase returns a
+  restatement and a question table with defaults, and the answered gate is the
+  go signal.  Lands in the =llm= plugin plus one core path accessor.
+- [[file:proposals/2026-07-27-agent-observability.proposed.org][Agent observability — runs, status, lineage, distributed execution]]
+  (deferred) — run tables, hashed-input lineage with staleness, a d3 cascade
+  export, and git as the work queue.
 - [[file:proposals/2026-07-06-encrypted-materialize-gpg.proposed.org][Encrypted headlines via GPG (EasyPG)]] — replace the home-grown AES with
   EasyPG for encrypted materialization.
 - [[file:proposals/2026-06-19-composable-tag-templates.proposed.md][Composable tag templates]] — tags as Haskell-style type classes.

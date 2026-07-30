@@ -1,0 +1,177 @@
+#+TITLE: Integrations: the inbox protocol, Telegram as the first one
+#+DATE: 2026-07-29
+
+Status: *proposed*.  Lands as a plugin
+([[file:2026-07-23-plugin-interface.done.org][plugin interface]]) declaring its
+tags through
+[[file:2026-07-27-plugin-tag-declarations.proposed.org][plugin tag declarations]].
+The ask/resume half depends on
+[[file:2026-07-27-agent-delegation.proposed.org][agent delegation]].
+Calendar is a separate discussion and deliberately out of scope here.
+
+* Problem
+
+org-glance is a laptop experience.  Everything — capture, review, delegation —
+requires Emacs, so it requires the machine Emacs is on.  Two costs follow:
+
+- *Capture happens away from the laptop.*  A link worth keeping, a thought on a
+  walk, a photo of something.  By the time there is a keyboard, most of it is
+  gone.
+- *Delegation made it worse.*  A =WAITING= run needs a human to read a question
+  and answer it, and questions arrive on the agent's schedule rather than on the
+  human's.  A run that could have resumed in thirty seconds instead waits until
+  someone sits down.
+
+A mobile app is the obvious answer and the wrong first move: two platforms, app
+review, push certificates, and it would be the first client of a protocol that
+has never had a second one.  Building the hard client first means discovering
+the protocol's flaws in the most expensive place.
+
+* The inbox protocol
+
+An integration runs continuously and Emacs does not.  Invariant 7 permits one
+writer.  Delegation already answered this shape for its executor, and
+integrations take the same answer.
+
+*A producer never writes the store.*  It writes immutable files into an inbox
+directory; Emacs ingests them, appends through the ordinary single-writer path,
+and deletes them.
+
+#+begin_src
+<store>/inbox/<uuid>.org      ← a producer wrote this; Emacs owns its fate
+#+end_src
+
+The inbox sits beside =data/= and =meta/= rather than under =cache/=: a pending
+capture is neither canonical (it is not in the WAL yet) nor derived (losing it
+loses the capture).  It is durable, short-lived, and owned by nobody until
+ingest.
+
+** Ingest is idempotent by construction
+
+Ingest reads the file, appends, then deletes.  A crash between the append and
+the delete would replay the capture on the next pass, so the filename's UUID
+*is* the headline's =ORG_GLANCE_ID=.  Re-ingesting an already-present id is a
+no-op under positional last-wins (invariant 1), and the stale file is dropped.
+
+No lock, no journal, no coordination — the store's existing semantics cover it.
+
+** Triggers
+
+=org-glance-graph-after-open-functions=, error-demoted per invariant 9, plus an
+explicit =org-glance-inbox-ingest= command.  A failed ingest may never break an
+open, and a malformed inbox file is moved aside rather than retried forever.
+
+** Why this generalises
+
+Two independent consumers now want it: delegation's executor and every
+integration.  "A headless producer writes immutable files; the single writer
+ingests them" states without reference to org-mode, which makes it a candidate
+in [[file:../extraction.org][extraction]].
+
+* Telegram
+
+Telegram is the mobile client already installed on the phone.  No app store, no
+review cycle, no push certificates, no second platform.
+
+** Capture
+
+Text becomes a headline.  A forwarded link becomes a headline carrying the URL.
+Tags come from a leading hashtag or from the plugin's configured default.
+
+The bot writes an inbox file and stops.  It parses nothing, decides nothing, and
+touches no other part of the store.
+
+** Ask and resume
+
+The delegation protocol is file state precisely so a second client can drive it,
+and this is that client.  The bot finds headlines in =WAITING=, sends the
+question with its options, and takes the reply.
+
+*The reply goes through the inbox too*, as an answer intent, rather than
+straight into =runs/<run-id>/=.  Delegation's executor writes run directories
+directly because it is trusted local code; a bot handling messages from a
+network is not the same trust level, so its input is validated by Emacs before
+it reaches canonical content.
+
+This is the highest-leverage half of the integration.  It also *validates the
+file-state protocol before the web client is written*, which is the cheapest
+possible place to discover that the protocol is wrong.
+
+** Where the bot runs, and what it needs to see
+
+The two halves have very different requirements, and the split is worth
+exploiting:
+
+| Half          | Needs                          | Can run                       |
+|---------------+--------------------------------+-------------------------------|
+| Capture       | write an inbox file, git push  | anywhere; no store access     |
+| Ask / resume  | read headline state            | only where the store is       |
+
+Capture-only exposes nothing: the bot never reads the knowledge base.  Ask and
+resume requires the store on that host, which for a local-first tool is a real
+decision rather than a detail.  Running the bot on the laptop keeps everything
+local at the cost of only working while the laptop is on; running it on a homelab
+or VPS means the store lives there too.
+
+Answers apply when Emacs next ingests, so resumption is Emacs-gated in the same
+way the phase-1 executor is.  A headless daemon would lift both limits at once,
+and it is out of scope here.
+
+* Security
+
+** The chat allowlist is not optional
+
+A bot token grants anyone holding it the ability to write into the knowledge
+base.  The plugin refuses to start without an explicit allowlist of chat ids,
+and messages from anywhere else are dropped without a reply.  The token lives in
+=auth-source= or the environment, never in the store.
+
+** Telegram sees everything captured through it
+
+Anything sent through the bot transits Telegram's infrastructure.  That is
+acceptable for the class of content already going into a chat application —
+links, quick notes, reminders — and unacceptable for the crypt-block class.
+
+The plugin never sends crypt content outward: a =WAITING= question drawn from a
+headline with sealed blocks sends the question alone, never surrounding context.
+
+** Captured content is captured provenance
+
+Delegation already forbids captured content from auto-delegating, precisely
+because a forwarded web page would otherwise become a source of agent
+instructions.  Telegram capture is the largest producer of exactly that content,
+so the provenance mark is what keeps the rule meaningful rather than
+theoretical.
+
+* What this is not
+
+- *Not a sync engine.*  Capture flows in; the graph does not flow out.
+- *Not a full client.*  Browsing, searching and editing the graph from chat are
+  out of scope, and may stay that way.
+- *Not a notification firehose.*  The bot speaks when a run is waiting on a
+  human.  Anything more turns it into noise and trains the human to ignore it.
+
+* Phasing
+
+1. *Inbox protocol* — directory, idempotent ingest, error-demoted trigger,
+   manual command.  Useful alone: any script can capture into org-glance.
+2. *Telegram capture* — text and links.  No store access, runs anywhere.
+3. *Telegram ask and resume* — the delegation half.  Highest leverage; requires
+   the store on the bot's host.
+4. *Media* — photos and voice into the headline's own directory with a stub
+   headline.
+5. *Read side* — querying the graph from chat.  Deferred, possibly forever.
+
+* Open questions
+
+- Does org-glance want a headless daemon?  Both the executor and this plugin are
+  currently gated on Emacs running.  A daemon lifts both and introduces a second
+  writer, which invariant 7 would have to be reopened for.
+- Where does the bot live — laptop, homelab, VPS?  Phase 2 is indifferent; phase
+  3 forces the store onto that host.
+- Should the inbox accept formats other than org?  A plain-text or JSON intent
+  would let non-Emacs producers write without knowing org syntax, at the cost of
+  a parser in the ingest path.
+- What happens to an inbox file that fails to parse twice?  Moving it aside
+  keeps ingest honest; silently discarding a capture is the one outcome worth
+  ruling out.

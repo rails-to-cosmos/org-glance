@@ -53,7 +53,7 @@
 
 (defun org-glance-transient--toggle-view-description (&rest _)
   "Toggle label naming the display mode it would switch TO."
-  (format "Overview layout -> %s"
+  (format "Switch layout -> %s"
           (propertize (if (equal (org-glance-transient--view-mode) "org") "table" "org")
                       'face 'transient-value)))
 
@@ -80,17 +80,16 @@ this one update in place."
   ;; material buffer mirrors these under C-c), SYSTEM (the install).
   ["Tag"
    [("o" org-glance-overview :description org-glance-transient--overview-description)
-    ("a" "Agenda" org-glance-agenda)
-    ("T" "All tags" org-glance-tags)]
-   [("-o" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)
-    ("+" "Capture" org-glance-capture)
-    ("C" "Configure" org-glance-tag-config-edit)
-    ]]
+    ;; ("a" "Agenda" org-glance-agenda)
+    ("T" "All tags" org-glance-tags)
+    ("C" "Configure" org-glance-tag-config-edit)]
+   [("-l" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]
   ["Headline"
-   [("m" "Materialize" org-glance-materialize)
+   [("+" "Capture" org-glance-capture)
+    ("m" "Materialize" org-glance-materialize)
     ("j" "Open link" org-glance-open)
     ("e" "Extract property" org-glance-extract)]
-   [("-d" "Decrypt secrets on open" "--decrypt")]]
+   [("-d" "Decrypt" "--decrypt")]]
   ["System"
    [("I" "Install plugin" org-glance-plugin-install)
     ("q" "Quit" transient-quit-one)]]

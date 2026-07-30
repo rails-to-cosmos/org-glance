@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.30.0.0.20260727.0
+;; Version: 1.31.0.0.20260730.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
 ;; Keywords: org-mode, graph, mindmap
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -71,14 +71,17 @@ its dependencies -- install the package first, then enable it here.")
 ;;;###autoload
 (cl-defun org-glance-plugin-install (plugin)
   "Enable PLUGIN now and remember it in `org-glance-plugins' (`P').
-Prompts from `org-glance-plugins-available'; free input allows an external
+Prompts from the not-yet-installed entries of `org-glance-plugins-available'
+\(those absent from `org-glance-plugins'); free input allows an external
 plugin.  Each plugin is a separate PACKAGE: when its library is not on
 `load-path' this says so instead of failing obscurely.  Loads immediately
 -- errors are LOUD here, unlike the demoted init-time loader -- and
 persists via `customize-save-variable' outside batch."
   (interactive
    (list (intern (completing-read "Install plugin: "
-                                  (mapcar #'symbol-name org-glance-plugins-available)))))
+                                  (mapcar #'symbol-name
+                                          (cl-remove-if (lambda (p) (memq p org-glance-plugins))
+                                                        org-glance-plugins-available))))))
   (let ((feature (intern (format "org-glance-%s" plugin))))
     (unless (require feature nil 'noerror)
       (user-error "Install the `%s' package first (it is not on `load-path')"
