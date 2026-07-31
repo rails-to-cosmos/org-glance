@@ -97,17 +97,14 @@ FILTER, if non-nil, is a predicate on the metadata."
     ;; is what queues the note this drops.
     (add-hook 'kill-buffer-hook #'org-glance-material--cancel-pending-log-note t t)))
 
-;; `C-c #' by context: region -> wrap it in a crypt block; `C-u' -> unwrap the
-;; block at point; else encrypt the whole body (plaintext buffer) or forget
-;; the cached password (already encrypted).
+;; `C-c #' by context -- the one crypt key: region -> wrap it in a crypt block;
+;; sealed buffer -> unseal; point inside a block -> unwrap it; decrypted buffer
+;; -> seal it back; plaintext headline -> encrypt the whole body.
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
 ;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
 ;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
-;; `C-c u': unseal (decrypt) this headline -- the counterpart of opening
-;; as-is; mirrors the transient's `-d' switch, applied after the fact.
-(define-key org-glance-material-mode-map (kbd "C-c u") #'org-glance-material:decrypt)
 ;; `C-c j': open a link from this headline (the transient's `j', scoped here).
 (define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
 ;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
@@ -460,6 +457,23 @@ sealed."
            (current-buffer))
     (message "org-glance: nothing sealed here")))
 
+(cl-defun org-glance-material:seal ()
+  "Seal this buffer's crypt blocks in place and forget the cached password.
+The in-buffer inverse of `org-glance-material:decrypt': the ciphertext
+already on disk replaces the plaintext, so the next `C-c #' prompts again.
+Refuses on a modified buffer -- sealing would hide unsaved edits behind
+ciphertext (invariant 11)."
+  (interactive)
+  (org-glance-material--ensure)
+  (unless org-glance-material--encrypted
+    (user-error "Not an encrypted materialized buffer"))
+  (when (buffer-modified-p)
+    (user-error "Save this buffer before sealing it"))
+  (org-glance-material--encrypt-buffer)
+  (set-buffer-modified-p nil)               ; sealed == the bytes on disk
+  (org-glance-material--clear-password)
+  (message "org-glance: sealed -- `C-c #' unseals"))
+
 (cl-defun org-glance-material:crypt-unwrap ()
   "Remove the crypt block around point; its body becomes public on save.
 A still-sealed body is decrypted first.  Unwrapping the last block makes the
@@ -481,22 +495,28 @@ whole headline public: the buffer stops sealing and forgets its password."
       (message "org-glance: last crypt block unwrapped -- headline public on save"))))
 
 (cl-defun org-glance-material:crypt ()
-  "Crypt action at point, by context.
+  "Crypt action at point, by context (`C-c #') -- the one crypt key.
 Active region -> wrap it in a crypt block (`org-glance-material:crypt-region').
-Prefix arg -> unwrap the block at point (`org-glance-material:crypt-unwrap').
-No region, plaintext buffer -> encrypt the WHOLE body (one block).
-No region, already encrypted -> forget the cached password
-\(`org-glance-material:lock'); when the buffer opened AS-IS its ciphertext
-is still sealed and unwired, so ask to decrypt rather than wrapping the
-ciphertext in a SECOND block under a second password."
+A SEALED buffer -> unseal it, wiring and hardening itself if it opened AS-IS.
+Point inside a crypt block -> unwrap that block
+\(`org-glance-material:crypt-unwrap'; public on save).
+A decrypted buffer, point outside every block -> seal it back
+\(`org-glance-material:seal').
+A plaintext headline -> encrypt its WHOLE body as a single block.
+The sealed check comes FIRST: in a sealed buffer point sits inside the
+ciphertext block, and unsealing is what `C-c #' means there."
   (interactive)
   (cond
    ((use-region-p)
     (org-glance-material:crypt-region (region-beginning) (region-end)))
-   (current-prefix-arg (org-glance-material:crypt-unwrap))
-   (org-glance-material--encrypted (org-glance-material:lock))
    ((org-glance-headline--buffer-encrypted?)
-    (message "org-glance: sealed -- `C-c u' decrypts it first"))
+    ;; a buffer this command sealed is still wired: unseal it in place, with no
+    ;; kill-on-wrong-password (that path belongs to opening, not to a toggle)
+    (if org-glance-material--encrypted
+        (org-glance-material--decrypt-buffer)
+      (org-glance-material:decrypt)))
+   ((org-glance--crypt-block-at (point)) (org-glance-material:crypt-unwrap))
+   (org-glance-material--encrypted (org-glance-material:seal))
    (t (pcase-let ((`(,beg . ,end) (org-glance-headline--body-region)))
         (org-glance-material:crypt-region beg end)))))
 

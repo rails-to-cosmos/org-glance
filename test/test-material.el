@@ -809,13 +809,18 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
         (org-glance-material:crypt)                     ; the C-c # dispatcher
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (s-contains? "line one" (buffer-string)))   ; still plaintext in buffer
-        ;; second bare C-c #: buffer is now encrypted -> LOCK route (declined),
-        ;; never a second whole-body wrap
-        (org-glance-test:answering ((y-or-n-p nil))
-          (org-glance-material:crypt))
+        ;; second bare C-c #: the buffer is encrypted now -> the SEAL route,
+        ;; which refuses while edits are unsaved (invariant 11), never a
+        ;; second whole-body wrap
+        (should-error (org-glance-material:crypt) :type 'user-error)
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (string= "pw" org-glance-material--password))
-        (org-glance-test:save)))
+        (org-glance-test:save)
+        ;; saved: the same key now seals in place and forgets the password
+        (org-glance-material:crypt)
+        (should-not (s-contains? "line one" (buffer-string)))
+        (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
+        (should-not org-glance-material--password)))
     (let ((blob (org-glance-graph:get-content graph "wb")))
       (should (s-contains? "aes-encrypted" blob))
       (should-not (s-contains? "line one" blob)))
@@ -932,6 +937,29 @@ plaintext at rest and the metadata keeps `linked?' alongside `encrypted?'."
           (should (org-glance-headline-metadata:encrypted? meta))
           (should (org-glance-headline-metadata:linked? meta)))
         (should (s-contains? "secret line" (buffer-string)))))))  ; buffer plaintext
+
+(ert-deftest org-glance-test:material-crypt-key-unwraps-block-at-point ()
+  "`C-c #' with point inside a PLAINTEXT crypt block unwraps that block --
+the dispatch arm that used to need `C-u'.  In a SEALED buffer the same key
+unseals instead, since point sits inside the ciphertext block there."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-headline:encrypt
+                                 (org-glance-test:headline "u2" "* TODO Secret"
+                                   "plainbody")
+                                 "pw"))
+    (org-glance-test:answering ((read-passwd "pw"))
+      (org-glance-test:with-material (buffer graph "u2")
+        (goto-char (point-min))
+        (search-forward "#+begin_crypt")                 ; inside the SEALED block
+        (funcall (key-binding (kbd "C-c #")))            ; -> unseals, keeps the block
+        (should (s-contains? "plainbody" (buffer-string)))
+        (should (= 1 (length (org-glance--crypt-block-regions))))
+        (goto-char (point-min))
+        (search-forward "plainbody")                     ; inside the PLAIN block now
+        (funcall (key-binding (kbd "C-c #")))            ; -> unwraps it
+        (should-not (s-contains? "#+begin_crypt" (buffer-string)))
+        (should (s-contains? "plainbody" (buffer-string)))
+        (should-not org-glance-material--encrypted)))))  ; last block gone: public
 
 (ert-deftest org-glance-test:material-crypt-unwrap-last-goes-public ()
   "Unwrapping the last crypt block and saving stores plaintext; `encrypted?'
@@ -1156,7 +1184,7 @@ them -- it inserts a fresh body line instead."
 (ert-deftest org-glance-test:material-opens-encrypted-as-is ()
   "An encrypted headline materializes AS-IS: no password prompt, ciphertext
 on screen, unhardened; `:decrypt' (the transient's `-d') opens it unsealed,
-and `C-c u' unseals an as-is buffer after the fact."
+and `C-c #' toggles the seal of an as-is buffer after the fact."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-headline:encrypt
                                  (org-glance-test:headline "e" "* TODO Secret" "plainbody")
@@ -1168,24 +1196,32 @@ and `C-c u' unseals an as-is buffer after the fact."
         (should (s-contains? "aes-encrypted" (buffer-string)))
         (should-not (s-contains? "plainbody" (buffer-string)))
         (should-not org-glance-material--encrypted)          ; unwired until asked
-        (should (eq (key-binding (kbd "C-c u")) #'org-glance-material:decrypt))))
-    ;; C-c u on an as-is buffer unseals it (and hardens)
+        (should (eq (key-binding (kbd "C-c #")) #'org-glance-material:crypt))))
+    ;; `C-c #' on an as-is buffer unseals it (and hardens); the same key seals
+    ;; it back, forgetting the password, and unseals again
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "e")
-        (org-glance-material:decrypt)
+        (funcall (key-binding (kbd "C-c #")))
         (should (s-contains? "plainbody" (buffer-string)))
         (should org-glance-material--encrypted)
+        (funcall (key-binding (kbd "C-c #")))                ; toggle: re-seal
+        (should-not (s-contains? "plainbody" (buffer-string)))
+        (should (s-contains? "aes-encrypted" (buffer-string)))
+        (should-not org-glance-material--password)           ; and forgotten
+        (should-not (buffer-modified-p))                     ; == the bytes on disk
+        (funcall (key-binding (kbd "C-c #")))                ; toggle: unseal again
+        (should (s-contains? "plainbody" (buffer-string)))
         ;; idempotent: a second decrypt has nothing sealed left to ask about
         (cl-letf (((symbol-function 'read-passwd)
                    (lambda (&rest _) (error "must not re-prompt"))))
           (org-glance-material:decrypt))))
-    ;; a bare `C-c #' on a still-sealed buffer refuses instead of wrapping the
-    ;; ciphertext in a second block under a second password
-    (cl-letf (((symbol-function 'read-passwd)
-               (lambda (&rest _) (error "must not prompt"))))
+    ;; a bare `C-c #' on a still-sealed buffer UNSEALS it instead of wrapping
+    ;; the ciphertext in a second block under a second password
+    (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "e")
         (org-glance-material:crypt)
-        (should (= 1 (length (org-glance--crypt-block-regions))))))))
+        (should (= 1 (length (org-glance--crypt-block-regions))))
+        (should (s-contains? "plainbody" (buffer-string)))))))
 
 (ert-deftest org-glance-test:link-label-from-item-prefix ()
   "A link with NO description is labelled by the `KEY:\' text introducing it in

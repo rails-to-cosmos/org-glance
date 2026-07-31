@@ -162,17 +162,20 @@ bank: 1234-5678
 #+end_src
 
 On disk it is ciphertext, and a materialized headline opens THAT WAY --
-no password prompt until you ask for one.  Unseal with =C-c u= in the
+no password prompt until you ask for one.  Unseal with =C-c #= in the
 buffer, or materialize with the transient's =-d= switch to open decrypted;
 then it re-seals on every save (auto-save and backups disabled).  Text
 OUTSIDE the blocks stays public and searchable.
 
-| Key       | In a materialized buffer                                     |
-|-----------+--------------------------------------------------------------|
-| =C-c u=     | unseal (decrypt) this headline -- it opens sealed by default |
-| =C-c #=     | wrap the region in a crypt block; no region: the whole body  |
-| =C-u C-c #= | unwrap the block at point                                    |
-| =C-c #=     | (already encrypted, no region) forget the cached password    |
+=C-c #= is the only crypt key; what it does depends on where point is:
+
+| Point / buffer state          | =C-c #=                                      |
+|-------------------------------+--------------------------------------------|
+| active region                 | wrap it in a crypt block                   |
+| sealed buffer (ciphertext)    | unseal it (prompts, hardens the buffer)    |
+| inside a plaintext block      | unwrap that block -- public on save        |
+| decrypted, outside any block  | seal it back, forgetting the password      |
+| plaintext headline            | encrypt the whole body as one block        |
 
 ** 6. Repeating headlines keep their history
 

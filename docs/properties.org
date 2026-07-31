@@ -102,10 +102,15 @@ Org link types org-glance registers; all follow with the ordinary =C-c C-o=.
 A headline whose blob carries sealed =#+begin_crypt= blocks materializes
 AS-IS: the ciphertext is what you see, no password is requested, and the
 buffer is NOT hardened (nothing secret is in it yet).  Decrypt explicitly
--- =C-c u= (=org-glance-material:decrypt=), or open with
+-- =C-c #= (=org-glance-material:crypt=), or open with
 =org-glance-material:open ... :decrypt t= (the transient's =-d= switch)
 -- at which point the buffer hardens and the seal/unseal save round-trip
-wires up (invariant 14 unchanged: plaintext never reaches disk).
+wires up (invariant 14 unchanged: plaintext never reaches disk).  =C-c #= is
+the only crypt key and reads its context: sealed buffer -> unseal; point
+inside a plaintext block -> unwrap it; decrypted buffer, point outside every
+block -> seal back and forget the password (=org-glance-material:seal=,
+refused while the buffer has unsaved edits); plaintext headline -> encrypt
+the whole body.
 
 * Body date interval
 

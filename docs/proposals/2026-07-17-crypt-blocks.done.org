@@ -49,7 +49,10 @@ the zero-markup idiom for public links.
   =--crypt-legacy=).  =C-c #= is context-aware: region → wrap it in a crypt
   block (first block prompts for the password), =C-u= → unwrap the block at
   point (last unwrap makes the headline public and forgets the password),
-  else → lock.
+  else → lock.  (Superseded 2026-07-31: =C-u= and =C-c u= folded into a
+  single context-aware =C-c #= — sealed → unseal, block at point → unwrap,
+  decrypted → seal back; see [[file:../../README.org][README]] and
+  [[file:../properties.org][properties.org]].)
 - Table =#= unchanged: encrypt seals, decrypt opens *and unwraps* (public means
   no residual markers); =C-u #= rekeys all blocks.
 

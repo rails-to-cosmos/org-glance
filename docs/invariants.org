@@ -131,10 +131,13 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
 14. *Crypt: plaintext never touches disk; secrecy is per-block.*  An
     encrypted headline materializes SEALED (ciphertext, no prompt, no
     hardening -- nothing secret is in the buffer yet); decryption is
-    explicit (=org-glance-material:decrypt= / =:open ... :decrypt t=) and
-    hardens the buffer BEFORE any plaintext lands -- including the unwrap
-    path (=org-glance-material:crypt-unwrap= wires first).  Decrypted
-    buffers are hardened (no auto-save/backup/lockfiles),
+    explicit (=C-c #= on a sealed buffer, =org-glance-material:decrypt=,
+    or =:open ... :decrypt t=) and hardens the buffer BEFORE any plaintext
+    lands -- including the unwrap path (=org-glance-material:crypt-unwrap=
+    wires first).  =C-c #= on a decrypted buffer seals it back
+    (=org-glance-material:seal=), which refuses while edits are unsaved so
+    ciphertext never hides them (invariant 11).  Decrypted buffers are
+    hardened (no auto-save/backup/lockfiles),
     sealed by =before-save-hook=, unsealed after; =#+begin_crypt= markers are the
     persistent secrecy annotation, and the legacy upgrade cannot re-wrap
     plaintext (aes-header guard in =org-glance-headline--crypt-upgrade-legacy=).

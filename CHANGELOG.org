@@ -127,6 +127,11 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- Material =C-c #= is the only crypt key, dispatching on context: region ->
+  wrap it; sealed buffer -> unseal; point inside a plaintext block -> unwrap
+  it; decrypted buffer outside every block -> seal back, forgetting the
+  password (refused with unsaved edits); plaintext headline -> encrypt the
+  whole body.
 - The content hash ignores the =LOGBOOK= drawer, so clocking in and out no
   longer invalidates the property index or any hash-guarded projection.
 - Table =g= now resets the view to the filter it was opened with: the =/=
@@ -212,6 +217,9 @@ Notable user-facing changes.  Versions date-based
   reopening switches to the live session.  Moved to =org-glance-llm.el=.
 
 ** Removed
+- Material =C-c u= (unseal) and =C-u C-c #= (unwrap the block at point) —
+  both fold into a context-aware =C-c #=; =org-glance-material:decrypt= and
+  =:crypt-unwrap= stay available via =M-x=.
 - =C-u C-c @= (back-references table) — =C-c @= now lists both directions.
 - =make fat= single-file build (=build/build-fat.el=, =dist/=) — the
   =rails-to-cosmos= ELPA archive distributes the package properly; from-source
