@@ -42,6 +42,7 @@
   (load "test/test-helpers.el")
   (load "test/test-headline.el")
   (load "test/test-graph.el")
+  (load "test/test-external.el")
   (load "test/test-filter.el")
   (load "test/test-segments.el")
   (load "test/test-merge.el")

@@ -920,6 +920,142 @@ Return the number of headlines re-indexed."
     (when reporter (progress-reporter-done reporter))
     n))
 
+;;; External writers: `meta/EXTERNAL.jsonl'
+;;
+;; A CROSS-REPO CONTRACT with `glance' (the Haskell daemon serving the store
+;; over HTTP; `Data.Org.External' is its half).  A blob is canonical content and
+;; this WAL is Emacs's projection of it, so an outside writer that edits
+;; `data/<2>/<rest>/data.org' leaves the WAL one record behind -- a drift
+;; glance's own scan reports.  `EXTERNAL.jsonl' is how such a writer says which
+;; entries it moved, and `refresh-external' is how those entries come back in.
+;;
+;; THE FORMAT, frozen.  One JSON object per line, newline-terminated, exactly
+;; two fields in this order:
+;;
+;;     {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z"}
+;;
+;; `id' is the ORG_GLANCE_ID of the written blob's FIRST headline -- the entry
+;; the blob is keyed by, so a line names the record a refresh replaces.  `at' is
+;; the writer's clock in UTC at second resolution and is a note for a human; the
+;; refresh reads `id' and nothing else, and tolerates a line it cannot parse.
+;;
+;; WHO DOES WHAT.  The daemon only ever APPENDS (`O_APPEND', one `write' per
+;; blob write, so lines land whole and interleave safely), creates the file and
+;; the directory where there are none, and touches no other file under `meta'.
+;; Emacs is the only side that removes lines, and only through this command.
+;;
+;; THE CRASH RULE.  Every record is appended to the WAL BEFORE the notification
+;; file is shortened, so a crash between the two costs a repeated refresh and
+;; nothing else: re-deriving a record from a blob that has not moved appends a
+;; record equal to the one already there, and the latest-per-id fold cannot tell
+;; the difference.  Idempotent by construction, which is what lets the two steps
+;; be unsynchronised.  The opposite order would lose an edit outright.
+
+(defconst org-glance-graph--external-name "EXTERNAL.jsonl"
+  "Basename of the file an external writer leaves its moved ids in.
+Under `meta/', beside the WAL it is a notification about; see the commentary
+above for the format and for who writes it.")
+
+(cl-defun org-glance-graph:external-path (graph)
+  "Path of GRAPH's external-write notification file (may not exist)."
+  (cl-check-type graph org-glance-graph)
+  (org-glance-graph--path
+   graph :external
+   (lambda () (f-join (org-glance-graph:meta-path graph)
+                 org-glance-graph--external-name))))
+
+(cl-defun org-glance-graph--read-external (graph)
+  "Read GRAPH's notification file as a cons of (TEXT . IDS).
+TEXT is what was read, so `--truncate-external' can drop exactly that much and
+keep whatever arrived while this ran; IDS are the distinct ids it names, in
+file order.  A line that does not parse is skipped rather than signalled --
+this file is a hint about work to redo, so the worst a bad line can cost is
+one entry left drifting until its next edit."
+  (let ((path (org-glance-graph:external-path graph))
+        (ids nil))
+    (if (not (f-exists? path))
+        (cons "" nil)
+      (let ((text (f-read-text path 'utf-8)))
+        (dolist (line (split-string text "\n" t))
+          (condition-case nil
+              (when-let ((id (plist-get (json-parse-string line :object-type 'plist) :id)))
+                (cl-pushnew id ids :test #'equal))
+            (json-error nil)))
+        (cons text (nreverse ids))))))
+
+(cl-defun org-glance-graph--truncate-external (graph consumed)
+  "Drop the first CONSUMED characters of GRAPH's notification file.
+CONSUMED is the text `--read-external' folded.  The file is append-only from
+the writer's side, so anything past that prefix arrived while this refresh was
+running and is kept for the next one; an unconditional empty write would drop
+it.  Written IN PLACE rather than through `--atomic-write': the writer holds an
+`O_APPEND' descriptor on this inode, and a rename would send its next line to
+an unlinked file."
+  (let ((path (org-glance-graph:external-path graph)))
+    (when (f-exists? path)
+      (let ((text (f-read-text path 'utf-8)))
+        (f-write-text (if (<= consumed (length text)) (substring text consumed) "")
+                      'utf-8 path)))))
+
+;; `org-glance-tag-config' requires this module, so the per-tag todo cycle is
+;; reached by name rather than by a `require' this file cannot make.  The guard
+;; is what a graph opened without the view layer needs; a real session has it.
+(declare-function org-glance-tag-config:cycle-for-filter "org-glance-tag-config")
+(declare-function org-glance-tag-config:cycle->keywords-or "org-glance-tag-config")
+
+(cl-defun org-glance-graph--reparse-blob (graph meta contents)
+  "Parse CONTENTS as META's headline in GRAPH, with its tag's todo cycle in scope.
+`org-glance-material:sync' binds that cycle GLOBALLY around the same parse and
+for the same reason: a state like READING is not in `org-todo-keywords', so
+without it the keyword folds into the title and the record would be re-derived
+wrong."
+  (let ((org-todo-keywords
+         (if (fboundp 'org-glance-tag-config:cycle-for-filter)
+             (org-glance-tag-config:cycle->keywords-or
+              (org-glance-tag-config:cycle-for-filter
+               graph (list :tags (append (org-glance-headline-metadata:tags meta) nil)))
+              org-todo-keywords)
+           org-todo-keywords)))
+    (org-glance-headline--from-string contents)))
+
+(cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init)))
+  "Fold the entries an external writer moved back into GRAPH's metadata.
+Interactive: acts on the session's graph.
+
+For each id `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now on
+disk and append it -- the same re-derivation `org-glance-graph:reindex' does,
+and what `org-glance-material:sync' does after a save here.  Blobs are READ and
+never rewritten: the content is already canonical, so only records append.  An
+id the store does not know, one that has been deleted, and one with no stored
+blob are each skipped with a message and cost the file its line anyway -- there
+is no record for a refresh to replace.
+
+The whole batch is ONE append, then the file is shortened; see the crash rule
+in the commentary above.  Return the number of entries refreshed."
+  (interactive)
+  (pcase-let* ((`(,text . ,ids) (org-glance-graph--read-external graph))
+               (specs nil)
+               (skipped 0))
+    (dolist (id ids)
+      (let* ((meta (org-glance-graph:live-meta graph id))
+             (contents (and meta (org-glance-graph:get-content graph id))))
+        (if contents
+            (push (org-glance-headline:metadata*
+                   (org-glance-graph--reparse-blob graph meta contents))
+                  specs)
+          (cl-incf skipped)
+          (message "org-glance: refresh-external skips %s (%s)" id
+                   (if meta "no stored blob" "unknown or deleted")))))
+    (when specs
+      (org-glance-graph:insert graph (nreverse specs)))
+    (when ids
+      (org-glance-graph--truncate-external graph (length text)))
+    (let ((n (- (length ids) skipped)))
+      (when (called-interactively-p 'any)
+        (message "org-glance: refreshed %d external edit(s)%s"
+                 n (if (> skipped 0) (format ", skipped %d" skipped) "")))
+      n)))
+
 ;;; Store bootstrap / recovery / compaction
 
 (cl-defun org-glance-graph--write-if-absent (path content)

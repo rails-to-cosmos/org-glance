@@ -197,14 +197,18 @@ configs -- runs through this one comparison."
 
 (cl-defun org-glance-overview:fresh? (graph file)
   "Non-nil if FILE exists and is newer than every source it is rendered from.
-The sources: GRAPH's `headlines.jsonl' (content) and the per-tag config files
-(the `#+TODO:' header + per-tag done-set render depends on), so editing a tag's
-cycle invalidates existing overview caches like a content change."
+The sources: GRAPH's `headlines.jsonl' (content), the per-tag config files (the
+`#+TODO:' header + per-tag done-set render depends on), so editing a tag's cycle
+invalidates existing overview caches like a content change, and
+`EXTERNAL.jsonl', so an edit made outside Emacs invalidates them as soon as it
+lands rather than when `org-glance-graph:refresh-external' folds it in."
   (cl-check-type graph org-glance-graph)
   (when-let ((mtime (org-glance--file-mtime file)))
     (cl-every (lambda (src) (org-glance-overview--fresher-than? mtime src))
               (list (org-glance--file-mtime
                      (org-glance-graph:headline-meta-path graph))
+                    (org-glance--file-mtime
+                     (org-glance-graph:external-path graph))
                     (org-glance-tag-config:source-mtime graph)))))
 
 (cl-defun org-glance-overview--header-current? (file)
