@@ -37,7 +37,10 @@
   ;; which also gives the caller the fresh list it promises.
   ;; Valid while the store SNAPSHOT (`--store-snapshot') is unchanged; cleared
   ;; in-process by every mutation (`--invalidate-cache').  See `--ensure-cache'.
-  (-meta-cache nil))
+  (-meta-cache nil)
+  ;; `float-time' of the last `meta/EXTERNAL.jsonl' stat, throttling the
+  ;; fold-before-read (`--fold-external-maybe').  0 = never looked.
+  (-external-checked 0 :type number))
 
 (defcustom org-glance-graph-segment-max-bytes (* 256 1024)
   "Soft maximum size, in bytes, of the open metadata segment before it is
@@ -527,7 +530,12 @@ which LIVE no longer records.  Any other doubt takes the same fallback."
 The cache is a plist (:snapshot S :by-id HASH :live LIVE).  The latest record
 per id (tombstones included, in insertion order) feeds both BY-ID (id -> record,
 backing the O(1) `:get-headline') and LIVE (the deserialized non-tombstoned
-metadata in the same order, exactly what `:headlines' returns)."
+metadata in the same order, exactly what `:headlines' returns).
+
+Pending external writes are folded in FIRST (`--fold-external-maybe'), so every
+reader sees them without asking; an external write moves a blob, never the WAL,
+and would otherwise be invisible to the snapshot below."
+  (org-glance-graph--fold-external-maybe graph)
   (let ((snap (org-glance-graph--store-snapshot graph))
         (cache (org-glance-graph:-meta-cache graph)))
     (unless (and cache (equal (plist-get cache :snapshot) snap))
@@ -923,33 +931,27 @@ Return the number of headlines re-indexed."
 ;;; External writers: `meta/EXTERNAL.jsonl'
 ;;
 ;; A CROSS-REPO CONTRACT with `glance' (the Haskell daemon serving the store
-;; over HTTP; `Data.Org.External' is its half).  A blob is canonical content and
-;; this WAL is Emacs's projection of it, so an outside writer that edits
-;; `data/<2>/<rest>/data.org' leaves the WAL one record behind -- a drift
-;; glance's own scan reports.  `EXTERNAL.jsonl' is how such a writer says which
-;; entries it moved, and `refresh-external' is how those entries come back in.
+;; over HTTP; `Data.Org.External' is its half).  The blob is canonical and this
+;; WAL a projection of it, so a writer editing `data/<2>/<rest>/data.org' leaves
+;; the WAL a record behind -- a drift glance's own scan reports.  It names the
+;; entries it moved here, and reads fold those entries back on their own
+;; (`--fold-external-maybe'); `refresh-external' is the same fold on demand.
 ;;
-;; THE FORMAT, frozen.  One JSON object per line, newline-terminated, exactly
-;; two fields in this order:
+;; FORMAT, frozen -- one newline-terminated JSON object per line, exactly two
+;; fields in this order: {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z"}.
+;; `id' is the ORG_GLANCE_ID of the blob's FIRST headline, the entry it is keyed
+;; by, naming the record a refresh replaces; `at' is the writer's UTC clock at
+;; second resolution, for humans.  The refresh reads `id' alone and skips a line
+;; it cannot parse.
 ;;
-;;     {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z"}
-;;
-;; `id' is the ORG_GLANCE_ID of the written blob's FIRST headline -- the entry
-;; the blob is keyed by, so a line names the record a refresh replaces.  `at' is
-;; the writer's clock in UTC at second resolution and is a note for a human; the
-;; refresh reads `id' and nothing else, and tolerates a line it cannot parse.
-;;
-;; WHO DOES WHAT.  The daemon only ever APPENDS (`O_APPEND', one `write' per
-;; blob write, so lines land whole and interleave safely), creates the file and
-;; the directory where there are none, and touches no other file under `meta'.
-;; Emacs is the only side that removes lines, and only through this command.
-;;
-;; THE CRASH RULE.  Every record is appended to the WAL BEFORE the notification
-;; file is shortened, so a crash between the two costs a repeated refresh and
-;; nothing else: re-deriving a record from a blob that has not moved appends a
-;; record equal to the one already there, and the latest-per-id fold cannot tell
-;; the difference.  Idempotent by construction, which is what lets the two steps
-;; be unsynchronised.  The opposite order would lose an edit outright.
+;; The daemon only APPENDS (`O_APPEND', one `write' per blob write: lines land
+;; whole and interleave safely), creates the file and its directory where absent,
+;; and touches nothing else under `meta'.  Emacs alone removes lines, only
+;; through the fold, and appends the WAL record BEFORE shortening the file:
+;; a crash between them costs one repeated refresh, since re-deriving from an
+;; unmoved blob appends an equal record the latest-per-id fold cannot tell apart.
+;; That idempotence is why the two steps need no synchronisation; the opposite
+;; order would lose an edit outright.
 
 (defconst org-glance-graph--external-name "EXTERNAL.jsonl"
   "Basename of the file an external writer leaves its moved ids in.
@@ -1018,9 +1020,47 @@ wrong."
            org-todo-keywords)))
     (org-glance-headline--from-string contents)))
 
+(defcustom org-glance-graph-external-poll-seconds 1.0
+  "Seconds between two `meta/EXTERNAL.jsonl' stats on the read path.
+Reads fold pending external writes in themselves; this bounds what that costs
+when reads come in bursts -- one `file-attributes' call per graph per interval,
+whatever the read volume.  0 checks on every read."
+  :group 'org-glance
+  :type 'number)
+
+(defvar org-glance-graph--folding-external nil
+  "Non-nil while a fold runs, so the reads inside it do not re-enter it.")
+
+(cl-defun org-glance-graph--fold-external-maybe (graph)
+  "Fold GRAPH's pending external writes, at most once per
+`org-glance-graph-external-poll-seconds'.  Called by every read
+\(`org-glance-graph--ensure-cache'), which is what makes an outside edit
+visible without asking for it.
+
+A NON-EMPTY notification file is the pending work -- Emacs truncates it once
+folded -- so the common case costs one stat.  A failed fold leaves the file
+alone, the read serves what the WAL has and the next one tries again: a plain
+`condition-case', not `with-demoted-errors', because a read must survive this
+even under `debug-on-error' (invariant 9, the `fill-frame' precedent)."
+  (unless org-glance-graph--folding-external
+    (let ((now (float-time)))
+      (when (>= (- now (org-glance-graph:-external-checked graph))
+                org-glance-graph-external-poll-seconds)
+        ;; stamped BEFORE the fold: the reads it makes must not re-stat either
+        (setf (org-glance-graph:-external-checked graph) now)
+        (when (> (or (file-attribute-size
+                      (file-attributes (org-glance-graph:external-path graph)))
+                     0)
+                 0)
+          (let ((org-glance-graph--folding-external t))
+            (condition-case err
+                (org-glance-graph:refresh-external graph)
+              (error (message "org-glance: refresh-external skipped: %S" err)))))))))
+
 (cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init)))
   "Fold the entries an external writer moved back into GRAPH's metadata.
-Interactive: acts on the session's graph.
+Interactive: acts on the session's graph.  Reads run this fold themselves
+(`--fold-external-maybe'); this is the unthrottled, on-demand form.
 
 For each id `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now on
 disk and append it -- the same re-derivation `org-glance-graph:reindex' does,

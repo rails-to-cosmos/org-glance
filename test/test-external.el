@@ -143,5 +143,60 @@ edit invalidates a rendered overview the way a WAL append does."
       (org-glance-test:external-write graph "id1")
       (should-not (org-glance-overview:fresh? graph file)))))
 
+(ert-deftest org-glance-test:external-read-folds-without-asking ()
+  "A plain READ folds pending external writes in: nobody calls the command, and
+`get-headline' already answers with the edit; the file is cleared as usual."
+  (let ((org-glance-graph-external-poll-seconds 0))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+      (org-glance-test:external-write graph "id1")
+      (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+      (should (string= "" (org-glance-test:external-text graph))))))
+
+(ert-deftest org-glance-test:external-read-fold-is-throttled ()
+  "The read-path stat is throttled by `org-glance-graph-external-poll-seconds':
+inside the interval a fresh notification waits, and the command folds it on
+demand regardless."
+  (org-glance-test:with-graph graph
+    (let ((org-glance-graph-external-poll-seconds 0))
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:field graph "id1" state))          ; stamps the check
+    (let ((org-glance-graph-external-poll-seconds 3600))
+      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+      (org-glance-test:external-write graph "id1")
+      (should (string= "TODO" (org-glance-test:field graph "id1" state)))
+      (should (= 1 (org-glance-graph:refresh-external graph)))   ; never throttled
+      (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
+
+(ert-deftest org-glance-test:external-read-fold-does-not-reenter ()
+  "The fold's OWN reads do not fold again: one refresh, not a recursion."
+  (let ((org-glance-graph-external-poll-seconds 0))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+      (org-glance-test:external-write graph "id1")
+      (let ((calls 0)
+            (real (symbol-function 'org-glance-graph:refresh-external)))
+        (cl-letf (((symbol-function 'org-glance-graph:refresh-external)
+                   (lambda (&rest args) (cl-incf calls) (apply real args))))
+          (should (string= "DONE" (org-glance-test:field graph "id1" state))))
+        (should (= 1 calls))))))
+
+(ert-deftest org-glance-test:external-read-fold-survives-a-failure ()
+  "A fold that signals never breaks the read -- even under `debug-on-error'.
+The read serves what the WAL has and the line stays for the next attempt."
+  (let ((org-glance-graph-external-poll-seconds 0)
+        (debug-on-error t))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+      (org-glance-test:external-write graph "id1")
+      (cl-letf (((symbol-function 'org-glance-graph--read-external)
+                 (lambda (&rest _) (error "boom"))))
+        (should (string= "TODO" (org-glance-test:field graph "id1" state))))
+      (should (string-match-p "id1" (org-glance-test:external-text graph)))
+      (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
+
 (provide 'test-external)
 ;;; test-external.el ends here
