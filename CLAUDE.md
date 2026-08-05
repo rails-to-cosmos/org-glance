@@ -149,6 +149,10 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     (table requires material); the relation pivot requires it at call time.
 32. Torn-line tolerance is scoped to the OPEN segment's FINAL line; a JSON
     error anywhere else re-signals rather than masking store corruption.
+33. External writers (the `glance` daemon) append moved ids to
+    `meta/EXTERNAL.jsonl`; every READ folds them in (`--fold-external-maybe`
+    in `--ensure-cache`) — throttled, non-reentrant, `condition-case`'d — and
+    Emacs alone truncates the file, always AFTER the WAL record is appended.
 
 ## Fix — and prevent — the whole class
 

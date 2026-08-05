@@ -6,6 +6,12 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- External writers: the =glance= daemon names the blobs it moved in
+  =meta/EXTERNAL.jsonl=, and every read folds those entries back into the WAL
+  on its own -- open views repaint at their next display boundary.
+  =M-x org-glance-graph:refresh-external= forces the same fold;
+  =org-glance-graph-external-poll-seconds= (default 1.0) bounds the read-path
+  check.
 - Transient: =U= disables a plugin, and the *System* heading lists the enabled
   plugins, marking any whose library failed to load.  =I= reports when every
   known plugin is already enabled instead of prompting with nothing to offer.

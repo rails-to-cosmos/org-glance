@@ -1029,7 +1029,9 @@ whatever the read volume.  0 checks on every read."
   :type 'number)
 
 (defvar org-glance-graph--folding-external nil
-  "Non-nil while a fold runs, so the reads inside it do not re-enter it.")
+  "Non-nil while a fold runs, so the reads it makes do not start another.
+Bound by `org-glance-graph:refresh-external' itself, so the guard holds for the
+command as much as for the automatic fold.")
 
 (cl-defun org-glance-graph--fold-external-maybe (graph)
   "Fold GRAPH's pending external writes, at most once per
@@ -1052,10 +1054,9 @@ even under `debug-on-error' (invariant 9, the `fill-frame' precedent)."
                       (file-attributes (org-glance-graph:external-path graph)))
                      0)
                  0)
-          (let ((org-glance-graph--folding-external t))
-            (condition-case err
-                (org-glance-graph:refresh-external graph)
-              (error (message "org-glance: refresh-external skipped: %S" err)))))))))
+          (condition-case err
+              (org-glance-graph:refresh-external graph)
+            (error (message "org-glance: refresh-external skipped: %S" err))))))))
 
 (cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init)))
   "Fold the entries an external writer moved back into GRAPH's metadata.
@@ -1073,7 +1074,8 @@ is no record for a refresh to replace.
 The whole batch is ONE append, then the file is shortened; see the crash rule
 in the commentary above.  Return the number of entries refreshed."
   (interactive)
-  (pcase-let* ((`(,text . ,ids) (org-glance-graph--read-external graph))
+  (pcase-let* ((org-glance-graph--folding-external t)   ; its own reads: no nested fold
+               (`(,text . ,ids) (org-glance-graph--read-external graph))
                (specs nil)
                (skipped 0))
     (dolist (id ids)

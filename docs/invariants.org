@@ -328,3 +328,18 @@ verified against its evidence site before being added.
     =org-glance-graph--scan-file= swallows a =json-error= only for the last
     line of the open segment and re-signals everywhere else.  Violation:
     tolerating a torn line mid-file silently masks real store corruption.
+
+33. *An external writer announces moved blobs; READS fold them in.*  The
+    =glance= daemon appends =\{"id":…,"at":…\}= lines to =meta/EXTERNAL.jsonl=
+    (=O_APPEND=, whole lines) and touches nothing else under =meta=; every
+    read folds the pending ones through =org-glance-graph--fold-external-maybe=
+    (=--ensure-cache=), so an outside edit needs no command.  The fold is
+    throttled (=org-glance-graph-external-poll-seconds=, one stat per graph
+    per interval), non-reentrant (=--folding-external=, bound by
+    =refresh-external= itself so its own reads cannot nest) and
+    =condition-case='d, so it can neither loop nor break a read under
+    =debug-on-error=.  Emacs alone shortens the file, and only AFTER the WAL
+    record is appended (the crash rule: a repeat costs an equal record the
+    latest-per-id fold cannot distinguish).  Violation: reversing the two
+    steps loses an edit outright; folding inside a fold recurses; an
+    unguarded signal takes a plain read down with it.
