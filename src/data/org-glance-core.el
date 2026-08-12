@@ -14,7 +14,7 @@
 (require 'cl-lib)
 (require 'org)                          ; `org-directory'
 
-(defgroup org-glance nil "Org-mode mindmap explorer."
+(defgroup org-glance nil "Projections over Org-mode headlines."
   :tag "Org Glance"
   :group 'org)
 

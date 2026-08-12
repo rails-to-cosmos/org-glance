@@ -69,7 +69,7 @@ storage format.
 
 ** =:purpose= — knowledge or machinery
 
-org-glance is a knowledge graph, so =knowledge= is the default and the only
+org-glance stores knowledge, so =knowledge= is the default and the only
 other value marks the exception: headlines that exist to make the system work
 rather than to record something the user knows.  An =llm-agent= headline is
 configuration wearing a headline's clothes.

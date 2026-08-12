@@ -5,9 +5,11 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-A personal knowledge graph for [[https://orgmode.org/][org-mode]].  Headlines become nodes in a
-durable plain-text store; typed references between them become edges;
-fast and flexible views show it all without opening a single file.
+Projections over your [[https://orgmode.org/][org-mode]] headlines.  The org files are a durable,
+addressable database; everything else is a projection.  Every entry gets an id and its own
+file; tags are collections carrying their own todo cycle and capture template;
+the table, the overview and the relations index are derived views — fast,
+rebuildable, and browsable without opening a single file.
 
 * How it works
 
@@ -28,8 +30,9 @@ If you know org-mode, you know almost everything already:
    You never edit a view: you open the headline behind it, edit ordinary org,
    save; views refresh themselves.
 
-4. *Links are edges.*  A link from one headline to another is indexed as a
-   typed relation, so the graph can answer "what references this?".
+4. *Links are references.*  A link from one headline to another is indexed as
+   a typed relation, so the relations index answers "what references this?" —
+   one more projection, rebuilt with the rest.
 
 * Usage
 

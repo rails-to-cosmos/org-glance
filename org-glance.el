@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t -*-
 
-;;; org-glance.el --- Org-mode mindmap.
+;;; org-glance.el --- Org-mode projections
 
 ;; Copyright (C) 2018-2026 Dmitry Akatov
 
@@ -8,7 +8,7 @@
 ;; Created: 29 September, 2018
 ;; Version: 1.35.0.0.20260812.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
-;; Keywords: org-mode, graph, mindmap
+;; Keywords: org-mode, outlines, data, database, store
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
 ;; License: GPL-3+
@@ -29,8 +29,18 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; This package allows you to manage bookmarks and travel around the
-;; digital world with an org-mode power behind your shoulders.
+;; Projections over org-mode headlines.  The org files are a durable,
+;; addressable database; everything else is a projection.
+;;
+;; Every captured headline gets an `:ORG_GLANCE_ID:' and its own org file
+;; under `org-glance-directory'.  Tags are collections, each free to carry
+;; its own todo cycle and capture template.  Tables, overviews, the property
+;; index and the write-ahead log are derived: delete one and the org files
+;; rebuild it.
+;;
+;; Edits go back into those files as ordinary org.  Another program may edit
+;; them too: the `glance' browser front end writes the same bytes and names
+;; each write in `meta/EXTERNAL.jsonl', which the next read folds back in.
 
 ;;; Code:
 

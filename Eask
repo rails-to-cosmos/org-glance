@@ -1,7 +1,7 @@
-(package "org-glance" "1.35.0.0.20260812.0" "Org-mode mindmap.")
+(package "org-glance" "1.35.0.0.20260812.0" "Org-mode projections")
 
 (website-url "https://github.com/rails-to-cosmos/org-glance")
-(keywords "org-mode" "graph" "mindmap")
+(keywords "org-mode" "outlines" "data" "database" "store")
 
 (package-file "org-glance.el")
 (files "*.el" "src/data/*.el" "src/view/*.el")
