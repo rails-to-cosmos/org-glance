@@ -144,15 +144,43 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     it is bookkeeping (the `archived?` flag), never a collection tag.
 30. `org-glance-graph:get-headline` is tri-state — nil (unknown) /
     `tombstone` / metadata. Read-only callers collapse it via
-    `org-glance-graph:live-meta`; `graph:delete` needs the tombstone case.
+    `org-glance-graph:live-meta`; `graph:delete` and the external fold need
+    the tombstone case and share one guard, `graph--tombstone-spec`.
 31. `org-glance-material` never top-level `require`s `org-glance-table`
     (table requires material); the relation pivot requires it at call time.
 32. Torn-line tolerance is scoped to the OPEN segment's FINAL line; a JSON
     error anywhere else re-signals rather than masking store corruption.
 33. External writers (the `glance` daemon) append moved ids to
-    `meta/EXTERNAL.jsonl`; every READ folds them in (`--fold-external-maybe`
-    in `--ensure-cache`) — throttled, non-reentrant, `condition-case`'d — and
-    Emacs alone truncates the file, always AFTER the WAL record is appended.
+    `meta/EXTERNAL.jsonl`, a delete wearing the third field `"tombstone":true`
+    and nothing else wearing it; the fold keeps one entry per id at its first
+    sighting with its LAST sighting's kind, tests it with `(eq t …)`, and
+    treats an unknown key as inert (the compatibility claim, both ways). Every
+    READ folds pending entries in (`--fold-external-maybe` in
+    `--ensure-cache`) — throttled, non-reentrant, `condition-case`'d — as ONE
+    `graph:insert` for records and tombstones alike, and Emacs alone truncates
+    the file, always AFTER that append.
+
+## Known hazards
+
+Costs the code ships WITH — lettered, because an invariant is a rule a change
+must preserve and these are what today's design gives up. Each was reproduced by
+probe and pinned by a test in `test/test-external.el`, so closing one turns its
+case red. Full statements, with the evidence:
+[[file:docs/invariants.org][docs/invariants.org]].
+
+H1. The external fold's truncate race eats a tombstone for good. Two Emacsen
+    folding one store take no lock (inv 7), so the second `--truncate-external`
+    drops characters counted against a file the first already emptied. A lost
+    WRITE note self-heals — the blob is still the truth and the id's next edit
+    says so again; a lost TOMBSTONE never does, and the record stays live over
+    bytes in the daemon's trash. Closing it wants a lock across Emacsen, which
+    reopens inv 7.
+H2. A folded delete is undone by the id's open material buffer. The tombstone
+    arm touches no buffer, so the next save's `material:sync` appends a LIVE
+    record and writes the blob back; the occurrence history stays behind. Open
+    because a fold runs in the BACKGROUND, and `material:delete`'s
+    consent-when-dirty guard (inv 11) exists because discarding a dirty buffer
+    needs a human.
 
 ## Fix — and prevent — the whole class
 

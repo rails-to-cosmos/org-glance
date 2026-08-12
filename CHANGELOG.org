@@ -12,6 +12,9 @@ Notable user-facing changes.  Versions date-based
   =M-x org-glance-graph:refresh-external= forces the same fold;
   =org-glance-graph-external-poll-seconds= (default 1.0) bounds the read-path
   check.
+- An =EXTERNAL.jsonl= line carrying ="tombstone":true= folds as a DELETE: the
+  fold appends the tombstone =org-glance-delete= would, under the same guard.
+  A write and a delete for one id in one window land as the delete.
 - Transient: =U= disables a plugin, and the *System* heading lists the enabled
   plugins, marking any whose library failed to load.  =I= reports when every
   known plugin is already enabled instead of prompting with nothing to offer.

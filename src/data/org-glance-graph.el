@@ -800,13 +800,22 @@ unknown or tombstoned ids."
     (-some-> (org-glance-graph:get-content graph id)
       (org-glance-headline--from-string))))
 
+(cl-defun org-glance-graph--tombstone-spec (graph id)
+  "The record deleting ID in GRAPH, or nil where GRAPH owes none.
+An id GRAPH never knew and one already tombstoned each owe nothing -- the
+tri-state read of invariant 30.  Two callers want the guard and only one wants
+the append: `org-glance-graph:delete' inserts this spec on its own, while
+`org-glance-graph:refresh-external' carries it into the batch its whole fold
+appends at once."
+  (unless (memq (org-glance-graph:get-headline graph id) '(nil tombstone))
+    (list :id id :tombstone t)))
+
 (cl-defun org-glance-graph:delete (graph id)
   "Append a tombstone for ID unless it is already absent or deleted."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (let ((meta (org-glance-graph:get-headline graph id)))
-    (unless (memq meta '(nil tombstone))
-      (org-glance-graph:insert graph (list (list :id id :tombstone t))))))
+  (when-let ((spec (org-glance-graph--tombstone-spec graph id)))
+    (org-glance-graph:insert graph (list spec))))
 
 (cl-defun org-glance-graph:headlines (graph)
   "Return all live (non-tombstoned) headline metadata in GRAPH.
@@ -937,26 +946,78 @@ Return the number of headlines re-indexed."
 ;; entries it moved here, and reads fold those entries back on their own
 ;; (`--fold-external-maybe'); `refresh-external' is the same fold on demand.
 ;;
-;; FORMAT, frozen -- one newline-terminated JSON object per line, exactly two
-;; fields in this order: {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z"}.
+;; FORMAT, frozen -- one newline-terminated JSON object per line.  A write names
+;; two fields in this order, and a DELETE the same two plus a third:
+;;
+;;     {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z"}
+;;     {"id":"e3b0c442-...","at":"2026-08-03T04:21:07Z","tombstone":true}
+;;
 ;; `id' is the ORG_GLANCE_ID of the blob's FIRST headline, the entry it is keyed
 ;; by, naming the record a refresh replaces; `at' is the writer's UTC clock at
-;; second resolution, for humans.  The refresh reads `id' alone and skips a line
-;; it cannot parse.
+;; second resolution, for humans.  `tombstone' appears ONLY on a delete and only
+;; as JSON true -- its absence IS the write, so each fact has one spelling.  The
+;; kind test is `(eq t ...)' rather than plist truthiness, since JSON false and
+;; null reach `json-parse-string' as the symbols `:false' and `:null', both
+;; non-nil; it mirrors glance's own `Data.Org.Index.flagOf'.  The word is
+;; org-glance's, spelled the way a WAL delete record spells it (`:tombstone t').
+;; The refresh reads `id' and `tombstone' and skips a line it cannot parse.
+;;
+;; COMPATIBILITY runs BOTH WAYS, which is why the delete wears a third field
+;; rather than a new `op' vocabulary.  A reader takes the keys it knows and
+;; carries the rest untouched, so a NEW glance against an OLD org-glance
+;; degrades to exactly today's behaviour: the id is read, the blob is already in
+;; the daemon's trash, `get-content' answers nil and the entry is skipped as
+;; "no stored blob".  An OLD glance against a NEW org-glance writes no third
+;; field, so every line it leaves reads as a write.
 ;;
 ;; The daemon only APPENDS (`O_APPEND', one `write' per blob write: lines land
 ;; whole and interleave safely), creates the file and its directory where absent,
 ;; and touches nothing else under `meta'.  Emacs alone removes lines, only
 ;; through the fold, and appends the WAL record BEFORE shortening the file:
 ;; a crash between them costs one repeated refresh, since re-deriving from an
-;; unmoved blob appends an equal record the latest-per-id fold cannot tell apart.
+;; unmoved blob appends an equal record the latest-per-id fold cannot tell apart,
+;; and a repeated delete finds the id already tombstoned and appends nothing.
 ;; That idempotence is why the two steps need no synchronisation; the opposite
 ;; order would lose an edit outright.
+;;
+;; TWO HAZARDS ARE PINNED HERE RATHER THAN FIXED (docs/invariants.org, H1 and
+;; H2; `test/test-external.el' pins today's behaviour under "Known hazards").
+;;
+;; H1, THE TRUNCATE RACE: `--truncate-external' drops `(length text)' characters
+;; counted against the file it READ, and invariant 7 gives two Emacsen folding
+;; one store no lock -- so the second truncate eats the head of whatever landed
+;; between.  The race predates the tombstone; what the tombstone moved is the
+;; CONSEQUENCE.  A lost write note self-heals, the blob on disk still being the
+;; truth: the id's next edit appends another note.  A lost TOMBSTONE never does
+;; -- the blob is gone, no later edit will name that id again, and the record
+;; stays live forever pointing at nothing.  Measured: E2 reads 74 characters,
+;; E1 folds and empties, the writer appends the 91-character tombstone, E2
+;; truncates by 74 and leaves `tombstone":true}' -- which parses as nothing, so
+;; `(when entries ...)' never truncates again and the fragment is permanent.
+;; Closing it wants a lock across Emacsen, which is a change to the fold's
+;; DESIGN rather than to this line; invariant 7 is the standing decision it
+;; would have to reopen.
+;;
+;; H2, RESURRECTION THROUGH AN OPEN MATERIAL BUFFER: the tombstone arm inserts
+;; the spec and touches no buffer, so an id's open material buffer survives a
+;; folded delete and the next save's `org-glance-material:sync' appends a LIVE
+;; record over the tombstone -- writing the blob back with it, over org's own
+;; "Directory does not exist; create?" where the daemon took the directory too.
+;; What stays behind is the blob's occurrence history.
+;; `org-glance-material:delete' discards that buffer, asking consent when it is
+;; dirty (invariant 11), and THAT is why the fold does not: a fold runs in the
+;; BACKGROUND, and the consent guard exists because discarding a dirty buffer
+;; needs a human.  Silently discarding one during a background fold is worse
+;; than a resurrected record, which `M-x org-glance-delete' clears.  Closing
+;; it wants a fold that can ask, or one that discards only CLEAN buffers.  The
+;; resurrection is visible in one interleaving: a save landing before the fold
+;; reads leaves the tombstone standing over a blob back on disk, which glance's
+;; scan counts as an unindexed blob.
 
 (defconst org-glance-graph--external-name "EXTERNAL.jsonl"
-  "Basename of the file an external writer leaves its moved ids in.
+  "Basename of the file an external writer leaves its moved and deleted ids in.
 Under `meta/', beside the WAL it is a notification about; see the commentary
-above for the format and for who writes it.")
+above for the two line shapes and for who writes them.")
 
 (cl-defun org-glance-graph:external-path (graph)
   "Path of GRAPH's external-write notification file (may not exist)."
@@ -967,23 +1028,35 @@ above for the format and for who writes it.")
                  org-glance-graph--external-name))))
 
 (cl-defun org-glance-graph--read-external (graph)
-  "Read GRAPH's notification file as a cons of (TEXT . IDS).
+  "Read GRAPH's notification file as a cons of (TEXT . ENTRIES).
 TEXT is what was read, so `--truncate-external' can drop exactly that much and
-keep whatever arrived while this ran; IDS are the distinct ids it names, in
-file order.  A line that does not parse is skipped rather than signalled --
-this file is a hint about work to redo, so the worst a bad line can cost is
-one entry left drifting until its next edit."
+keep whatever arrived while this ran.  ENTRIES is one (ID . KIND) cons per
+distinct id, KIND being `edit' or `tombstone': each id sits where it was FIRST
+sighted and carries its LAST sighting's kind, the rule `--latest-records' folds
+the WAL by -- so a write followed by a delete inside one window folds as the
+delete, the drift the third field exists to close.  A line that does not
+parse is skipped rather than signalled -- this file is a hint about work to
+redo, so the worst a bad line can cost is one entry left drifting until its
+next edit."
   (let ((path (org-glance-graph:external-path graph))
-        (ids nil))
+        (entries nil))
     (if (not (f-exists? path))
         (cons "" nil)
       (let ((text (f-read-text path 'utf-8)))
         (dolist (line (split-string text "\n" t))
           (condition-case nil
-              (when-let ((id (plist-get (json-parse-string line :object-type 'plist) :id)))
-                (cl-pushnew id ids :test #'equal))
+              (let ((object (json-parse-string line :object-type 'plist)))
+                (when-let ((id (plist-get object :id)))
+                  ;; `(eq t ...)': JSON false and null read as :false and :null
+                  (let ((kind (if (eq t (plist-get object :tombstone))
+                                  'tombstone
+                                'edit))
+                        (seen (assoc id entries)))
+                    (if seen
+                        (setcdr seen kind)
+                      (push (cons id kind) entries)))))
             (json-error nil)))
-        (cons text (nreverse ids))))))
+        (cons text (nreverse entries))))))
 
 (cl-defun org-glance-graph--truncate-external (graph consumed)
   "Drop the first CONSUMED characters of GRAPH's notification file.
@@ -1063,39 +1136,48 @@ even under `debug-on-error' (invariant 9, the `fill-frame' precedent)."
 Interactive: acts on the session's graph.  Reads run this fold themselves
 (`--fold-external-maybe'); this is the unthrottled, on-demand form.
 
-For each id `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now on
-disk and append it -- the same re-derivation `org-glance-graph:reindex' does,
+For each WRITE `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now
+on disk and append it -- the same re-derivation `org-glance-graph:reindex' does,
 and what `org-glance-material:sync' does after a save here.  Blobs are READ and
-never rewritten: the content is already canonical, so only records append.  An
-id the store does not know, one that has been deleted, and one with no stored
-blob are each skipped with a message and cost the file its line anyway -- there
-is no record for a refresh to replace.
+never rewritten: the content is already canonical, so only records append.  For
+each DELETE, append the tombstone `org-glance-graph:delete' would, under that
+command's own guard.  An id the store does not know, one already deleted, and a
+write with no stored blob are each skipped with a message and cost the file its
+line anyway -- there is no record for a refresh to replace.
 
 The whole batch is ONE append, then the file is shortened; see the crash rule
 in the commentary above.  Return the number of entries refreshed."
   (interactive)
   (pcase-let* ((org-glance-graph--folding-external t)   ; its own reads: no nested fold
-               (`(,text . ,ids) (org-glance-graph--read-external graph))
+               (`(,text . ,entries) (org-glance-graph--read-external graph))
                (specs nil)
                (skipped 0))
-    (dolist (id ids)
-      (let* ((meta (org-glance-graph:live-meta graph id))
-             (contents (and meta (org-glance-graph:get-content graph id))))
-        (if contents
-            (push (org-glance-headline:metadata*
-                   (org-glance-graph--reparse-blob graph meta contents))
-                  specs)
+    (pcase-dolist (`(,id . ,kind) entries)
+      ;; Every guard reads the PRE-append store, sound because one id yields one
+      ;; entry: no id is both written and deleted within a batch.
+      (let (spec why)
+        (if (eq kind 'tombstone)
+            (setq spec (org-glance-graph--tombstone-spec graph id)
+                  why "unknown or deleted")
+          (let* ((meta (org-glance-graph:live-meta graph id))
+                 (contents (and meta (org-glance-graph:get-content graph id))))
+            (setq spec (and contents
+                            (org-glance-headline:metadata*
+                             (org-glance-graph--reparse-blob graph meta contents)))
+                  why (if meta "no stored blob" "unknown or deleted"))))
+        (if spec
+            (push spec specs)
           (cl-incf skipped)
-          (message "org-glance: refresh-external skips %s (%s)" id
-                   (if meta "no stored blob" "unknown or deleted")))))
+          (message "org-glance: refresh-external skips %s (%s)" id why))))
     (when specs
       (org-glance-graph:insert graph (nreverse specs)))
-    (when ids
+    (when entries
       (org-glance-graph--truncate-external graph (length text)))
-    (let ((n (- (length ids) skipped)))
+    (let ((n (- (length entries) skipped)))
       (when (called-interactively-p 'any)
-        (message "org-glance: refreshed %d external edit(s)%s"
-                 n (if (> skipped 0) (format ", skipped %d" skipped) "")))
+        (message "org-glance: refreshed %d external entr%s%s"
+                 n (if (= n 1) "y" "ies")
+                 (if (> skipped 0) (format ", skipped %d" skipped) "")))
       n)))
 
 ;;; Store bootstrap / recovery / compaction

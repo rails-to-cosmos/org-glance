@@ -219,11 +219,12 @@ canonical; every index is derived and rebuildable (=M-x org-glance-reindex=).
 Deletion (=D=, =M-x org-glance-delete=) writes a tombstone after a
 confirmation that names any headlines whose links would dangle.
 
-Because the org files are canonical, another program may edit one directly.
-It says so by appending the entry's id to =meta/EXTERNAL.jsonl= (the contract
-the =glance= daemon writes), and the next read folds that entry back into the
-log by itself -- open tables and overviews repaint when you next look at them.
-=M-x org-glance-graph:refresh-external= forces the fold now.
+Because the org files are canonical, another program may edit or remove one
+directly.  It says so by appending the entry's id to =meta/EXTERNAL.jsonl= (the
+contract the =glance= daemon writes), marking a removal ="tombstone":true=, and
+the next read folds that entry back into the log by itself -- an edit as a fresh
+record, a removal as a tombstone.  Open tables and overviews repaint when you
+next look at them; =M-x org-glance-graph:refresh-external= forces the fold now.
 
 * Install
 

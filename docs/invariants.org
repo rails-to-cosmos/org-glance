@@ -65,7 +65,7 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
    alone (=org-glance-graph--store-snapshot=); in-process mutations call
    =--invalidate-cache= explicitly.  Violation: same-second external compaction
-   serves deleted data as live.
+   serves deleted data as live.  The accepted cost is [[*H1 -- the external fold's truncate race eats a tombstone for good][H1]].
 
 8. *Git conflicts heal by union merge.*  Gated by
    =org-glance-conflict-resolution= (ask/union/nil); =.gitattributes= written
@@ -100,7 +100,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
     file-backed view is flagged stale, never reverted.  Deletion
     (=org-glance-material:delete=) names unsaved edits in its consent prompt
     and tombstones BEFORE discarding the buffer, so a failed append never
-    costs the only unsaved copy.
+    costs the only unsaved copy.  The external fold discards nothing, having
+    no human to ask; the accepted cost is
+    [[*H2 -- a folded delete is undone by the id's open material buffer][H2]].
 
 * Parsing and data hygiene
 
@@ -314,10 +316,13 @@ verified against its evidence site before being added.
 
 30. *=graph:get-headline= is tri-state: nil / =tombstone= / metadata.*
     Read-only callers collapse the first two through
-    =org-glance-graph:live-meta=; =org-glance-graph:delete= needs the
-    distinction (it guards on =(memq meta '(nil tombstone))=).  Violation:
-    collapsing tombstone to nil resurrects deleted ids in derived indexes and
-    appends duplicate tombstones.
+    =org-glance-graph:live-meta=.  Two callers need the distinction, and they
+    share one guard: =org-glance-graph--tombstone-spec= answers the record a
+    delete owes or nil, for =org-glance-graph:delete= (which appends it alone)
+    and for =org-glance-graph:refresh-external= (which carries it into the one
+    batch its whole fold appends).  Violation: collapsing tombstone to nil
+    resurrects deleted ids in derived indexes and appends duplicate tombstones;
+    spelling the guard twice lets the two drift.
 
 31. *=org-glance-material= must never top-level =require= =org-glance-table=.*
     The dependency runs table -> material; the relation pivot
@@ -329,17 +334,112 @@ verified against its evidence site before being added.
     line of the open segment and re-signals everywhere else.  Violation:
     tolerating a torn line mid-file silently masks real store corruption.
 
-33. *An external writer announces moved blobs; READS fold them in.*  The
-    =glance= daemon appends =\{"id":…,"at":…\}= lines to =meta/EXTERNAL.jsonl=
-    (=O_APPEND=, whole lines) and touches nothing else under =meta=; every
-    read folds the pending ones through =org-glance-graph--fold-external-maybe=
-    (=--ensure-cache=), so an outside edit needs no command.  The fold is
-    throttled (=org-glance-graph-external-poll-seconds=, one stat per graph
-    per interval), non-reentrant (=--folding-external=, bound by
+33. *An external writer announces moved and deleted blobs; READS fold them in.*
+    The =glance= daemon appends =\{"id":…,"at":…\}= lines to
+    =meta/EXTERNAL.jsonl= (=O_APPEND=, whole lines) and touches nothing else
+    under =meta=; a DELETE is those two fields plus ="tombstone":true=, the
+    only third field and the only value it takes, so a line's absence of it IS
+    the write.  =org-glance-graph--read-external= keeps ONE entry per id at its
+    first sighting carrying its LAST sighting's kind (=--latest-records='' own
+    rule), so a write followed by a delete in one window folds as the delete;
+    the kind test is =(eq t …)=, since =json-parse-string= maps JSON false and
+    null to the non-nil =:false= and =:null=.  An unknown key is inert both
+    ways: a new =glance= against an old org-glance degrades to a skipped
+    ="no stored blob"=, and an old =glance= writes no third field at all.
+    Every read folds the pending entries through
+    =org-glance-graph--fold-external-maybe= (=--ensure-cache=), so an outside
+    edit needs no command.  The fold is throttled
+    (=org-glance-graph-external-poll-seconds=, one stat per graph per
+    interval), non-reentrant (=--folding-external=, bound by
     =refresh-external= itself so its own reads cannot nest) and
     =condition-case='d, so it can neither loop nor break a read under
-    =debug-on-error=.  Emacs alone shortens the file, and only AFTER the WAL
-    record is appended (the crash rule: a repeat costs an equal record the
-    latest-per-id fold cannot distinguish).  Violation: reversing the two
-    steps loses an edit outright; folding inside a fold recurses; an
-    unguarded signal takes a plain read down with it.
+    =debug-on-error=.  The whole batch — re-derived records and tombstones
+    alike — is ONE =graph:insert=; Emacs alone shortens the file, and only
+    AFTER that append (the crash rule: a repeated write costs an equal record
+    the latest-per-id fold cannot distinguish, and a repeated delete finds the
+    id already tombstoned and appends nothing).  Violation: reversing the two
+    steps loses an edit outright; per-id inserts break the one-append rule the
+    crash argument rests on; folding inside a fold recurses; an unguarded
+    signal takes a plain read down with it.  What this fold gives up is written
+    below as [[*Known hazards][H1 and H2]].
+
+* Known hazards
+
+Costs the code ships WITH, deliberately.  An invariant is a rule a change must
+preserve; a hazard is what today's design gives up, so it is lettered and kept
+apart -- a reader meeting the symptom should find the decision written down.
+Each was reproduced with a probe before being added, and each earns a test in
+[[file:../test/test-external.el][test-external.el]] pinning today's behaviour,
+so closing one turns its own case red and names the decision.  Each entry
+states what it costs, what would close it, and why it stands.
+
+** H1 -- the external fold's truncate race eats a tombstone for good
+
+=org-glance-graph--truncate-external= writes back =(substring text consumed)=,
+where CONSUMED is the length of the text =--read-external= saw.  Invariant 7
+gives two Emacsen folding one store no lock, so the second truncate drops
+CONSUMED characters counted against a file the first already emptied, eating
+the head of whatever landed between.
+
+*The race predates the tombstone; the tombstone moved the CONSEQUENCE.*  A lost
+write note self-heals, the blob on disk still being the truth: the id's next
+edit appends another note and the record catches up.  A lost TOMBSTONE never
+self-heals -- the blob is gone, no later edit will ever name that id again, and
+the record stays live forever pointing at nothing.
+
+Reproduced (=external-truncate-race-eats-a-tombstone=): E2 reads 74 characters;
+E1 folds and empties the file; the writer appends the 91-character tombstone;
+E2 truncates by the 74 it counted, leaving =tombstone":true}=.  That fragment
+parses as nothing, so =--read-external= names no entry, the fold's
+=(when entries (truncate ...))= never fires and the fragment survives every
+later fold -- pinned separately as
+=external-unparseable-file-is-never-shortened=.  The record reads LIVE
+throughout.  The write half is pinned as =external-truncate-race-spares-a-write=.
+
+- *Costs:* one id per lost tombstone, live forever over bytes in the daemon's
+  trash; every derived index, table, overview and agenda carries it.  The blob
+  left the tree, so =glance= holds no row to delete either, and
+  =M-x org-glance-delete= is what clears it.
+- *Would close it:* a lock across Emacsen around read-then-truncate -- a change
+  to the FOLD's design, since nothing about this line is wrong on its own.
+  Truncating by matched line count rather than by character prefix narrows the
+  window without closing it; the two readers still overlap.
+- *Open because:* it reopens invariant 7 (single user, no locking), the store's
+  standing decision, for a race that needs two Emacsen folding one store inside
+  one fold's duration.
+
+** H2 -- a folded delete is undone by the id's open material buffer
+
+=org-glance-material:delete= discards the id's open material buffer, naming
+unsaved edits in its consent prompt (invariant 11).  The fold's tombstone arm
+inserts the spec and touches no buffer, so that buffer survives a folded delete
+and the next save's =org-glance-material:sync= appends a LIVE record over the
+tombstone.
+
+Reproduced (=external-delete-is-undone-by-an-open-buffer=), both ways: with the
+blob directory left standing the save is silent; with it removed -- as the
+daemon leaves it -- the save asks org's own "Directory does not exist; create?"
+and a =yes= puts the blob back too.  A =no= aborts the save, so
+=after-save-hook= never runs and the tombstone stands: the record and the blob
+never come back apart.  What does not come back is the blob's occurrence
+history, canonical content under invariant 5, which went with the directory.
+
+- *Costs:* one live record and one recreated blob per delete of an id somebody
+  had open, minus that id's =occurrences/=.  The record and the document come
+  back together, so no store-level counter moves in the ordinary interleaving.
+  It IS visible in one: a save landing BEFORE the fold reads leaves the
+  tombstone standing over a blob back on disk, which =glance='s scan counts as
+  an unindexed blob (=Data.Org.Index.driftOf=, =dfUnindexed=) -- pinned as
+  =external-delete-after-a-save-strands-the-blob=.  Deleting the resurrected id
+  through =glance= again is refused, its trash destination already holding that
+  id (=Data.Org.Trash=, "the trash already holds"); =M-x org-glance-delete=
+  clears the record.
+- *Would close it:* discarding the buffer in the tombstone arm, as
+  =material:delete= does; or discarding only CLEAN buffers and leaving a dirty
+  one with a warning.
+- *Open because:* a fold runs in the BACKGROUND, off any read, and
+  =material:delete='s consent-when-dirty guard exists precisely because
+  discarding a dirty buffer needs a human.  Silently discarding one during a
+  background fold breaks invariant 11 -- never clobber unsaved edits -- to save
+  a record =M-x org-glance-delete= clears in one command.  The resurrected
+  record is the lesser harm.
