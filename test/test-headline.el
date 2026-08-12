@@ -229,7 +229,7 @@ above trusts it, so it must equal what `--content-facts\' actually returns."
                          #'string<)))))
 
 (ert-deftest org-glance-test:metadata-build-parses-once ()
-  "Building metadata from a parsed headline is ONE org-mode pass, not two.
+  "Building metadata from a parsed headline is ONE org-mode pass.
 The parse that produced the headline captures the content facts in its own
 buffer; `:metadata' reads that memo instead of standing up a second buffer over
 the same string.  The passes are counted."

@@ -115,7 +115,7 @@ sidecar* the store updates as events happen:
   as a best-effort =:created= where there is no recorded event history.
 - *Caveat (cross-process):* the sidecar is best-effort like the read cache — two
   Emacsen appending at once race the read-modify-write; fine for metrics (the WAL
-  stays the source of truth).  A note, not a blocker.
+  stays the source of truth).  Worth recording as a known caveat.
 
 * Per-tag configuration columns
 

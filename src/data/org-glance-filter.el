@@ -2,7 +2,6 @@
 
 ;;; org-glance-filter.el --- the org-glance headline filter language
 
-
 ;;; Code:
 
 (require 'cl-lib)
@@ -11,7 +10,6 @@
 
 (require 'org-glance-tag)
 (require 'org-glance-graph)
-
 
 (defcustom org-glance-filter-spec '(:done nil :archived nil :commented nil)
   "Ambient filter applied to headline actions, as a normalized filter spec.
@@ -22,7 +20,6 @@ onto the overview and agenda.  See `org-glance-filter:predicate' for the
 spec language."
   :group 'org-glance
   :type 'sexp)
-
 
 (defconst org-glance-filter:table
   ;; Row: KEY :match KIND :accessor FN :canon KIND (nil :canon = as-is).
@@ -186,7 +183,6 @@ unambiguously."
                  collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
-
 (cl-defun org-glance-filter--link-value (key v)
   "Link value string V coerced for filter KEY, per the table's kinds.
 Lists are comma-separated; booleans read t/nil; planning keys read
@@ -240,7 +236,6 @@ name is a lossy hash prefix)."
        org-glance-filter:normalize-spec
        org-glance-filter--canonical-pairs
        prin1-to-string))
-
 
 (cl-defun org-glance-filter:read-state (&optional graph)
   "Completing-read a todo-state choice for the filter.

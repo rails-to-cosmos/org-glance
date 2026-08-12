@@ -63,7 +63,7 @@ CLOSED: [2026-07-26 Sun 08:33]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-07-26 Sun 08:33]
 :END:
-** DONE ability to encrypt regions, not only headlines
+** DONE ability to encrypt regions as well as headlines
 CLOSED: [2026-07-18]
 =#+begin_crypt= … =#+end_crypt= blocks seal only their body; several per headline,
 public text between stays plaintext and indexed.

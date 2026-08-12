@@ -1,6 +1,5 @@
 ;;; org-glance-tag-metrics.el --- per-tag event metrics sidecar -*- lexical-binding: t; -*-
 
-
 ;;; Code:
 
 (require 'cl-lib)

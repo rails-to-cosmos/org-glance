@@ -93,7 +93,7 @@ Placement follows:
 The rebuild fallback is O(runs) rather than O(headlines), and runs accumulate on
 their own curve.  A retention policy bounds it.
 
-** Recording hashes, not just ids
+** Recording an input's hash alongside its id
 
 Context assembly already knows the exact input set.  Recording each input's
 *content hash at assembly time* alongside its id costs one field and buys three
@@ -204,7 +204,7 @@ uses for providers and =session-buffer-cycle= uses for kinds:
 | =cloud-sandbox=   | provider API    | ephemeral  | none             | yes   |
 
 Placement is a constraint match: tag config declares what a task needs, and the
-cheapest executor satisfying it wins.  A solve rather than a scheduler.  Adding
+cheapest executor satisfying it wins.  A constraint solve.  Adding
 a managed sandbox provider later is one more row, which is also the test of
 whether the abstraction is real.
 

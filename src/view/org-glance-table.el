@@ -183,7 +183,6 @@ priority is its letter, absent values are the empty string."
                 (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" ""))
                 (repeated . ,(if (org-glance-headline-metadata:repeated? metadata) "↻" "")))))))
 
-
 (defvar-local org-glance-table--spec nil
   "Normalised filter spec the current table buffer was generated with.")
 (cl-defun org-glance-table--rows (graph keep?)
@@ -231,7 +230,6 @@ LINE, which drifts to another row once the sort reorders them."
         (table-view-apply-sort)
         (org-glance-view:mark-fresh)
         (org-glance-view:restore-point id line col)))))
-
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
@@ -544,7 +542,6 @@ so `C-c +' uses it."
           (org-glance-table--custom-column
            graph (cdr (assoc choice candidates))))))))
 
-
 (cl-defun org-glance-table--schema-file (graph)
   "Path of GRAPH's per-tag custom-column schema store (may not exist)."
   (org-glance-graph:config-file graph "table-columns.eld"))
@@ -814,7 +811,6 @@ drop (retag's `user-error')."
                    (org-glance-table--reload buf)
                    (message "Removed tag `%s'" tag))
           (user-error (message "Headline `%s' has unsaved edits; save it first" id)))))))
-
 
 (defun org-glance-table:filter-or-reset ()
   "Filter or narrow the table; with a prefix arg, clear the active filter.

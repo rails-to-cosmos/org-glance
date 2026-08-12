@@ -157,7 +157,6 @@ for the original id (the sync hook skips a mismatched id)."
   (org-glance-test:with-graph graph
     (should-error (org-glance-material:open graph "nope") :type 'user-error)))
 
-
 (ert-deftest org-glance-test:open-link-single ()
   "A single non-org-glance link is opened without prompting."
   (let ((headline (org-glance-test:headline "o1" "* foo" "[[https://example.com][ex]]"))
@@ -480,7 +479,6 @@ Pins the design default so an accidental change to the defvar fails loudly."
           (let ((org-glance-filter-spec nil))
             (org-glance-extract) (should (equal '("dk" "tk") (org-glance-test:offered-ids offered)))))))))
 
-
 (ert-deftest org-glance-test:material-change-todo-live-global ()
   "`change-todo-live' advances the state via org's own algorithm, persists it
 through the save->sync path, and finalizes with the new state (Tier A, no note)."
@@ -538,7 +536,6 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
             (should (s-contains? "CLOSED:" blob))            ; state+CLOSED always kept
             (should (eq (plist-get case :note)               ; note only on commit
                         (and (s-contains? "the reason" blob) t)))))))))
-
 
 (ert-deftest org-glance-test:material-set-todo-bulk ()
   "`set-todo-bulk' sets each id to STATE, persists it, and reports changed/skipped."

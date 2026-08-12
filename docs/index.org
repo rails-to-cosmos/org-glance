@@ -32,7 +32,7 @@ Newest first.
   re-deriving the whole view (the double-render half is an upstream change).
 - [[file:proposals/2026-07-06-incremental-metadata-cache.done.org][Incremental metadata cache]] — an append patches the read cache instead of
   dropping it; save+read over 1000 headlines went ≈8× faster.
-- [[file:proposals/2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] — the metadata build is one org-mode pass, not two
+- [[file:proposals/2026-07-06-single-parse-metadata.done.org][Single-parse metadata]] — the metadata build is one org-mode pass
   (measured: ≈7%, not the ≈2× the proposal estimated -- see its outcome).
 - [[file:proposals/2026-06-07-generalize-test-fixture-helpers.done.org][Shared fixtures for the test suite]] — 35 helpers; crash injection, record
   counting and save simulation are no longer hand-rolled per test.
@@ -94,7 +94,7 @@ Each is part of the [[file:proposals/2026-07-06-performance-audit.org][performan
 
 - [[file:proposals/2026-07-06-lazy-property-columns.proposed.org][Lazy value-fn for custom property columns]] — parse only visible rows for a
   displayed property column.
-- [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page, not the whole set.
+- [[file:proposals/2026-07-06-table-paging.proposed.org][Table paging / windowing]] — render a screen-sized page at a time.
 
 * Proposed — other
 

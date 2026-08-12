@@ -35,14 +35,12 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
   "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n"
   "Minimal single-tag book config: cycle only, an empty capture entry.")
 
-
 (ert-deftest org-glance-test:tag-config-degrades-without-config ()
   "With no config, the capture template is byte-identical to the default."
   (let ((org-glance-tag-config-dir nil)
         (org-glance-graph nil))
     (org-glance-tag-config--invalidate)
     (should (string= "* Hi%?  :task:" (org-glance-capture:template 'task "Hi")))))
-
 
 (ert-deftest org-glance-test:tag-config-resolve ()
   "A per-tag file resolves to a struct; an unknown tag resolves to nil."
@@ -55,7 +53,6 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
       (should (s-contains? "Notes" (org-glance-tag-config:template config))))
     (should (null (org-glance-tag-config:resolve nil 'nonexistent)))))
 
-
 (ert-deftest org-glance-test:tag-config-done-keywords ()
   "The done-set is everything after the last `|', derived by org itself."
   (should (equal '("READ" "ABANDONED")
@@ -63,7 +60,6 @@ Resets the module cache around BODY so reads see exactly CONFIGS."
   (should (equal '("DONE") (org-glance-tag-config:done-keywords "TODO | DONE")))
   (should (null (org-glance-tag-config:done-keywords nil)))
   (should (null (org-glance-tag-config:done-keywords ""))))
-
 
 (ert-deftest org-glance-test:tag-config-render-from-config ()
   "Render keeps the captured tag + skeleton + prompts, prepends the cycle as a
@@ -103,7 +99,6 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
       (should (= 1 (s-count-matches "%\\?" template)))
       (should-not (s-contains? "#+TODO:" template)))))
 
-
 (ert-deftest org-glance-test:tag-config-cycle-for-filter ()
   "A single configured cycle wins; 0 or >1 distinct cycles fall back to nil."
   (org-glance-test:with-tag-config
@@ -113,7 +108,6 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
                    (org-glance-tag-config:cycle-for-filter nil '(:tags ("book")))))
     (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("book" "film")))))
     (should (null (org-glance-tag-config:cycle-for-filter nil '(:tags ("task")))))))
-
 
 (ert-deftest org-glance-test:tag-config-not-in-content-tags ()
   "A configured tag never appears in the content graph's tag discovery, and
@@ -126,7 +120,6 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
       (should-not (member "class" (org-glance-graph:tags graph)))
       (should (org-glance-tag-config:resolve nil 'book)))))
 
-
 (ert-deftest org-glance-test:tag-config-overview-todo-header ()
   "The overview emits `#+TODO:' for a single configured tag, and omits it otherwise."
   (org-glance-test:with-graph graph
@@ -137,7 +130,6 @@ TITLE fills the heading, `%?' survives, no `#+TODO:' preamble is emitted."
         (should (s-contains? "Dune" text)))
       (let ((text (org-glance-overview:render graph nil)))
         (should-not (s-contains? "#+TODO:" text))))))
-
 
 (ert-deftest org-glance-test:tag-config-materialize-state-roundtrip ()
   "A per-tag todo state survives materialize -> edit -> save: it must NOT fold into
@@ -156,7 +148,6 @@ per-tag at sync)."
           (should (equal "READING" (org-glance-headline-metadata:state m)))
           (should (equal "Dune" (org-glance-headline-metadata:title m))))))))
 
-
 (ert-deftest org-glance-test:tag-config-lint ()
   "The lint flags a leftover :TODO_KEYWORDS:/:TAG: drawer and a missing entry,
 and is silent on a clean per-tag file."
@@ -171,7 +162,6 @@ and is silent on a clean per-tag file."
     (insert "#+TITLE: Book\n#+TODO: TODO | DONE\n\n* Book\n*** Notes\n%?\n")
     (delay-mode-hooks (org-mode))
     (should-not (org-glance-tag-config--lint))))
-
 
 (defconst org-glance-test:book-config-no-prompts
   "#+TITLE: Book\n#+TODO:  TODO READING | READ ABANDONED\n\n* Book\n%?\n"
@@ -218,7 +208,6 @@ the skeleton body, and no config-internal drawer keys."
     (should (null (car split)))
     (should (equal "* plain :t:" (cdr split)))))
 
-
 (ert-deftest org-glance-test:tag-config-migrate-legacy ()
   "Opening a graph with a legacy `config/tags.org' splits it into per-tag files
 \(heading -> #+TITLE, :TODO_KEYWORDS: -> #+TODO, subtree minus those keys ->
@@ -251,7 +240,6 @@ entry) and backs the legacy file up, leaving resolution intact."
       (should (equal "X | Y" (org-glance-tag-config:todo
                               (progn (org-glance-tag-config--invalidate)
                                      (org-glance-tag-config:resolve graph 'book))))))))
-
 
 (ert-deftest org-glance-test:tag-config-materialize-knows-keywords ()
   "Materializing a configured-tag headline makes the blob buffer natively recognise

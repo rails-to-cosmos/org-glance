@@ -13,7 +13,6 @@
                               ; the System heading (that file requires this one)
 (declare-function org-glance-plugin-feature "org-glance")
 
-
 (transient-define-suffix org-glance-transient:filter-by-state ()
   "Set the ambient filter's todo-state dimension (active / done / all / a state)."
   :transient t

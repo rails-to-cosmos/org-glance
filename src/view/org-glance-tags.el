@@ -1,6 +1,5 @@
 ;;; org-glance-tags.el --- all-tags overview (a table-view of tags) -*- lexical-binding: t; -*-
 
-
 ;;; Code:
 
 (require 'cl-lib)
@@ -20,7 +19,6 @@
 (require 'org-glance-capture)
 
 (require 'org-glance-core)
-
 
 (cl-defun org-glance-tags--format-time (ts)
   "Format timestamp TS as `YYYY-MM-DD HH:MM', or empty when nil."
@@ -44,7 +42,6 @@ The `|' active/done separator is left plain."
                  (split-string cycle)
                  " ")
     ""))
-
 
 (cl-defun org-glance-tags--spec ()
   "The `table-view' spec for the all-tags overview (rows are tags)."
@@ -80,8 +77,6 @@ The row id is the tag string; the Cycle cell comes from the tag's config."
   "All tag rows for GRAPH, one per live tag."
   (cl-loop for entry in (org-glance-tag-metrics:all graph)
            collect (org-glance-tags--row graph (car entry) (cdr entry))))
-
-
 
 (cl-defun org-glance-tags--tag-filter (tag)
   "TAG's view filter: the tag overlaid on the ambient spec.
@@ -136,7 +131,6 @@ tag vanishes once no live headline carries it."
                  (if (> (cdr res) 0)
                      (format " (%d skipped: unsaved edits)" (cdr res))
                    "")))))))
-
 
 (cl-defun org-glance-tags:visit (graph)
   "Open GRAPH's all-tags overview in the single `*org-glance-tags*' buffer."

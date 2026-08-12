@@ -215,8 +215,8 @@ comparing them funnels through here."
 
 (cl-defun org-glance--strings (values)
   "Coerce VALUES to a list of strings.
-The non-downcasing sibling of `org-glance--downcased-string': serialization and
-display keep a tag's stored case, comparison does not."
+The case-preserving sibling of `org-glance--downcased-string': serialization
+and display keep a tag's stored case; comparison downcases."
   (mapcar (lambda (value) (format "%s" value)) values))
 
 (cl-defun org-glance--buffer-key-value-pairs ()

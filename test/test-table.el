@@ -2,7 +2,6 @@
 
 (require 'test-helpers)
 
-
 (ert-deftest org-glance-test:table-row-from-metadata ()
   "org-glance-table--row produces a well-formed row from headline metadata."
   (org-glance-test:with-graph graph
@@ -30,7 +29,6 @@
       (should (equal "" (alist-get 'schedule cells)))
       (should (equal "" (alist-get 'deadline cells)))
       (should (equal "" (alist-get 'priority cells))))))
-
 
 (ert-deftest org-glance-test:table-state-badges-active-before-done ()
   "State badges list active states before done states."
@@ -63,7 +61,6 @@ falling back to the default."
     (should (equal org-glance-table-default-state-color
                    (org-glance-table--state-color "NOWHERE")))))
 
-
 (ert-deftest org-glance-test:table-spec-shape ()
   "The spec has the required top-level keys and exactly the built-in columns."
   (org-glance-test:with-graph graph
@@ -73,7 +70,6 @@ falling back to the default."
                        "priority" "encrypted" "repeated" "tags")
                      (mapcar (lambda (c) (alist-get 'key c))
                              (alist-get 'columns spec)))))))
-
 
 (ert-deftest org-glance-test:table-todo-line ()
   "The spec carries a `#+TODO:'-style subtitle of the graph's states -- active,
@@ -94,7 +90,6 @@ then `|', then done -- coloured; exposed as the `table-view' subtitle."
         (should (text-property-not-all 0 (length line) 'face nil line))  ; coloured
         (should (equal line (alist-get 'subtitle (org-glance-table--spec graph nil))))))))
 
-
 (ert-deftest org-glance-test:table-fill-honours-filter ()
   "Only headlines matching the filter appear as rows."
   (org-glance-test:with-graph graph
@@ -105,7 +100,6 @@ then `|', then done -- coloured; exposed as the `table-view' subtitle."
            (rows (org-glance-table--rows graph keep?))
            (ids (org-glance-test:row-ids rows)))
       (should (equal '("f1") ids)))))
-
 
 (ert-deftest org-glance-test:table-stale-flag-on-save ()
   "A materialized save FLAGS an open table stale without re-filling it on the hot
@@ -124,7 +118,6 @@ path; a display-boundary refresh re-fills it and clears the flag."
         (should (= 2 (length table-view--rows)))
         (should-not org-glance-view--stale))))
 
-
 (ert-deftest org-glance-test:table-stale-detection ()
   "A table is stale when the store's mtime advances past its recorded mtime."
   (org-glance-test:with-graph graph
@@ -137,7 +130,6 @@ path; a display-boundary refresh re-fills it and clears the flag."
           (should-not (org-glance-view:stale-vs-file? src))
           (setq org-glance-view--mtime '(0 0 0 0))
           (should (org-glance-view:stale-vs-file? src)))))))
-
 
 (ert-deftest org-glance-test:table-visit-creates-buffer ()
   "org-glance-table:visit creates a table-view buffer with rows from the graph."
@@ -301,7 +293,6 @@ the new password."
           (should (s-contains? "body" (org-glance-headline:contents
                                        (org-glance-headline:decrypt
                                         (org-glance-graph:headline graph id) "new"))))))))
-
 
 (ert-deftest org-glance-test:table-persist-column-order ()
   "A column reorder is persisted per filter and restored on re-visit."
@@ -622,7 +613,6 @@ buffer switching -- which the flush relies on -- runs for real.)"
           (funcall (key-binding (kbd "C-c C-t")))             ; single (no marks)
           (should (equal "DONE" (org-glance-test:field graph "s1" state)))))))
 
-
 (ert-deftest org-glance-test:table-schema-key-by-tags ()
   "The schema key is the filter's tags, sorted and joined; none -> \":none:\"."
   (should (equal "book" (org-glance-table--schema-key '(:tags ("book")))))
@@ -745,7 +735,6 @@ arg, since columns moved off the `C-u' prefix onto `C-c +' / `C-c -'."
             (let ((current-prefix-arg '(4))) (funcall (key-binding (kbd "+"))))
             (should captured))))))
 
-
 (ert-deftest org-glance-test:table-minus-untags ()
   "A bare `-' always drops the view's tag -- with a prefix arg too, since
 column removal moved to `C-c -'."
@@ -818,7 +807,6 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered))))))
 
-
 (ert-deftest org-glance-test:table-repeated-column-and-history ()
   "The Rep column marks repeater-carrying rows (↻ cell); `l' routes to the
 shared picker."
@@ -869,7 +857,6 @@ shared picker."
         (let ((meta (org-glance-graph:get-headline graph "p1")))
           (should (null (org-glance-headline-metadata:schedule meta)))
           (should (s-contains? "2026-09-01" (org-glance-headline-metadata:deadline meta)))))))
-
 
 (cl-defun org-glance-test:ref-fixture (graph)
   "Two coffees each referencing one roaster."

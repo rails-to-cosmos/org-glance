@@ -8,7 +8,7 @@ proven, what is a candidate, and what stays.
 
 The sandbox only earns its keep if extraction is deliberate.  A research vehicle
 with no export path is a hobby with a flattering name, so this file exists to be
-re-read rather than admired.
+re-read.
 
 * Criterion
 

@@ -376,8 +376,8 @@ verified against its evidence site before being added.
     the two spaces never have to agree.  =--set-external-cursor= writes it
     temp-then-rename after the records land (inv 33's crash rule).  THE READER
     MUTATING NOTHING is what makes two Emacsen folding one store safe with no
-    lock — invariant 7 stands, with nothing to serialise rather than with a
-    guarded mutation.  Both folding one range appends two equal records, the
+    lock: invariant 7 stands because there is nothing to serialise.  Both
+    folding one range appends two equal records, the
     crash rule's own idempotence, and a cursor written BACKWARDS costs the same
     re-fold; it is deliberately NOT guarded with =max=, forwards being the
     direction that skips lines and =max= being what would make a number past

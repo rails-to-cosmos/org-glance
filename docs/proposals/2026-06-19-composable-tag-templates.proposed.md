@@ -269,7 +269,7 @@ algebra (§3) and conflict lattice (§4) are unchanged as the design of record f
 **Phases 2–3 — still proposed** (§3–§5 stand as the algebra of record), but a 2026-06-23
 adversarial review reframed the scope:
 
-- **Reframe: "the inference gap", not "type classes".** There is exactly ONE fact the
+- **Reframe: from "type classes" to "the inference gap".** There is exactly ONE fact the
   system cannot infer — a per-tag cycle's *order* and its active|done partition (the `|`).
   `org-glance-graph:states` already derives the *set* of used states from content, but a
   set has no order and no done-boundary, so it cannot drive cycling/faces or `:done`. That

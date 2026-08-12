@@ -92,7 +92,6 @@ non-nil, and leaves the window layout alone when nil."
     (let ((org-glance-graph graph))
       (org-glance-test:assert-fills-frame (org-glance-overview:visit graph nil)))))
 
-
 (ert-deftest org-glance-test:overview-filter-by-tag ()
   "A plist `(:tags ...)' filter and the legacy bare-tag shim both restrict by tag."
   (org-glance-test:with-graph graph
@@ -161,7 +160,6 @@ caught)."
   "An unrecognised filter key errors loudly rather than silently matching all."
   (should-error (org-glance-filter:predicate '(:bogus 1)))
   (should-error (org-glance-overview:spec-key '(:bogus 1))))
-
 
 (ert-deftest org-glance-test:overview-spec-key-stable ()
   "Cache keys are order-independent, filesystem-safe, and signal uncacheability."
@@ -233,7 +231,6 @@ longer exists."
       (should (s-contains? "mode: org-glance-overview -*-"
                            (f-read-text (org-glance-overview:cached-file graph '(:tags ("work")))
                                         'utf-8))))))
-
 
 (ert-deftest org-glance-test:overview-fresh-p ()
   "`:fresh?' is mtime-based against headlines.jsonl, biased to rebuild."
@@ -472,7 +469,6 @@ when it is (re)displayed or selected."
       (with-current-buffer all
         (org-glance-view--refresh-when-stale))
       (should (s-contains? "Beta" (with-current-buffer all (buffer-string)))))))
-
 
 (ert-deftest org-glance-test:overview-keymap-bindings ()
   "The overview keymap mirrors v1 navigation (n/p heading, f/b sibling) + actions."

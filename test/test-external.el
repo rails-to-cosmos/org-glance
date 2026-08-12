@@ -248,7 +248,6 @@ attempt, the cursor never having moved."
       (should (string-match-p "id1" (org-glance-test:external-pending graph)))
       (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
 
-
 (ert-deftest org-glance-test:external-refresh-folds-a-delete-in ()
   "A tombstone line deletes the entry: `get-headline' answers the symbol and the
 read-only collapse answers nil.  The line is spent and kept, as a write's is."
@@ -338,7 +337,6 @@ still resolve its tags."
     (should (= 1 (plist-get (cdr (assoc "x" (org-glance-tag-metrics--read graph)))
                             :removals)))))
 
-
 (ert-deftest org-glance-test:external-json-true-is-t ()
   "The platform fact the kind test rests on: `json-parse-string' maps JSON true
 to t, and false to the NON-NIL symbol plist truthiness would read as a delete."
@@ -376,7 +374,6 @@ writes, so plist truthiness cannot creep into the kind test."
     (should (= 2 (org-glance-graph:refresh-external graph)))
     (should (org-glance-graph:live-meta graph "id1"))
     (should (org-glance-graph:live-meta graph "id2"))))
-
 
 (ert-deftest org-glance-test:external-race-spares-the-tombstone ()
   "The race that ate a tombstone, run again.  E2 reads 74 characters; E1 folds
@@ -499,7 +496,6 @@ again by every later one -- and the bytes themselves stay where they were."
     (should (= 0 (org-glance-graph:refresh-external graph)))
     (should (string= "" (org-glance-test:external-pending graph)))
     (should (string= "tombstone\":true}\n" (org-glance-test:external-text graph)))))
-
 
 (ert-deftest org-glance-test:external-rotates-when-the-cursor-has-caught-up ()
   "Rotation renames the file and its cursor together, so the generation is born

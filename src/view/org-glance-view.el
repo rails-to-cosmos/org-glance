@@ -48,7 +48,6 @@ doubt, rebuild."
   (let ((choice (completing-read prompt (org-glance-graph:tags org-glance-graph))))
     (unless (string-empty-p choice) choice)))
 
-
 (defcustom org-glance-view-fill-frame t
   "When non-nil, opening an overview or table view fills the frame.
 The view's window becomes the sole one (via `delete-other-windows'), so a
@@ -130,7 +129,6 @@ the save that flagged it, so its errors are demoted."
 
 (cl-pushnew '(org-glance-view--stale " glance:stale") mode-line-misc-info :test #'equal)
 
-
 (cl-defun org-glance-view:pick-occurrence (graph id)
   "Completing-read one of ID's occurrence snapshots and open it READ-ONLY.
 Snapshots are immutable history (`org-glance-graph:occurrences'); the buffer is
@@ -192,7 +190,6 @@ Return the buffer."
       (table-view-apply-sort)
       (org-glance-view:fill-frame from-view))
     buf))
-
 
 (defconst org-glance-view--stale-message
   "Headline no longer in graph (view is stale; press `g' to refresh)"

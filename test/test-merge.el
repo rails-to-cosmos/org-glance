@@ -1,6 +1,5 @@
 ;;; test-merge.el --- Git-sync merge/self-heal tests for the metadata store  -*- lexical-binding: t -*-
 
-
 (require 'test-helpers)
 (require 'org-glance-tag-metrics)
 
@@ -279,7 +278,6 @@ populated side -- `--read-eld' picks the non-empty one regardless of side order.
       (should (equal '(("b" . 2)) (org-glance--read-eld file)))
       (f-write-text (org-glance-test-merge:conflict-eld '(("a" . 1)) nil) 'utf-8 file)
       (should (equal '(("a" . 1)) (org-glance--read-eld file))))))
-
 
 (ert-deftest org-glance-test:conflict-strip-markers ()
   "`--strip-conflict-markers' drops only the marker lines, keeping both sides;

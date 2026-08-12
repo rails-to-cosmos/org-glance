@@ -2,7 +2,6 @@
 
 (require 'test-helpers)
 
-
 (ert-deftest org-glance-test:tags-metrics-tracked ()
   "Adding headlines records per-tag count, states, timestamps and capture counter."
   (org-glance-test:with-graph graph
@@ -41,7 +40,6 @@
       (should (= 1 (plist-get m :removals))))
     (should-not (member "x" (org-glance-graph:tags graph)))))
 
-
 (ert-deftest org-glance-test:tags-rows ()
   "`org-glance-tags--rows' yields one row per tag, id = tag, count in cells."
   (org-glance-test:with-graph graph
@@ -55,7 +53,6 @@
       (should (member "y" ids))
       (let ((xr (cl-find "x" rows :key (lambda (r) (alist-get 'id r)) :test #'string=)))
         (should (equal "1" (alist-get 'count (alist-get 'cells xr))))))))
-
 
 (ert-deftest org-glance-test:tags-retag-remove ()
   "Removing a tag drops it off each headline: multi-tagged survive, single-tagged
@@ -72,7 +69,6 @@ become untagged but live, and the tag leaves the derived tag set."
       (should (equal '("y") (org-glance-test:field graph "a" tags)))
       (should (null (org-glance-test:field graph "b" tags))))))
 
-
 (ert-deftest org-glance-test:tags-visit ()
   "`org-glance-tags:visit' opens the single tags buffer with one row per tag."
   (org-glance-test:with-graph graph
@@ -85,7 +81,6 @@ become untagged but live, and the tag leaves the derived tag set."
         (with-current-buffer buf
           (should (string= "*org-glance-tags*" (buffer-name)))
           (should (= 2 (length table-view--rows))))))))
-
 
 (ert-deftest org-glance-test:tags-states-colored ()
   "The States cell colours each state name with a todo-state face."
@@ -100,7 +95,6 @@ become untagged but live, and the tag leaves the derived tag set."
     (should (get-text-property (string-match "TODO" s) 'face s))
     (should (get-text-property (string-match "DONE" s) 'face s))
     (should-not (get-text-property (string-match "|" s) 'face s))))
-
 
 (ert-deftest org-glance-test:tags-filter-overlays-ambient ()
   "The dashboard's per-tag filter overlays the ambient spec (same view as the

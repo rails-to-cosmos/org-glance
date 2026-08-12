@@ -99,8 +99,8 @@ Org's three repeater forms do not behave alike, and one of them is a hard limit:
 | =.+1w= | one week after *completion*        | *no* — current only |
 
 =.+1w= future occurrences depend on when the user actually finishes, which is
-unknowable, so such a headline exports exactly one event.  Documented rather
-than discovered.
+unknowable, so such a headline exports exactly one event.  The limit is
+documented up front.
 
 The expandable forms are infinite, so export is a *sliding window* — a
 configurable horizon, re-expanded as time passes.  That makes the sync partly

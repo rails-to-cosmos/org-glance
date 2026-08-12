@@ -2,7 +2,6 @@
 
 (require 'test-helpers)
 
-
 (ert-deftest org-glance-test:relations-edges-from-links ()
   "material links (kinded + kindless), legacy visit links, and dedup; other
 link types contribute no edge."
@@ -40,7 +39,6 @@ DESERIALIZED structs (the inner-vector normalization trap)."
                  :linked nil :propertized nil :encrypted nil))))
     (should (null (org-glance-headline-metadata:relations meta)))))
 
-
 (ert-deftest org-glance-test:relations-id-any-filter-and-identity ()
   "`:id-any' selects the listed ids; its identity is order-insensitive; both
 relation keys are transient (never overview-cached, no table config)."
@@ -57,7 +55,6 @@ relation keys are transient (never overview-cached, no table config)."
     (should (org-glance-filter:transient? '(:id-any ("x"))))
     (should-not (org-glance-filter:transient? '(:tags ("book"))))
     (should (null (org-glance-overview:spec-key '(:refers-to "x"))))))
-
 
 (ert-deftest org-glance-test:material-refer-inserts-link ()
   "`@' at a body boundary inserts a material link; the C-u variant a ?kind=;
@@ -143,7 +140,6 @@ Column-0 self-insert is owned by `material-refer-self-inserts-elsewhere'."
         (let ((last-command-event ?@)) (org-glance-material:refer))
         (should (s-contains? "@* TODO Me" (buffer-string)))))))
 
-
 (ert-deftest org-glance-test:link-material-follow ()
   "Following org-glance-material:ID materializes ID; ?kind= is stripped;
 dangling id errors."
@@ -157,7 +153,6 @@ dangling id errors."
           (with-current-buffer shown
             (should (equal "t" org-glance-material--id)))
           (should-error (org-glance-link:material "no-such-id") :type 'user-error))))))
-
 
 (ert-deftest org-glance-test:material-references-commands ()
   "`C-c @' opens ONE relation table -- outgoing edges and referrers merged --
@@ -211,7 +206,6 @@ for a kindless edge.  Rows merge both directions."
     (org-glance-test:with-table (graph)
       (should-not (member "relation" (org-glance-test:table-col-keys))))))
 
-
 (ert-deftest org-glance-test:relations-crypt-sealed-excluded ()
   "A link inside a SEALED crypt block is not indexed; one outside is.
 Both projections of the sealed bytes are checked: `relations' (material links)
@@ -257,7 +251,6 @@ time; reindex agrees."
       (should (equal '(("public-ref" . nil)) after-sync))
       (org-glance-graph:reindex graph)
       (should (equal after-sync (org-glance-test:field graph "cs" relations))))))
-
 
 (ert-deftest org-glance-test:snapshot-on-repeat-skips-encrypted ()
   "An encrypted headline keeps no occurrence history (would store plaintext)."

@@ -63,7 +63,6 @@ With EMITTING, only those a rendered buffer emits as a file keyword."
            when (and pragma (or (not emitting) emit))
            collect (cons slot pragma)))
 
-
 (cl-defun org-glance-tag-config:dir (graph)
   "Resolved config directory of GRAPH (may not exist).
 `org-glance-tag-config-dir' overrides; else `config/tags/' under GRAPH's store.
@@ -88,7 +87,6 @@ them like a content change (a directory mtime alone misses in-file edits)."
            with newest = nil
            do (when (or (null newest) (time-less-p newest mtime)) (setq newest mtime))
            finally return newest))
-
 
 (cl-defun org-glance-tag-config--file-keyword (key)
   "Value of file keyword KEY (e.g. \"TITLE\", \"TODO\") in the current buffer.
@@ -136,7 +134,6 @@ Each `<tag>.org' contributes one config keyed by its file name."
             (puthash tag (org-glance-tag-config--parse-file path tag) by-tag)))))
     by-tag))
 
-
 (defvar org-glance-tag-config--cache nil
   "Module cache plist (:dir D :snapshot S :by-tag HASH), or nil (cold).")
 
@@ -169,7 +166,6 @@ depend on mtime granularity for in-process edits."
             (list :dir dir :snapshot snapshot
                   :by-tag (org-glance-tag-config--parse dir))))
     (plist-get org-glance-tag-config--cache :by-tag)))
-
 
 (cl-defun org-glance-tag-config:resolve (graph tag)
   "Resolve TAG to its `org-glance-tag-config' in GRAPH, or nil if it has none.
@@ -249,7 +245,6 @@ Blank values drop out; nil when nothing is left."
                         collect (concat "#+" pragma ": " value "\n"))))
     (when lines (apply #'concat lines))))
 
-
 (defconst org-glance-tag-config--render-strip
   (append '("TAG" "TODO_KEYWORDS") org-glance-headline:hash-ignore-properties)
   "Drawer keys stripped from a rendered capture instance.
@@ -292,7 +287,6 @@ first)."
         (goto-char (point-min))
         (org-set-tags (mapcar #'org-glance-tag:to-string tags)))
       (s-trim-right (buffer-substring-no-properties (point-min) (point-max))))))
-
 
 (cl-defun org-glance-tag-config--migrate-on-open (graph)
   "Split a legacy single-file `config/tags.org' into per-tag files, once.
@@ -343,7 +337,6 @@ never deleted -- migration discipline)."
 
 (add-hook 'org-glance-graph-after-open-functions
           #'org-glance-tag-config--migrate-on-open)
-
 
 (cl-defun org-glance-tag-config--stub (tag)
   "Default contents for a freshly-created config file of TAG.

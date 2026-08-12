@@ -2,7 +2,6 @@
 
 ;;; org-glance-overview.el --- graph-backed overview + agenda
 
-
 ;;; Code:
 
 (require 'cl-lib)
@@ -26,7 +25,6 @@
 (defconst org-glance-overview:header
   "#    -*- mode: org; mode: org-glance-overview -*-\n#+TITLE: org-glance overview\n\n"
   "Prop-line header written at the top of the overview file.")
-
 
 (cl-defun org-glance-overview:spec-key (filter)
   "Return a compact, deterministic cache key for FILTER.
@@ -57,7 +55,6 @@ filter a cache directory holds."
     (and (f-exists? sidecar)
          (string= (org-glance-filter:identity filter)
                   (s-trim (f-read-text sidecar 'utf-8))))))
-
 
 (cl-defun org-glance-overview:render-headline (graph metadata)
   "Render METADATA as one self-sufficient org heading.
@@ -121,7 +118,6 @@ is correct for the tag's keywords without any spec/cache-key change."
            (cl-loop for meta in (org-glance-graph:headlines graph)
                     when (funcall keep? meta)
                     collect (org-glance-overview:render-headline graph meta)))))
-
 
 (cl-defun org-glance-overview:file (graph)
   "Path to GRAPH's unfiltered overview file (inside the hidden store)."
@@ -216,7 +212,6 @@ re-renders."
                (org-glance-overview--spec-owns-cache? filter file)))
       file)                                            ; hit -- no read, no render
      (t (org-glance-overview:write graph filter)))))
-
 
 (defvar org-glance-overview-mode-map (make-sparse-keymap)
   "Keymap for `org-glance-overview-mode'.")
@@ -398,6 +393,8 @@ view names no single tag, so fall back to the tag prompt."
   (org-glance-tag-config-edit
    (org-glance-filter:sole-tag org-glance-overview--spec)))
 
+;;;
+
 ;;;###autoload
 (cl-defun org-glance-overview (&optional tag)
   "Browse the graph, optionally filtered, in the default view.
@@ -462,7 +459,6 @@ The view's STALE-FN (see `org-glance-view:register'): the cache file changed
 under us, or predates a source it renders from (`org-glance-overview:fresh?')."
   (or (not (verify-visited-file-modtime (current-buffer))) ; file changed under us
       (not (org-glance-overview:fresh? org-glance-graph buffer-file-name))))
-
 
 ;;;###autoload
 (cl-defun org-glance-agenda ()

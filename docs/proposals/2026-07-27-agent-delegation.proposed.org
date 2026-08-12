@@ -321,7 +321,7 @@ With a three-member team, an intake per member means three question tables and
 the core promise is gone.  So one intake runs — the worker's — and its answered
 artifact is shared by every member of every stage.
 
-Reviewers file findings rather than questions.  =ask_human= belongs to the
+Reviewers file findings; =ask_human= belongs to the
 worker alone.
 
 ** Why intake explores before it asks
@@ -330,9 +330,9 @@ Questions formed before the agent reads anything come from ignorance and land
 generic — "what tone would you like".  Sharp questions arrive after exploration,
 by which time the human has walked away.
 
-Intake is therefore a phase rather than a single call: assemble, explore, form
-understanding, then ask.  Reading is the cheap part of any run, so this costs
-little and it is the difference between a ceremonial question and "these two
+Intake is therefore a phase: assemble, explore, form understanding, then ask.
+Reading is the cheap part of any run, so this costs little and it is the
+difference between a ceremonial question and "these two
 headlines both define the schema and they disagree — which is authoritative?"
 
 Intake runs under a read-only permission set regardless of the agent's grant,
