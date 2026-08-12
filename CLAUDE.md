@@ -157,24 +157,34 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     treats an unknown key as inert (the compatibility claim, both ways). Every
     READ folds pending entries in (`--fold-external-maybe` in
     `--ensure-cache`) — throttled, non-reentrant, `condition-case`'d — as ONE
-    `graph:insert` for records and tombstones alike, and Emacs alone truncates
-    the file, always AFTER that append.
+    `graph:insert` for records and tombstones alike, and the fold's cursor moves
+    always AFTER that append.
+34. The fold moves a CURSOR and never rewrites `EXTERNAL.jsonl`:
+    `meta/EXTERNAL.cursor` is one decimal BYTE offset, read to the file's end
+    and written temp-then-rename after the records land. Bytes because the
+    writer appends bytes and a fold consumes whole lines; a cursor absent,
+    garbled or past EOF reads as 0, and none is guarded with `max`. With no
+    mutation there is nothing for two Emacsen to serialise (inv 7). Growth is
+    ROTATION: over `external-max-bytes` with the cursor caught up, cursor then
+    file rename to `EXTERNAL-<gen>`, a generation drained ahead of the live file
+    and never deleted on the pass that made it.
 
 ## Known hazards
 
 Costs the code ships WITH — lettered, because an invariant is a rule a change
 must preserve and these are what today's design gives up. Each was reproduced by
 probe and pinned by a test in `test/test-external.el`, so closing one turns its
-case red. Full statements, with the evidence:
+case red. An OPEN entry states its cost, what would close it and why it stands;
+a CLOSED one keeps its letter and states what closed it. A letter is never
+reused. Full statements, with the evidence:
 [[file:docs/invariants.org][docs/invariants.org]].
 
-H1. The external fold's truncate race eats a tombstone for good. Two Emacsen
-    folding one store take no lock (inv 7), so the second `--truncate-external`
-    drops characters counted against a file the first already emptied. A lost
-    WRITE note self-heals — the blob is still the truth and the id's next edit
-    says so again; a lost TOMBSTONE never does, and the record stays live over
-    bytes in the daemon's trash. Closing it wants a lock across Emacsen, which
-    reopens inv 7.
+H1. CLOSED 2026-08-12 by inv 34 — the external fold's truncate race ate a
+    tombstone. The compare-and-swap that preceded it narrowed the window and
+    left an inner one (`f-write-text` is `write-region` with `append` nil, so a
+    line appended between the guard's own read and write is destroyed); the
+    cursor closes it by removing the rewrite, and takes the byte-identical
+    residual with it.
 H2. A folded delete is undone by the id's open material buffer. The tombstone
     arm touches no buffer, so the next save's `material:sync` appends a LIVE
     record and writes the blob back; the occurrence history stays behind. Open
@@ -196,6 +206,14 @@ Prevent it going forward:
   instances, so one fix generalizes and the class stops recurring.
 
 ## Docstrings & comments
+
+Comment density stays near 3% of lines. A comment earns its line only as: a
+hazard or ordering constraint the code cannot state, a pointer to the invariant
+that owns the rule (`;; invariant 27: sync runs before --decrypt-buffer.`), a
+deliberate-difference note ("spelled twice on purpose"), or "why not the obvious
+thing". Each is ONE line. A rule lives in the invariant list once; a paragraph
+restating it in a comment is a second copy that drifts, and a sentence restating
+the line under it is deleted on sight.
 
 Cut genuine bloat — over-explanation, redundancy, three sentences where one
 works. Keep docstrings proper English and checkdoc-valid (they are public API,

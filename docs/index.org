@@ -7,7 +7,7 @@ when implemented (older ones are =.md=; new ones are =.org=).
 
 * Rules of the codebase
 
-- [[file:invariants.org][Global invariants]] — the 33 rules every change must preserve (rule,
+- [[file:invariants.org][Global invariants]] — the 34 rules every change must preserve (rule,
   evidence anchors, what breaks), and the lettered [[file:invariants.org::*Known hazards][known hazards]] the code ships
   with (cost, what would close it, why it stands); compact index in
   [[file:../CLAUDE.md][CLAUDE.md]].

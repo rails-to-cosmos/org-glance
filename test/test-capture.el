@@ -4,14 +4,12 @@
   (org-glance-test:session
     (org-glance-capture 'test "Hello")
     (org-capture-finalize)
-    ;; The headline lands in the graph with an id, title and tag.
     (let ((headlines (org-glance-graph:headlines org-glance-graph)))
       (should (= 1 (length headlines)))
       (let ((meta (car headlines)))
         (should (org-glance-headline-metadata:id meta))
         (should (string= "Hello" (org-glance-headline-metadata:title meta)))
         (should (member "test" (org-glance-headline-metadata:tag-strings meta)))
-        ;; the captured body was persisted and is retrievable
         (should (s-contains? "Hello" (org-glance-graph:get-content
                                       org-glance-graph
                                       (org-glance-headline-metadata:id meta))))))))
@@ -49,7 +47,6 @@ tags, normalizes case, and rejects empty input."
       (org-glance-test:offering (seen-candidates "Task")
         (should (eq 'task (org-glance-capture:completing-read-tag)))
         (should (equal '("task" "work") seen-candidates)))
-      ;; A tag unknown to the graph is fine -- discovery is capture-driven.
       (org-glance-test:answering ((completing-read "fresh"))
         (should (eq 'fresh (org-glance-capture:completing-read-tag))))
       (org-glance-test:answering ((completing-read "  "))
@@ -67,19 +64,15 @@ tags, normalizes case, and rejects empty input."
 the capture prompt, programmatic capture, and the retag add path.
 Removal stays ungated."
   (org-glance-test:session
-    ;; capture prompt
     (org-glance-test:answering ((completing-read "albert-heijn"))
       (should-error (org-glance-capture:completing-read-tag) :type 'user-error))
-    ;; programmatic capture
     (should-error (org-glance-capture '(albert-heijn) "x") :type 'user-error)
-    ;; retag add path; the graph stays untouched
     (org-glance-graph:add org-glance-graph
                           (org-glance-test:headline "a" "* TODO A :shop:"))
     (should-error (org-glance-material:retag org-glance-graph "a" "albert-heijn")
                   :type 'user-error)
     (should (equal '("shop")
                    (org-glance-test:field org-glance-graph "a" tag-strings)))
-    ;; removal of a valid tag still works
     (should (org-glance-material:retag org-glance-graph "a" "shop" :remove t))))
 
 (ert-deftest org-glance-test:capture-refer-inserts-link ()
@@ -90,9 +83,7 @@ into the captured headline's relations metadata (invariant 5)."
     (org-glance-graph:add org-glance-graph
                           (org-glance-test:headline "target" "* TODO Target headline"))
     (org-glance-capture 'test "Note")
-    ;; the mode is active in the (current) capture buffer, binding `@'
     (should org-glance-capture-mode)
-    ;; drop to the body, at a word boundary, and insert a reference
     (goto-char (point-max))
     (unless (bolp) (insert "\n"))
     (insert "refers ")
@@ -103,7 +94,6 @@ into the captured headline's relations metadata (invariant 5)."
     (should (s-contains? "[[org-glance-material:target][Target headline]]"
                          (buffer-string)))
     (org-capture-finalize)
-    ;; the freshly captured headline carries the edge as relations metadata
     (let ((captured (cl-find-if
                      (lambda (m) (string= "Note" (org-glance-headline-metadata:title m)))
                      (org-glance-graph:headlines org-glance-graph))))

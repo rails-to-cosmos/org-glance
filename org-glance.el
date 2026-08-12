@@ -8,7 +8,7 @@
 ;; Created: 29 September, 2018
 ;; Version: 1.35.0.0.20260812.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
-;; Keywords: org-mode, outlines, data, database, store
+;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
 ;; Source: gnu, melpa, org
 ;; License: GPL-3+
@@ -29,8 +29,8 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; Projections over org-mode headlines.  The org files are a durable,
-;; addressable database; everything else is a projection.
+;; Projections over org-mode headlines.  The org files are the source of
+;; truth -- durable and addressable; everything else is a projection.
 ;;
 ;; Every captured headline gets an `:ORG_GLANCE_ID:' and its own org file
 ;; under `org-glance-directory'.  Tags are collections, each free to carry
@@ -167,12 +167,7 @@ Loads `org-glance-plugins' first, so plugin hooks see the graph open."
   (setq org-glance-graph (org-glance-graph directory))
   (org-glance-migrate-maybe directory))
 
-;; --- Runtime migration of legacy v1 metadata into the graph -----------------
-;;
-;; The org files are canonical (see docs/archive/MIGRATION-PLAN.md), so migration RE-SCANS the
-;; sources -- it does not trust v1's possibly-stale `begin' pointers and never
-;; reads the v1 positional serialization. Legacy `*.metadata.el' files are merely
-;; the trigger; they are backed up, never deleted.
+;; Migration RE-SCANS the org sources: v1's `begin' pointers may be stale.
 
 (cl-defun org-glance-legacy-metadata-files (&optional (directory org-glance-directory))
   "Return the list of legacy v1 `*.metadata.el' files under DIRECTORY."
@@ -195,17 +190,6 @@ Detected by its prop-line `mode: org-glance-overview' marker."
     (goto-char (point-min))
     (re-search-forward "mode:[ \t]*org-glance-overview" nil t)))
 
-;; --- Persistent migration progress ------------------------------------------
-;;
-;; Migration is journaled so it is idempotent and resumable: each canonical
-;; source file is recorded (by its path relative to the directory) the moment it
-;; is fully ingested.  A re-run -- whether after a crash mid-batch or a normal
-;; second invocation -- skips every already-recorded source, so no headline is
-;; ingested twice.  The journal is an append-only JSONL file at the store root
-;; (one `{"source": "<relpath>"}' per line); appending after each clean file
-;; keeps the record durable across an Emacs restart with at most the in-flight
-;; file to redo.  Even that file cannot duplicate: a headline whose id+hash
-;; already match the store is not re-added (see the ingest loop).
 
 (cl-defun org-glance-migrate--journal-path (graph)
   "Path of GRAPH's persistent migration-progress journal."
@@ -272,8 +256,7 @@ Return the number of headlines ingested this run."
          (done (org-glance-migrate--migrated-sources graph))
          (pending (cl-remove-if (lambda (f) (gethash (f-relative f directory) done))
                                 (org-glance-migrate--source-files directory)))
-         ;; One id->hash snapshot of the store, built once and updated as we add,
-         ;; so dedup is an O(1) lookup instead of a per-headline segment scan.
+         ;; One id->hash snapshot of the store: dedup is an O(1) lookup.
          (seen (and pending
                     (let ((h (make-hash-table :test 'equal)))
                       (dolist (meta (org-glance-graph:headlines graph) h)
@@ -287,12 +270,8 @@ Return the number of headlines ingested this run."
     (cl-loop for file in pending
              for i from 1
              for relpath = (f-relative file directory)
-             ;; Per-file `condition-case' so one unreadable/mis-decoded file
-             ;; (e.g. autodetect mis-guesses a non-utf-8 encoding) is logged and
-             ;; skipped instead of aborting the whole batch.  A skipped file is
-             ;; NOT journaled, so a later run retries it.  Overview clones are
-             ;; journaled but never ingested, so a clone can't override its
-             ;; source and is also skipped on resume.
+             ;; A skipped file is NOT journaled, so a later run retries it;
+             ;; an overview clone IS journaled and never ingested.
              do (condition-case err
                     (progn
                       (unless (org-glance-migrate--overview-file? file)
@@ -307,7 +286,6 @@ Return the number of headlines ingested this run."
              (when reporter (progress-reporter-update reporter i)))
     (when reporter (progress-reporter-done reporter))
     (let ((legacy (org-glance-legacy-metadata-files directory)))
-      ;; Back up legacy indices only on a clean pass.
       (unless skipped
         (dolist (file legacy)
           (rename-file file (concat file ".bak") t)))
@@ -328,9 +306,7 @@ and `org-glance-extract')."
   (let* ((graph (org-glance-graph directory))
          (n (org-glance-graph:reindex graph)))
     (org-glance-property-index:clear graph)   ; in-session memo (+ its file)
-    ;; Every on-disk derived cache goes wholesale: the cache/ dir and the
-    ;; overview renders.  Identities change across upgrades (e.g. new
-    ;; ambient-filter keys), so per-key dirs would otherwise accrete forever.
+    ;; Identities change across upgrades, so per-key dirs would accrete forever.
     (dolist (dir (list (org-glance-graph:cache-path graph)
                        (org-glance-overview:cache-path graph)))
       (ignore-errors (f-delete dir t)))

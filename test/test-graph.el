@@ -60,12 +60,9 @@ Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
   (org-glance-test:with-graph graph
     (let ((title "Façade — Facebook’s “data” café"))
       (org-glance-graph:add graph (org-glance-test:headline "u1" (concat "* TODO " title)))
-      ;; point lookup (the previously-broken path)
       (should (string= title (org-glance-test:field graph "u1" title)))
-      ;; forward reader
       (should (string= title (org-glance-headline-metadata:title
                               (car (org-glance-graph:headlines graph)))))
-      ;; full content reconstruct
       (should (string= title (org-glance-headline:title
                               (org-glance-graph:headline graph "u1")))))))
 
@@ -78,8 +75,6 @@ Regression: an earlier reverse JSONL reader fed undecoded UTF-8 bytes to
         (org-glance-graph:add graph
                                  (org-glance-test:headline (format "k%d" i)
                                                            (format "* TODO %s %d" title i))))
-      ;; the jsonl now spans several 4096-byte chunks; every id must resolve and
-      ;; carry its multibyte title intact regardless of where boundaries fall
       (dotimes (i 50)
         (let ((meta (org-glance-graph:get-headline graph (format "k%d" i))))
           (should (org-glance-headline-metadata? meta))
@@ -141,10 +136,8 @@ truncate an existing data.org)."
   (org-glance-test:with-graph graph
     (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "first body"))
     (org-glance-graph:put-content graph (org-glance-test:headline "aw1" "* foo" "second body"))
-    ;; latest content wins, in place
     (should (s-contains? "second body" (org-glance-graph:get-content graph "aw1")))
     (should-not (s-contains? "first body" (org-glance-graph:get-content graph "aw1")))
-    ;; the temp file was renamed away, not left in the data dir
     (let ((dir (org-glance-graph:headline-data-path graph "aw1")))
       (should-not (cl-find-if (lambda (f) (s-contains? "data.org.tmp." f))
                               (directory-files dir))))))
@@ -154,7 +147,6 @@ truncate an existing data.org)."
   (org-glance-test:with-graph graph
     (should-error (org-glance-graph:headline-data-path graph "../escape") :type 'error)
     (should-error (org-glance-graph:headline-data-path graph "a/b") :type 'error)
-    ;; a normal tag-hash id is fine
     (should (org-glance-graph:headline-data-path graph "whitepaper-d41d8cd98f00b204"))))
 
 (ert-deftest org-glance-test:graph-flags-roundtrip ()
@@ -210,7 +202,6 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
     (should (org-glance-headline? (org-glance-graph:headline graph "id1")))
     (org-glance-graph:delete graph "id1")
     (should (null (org-glance-graph:headline graph "id1")))
-    ;; the low-level blob is still present (append-only store)
     (should (s-contains? "body" (org-glance-graph:get-content graph "id1")))))
 
 (ert-deftest org-glance-test:graph-states ()
@@ -223,14 +214,7 @@ files must be 8\" in Emacsen whose default tab-width is not 8."
                              (org-glance-test:headline "s4" "* Delta"))
     (should (equal '("DONE" "TODO") (org-glance-graph:states graph)))))
 
-;;; In-memory read cache coherence
-;;
-;; The hot read APIs (`headlines'/`get-headline'/`tags'/`states') serve from a
-;; snapshot-keyed in-memory cache.  These guard the cases a naive memo gets
-;; wrong: an in-process write in the same filesystem-mtime second, an external
-;; (another-Emacs) write the in-process invalidation never sees, tombstone
-;; liveness through the O(1) lookup, compaction changing an observable read, and
-;; insertion order surviving a cache rebuild.
+;;; In-memory read cache coherence -- the cases a naive memo gets wrong.
 
 (ert-deftest org-glance-test:graph-cache-same-second-add ()
   "An add right after a warmed read is visible even if mtime did not advance.
@@ -255,7 +239,6 @@ trigger a rebuild on the next read."
       (f-append-text (concat (json-serialize (list :id "e2" :state "TODO" :title "B" :seq 9999))
                              "\n")
                      'utf-8 open))
-    ;; cache was warm and no mutation method ran, yet the new record is seen
     (should (= 2 (length (org-glance-graph:headlines graph))))
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "e2")))))
 
@@ -276,7 +259,6 @@ The cache must invalidate on compaction so this observable change is seen."
     (org-glance-graph:delete graph "k1")
     (should (eq 'tombstone (org-glance-graph:get-headline graph "k1"))) ; warm: tombstone
     (org-glance-graph:compact graph)
-    ;; the only record for k1 was a tombstone -> compaction drops the id entirely
     (should (null (org-glance-graph:get-headline graph "k1")))))
 
 (ert-deftest org-glance-test:graph-cache-insertion-order-after-update ()
@@ -287,7 +269,6 @@ The cache must invalidate on compaction so this observable change is seen."
                              (org-glance-test:headline "o2" "* TODO B")
                              (org-glance-test:headline "o3" "* TODO C"))
     (should (equal '("o1" "o2" "o3") (org-glance-test:ids graph)))
-    ;; re-add o2 with a new title: order is unchanged, content is the latest
     (org-glance-graph:add graph (org-glance-test:headline "o2" "* DONE B2"))
     (let ((metas (org-glance-graph:headlines graph)))
       (should (equal '("o1" "o2" "o3") (org-glance-test:ids graph)))
@@ -307,27 +288,19 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
            (open (org-glance-graph:headline-meta-path reader))
            (manifest (org-glance-graph--manifest-path reader))
            (pinned 1500000000))
-      ;; Writer builds a sealed segment of A,B,C with an empty open segment.
       (org-glance-graph:add writer
                             (org-glance-test:headline "A" "* TODO A")
                             (org-glance-test:headline "B" "* TODO B")
                             (org-glance-test:headline "C" "* TODO C"))
       (org-glance-graph--seal writer)
-      ;; Pin times, then warm the READER's cache: live={A,B,C}, sealed=[seg-01].
       (set-file-times open pinned)
       (set-file-times manifest pinned)
       (should (= 3 (length (org-glance-graph:headlines reader))))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline reader "A")))
-      ;; External writer deletes A and compacts: A's tombstone is dropped, B,C are
-      ;; folded into seg-02, the open is rewritten empty.  The reader's cache is
-      ;; untouched (separate struct -> no in-process invalidation).
       (org-glance-graph:delete writer "A")
       (org-glance-graph:compact writer)
-      ;; Pin the open + MANIFEST mtimes back so (mtime,size) match the warm
-      ;; snapshot; only the sealed-segment NAMES differ.
       (set-file-times open pinned)
       (set-file-times manifest pinned)
-      ;; The reader must rebuild and see the post-compaction state (no resurrection).
       (should (= 2 (length (org-glance-graph:headlines reader))))
       (should (null (org-glance-graph:get-headline reader "A"))))))
 
@@ -341,7 +314,6 @@ sealed-segment name list ([seg-01] -> [seg-02]) distinguishes the two states."
       (should (= 1 (org-glance-graph:reindex graph)))
       (should (time-equal-p past (file-attribute-modification-time
                                   (file-attributes blob))))
-      ;; the re-derived record is live and correct
       (should (equal "A" (org-glance-test:field graph "a" title))))))
 
 (cl-defun org-glance-test:tri-state (graph id)
@@ -364,12 +336,10 @@ not re-scan the WAL.  Counted -- `--latest-records' is the rebuild."
         (org-glance-graph:add graph (org-glance-test:headline "b" "* TODO B"))
         (should (equal '("a" "b") (org-glance-test:ids graph)))
         (should (= 0 rebuilds))
-        ;; an update patches in place, keeping first-sighting order
         (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE A"))
         (should (equal '("a" "b") (org-glance-test:ids graph)))
         (should (equal "DONE" (org-glance-test:field graph "a" state)))
         (should (= 0 rebuilds))
-        ;; a tombstone drops it from LIVE but keeps the tri-state in BY-ID
         (org-glance-graph:delete graph "a")
         (should (equal '("b") (org-glance-test:ids graph)))
         (should (eq 'tombstone (org-glance-graph:get-headline graph "a")))

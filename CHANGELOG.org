@@ -241,6 +241,16 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- An outside delete is no longer lost while =EXTERNAL.jsonl= is being folded:
+  the fold reads from a byte cursor (=meta/EXTERNAL.cursor=) and rewrites the
+  file never, so a note the daemon appends mid-fold survives whether or not it
+  is byte-identical to one already there, and two Emacsen folding at once cost
+  duplicate work rather than a lost tombstone.
+- =EXTERNAL.jsonl= grows by rotation rather than truncation: it is renamed to
+  =EXTERNAL-<generation>.jsonl= once it passes
+  =org-glance-graph-external-max-bytes= and the cursor has caught up, two
+  generations are kept, and a line that landed in a just-rotated file is still
+  folded.
 - Link picker (=j= / =C-c j=) labels a link with no description by the =KEY:=
   text introducing it in its list item — =- Local: [[file:~/x]]= offers
   "Local" instead of the raw URL.

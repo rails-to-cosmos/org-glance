@@ -2,7 +2,6 @@
 
 (require 'test-helpers)
 
-;;; Per-tag metrics (event-tracked sidecar)
 
 (ert-deftest org-glance-test:tags-metrics-tracked ()
   "Adding headlines records per-tag count, states, timestamps and capture counter."
@@ -18,7 +17,6 @@
       (should (plist-get x :created))
       (should (plist-get x :modified))
       (should (= 2 (plist-get x :captures)))
-      ;; state breakdown for x: one TODO, one DONE
       (should (equal 1 (alist-get "TODO" (plist-get x :states) nil nil #'string=)))
       (should (equal 1 (alist-get "DONE" (plist-get x :states) nil nil #'string=))))))
 
@@ -41,10 +39,8 @@
     (org-glance-graph:delete graph "a")
     (let ((m (cdr (assoc "x" (org-glance-tag-metrics--read graph)))))
       (should (= 1 (plist-get m :removals))))
-    ;; x has no live headline now, so it drops out of the derived tag set
     (should-not (member "x" (org-glance-graph:tags graph)))))
 
-;;; Row builder
 
 (ert-deftest org-glance-test:tags-rows ()
   "`org-glance-tags--rows' yields one row per tag, id = tag, count in cells."
@@ -60,7 +56,6 @@
       (let ((xr (cl-find "x" rows :key (lambda (r) (alist-get 'id r)) :test #'string=)))
         (should (equal "1" (alist-get 'count (alist-get 'cells xr))))))))
 
-;;; Remove tag (non-destructive retag)
 
 (ert-deftest org-glance-test:tags-retag-remove ()
   "Removing a tag drops it off each headline: multi-tagged survive, single-tagged
@@ -69,7 +64,7 @@ become untagged but live, and the tag leaves the derived tag set."
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :x:y:")   ; multi
                           (org-glance-test:headline "b" "* TODO B :x:"))    ; single
-    ;; the row id is a STRING, which is what the `-' action forwards
+    ;; the row id is a STRING -- what the `-' action forwards.
     (let ((res (org-glance-tags--retag-remove graph "x" '("a" "b"))))
       (should (equal '(2 . 0) res))
       (should-not (member "x" (org-glance-graph:tags graph)))
@@ -77,7 +72,6 @@ become untagged but live, and the tag leaves the derived tag set."
       (should (equal '("y") (org-glance-test:field graph "a" tags)))
       (should (null (org-glance-test:field graph "b" tags))))))
 
-;;; Visit
 
 (ert-deftest org-glance-test:tags-visit ()
   "`org-glance-tags:visit' opens the single tags buffer with one row per tag."
@@ -92,7 +86,6 @@ become untagged but live, and the tag leaves the derived tag set."
           (should (string= "*org-glance-tags*" (buffer-name)))
           (should (= 2 (length table-view--rows))))))))
 
-;;; Coloured cells
 
 (ert-deftest org-glance-test:tags-states-colored ()
   "The States cell colours each state name with a todo-state face."
@@ -108,7 +101,6 @@ become untagged but live, and the tag leaves the derived tag set."
     (should (get-text-property (string-match "DONE" s) 'face s))
     (should-not (get-text-property (string-match "|" s) 'face s))))
 
-;;; RET -> tag's headline table
 
 (ert-deftest org-glance-test:tags-filter-overlays-ambient ()
   "The dashboard's per-tag filter overlays the ambient spec (same view as the

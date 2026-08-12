@@ -1,12 +1,5 @@
 ;;; org-glance-tags.el --- all-tags overview (a table-view of tags) -*- lexical-binding: t; -*-
 
-;;; Commentary:
-;; A table-view whose rows are TAGS: count, todo-state
-;; breakdown, the tag's configured cycle, and event-tracked created/modified
-;; timestamps (see `org-glance-tag-metrics').  Row actions: open the tag's
-;; overview (o/RET), add a tag (+), remove a tag (-, a guarded non-destructive
-;; retag).  Bound to "t" in `org-glance-transient'.  Reuses the table-view
-;; package and `org-glance-view' coherence like `org-glance-table'.
 
 ;;; Code:
 
@@ -28,7 +21,6 @@
 
 (require 'org-glance-core)
 
-;;; Formatting
 
 (cl-defun org-glance-tags--format-time (ts)
   "Format timestamp TS as `YYYY-MM-DD HH:MM', or empty when nil."
@@ -53,7 +45,6 @@ The `|' active/done separator is left plain."
                  " ")
     ""))
 
-;;; Spec / rows
 
 (cl-defun org-glance-tags--spec ()
   "The `table-view' spec for the all-tags overview (rows are tags)."
@@ -90,9 +81,7 @@ The row id is the tag string; the Cycle cell comes from the tag's config."
   (cl-loop for entry in (org-glance-tag-metrics:all graph)
            collect (org-glance-tags--row graph (car entry) (cdr entry))))
 
-;;; Coherence (non-file projection, mirrors `org-glance-table')
 
-;;; Actions
 
 (cl-defun org-glance-tags--tag-filter (tag)
   "TAG's view filter: the tag overlaid on the ambient spec.
@@ -148,15 +137,13 @@ tag vanishes once no live headline carries it."
                      (format " (%d skipped: unsaved edits)" (cdr res))
                    "")))))))
 
-;;; Visit + entry point
 
 (cl-defun org-glance-tags:visit (graph)
   "Open GRAPH's all-tags overview in the single `*org-glance-tags*' buffer."
   (let ((src (org-glance-graph:headline-meta-path graph))
         (handlers (list (cons "table"    (lambda (id _row) (org-glance-tags--act-table graph id)))
                         (cons "overview" (lambda (id _row) (org-glance-tags--act-overview graph id)))
-                        ;; a tag exists only by carrying a headline, so "add a
-                        ;; tag" is the standard capture (new tags allowed)
+                        ;; a tag exists only on a headline, so "add" is capture
                         (cons "add"      (lambda (_id _row)
                                            (call-interactively #'org-glance-capture)))
                         (cons "remove"   (lambda (id _row) (org-glance-tags--act-remove graph id)))
@@ -178,4 +165,3 @@ tag vanishes once no live headline carries it."
   (org-glance-tags:visit org-glance-graph))
 
 (provide 'org-glance-tags)
-;;; org-glance-tags.el ends here

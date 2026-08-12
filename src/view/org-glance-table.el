@@ -3,26 +3,7 @@
 ;;; org-glance-table.el --- table-view-backed headline dashboard
 
 ;;; Commentary:
-;; A sortable, badge-coloured TABLE view over the graph, sister to the org-text
-;; `org-glance-overview'.  Where the overview is a real org file (folding,
-;; planning, agenda, an on-disk cache + coherence machinery), this is a flat,
-;; in-memory `table-view' buffer: one row per matching headline, columns for
-;; state / title / tags / scheduled / deadline / priority, client-side sort, and
-;; the same id-keyed actions (materialize / open / extract / tag / encrypt).
-;;
-;; It reuses the headless half of org-glance verbatim: rows come from
-;; `org-glance-graph:headlines' filtered by `org-glance-filter:predicate' (the
-;; exact pair the overview renders from), and the spec is built in pure elisp --
-;; the generic `table-view' core needs no backend process.
-;;
-;; COHERENCE.  PULL at the display boundary: a materialized save only appends to
-;; the WAL and FLAGS open views stale (`org-glance-view:mark-graph-stale' -- a
-;; boolean + the `glance:stale' lighter), never patching a row here.  When the
-;; buffer is (re)displayed or its window selected, it re-fills from the graph iff
-;; `headlines.jsonl' advanced since its last fill -- catching its own saves AND
-;; capture / delete / reindex / compaction / another Emacs by the same check.
-;;
-;; Browse with `org-glance-table'; act on the row at point.
+;; An in-memory `table-view' over the graph; sister to `org-glance-overview'.
 
 ;;; Code:
 
@@ -45,10 +26,6 @@
 (declare-function org-glance-capture:completing-read-tag "org-glance-capture")
 
 ;;; State colour palette
-;;
-;; The badge palette also fixes the sort priority for the state column (the core
-;; sorts a badge column by declared order), so the spec lists the graph's actual
-;; states active-before-done -- making "sort by state" default to active first.
 
 (defcustom org-glance-table-state-colors
   '(("TODO"      . "#e0af68")
@@ -121,7 +98,7 @@ always in the table header via the `table-view' `subtitle' (never hidden by the
                 (concat (if active " " "") "| "
                         (mapconcat #'org-glance-table--colorize-state done " ")))))))
 
-;;; Spec + rows (built in pure elisp -- no backend process)
+;;; Spec + rows
 
 (cl-defun org-glance-table--base-columns (graph)
   "The fixed built-in table columns for GRAPH, in default order.
@@ -206,7 +183,6 @@ priority is its letter, absent values are the empty string."
                 (encrypted . ,(if (org-glance-headline-metadata:encrypted? metadata) "🔒" ""))
                 (repeated . ,(if (org-glance-headline-metadata:repeated? metadata) "↻" "")))))))
 
-;;; Per-buffer state
 
 (defvar-local org-glance-table--spec nil
   "Normalised filter spec the current table buffer was generated with.")
@@ -234,8 +210,7 @@ to a full reload, so it can never show a stale row."
       (table-view-upsert-row buf (org-glance-table--row meta))
       (table-view-apply-sort))
      (t (table-view-delete-row buf id)))
-    ;; This view now reflects the store our own write just advanced (invariant
-    ;; 7: single-user, so the file mtime is the anchor).
+    ;; Our own write advanced the store; re-anchor mtime (invariant 7).
     (when graph
       (org-glance-view:snapshot-mtime (org-glance-graph:headline-meta-path graph)))
     (org-glance-view:mark-fresh)
@@ -257,13 +232,6 @@ LINE, which drifts to another row once the sort reorders them."
         (org-glance-view:mark-fresh)
         (org-glance-view:restore-point id line col)))))
 
-;;; Live coherence (pull at the display boundary, driven by `org-glance-view')
-;;
-;; This file supplies only the two view-specific pieces `org-glance-view:register'
-;; takes -- the STALE-FN (`--stale?') and the RELOAD-FN (`--reload') -- in
-;; `org-glance-table:visit'.  A table is a NON-FILE projection rebuilt from the
-;; graph, so the shared driver always reloads it at the display boundary (it
-;; discards no user data, unlike the overview's file-backed buffer).
 
 ;;; Actions (id-keyed; the table-view core hands each handler the row's id)
 
@@ -375,14 +343,6 @@ passwords (confirmed when setting a new one) and reloads the row."
       (org-glance-table--finish id line "%s" done))))
 
 ;;; Per-view persistence: column order + sort, keyed by filter identity
-;;
-;; The user's column reordering (`table-view' column-move) and sort choice live in
-;; the table buffer (read via `table-view-layout').  Persist
-;; them PER FILTER so reopening the same view restores the layout across sessions.
-;; Stored as one `read'-able alist at `<store>/config/table-views.eld', keyed by the
-;; canonical filter identity (the same key basis the overview cache uses).  A change
-;; is saved from a buffer-local `post-command-hook' that only writes when the layout
-;; actually differs from the last snapshot (column moves / sorts are rare).
 
 (cl-defun org-glance-table--config-file (graph)
   "Path of GRAPH's table-view config store (may not exist)."
@@ -460,21 +420,7 @@ nudges, once per change, that `C-c C-c' applies the layout to a scope."
           (setq org-glance-table--config-snapshot cur)
           (message "Layout modified — C-c C-c to apply it to a scope")))))))
 
-;;; Column schema (`C-c +' adds, `C-c -' removes, persisted per tag)
-;;
-;; `C-c +' completing-reads an org drawer property the visible headlines carry
-;; (`org-glance-property-index:keys') and appends a column showing it per row.
-;; The metadata projection the table renders from does not carry arbitrary drawer
-;; properties, so the cell is pulled from `org-glance-property-index' -- a derived,
-;; hash-invalidated, persisted cache of each headline's properties (fallback: an
-;; O(N) blob parse).  `C-c -' removes a column -- any column except the
-;; mandatory Title.
-;;
-;; Both persist PER TAG (the filter's tags) at `<store>/config/table-columns.eld':
-;; `:columns' the added custom columns, `:hidden' the removed built-in keys.  So
-;; every view of a tag inherits its columns; a hidden built-in stays hidden and a
-;; new built-in shipped later still appears (hidden is a denylist).  Column
-;; ORDER + sort persist separately, per filter (see above).
+;;; Column schema (`C-c +' / `C-c -'), persisted PER TAG -- invariant 16
 
 (cl-defun org-glance-table--property-column (graph property &optional header)
   "A `table-view' column displaying drawer PROPERTY for each row's headline.
@@ -585,7 +531,7 @@ empty input cancels.  Bound buffer-locally as `table-view-add-column-function'
 so `C-c +' uses it."
   (let* ((graph org-glance-view--graph)
          (ids (org-glance-table--row-ids table-view--rows))
-         ;; kinds display PRETTY ("roasted by") but canonicalize to their slug
+         ;; invariant 13: kinds display PRETTY, canonicalize to their slug
          (candidates (append (mapcar (lambda (k) (cons (org-glance--kind-pretty k) k))
                                      (org-glance-graph:edge-kinds graph ids))
                              (mapcar (lambda (k) (cons k k))
@@ -598,7 +544,6 @@ so `C-c +' uses it."
           (org-glance-table--custom-column
            graph (cdr (assoc choice candidates))))))))
 
-;;; Per-tag column schema store (`<store>/config/table-columns.eld')
 
 (cl-defun org-glance-table--schema-file (graph)
   "Path of GRAPH's per-tag custom-column schema store (may not exist)."
@@ -660,16 +605,7 @@ untagged (\":none:\") entry."
                                       :columns (plist-get snap :columns)
                                       :hidden (plist-get snap :hidden))))))
 
-;;; Scoped layout for reference tables (`C-c C-c' applies, scope-keyed)
-;;
-;; Relation tables (`@' / `C-c @') are transient: neither persistence path
-;; above may touch them (their filter identity embeds another headline's
-;; id/link set and would accrete one entry per visit).  Instead the user applies
-;; an edited layout EXPLICITLY: `C-c C-c' prompts for a scope -- the anchor
-;; headline itself, or one (anchor-tag x row-tag) pair -- and saves the full
-;; layout (custom columns, hidden built-ins, order, sort) under that scope in
-;; `<store>/config/table-refs.eld'.  A later relation table restores the
-;; anchor's own entry first, else the latest-applied matching pair entry.
+;;; Scoped reference layouts: `C-c C-c' only, scope-keyed (invariants 17-18)
 
 (cl-defun org-glance-table--refs-file (graph)
   "Path of GRAPH's scoped reference-layout store (may not exist)."
@@ -879,7 +815,6 @@ drop (retag's `user-error')."
                    (message "Removed tag `%s'" tag))
           (user-error (message "Headline `%s' has unsaved edits; save it first" id)))))))
 
-;;; Browser
 
 (defun org-glance-table:filter-or-reset ()
   "Filter or narrow the table; with a prefix arg, clear the active filter.
@@ -909,21 +844,15 @@ the display-boundary refresh widens the view under the user."
         (cons "open"        (lambda (id _row) (org-glance-table--act-open graph id)))
         (cons "extract"     (lambda (id _row) (org-glance-table--act-extract graph id)))
         (cons "todo"        (lambda (rows)
-                              ;; `bulk' handler: a row LIST.  With marks -> bulk
-                              ;; (one prompt, all marked); else the row at point
-                              ;; gets the full single-row `C-c C-t' (cycle + note).
+                              ;; `(bulk . t)' -> the core hands a row LIST.
                               (if (table-view-marked-rows)
                                   (org-glance-table--act-todo-bulk graph rows)
                                 (let ((row (car rows)))
                                   (org-glance-table--act-todo graph (alist-get 'id row))))))
         (cons "refresh"     (lambda (_id _row) (org-glance-table--act-refresh)))
         (cons "overview"    (lambda (_id _row) (org-glance-overview:visit graph spec)))
-        ;; `-' drops the view's tag off the headline (mirror of the bare `+');
-        ;; column removal lives on `C-c -' (`org-glance-table:remove-column').
         (cons "remove"      (lambda (id _row)
                               (org-glance-table--act-deltag graph id spec)))
-        ;; `+' captures into the view's tag; columns are added with `C-c +'
-        ;; (`org-glance-table:add-column').
         (cons "capture"     (lambda (_id _row)
                               (org-glance-capture (or (org-glance-filter:tags spec)
                                                       (org-glance-capture:completing-read-tag))
@@ -970,10 +899,7 @@ open, `C-c C-c' to apply -- and the `Relation' column."
          (spec (org-glance-filter:normalize-spec filter))
          (saved (org-glance-table--config-get graph spec))   ; restored column order + sort
          (ref-entry (and context (org-glance-table--refs-resolve graph context)))
-         ;; Resolve the active/done split ONCE and bind it while the `:done'
-         ;; predicate AND the badge split are built, so the table agrees with the
-         ;; overview (W2).  The predicate is captured in `fill-fn', so a reload
-         ;; reuses this exact split with no further bookkeeping.
+         ;; Bound BEFORE `keep?' and the badge split, so both read one done-set.
          (org-done-keywords
           (org-glance-tag-config:done-keywords-for-filter graph spec))
          (keep? (org-glance-filter:predicate spec))
@@ -983,8 +909,6 @@ open, `C-c C-c' to apply -- and the `Relation' column."
                     (with-current-buffer buf
                       (let ((rows (org-glance-table--rows graph keep?)))
                         (table-view-set-rows buf rows)
-                        ;; `set-rows' already warmed the memo via the custom
-                        ;; columns' value-fns; persist only if a blob re-parsed.
                         (org-glance-property-index--flush-if-dirty graph)
                         (org-glance-view:snapshot-mtime src)))))
          (buf (table-view-display
@@ -999,30 +923,17 @@ open, `C-c C-c' to apply -- and the `Relation' column."
       (local-set-key (kbd "C-c C-c") #'org-glance-table:apply-layout)
       (setq org-glance-table--keep-fn keep?
             org-glance-table--spec spec
-            ;; Match the corresponding overview (`org-glance-overview:visit'): run
-            ;; directory-relative actions (dired, shell, relative links) from the
-            ;; graph's ROOT, not wherever this non-file buffer happened to spawn.
             default-directory (file-name-as-directory (org-glance-graph:directory graph)))
       (org-glance-view:register graph
                                 :stale-fn  (lambda () (org-glance-view:stale-vs-file? src))
                                 :reload-fn (lambda () (org-glance-table--reload (current-buffer))))
-      ;; Custom property columns: `C-c +' builds one via the prompt below, and any
-      ;; add/remove is persisted per tag through the schema-changed hook.
       (setq-local table-view-add-column-function #'org-glance-table--add-column-prompt)
-      ;; `C-u /' clears the active filter; a bare `/' stays filter-or-narrow.
       (local-set-key "/" #'org-glance-table:filter-or-reset)
-      ;; `!' quietly aliases `j' (open link) -- dired's execute rhyme.
       (local-set-key (kbd "!") (lookup-key (current-local-map) (kbd "j")))
-      ;; `C' configures the table's tag directly -- the prompt-free `C' of the
-      ;; transient, symmetric with the overview binding.
       (local-set-key (kbd "C") #'org-glance-table:configure-tag)
-      ;; `C-c +' / `C-c -' are the column keys; the bare `+' / `-' act on the
-      ;; headline at point (capture / untag).  `C-u C-c -' always prompts.
       (local-set-key (kbd "C-c +") #'org-glance-table:add-column)
       (local-set-key (kbd "C-c -") #'org-glance-table:remove-column)
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
-      ;; Restore the saved sort (else the spec default seeded by display), apply it,
-      ;; then persist any subsequent layout change (column move / sort) for this filter.
       (if-let ((sort (or (plist-get ref-entry :sort) (plist-get saved :sort))))
           (table-view-set-sort sort)
         (table-view-apply-sort))

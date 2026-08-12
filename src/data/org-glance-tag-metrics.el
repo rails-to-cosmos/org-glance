@@ -1,12 +1,5 @@
 ;;; org-glance-tag-metrics.el --- per-tag event metrics sidecar -*- lexical-binding: t; -*-
 
-;;; Commentary:
-;; A side index of per-tag wall-clock facts the content store cannot provide (it
-;; keeps only a monotonic `seq', never a timestamp).  The store fires
-;; `org-glance-graph-before-append-functions' before every WAL append; this module
-;; stamps :created (once, first sighting), :modified (every touching event) and
-;; :captures/:removals counters into `<store>/config/tag-metrics.eld'.  Live
-;; :count and :states stay DERIVED from the headlines so they cannot drift.
 
 ;;; Code:
 
@@ -172,4 +165,3 @@ seeding :created lazily for tags that predate the metrics index."
       result)))
 
 (provide 'org-glance-tag-metrics)
-;;; org-glance-tag-metrics.el ends here

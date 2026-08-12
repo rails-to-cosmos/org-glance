@@ -33,16 +33,11 @@
                     ":TODO_KEYWORDS: TODO READING | READ"
                     ":END:"
                     "- author: Tolkien")))
-    ;; drawer properties, matched case-insensitively
     (should (string= "book-1" (org-glance-headline:node-property "ORG_GLANCE_ID" headline)))
     (should (string= "TODO READING | READ" (org-glance-headline:node-property "todo_keywords" headline)))
-    ;; absent -> nil
     (should (null (org-glance-headline:node-property "NOPE" headline)))
-    ;; a body `KEY: value' is NOT a drawer/node property ...
     (should (null (org-glance-headline:node-property "author" headline)))
-    ;; ... it is a user (body) property instead
     (should (string= "Tolkien" (org-glance-headline:get-user-property "author" headline)))
-    ;; the drawer alist carries the keys, uppercased
     (should (assoc "TODO_KEYWORDS" (org-glance-headline:node-properties headline)))))
 
 (ert-deftest org-glance-test:headline-links ()
@@ -63,11 +58,9 @@
     (should (org-glance-headline:encrypted? encrypted))
     (should (s-contains? "#+begin_crypt" (org-glance-headline:contents encrypted)))
     (should (not (s-contains? "foo bar" (org-glance-headline:contents encrypted))))
-    ;; decrypt: blocks stay (rekey path), body plaintext again
     (should (not (org-glance-headline:encrypted? decrypted)))
     (should (s-contains? "#+begin_crypt" (org-glance-headline:contents decrypted)))
     (should (s-contains? "foo bar" (org-glance-headline:contents decrypted)))
-    ;; decrypt + unwrap: byte-identical to the original
     (should (string= (org-glance-headline:contents public)
                      (org-glance-headline:contents orig)))))
 
@@ -85,16 +78,13 @@ encrypt) preserves the block structure; decrypt+unwrap restores the original."
          (fresh (org-glance-headline--from-string (org-glance-headline:contents enc)))
          (meta (org-glance-headline:metadata fresh))
          (cipher (org-glance-headline:contents fresh)))
-    ;; only the blocks sealed; public parts intact
     (should (s-contains? "example.com" cipher))
     (should (s-contains? "public middle" cipher))
     (should-not (s-contains? "secret one" cipher))
     (should-not (s-contains? "secret two" cipher))
     (should (= 2 (s-count-matches "#\\+begin_crypt" cipher)))
-    ;; the metadata sees both facts at once -- the point of the feature
     (should (org-glance-headline-metadata:encrypted? meta))
     (should (org-glance-headline-metadata:linked? meta))
-    ;; rekey preserves both blocks; the new password opens them
     (let* ((rekeyed (org-glance-headline:encrypt
                      (org-glance-headline:decrypt fresh "pw") "new"))
            (opened (org-glance-headline:contents
@@ -103,7 +93,6 @@ encrypt) preserves the block structure; decrypt+unwrap restores the original."
                                     (org-glance-headline:contents rekeyed))))
       (should (s-contains? "secret one" opened))
       (should (s-contains? "secret two" opened)))
-    ;; decrypt + unwrap: fully public, no markers left
     (let ((public (org-glance-headline:contents
                    (org-glance-headline:decrypt fresh "pw" t))))
       (should (s-contains? "secret one" public))
@@ -198,9 +187,7 @@ property index on every clock-in/out.  Real content still changes it."
          (edited (org-glance-test:headline "h" "* TODO Task" "body edited")))
     (should (equal (org-glance-headline:hash bare) (org-glance-headline:hash logged)))
     (should (equal (org-glance-headline:hash bare) (org-glance-headline:hash more)))
-    ;; the drawer is ignored, not the body
     (should-not (equal (org-glance-headline:hash bare) (org-glance-headline:hash edited)))
-    ;; ... and a custom logbook drawer name is honoured
     (let ((org-log-into-drawer "MYLOG"))
       (should (equal (org-glance-headline:hash bare)
                      (org-glance-headline:hash
@@ -213,23 +200,19 @@ a keyword FROM naming no real content fact (the field would read nil forever)
 and a list-valued slot with a non-vector ENCODE (which kills EVERY save, since
 `--append\' calls `json-serialize\' outside the error-demoted hook)."
   (let ((slots (cdr (cl-struct-slot-info 'org-glance-headline-metadata))))
-    ;; the shipped pair is valid
     (should (org-glance-headline-metadata--check-fields
              slots org-glance-headline-metadata:fields))
-    ;; unknown content fact
     (should-error
      (org-glance-headline-metadata--check-fields
       slots (cl-loop for (slot json from encode decode) in org-glance-headline-metadata:fields
                      collect (list slot json (if (eq slot 'hash) :no-such-fact from)
                                    encode decode)))
      :type 'error)
-    ;; a list field demoted to a nil encoder
     (should-error
      (org-glance-headline-metadata--check-fields
       slots (cl-loop for (slot json from encode decode) in org-glance-headline-metadata:fields
                      collect (list slot json from (if (eq slot 'tags) nil encode) decode)))
      :type 'error)
-    ;; slot order still guarded
     (should-error
      (org-glance-headline-metadata--check-fields
       slots (reverse org-glance-headline-metadata:fields))
@@ -259,7 +242,6 @@ the same string.  The passes are counted."
       (let* ((headline (org-glance-headline--from-string contents))
              (meta (org-glance-headline:metadata headline)))
         (should (org-glance-headline-metadata? meta))
-        ;; one buffer for the parse; the facts rode along with it
         (should (= 1 passes))))))
 
 (ert-deftest org-glance-test:content-facts-memo-is-contents-keyed ()
@@ -268,11 +250,9 @@ rewrites contents recomputes rather than describing the old bytes."
   (let* ((contents (org-glance-test:org-with-id "* TODO Task" "p2" "plain body"))
          (headline (org-glance-headline--from-string contents))
          (memoized (org-glance-headline--content-facts headline))
-         ;; same headline, memo dropped: the on-demand parse must agree
          (fresh (org-glance-headline--content-facts
                  (org-glance-headline--copy headline :-facts nil))))
     (should (equal memoized fresh))
-    ;; a contents rewrite drops the memo (and the thunks built from it)
     (let ((rewritten (org-glance-headline--copy headline
                        :contents (org-glance-test:org-with-id
                                   "* TODO Task" "p2" "a different body"))))

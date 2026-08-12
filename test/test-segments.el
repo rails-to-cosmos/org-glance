@@ -8,7 +8,6 @@
     (should (f-exists? (org-glance-graph--manifest-path graph)))
     (should (null (org-glance-test:sealed-segments graph)))
     (should (null (org-glance-graph:headlines graph)))
-    ;; reopen (bypass the instance cache) -> same manifest, still empty
     (let ((manifest-before (f-read-text (org-glance-graph--manifest-path graph) 'utf-8)))
       (org-glance-test:reopen graph)
       (should (string= manifest-before
@@ -24,7 +23,6 @@
                                                                  (format "* Headline number %d" i))))
       (let ((sealed (org-glance-test:sealed-segments graph)))
         (should (>= (length sealed) 1))
-        ;; every sealed segment exists, parses line-by-line, and the open file is small
         (dolist (name sealed)
           (let ((lines 0))
             (org-glance-graph--scan-file
@@ -55,12 +53,10 @@
       (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE Alpha")) ; update across seals
       (org-glance-graph:delete graph "b")
       (should (>= (length (org-glance-test:sealed-segments graph)) 3))
-      ;; point lookups across segment boundaries
       (should (string= "DONE" (org-glance-test:field graph "a" state)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "b")))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "c")))
       (should (null (org-glance-graph:get-headline graph "nope")))
-      ;; full scan: first-sighting order (a before c), b tombstoned out, a's latest state
       (let ((metas (org-glance-graph:headlines graph)))
         (should (equal '("a" "c") (mapcar #'org-glance-headline-metadata:id metas)))
         (should (string= "DONE" (org-glance-headline-metadata:state (car metas))))))))
@@ -82,12 +78,11 @@ the next append; intact records are unaffected."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "ok" "* Intact"))
     (let ((open (org-glance-graph:headline-meta-path graph)))
-      ;; simulate a crash mid-append: half a record, no trailing newline
+      ;; invariant 32: tolerated only as the open segment's FINAL line.
       (f-append-text "{\"id\":\"torn\",\"sta" 'utf-8 open)
       (should (= 1 (length (org-glance-graph:headlines graph))))
       (should (null (org-glance-graph:get-headline graph "torn")))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "ok")))
-      ;; the next insert drops the torn tail and appends cleanly
       (org-glance-graph:add graph (org-glance-test:headline "next" "* After crash"))
       (should (equal '("ok" "next") (org-glance-test:ids graph))))))
 
@@ -97,7 +92,7 @@ the next append; intact records are unaffected."
     (org-glance-graph:add graph (org-glance-test:headline "x" "* Sealed data"))
     (let ((open (org-glance-graph:headline-meta-path graph))
           (sealed (org-glance-graph--segment-path graph 1)))
-      ;; simulate --seal dying between rename and manifest swap
+      ;; invariant 2: the crash lands between the rename and the MANIFEST swap.
       (rename-file open sealed)
       (f-touch open)
       (let ((graph (org-glance-test:reopen graph)))
@@ -131,13 +126,11 @@ in place: same reads, order preserved, next insert continues cleanly."
     (let ((graph (org-glance-graph dir)))
       (should (f-exists? (org-glance-graph--manifest-path graph)))
       (should (null (org-glance-test:sealed-segments graph)))
-      ;; single-file semantics preserved
       (let ((metas (org-glance-graph:headlines graph)))
         (should (equal '("l1" "l2") (mapcar #'org-glance-headline-metadata:id metas)))
         (should (string= "DONE" (org-glance-headline-metadata:state (car metas))))
         (should (string= "Legacy один" (org-glance-headline-metadata:title (car metas)))))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "l3")))
-      ;; new records sort after all legacy ones
       (org-glance-graph:insert graph (list (list :id "new" :state "" :title "New" :hash "h4")))
       (should (equal '("l1" "l2" "new") (org-glance-test:ids graph))))))
 
@@ -154,17 +147,14 @@ tombstones, GCs dead blobs, and keeps live data intact."
       (should (>= (length (org-glance-test:sealed-segments graph)) 3))
       (should (f-exists? (org-glance-graph:headline-data-path graph "b")))
       (org-glance-graph:compact graph)
-      ;; one sealed segment; superseded + tombstoned records gone
       (should (= 1 (length (org-glance-test:sealed-segments graph))))
       (let ((records nil))
         (org-glance-graph--scan-forward graph (lambda (r) (push r records)))
         (should (= 1 (length records)))
         (should (string= "a" (plist-get (car records) :id)))
         (should (string= "DONE" (plist-get (car records) :state))))
-      ;; b is fully reclaimed: metadata gone (nil, not tombstone), blob deleted
       (should (null (org-glance-graph:get-headline graph "b")))
       (should-not (f-exists? (org-glance-graph:headline-data-path graph "b")))
-      ;; a intact, contents readable
       (should (s-contains? "alpha body v2" (org-glance-graph:get-content graph "a"))))))
 
 (ert-deftest org-glance-test:segments-compaction-preserves-order ()
@@ -175,14 +165,12 @@ such ids after everything else)."
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "a" "* TODO Alpha")) ; seals
       (org-glance-graph:add graph (org-glance-test:headline "b" "* Beta")))      ; seals
-    ;; update a with the default cap: the record stays in the OPEN segment
     (org-glance-graph:add graph (org-glance-test:headline "a" "* DONE Alpha"))
     (should (equal '("a" "b") (org-glance-test:ids graph)))
     (org-glance-graph:compact graph)
     (let ((metas (org-glance-graph:headlines graph)))
       (should (equal '("a" "b") (mapcar #'org-glance-headline-metadata:id metas)))
       (should (string= "DONE" (org-glance-headline-metadata:state (car metas)))))
-    ;; everything merged: one sealed segment, empty open
     (should (= 1 (length (org-glance-test:sealed-segments graph))))
     (should (= 0 (org-glance-test:open-size graph)))))
 
@@ -217,17 +205,13 @@ listed segment still held the headline live)."
     (org-glance-test:with-seal-each-insert
       (org-glance-graph:add graph (org-glance-test:headline "x" "* TODO Doomed" "body"))  ; seals
       (org-glance-graph:add graph (org-glance-test:headline "y" "* Alive" "body")))       ; seals
-    ;; tombstone for x lands in the OPEN segment only (default cap: no seal)
     (org-glance-graph:delete graph "x")
     (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
-    ;; crash compact at its commit point
     (org-glance-test:with-crash-at #'org-glance-graph--write-manifest
       (should-error (org-glance-graph:compact graph)))
-    ;; recover: x must STILL be dead, y alive, and the orphan merged seg reaped
     (let ((graph (org-glance-test:reopen graph)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "x")))
       (should (equal '("y") (org-glance-test:ids graph)))
-      ;; a subsequent clean compaction converges: x fully reclaimed
       (org-glance-graph:compact graph)
       (should (null (org-glance-graph:get-headline graph "x")))
       (should-not (f-exists? (org-glance-graph:headline-data-path graph "x")))
@@ -245,7 +229,6 @@ heal, even in the ambiguous empty-open state; the store does not bloat."
       (org-glance-test:with-crash-at #'org-glance-graph--write-manifest
         (should-error (org-glance-graph:compact graph)))
       (let ((graph (org-glance-test:reopen graph)))
-        ;; the orphan shares seqs with listed segments -> reaped, not adopted
         (should (equal segments-before (org-glance-test:sealed-segments graph)))
         (should (= 2 (org-glance-test:count-records graph)))
         (should (equal '("a" "b") (org-glance-test:ids graph)))))))
@@ -259,23 +242,18 @@ the overview cache invalidates on every kind of store write."
           (signal (org-glance-graph:headline-meta-path graph)))
       (cl-flet ((backdate () (set-file-times signal (time-subtract (current-time) 100)))
                 (mtime () (file-attribute-modification-time (file-attributes signal))))
-        ;; insert bumps
         (backdate)
         (let ((before (mtime)))
           (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
           (should (time-less-p before (mtime))))
-        ;; delete bumps
         (backdate)
         (let ((before (mtime)))
           (org-glance-graph:delete graph "a")
           (should (time-less-p before (mtime))))
-        ;; seal recreates the open segment fresh
         (backdate)
         (let ((before (mtime)))
           (org-glance-graph--seal graph)
           (should (time-less-p before (mtime))))
-        ;; compaction changes observable reads (tombstone -> nil), so it must
-        ;; bump the signal too (it replaces the open segment)
         (backdate)
         (let ((before (mtime)))
           (org-glance-graph:compact graph)

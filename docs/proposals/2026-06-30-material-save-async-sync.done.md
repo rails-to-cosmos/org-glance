@@ -170,7 +170,8 @@ silently revert.
 ## Secondary win (optional, same PR or follow-up)
 
 Step 2 stringifies the buffer and re-parses it in a *fresh* temp buffer
-(`--from-string`) purely so the per-tag todo cycle can be `let`-bound globally (the W1 fix).
+(`--from-string`) purely so the per-tag todo cycle can be `let`-bound globally (pinned by
+`org-glance-test:tag-config-materialize-state-roundtrip`).
 The save buffer is already an org buffer holding exactly one headline — we can re-run the
 element parse **in place** under the same `let ((org-todo-keywords …))`, skipping the string
 copy + temp-buffer org-mode spin-up. Pure CPU win on the hot path, no behaviour change. Verify

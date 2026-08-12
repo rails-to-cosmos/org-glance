@@ -153,13 +153,7 @@ and unescaped path -- exactly what `org-glance--links-partition' reads."
                          (org-element-property :type link-element)
                          (org-element-property :path link-element))))
 
-;;; Relation edges
-;;
-;; An edge IS an `org-glance-material:' link in the source headline's body
-;; (blobs canonical, indexes derived): `[[org-glance-material:ID][Title]]',
-;; optionally `?kind=KIND' for a typed reference (a book's author vs editor).
-;; Legacy `org-glance-visit:' links count as kindless edges, so old notes gain
-;; relations for free.
+;;; Relation edges: the `org-glance-material:' body link is canonical (inv 5).
 
 (defconst org-glance-link-material-type "org-glance-material"
   "Org link type materializing a headline by id; the canonical edge form.")
@@ -330,14 +324,7 @@ shrink them."
       (org-glance--pick-link-pos
        (mapcar (lambda (entry) (cons (cdr (car entry)) (cdr entry))) chosen))))))
 
-;;; Crypt blocks
-;;
-;; A `#+begin_crypt' … `#+end_crypt' special block marks a body region that is
-;; ciphertext AT REST and plaintext only in the material buffer.  The markers
-;; are the persistent secrecy annotation; sealing/unsealing rewrites only the
-;; body between them.  Plaintext outside the blocks stays indexable (links,
-;; properties), which is the whole point.  Base64 ciphertext cannot collide
-;; with the marker lines.
+;;; Crypt blocks: per-block secrecy; plaintext outside stays indexed (inv 14).
 
 (defconst org-glance--crypt-begin-re "^[ \t]*#\\+begin_crypt[ \t]*$"
   "Regexp matching a crypt block's opening marker line (case-insensitive use).")

@@ -25,10 +25,8 @@ preserved) and backs up the legacy metadata non-destructively."
       (should (string= "Hello" (org-glance-headline-metadata:title meta)))
       (should (member "foo" (org-glance-headline-metadata:tag-strings meta)))
       (should (s-contains? "body text" (org-glance-graph:get-content graph "hello-1"))))
-    ;; non-destructive backup
     (should (f-exists? (f-join dir "foo" "foo.metadata.el.bak")))
     (should-not (f-exists? (f-join dir "foo" "foo.metadata.el")))
-    ;; legacy no longer detected after migration
     (should (null (org-glance-legacy-metadata-files dir)))))
 
 (ert-deftest org-glance-test:migrate-skips-overview ()
@@ -58,7 +56,6 @@ migrate (no whole-batch abort)."
                            (org-glance-test:org-with-id "* TODO Good" "good"))
     (org-glance-test:write (f-join dir "bad.org")
                            (org-glance-test:org-with-id "* TODO Bad" "bad"))
-    ;; must not abort despite bad.org failing
     (org-glance-test:with-failing-ingest "bad"
       (org-glance-migrate dir))
     (let ((graph (org-glance-graph dir)))
@@ -82,7 +79,6 @@ already-migrated sources and ingests only newly-appeared ones."
     (org-glance-test:write (f-join dir "a.org")
                            (org-glance-test:org-with-id "* TODO A" "a"))
     (should (= 1 (org-glance-migrate dir)))
-    ;; restart, and a brand-new source file appears
     (org-glance-test:write (f-join dir "b.org")
                            (org-glance-test:org-with-id "* TODO B" "b"))
     (should (= 1 (org-glance-migrate dir)))     ; only b.org is ingested; a.org skipped
@@ -102,11 +98,8 @@ file and only then backs the index up; the already-done file is not re-ingested.
     (org-glance-test:write (f-join dir "tag.metadata.el") "#s(hash-table)")
     (org-glance-test:with-failing-ingest "bad"
       (org-glance-migrate dir))
-    ;; legacy index kept (NOT backed up) because a file was skipped
     (should (f-exists? (f-join dir "tag.metadata.el")))
     (should-not (f-exists? (f-join dir "tag.metadata.el.bak")))
-    ;; resume without the failure: finishes bad.org, leaves good.org alone, and
-    ;; now the clean pass backs up the index
     (should (= 1 (org-glance-migrate dir)))     ; only bad.org ingested on resume
     (should (f-exists? (f-join dir "tag.metadata.el.bak")))
     (should-not (f-exists? (f-join dir "tag.metadata.el")))
@@ -128,10 +121,8 @@ migrates, or touches the legacy store; it always returns nil."
                 ((symbol-function 'display-warning)
                  (lambda (&rest _) (cl-incf warnings))))
         (should (null (org-glance-migrate-maybe dir)))
-        ;; second init: already warned this session -> no second warning
         (should (null (org-glance-migrate-maybe dir)))
         (should (= 1 warnings))))
-    ;; nothing was migrated or renamed; the graph stays empty
     (should (f-exists? (f-join dir "foo" "foo.metadata.el")))
     (should-not (f-exists? (f-join dir "foo" "foo.metadata.el.bak")))
     (should (null (org-glance-graph:get-headline (org-glance-graph dir) "h1")))))

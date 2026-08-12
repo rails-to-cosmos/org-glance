@@ -3,25 +3,7 @@
 ;;; org-glance-view.el --- shared coherence for graph views
 
 ;;; Commentary:
-;; Overviews and tables are read-only projections of the graph that can fall
-;; behind the store when it advances (a materialized save appends to
-;; `headlines.jsonl').  This module owns BOTH halves of keeping them coherent,
-;; once, for every view type:
-;;
-;;  - PUSH (cheap, on the save hot path): `org-glance-view:mark-graph-stale'
-;;    flags every open view of a graph stale -- a boolean per view, no I/O, no
-;;    rebuild, it never touches point -- so the save stays "blob + WAL" and the
-;;    `glance:stale' lighter shows until the view refreshes.
-;;  - PULL (at a SAFE boundary): a view registered with `org-glance-view:register'
-;;    re-fills itself when its window is (re)displayed or selected -- where point
-;;    is being re-established anyway -- via `org-glance-view--refresh-when-stale'.
-;;    A FILE-backed buffer with unsaved edits is never reverted (it is only
-;;    flagged), so no user data is discarded.
-;;
-;; Each view supplies only what genuinely differs: a STALE-FN (its freshness
-;; test -- an org-file cache vs an in-memory fill) and a RELOAD-FN (its rebuild).
-;; The window-hook wiring, the modified-buffer guard and the error demotion live
-;; here, so a new view type adds only a `register' call.
+;; Both halves of view coherence (invariant 10): PUSH flag-stale, PULL refresh.
 
 ;;; Code:
 
@@ -66,7 +48,6 @@ doubt, rebuild."
   (let ((choice (completing-read prompt (org-glance-graph:tags org-glance-graph))))
     (unless (string-empty-p choice) choice)))
 
-;;; Display
 
 (defcustom org-glance-view-fill-frame t
   "When non-nil, opening an overview or table view fills the frame.
@@ -147,13 +128,8 @@ the save that flagged it, so its errors are demoted."
         (with-demoted-errors "org-glance: view refresh failed: %S"
           (funcall org-glance-view--reload-fn))))))
 
-;; One global, guarded mode-line element.  The native `(VARIABLE THEN)' construct
-;; reads the buffer-local flag directly -- no per-redisplay funcall -- so it shows
-;; ` glance:stale' only in a stale view and nothing elsewhere (idempotent across
-;; reloads).
 (cl-pushnew '(org-glance-view--stale " glance:stale") mode-line-misc-info :test #'equal)
 
-;;; Occurrence history picker (shared by table `l', overview `l', material `C-c l')
 
 (cl-defun org-glance-view:pick-occurrence (graph id)
   "Completing-read one of ID's occurrence snapshots and open it READ-ONLY.
@@ -217,7 +193,6 @@ Return the buffer."
       (org-glance-view:fill-frame from-view))
     buf))
 
-;;; Staleness guard (a view's cached snapshot can outlive the graph)
 
 (defconst org-glance-view--stale-message
   "Headline no longer in graph (view is stale; press `g' to refresh)"

@@ -1,9 +1,5 @@
 ;;; test-merge.el --- Git-sync merge/self-heal tests for the metadata store  -*- lexical-binding: t -*-
 
-;; Covers the store's behaviour when its meta/ dir is synced across machines
-;; via git: the `merge=union' driver on *.jsonl, self-healing a MANIFEST left
-;; conflict-marked by git's default merge, positional last-wins reads over a
-;; union-merged open segment, and adopting segments sealed on two machines.
 
 (require 'test-helpers)
 (require 'org-glance-tag-metrics)
@@ -50,7 +46,6 @@ line, and a second open never clobbers a hand-edited file (write-if-absent)."
     (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes")))
       (should (f-exists? path))
       (should (string= "*.jsonl merge=union\n" (f-read-text path 'utf-8)))
-      ;; hand-edit, then reopen: the existing file must survive untouched
       (f-write-text "*.jsonl merge=union\n# local override\n" 'utf-8 path)
       (let ((graph (org-glance-test:reopen graph)))
         (should (string= "*.jsonl merge=union\n# local override\n"
@@ -70,20 +65,16 @@ and the rewritten MANIFEST is valid canonical JSON."
     (let ((segs (org-glance-test-merge:seg-names graph))
           (manifest (org-glance-graph--manifest-path graph)))
       (should (= 3 (length segs)))
-      ;; mangle the MANIFEST exactly as git's default (non-union) merge would
       (f-write-text (org-glance-test-merge:conflict-manifest (list (nth 0 segs)) segs)
                     'utf-8 manifest)
       (let ((graph (org-glance-test:reopen graph)))
-        ;; every sealed segment adopted back; none reaped
         (should (equal segs (sort (copy-sequence
                                    (org-glance-graph--sealed-segments graph))
                                   #'string<)))
         (should (equal segs (org-glance-test-merge:seg-names graph)))
-        ;; live records restored, in first-sighting order
         (should (equal '("a" "b" "c")
                        (mapcar #'org-glance-headline-metadata:id
                                (org-glance-graph:headlines graph))))
-        ;; rewritten MANIFEST is valid canonical JSON, no markers left
         (let* ((text (f-read-text manifest 'utf-8))
                (parsed (json-parse-string text :object-type 'plist)))
           (should (= 2 (plist-get parsed :version)))
@@ -98,22 +89,17 @@ and the rewritten MANIFEST is valid canonical JSON."
 after ours, including a newer duplicate id placed later) reads by physical
 position: the last record per id wins and no data is lost."
   (org-glance-test:with-graph graph
-    ;; two ids via the normal API -- these land in the open segment
     (org-glance-graph:insert graph (list (list :id "a" :state "" :title "A-orig" :hash "ha1")))
     (org-glance-graph:insert graph (list (list :id "b" :state "" :title "B-orig" :hash "hb1")))
     (let ((open (org-glance-graph:headline-meta-path graph)))
-      ;; what `merge=union' leaves: the other side's lines spliced in after ours,
-      ;; with a newer record for "a" positioned last and a brand-new id "c"
       (f-append-text
        (concat (org-glance-test-merge:record :id "c" :state "" :title "C-new" :hash "hc1" :seq 50)
                (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 51))
        'utf-8 open))
     (let ((graph (org-glance-test:reopen graph)))
-      ;; positional last-wins: the later "a" record supersedes the earlier one
       (let ((a (org-glance-graph:get-headline graph "a")))
         (should (string= "A-newer" (org-glance-headline-metadata:title a)))
         (should (string= "DONE" (org-glance-headline-metadata:state a))))
-      ;; nothing dropped
       (should (string= "B-orig" (org-glance-test:field graph "b" title)))
       (should (string= "C-new" (org-glance-test:field graph "c" title)))
       (should (equal '("a" "b" "c")
@@ -130,23 +116,19 @@ position: the last record per id wins and no data is lost."
                              (org-glance-test-merge:record :id "m1" :state "" :title "Machine one" :hash "h1" :seq 1))
       (org-glance-test:write (f-join meta "seg-0000000002.jsonl")
                              (org-glance-test-merge:record :id "m2" :state "" :title "Machine two" :hash "h2" :seq 2))
-      ;; MANIFEST as git left it: neither side lists both segments
       (org-glance-test:write (f-join meta "MANIFEST")
                              (org-glance-test-merge:conflict-manifest '() '("seg-0000000001.jsonl")))
       (let ((graph (org-glance-graph dir)))
-        ;; both segments now live
         (should (member "seg-0000000001.jsonl"
                         (org-glance-graph--sealed-segments graph)))
         (should (member "seg-0000000002.jsonl"
                         (org-glance-graph--sealed-segments graph)))
-        ;; records from both readable
         (should (string= "Machine one" (org-glance-test:field graph "m1" title)))
         (should (string= "Machine two" (org-glance-test:field graph "m2" title)))
         (should (equal '("m1" "m2")
                        (sort (mapcar #'org-glance-headline-metadata:id
                                      (org-glance-graph:headlines graph))
                              #'string<)))
-        ;; nothing reaped by gc
         (should (f-exists? (f-join meta "seg-0000000001.jsonl")))
         (should (f-exists? (f-join meta "seg-0000000002.jsonl")))))))
 
@@ -158,8 +140,6 @@ from both sides kept, positional last-wins per id."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution 'union))
-      ;; "a" landed normally; then git wrapped the two machines' concurrent
-      ;; appends in markers, theirs carrying a newer "a" positioned last
       (f-write-text
        (concat
         (org-glance-test-merge:record :id "a" :state "" :title "A-orig" :hash "ha1" :seq 1)
@@ -169,15 +149,12 @@ from both sides kept, positional last-wins per id."
                  (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 4))))
        'utf-8 open)
       (let ((graph (org-glance-test:reopen graph)))
-        ;; markers stripped from disk
         (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
         (should-not (s-contains? "=======" (f-read-text open 'utf-8)))
-        ;; every id from both sides kept
         (should (equal '("a" "b" "c")
                        (sort (mapcar #'org-glance-headline-metadata:id
                                      (org-glance-graph:headlines graph))
                              #'string<)))
-        ;; positional last-wins: theirs' later "a" supersedes ours
         (let ((a (org-glance-graph:get-headline graph "a")))
           (should (string= "A-newer" (org-glance-headline-metadata:title a)))
           (should (string= "DONE" (org-glance-headline-metadata:state a))))))))
@@ -192,11 +169,9 @@ segment; a declined prompt errors and leaves the markers in place."
                      (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
                      (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
                     'utf-8 open)
-      ;; declined -> error, markers untouched
       (org-glance-test:answering ((y-or-n-p nil))
         (should-error (org-glance-test:reopen graph))
         (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))
-      ;; approved -> resolved, both ids readable
       (org-glance-test:answering ((y-or-n-p t))
         (let ((graph (org-glance-test:reopen graph)))
           (should-not (s-contains? "<<<<<<<" (f-read-text open 'utf-8)))
@@ -218,7 +193,7 @@ signals an error and leaves the markers in place for manual handling."
       (should-error (org-glance-test:reopen graph))
       (should (s-contains? "<<<<<<<" (f-read-text open 'utf-8))))))
 
-;;; tag-metrics.eld conflict resolution (a config/*.eld the union driver misses)
+;;; tag-metrics.eld conflicts: a config/*.eld the union driver (*.jsonl) misses
 
 (ert-deftest org-glance-test:merge-tag-metrics-plist-semantics ()
   "Metric plists union by field: earliest :created, latest :modified, and `max'
@@ -302,11 +277,9 @@ populated side -- `--read-eld' picks the non-empty one regardless of side order.
       ;; nil is HEAD, populated side second: the buggy `listp' floor returned nil.
       (f-write-text (org-glance-test-merge:conflict-eld nil '(("b" . 2))) 'utf-8 file)
       (should (equal '(("b" . 2)) (org-glance--read-eld file)))
-      ;; and the mirror ordering still works
       (f-write-text (org-glance-test-merge:conflict-eld '(("a" . 1)) nil) 'utf-8 file)
       (should (equal '(("a" . 1)) (org-glance--read-eld file))))))
 
-;;; Reusable conflict toolkit (org-glance-utils) -- format-agnostic
 
 (ert-deftest org-glance-test:conflict-strip-markers ()
   "`--strip-conflict-markers' drops only the marker lines, keeping both sides;

@@ -2,7 +2,6 @@
 
 (require 'test-helpers)
 
-;;; Row builder
 
 (ert-deftest org-glance-test:table-row-from-metadata ()
   "org-glance-table--row produces a well-formed row from headline metadata."
@@ -32,7 +31,6 @@
       (should (equal "" (alist-get 'deadline cells)))
       (should (equal "" (alist-get 'priority cells))))))
 
-;;; Badge palette
 
 (ert-deftest org-glance-test:table-state-badges-active-before-done ()
   "State badges list active states before done states."
@@ -60,26 +58,22 @@ falling back to the default."
     (should (equal "orchid" (org-glance-table--state-color "DELEGATED")))
     (should (equal "tomato" (org-glance-table--state-color "BLOCKED")))
     (should (equal "gold" (org-glance-table--state-color "REVIEW")))
-    ;; the explicit palette still wins, and unknowns still get the default
     (should (equal (cdr (assoc "TODO" org-glance-table-state-colors))
                    (org-glance-table--state-color "TODO")))
     (should (equal org-glance-table-default-state-color
                    (org-glance-table--state-color "NOWHERE")))))
 
-;;; Spec generation
 
 (ert-deftest org-glance-test:table-spec-shape ()
   "The spec has the required top-level keys and exactly the built-in columns."
   (org-glance-test:with-graph graph
     (let ((spec (org-glance-table--spec graph nil)))
-      ;; `title'/`actions'/`sort' are literals of the same backquote -- only
-      ;; the column set is a real claim (the built-ins, in default order).
+      ;; only the column set is a real claim; the rest are backquote literals.
       (should (equal '("state" "title" "schedule" "deadline" "interval"
                        "priority" "encrypted" "repeated" "tags")
                      (mapcar (lambda (c) (alist-get 'key c))
                              (alist-get 'columns spec)))))))
 
-;;; #+TODO: header line (always-visible subtitle)
 
 (ert-deftest org-glance-test:table-todo-line ()
   "The spec carries a `#+TODO:'-style subtitle of the graph's states -- active,
@@ -98,10 +92,8 @@ then `|', then done -- coloured; exposed as the `table-view' subtitle."
         (should (s-contains? "NEXT" plain))
         (should (s-contains? "| DONE" plain))              ; done after the bar
         (should (text-property-not-all 0 (length line) 'face nil line))  ; coloured
-        ;; the spec exposes it as the always-visible subtitle
         (should (equal line (alist-get 'subtitle (org-glance-table--spec graph nil))))))))
 
-;;; Filter
 
 (ert-deftest org-glance-test:table-fill-honours-filter ()
   "Only headlines matching the filter appear as rows."
@@ -114,7 +106,6 @@ then `|', then done -- coloured; exposed as the `table-view' subtitle."
            (ids (org-glance-test:row-ids rows)))
       (should (equal '("f1") ids)))))
 
-;;; Coherence: pull model (stale flag + display-boundary reload)
 
 (ert-deftest org-glance-test:table-stale-flag-on-save ()
   "A materialized save FLAGS an open table stale without re-filling it on the hot
@@ -124,19 +115,15 @@ path; a display-boundary refresh re-fills it and clears the flag."
     (org-glance-test:with-table (graph)
         (should (= 1 (length table-view--rows)))
         (should-not org-glance-view--stale)
-        ;; the store advances (a new headline) and views are flagged
         (org-glance-graph:add graph (org-glance-test:headline "p2" "* TODO Bar :work:"))
         (org-glance-test:store-mtime graph 100)
         (org-glance-view:mark-graph-stale graph)
-        ;; flagged stale, but NOT re-filled on the hot path (still 1 row)
         (should org-glance-view--stale)
         (should (= 1 (length table-view--rows)))
-        ;; display boundary re-fills and clears the flag
         (org-glance-view--refresh-when-stale)
         (should (= 2 (length table-view--rows)))
         (should-not org-glance-view--stale))))
 
-;;; Coherence: staleness
 
 (ert-deftest org-glance-test:table-stale-detection ()
   "A table is stale when the store's mtime advances past its recorded mtime."
@@ -151,7 +138,6 @@ path; a display-boundary refresh re-fills it and clears the flag."
           (setq org-glance-view--mtime '(0 0 0 0))
           (should (org-glance-view:stale-vs-file? src)))))))
 
-;;; Visit + actions
 
 (ert-deftest org-glance-test:table-visit-creates-buffer ()
   "org-glance-table:visit creates a table-view buffer with rows from the graph."
@@ -186,11 +172,9 @@ on it; a headline related to nothing errors instead."
           (funcall (key-binding (kbd "@")))))
       (should (equal '(:id-any ("b")) (car (car calls))))
       (should (equal '(:anchor "a" :dir relations) (cdr (car calls)))))
-    ;; a row with no relations errors through the same key
     (org-glance-test:with-table (graph)
       (table-view--goto-id "z")
       (should-error (funcall (key-binding (kbd "@"))) :type 'user-error))
-    ;; the overview's `@' routes to the same entry point
     (should (eq (lookup-key org-glance-overview-mode-map (kbd "@"))
                 #'org-glance-overview:relations))))
 
@@ -206,11 +190,9 @@ offered, and the removal persists per tag."
       (org-glance-test:goto-cell "a" "state")
       (org-glance-test:offering (offered "Tags")
         (org-glance-table:remove-column '(4))
-        ;; Title is mandatory -- it is not among the candidates
         (should-not (member "Title" offered))
         (should (member "Tags" offered)))
       (should-not (member "tags" (org-glance-test:table-col-keys))))
-    ;; persisted per tag: a fresh view of the same tag stays without it
     (org-glance-test:with-table (graph '(:tags ("work")))
       (should-not (member "tags" (org-glance-test:table-col-keys))))))
 
@@ -228,17 +210,14 @@ filter still governs which rows exist.  An action-triggered reload keeps them."
       (table-view-filter "alpha")
       (should (equal "alpha" table-view--filter))
       (should (= 1 (length (table-view--visible-rows))))
-      ;; a reload behind an edit PRESERVES the refinement
       (org-glance-table--reload (current-buffer))
       (should (equal "alpha" table-view--filter))
-      ;; `g' resets it -- back to the initial filter, not to every headline
       (funcall (key-binding (kbd "g")))
       (should-not table-view--filter)
       (should (= 2 (length (table-view--visible-rows))))
       (should (equal '("a1" "b1")
                      (sort (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)
                            #'string<)))
-      ;; a narrow-to-marked view is a refinement too
       (table-view--goto-id "a1")
       (table-view-mark-toggle)
       (table-view-narrow-toggle)
@@ -323,20 +302,17 @@ the new password."
                                        (org-glance-headline:decrypt
                                         (org-glance-graph:headline graph id) "new"))))))))
 
-;;; Per-view persistence (column order + sort)
 
 (ert-deftest org-glance-test:table-persist-column-order ()
   "A column reorder is persisted per filter and restored on re-visit."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "p1" "* TODO Alpha"))
-    ;; first visit: default order has `state' first; move `title' to the front + persist
     (org-glance-test:with-table (graph)
         (should (equal "state" (alist-get 'key (car (alist-get 'columns table-view--spec)))))
         (setf (alist-get 'columns table-view--spec)
               (org-glance-table--reorder-columns (alist-get 'columns table-view--spec)
                                                  '("title" "state")))
         (org-glance-table--persist-config))
-    ;; re-visit: restored order (`title' first)
     (org-glance-test:with-table (graph)
         (should (equal "title" (alist-get 'key (car (alist-get 'columns table-view--spec))))))))
 
@@ -347,11 +323,9 @@ the new password."
       (org-glance-graph:add graph
                             (org-glance-test:headline "a" "* TODO Zeta")
                             (org-glance-test:headline "b" "* TODO Alpha"))
-      ;; sort by title ascending + persist
       (org-glance-test:with-table (graph)
           (setq table-view--sort-keys '(("title" . t)))
           (org-glance-table--persist-config))
-      ;; re-visit: sort restored AND applied (rows ordered by title: Alpha, Zeta)
       (org-glance-test:with-table (graph)
           (should (equal '(("title" . t)) table-view--sort-keys))
           (should (equal '("b" "a") (org-glance-test:row-ids table-view--rows)))))))
@@ -367,7 +341,6 @@ the new password."
               (org-glance-table--reorder-columns (alist-get 'columns table-view--spec)
                                                  '("tags" "state")))
         (org-glance-table--persist-config))
-    ;; the :home filter still has the default order (state first)
     (org-glance-test:with-table (graph 'home)
         (should (equal "state" (alist-get 'key (car (alist-get 'columns table-view--spec))))))))
 
@@ -549,9 +522,7 @@ after the (no-note) commit the reloaded table shows the new state on the row."
       (org-glance-graph:add graph (org-glance-test:headline "td1" "* TODO Alpha"))
       (org-glance-test:with-table (graph)
           (org-glance-table--act-todo graph "td1")   ; no-note -> synchronous finalize
-          ;; persisted in the graph
           (should (equal "DONE" (org-glance-test:field graph "td1" state)))
-          ;; reloaded row reflects the new state
           (let ((row (car table-view--rows)))
             (should (equal "td1" (alist-get 'id row)))
             (should (equal "DONE" (alist-get 'state (alist-get 'cells row)))))))))
@@ -571,7 +542,6 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
               (cl-letf (((symbol-function 'org-fast-todo-selection)
                          (lambda (&rest _) (setq seen org-todo-keywords-1) "READING")))
                 (org-glance-table--read-state-native graph '(:tags ("book"))))
-              ;; the temp selection buffer carried the TAG's cycle, not the global one
               (should (equal '("TODO" "READING" "READ") seen)))
           (org-glance-tag-config--invalidate))))))
 
@@ -608,7 +578,6 @@ cycle -- the selector sees exactly the `#+TODO:' keywords `C-c C-t' would."
           (should (table-view--goto-id "p4"))            ; park point on an UNMARKED row
           (org-glance-test:answering ((org-fast-todo-selection "DONE"))
             (funcall (key-binding (kbd "C-c C-t"))))     ; bulk-sets p1,p2 (not p4)
-          ;; point followed its row (p4), which survived the change
           (should (equal "p4" (get-text-property (point) 'table-view-id)))
           (should (equal "DONE" (org-glance-test:field graph "p1" state)))
           (should (equal "TODO" (org-glance-test:field graph "p4" state)))))))
@@ -653,7 +622,6 @@ buffer switching -- which the flush relies on -- runs for real.)"
           (funcall (key-binding (kbd "C-c C-t")))             ; single (no marks)
           (should (equal "DONE" (org-glance-test:field graph "s1" state)))))))
 
-;;; Surgical single-row updates (buffer-text level)
 
 (ert-deftest org-glance-test:table-schema-key-by-tags ()
   "The schema key is the filter's tags, sorted and joined; none -> \":none:\"."
@@ -693,14 +661,12 @@ priority and property columns take a string prompt, derived columns refuse."
                                       '(("ROAST" . "light"))))
     (org-glance-test:with-table (graph 'work)
       (table-view-add-column (org-glance-table--property-column graph "ROAST"))
-      ;; state column: routes to the todo flow
       (org-glance-test:goto-cell "a" "state")
       (let (todo)
         (cl-letf (((symbol-function 'org-glance-table--act-todo)
                    (lambda (_g id) (setq todo id))))
           (org-glance-table--act-edit graph "a"))
         (should (equal "a" todo)))
-      ;; title column: string prompt, pre-filled
       (org-glance-test:goto-cell "a" "title")
       (let (offered)
         (cl-letf (((symbol-function 'read-string)
@@ -708,22 +674,18 @@ priority and property columns take a string prompt, derived columns refuse."
           (org-glance-table--act-edit graph "a"))
         (should (equal "Alpha" offered)))
       (should (equal "Beta" (org-glance-test:field graph "a" title)))
-      ;; tags column: routes to the `:' tag flow
       (org-glance-test:goto-cell "a" "tags")
       (let (tagged)
         (cl-letf (((symbol-function 'org-glance-table--act-tag)
                    (lambda (_g id) (setq tagged id))))
           (org-glance-table--act-edit graph "a"))
         (should (equal "a" tagged)))
-      ;; a truly derived column still refuses
       (org-glance-test:goto-cell "a" "repeated")
       (should-error (org-glance-table--act-edit graph "a") :type 'user-error)
-      ;; priority column: empty input clears the cookie
       (org-glance-test:goto-cell "a" "priority")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "")))
         (org-glance-table--act-edit graph "a"))
       (should-not (org-glance-test:field graph "a" priority))
-      ;; drawer-property column: string prompt updates the drawer
       (org-glance-test:goto-cell "a" "ROAST")
       (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "dark")))
         (org-glance-table--act-edit graph "a"))
@@ -736,7 +698,6 @@ priority and property columns take a string prompt, derived columns refuse."
       (org-glance-test:headline-props "bk1" "* TODO The Hobbit :book:" '(("AUTHOR" . "Tolkien"))))
     (org-glance-test:with-table (graph 'book)
         (table-view-add-column (org-glance-table--property-column graph "AUTHOR")))
-    ;; re-visit :book -> the AUTHOR column comes back, still reading the drawer
     (org-glance-test:with-table (graph 'book)
       (should (member "AUTHOR" (org-glance-test:table-col-keys)))
       (should (equal "Tolkien" (org-glance-test:table-cell "bk1" "AUTHOR"))))))
@@ -778,14 +739,12 @@ arg, since columns moved off the `C-u' prefix onto `C-c +' / `C-c -'."
           (funcall (key-binding (kbd "C-c +"))))
         (should (member "AUTHOR" (org-glance-test:table-col-keys)))
         (should (equal "Ann" (org-glance-test:table-cell "x1" "AUTHOR")))
-        ;; `C-u +' no longer adds a column -- it captures like a bare `+'
         (let (captured)
           (cl-letf (((symbol-function 'org-glance-capture)
                      (lambda (&rest _) (setq captured t))))
             (let ((current-prefix-arg '(4))) (funcall (key-binding (kbd "+"))))
             (should captured))))))
 
-;;; `-' untags; `C-c -' is the one column-removal key
 
 (ert-deftest org-glance-test:table-minus-untags ()
   "A bare `-' always drops the view's tag -- with a prefix arg too, since
@@ -809,11 +768,9 @@ column removal moved to `C-c -'."
     (org-glance-graph:add graph
       (org-glance-test:headline "x1" "* TODO X :book:"))
     (org-glance-test:with-table (graph 'book)
-        ;; point ON the Tags cell -> that column goes, no prompt
         (org-glance-test:goto-cell "x1" "tags")
         (org-glance-table:remove-column)
         (should-not (member "tags" (org-glance-test:table-col-keys)))
-        ;; Title is refused (errors before touching the spec)
         (org-glance-test:goto-cell "x1" "title")
         (should-error (org-glance-table:remove-column) :type 'user-error)
         (should (member "title" (org-glance-test:table-col-keys))))))
@@ -861,7 +818,6 @@ but stays live in the graph (mirror of the bare `+' capture)."
           (should-not (member "book" offered))            ; own tags excluded
           (should-not (member "read" offered))))))
 
-;;; Occurrence history: Rep column + `l' action
 
 (ert-deftest org-glance-test:table-repeated-column-and-history ()
   "The Rep column marks repeater-carrying rows (↻ cell); `l' routes to the
@@ -907,7 +863,6 @@ shared picker."
           (funcall (key-binding (kbd "C-c C-d"))))
         (should (s-contains? "2026-09-01"
                              (org-glance-test:field graph "p1" deadline)))
-        ;; C-u clears the schedule, deadline untouched
         (table-view--goto-id "p1")
         (let ((current-prefix-arg '(4)))
           (funcall (key-binding (kbd "C-c C-s"))))
@@ -915,7 +870,6 @@ shared picker."
           (should (null (org-glance-headline-metadata:schedule meta)))
           (should (s-contains? "2026-09-01" (org-glance-headline-metadata:deadline meta)))))))
 
-;;; Scoped layout for reference tables (C-c C-c apply)
 
 (cl-defun org-glance-test:ref-fixture (graph)
   "Two coffees each referencing one roaster."
@@ -932,17 +886,14 @@ shared picker."
 the anchor id, so another anchor keeps the default layout."
   (org-glance-test:with-graph graph
     (org-glance-test:ref-fixture graph)
-    ;; edit WITHOUT apply -> the transient guards persist nothing
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (table-view-remove-column "tags")
       (org-glance-table--persist-schema)          ; what the live hooks would run
       (org-glance-table--persist-config))
-    ;; nothing written anywhere: not the scoped store, not the per-tag/
-    ;; per-filter stores the transient guards protect
+    ;; a transient filter persists nothing, in any store (invariant 17).
     (should-not (file-exists-p (org-glance-table--refs-file graph)))
     (should-not (file-exists-p (org-glance-table--schema-file graph)))
     (should-not (file-exists-p (org-glance-table--config-file graph)))
-    ;; edit + apply to the anchor headline; assert the offered scopes
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys)))   ; default restored
       (table-view-remove-column "tags")
@@ -950,7 +901,6 @@ the anchor id, so another anchor keeps the default layout."
         (org-glance-table:apply-layout)
         (should (equal coll '("this headline: Coffee1"
                               "tag pair: coffee → roaster")))))
-    ;; same anchor restores; a different anchor does not
     (org-glance-test:with-table (graph '(:id-any ("r1")) '(:anchor "c1" :dir relations))
       (should-not (member "tags" (org-glance-test:table-col-keys))))
     (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
@@ -1018,10 +968,8 @@ from the other side is a different scope."
       (table-view-remove-column "tags")
       (org-glance-test:offering (coll "tag pair: coffee → roaster")
         (org-glance-table:apply-layout)))
-    ;; another coffee's relation table matches the pair
     (org-glance-test:with-table (graph '(:id-any ("r2")) '(:anchor "c2" :dir relations))
       (should-not (member "tags" (org-glance-test:table-col-keys))))
-    ;; anchored on the roaster instead, the pair reads roaster > coffee -- untouched
     (org-glance-test:with-table (graph '(:id-any ("c1")) '(:anchor "r1" :dir relations))
       (should (member "tags" (org-glance-test:table-col-keys))))))
 
@@ -1115,18 +1063,15 @@ leaves the view (deleted, or no longer matching the filter)."
         (cl-letf* ((orig (symbol-function 'org-glance-table--rows))
                    ((symbol-function 'org-glance-table--rows)
                     (lambda (&rest args) (cl-incf derivations) (apply orig args))))
-          ;; the store advances, then the action finishes on that one row
           (org-glance-graph:add graph (org-glance-test:headline "a1" "* DONE Alpha :work:"))
           (org-glance-table--finish "a1" 1 "State: %s" "DONE")
           (should (= 0 derivations))                     ; no whole-set rebuild
           (should (equal "DONE" (org-glance-test:table-cell "a1" "state")))
           (should (equal "TODO" (org-glance-test:table-cell "b1" "state")))
-          ;; leaving the filter drops the row (here: the tag goes away)
           (org-glance-graph:add graph (org-glance-test:headline "a1" "* DONE Alpha"))
           (org-glance-table--finish "a1" 1 "Removed tag")
           (should (= 0 derivations))
           (should (equal '("b1") (mapcar (lambda (r) (alist-get 'id r)) table-view--rows)))
-          ;; a deleted headline drops too
           (org-glance-graph:delete graph "b1")
           (org-glance-table--finish "b1" 1 "Headline deleted")
           (should (= 0 derivations))

@@ -1,36 +1,7 @@
 ;; -*- lexical-binding: t -*-
-;; `org-glance-tag-config' -- a separate, optional per-tag configuration store.
-;;
-;; Tags are DISCOVERED from captured headlines (`org-glance-tag'); they need no
-;; declaration.  A tag's CONFIG is optional metadata that bounds / describes a
-;; tag: its capture skeleton and its todo-keyword cycle.  This config lives
-;; OUTSIDE the content graph, so it never reaches tag discovery, overviews or
-;; the capture picker.
-;;
-;; ONE Org file per tag, at `<store>/.org-glance/config/tags/<tag>.org', named
-;; for the tag.  The file header carries the todo cycle as an org-native
-;; `#+TODO:' keyword; the body (from the first `*') is the org-capture skeleton:
-;;
-;;   #+TITLE: Book
-;;   #+TODO:  TODO READING | READ ABANDONED
-;;
-;;   * Book
-;;   *** Notes
-;;       %?
-;;
-;; The first heading's text is a placeholder; capture overwrites it with the
-;; instance title + tags and prepends the `#+TODO:' as a file keyword.
-;; `#+TITLE:' is the human label.  Every header pragma is OPTIONAL: a freshly
-;; stubbed file carries only the capture template (a bare `* %?'), so the tag
-;; inherits the global defaults until a pragma overrides one.
-;;
-;; A legacy single-file `config/tags.org' (level-1 `:TAG:' headlines) is split
-;; into per-tag files at graph open (`--migrate-on-open') and backed up.
-;;
-;; Resolution is an O(1) lookup into a cache rebuilt only when the config
-;; directory changes (mtime+size+names of its `*.org', mirroring the graph's
-;; store snapshot).  Absent dir / absent file / absent dimension all degrade to
-;; nil, so an unconfigured tag captures and renders byte-for-byte as before.
+;; `org-glance-tag-config' -- optional per-tag config (capture skeleton, todo
+;; cycle) in one Org file per tag.  It lives OUTSIDE the content graph, so it
+;; never reaches tag discovery, overviews or the capture picker.
 
 (require 's)
 (require 'org)
@@ -61,7 +32,6 @@ sets an explicit directory (used for tests and non-standard layouts)."
   (template nil :read-only t :type (or null string)))   ; capture entry (from the first `*')
 
 (defconst org-glance-tag-config:fields
-  ;; SLOT       PRAGMA      EMIT?
   '((tag       nil        nil)     ; supplied by the file NAME
     (title     "TITLE"    nil)     ; human label; never emitted into a buffer
     (todo      "TODO"     t)       ; the todo cycle: capture + overview emit it
@@ -93,7 +63,6 @@ With EMITTING, only those a rendered buffer emits as a file keyword."
            when (and pragma (or (not emitting) emit))
            collect (cons slot pragma)))
 
-;;; Config file location
 
 (cl-defun org-glance-tag-config:dir (graph)
   "Resolved config directory of GRAPH (may not exist).
@@ -120,7 +89,6 @@ them like a content change (a directory mtime alone misses in-file edits)."
            do (when (or (null newest) (time-less-p newest mtime)) (setq newest mtime))
            finally return newest))
 
-;;; Parse: config/tags/<tag>.org -> tag-symbol -> config
 
 (cl-defun org-glance-tag-config--file-keyword (key)
   "Value of file keyword KEY (e.g. \"TITLE\", \"TODO\") in the current buffer.
@@ -146,8 +114,6 @@ EOF (trimmed), or nil when the buffer has no heading."
   (with-temp-buffer
     (let ((coding-system-for-read 'utf-8))
       (insert-file-contents path))
-    ;; NB every cycle-like value is a FILE keyword now (org-native), replacing
-    ;; the old `:TODO_KEYWORDS:' drawer.  One read per pragma row.
     (apply #'org-glance-tag-config
            :tag tag
            :template (org-glance-tag-config--entry)
@@ -170,7 +136,6 @@ Each `<tag>.org' contributes one config keyed by its file name."
             (puthash tag (org-glance-tag-config--parse-file path tag) by-tag)))))
     by-tag))
 
-;;; In-memory cache (directory snapshot, mirroring the graph's read cache)
 
 (defvar org-glance-tag-config--cache nil
   "Module cache plist (:dir D :snapshot S :by-tag HASH), or nil (cold).")
@@ -205,7 +170,6 @@ depend on mtime granularity for in-process edits."
                   :by-tag (org-glance-tag-config--parse dir))))
     (plist-get org-glance-tag-config--cache :by-tag)))
 
-;;; Resolution
 
 (cl-defun org-glance-tag-config:resolve (graph tag)
   "Resolve TAG to its `org-glance-tag-config' in GRAPH, or nil if it has none.
@@ -246,8 +210,6 @@ is exactly the one a `#+TODO:' header produces -- single source of truth."
 Nil for 0 or >1 distinct values: merging keyword sequences is order-sensitive
 and corrupts the active/done split, so an ambiguous filter falls back to the
 global default."
-  ;; `org-glance-filter:tags' already returns canonical (downcased) tag symbols,
-  ;; so each resolves directly; configs without that pragma drop out.
   (let ((values (cl-remove-duplicates
                  (delq nil (mapcar (lambda (tag)
                                      (when-let ((c (org-glance-tag-config:resolve graph tag)))
@@ -287,7 +249,6 @@ Blank values drop out; nil when nothing is left."
                         collect (concat "#+" pragma ": " value "\n"))))
     (when lines (apply #'concat lines))))
 
-;;; Render: a config -> an `org-capture' entry template string
 
 (defconst org-glance-tag-config--render-strip
   (append '("TAG" "TODO_KEYWORDS") org-glance-headline:hash-ignore-properties)
@@ -321,11 +282,8 @@ first)."
         (goto-char (point-min))
         (org-entry-delete nil property))
       (goto-char (point-min))
-      ;; Append `%?' to the heading only if the skeleton has NO capture point
-      ;; BELOW the heading line (body AND kept drawer properties -- a preserved
-      ;; `:NOTE: %?' counts).  A `%?' in the heading itself is overwritten by
-      ;; `org-edit-headline', so it does not count: a bare `* %?' skeleton
-      ;; correctly yields `* TITLE%?'.
+      ;; `org-edit-headline' overwrites a `%?' in the heading, so only a
+      ;; capture point BELOW it counts.
       (let ((skeleton-has-point (save-excursion
                                   (end-of-line)
                                   (s-contains? "%?" (buffer-substring-no-properties
@@ -335,7 +293,6 @@ first)."
         (org-set-tags (mapcar #'org-glance-tag:to-string tags)))
       (s-trim-right (buffer-substring-no-properties (point-min) (point-max))))))
 
-;;; Migration: legacy single-file config/tags.org -> per-tag files
 
 (cl-defun org-glance-tag-config--migrate-on-open (graph)
   "Split a legacy single-file `config/tags.org' into per-tag files, once.
@@ -387,7 +344,6 @@ never deleted -- migration discipline)."
 (add-hook 'org-glance-graph-after-open-functions
           #'org-glance-tag-config--migrate-on-open)
 
-;;; Authoring
 
 (cl-defun org-glance-tag-config--stub (tag)
   "Default contents for a freshly-created config file of TAG.

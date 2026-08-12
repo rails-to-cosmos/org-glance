@@ -58,12 +58,10 @@ Two headlines, point on the second: the buffer shown carries ITS id."
   "`org-glance-overview' lands in `org-glance-overview-default-view': the table
 dashboard for `org-glance-table', the org-text overview for `org-glance-overview'.
 The legacy `table' / `org' values map the same way."
-  ;; value -> view selection (pure; legacy aliases included)
   (dolist (case '((org-glance-table . t) (table . t)
                   (org-glance-overview . nil) (org . nil)))
     (let ((org-glance-overview-default-view (car case)))
       (should (eq (and (org-glance-overview--default-table?) t) (cdr case)))))
-  ;; end-to-end: each canonical value opens the right buffer
   (org-glance-test:session
     (org-glance-graph:add org-glance-graph (org-glance-test:headline "d1" "* TODO Alpha :work:"))
     (let ((org-glance-filter-spec nil))
@@ -84,7 +82,6 @@ where the user's content is."
     (org-glance-test:with-overview (buf graph nil)
       (with-current-buffer buf
         (should (file-equal-p default-directory (org-glance-graph:directory graph)))
-        ;; and NOT the cache file's own directory (under the store)
         (should-not (file-equal-p default-directory (f-dirname buffer-file-name)))))))
 
 (ert-deftest org-glance-test:overview-fill-frame ()
@@ -95,7 +92,6 @@ non-nil, and leaves the window layout alone when nil."
     (let ((org-glance-graph graph))
       (org-glance-test:assert-fills-frame (org-glance-overview:visit graph nil)))))
 
-;;; Filtering
 
 (ert-deftest org-glance-test:overview-filter-by-tag ()
   "A plist `(:tags ...)' filter and the legacy bare-tag shim both restrict by tag."
@@ -103,8 +99,7 @@ non-nil, and leaves the window layout alone when nil."
     (org-glance-graph:add graph
                              (org-glance-test:headline "o1" "* Alpha :work:")
                              (org-glance-test:headline "o2" "* Beta :home:"))
-    ;; Plist, bare symbol, bare string, and (since tags are stored downcased)
-    ;; mixed-case spellings all match.
+    ;; tags are stored downcased, so mixed-case spellings match (invariant 13).
     (dolist (filter (list '(:tags ("work")) 'work "work" 'Work "WORK" '(:tags ("Work"))))
       (let ((text (org-glance-overview:render graph filter)))
         (should (s-contains? ":ORG_GLANCE_ID: o1" text))
@@ -123,9 +118,7 @@ caught)."
     (should (= 1 (length (org-glance-test:filter-ids graph '(:state "TODO")))))
     (should (= 1 (length (org-glance-test:filter-ids graph '(:done t)))))
     (should (= 2 (length (org-glance-test:filter-ids graph '(:done nil)))))
-    ;; (:state nil) keeps only the stateless headline ...
     (should (= 1 (length (org-glance-test:filter-ids graph '(:state nil)))))
-    ;; ... whereas omitting :state keeps everything.
     (should (= 3 (length (org-glance-test:filter-ids graph nil))))))
 
 (ert-deftest org-glance-test:overview-done-keywords-per-overview ()
@@ -134,19 +127,14 @@ caught)."
     (org-glance-graph:add graph
                              (org-glance-test:headline "o1" "* TODO Alpha")
                              (org-glance-test:headline "o2" "* DONE Beta"))
-    ;; Default: DONE is done.
     (should (equal '("o2") (org-glance-test:filter-ids graph '(:done t))))
     (should (equal '("o1") (org-glance-test:filter-ids graph '(:done nil))))
-    ;; This overview declares TODO (not DONE) to be done.
     (should (equal '("o1") (org-glance-test:filter-ids graph '(:done t :done-keywords ("TODO")))))
     (should (equal '("o2") (org-glance-test:filter-ids graph '(:done nil :done-keywords ("TODO")))))
-    ;; Per-overview :done-keywords wins over the ambient `org-done-keywords'.
     (let ((org-done-keywords '("DONE")))
       (should (equal '("o1") (org-glance-test:filter-ids graph '(:done t :done-keywords ("TODO"))))))
-    ;; :done-keywords participates in the cache key (distinct overviews) ...
     (should-not (string= (org-glance-overview:spec-key '(:done t))
                          (org-glance-overview:spec-key '(:done t :done-keywords ("TODO")))))
-    ;; ... but folds to "all" (no-op) without :done.
     (should (string= "all" (org-glance-overview:spec-key '(:done-keywords ("TODO")))))))
 
 (ert-deftest org-glance-test:overview-filter-by-field ()
@@ -166,7 +154,6 @@ caught)."
                              (org-glance-test:headline "o3" "* Gamma :home:"))
     (let ((only-o1 (list :where (lambda (m) (string= "o1" (org-glance-headline-metadata:id m))))))
       (should (= 1 (length (org-glance-test:filter-ids graph only-o1))))
-      ;; :where ANDed with :tags -- o1 matches both, o3 fails the tag, o2 fails :where
       (let ((spec (append only-o1 '(:tags ("work")))))
         (should (= 1 (length (org-glance-test:filter-ids graph spec))))))))
 
@@ -175,21 +162,16 @@ caught)."
   (should-error (org-glance-filter:predicate '(:bogus 1)))
   (should-error (org-glance-overview:spec-key '(:bogus 1))))
 
-;;; Cache keys
 
 (ert-deftest org-glance-test:overview-spec-key-stable ()
   "Cache keys are order-independent, filesystem-safe, and signal uncacheability."
-  ;; key/tag order independence
   (should (string= (org-glance-overview:spec-key '(:tags ("b" "a") :state "TODO"))
                    (org-glance-overview:spec-key '(:state "TODO" :tags ("a" "b")))))
-  ;; :tag folds into :tags
   (should (string= (org-glance-overview:spec-key '(:tag "a"))
                    (org-glance-overview:spec-key '(:tags ("a")))))
-  ;; empty filter (and an empty tag list) is "all"; :where is uncacheable
   (should (string= "all" (org-glance-overview:spec-key nil)))
   (should (string= "all" (org-glance-overview:spec-key '(:tags nil))))
   (should-not (org-glance-overview:spec-key (list :where #'ignore)))
-  ;; a path-hostile value never escapes its segment
   (let ((key (org-glance-overview:spec-key '(:id "a/../b"))))
     (should-not (s-contains? "/" key))))
 
@@ -197,11 +179,8 @@ caught)."
   "Cache directory names are short hashes of the canonical identity: fixed
 width, lowercase hex, whatever the filter carries.  The readable filter lives
 in the SPEC sidecar."
-  ;; canonical: the bare-tag shorthand and the full form share a key
   (should (string= (org-glance-overview:spec-key 'task)
                    (org-glance-overview:spec-key '(:tags ("task")))))
-  ;; fixed-width lowercase hex -- non-ASCII, whitespace, overlong values and
-  ;; path-hostile characters all hash away
   (dolist (filter (list '(:tags ("task"))
                         '(:tags ("work") :state "TODO")
                         '(:title-contains "Приготовить ужин")
@@ -209,8 +188,7 @@ in the SPEC sidecar."
                         '(:id "a/../b")))
     (should (string-match-p "\\`[0-9a-f]\\{12\\}\\'"
                             (org-glance-overview:spec-key filter))))
-  ;; the hash is of the IDENTITY, so value boundaries survive: specs the old
-  ;; readable slug conflated get distinct keys
+  ;; value boundaries survive the hash -- the old readable slug conflated these.
   (should-not (string= (org-glance-overview:spec-key '(:tags ("a" "b")))
                        (org-glance-overview:spec-key '(:tags ("a,b")))))
   (should-not (string= (org-glance-overview:spec-key '(:id "a" :title "b"))
@@ -227,7 +205,6 @@ astronomically rare, so one is forced here by pinning `spec-key'."
           (s2 '(:id "a&title=b")))
       (cl-letf (((symbol-function 'org-glance-overview:spec-key)
                  (lambda (_filter) "deadbeef0000")))
-        ;; same directory name, different identities
         (should (string= (org-glance-overview:spec-key s1)
                          (org-glance-overview:spec-key s2)))
         (org-glance-overview:cached-file graph s1)             ; s1 owns the dir
@@ -247,7 +224,6 @@ longer exists."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a" "* Alpha"))
     (let ((file (org-glance-overview:cached-file graph '(:tags ("work")))))
-      ;; Simulate the pre-rename cache: same content, old prop-line mode.
       (f-write-text (s-replace "mode: org-glance-overview"
                                "mode: org-glance-overview-v2"
                                (f-read-text file 'utf-8))
@@ -258,7 +234,6 @@ longer exists."
                            (f-read-text (org-glance-overview:cached-file graph '(:tags ("work")))
                                         'utf-8))))))
 
-;;; Cache freshness + invalidation
 
 (ert-deftest org-glance-test:overview-fresh-p ()
   "`:fresh?' is mtime-based against headlines.jsonl, biased to rebuild."
@@ -269,7 +244,6 @@ longer exists."
       (should (org-glance-overview:fresh? graph file))
       (org-glance-test:store-mtime graph 100)
       (should-not (org-glance-overview:fresh? graph file))
-      ;; a missing cache file is never fresh
       (should-not (org-glance-overview:fresh? graph (f-join dir "absent.org"))))))
 
 (ert-deftest org-glance-test:overview-cache-hit-skips-render ()
@@ -302,9 +276,7 @@ longer exists."
            (file (org-glance-overview:cached-file graph spec)))
       (should (s-contains? ":ORG_GLANCE_ID: o1" (f-read-text file 'utf-8)))
       (should-not (s-contains? ":ORG_GLANCE_ID: o2" (f-read-text file 'utf-8)))
-      ;; it must NOT reuse the unfiltered overview file
       (should-not (string= file (org-glance-overview:file graph)))
-      ;; and it re-renders even when the graph is unchanged
       (org-glance-test:store-mtime graph -100)
       (org-glance-test:counting-renders (renders)
         (org-glance-overview:cached-file graph spec)
@@ -362,23 +334,18 @@ filter (same dimension replaces), and `clear' returns to the unfiltered view."
                  (lambda (_graph filter) (setq visited filter))))
         (with-temp-buffer
           (setq-local org-glance-overview--spec '(:tags ("work")))
-          ;; narrow by state: composes onto the tag filter
           (org-glance-test:answering ((completing-read "TODO"))
             (org-glance-overview:filter-by-state))
           (should (equal '(:tags ("work") :state "TODO") visited))
-          ;; narrow by substring
           (org-glance-test:answering ((read-string "alp"))
             (org-glance-overview:filter-by-substring))
           (should (equal '(:tags ("work") :title-contains "alp") visited))
-          ;; re-filtering the same dimension REPLACES it
           (setq-local org-glance-overview--spec '(:state "TODO"))
           (org-glance-test:answering ((completing-read "DONE"))
             (org-glance-overview:filter-by-state))
           (should (equal '(:state "DONE") visited))
-          ;; empty input aborts instead of filtering
           (org-glance-test:answering ((read-string ""))
             (should-error (org-glance-overview:filter-by-substring) :type 'user-error))
-          ;; clear -> unfiltered
           (org-glance-overview:filter-clear)
           (should (null visited)))))))
 
@@ -406,15 +373,12 @@ view `org-glance-overview-default-view' selects, so both view-openers are stubbe
                 ((symbol-function 'org-glance-table:visit) capture)
                 ((symbol-function 'completing-read) (lambda (&rest _) "work")))
         (call-interactively #'org-glance-overview)
-        ;; tag overlaid on the ambient (active) filter
         (should (equal '(:done nil :tags ("work")) visited)))
-      ;; empty input -> just the ambient filter
       (cl-letf (((symbol-function 'org-glance-overview:visit) capture)
                 ((symbol-function 'org-glance-table:visit) capture)
                 ((symbol-function 'completing-read) (lambda (&rest _) "")))
         (call-interactively #'org-glance-overview)
         (should (equal '(:done nil) visited)))
-      ;; a cleared ambient filter falls back to the bare tag / nil
       (let ((org-glance-filter-spec nil))
         (cl-letf (((symbol-function 'org-glance-overview:visit) capture)
                   ((symbol-function 'org-glance-table:visit) capture)
@@ -422,11 +386,7 @@ view `org-glance-overview-default-view' selects, so both view-openers are stubbe
           (call-interactively #'org-glance-overview)
           (should (equal '(:tags ("work")) visited)))))))
 
-;;; View coherence: no overview may show outdated results
-;;
-;; Pull model: a materialized save does NOT rewrite open overviews on the hot
-;; path -- it only flags them stale (the `glance:stale' lighter); each rebuilds
-;; itself lazily at its next display boundary (`--refresh-when-stale').
+;;; View coherence: save flags stale, display boundary rebuilds (invariant 10).
 
 (ert-deftest org-glance-test:overview-stale-flag-on-save ()
   "A materialized save FLAGS open overviews stale without rewriting them on the
@@ -442,7 +402,6 @@ and its on-disk cache still holds the OLD render (no eager write)."
       (org-glance-test:simulate-material-save
        graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
       (with-current-buffer all
-        ;; flagged stale, but neither buffer NOR cache file rewritten by sync
         (should org-glance-view--stale)
         (should (s-contains? "TODO Alpha" (buffer-string)))
         (should-not (s-contains? "DONE Alpha" (buffer-string)))
@@ -460,14 +419,12 @@ filtered-out headlines drop, and the stale flag clears."
       (org-glance-test:with-overview (todo graph '(:state "TODO"))
         (org-glance-test:simulate-material-save
          graph "a1" "* DONE Alpha :work:\n:PROPERTIES:\n:ORG_GLANCE_ID: a1\n:END:\n")
-        ;; "all": display boundary rebuilds in place, flag clears, not modified
         (with-current-buffer all
           (org-glance-view--refresh-when-stale)
           (should (s-contains? "DONE Alpha" (buffer-string)))
           (should-not (s-contains? "TODO Alpha" (buffer-string)))
           (should-not org-glance-view--stale)
           (should-not (buffer-modified-p)))
-        ;; state=TODO: Alpha no longer matches -> dropped; Beta untouched
         (with-current-buffer todo
           (org-glance-view--refresh-when-stale)
           (should-not (s-contains? "Alpha" (buffer-string)))
@@ -492,7 +449,6 @@ edits -- it leaves the edits intact and only flags the view stale."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* TODO Alpha"))
     (org-glance-test:with-overview (all graph nil)
-      ;; advance the store so the view is genuinely stale
       (org-glance-graph:add graph (org-glance-test:headline "b1" "* TODO Beta"))
       (org-glance-test:store-mtime graph 100)
       (with-current-buffer all
@@ -501,7 +457,6 @@ edits -- it leaves the edits intact and only flags the view stale."
           (insert "\n* UNSAVED local edit\n"))
         (should (buffer-modified-p))
         (org-glance-view--refresh-when-stale)
-        ;; edit survived (no revert); view flagged stale instead
         (should (s-contains? "UNSAVED local edit" (buffer-string)))
         (should org-glance-view--stale)))))
 
@@ -511,7 +466,6 @@ when it is (re)displayed or selected."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "a1" "* Alpha"))
     (org-glance-test:with-overview (all graph nil)
-      ;; mutate the store BEHIND the views (no materialized save involved)
       (org-glance-graph:add graph (org-glance-test:headline "b1" "* Beta"))
       (org-glance-test:store-mtime graph 100) ; guarantee staleness
       (should-not (s-contains? "Beta" (with-current-buffer all (buffer-string))))
@@ -519,7 +473,6 @@ when it is (re)displayed or selected."
         (org-glance-view--refresh-when-stale))
       (should (s-contains? "Beta" (with-current-buffer all (buffer-string)))))))
 
-;;; Keymap
 
 (ert-deftest org-glance-test:overview-keymap-bindings ()
   "The overview keymap mirrors v1 navigation (n/p heading, f/b sibling) + actions."
@@ -531,8 +484,7 @@ when it is (re)displayed or selected."
     (should (eq (lookup-key map (kbd ",")) #'beginning-of-buffer))
     (should (eq (lookup-key map (kbd ".")) #'end-of-buffer))
     (should (eq (lookup-key map (kbd "RET")) #'org-glance-overview:materialize))
-    ;; `m' is NOT a materialize key -- it was dropped, and in the table view `m'
-    ;; marks (`table-view-mark-toggle'); the org-text overview leaves it unbound.
+    ;; `m' was dropped as a materialize key; in the table view it marks rows.
     (should-not (lookup-key map (kbd "m")))
     (should (eq (lookup-key map (kbd "j")) #'org-glance-overview:open))
     (should (eq (lookup-key map (kbd "!")) #'org-glance-overview:open))
@@ -570,13 +522,12 @@ when it is (re)displayed or selected."
           (funcall (key-binding (kbd "C-c C-s"))))
         (should (s-contains? "2026-08-15"
                              (org-glance-test:field graph "p1" schedule)))
-        ;; point restored onto the headline after the refresh
+        ;; the refresh restores point onto the headline.
         (should (org-at-heading-p))
         (org-glance-test:answering ((org-read-date "2026-09-15"))
           (funcall (key-binding (kbd "C-c C-d"))))
         (should (s-contains? "2026-09-15"
                              (org-glance-test:field graph "p1" deadline)))
-        ;; C-u through the interactive frontend clears; the other survives
         (let ((current-prefix-arg '(4)))
           (org-glance-overview:schedule current-prefix-arg))
         (let ((meta (org-glance-graph:get-headline graph "p1")))
@@ -598,16 +549,13 @@ plain body links -- agenda and link-following need no materialization."
       (org-glance-test:headline "r1" "* Manhattan Coffee Roasters")
       (org-glance-test:headline "r2" "* Water Notes"))
     (let ((text (org-glance-overview:render graph '(:tags ("coffee")))))
-      ;; priority cookie + one-line planning (agenda-native)
       (should (s-contains? "* TODO [#A] Kebena Decaf" text))
       (should (s-contains? "DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>" text))
-      ;; relation: pretty kind + canonical edge link + LIVE title
       (should (s-contains?
                "- roasted by [[org-glance-material:r1?kind=roasted-by][Manhattan Coffee Roasters]]"
                text))
-      ;; kindless edge: bare list item, no prose prefix
       (should (s-contains? "\n- [[org-glance-material:r2][Water Notes]]" text))
-      ;; plain link verbatim; the edge link is NOT duplicated into the list
+      ;; the edge link appears once -- never duplicated into the plain links.
       (should (s-contains? "- [[https://example.com][Homepage]]" text))
       (should (= 1 (s-count-matches "r1\\?kind" text))))))
 

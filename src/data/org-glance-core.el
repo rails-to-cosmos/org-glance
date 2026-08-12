@@ -1,13 +1,6 @@
 ;;; org-glance-core.el --- org-glance session state -*- lexical-binding: t; -*-
 
-;;; Commentary:
-;; The session-level primitives every command depends on: the customization
-;; group, the content directory, the current global graph, and the init check.
-;; They live in this low-level module -- required by the view/command modules --
-;; so an autoloaded entry command finds them even when the umbrella `org-glance'
-;; file (which requires all the parts, so cannot be required back) is not loaded.
-;; `org-glance-init' stays in `org-glance.el' (it drives migration); it SETS the
-;; `org-glance-graph' defined here.
+;; Low-level: `org-glance' requires this file, so it can never be required back.
 
 ;;; Code:
 
@@ -54,4 +47,3 @@ Value `org-glance-table' opens the sortable table dashboard (default); value
   (memq org-glance-overview-default-view '(org-glance-table table)))
 
 (provide 'org-glance-core)
-;;; org-glance-core.el ends here

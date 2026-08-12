@@ -1,19 +1,6 @@
 ;;; org-glance-property-index.el --- derived per-headline property index -*- lexical-binding: t; -*-
 
-;;; Commentary:
-;; A PURE, rebuildable cache of each live headline's org properties, keyed by id
-;; and invalidated by content hash.  It backs the table's custom-column values,
-;; the column-add key discovery (a completing-read over the properties the
-;; filtered headlines actually carry), and extract -- so those read properties
-;; without re-parsing the content blob every time.
-;;
-;; Two property notions are indexed, both filled in ONE blob parse:
-;;   :drawer  the org `:PROPERTIES:' drawer (`node-properties'), shown as columns;
-;;   :body    org-glance's body `KEY: value' pairs (`properties'), read by extract.
-;;
-;; Persisted at `<store>/cache/property-index.eld' (alist id -> (HASH :drawer AL
-;; :body AL)).  Correctness never depends on it: a cold / stale / git-conflicted
-;; entry falls back to an O(N) blob parse, and `org-glance-reindex' drops it.
+;; Invariant 5: a pure derived cache -- hash-guarded reads, O(N) blob fallback.
 
 ;;; Code:
 
@@ -141,4 +128,3 @@ CATEGORY excluded).  Read-only w.r.t. disk -- a following render persists."
     (when (f-exists? f) (f-delete f))))
 
 (provide 'org-glance-property-index)
-;;; org-glance-property-index.el ends here

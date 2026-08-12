@@ -1,15 +1,7 @@
 ;;; bench-graph.el --- Store benchmarks (eask bench)  -*- lexical-binding: t -*-
 
 ;;; Commentary:
-;; Times the store's hot paths over synthetic graphs so the seal/compact
-;; knobs (`org-glance-graph-segment-max-bytes',
-;; `org-glance-graph-compact-segment-count') get a measured curve,
-;; and every performance change gets a before/after number.  Reuses the test
-;; fixtures; `benchmark' ships with Emacs -- no new dependency.
-;;
-;; Run with `eask bench' (or `make bench').  Default N: 1000 and 10000;
-;; set OG_BENCH_LARGE=1 for the 100000 tier.  Non-assertive by design --
-;; never wired into `eask test'.
+;; Times the store's hot paths to tune the seal/compact knobs; asserts nothing.
 
 ;;; Code:
 

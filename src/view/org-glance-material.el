@@ -3,10 +3,8 @@
 ;;; org-glance-material.el --- graph-backed selection + materialize/sync
 
 ;;; Commentary:
-;; Command layer over the graph.  Selection lists live headlines from the
-;; graph; materialize opens a headline's content blob in an editable buffer;
-;; saving writes it back as a NEW version (the store is append-only,
-;; last-write-wins), guarded by a hash check against concurrent changes.
+;; Command layer over the graph.  Materialize opens a headline's content blob
+;; as an editable file; saving appends a NEW version (append-only, last wins).
 
 ;;; Code:
 
@@ -40,16 +38,10 @@
   "Choose a live headline from GRAPH and return its metadata.
 FILTER, if non-nil, is a predicate on the metadata."
   (cl-check-type graph org-glance-graph)
-  ;; FILTER often calls `active?'/`done?', which read the buffer-local
-  ;; `org-done-keywords' -- nil in this command/minibuffer context.  Bind the
-  ;; user's done set so the filter is correct regardless of the current buffer.
   (let* ((org-done-keywords (org-glance--done-keywords))
          (metas (cl-loop for meta in (org-glance-graph:headlines graph)
                          when (or (null filter) (funcall filter meta))
                          collect meta))
-         ;; Duplicate labels get a short-id suffix so the pick is injective --
-         ;; resolving a collision to the FIRST metadata would silently act on
-         ;; the wrong headline.
          (labels (mapcar #'org-glance-material:label metas))
          (counts (-frequencies labels))
          (candidates (cl-mapcar (lambda (meta label)
@@ -71,13 +63,6 @@ FILTER, if non-nil, is a predicate on the metadata."
     (cdr (assoc (completing-read prompt candidates nil t) candidates))))
 
 ;;; Materialized buffer
-;;
-;; A materialized headline is its content blob (`…/data/<id>/data.org`) opened as
-;; a REAL file.  Saving is therefore an ordinary file save (works under any
-;; config -- evil, super-save, whatever binds the save command), and a
-;; buffer-local `after-save-hook' refreshes the graph metadata index from the
-;; saved content.  Emacs's own "file changed on disk" handling covers concurrent
-;; edits, so there is no custom conflict prompt.
 
 (defvar org-glance-material-mode-map (make-sparse-keymap)
   "Keymap for `org-glance-material-mode'.")
@@ -89,29 +74,16 @@ FILTER, if non-nil, is a predicate on the metadata."
   :group 'org-glance
   :keymap org-glance-material-mode-map
   (when org-glance-material-mode
-    ;; org requires tab-width 8; no tabs.
     (setq tab-width 8 indent-tabs-mode nil)
-    ;; Advance only the earliest of multiple repeatable timestamps on repeat.
     (org-glance-datetime-mode 1)
-    ;; Appended, so it runs AFTER org's own `org-check-running-clock' -- which
-    ;; is what queues the note this drops.
+    ;; Appended: runs AFTER `org-check-running-clock', which queues that note.
     (add-hook 'kill-buffer-hook #'org-glance-material--cancel-pending-log-note t t)))
 
-;; `C-c #' by context -- the one crypt key: region -> wrap it in a crypt block;
-;; sealed buffer -> unseal; point inside a block -> unwrap it; decrypted buffer
-;; -> seal it back; plaintext headline -> encrypt the whole body.
 (define-key org-glance-material-mode-map (kbd "C-c #") #'org-glance-material:crypt)
-;; `C-c d': set/clear the headline's project directory (`org-glance-llm' uses it).
 (define-key org-glance-material-mode-map (kbd "C-c d") #'org-glance-material:set-project-dir)
-;; `C-c e': copy a body `KEY: value' from this headline (the views' `e').
 (define-key org-glance-material-mode-map (kbd "C-c e") #'org-glance-material:extract-here)
-;; `C-c j': open a link from this headline (the transient's `j', scoped here).
 (define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
-;; `C-c i': set the date interval (<from>--<to> body range); `C-u' removes it.
 (define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
-;; `@' at a word boundary (body or heading title) references another headline
-;; (C-u adds a kind); at column 0 of a heading and mid-word it self-inserts.
-;; `C-c @' views this headline's relations (both directions).
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
 (define-key org-glance-material-mode-map (kbd "C-c @") #'org-glance-material:references)
 
@@ -156,11 +128,6 @@ ORG_GLANCE_ID was changed."
   (when (and org-glance-material--graph org-glance-material--id)
     (let* ((graph org-glance-material--graph)
            (id org-glance-material--id)
-           ;; Re-parse with the tag's todo cycle GLOBALLY bound, so it reaches
-           ;; `--from-string's internal temp buffer and a state like READING is
-           ;; recognised instead of folding into the title.  `org-todo-keywords' is
-           ;; not buffer-local here (see `material:open'), so this `let' binds the
-           ;; global value the temp buffer's `org-mode' reads.
            (headline (let ((org-todo-keywords
                             (org-glance-tag-config:cycle->keywords-or
                              org-glance-material--cycle org-todo-keywords)))
@@ -173,13 +140,7 @@ ORG_GLANCE_ID was changed."
         (message "org-glance: ORG_GLANCE_ID changed (expected %s); metadata not updated" id)))))
 
 ;;; Repeated headlines: occurrence history
-;;
-;; A repeating headline stays ONE graph entity.  Completing a repetition
-;; snapshots the done state VERBATIM into `data/<id>/occurrences/<STAMP>.org'
-;; (immutable files, newest `org-glance-repeat-history-depth' kept), then the
-;; live headline is trimmed to its header + pinned blocks.  Pick a snapshot
-;; with `l' (table/overview) or `C-c h' (here).  See
-;; docs/proposals/2026-07-18-repeat-occurrences.done.org.
+;; See docs/proposals/2026-07-18-repeat-occurrences.done.org.
 
 (defcustom org-glance-repeat-history-depth 0
   "How many completed occurrences to keep per repeating headline.
@@ -239,12 +200,9 @@ flag."
                           (org-glance-material--history-depth)))
               (ts (and (or (eq depth t) (> depth 0))
                        (member (org-get-todo-state) org-done-keywords)
-                       ;; ONE subtree parse: the earliest repeated timestamp both
-                       ;; gates the snapshot and names it.
                        (car (org-glance-datetime-active-repeated-timestamps
                              'include-schedules 'include-deadlines)))))
-    ;; This buffer is DECRYPTED plaintext; snapshotting it would write
-    ;; plaintext history for an encrypted headline (invariant 14).  Skip.
+    ;; invariant 14: an encrypted buffer holds plaintext -- never snapshot it.
     (if org-glance-material--encrypted
         (message "org-glance: encrypted headline keeps no occurrence history")
       (with-demoted-errors "org-glance: occurrence snapshot failed: %S"   ; inv 9
@@ -291,22 +249,11 @@ Runs `:after' `org-auto-repeat-maybe'; consumes the `--snapshotted' flag."
         (insert (s-join "\n\n" (cons header pinned)) "\n")
         (org-delete-property "LAST_REPEAT")))))   ; entry-delete finds the sole heading
 
-;; Idempotent on reload: `advice-add' is a no-op for an already-added function.
 (advice-add 'org-auto-repeat-maybe :before #'org-glance-material:snapshot-on-repeat '((depth . -90)))
 (advice-add 'org-auto-repeat-maybe :after #'org-glance-material:cleanup-after-repeat)
 
 ;;; Encrypted headlines: decrypt on open, re-encrypt on save
-;;
-;; A materialized blob IS `data.org' (the store's canonical file), so plaintext
-;; must never touch disk.  The password prompted on open is cached buffer-local
-;; (with a TTL, `org-glance-material-password-ttl'); `before-save-hook' encrypts
-;; the body so the file is written as ciphertext, then `after-save-hook' (after
-;; `sync' has re-indexed the ciphertext) decrypts the body back for editing.  The
-;; buffer holds plaintext only in memory, and auto-save/backup/lockfiles are
-;; disabled so that plaintext cannot leak to `#data.org#' / `data.org~' / lock
-;; files.  SECURITY NOTE: the decrypted body and the cached password still live in
-;; process memory (and the undo list) for the buffer's lifetime; moving to
-;; gpg-agent removes that -- see the GPG-migration proposal.
+;; SECURITY: plaintext and the password stay in memory (GPG-migration proposal).
 
 (defcustom org-glance-material-password-ttl 300
   "Seconds an encrypted buffer caches its password before forgetting it.
@@ -438,7 +385,6 @@ wires the seal/unseal round-trip.  The region must lie inside the body."
     (org-glance-material--wire-crypto)
     (org-glance-material--set-password
      (read-passwd "Headline password (confirm): " t))
-    ;; the headline just became secret: purge its plaintext occurrence history
     (org-glance-material--purge-occurrences org-glance-material--graph
                                             org-glance-material--id))
   (deactivate-mark)
@@ -482,8 +428,7 @@ whole headline public: the buffer stops sealing and forgets its password."
   (let ((block (org-glance--crypt-block-at (point))))
     (unless block (user-error "Point is not inside a crypt block"))
     (when (org-glance--crypt-sealed? block)
-      ;; As-is-opened buffers arrive unhardened; wire BEFORE any plaintext
-      ;; lands (invariant 14: no autosave/backup may see it).
+      ;; invariant 14: harden BEFORE plaintext lands (as-is opens unhardened).
       (org-glance-material--wire-crypto)
       (org-glance--crypt-unseal-blocks (org-glance-material--require-password))
       (setq block (org-glance--crypt-block-at (point))))
@@ -510,8 +455,6 @@ ciphertext block, and unsealing is what `C-c #' means there."
    ((use-region-p)
     (org-glance-material:crypt-region (region-beginning) (region-end)))
    ((org-glance-headline--buffer-encrypted?)
-    ;; a buffer this command sealed is still wired: unseal it in place, with no
-    ;; kill-on-wrong-password (that path belongs to opening, not to a toggle)
     (if org-glance-material--encrypted
         (org-glance-material--decrypt-buffer)
       (org-glance-material:decrypt)))
@@ -531,9 +474,6 @@ consumers re-add one (`file-name-as-directory') for a `default-directory'."
            (expand-file-name
             (read-directory-name
              "Project dir: "
-             ;; The PROMPT's default keeps its trailing "/", so the minibuffer
-             ;; opens INSIDE the directory (completing its contents) instead of
-             ;; offering the directory itself as the pending selection.
              (if-let ((cur (org-glance-material--property
                             org-glance-project-dir-property)))
                  (file-name-as-directory cur)
@@ -664,17 +604,10 @@ tombstoned, or has no stored blob."
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
           (when decrypt (org-glance-material--maybe-decrypt meta existing))
           (cl-return-from org-glance-material:open existing)))
-      ;; Fresh open only: the tag's todo cycle (a stat + possible tag-config
-      ;; parse) is pure waste on the reuse path above.
       (let* ((cycle (org-glance-tag-config:cycle-for-filter
                      graph (list :tags (append (org-glance-headline-metadata:tags meta) nil))))
              (buffer
-             ;; Initialize the buffer's `org-mode' with the tag's TODO cycle bound
-             ;; GLOBALLY: `org-set-regexps-and-options' (run inside `find-file-noselect')
-             ;; reads the DEFAULT value of `org-todo-keywords', not a buffer-local one
-             ;; (the W1 finding), so this is what makes the buffer's derived keyword vars
-             ;; -- and hence native rendering, cycling and `org-todo' -- know the tag's
-             ;; states (e.g. READING), WITHOUT a `#+TODO:' in the kept-clean blob.
+             ;; Bound GLOBALLY: `find-file-noselect' reads the DEFAULT value.
              (let ((org-todo-keywords
                     (org-glance-tag-config:cycle->keywords-or cycle org-todo-keywords)))
                (find-file-noselect path))))
@@ -682,55 +615,24 @@ tombstoned, or has no stored blob."
           (rename-buffer (format "*org-glance: %s*" (org-glance-headline-metadata:title meta)) t)
           (setq-local org-glance-material--graph graph
                       org-glance-material--id id)
-          ;; Save atomically: write a temp file then rename it over data.org, so a
-          ;; crash mid-save can never truncate the blob (the canonical materialized
-          ;; file).  Mirrors the temp-then-rename in `org-glance-graph:put-content'.
+          ;; invariant 2: temp-then-rename; a crash never truncates the blob.
           (setq-local file-precious-flag t)
-          ;; A configured tag's todo cycle is NOT stored in the blob (kept clean);
-          ;; stash it so `org-glance-material:sync' can re-parse the save with the
-          ;; tag's own keywords in scope (else a state like READING folds into the
-          ;; title).  NB do NOT `setq-local' `org-todo-keywords' here -- that would
-          ;; make it buffer-local, and sync's dynamic `let' must bind it GLOBALLY to
-          ;; reach `--from-string's internal temp buffer.
+          ;; NEVER `setq-local' `org-todo-keywords': `sync' binds it globally.
           (setq-local org-glance-material--cycle cycle)
           (add-hook 'after-save-hook #'org-glance-material:sync nil t)
           (org-glance-material-mode 1)
           (when decrypt (org-glance-material--maybe-decrypt meta buffer))
-          ;; Conceal bookkeeping drawer lines; re-conceal after every save
-          ;; (depth 100: after the crypt unseal hook has restored plaintext).
+          ;; invariant 27: depth 100 -- after the crypt unseal (depth 90).
           (org-glance-material--hide-reserved-properties)
           (add-hook 'after-save-hook #'org-glance-material--hide-reserved-properties 100 t)
-          ;; Reserved properties are managed: snapshot the originals and revert
-          ;; hand edits on save (with a warning), before the file is written.
-          ;; Order vs the crypt seal is immaterial: restore edits only the
-          ;; heading drawer, the seal only body crypt blocks -- disjoint regions.
+          ;; invariant 21: drawer-only, disjoint from the crypt seal.
           (setq-local org-glance-material--reserved-values
                       (org-glance-material--reserved-snapshot))
           (add-hook 'before-save-hook #'org-glance-material--restore-reserved nil t)
-          ;; Case-duplicate tags (:Food:food:) collapse to the canonical
-          ;; downcased one before the file is written (invariant 13).
           (add-hook 'before-save-hook #'org-glance-material--dedupe-tags nil t))
         buffer))))
 
 ;;; TODO state change: exactly `C-c C-t' on the headline (materialize -> sync)
-;;
-;; A read-only view (overview / table) advances a headline's state with byte-exact
-;; org fidelity by MATERIALIZING it and running `org-todo' in the real blob buffer:
-;; per-tag keywords are live (see `org-glance-material:open'), so state cycling, the
-;; CLOSED timestamp, `org-after-todo-state-change-hook', dependency blocking,
-;; repeaters (snapshot-on-repeat) and the interactive LOGBOOK note all happen natively.
-;; Persistence reuses the ordinary save -> `after-save-hook' -> `:sync' path (atomic
-;; blob + WAL + mark-stale); there is no separate write.
-;;
-;; The wrinkle is the note.  `org-todo' applies the state + CLOSED synchronously but
-;; DEFERS an interactive note (`org-log-done' `note', repeat-notes, `C-u' force-log)
-;; to `*Org Note*'.  So we save immediately when no note is queued (signalled by
-;; `org-log-setup', read in the same stack frame), else save from a one-shot `:after'
-;; advice on `org-store-log-note' -- which fires on BOTH commit (`C-c C-c') and abort
-;; (`C-c C-k'); on abort the state + CLOSED are kept, matching native `C-c C-t'.  A
-;; FRESH background buffer is killed and the origin view refreshed once committed; a
-;; PRE-EXISTING materialized buffer is edited in place and left for the user to save
-;; (we never flush their unsaved edits).
 
 (defvar org-log-setup)         ; org.el: non-nil while an interactive note is queued
 (defvar org-log-note-how)      ; org.el: `note' (prompt) vs `time'/`state' (timestamp)
@@ -776,20 +678,16 @@ A pre-existing materialized buffer is edited in place; the user saves it."
          (origin (current-buffer))
          (buf (org-glance-material:open graph id)))  ; user-errors if not live
     (if (not fresh)
-        ;; Already materialized: act in place, the user drives the save.
         (progn
           (switch-to-buffer buf)
           (org-glance-material--goto-first-heading)
           (let ((current-prefix-arg arg)) (call-interactively #'org-todo)))
-      ;; Fresh background buffer: run org-todo, then commit (now or after the note).
       (let ((owned nil) (commit-now nil))
         (cl-labels
             ((finish (state)
                (when (buffer-live-p buf) (kill-buffer buf))
                (when (buffer-live-p origin)
                  (with-current-buffer origin (funcall finalize state))))
-             ;; Save persists via the buffer's `after-save-hook' (`:sync'); return
-             ;; the new state string.
              (persist ()
                (with-current-buffer buf
                  (save-buffer)
@@ -799,13 +697,9 @@ A pre-existing materialized buffer is edited in place; the user saves it."
                 (with-current-buffer buf
                   (org-glance-material--goto-first-heading)
                   (let ((current-prefix-arg arg) (org-log-setup nil))
-                    ;; State + CLOSED + hooks + repeater are applied here; only an
-                    ;; interactive note is deferred (signalled by `org-log-setup').
                     (call-interactively #'org-todo)
                     (cond
                      (org-log-setup
-                      ;; Note pending -> persist + finish after it settles;
-                      ;; DEFER the kill/refresh off org's extent.
                       (org-glance-material--on-next-log-note
                        (lambda ()
                          (let ((state (persist)))
@@ -813,11 +707,7 @@ A pre-existing materialized buffer is edited in place; the user saves it."
                       (setq owned t))
                      ((buffer-modified-p)
                       (setq owned t commit-now t)))))
-                ;; No note: commit synchronously, now OUTSIDE the buffer edit (so
-                ;; killing it is safe).
                 (when commit-now (finish (persist))))
-            ;; org-todo threw (e.g. a dependency block) before ownership passed to
-            ;; the note advice / commit -> don't leak the background buffer.
             (unless owned (org-glance--discard-buffer buf))))))))
 
 (cl-defun org-glance-material--on-next-log-note (continuation)
@@ -874,8 +764,6 @@ the (id . reason) pairs skipped."
                          (let ((org-log-setup nil))
                            (org-todo state)
                            (cond
-                            ;; Interactive note: drive the prompt now; the advice
-                            ;; persists + advances the chain once it settles.
                             ((and org-log-setup (eq org-log-note-how 'note))
                              (let ((adv (org-glance-material--on-next-log-note
                                          (lambda () (resume buf existing id)))))
@@ -885,14 +773,12 @@ the (id . reason) pairs skipped."
                                      (setq suspended t))
                                  (unless suspended
                                    (advice-remove 'org-store-log-note adv)))))
-                            ;; Timestamp log: flush it inline, no window churn.
                             (org-log-setup
                              (save-window-excursion
                                (let ((this-command org-log-note-this-command))
                                  (org-add-log-note)))
                              (with-current-buffer buf (save-buffer))
                              (push id changed))
-                            ;; Plain state change (or already in STATE).
                             (t (when (buffer-modified-p) (save-buffer))
                                (push id changed)))))
                      (error (push (cons id (error-message-string err)) skipped)))
@@ -985,15 +871,13 @@ flags views stale."
                        title (length referrers)
                        (s-join ", " (mapcar (lambda (r) (s-truncate 30 r)) referrers)))
              (format "Delete \"%s\"?" title))
-           ;; never clobber silently (invariant 11): a dirty open buffer is
-           ;; called out in the SAME consent prompt
+           ;; invariant 11: a dirty open buffer is named in the SAME prompt.
            (if (and buf (buffer-modified-p buf))
                " (its open buffer has UNSAVED edits, which will be discarded)"
              "")
            " ")))
     (when (yes-or-no-p prompt)
-      ;; tombstone FIRST: if the append fails (ENOSPC), the open buffer -- the
-      ;; user's only unsaved copy -- must survive (write-ordering, inv 5 spirit)
+      ;; Tombstone FIRST: a failed append must not cost the unsaved copy.
       (org-glance-graph:delete graph id)
       (when buf (org-glance--discard-buffer buf))
       (org-glance-view:mark-graph-stale graph)
@@ -1068,13 +952,10 @@ at the prompt land natively.  Errors on unsaved edits
     (org-glance-material--replace-headline
      graph id
      (lambda (headline)
-       ;; Prompt only after --replace-headline's guards (unsaved edits, dead
-       ;; id): C-g here still aborts before any write.
        (let ((time (unless remove
                      (org-read-date nil nil nil
                                     (format "%s: " (capitalize (symbol-name kind))))))
-             ;; A temp parse cannot host org's deferred reschedule/redeadline
-             ;; note buffer -- never let the planner queue one.
+             ;; A temp parse cannot host org's deferred note buffer.
              (org-log-reschedule nil)
              (org-log-redeadline nil))
          (org-glance-headline--map-contents headline
@@ -1114,13 +995,6 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
   t)
 
 ;;; Commands
-;;
-;; The picker commands -- materialize / open / extract -- gate their candidate
-;; list by the ambient `org-glance-filter-spec' (default: active headlines),
-;; composed with each command's own intrinsic constraint (open needs a link,
-;; extract needs a property/encryption).  The same filter is overlaid onto the
-;; overview and agenda (see `org-glance-overview'); capture creates a new
-;; headline, so a state filter does not apply there.
 
 (cl-defun org-glance-material:pick-metadata (graph)
   "Choose a live GRAPH headline gated by the ambient `org-glance-filter-spec'."
@@ -1153,7 +1027,6 @@ parse of stored content) and `:open-link-here' (the live buffer)."
               (cl-remove-if (lambda (entry)
                               (s-starts-with-p "org-glance-" (or (nth 2 entry) "")))
                             (org-glance--link-paths))))
-  ;; Mirror v1: open `file:' links in the same window.
   (let ((org-link-frame-setup (cl-acons 'file 'find-file org-link-frame-setup)))
     (org-open-at-point)))
 
@@ -1219,10 +1092,7 @@ ordinary save."
   (org-with-wide-buffer
     (org-glance-material--goto-first-heading)
       (org-end-of-meta-data t)
-      ;; Search the BODY only (title/planning/drawers can carry ranges that
-      ;; are not the interval), and never a match inside a decrypted crypt
-      ;; block -- editing there would silently mutate secret content the
-      ;; index (which reads SEALED bytes, invariant 14) can never reflect.
+      ;; Never inside a crypt block: index reads SEALED bytes (invariant 14).
       (cl-flet ((goto-body-range ()
                   (cl-loop while (re-search-forward org-tr-regexp nil t)
                            unless (org-glance--crypt-block-at (match-beginning 0))
@@ -1273,9 +1143,7 @@ stored-headline path uses -- no temp-buffer reparse."
                     (org-glance-headline-metadata:encrypted? m))))))
 
 ;;; References (`@'): edges to other headlines
-;;
-;; A reference IS a link in the body; `org-glance--link-edge' owns the wire
-;; format.  See docs/proposals/2026-07-18-relations.done.org.
+;; See docs/proposals/2026-07-18-relations.done.org.
 
 (cl-defun org-glance-material--read-reference (graph self &key with-kind)
   "Choose a reference target in GRAPH: (ID TITLE KIND-or-nil).
@@ -1311,8 +1179,6 @@ The core behind the materialized buffer's `@' and the capture buffer's `@'."
     (pcase-let ((`(,id ,title ,kind)
                  (org-glance-material--read-reference graph self
                                                       :with-kind with-kind)))
-      ;; Prose edge: "roasted by [[...][Manhattan]]" -- only the name is a
-      ;; link; the canonical kind lives in the link path.
       (insert (org-glance--edge->string id kind title)))))
 
 (cl-defun org-glance-material:refer (&optional arg)

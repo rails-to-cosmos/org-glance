@@ -6,7 +6,6 @@
 (require 'org-glance-filter)
 
 (require 'org-glance-core)
-;; The transient's suffix commands live in other files; declared for the compiler.
 (declare-function org-glance-table "org-glance-table")
 (declare-function org-glance-tags "org-glance-tags")
 (declare-function org-glance-tag-config-edit "org-glance-tag-config")
@@ -14,13 +13,6 @@
                               ; the System heading (that file requires this one)
 (declare-function org-glance-plugin-feature "org-glance")
 
-;;; Ambient filter controls
-;;
-;; These mirror the in-overview `/' menu (`org-glance-overview-filter') but
-;; target the global `org-glance-filter-spec' -- the filter every action here
-;; respects: the pickers gate their candidates by it, and the overview/agenda
-;; overlay it.  Both menus share the clause builders in `org-glance-filter', so
-;; the two stay consistent.
 
 (transient-define-suffix org-glance-transient:filter-by-state ()
   "Set the ambient filter's todo-state dimension (active / done / all / a state)."
@@ -95,11 +87,8 @@ absent, and this heading is where that shows."
    ("s" "Todo state" org-glance-transient:filter-by-state)
    ("/" "Title substring" org-glance-transient:filter-by-substring)
    ("c" "Clear (all)" org-glance-transient:filter-clear)]
-  ;; Three semantic layers: TAG (collections), HEADLINE (one node; the
-  ;; material buffer mirrors these under C-c), SYSTEM (the installation).
   ["Tag"
    [("o" org-glance-overview :description org-glance-transient--overview-description)
-    ;; ("a" "Agenda" org-glance-agenda)
     ("T" "All tags" org-glance-tags)
     ("C" "Configure" org-glance-tag-config-edit)]
    [("-l" org-glance-transient:toggle-view :description org-glance-transient--toggle-view-description)]]

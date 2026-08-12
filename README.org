@@ -5,9 +5,9 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-Projections over your [[https://orgmode.org/][org-mode]] headlines.  The org files are a durable,
-addressable database; everything else is a projection.  Every entry gets an id and its own
-file; tags are collections carrying their own todo cycle and capture template;
+Projections over your [[https://orgmode.org/][org-mode]] headlines.  The org files are the source
+of truth — durable and addressable; everything else is a projection.  Every
+entry gets an id and its own file; tags are collections carrying their own todo cycle and capture template;
 the table, the overview and the relations index are derived views — fast,
 rebuildable, and browsable without opening a single file.
 

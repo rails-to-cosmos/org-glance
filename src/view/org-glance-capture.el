@@ -18,9 +18,6 @@
 (defvar org-glance-capture-mode-map (make-sparse-keymap)
   "Keymap for `org-glance-capture-mode'.")
 
-;; `@' at a word boundary references a graph headline (C-u adds a kind); at a
-;; heading's column 0 or mid-word it self-inserts, mirroring a materialized
-;; buffer's `@' (see `org-glance-material:refer').
 (define-key org-glance-capture-mode-map (kbd "@") #'org-glance-capture:refer)
 
 (define-minor-mode org-glance-capture-mode
@@ -55,8 +52,6 @@ byte-identical to before.  Multi-tag composition is deferred to Phase 2."
     (if config
         (let ((body (org-glance-tag-config:render config title tags))
               (preamble (org-glance-tag-config:preamble config)))
-          ;; A skeleton that already carries a pragma keeps its own (the entry
-          ;; is the user's text); otherwise the config's pragmas lead.
           (if (and preamble (not (s-contains? "#+TODO:" body)))
               (concat preamble body)
             body))
@@ -111,9 +106,6 @@ separately."
     (when preamble
       (f-write-text (concat preamble "\n") 'utf-8 file))
     (find-file file)
-    ;; The temp buffer is discarded once its content is in the graph; guard it
-    ;; so any kill -- the after-finalize discard, or org-capture's own teardown
-    ;; -- is silent, with no `Buffer modified; kill anyway?' confirmation.
     (add-hook 'kill-buffer-query-functions #'org-glance--kill-buffer-noconfirm nil t)
     (add-hook 'org-capture-after-finalize-hook
               (lambda ()

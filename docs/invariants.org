@@ -65,7 +65,9 @@ and what breaks on violation.  Compact index in [[file:../CLAUDE.md][CLAUDE.md]]
    snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
    alone (=org-glance-graph--store-snapshot=); in-process mutations call
    =--invalidate-cache= explicitly.  Violation: same-second external compaction
-   serves deleted data as live.  The accepted cost is [[*H1 -- the external fold's truncate race eats a tombstone for good][H1]].
+   serves deleted data as live.  Two Emacsen folding one =EXTERNAL.jsonl= need
+   no lock all the same: inv 34 leaves them nothing to serialise, the fold
+   moving a cursor where it used to rewrite the file.
 
 8. *Git conflicts heal by union merge.*  Gated by
    =org-glance-conflict-resolution= (ask/union/nil); =.gitattributes= written
@@ -354,14 +356,58 @@ verified against its evidence site before being added.
     =refresh-external= itself so its own reads cannot nest) and
     =condition-case='d, so it can neither loop nor break a read under
     =debug-on-error=.  The whole batch — re-derived records and tombstones
-    alike — is ONE =graph:insert=; Emacs alone shortens the file, and only
-    AFTER that append (the crash rule: a repeated write costs an equal record
-    the latest-per-id fold cannot distinguish, and a repeated delete finds the
-    id already tombstoned and appends nothing).  Violation: reversing the two
+    alike — is ONE =graph:insert=; the fold's cursor moves only AFTER that
+    append (the crash rule: a repeated write costs an equal record the
+    latest-per-id fold cannot distinguish, and a repeated delete finds the id
+    already tombstoned and appends nothing).  Violation: reversing the two
     steps loses an edit outright; per-id inserts break the one-append rule the
     crash argument rests on; folding inside a fold recurses; an unguarded
     signal takes a plain read down with it.  What this fold gives up is written
-    below as [[*Known hazards][H1 and H2]].
+    below as [[*Known hazards][H2]].
+
+* Added 2026-08-12
+
+34. *The fold moves a CURSOR; it never rewrites =EXTERNAL.jsonl=.*
+    =meta/EXTERNAL.cursor= holds one decimal BYTE offset — how far this store
+    has folded — and =org-glance-graph--read-external= reads from there to the
+    end of the file (=insert-file-contents= with byte BEG/END).  BYTES because
+    the writer appends bytes where Emacs reads characters, and whole lines are
+    what a fold consumes, so the offset always lands where decoding can start;
+    the two spaces never have to agree.  =--set-external-cursor= writes it
+    temp-then-rename after the records land (inv 33's crash rule).  THE READER
+    MUTATING NOTHING is what makes two Emacsen folding one store safe with no
+    lock — invariant 7 stands, with nothing to serialise rather than with a
+    guarded mutation.  Both folding one range appends two equal records, the
+    crash rule's own idempotence, and a cursor written BACKWARDS costs the same
+    re-fold; it is deliberately NOT guarded with =max=, forwards being the
+    direction that skips lines and =max= being what would make a number past
+    the bytes that exist stick.  What guards THAT is the read: a cursor absent,
+    garbled or PAST the file's end reads as 0.
+
+    GROWTH IS ROTATION (=--rotate-external-maybe=), never truncation.  Once the
+    file passes =org-glance-graph-external-max-bytes= AND the cursor has caught
+    up, the cursor is renamed to =EXTERNAL-<gen>.cursor= and the file to
+    =EXTERNAL-<gen>.jsonl= — cursor first, since a generation with no cursor is
+    re-folded whole (a no-op) where a fresh live file under the old cursor would
+    have its first lines skipped.  The daemon's next append creates the live
+    file again, opening the path per line (=Data.Org.External.appendLine=,
+    =O_CREAT|O_APPEND=), so a rename between its open and its write lands that
+    line in the ROTATED file — which still exists, is drained ahead of the live
+    one, and is NEVER deleted on the pass that made it: the older generation
+    goes at the START of the next rotation, so at most two are on disk and each
+    outlives any in-flight open.  This is the store's own shape one file over,
+    where the open WAL segment is appended to and sealed by a rename (inv 2).
+
+    Violation: rewriting the file at all reopens the race H1 names — a fold
+    dropping what another already took eats the head of whatever arrived
+    between, and a lost tombstone never self-heals, the blob being gone.
+    Trusting a cursor past EOF skips lines nothing read.  Unlinking a
+    generation on the pass that rotated it loses the line an in-flight open is
+    about to write.  Rejected: a lock across Emacsen (invariant 7, and it buys
+    nothing here — there is no mutation to serialise) and shortening the file
+    under any guard, since =f-write-text= is =write-region= with =append= nil
+    and destroys whatever the daemon appended between its own read and its own
+    write.
 
 * Known hazards
 
@@ -370,43 +416,45 @@ preserve; a hazard is what today's design gives up, so it is lettered and kept
 apart -- a reader meeting the symptom should find the decision written down.
 Each was reproduced with a probe before being added, and each earns a test in
 [[file:../test/test-external.el][test-external.el]] pinning today's behaviour,
-so closing one turns its own case red and names the decision.  Each entry
-states what it costs, what would close it, and why it stands.
+so closing one turns its own case red and names the decision.  An OPEN entry
+states what it costs, what would close it, and why it stands.  A letter is never
+reused, and a CLOSED entry keeps its place so the symptom stays findable: what
+it states instead is what the symptom was, what closed it, and which cases now
+hold the rule.
 
-** H1 -- the external fold's truncate race eats a tombstone for good
+** H1 -- CLOSED 2026-08-12: the external fold's truncate race ate a tombstone
 
-=org-glance-graph--truncate-external= writes back =(substring text consumed)=,
-where CONSUMED is the length of the text =--read-external= saw.  Invariant 7
-gives two Emacsen folding one store no lock, so the second truncate drops
-CONSUMED characters counted against a file the first already emptied, eating
-the head of whatever landed between.
+*The symptom.*  =org-glance-graph--truncate-external= rewrote the file with a
+character COUNT dropped from its head, counted against the file the fold had
+read.  Invariant 7 gives two Emacsen folding one store no lock, so the second
+truncate ate the head of whatever landed between -- measured: E2 reads 74
+characters, E1 folds and empties, the writer appends the 91-character tombstone,
+E2 truncates by 74 and leaves =tombstone":true}=, with the record LIVE and the
+fragment surviving every later fold.  A lost write note self-heals, the blob
+still being the truth; a lost TOMBSTONE never does, the blob having gone, so no
+later edit will ever name that id again.
 
-*The race predates the tombstone; the tombstone moved the CONSEQUENCE.*  A lost
-write note self-heals, the blob on disk still being the truth: the id's next
-edit appends another note and the record catches up.  A lost TOMBSTONE never
-self-heals -- the blob is gone, no later edit will ever name that id again, and
-the record stays live forever pointing at nothing.
+*Why a guarded mutation did not close it.*  A compare-and-swap on the prefix
+narrowed the window and left an inner one: =f-write-text= is =write-region= with
+=append= nil, so a line the daemon appends between that function's own
+=f-read-text= and its own =f-write-text= is destroyed -- H1's exact symptom,
+reachable with ONE Emacs.  Guarding a mutation cannot close a race against an
+appender.
 
-Reproduced (=external-truncate-race-eats-a-tombstone=): E2 reads 74 characters;
-E1 folds and empties the file; the writer appends the 91-character tombstone;
-E2 truncates by the 74 it counted, leaving =tombstone":true}=.  That fragment
-parses as nothing, so =--read-external= names no entry, the fold's
-=(when entries (truncate ...))= never fires and the fragment survives every
-later fold -- pinned separately as
-=external-unparseable-file-is-never-shortened=.  The record reads LIVE
-throughout.  The write half is pinned as =external-truncate-race-spares-a-write=.
+*Closed by invariant 34*, which removes the mutation: the fold reads from a byte
+cursor and writes that cursor forward, and growth is handled by rotation.  There
+is no window because there is no rewrite.  Pinned by
+=external-race-spares-the-tombstone=,
+=external-keeps-a-note-that-arrived-mid-fold=,
+=external-keeps-a-byte-identical-note=, =external-double-fold-is-a-no-op=,
+=external-a-lost-cursor-refolds-from-zero=,
+=external-a-cursor-past-the-end-refolds= and the three rotation cases.
 
-- *Costs:* one id per lost tombstone, live forever over bytes in the daemon's
-  trash; every derived index, table, overview and agenda carries it.  The blob
-  left the tree, so =glance= holds no row to delete either, and
-  =M-x org-glance-delete= is what clears it.
-- *Would close it:* a lock across Emacsen around read-then-truncate -- a change
-  to the FOLD's design, since nothing about this line is wrong on its own.
-  Truncating by matched line count rather than by character prefix narrows the
-  window without closing it; the two readers still overlap.
-- *Open because:* it reopens invariant 7 (single user, no locking), the store's
-  standing decision, for a race that needs two Emacsen folding one store inside
-  one fold's duration.
+*The residual is gone with it.*  Under the swap, a note arriving byte-identical
+to the text a fold read was indistinguishable from it and was dropped with it.
+An OFFSET counts bytes rather than comparing them, so the second note survives
+-- which is what =external-keeps-a-byte-identical-note= asserts, the opposite of
+the case that pinned the residual.
 
 ** H2 -- a folded delete is undone by the id's open material buffer
 

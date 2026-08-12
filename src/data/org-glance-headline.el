@@ -36,22 +36,15 @@ projection keyed on it.")
   (tags nil :read-only t :type list)
   (title nil :read-only t :type string)
   (priority nil :read-only t :type number)
-  ;; Hold the parsed org-element timestamp object (or nil); the public
-  ;; `org-glance-headline:schedule' / `:deadline' methods expose raw strings.
   (-schedule nil :read-only t :type (or null list))
   (-deadline nil :read-only t :type (or null list))
 
-  ;; Metadata
   (archived? nil :read-only t :type bool)
   (commented? nil :read-only t :type bool)
 
-  ;; Content facts captured by the parse that built this headline, as
-  ;; (CONTENTS . PLIST) -- see `org-glance-headline--content-facts'.  Held
-  ;; against the exact contents STRING it was computed from, so a copy that
-  ;; rewrites contents (encrypt/decrypt) can never read a stale plist.
+  ;; (CONTENTS . PLIST), keyed by the exact string it was computed from.
   (-facts nil :read-only t :type list)
 
-  ;; Lazy attributes start with "-". Each has a builder: `org-glance-headline--<slot-name>'
   (-hash nil :read-only t :type (or string function))
   (-encrypted? nil :read-only t :type (or bool function))
   (-properties nil :read-only t :type (or list function))
@@ -73,7 +66,6 @@ forces `tab-width' to 8 -- which org's parser REQUIRES, and which a fresh buffer
                (org-glance-headline (org-glance-headline:contents ,contents))
                (string ,contents)
                (otherwise (error "Expected `org-glance-headline' or string, but got %s" (type-of ,contents)))))
-     ;; org's parser requires tab-width 8; ensure it before any form parses.
      (org-glance--org-mode)
      (goto-char (point-min))
      ,@forms))
@@ -130,12 +122,6 @@ PROPERTY is matched case-insensitively (e.g. \"TAG\", \"ORG_GLANCE_ID\")."
   (-some->> (org-glance-headline:-deadline headline)
     (org-element-property :raw-value)))
 
-;; The four content-derived facts, each computed in the CURRENT `org-mode' buffer
-;; (holding one headline) -- hence the `--buffer-' prefix they share with
-;; `org-glance--buffer-links' and `--buffer-key-value-pairs'.
-;; `--buffer-content-facts' composes all four in one shared buffer for the
-;; metadata build; the -hash/-encrypted thunks reuse the same helpers, so each
-;; computation has a single definition.
 
 (defun org-glance-headline--buffer-propertized? ()
   "Non-nil if the current buffer's headline body has a `KEY: value' pair."
@@ -272,18 +258,8 @@ descendants (like every content fact), so a child's range can project."
       (error "Unable to find `org-element' of type `headline' in the provided contents"))
     (let* ((headline (org-glance-headline:at-point))
            (parsed (org-glance-headline:contents headline)))
-      ;; This buffer already holds exactly one headline's text in the common
-      ;; case (one headline per blob), and it is already in org-mode: compute
-      ;; the content facts HERE instead of standing up a second buffer over the
-      ;; same string.  Runs AFTER `at-point' captured CONTENTS, since the hash
-      ;; pass mutates.
-      ;;
-      ;; The guard is EXACT string equality, not a trim: computing in place is
-      ;; identical to computing in a fresh buffer holding CONTENTS only when the
-      ;; buffer holds CONTENTS and nothing else.  Anything before the heading
-      ;; (blank lines, a preamble) is outside CONTENTS but inside this buffer,
-      ;; and the hash covers the whole buffer -- so those cases fall through to
-      ;; the on-demand parse in `--content-facts', exactly as before.
+      ;; Runs AFTER `at-point' captured CONTENTS -- the hash pass mutates.
+      ;; Exact equality: computing here equals a fresh CONTENTS-only buffer.
       (if (equal parsed (buffer-substring-no-properties (point-min) (point-max)))
           (org-glance-headline--copy headline
             :-facts (cons parsed (org-glance-headline--buffer-content-facts)))
@@ -296,9 +272,7 @@ descendants (like every content fact), so a child's range can project."
 (cl-defun org-glance-headline--from-element (element)
   "Create `org-glance-headline' from `org-element' ELEMENT."
   (let ((id (org-element-property :ORG_GLANCE_ID element))
-        ;; org's ARCHIVE marker tag is bookkeeping (the `archived?' flag below
-        ;; carries it) -- never a collection tag, so no phantom pickable
-        ;; \"archive\" view of headlines the ambient filter hides.
+        ;; Invariant 29: org's ARCHIVE marker is bookkeeping, never a tag.
         (tags (delete-dups
                (cl-remove (org-glance-tag:from-string org-archive-tag)
                           (mapcar #'org-glance-tag:from-string
@@ -329,9 +303,6 @@ descendants (like every content fact), so a child's range can project."
            :contents contents
            :archived? archived?
            :commented? commented?
-           ;; The lazy slots come from the same table `--copy' rebuilds them
-           ;; with, so a new one is declared once.  A nil builder (`-facts')
-           ;; is skipped and stays nil.
            (cl-loop for (slot . builder) in org-glance-headline--contents-derived-slots
                     when builder
                     append (list (intern (format ":%s" slot))

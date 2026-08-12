@@ -27,11 +27,8 @@
   (should (equal '(:done t)   (org-glance-filter:set-state nil 'done)))
   (should (equal '(:state "TODO") (org-glance-filter:set-state nil "TODO")))
   (should (null (org-glance-filter:set-state nil 'all)))
-  ;; switching dimensions: :state -> active drops :state, adds :done
   (should (equal '(:done nil) (org-glance-filter:set-state '(:state "TODO") 'active)))
-  ;; active -> a concrete state drops :done, adds :state
   (should (equal '(:state "DONE") (org-glance-filter:set-state '(:done nil) "DONE")))
-  ;; `all' clears both but preserves orthogonal dimensions
   (should (equal '(:tags ("work")) (org-glance-filter:set-state '(:tags ("work") :done nil) 'all))))
 
 (ert-deftest org-glance-test:filter-set-substring ()
@@ -64,7 +61,6 @@
   (should (string= "done" (org-glance-filter:describe '(:done t))))
   (should (string= "state=TODO" (org-glance-filter:describe '(:state "TODO"))))
   (should (s-contains? "title~foo" (org-glance-filter:describe '(:title-contains "foo"))))
-  ;; relation views stay compact: truncated id / target count, never the raw list
   (should (string= "refs->abcdefgh" (org-glance-filter:describe '(:refers-to "abcdefgh-long-id"))))
   (should (string= "id-any(2)" (org-glance-filter:describe '(:id-any ("a" "b"))))))
 
@@ -78,11 +74,9 @@
                     ("all" . all) ("TODO" . "TODO")))
       (org-glance-test:answering ((completing-read (car case)))
         (should (equal (cdr case) (org-glance-filter:read-state graph)))))
-    ;; the offered candidates are active/done/all + the graph's concrete states
     (org-glance-test:offering (offered "all")
       (org-glance-filter:read-state graph)
       (dolist (w '("active" "done" "all" "TODO" "DONE")) (should (member w offered))))
-    ;; empty input -> user-error (no silent "match everything")
     (org-glance-test:answering ((completing-read ""))
       (should-error (org-glance-filter:read-state graph) :type 'user-error))))
 
@@ -94,11 +88,8 @@ special symbol, never the literal string.  Documents the deliberate limitation
   (cl-letf (((symbol-function 'org-glance-graph:states)
              (lambda (&rest _) '("active" "TODO"))))
     (org-glance-test:offering (offered "active")
-      ;; selecting the colliding name returns the special symbol, not "active"
       (should (eq 'active (org-glance-filter:read-state 'dummy-graph)))
-      ;; "active" is offered exactly once (the special; the concrete dup is dropped)
       (should (= 1 (cl-count "active" offered :test #'string=)))
-      ;; a non-colliding concrete state is still offered as itself
       (should (member "TODO" offered)))))
 
 (ert-deftest org-glance-test:filter-archived-commented ()
@@ -112,18 +103,16 @@ record from before the fields reads nil (kept by the nil filter)."
       (org-glance-test:headline "comm" "* COMMENT Draft"))
     (let ((cold (org-glance-test:reopen graph)))       ; deserialized structs
       (should (org-glance-test:field cold "arch" archived?))
-      ;; the ARCHIVE marker tag never becomes a collection tag
+      ;; invariant 29: ARCHIVE is bookkeeping, never a collection tag.
       (should-not (org-glance-test:field cold "arch" tag-strings))
       (should-not (member "archive" (org-glance-graph:tags cold)))
       (should (org-glance-test:field cold "comm" commented?))
       (should (equal '("arch") (org-glance-test:filter-ids cold '(:archived t))))
       (should (equal '("comm" "live")
                      (sort (org-glance-test:filter-ids cold '(:archived nil)) #'string<)))
-      ;; the DEFAULT ambient spec hides both flags
       (should (equal '("live")
                      (org-glance-test:filter-ids
                       cold (default-value 'org-glance-filter-spec)))))
-    ;; pre-field record: absent flags deserialize nil -> nil filter keeps it
     (let ((meta (org-glance-headline-metadata:deserialize
                  '(:id "old" :state "TODO" :title "Old" :tags []
                    :hash "h" :schedule nil :deadline nil :priority nil
@@ -147,20 +136,16 @@ and commented headlines; `describe' renders the flags compactly."
   "The load-time guard rejects a row that would never reach `predicate\'.
 A nil `:match\' builds no clause, so the key silently constrains nothing and
 the filter matches EVERYTHING -- the regression the table exists to prevent."
-  ;; the shipped table is valid
   (should (org-glance-filter--check-table org-glance-filter:table))
-  ;; a value key with no :match
   (should-error (org-glance-filter--check-table
                  '((:colour :accessor identity)))
                 :type 'error)
-  ;; :match with no accessor -- the clause would call nil
   (should-error (org-glance-filter--check-table '((:colour :match equal)))
                 :type 'error)
-  ;; a structural key must NOT declare one (predicate hand-builds it)
+  ;; a structural key must NOT declare :match -- `predicate' hand-builds it.
   (should-error (org-glance-filter--check-table
                  '((:where :match equal :accessor identity)))
                 :type 'error)
-  ;; structural keys are legal without :match
   (should (org-glance-filter--check-table '((:where) (:done) (:done-keywords)))))
 
 (provide 'test-filter)

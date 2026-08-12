@@ -47,7 +47,6 @@ customize-save), and reports when nothing is enabled."
     (cl-letf (((symbol-function 'completing-read) (lambda (&rest _) "fake")))
       (call-interactively #'org-glance-plugin-disable))
     (should (equal '(other) org-glance-plugins)))
-  ;; nothing enabled -> report, no prompt
   (let ((org-glance-plugins nil)
         (prompted nil))
     (cl-letf (((symbol-function 'completing-read)
@@ -64,7 +63,6 @@ absent, and this heading is the only place that shows."
   (let ((org-glance-plugins '(no-such-plugin-xyz)))
     (should (s-contains? "no-such-plugin-xyz (not loaded)"
                          (org-glance-transient--plugins-description))))
-  ;; a feature that IS loaded shows bare
   (let ((org-glance-plugins '(fake)))
     (cl-letf (((symbol-function 'featurep)
                (lambda (f &rest _) (eq f 'org-glance-fake))))

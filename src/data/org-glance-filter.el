@@ -2,23 +2,6 @@
 
 ;;; org-glance-filter.el --- the org-glance headline filter language
 
-;;; Commentary:
-;; The single, shared filter language over headline *metadata*.  A FILTER is
-;; either nil (all headlines), a bare tag symbol/string (shorthand for
-;; `(:tags (TAG))'), or a normalized plist spec.  Three pure helpers interpret
-;; it: `:normalize-spec' (the single coercion point), `:predicate' (spec ->
-;; closure on metadata) and `:identity' (spec -> an unambiguous printed form,
-;; the basis of the overview cache key).
-;;
-;; This used to live inside `org-glance-overview'; it was lifted here so the
-;; SAME language drives every consumer -- the picker commands
-;; (materialize/open/extract), the overview + agenda, the in-overview `/'
-;; refinement, and the `org-glance-transient' transient.  `org-glance-overview'
-;; keeps only the cache/render machinery layered on top (`spec-key',
-;; `cached-file', the SPEC sidecar, ...).
-;;
-;; `plist-member' (not `plist-get') gates each clause, so `(:state nil)'
-;; (stateless headlines) is distinct from omitting `:state' (no constraint).
 
 ;;; Code:
 
@@ -29,7 +12,6 @@
 (require 'org-glance-tag)
 (require 'org-glance-graph)
 
-;;; The ambient filter
 
 (defcustom org-glance-filter-spec '(:done nil :archived nil :commented nil)
   "Ambient filter applied to headline actions, as a normalized filter spec.
@@ -41,17 +23,9 @@ spec language."
   :group 'org-glance
   :type 'sexp)
 
-;;; The language
 
 (defconst org-glance-filter:table
-  ;; KEY -> plist:
-  ;;   :match    clause kind built by `--match-clause' (nil = the clause is
-  ;;             structural and hand-built in `predicate': :done is
-  ;;             parameterised by :done-keywords; :where is a raw predicate;
-  ;;             :done-keywords contributes no clause of its own)
-  ;;   :accessor metadata accessor the clause tests
-  ;;   :canon    canonicalisation kind shared by the spec identity and the
-  ;;             cache key (see `--canon-value'; nil = as-is)
+  ;; Row: KEY :match KIND :accessor FN :canon KIND (nil :canon = as-is).
   `((:tags           :match member-all     :canon tags
                      :accessor ,#'org-glance-headline-metadata:tags)
     (:state          :match state-equal
@@ -71,10 +45,7 @@ spec language."
     (:commented      :match bool           :accessor ,#'org-glance-headline-metadata:commented?)
     (:schedule       :match present-absent :accessor ,#'org-glance-headline-metadata:schedule)
     (:deadline       :match present-absent :accessor ,#'org-glance-headline-metadata:deadline)
-    ;; Relation views.  :transient marks keys whose views are one-off (a raw
-    ;; predicate, or an identity embedding another headline's id/link set):
-    ;; the overview never caches them and the table never persists their
-    ;; per-filter config -- both would accrete one entry per visited headline.
+    ;; Invariant 17: transient views are never cached, never persisted.
     (:refers-to      :match edge-target    :transient t
                      :accessor ,#'org-glance-headline-metadata:relations)
     (:id-any         :match member         :canon string-list :transient t
@@ -94,9 +65,6 @@ case-insensitive substring.")
 Every other row MUST declare a `:match' kind: a nil one builds no clause, so
 the key constrains nothing and the filter matches EVERYTHING.")
 
-;; Load-time guard: the table is a single source of truth only if every row
-;; actually reaches `predicate'.  A missing `:match', or a `:match' whose
-;; clause would call a nil accessor, is invisible at runtime -- fail here.
 (cl-defun org-glance-filter--check-table (table)
   "Signal unless TABLE is a valid filter table; else return t.
 Runs at load over the real table; tests call it with broken ones."
@@ -134,13 +102,10 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
                         ((eq k :tags) (setq tags v tags-seen t))
                         (t (setq out (plist-put out k v)))))
       (when (or tags-seen tag)
-        ;; An empty tag list is no constraint -- drop it so `(:tags nil)' folds
-        ;; to the "all" key and shares the unfiltered cache (like `(:tag nil)').
+        ;; An empty tag list folds to the "all" key and shares its cache.
         (when-let ((all (append (org-glance-tag:as-list tags)
                                 (when tag (list tag)))))
           (setq out (plist-put out :tags all))))
-      ;; :done-keywords only parameterises :done; without :done it changes
-      ;; nothing, so drop it (avoids a no-op filter and a fragmented cache).
       (when (and (plist-member out :done-keywords) (not (plist-member out :done)))
         (cl-remf out :done-keywords))
       (cl-loop for (k _v) on out by #'cddr
@@ -152,27 +117,20 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
 (cl-defun org-glance-filter--match-clause (kind accessor want)
   "Build one predicate clause testing ACCESSOR's value against WANT, per KIND."
   (pcase kind
-    ;; Tags are stored interned + downcased, so compare case-insensitively
-    ;; (mirrors v1's `org-glance:tag-filter').
     ('member-all (let ((want (mapcar #'org-glance--downcased-string want)))
                    (lambda (m)
                      (let ((have (mapcar #'org-glance--downcased-string
                                          (append (funcall accessor m) nil))))
                        (cl-every (lambda (tag) (member tag have)) want)))))
-    ;; A headline with no todo keyword carries state "" (not nil); treat a nil
-    ;; or "" filter value alike, so `(:state nil)' means "stateless".
+    ;; A stateless headline carries state "": `(:state nil)' must match it.
     ('state-equal (let ((want (or want "")))
                     (lambda (m) (equal want (or (funcall accessor m) "")))))
     ('equal (lambda (m) (equal want (funcall accessor m))))
     ('eql (lambda (m) (eql want (funcall accessor m))))
-    ;; Relation kinds: `edge-target' tests the (TARGET-ID . KIND) edge list for
-    ;; WANT as a target (any kind); `member' tests the scalar accessor value
-    ;; against the WANT list (`:id-any').
     ('edge-target (lambda (m) (assoc want (funcall accessor m))))
     ('member (lambda (m) (member (funcall accessor m) want)))
     ('bool (let ((want (and want t)))
              (lambda (m) (eq want (and (funcall accessor m) t)))))
-    ;; Case-insensitive substring (the interactive `/' refinement).
     ('substring (let ((needle (org-glance--downcased-string want)))
                   (lambda (m) (s-contains? needle (downcase (or (funcall accessor m) ""))))))
     ('present-absent (lambda (m)
@@ -189,14 +147,8 @@ A nil/empty filter yields a predicate that accepts every headline.  Each present
 clause must hold (logical AND).  See `org-glance-filter:table'."
   (let ((spec (org-glance-filter:normalize-spec filter))
         (clauses nil))
-    ;; Structural specials the table cannot express:
     (when (plist-member spec :done)
-      ;; `done?' reads the buffer-local `org-done-keywords' (nil outside an Org
-      ;; buffer), so resolve a concrete done-set ONCE here -- a per-overview
-      ;; `:done-keywords' wins over the global default chain -- and test membership
-      ;; directly against it.  This mirrors `org-glance-headline-metadata:done?' (a
-      ;; plain `member') but avoids a per-candidate dynamic `let' + function call on
-      ;; the picker's hot path: `(and (member ...) t)' == `(not (null (member ...)))'.
+      ;; Resolve the done-set once -- `org-done-keywords' is nil outside Org.
       (let ((want (and (plist-get spec :done) t))
             (done-keywords (or (plist-get spec :done-keywords)
                                (org-glance--done-keywords))))
@@ -207,7 +159,6 @@ clause must hold (logical AND).  See `org-glance-filter:table'."
       (let ((fn (plist-get spec :where)))
         (cl-check-type fn function)
         (push fn clauses)))
-    ;; Everything else is table-driven: one row per key.
     (cl-loop for (key . props) in org-glance-filter:table
              for kind = (plist-get props :match)
              when (and kind (plist-member spec key))
@@ -235,10 +186,6 @@ unambiguously."
                  collect (cons k (org-glance-filter--canon-value k v)))
         (lambda (a b) (string< (symbol-name (car a)) (symbol-name (car b))))))
 
-;;; Overview links: "TAG[?KEY=VALUE&...]" -> filter spec
-;;
-;; `org-glance-overview:' link paths encode a filter.  Value syntax derives
-;; from the table's :match/:canon kinds -- no second key list to maintain.
 
 (cl-defun org-glance-filter--link-value (key v)
   "Link value string V coerced for filter KEY, per the table's kinds.
@@ -252,8 +199,6 @@ present/absent (the clause's own vocabulary); `:priority' reads a letter;
      ((or (eq key :done) (eq kind 'bool))
       (pcase v ("t" t) ("nil" nil)
              (_ (error "org-glance: link filter boolean must be t/nil: %S" v))))
-     ;; :schedule/:deadline speak the predicate's own vocabulary -- a t/nil
-     ;; here would error per headline inside the clause, not at parse time.
      ((eq kind 'present-absent)
       (pcase v ("present" :present) ("absent" :absent)
              (_ (error "org-glance: planning link value must be present/absent: %S" v))))
@@ -296,10 +241,6 @@ name is a lossy hash prefix)."
        org-glance-filter--canonical-pairs
        prin1-to-string))
 
-;;; Generalized refinement: build a new spec from a dimension choice
-;;
-;; Shared by the in-overview `/' filter and the `org-glance-transient'
-;; transient so the two stay consistent.  Each returns a fresh normalized spec.
 
 (cl-defun org-glance-filter:read-state (&optional graph)
   "Completing-read a todo-state choice for the filter.
@@ -355,8 +296,6 @@ prompted tag) onto the ambient `org-glance-filter-spec'."
                      (:state (format "state=%s" v))
                      (:tags (format "tags=%s" (mapconcat (-partial #'format "%s") v "+")))
                      (:title-contains (format "title~%s" v))
-                     ;; Compact: an :id-any value embeds a whole target list and
-                     ;; ids are long -- keep buffer names/titles bounded.
                      (:refers-to (format "refs->%s" (s-left 8 v)))
                      (:id-any (format "id-any(%d)" (length v)))
                      (:where "where")

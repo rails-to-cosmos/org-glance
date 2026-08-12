@@ -23,12 +23,10 @@
            (labels (mapcar #'org-glance-material:label metas)))
       (should (member "[w] Alpha" labels))
       (should (member "https:example.com" labels))
-      ;; raw link markup never leaks into a label
       (should-not (cl-some (lambda (l) (s-contains? "[[" l)) labels)))))
 
-;; (`material-active-filter' removed: its body is a strict subset of
-;; `material-done-keywords-custom' below -- same fixture, same default-branch
-;; assertion -- and mutation-testing the `:filter' path confirmed no unique kill.)
+;; (`material-active-filter' removed: a subset of the next test, and
+;; mutation-testing the `:filter' path found no unique kill.)
 
 (ert-deftest org-glance-test:material-done-keywords-custom ()
   "`org-done-keywords' redefines what counts as active for selection."
@@ -36,13 +34,11 @@
     (org-glance-graph:add graph
                              (org-glance-test:headline "a" "* TODO Todo")
                              (org-glance-test:headline "b" "* DONE Done"))
-    ;; Default: DONE is done, so the active (selectable) headline is the TODO one.
     (org-glance-test:offering (offered (caar offered))
       (should (string= "a" (org-glance-headline-metadata:id
                             (org-glance-material:completing-read
                              graph :filter #'org-glance-headline-metadata:active?))))
       (should (= 1 (length offered))))
-    ;; Declaring TODO done flips it: now the DONE headline is the active one.
     (let ((org-done-keywords '("TODO")))
       (org-glance-test:offering (offered (caar offered))
         (should (string= "b" (org-glance-headline-metadata:id
@@ -75,20 +71,15 @@ the command loop then errors \"Marker does not point anywhere\"."
               (cl-letf (((symbol-function 'y-or-n-p) (lambda (&rest _) t)))
                 (kill-buffer buf))
               (should-not (buffer-live-p buf))
-              ;; nothing left queued against the dead buffer ...
               (should-not (memq 'org-add-log-note post-command-hook))
               (should-not org-log-setup)
-              ;; ... so the command loop's next step is quiet
               (run-hooks 'post-command-hook))
-            ;; a note aimed at ANOTHER buffer is left alone -- the guard drops
-            ;; only what pointed into the buffer it killed
             (let ((other (generate-new-buffer " *other-note*")))
               (unwind-protect
                   (let ((org-log-setup t))
                     (with-current-buffer other
                       (set-marker org-log-note-marker (point-min) other))
-                    ;; the guard runs in a DIFFERENT buffer: the queued note is
-                    ;; not aimed here, so it must survive untouched
+                    ;; runs in a DIFFERENT buffer: this note must survive.
                     (with-temp-buffer
                       (org-glance-material--cancel-pending-log-note))
                     (should org-log-setup)
@@ -113,7 +104,6 @@ This guards the interactive save path users actually hit."
       (org-glance-test:sed "TODO" "DONE")
       (org-glance-test:save))
     (should (string= "DONE" (org-glance-test:field graph "s1" state)))
-    ;; persisted: re-materializing shows the edited state
     (org-glance-test:with-material (buffer graph "s1")
       (should (s-contains? "DONE foo" (buffer-string))))))
 
@@ -160,7 +150,6 @@ for the original id (the sync hook skips a mismatched id)."
     (org-glance-test:with-material (buffer graph "m1")
       (org-glance-test:sed "^:ORG_GLANCE_ID:.*$" ":ORG_GLANCE_ID: changed")
       (org-glance-test:save))
-    ;; the original id's metadata is left untouched
     (should (string= "foo" (org-glance-test:field graph "m1" title)))))
 
 (ert-deftest org-glance-test:material-open-missing ()
@@ -168,7 +157,6 @@ for the original id (the sync hook skips a mismatched id)."
   (org-glance-test:with-graph graph
     (should-error (org-glance-material:open graph "nope") :type 'user-error)))
 
-;;; open / extract (read-only commands)
 
 (ert-deftest org-glance-test:open-link-single ()
   "A single non-org-glance link is opened without prompting."
@@ -249,11 +237,9 @@ for the original id (the sync hook skips a mismatched id)."
 
 (ert-deftest org-glance-test:link-materialize-stale-id-errors ()
   "Following a stale org-glance link errors loudly, not popping a picker."
-  ;; Uninitialized: still a loud user-error, no picker.
   (let ((org-glance-graph nil))
     (should-error (org-glance-link:material "no-such-id") :type 'user-error)
     (should-error (org-glance-link:open "no-such-id") :type 'user-error))
-  ;; Initialized but the id is unknown: not-found user-error.
   (org-glance-test:with-graph graph
     (let ((org-glance-graph graph))
       (should-error (org-glance-link:material "no-such-id") :type 'user-error)
@@ -275,14 +261,11 @@ NEVER a new headline -- stamped by the completed occurrence's timestamp."
     (org-glance-test:with-repeat (buffer graph "R" 7)
         (progn
           (org-glance-test:complete-repetition)
-        ;; still exactly ONE headline in the graph
         (should (= 1 (length (org-glance-graph:headlines graph))))
-        ;; one snapshot, stamped by the completed occurrence, holding DONE state
         (let ((occ (org-glance-graph:occurrences graph "R")))
           (should (= 1 (length occ)))
           (should (string-prefix-p "2026-06-07" (caar occ)))
           (should (s-contains? "DONE water flowers" (f-read-text (cdar occ) 'utf-8))))
-        ;; the live headline repeated forward
         (should (string= "TODO" (org-get-todo-state)))))))
 
 (ert-deftest org-glance-test:material-cleanup-after-repeat ()
@@ -300,7 +283,6 @@ NEVER a new headline -- stamped by the completed occurrence's timestamp."
         (should (s-contains? "keep me" (buffer-string)))
         (should-not (s-contains? "transient note" (buffer-string)))
         (should (s-contains? ":ORG_GLANCE_ID: R" (buffer-string)))
-        ;; the trimmed-away note lives on in the occurrence snapshot
         (should (s-contains? "transient note"
                              (f-read-text (cdar (org-glance-graph:occurrences graph "R"))
                                           'utf-8)))))))
@@ -331,24 +313,19 @@ concealment survives a save."
                   (goto-char (point-min))
                   (re-search-forward re)
                   (invisible-p (line-beginning-position)))))
-      ;; mixed drawer: id hidden, AUTHOR visible, delimiters visible
       (org-glance-test:with-material (buf graph "vis")
         (should (line-invisible? ":ORG_GLANCE_ID:"))
         (should-not (line-invisible? ":AUTHOR:"))
         (should-not (line-invisible? ":PROPERTIES:"))
-        ;; the line is concealed, not deleted -- the file still carries the id
         (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
-        ;; still concealed after an edit + save (overlays re-applied)
         (goto-char (point-max))
         (insert "\nnote")
         (org-glance-test:save)
         (should (line-invisible? ":ORG_GLANCE_ID:")))
-      ;; all-reserved drawer: the whole drawer hides, delimiters included
       (org-glance-test:with-material (buf graph "bare")
         (should (line-invisible? ":PROPERTIES:"))
         (should (line-invisible? ":ORG_GLANCE_ID:"))
         (should (line-invisible? ":END:")))
-      ;; opt out entirely
       (let ((org-glance-material-hidden-properties nil))
         (org-glance-test:with-material (buf graph "bare")
           (should-not (line-invisible? ":ORG_GLANCE_ID:")))))))
@@ -364,16 +341,13 @@ removed, and ordinary edits persist under the original id."
       (cl-letf (((symbol-function 'display-warning)
                  (lambda (_type msg &rest _) (push msg warnings))))
         (org-glance-test:with-material (buf graph "vis")
-          ;; hand-edit the managed id + hand-add a managed hash + a real edit
           (org-glance-test:sed ":ORG_GLANCE_ID: vis" ":ORG_GLANCE_ID: hacked")
           (org-glance-test:sed ":AUTHOR: Tolkien"
                                ":ORG_GLANCE_HASH: fake\n:AUTHOR: Le Guin")
           (org-glance-test:save)
-          ;; both managed edits reverted in the BUFFER...
           (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
           (should-not (s-contains? "hacked" (buffer-string)))
           (should-not (s-contains? "ORG_GLANCE_HASH" (buffer-string)))
-          ;; ...and warned, once per key
           (should (= 2 (length warnings)))
           (should (cl-some (lambda (w) (s-contains? "ORG_GLANCE_ID" w)) warnings))
           (should (cl-some (lambda (w) (s-contains? "ORG_GLANCE_HASH" w)) warnings))
@@ -381,7 +355,6 @@ removed, and ordinary edits persist under the original id."
           (set-buffer-modified-p t)
           (org-glance-test:save)
           (should (= 2 (length warnings)))
-          ;; a region kill can take the INVISIBLE id line; save resurrects it
           (goto-char (point-min))
           (re-search-forward ":ORG_GLANCE_ID: vis")
           (delete-region (line-beginning-position) (1+ (line-end-position)))
@@ -389,7 +362,6 @@ removed, and ordinary edits persist under the original id."
           (org-glance-test:save)
           (should (s-contains? ":ORG_GLANCE_ID: vis" (buffer-string)))
           (should (= 3 (length warnings)))))
-      ;; disk agrees; the ordinary edit persisted under the ORIGINAL id
       (should (s-contains? ":ORG_GLANCE_ID: vis" (org-glance-graph:get-content graph "vis")))
       (should (s-contains? "Le Guin" (org-glance-graph:get-content graph "vis")))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "vis"))))))
@@ -436,7 +408,6 @@ without history it errors with a hint."
           (org-glance-test:complete-repetition))
         (let ((occ (org-glance-graph:occurrences graph "R")))
           (should (= 2 (length occ)))                       ; pruned to depth
-          ;; newest first, and the two NEWEST occurrences survived
           (should (equal (sort (mapcar #'car occ) #'string>) (mapcar #'car occ)))
           (should (string-prefix-p "2026-06-10" (caar occ))))))))
 
@@ -485,13 +456,10 @@ Pins the design default so an accidental change to the defvar fails loudly."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:open-link) #'ignore))
         (org-glance-test:offering (offered (caar offered))
-          ;; active + linked -> "ta" (DONE filtered out; "tn" lacks a link)
           (let ((org-glance-filter-spec '(:done nil)))
             (org-glance-open) (should (equal '("ta") (org-glance-test:offered-ids offered))))
-          ;; done + linked -> "da"
           (let ((org-glance-filter-spec '(:done t)))
             (org-glance-open) (should (equal '("da") (org-glance-test:offered-ids offered))))
-          ;; all + linked -> "ta","da" (still not "tn")
           (let ((org-glance-filter-spec nil))
             (org-glance-open) (should (equal '("da" "ta") (org-glance-test:offered-ids offered)))))))))
 
@@ -505,17 +473,13 @@ Pins the design default so an accidental change to the defvar fails loudly."
     (let ((org-glance-graph graph))
       (cl-letf (((symbol-function 'org-glance-material:extract) #'ignore))
         (org-glance-test:offering (offered (caar offered))
-          ;; active + propertized -> "tk" (DONE filtered; "tn" lacks pairs)
           (let ((org-glance-filter-spec '(:done nil)))
             (org-glance-extract) (should (equal '("tk") (org-glance-test:offered-ids offered))))
-          ;; done + propertized -> "dk"
           (let ((org-glance-filter-spec '(:done t)))
             (org-glance-extract) (should (equal '("dk") (org-glance-test:offered-ids offered))))
-          ;; all + propertized -> "tk","dk" (still not "tn")
           (let ((org-glance-filter-spec nil))
             (org-glance-extract) (should (equal '("dk" "tk") (org-glance-test:offered-ids offered)))))))))
 
-;;; TODO state change: materialize -> org-todo -> sync (exactly C-c C-t)
 
 (ert-deftest org-glance-test:material-change-todo-live-global ()
   "`change-todo-live' advances the state via org's own algorithm, persists it
@@ -523,14 +487,11 @@ through the save->sync path, and finalizes with the new state (Tier A, no note).
   (org-glance-test:with-todo-done
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "c1" "* TODO Alpha"))
-      ;; TODO -> DONE
       (should (equal "DONE" (org-glance-test:change-todo-live graph "c1")))
       (should (equal "DONE" (org-glance-test:field graph "c1" state)))
       (should (s-contains? "* DONE Alpha" (org-glance-graph:get-content graph "c1")))
-      ;; DONE -> (none)
       (should (equal "" (org-glance-test:change-todo-live graph "c1")))
       (should (equal "" (org-glance-test:field graph "c1" state)))
-      ;; the fresh background material buffer is not leaked
       (should-not (get-file-buffer
                    (f-join (org-glance-graph:headline-data-path graph "c1") "data.org"))))))
 
@@ -563,7 +524,6 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
           (with-current-buffer origin
             (org-glance-material:change-todo-live
              graph "n1" nil (lambda (s) (setq finalized s))))
-          ;; deliver + finish the note (C-c C-c commit, or C-c C-k abort)
           (ignore-errors (run-hooks 'post-command-hook))
           (let ((nb (get-buffer "*Org Note*")))
             (should nb)
@@ -579,7 +539,6 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
             (should (eq (plist-get case :note)               ; note only on commit
                         (and (s-contains? "the reason" blob) t)))))))))
 
-;;; Bulk TODO state change: materialize -> org-todo -> sync, per row, no note
 
 (ert-deftest org-glance-test:material-set-todo-bulk ()
   "`set-todo-bulk' sets each id to STATE, persists it, and reports changed/skipped."
@@ -604,9 +563,8 @@ the note, aborting (`C-c C-k') discards it, and BOTH keep the state + CLOSED
   "Bulk records the LOGBOOK state-change entry for EVERY row under timestamp
 logging (flushed synchronously, org-agenda style), never discarded, and leaves
 nothing dangling on `post-command-hook'."
-  ;; `DONE(!)' logs a timestamp on entering DONE; the notation rides in via
-  ;; `org-todo-keywords' so the materialized buffer actually derives the log
-  ;; (a bare global `org-todo-log-states' would not -- it is buffer-local).
+  ;; `DONE(!)' rides in via `org-todo-keywords': a global
+  ;; `org-todo-log-states' would not reach the buffer -- it is buffer-local.
   (let ((org-todo-keywords '((sequence "TODO" "DONE(!)")))
         (org-log-into-drawer nil) (this-command 'org-glance-test-bulk))
     (org-glance-test:with-graph graph
@@ -652,8 +610,7 @@ each one -- never discarding, never dangling on a killed buffer."
         (with-current-buffer origin
           (org-glance-material:set-todo-bulk
            graph '("n1" "n2") "DONE" (lambda (c _s) (setq finalized c))))
-        ;; Drive the sequential prompts: whenever `*Org Note*' appears, fill and
-        ;; commit it; the next row's prompt follows once the timer advances.
+        ;; Pump the timer: each commit releases the next row's prompt.
         (with-timeout (5)
           (while (eq finalized 'unset)
             (let ((nb (get-buffer "*Org Note*")))
@@ -691,20 +648,16 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
     (org-glance-graph:add graph (org-glance-headline:encrypt
                                  (org-glance-test:headline "enc" "* TODO Secret" "plainbody")
                                  "pw"))
-    ;; Seeded blob on disk is ciphertext.
     (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buffer graph "enc")
-        ;; As-is by default: sealed until the explicit decrypt.
         (should (s-contains? "aes-encrypted" (buffer-string)))
         (org-glance-material:decrypt)
         (should (string= "pw" org-glance-material--password))
-        ;; Hardening: plaintext cannot leak to auto-save/backup/lockfiles.
+        ;; hardening keeps plaintext off disk entirely (invariant 14).
         (should (null buffer-auto-save-file-name))
         (should backup-inhibited)
         (should (null create-lockfiles))
-        ;; Lock asks first, then forgets the password (next save re-prompts);
-        ;; declining keeps it.
         (org-glance-test:answering ((y-or-n-p nil))
           (org-glance-material:lock))
         (should (string= "pw" org-glance-material--password))
@@ -714,16 +667,12 @@ and re-encrypts on save so `data.org' never holds plaintext and edits round-trip
         (org-glance-material--set-password "pw")   ; restore for the save below
         (should (save-excursion (goto-char (point-min)) (re-search-forward "plainbody" nil t)))
         (should-not (save-excursion (goto-char (point-min)) (re-search-forward "aes-encrypted" nil t)))
-        ;; Edit + save: before-save encrypts, after-save decrypts back.
         (org-glance-test:sed "plainbody" "editedbody")
         (org-glance-test:save)
-        ;; Disk stays ciphertext; metadata still flagged encrypted.
         (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "enc")))
         (should (org-glance-test:field graph "enc" encrypted?))
-        ;; Buffer decrypted back to plaintext with the edit, not left dirty.
         (should (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
         (should-not (buffer-modified-p)))
-      ;; Reopen: as-is (sealed), then the explicit decrypt round-trips the edit.
       (org-glance-test:with-material (buffer graph "enc")
         (should-not (save-excursion (goto-char (point-min)) (re-search-forward "editedbody" nil t)))
         (org-glance-material:decrypt)
@@ -736,12 +685,10 @@ refuses to re-encrypt an already-encrypted headline."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "sec" "* TODO Secret" "plainbody"))
     (should-not (org-glance-test:field graph "sec" encrypted?))
-    ;; encrypt: blob becomes ciphertext, projection flips
     (should (org-glance-material:crypt-set graph "sec" t "pw"))
     (should (s-contains? "aes-encrypted" (org-glance-graph:get-content graph "sec")))
     (should (org-glance-test:field graph "sec" encrypted?))
     (should-error (org-glance-material:crypt-set graph "sec" t "pw"))  ; already
-    ;; decrypt: plaintext restored, projection flips back
     (should (org-glance-material:crypt-set graph "sec" nil "pw"))
     (let ((blob (org-glance-graph:get-content graph "sec")))
       (should-not (s-contains? "aes-encrypted" blob))
@@ -769,19 +716,15 @@ a global 1, and 0 disables under a global t."
       (org-glance-graph:add graph
         (repeater "on" "2") (repeater "inf" "inf") (repeater "off" "0")
         (repeater "junk" "whenever")))
-    ;; property 2 wins over global 0: snapshots, pruned to 2
     (org-glance-test:with-repeat (buffer graph "on" 0)
       (progn (dotimes (_ 3) (org-glance-test:complete-repetition))
              (should (= 2 (length (org-glance-graph:occurrences graph "on"))))))
-    ;; property inf wins over global 1: keeps all
     (org-glance-test:with-repeat (buffer graph "inf" 1)
       (progn (dotimes (_ 3) (org-glance-test:complete-repetition))
              (should (= 3 (length (org-glance-graph:occurrences graph "inf"))))))
-    ;; property 0 wins over global t: no history, no trim
     (org-glance-test:with-repeat (buffer graph "off" t)
       (progn (org-glance-test:complete-repetition)
              (should (null (org-glance-graph:occurrences graph "off")))))
-    ;; unparseable value reads as 0 -- disabled, even under global t
     (org-glance-test:with-repeat (buffer graph "junk" t)
       (progn (org-glance-test:complete-repetition)
              (should (null (org-glance-graph:occurrences graph "junk")))))))
@@ -809,14 +752,11 @@ one crypt block wrapping it, sealed ciphertext on disk after save."
         (org-glance-material:crypt)                     ; the C-c # dispatcher
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (s-contains? "line one" (buffer-string)))   ; still plaintext in buffer
-        ;; second bare C-c #: the buffer is encrypted now -> the SEAL route,
-        ;; which refuses while edits are unsaved (invariant 11), never a
-        ;; second whole-body wrap
+        ;; the SEAL route refuses unsaved edits (invariant 11).
         (should-error (org-glance-material:crypt) :type 'user-error)
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
         (should (string= "pw" org-glance-material--password))
         (org-glance-test:save)
-        ;; saved: the same key now seals in place and forgets the password
         (org-glance-material:crypt)
         (should-not (s-contains? "line one" (buffer-string)))
         (should (= 1 (s-count-matches "#\\+begin_crypt" (buffer-string))))
@@ -835,30 +775,24 @@ keeps the headline; the referrer's edge dangles harmlessly afterwards."
       (org-glance-test:headline "ref" "* TODO Referrer"
         "[[org-glance-material:gone][Doomed]]"))
     (let (prompt)
-      ;; decline: still alive, prompt named the referrer
       (cl-letf (((symbol-function 'yes-or-no-p)
                  (lambda (p) (setq prompt p) nil)))
         (should-not (org-glance-material:delete graph "gone")))
       (should (s-contains? "Referrer" prompt))
       (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "gone")))
-      ;; confirm: tombstoned; open material buffer discarded; edge dangles
       (let ((buf (org-glance-material:open graph "gone")))
         (org-glance-test:answering ((yes-or-no-p t))
           (should (org-glance-material:delete graph "gone")))
         (should-not (buffer-live-p buf)))
       (should (eq 'tombstone (org-glance-graph:get-headline graph "gone")))
-      ;; the dangling edge still matches :refers-to; the tombstoned target is
-      ;; itself excluded from every scan
       (should (equal '("ref") (org-glance-test:filter-ids graph '(:refers-to "gone"))))
       (should (equal '(("gone" . nil))
                      (org-glance-test:field graph "ref" relations)))
       (should (equal "gone" (org-glance-graph:title-or-id graph "gone")))
-      ;; deleting the now-referrer-free "ref": the prompt drops the referrer talk
       (cl-letf (((symbol-function 'yes-or-no-p)
                  (lambda (p) (setq prompt p) t)))
         (should (org-glance-material:delete graph "ref")))
       (should-not (s-contains? "reference" prompt))
-      ;; compaction reclaims the tombstoned blob dir (occurrences included)
       (org-glance-graph:compact graph)
       (should-not (f-exists? (org-glance-graph:headline-data-path graph "gone"))))))
 
@@ -991,13 +925,11 @@ tests that end in its own repo.)"
       (should (equal "/tmp/proj-x"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
-      ;; a trailing slash is stripped -- the stored value is slash-free whichever
-      ;; way it arrives (`read-directory-name' always hands one over)
+      ;; `read-directory-name' always hands over a trailing slash.
       (org-glance-material:set-project-dir "/tmp/proj-y/")
       (should (equal "/tmp/proj-y"
                      (org-glance-headline:node-property
                       "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))
-      ;; clear (nil dir, as a prefix-arg invocation supplies)
       (org-glance-material:set-project-dir nil)
       (should-not (org-glance-headline:node-property
                    "ORG_GLANCE_PROJECT_DIR" (org-glance-graph:headline graph "d"))))))
@@ -1031,19 +963,15 @@ both directions), and the material save (heading rewritten to one tag)."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph
                           (org-glance-test:headline "a" "* TODO A :Food:food:"))
-    ;; parse boundary: metadata carries ONE canonical tag
     (should (equal '("food") (org-glance-test:field graph "a" tag-strings)))
-    ;; legacy read boundary: stored duplicates read as one
     (let ((meta (org-glance-headline-metadata:deserialize
                  '(:id "old" :state "" :title "Old" :tags ["Food" "food"]
                    :hash "h" :schedule nil :deadline nil :priority nil
                    :linked nil :propertized nil :encrypted nil))))
       (should (equal '("food") (org-glance-headline-metadata:tag-strings meta))))
-    ;; retag: adding a case-twin is a no-op; removing hits any case
     (should-not (org-glance-material:retag graph "a" "FOOD"))
     (should (org-glance-material:retag graph "a" "food" :remove t))
     (should-not (org-glance-test:field graph "a" tag-strings))
-    ;; material save: the heading itself collapses to the canonical tag
     (org-glance-graph:add graph
                           (org-glance-test:headline "b" "* TODO B :Food:food:"))
     (org-glance-test:with-material (buf graph "b")
@@ -1079,8 +1007,6 @@ headline is NOT re-prompted for its password."
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "enc" :decrypt t)
         (should (s-contains? "plainbody" (buffer-string)))
-        ;; second open: same buffer, no password prompt -- even asking for
-        ;; decrypt again (idempotent: nothing left sealed)
         (cl-letf (((symbol-function 'read-passwd)
                    (lambda (&rest _) (error "must not re-prompt"))))
           (should (eq buf (org-glance-material:open graph "enc")))
@@ -1094,21 +1020,17 @@ the table cell; `C-c i' inserts/replaces it live, `C-u C-c i' removes it."
       (org-glance-test:headline "trip" "* DONE Petersburg :travel:"
                                 "<2021-12-18 Sat>--<2021-12-19 Sun>")
       (org-glance-test:headline "flat" "* TODO No dates :travel:"))
-    ;; metadata round-trip (cold store)
     (let ((meta (org-glance-graph:get-headline (org-glance-test:reopen graph) "trip")))
       (should (equal '("<2021-12-18 Sat>" "<2021-12-19 Sun>")
                      (org-glance-headline-metadata:range meta))))
     (should-not (org-glance-test:field graph "flat" range))
-    ;; overview heading carries the verbatim range line (agenda span)
     (should (s-contains? "<2021-12-18 Sat>--<2021-12-19 Sun>"
                          (org-glance-overview:render-headline
                           graph (org-glance-graph:get-headline graph "trip"))))
-    ;; table cell: compact ISO, sortable by start
     (should (equal "2021-12-18..2021-12-19"
                    (alist-get 'interval
                               (alist-get 'cells (org-glance-table--row
                                                  (org-glance-graph:get-headline graph "trip"))))))
-    ;; C-c i inserts on a range-less headline...
     (org-glance-test:with-material (buf graph "flat")
       (cl-letf (((symbol-function 'org-read-date)
                  (let ((n 0))
@@ -1116,17 +1038,14 @@ the table cell; `C-c i' inserts/replaces it live, `C-u C-c i' removes it."
                      (encode-time 0 0 0 (if (= (cl-incf n) 1) 18 19) 12 2021)))))
         (org-glance-material:set-interval))
       (should (s-contains? "<2021-12-18 Sat>--<2021-12-19 Sun>" (buffer-string)))
-      ;; ...replaces on the second call...
       (cl-letf (((symbol-function 'org-read-date)
                  (lambda (&rest _) (encode-time 0 0 0 20 12 2021))))
         (org-glance-material:set-interval))
       (should (s-contains? "<2021-12-20 Mon>--<2021-12-20 Mon>" (buffer-string)))
       (should-not (s-contains? "2021-12-18" (buffer-string)))
-      ;; ...and C-u removes the line
       (org-glance-material:set-interval '(4))
       (should-not (s-contains? "--<" (buffer-string)))
       (should-error (org-glance-material:set-interval '(4)) :type 'user-error)
-      ;; persist: save -> metadata reflects the removal
       (set-buffer-modified-p t)
       (org-glance-test:save))
     (should-not (org-glance-test:field graph "flat" range))))
@@ -1141,16 +1060,12 @@ them -- it inserts a fresh body line instead."
        "p" "* TODO Trip <2020-01-01 Wed>--<2020-01-02 Thu>"
        '(("DATES" . "<2020-02-01 Sat>--<2020-02-02 Sun>"))
        "SCHEDULED: <2020-03-01 Sun>--<2020-03-02 Mon>"))
-    ;; none of those ranges projects
     (should-not (org-glance-test:field graph "p" range))
     (org-glance-test:with-material (buf graph "p")
-      ;; a (decrypted-style) crypt block's range is never editable here
       (goto-char (point-max))
       (unless (bolp) (insert "\n"))
       (insert "#+begin_crypt\n<2020-04-01 Wed>--<2020-04-02 Thu>\n#+end_crypt\n")
-      ;; C-u C-c i finds nothing editable (crypt-block match skipped)
       (should-error (org-glance-material:set-interval '(4)) :type 'user-error)
-      ;; C-c i inserts a BODY line, leaving title/drawer/planning/crypt alone
       (cl-letf (((symbol-function 'org-read-date)
                  (lambda (&rest _) (encode-time 0 0 0 5 5 2020))))
         (org-glance-material:set-interval))
@@ -1189,7 +1104,6 @@ and `C-c #' toggles the seal of an as-is buffer after the fact."
     (org-glance-graph:add graph (org-glance-headline:encrypt
                                  (org-glance-test:headline "e" "* TODO Secret" "plainbody")
                                  "pw"))
-    ;; default: as-is, and NOTHING may prompt
     (cl-letf (((symbol-function 'read-passwd)
                (lambda (&rest _) (error "must not prompt"))))
       (org-glance-test:with-material (buf graph "e")
@@ -1197,8 +1111,6 @@ and `C-c #' toggles the seal of an as-is buffer after the fact."
         (should-not (s-contains? "plainbody" (buffer-string)))
         (should-not org-glance-material--encrypted)          ; unwired until asked
         (should (eq (key-binding (kbd "C-c #")) #'org-glance-material:crypt))))
-    ;; `C-c #' on an as-is buffer unseals it (and hardens); the same key seals
-    ;; it back, forgetting the password, and unseals again
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "e")
         (funcall (key-binding (kbd "C-c #")))
@@ -1211,12 +1123,10 @@ and `C-c #' toggles the seal of an as-is buffer after the fact."
         (should-not (buffer-modified-p))                     ; == the bytes on disk
         (funcall (key-binding (kbd "C-c #")))                ; toggle: unseal again
         (should (s-contains? "plainbody" (buffer-string)))
-        ;; idempotent: a second decrypt has nothing sealed left to ask about
         (cl-letf (((symbol-function 'read-passwd)
                    (lambda (&rest _) (error "must not re-prompt"))))
           (org-glance-material:decrypt))))
-    ;; a bare `C-c #' on a still-sealed buffer UNSEALS it instead of wrapping
-    ;; the ciphertext in a second block under a second password
+    ;; a bare `C-c #' unseals here; a second wrap would double-encrypt.
     (org-glance-test:answering ((read-passwd "pw"))
       (org-glance-test:with-material (buf graph "e")
         (org-glance-material:crypt)
@@ -1235,12 +1145,9 @@ A description still wins, and a link outside any list keeps the raw link."
             "Loose [[https://example.com/loose]]\n")
     (org-glance--org-mode)
     (let ((labels (mapcar (lambda (e) (car (last (car e)))) (org-glance--link-paths))))
-      ;; the reported case: the prefix names the link, colon trimmed
       (should (member "Local" labels))
-      ;; a description still wins over the prefix
       (should (member "Handbook" labels))
       (should-not (member "Docs" labels))
-      ;; nothing introduces these two -> the raw link, as before
       (should (member "https://example.com/bare" labels))
       (should (member "https://example.com/loose" labels)))))
 
@@ -1281,17 +1188,14 @@ depth is taken without asking."
                                                 (point) (line-end-position))))))
                       (org-glance-material:open-link-here))
                     (cons (nreverse asked) opened))))
-        ;; two levels: group, then the link inside it
         (pcase-let ((`(,asked . ,opened) (open-with '("Remote" "Remote (Gitlab)"))))
           (should (equal '(("Local" "Remote" "Solo")
                            ("Remote (Github)" "Remote (Gitlab)"))
                          asked))
           (should (s-contains? "example.com/gl" opened)))
-        ;; a top-level leaf needs one prompt only
         (pcase-let ((`(,asked . ,opened) (open-with '("Local"))))
           (should (= 1 (length asked)))
           (should (s-contains? "file+emacs:/tmp" opened)))
-        ;; a branch with a single child does not ask twice
         (pcase-let ((`(,asked . ,opened) (open-with '("Solo"))))
           (should (= 1 (length asked)))
           (should (s-contains? "example.com/only" opened)))))))

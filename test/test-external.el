@@ -1,10 +1,8 @@
 ;;; test-external.el --- Tests for the external-write notification file  -*- lexical-binding: t -*-
 
-;; The cross-repo contract with `glance': an outside writer edits or removes a
-;; blob and names its id in `meta/EXTERNAL.jsonl';
-;; `org-glance-graph:refresh-external' folds those entries back into the WAL --
-;; a re-derived record for a write, a tombstone for a delete -- and shortens the
-;; file.  See the commentary in `org-glance-graph.el'.
+;; The cross-repo contract with `glance' (invariants 33-34): it names edited
+;; and removed blob ids in `meta/EXTERNAL.jsonl' and a fold moves a CURSOR past
+;; them, rewriting nothing.  Commentary in `src/data/org-glance-graph.el'.
 
 (require 'test-helpers)
 
@@ -42,6 +40,22 @@ about, or a `tombstone' that is not JSON true."
   (let ((path (org-glance-graph:external-path graph)))
     (when (f-exists? path) (f-read-text path 'utf-8))))
 
+(cl-defun org-glance-test:external-pending (graph)
+  "The notification bytes of GRAPH no fold has taken yet, decoded.
+Empty means the cursor has caught up -- which is what \"the file was emptied\"
+used to mean, back when a fold rewrote it."
+  (plist-get (org-glance-graph--read-external graph) :text))
+
+(cl-defun org-glance-test:external-cursor (graph)
+  "How far GRAPH's live notification file has been folded, in bytes."
+  (let ((path (org-glance-graph:external-path graph)))
+    (org-glance-graph--external-folded
+     path (or (file-attribute-size (file-attributes path)) 0))))
+
+(cl-defun org-glance-test:external-cursor-path (graph)
+  "Path of the cursor beside GRAPH's live notification file."
+  (org-glance-graph--external-cursor-path (org-glance-graph:external-path graph)))
+
 (cl-defun org-glance-test:edit-blob (graph id from to)
   "Rewrite ID's blob in GRAPH, replacing FROM with TO -- an outside writer's edit.
 Writes the file directly, without going through `org-glance-graph:add', which is
@@ -54,20 +68,38 @@ exactly what the daemon does: the blob moves and the WAL does not."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-    ;; The WAL still says what it said: a blob write is not a record.
     (should (string= "TODO" (org-glance-test:field graph "id1" state)))
     (org-glance-test:external-write graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))))
 
-(ert-deftest org-glance-test:external-refresh-truncates ()
-  "The file is emptied once its ids have landed, and the file itself stays."
+(ert-deftest org-glance-test:external-refresh-spends-the-bytes-and-keeps-them ()
+  "The fold moves a CURSOR and rewrites nothing: the line stays on disk byte for
+byte, stops being pending, and the cursor lands on the file's own size."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:external-write graph "id1")
+    (let ((text (org-glance-test:external-text graph))
+          (path (org-glance-graph:external-path graph)))
+      (org-glance-graph:refresh-external graph)
+      (should (string= text (org-glance-test:external-text graph)))
+      (should (string= "" (org-glance-test:external-pending graph)))
+      (should (= (f-size path) (org-glance-test:external-cursor graph))))))
+
+(ert-deftest org-glance-test:external-cursor-counts-bytes ()
+  "The cursor is in BYTES where the fold reads CHARACTERS.  A line carrying a
+multibyte id leaves it past that line's character count, and the fold after it
+still starts on a line boundary."
+  (org-glance-test:with-graph graph
+    (org-glance-test:external-raw
+     graph "{\"id\":\"caf\u00e9\",\"at\":\"2026-08-03T04:21:07Z\"}\n")
     (org-glance-graph:refresh-external graph)
-    (should (string= "" (org-glance-test:external-text graph)))
-    (should (f-exists? (org-glance-graph:external-path graph)))))
+    (let ((text (org-glance-test:external-text graph)))
+      (should (= (string-bytes text) (org-glance-test:external-cursor graph)))
+      (should (> (org-glance-test:external-cursor graph) (length text))))
+    (should (string= "" (org-glance-test:external-pending graph)))
+    (org-glance-test:external-write graph "id1")
+    (should (string-match-p "\\`{\"id\":\"id1\"" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-is-idempotent ()
   "Re-running a refresh over the same ids is the crash rule: it costs a record
@@ -77,7 +109,6 @@ equal to the one already there and changes no answer."
     (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
     (org-glance-test:external-write graph "id1")
     (org-glance-graph:refresh-external graph)
-    ;; A crash before the truncation leaves the line: the next run repeats it.
     (org-glance-test:external-write graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))
@@ -91,15 +122,15 @@ equal to the one already there and changes no answer."
     (should (= 1 (org-glance-graph:refresh-external graph)))))
 
 (ert-deftest org-glance-test:external-refresh-skips-unknown-and-deleted ()
-  "An id the store never had, and one it tombstoned, are skipped -- with the
-file still cleared, since neither has a record to replace."
+  "An id the store never had, and one it tombstoned, are skipped -- with their
+bytes spent all the same, since neither has a record to replace."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-graph:delete graph "id1")
     (org-glance-test:external-write graph "id1" "ghost")
     (should (= 0 (org-glance-graph:refresh-external graph)))
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))
-    (should (string= "" (org-glance-test:external-text graph)))))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-keeps-a-good-id-past-a-bad-line ()
   "A line no JSON reader can parse costs its own entry and no other.
@@ -112,11 +143,11 @@ write at the end of the file -- which is where this puts it."
     (f-append-text "{\"id\":\"tor" 'utf-8 (org-glance-graph:external-path graph))
     (should (= 1 (org-glance-graph:refresh-external graph)))
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))
-    (should (string= "" (org-glance-test:external-text graph)))))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-keeps-what-arrived-meanwhile ()
-  "Only the lines the run folded are dropped: a line appended while it ran
-survives for the next refresh, so a concurrent writer loses nothing."
+  "Only the bytes the run read are spent: a line appended while it ran is past
+the offset it recorded, so a concurrent writer loses nothing."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-graph:add graph (org-glance-test:headline "id2" "* TODO bar"))
@@ -126,21 +157,21 @@ survives for the next refresh, so a concurrent writer loses nothing."
                  (lambda (g) (prog1 (funcall read g)
                           (org-glance-test:external-write g "id2")))))
         (org-glance-graph:refresh-external graph)))
-    (should (string-match-p "id2" (org-glance-test:external-text graph)))
-    (should-not (string-match-p "id1" (org-glance-test:external-text graph)))))
+    (should (string-match-p "id2" (org-glance-test:external-pending graph)))
+    (should-not (string-match-p "id1" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-without-a-file ()
   "A store no external writer ever touched refreshes nothing and makes nothing."
   (org-glance-test:with-graph graph
     (should (= 0 (org-glance-graph:refresh-external graph)))
-    (should-not (f-exists? (org-glance-graph:external-path graph)))))
+    (should-not (f-exists? (org-glance-graph:external-path graph)))
+    (should-not (f-exists? (org-glance-test:external-cursor-path graph)))))
 
 (ert-deftest org-glance-test:external-refresh-reads-the-tags-cycle ()
   "A state only a tag's `#+TODO:' cycle declares is re-derived as a STATE.
 Without the cycle in scope the keyword folds into the title, exactly as it
 would in `org-glance-material:sync' -- which binds it for this reason."
   (org-glance-test:with-graph graph
-    ;; The tag is the file NAME under the store's `config/tags/'.
     (org-glance-test:write (org-glance-graph:config-file graph "tags/book.org")
                            "#+TITLE: Book\n#+TODO: TODO READING | READ\n\n* Book\n")
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* foo :book:"))
@@ -163,14 +194,14 @@ edit invalidates a rendered overview the way a WAL append does."
 
 (ert-deftest org-glance-test:external-read-folds-without-asking ()
   "A plain READ folds pending external writes in: nobody calls the command, and
-`get-headline' already answers with the edit; the file is cleared as usual."
+`get-headline' already answers with the edit; the cursor has spent the line."
   (let ((org-glance-graph-external-poll-seconds 0))
     (org-glance-test:with-graph graph
       (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
       (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
       (org-glance-test:external-write graph "id1")
       (should (string= "DONE" (org-glance-test:field graph "id1" state)))
-      (should (string= "" (org-glance-test:external-text graph))))))
+      (should (string= "" (org-glance-test:external-pending graph))))))
 
 (ert-deftest org-glance-test:external-read-fold-is-throttled ()
   "The read-path stat is throttled by `org-glance-graph-external-poll-seconds':
@@ -203,7 +234,8 @@ demand regardless."
 
 (ert-deftest org-glance-test:external-read-fold-survives-a-failure ()
   "A fold that signals never breaks the read -- even under `debug-on-error'.
-The read serves what the WAL has and the line stays for the next attempt."
+The read serves what the WAL has and the line stays pending for the next
+attempt, the cursor never having moved."
   (let ((org-glance-graph-external-poll-seconds 0)
         (debug-on-error t))
     (org-glance-test:with-graph graph
@@ -213,21 +245,20 @@ The read serves what the WAL has and the line stays for the next attempt."
       (cl-letf (((symbol-function 'org-glance-graph--read-external)
                  (lambda (&rest _) (error "boom"))))
         (should (string= "TODO" (org-glance-test:field graph "id1" state))))
-      (should (string-match-p "id1" (org-glance-test:external-text graph)))
+      (should (string-match-p "id1" (org-glance-test:external-pending graph)))
       (should (string= "DONE" (org-glance-test:field graph "id1" state))))))
 
-;;; Deletes
 
 (ert-deftest org-glance-test:external-refresh-folds-a-delete-in ()
   "A tombstone line deletes the entry: `get-headline' answers the symbol and the
-read-only collapse answers nil.  The file is emptied and kept, as a write's is."
+read-only collapse answers nil.  The line is spent and kept, as a write's is."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:external-delete graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))
     (should-not (org-glance-graph:live-meta graph "id1"))
-    (should (string= "" (org-glance-test:external-text graph)))
+    (should (string= "" (org-glance-test:external-pending graph)))
     (should (f-exists? (org-glance-graph:external-path graph)))))
 
 (ert-deftest org-glance-test:external-refresh-deletes-a-blob-that-is-gone ()
@@ -242,7 +273,7 @@ says so, so a write's `no stored blob' skip must never reach a tombstone line."
 
 (ert-deftest org-glance-test:external-refresh-folds-a-write-and-a-delete ()
   "Two ids of two kinds fold in one pass, and the batch is ONE append -- the
-crash rule rests on the whole fold landing before the file is shortened."
+crash rule rests on the whole fold landing before the cursor moves."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-graph:add graph (org-glance-test:headline "id2" "* TODO bar"))
@@ -258,7 +289,7 @@ crash rule rests on the whole fold landing before the file is shortened."
     (should (string= "DONE" (org-glance-test:field graph "id1" state)))
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id2")))
     (should (equal '("id1") (org-glance-test:ids graph)))
-    (should (string= "" (org-glance-test:external-text graph)))))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-takes-the-last-sighting ()
   "A write then a delete for one id is the DELETE: a blob edited and then
@@ -285,7 +316,7 @@ a write for one id is the write, and the entry stays live."
 
 (ert-deftest org-glance-test:external-refresh-skips-a-delete-it-cannot-make ()
   "A delete naming an id the store never had, and one naming an already
-tombstoned id, each cost the line and nothing else: no record, no count."
+tombstoned id, each cost their bytes and nothing else: no record, no count."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-graph:delete graph "id1")
@@ -294,7 +325,7 @@ tombstoned id, each cost the line and nothing else: no record, no count."
       (should (= 0 (org-glance-graph:refresh-external graph)))
       (should (= before (org-glance-test:count-records graph))))
     (should (eq 'tombstone (org-glance-graph:get-headline graph "id1")))
-    (should (string= "" (org-glance-test:external-text graph)))))
+    (should (string= "" (org-glance-test:external-pending graph)))))
 
 (ert-deftest org-glance-test:external-refresh-bumps-the-tag-removal-counter ()
   "A folded delete reaches the tag sidecar the way `graph:delete' does: the
@@ -307,7 +338,6 @@ still resolve its tags."
     (should (= 1 (plist-get (cdr (assoc "x" (org-glance-tag-metrics--read graph)))
                             :removals)))))
 
-;;; Cross-version compatibility
 
 (ert-deftest org-glance-test:external-json-true-is-t ()
   "The platform fact the kind test rests on: `json-parse-string' maps JSON true
@@ -347,62 +377,199 @@ writes, so plist truthiness cannot creep into the kind test."
     (should (org-glance-graph:live-meta graph "id1"))
     (should (org-glance-graph:live-meta graph "id2"))))
 
-;;; Known hazards, pinned
-;;
-;; Two costs the fold is shipped with, each written up in docs/invariants.org
-;; (H1, H2) and in this module's commentary.  These tests pin TODAY's behaviour
-;; so closing either hazard turns its own case red and names the decision.
 
-(ert-deftest org-glance-test:external-truncate-race-eats-a-tombstone ()
-  "H1: two Emacsen folding one store take no lock, and a lost tombstone never
-self-heals.  E2 reads 74 characters; E1 folds and empties the file; the writer
-appends the 91-character tombstone; E2 truncates by the 74 it counted against
-the file E1 already emptied, leaving a fragment no reader parses.  The record
-stays LIVE, and every later fold leaves it that way."
+(ert-deftest org-glance-test:external-race-spares-the-tombstone ()
+  "The race that ate a tombstone, run again.  E2 reads 74 characters; E1 folds
+them and moves the cursor; the writer appends the 91-character tombstone.  The
+tombstone is PAST the cursor rather than counted against a file somebody
+shortened, so the next fold takes it and the record is tombstoned."
   (org-glance-test:with-graph graph
-    (let ((id "e3b0c442-98fc-1c14-9afb-f4c8996fb924")
-          (path (org-glance-graph:external-path graph)))
+    (let ((id "e3b0c442-98fc-1c14-9afb-f4c8996fb924"))
       (org-glance-graph:add graph (org-glance-test:headline id "* TODO foo"))
       (org-glance-test:external-write graph id)
-      (pcase-let ((`(,e2-text . ,_) (org-glance-graph--read-external graph)))
-        (should (= 74 (length e2-text)))
-        (org-glance-graph:refresh-external graph)          ; E1 empties the file
-        (org-glance-test:external-delete graph id)         ; the writer's tombstone
-        (should (= 91 (length (org-glance-test:external-text graph))))
-        (org-glance-graph--truncate-external graph (length e2-text)))
-      (should (string= "tombstone\":true}\n" (f-read-text path 'utf-8)))
-      ;; the fragment parses as nothing, so no later fold ever sees the delete
-      (should (= 0 (org-glance-graph:refresh-external graph)))
-      (should (org-glance-graph:live-meta graph id)))))
+      (should (= 74 (length (org-glance-test:external-pending graph))))
+      (org-glance-graph:refresh-external graph)           ; E1 folds the write
+      (org-glance-test:external-delete graph id)          ; the writer's tombstone
+      (should (= 165 (length (org-glance-test:external-text graph))))
+      (should (= 91 (length (org-glance-test:external-pending graph))))
+      (should (= 1 (org-glance-graph:refresh-external graph)))
+      (should (eq 'tombstone (org-glance-graph:get-headline graph id)))
+      (should (string= "" (org-glance-test:external-pending graph))))))
 
-(ert-deftest org-glance-test:external-truncate-race-spares-a-write ()
-  "H1's other half: the SAME race over a write note costs nothing lasting.
-The blob on disk is still the truth, so the next edit of that id appends
-another note and the record catches up."
+(ert-deftest org-glance-test:external-keeps-a-note-that-arrived-mid-fold ()
+  "The window that killed the compare-and-swap: a note landing after the fold
+read and before it recorded its position.  The offset was measured BEFORE the
+read, so the note is past it and folds next time."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+    (org-glance-graph:add graph (org-glance-test:headline "id2" "* TODO bar"))
+    (org-glance-test:external-write graph "id1")
+    (let ((read (symbol-function 'org-glance-graph--read-external)))
+      (cl-letf (((symbol-function 'org-glance-graph--read-external)
+                 (lambda (g) (prog1 (funcall read g)
+                          (org-glance-test:external-delete g "id2")))))
+        (should (= 1 (org-glance-graph:refresh-external graph)))))
+    (should (string= "{\"id\":\"id2\",\"at\":\"2026-08-03T04:21:07Z\",\"tombstone\":true}\n"
+                     (org-glance-test:external-pending graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (eq 'tombstone (org-glance-graph:get-headline graph "id2")))))
+
+(ert-deftest org-glance-test:external-keeps-a-byte-identical-note ()
+  "The hole a prefix test could not see: a note arriving byte-identical to the
+text a fold just read.  Two equal strings are indistinguishable and were dropped
+together; an OFFSET counts them instead, so the second survives and does its
+work -- here the edit that reaches the WAL through it."
   (org-glance-test:with-graph graph
     (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
     (org-glance-test:external-write graph "id1")
-    (pcase-let ((`(,e2-text . ,_) (org-glance-graph--read-external graph)))
-      (org-glance-graph:refresh-external graph)
-      (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
-      (org-glance-test:external-write graph "id1")        ; the note this race eats
-      (org-glance-graph--truncate-external graph (length e2-text)))
-    (should (string= "" (org-glance-test:external-text graph)))
-    (should (string= "TODO" (org-glance-test:field graph "id1" state)))
-    ;; the next edit says so again, and the record catches up
+    (let ((read (symbol-function 'org-glance-graph--read-external)))
+      (cl-letf (((symbol-function 'org-glance-graph--read-external)
+                 (lambda (g) (prog1 (funcall read g)
+                          (org-glance-test:external-write g "id1")))))
+        (should (= 1 (org-glance-graph:refresh-external graph)))))
+    (should (string= "{\"id\":\"id1\",\"at\":\"2026-08-03T04:21:07Z\"}\n"
+                     (org-glance-test:external-pending graph)))
+    (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+    (should (string= "" (org-glance-test:external-pending graph)))))
+
+(ert-deftest org-glance-test:external-double-fold-is-a-no-op ()
+  "Two Emacsen folding one range is what no lock costs, and it costs work alone.
+E1 folds and moves the cursor; E2, holding the read it took before that, folds
+the same range and appends a record equal to E1's, which latest-per-id cannot
+tell apart."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+    (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+    (org-glance-test:external-write graph "id1")
+    (let ((stale (org-glance-graph--read-external graph))
+          (before (org-glance-test:count-records graph)))
+      (should (= 1 (org-glance-graph:refresh-external graph)))
+      (cl-letf (((symbol-function 'org-glance-graph--read-external)
+                 (lambda (_graph) stale)))
+        (should (= 1 (org-glance-graph:refresh-external graph))))
+      (should (= (+ before 2) (org-glance-test:count-records graph))))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+    (should (equal '("id1") (org-glance-test:ids graph)))
+    (should (string= "" (org-glance-test:external-pending graph)))))
+
+(ert-deftest org-glance-test:external-a-lost-cursor-refolds-from-zero ()
+  "Losing the cursor costs a re-fold and nothing else -- the file is read whole
+again, its records land again, and every answer is the one it already was.  A
+cursor nothing can read (a git conflict marker, say) reads as 0 the same way."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+    (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
     (org-glance-test:external-write graph "id1")
     (should (= 1 (org-glance-graph:refresh-external graph)))
-    (should (string= "DONE" (org-glance-test:field graph "id1" state)))))
+    (f-delete (org-glance-test:external-cursor-path graph))
+    (should (string= (org-glance-test:external-text graph)
+                     (org-glance-test:external-pending graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (f-write-text "<<<<<<< HEAD\n41\n" 'utf-8
+                  (org-glance-test:external-cursor-path graph))
+    (should (string= (org-glance-test:external-text graph)
+                     (org-glance-test:external-pending graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+    (should (equal '("id1") (org-glance-test:ids graph)))))
 
-(ert-deftest org-glance-test:external-unparseable-file-is-never-shortened ()
-  "H1's residue: a file whose every line is unparseable names no entry, so the
-fold's `(when entries ...)' guard never truncates and the fragment survives
-every later fold.  What a truncate race leaves behind, it leaves for good."
+(ert-deftest org-glance-test:external-a-cursor-past-the-end-refolds ()
+  "A cursor naming more bytes than the file holds reads as 0: something replaced
+the file under it, and re-folding what is there is a no-op where trusting the
+number would skip lines nothing ever read."
+  (org-glance-test:with-graph graph
+    (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+    (org-glance-test:edit-blob graph "id1" "* TODO foo" "* DONE foo")
+    (org-glance-test:external-write graph "id1")
+    (f-write-text "4096\n" 'utf-8 (org-glance-test:external-cursor-path graph))
+    (should (= 0 (org-glance-test:external-cursor graph)))
+    (should (= 1 (org-glance-graph:refresh-external graph)))
+    (should (string= "DONE" (org-glance-test:field graph "id1" state)))
+    (should (= (f-size (org-glance-graph:external-path graph))
+               (org-glance-test:external-cursor graph)))))
+
+(ert-deftest org-glance-test:external-unparseable-bytes-are-spent ()
+  "A file whose every line is unparseable names no entry and is spent anyway:
+the cursor moves by BYTES, so a fragment costs one fold rather than being read
+again by every later one -- and the bytes themselves stay where they were."
   (org-glance-test:with-graph graph
     (org-glance-test:external-raw graph "tombstone\":true}\n")
-    (dotimes (_ 3)
-      (should (= 0 (org-glance-graph:refresh-external graph)))
-      (should (string= "tombstone\":true}\n" (org-glance-test:external-text graph))))))
+    (should (= 0 (org-glance-graph:refresh-external graph)))
+    (should (string= "" (org-glance-test:external-pending graph)))
+    (should (string= "tombstone\":true}\n" (org-glance-test:external-text graph)))))
+
+
+(ert-deftest org-glance-test:external-rotates-when-the-cursor-has-caught-up ()
+  "Rotation renames the file and its cursor together, so the generation is born
+fully folded and the live path is free for the writer to create again."
+  (let ((org-glance-graph-external-max-bytes 60))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:external-write graph "id1" "id1")     ; two 41-byte lines
+      (should (= 1 (org-glance-graph:refresh-external graph)))
+      (should-not (f-exists? (org-glance-graph:external-path graph)))
+      (should-not (f-exists? (org-glance-test:external-cursor-path graph)))
+      (should (equal '("EXTERNAL-0000000001.jsonl")
+                     (org-glance-graph--external-generations graph)))
+      (should (string= "" (org-glance-test:external-pending graph)))
+      (org-glance-test:external-write graph "id1")
+      (should (string= "{\"id\":\"id1\",\"at\":\"2026-08-03T04:21:07Z\"}\n"
+                       (org-glance-test:external-pending graph)))
+      (should (= 1 (org-glance-graph:refresh-external graph))))))
+
+(ert-deftest org-glance-test:external-holds-a-file-under-the-rotation-size ()
+  "A file the cursor has caught up with is left alone while it is small: nothing
+rotates until it is worth rotating."
+  (let ((org-glance-graph-external-max-bytes (* 1024 1024)))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-test:external-write graph "id1")
+      (should (= 1 (org-glance-graph:refresh-external graph)))
+      (should (f-exists? (org-glance-graph:external-path graph)))
+      (should-not (org-glance-graph--external-generations graph)))))
+
+(ert-deftest org-glance-test:external-folds-a-line-that-landed-in-a-rotated-file ()
+  "THE ROTATION HAZARD, handled.  The writer opens the live path per line, so a
+rename landing between its open and its write puts that line in the ROTATED
+file.  A generation is drained ahead of the live one, so the line is folded
+there rather than lost with the name it was written under."
+  (let ((org-glance-graph-external-max-bytes 60))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (org-glance-graph:add graph (org-glance-test:headline "id2" "* TODO bar"))
+      (org-glance-test:edit-blob graph "id2" "* TODO bar" "* DONE bar")
+      (org-glance-test:external-write graph "id1" "id1")
+      (org-glance-graph:refresh-external graph)             ; this pass rotates
+      (let ((rotated (f-join (org-glance-graph:meta-path graph)
+                             (car (org-glance-graph--external-generations graph)))))
+        (f-append-text "{\"id\":\"id2\",\"at\":\"2026-08-03T04:21:07Z\"}\n"
+                       'utf-8 rotated))
+      (should (string-match-p "id2" (org-glance-test:external-pending graph)))
+      (should (= 1 (org-glance-graph:refresh-external graph)))
+      (should (string= "DONE" (org-glance-test:field graph "id2" state)))
+      (should (string= "" (org-glance-test:external-pending graph))))))
+
+(ert-deftest org-glance-test:external-carries-two-generations ()
+  "A generation is NEVER deleted on the pass that made it -- an open the writer
+took before the rename may still be about to write into it.  The older one goes
+at the START of the next rotation, so at most two are ever on disk and each
+survives a whole rotation cycle."
+  (let ((org-glance-graph-external-max-bytes 60))
+    (org-glance-test:with-graph graph
+      (org-glance-graph:add graph (org-glance-test:headline "id1" "* TODO foo"))
+      (dolist (round '(1 2 3))
+        (org-glance-test:external-write graph "id1" "id1")
+        (should (= 1 (org-glance-graph:refresh-external graph)))
+        (should (= (min round 2)
+                   (length (org-glance-graph--external-generations graph)))))
+      (should (equal '("EXTERNAL-0000000002.jsonl" "EXTERNAL-0000000003.jsonl")
+                     (org-glance-graph--external-generations graph)))
+      (should-not (f-exists? (f-join (org-glance-graph:meta-path graph)
+                                     "EXTERNAL-0000000001.cursor"))))))
+
+;;; Known hazards: these pin TODAY's behaviour -- H2 in docs/invariants.org.
 
 (ert-deftest org-glance-test:external-delete-is-undone-by-an-open-buffer ()
   "H2: the fold's tombstone arm inserts the spec and touches no buffer, so an
@@ -426,7 +593,6 @@ occurrence history, which went with the directory."
         (should (buffer-live-p buffer))
         (goto-char (point-max))
         (insert "typed after the delete\n")
-        ;; org's own question, since the directory went with the blob
         (org-glance-test:answering ((y-or-n-p t))
           (org-glance-test:save)))
       (should (org-glance-graph:live-meta graph id))

@@ -35,7 +35,6 @@ table and org-text view (round-tripping), and maps a legacy value to canonical."
     (should (equal "org" (org-glance-transient--view-mode)))
     (org-glance-transient:toggle-view)
     (should (eq 'org-glance-table org-glance-overview-default-view)))
-  ;; a legacy value toggles to the canonical counterpart
   (let ((org-glance-overview-default-view 'org))
     (org-glance-transient:toggle-view)
     (should (eq 'org-glance-table org-glance-overview-default-view))))
