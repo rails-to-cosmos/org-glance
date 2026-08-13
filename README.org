@@ -229,6 +229,15 @@ the next read folds that entry back into the log by itself -- an edit as a fresh
 record, a removal as a tombstone.  Open tables and overviews repaint when you
 next look at them; =M-x org-glance-graph:refresh-external= forces the fold now.
 
+That file is LOCAL: it is git-ignored, along with the generations it rotates
+into and their fold cursors, because what has to travel between machines is the
+log record the fold produces.  Ignoring does not untrack, so a store that
+committed these files before the rule existed keeps syncing them until you run
+=git rm --cached '.org-glance/meta/EXTERNAL*'= over them once.  A spent
+generation is moved to =meta/spent/= and kept there; nothing prunes it --
+=M-x org-glance-graph:clear-spent-external= is how you empty that directory when
+it grows tiresome.
+
 * Install
 
 The published package archive is the simplest route.  Add the archive, then let

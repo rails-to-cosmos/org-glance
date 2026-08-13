@@ -21,6 +21,14 @@ DIR is a symbol that will hold the path to the temporary directory within BODY."
   (f-mkdir-full-path (f-dirname path))
   (f-write-text text 'utf-8 path))
 
+(cl-defun org-glance-test:conflict-open (ours theirs)
+  "Return line-oriented text git left conflict-marked with OURS over THEIRS.
+OURS and THEIRS are each a string of newline-terminated lines.  ONE speller of
+the marker layout, shared by every file the resolvers read -- the WAL's open
+segment, a sealed one, and the notification family the resolver must leave
+alone."
+  (concat "<<<<<<< HEAD\n" ours "=======\n" theirs ">>>>>>> other-machine\n"))
+
 (cl-defmacro org-glance-test:session (&rest body)
   (declare (indent 0))
   `(with-temp-directory org-glance-directory
@@ -107,9 +115,7 @@ it (caches read as stale)."
 
 (cl-defun org-glance-test:open-size (graph)
   "Byte size of GRAPH's open (unsealed) segment file, 0 if absent."
-  (or (file-attribute-size
-       (file-attributes (org-glance-graph:headline-meta-path graph)))
-      0))
+  (org-glance--file-size (org-glance-graph:headline-meta-path graph)))
 
 (cl-defun org-glance-test:sed (from to)
   "From `point-min', find regexp FROM in the current buffer, replace with TO."

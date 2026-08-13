@@ -272,8 +272,15 @@ signal for the overview cache, and the migration-adoption target)."
    graph :manifest
    (lambda () (-> (f-join (org-glance-graph:meta-path graph) "MANIFEST") (file-truename)))))
 
+(defconst org-glance-graph--segment-stem "seg-"
+  "What a sealed segment's basename opens with.
+THE ONE SPELLER: the name a seal writes (`--segment-path'), the name a listing
+matches (`--segment-name-re') and the glob `--ensure-gitattributes' hands git
+are all built from this, so they cannot come apart.")
+
 (cl-defun org-glance-graph--segment-path (graph gen)
-  (-> (f-join (org-glance-graph:meta-path graph) (format "seg-%010d.jsonl" gen))
+  (-> (f-join (org-glance-graph:meta-path graph)
+              (format "%s%010d.jsonl" org-glance-graph--segment-stem gen))
       (file-truename)))
 
 (cl-defun org-glance-graph--tmp-path (graph base &optional dir)
@@ -291,7 +298,9 @@ the orphan-segment no-clobber case)."
     (f-write-text content 'utf-8 tmp)
     (rename-file tmp path overwrite)))
 
-(defconst org-glance-graph--segment-name-re "\\`seg-\\([0-9]+\\)\\.jsonl\\'"
+(defconst org-glance-graph--segment-name-re
+  (concat "\\`" (regexp-quote org-glance-graph--segment-stem)
+          "\\([0-9]+\\)\\.jsonl\\'")
   "Matches a sealed segment basename; group 1 is its generation number.")
 
 (cl-defun org-glance-graph--segment-generation (name)
@@ -494,16 +503,14 @@ and would otherwise be invisible to the snapshot below."
 (cl-defun org-glance-graph--ensure-newline-terminated (path)
   "Drop a trailing partial line in PATH (crash mid-append) so future appends stay
 clean.  Cheap: only rewrites when PATH's final byte is not a newline."
-  (let ((size (or (f-size path) 0)))
+  (let ((size (org-glance--file-size path)))
     (when (> size 0)
       (let ((last-byte (with-temp-buffer
-                         (set-buffer-multibyte nil)
-                         (insert-file-contents-literally path nil (1- size) size)
+                         (org-glance--insert-bytes path (1- size) size)
                          (char-after (point-min)))))
         (unless (eql last-byte ?\n)
           (with-temp-buffer
-            (set-buffer-multibyte nil)
-            (insert-file-contents-literally path)
+            (org-glance--insert-bytes path)
             (goto-char (point-max))
             (if (search-backward "\n" nil t)
                 (delete-region (1+ (point)) (point-max))
@@ -541,7 +548,7 @@ fresh monotonic `seq' on each, then maybe seal and compact."
 
 (cl-defun org-glance-graph--maybe-seal (graph)
   (let ((open (org-glance-graph--open-segment-path graph)))
-    (when (> (or (f-size open) 0) org-glance-graph-segment-max-bytes)
+    (when (> (org-glance--file-size open) org-glance-graph-segment-max-bytes)
       (org-glance-graph--seal graph))))
 
 (cl-defun org-glance-graph--seal (graph)
@@ -862,16 +869,35 @@ Return the number of headlines re-indexed."
 ;; object per line, {"id","at"} a write, a third "tombstone":true a delete; an
 ;; unknown key is inert, so old and new mix in either direction.
 ;; BYTE offsets, never characters: the writer appends bytes, a fold takes lines.
+;; A cursor carries an OFFSET and TWO DIGESTS of the bytes ONE read took, so
+;; anything re-laying them re-folds (invariant 34): a WINDOW the idle poll
+;; verifies at a cost flat in the file's size, and the whole PREFIX every fold
+;; that consumes bytes verifies out of the buffer it already holds.
+;; ONE QUESTION PER SOURCE PER CYCLE (`--external-survey'): the poll's bounded
+;; answer is the fold's first question, so a source it blesses is never read.
+;; NOTHING IRREVERSIBLE HAPPENS: a spent generation is MOVED to `meta/spent/'
+;; (`--external-retire') and only the reader removes it.
+;; THE FAMILY IS GIT-IGNORED (`--ensure-gitignore'): a local hint between the
+;; local daemon and the local Emacs, where the WAL RECORD a fold produces is
+;; what syncs.
 ;; Two Emacsen need no lock (invariant 7): a doubled fold appends equal records.
-;; Hazard H2 (docs/invariants.org): an open material buffer undoes a delete.
+;; Evidence, measurements and the rounds of holes behind each rule:
+;; docs/invariants.org, invariant 34 and hazards H2-H3.
 
 (defconst org-glance-graph--external-name "EXTERNAL.jsonl"
   "Basename of the file an external writer leaves its moved and deleted ids in.
 Under `meta/', beside the WAL it is a notification about; see the commentary
 above for the two line shapes and for who writes them.")
 
+(defconst org-glance-graph--external-generation-stem "EXTERNAL-"
+  "What a rotated notification generation's basename opens with.
+THE ONE SPELLER: the name rotation writes (`--external-generation-path') and the
+name a listing matches (`--external-generation-re') are both built from this, so
+a rename moves the writer and the reader together.")
+
 (defconst org-glance-graph--external-generation-re
-  "\\`EXTERNAL-\\([0-9]+\\)\\.jsonl\\'"
+  (concat "\\`" (regexp-quote org-glance-graph--external-generation-stem)
+          "\\([0-9]+\\)\\.jsonl\\'")
   "Match a rotated notification generation; group 1 is its number.
 Zero-padded when rotation mints it, so name order is generation order.")
 
@@ -889,6 +915,202 @@ One cursor per notification file and named off it, so a rotation renames the
 pair and the fold asks every generation the same question."
   (concat (file-name-sans-extension path) ".cursor"))
 
+(cl-defun org-glance-graph--external-generation-path (graph gen)
+  "Path of GRAPH's rotated notification generation GEN.
+Zero-padded off `--external-generation-stem', so name order is generation order
+and `--external-generation-re' reads back what this writes."
+  (f-join (org-glance-graph:meta-path graph)
+          (format "%s%010d.jsonl" org-glance-graph--external-generation-stem gen)))
+
+(defconst org-glance-graph--external-window-bytes 4096
+  "Bytes before a cursor's offset the PENDING check hashes.
+A bound is the whole point: it holds the poll's cost flat in the file's size,
+where hashing the folded PREFIX grows with it and runs before every graph read.
+A window catches an insertion or a deletion anywhere ahead of the offset, and a
+replacement wherever it touches these last bytes.  WHAT IT MISSES is invariant
+34's residual, a same-LENGTH replacement further back: the FOLD closes it on the
+live file at the first byte owed, and ROTATION closes it on a generation
+(`--external-folded-whole?').  CONSTRAINED UPWARD AND FREE DOWNWARD -- widening
+it to the whole prefix reddens the case that pins the residual.")
+
+(cl-defun org-glance-graph--external-digest (beg end)
+  "SHA-1 of the current buffer's bytes from BEG to END.
+THE ONE SPELLER OF THE HASHING RULE: every digest a cursor carries is minted and
+verified through this, over the unibyte buffer `--external-bytes' or
+`--external-window' filled, so a decoder's opinion of the file cannot move it
+and the two sides of a check cannot drift apart."
+  (secure-hash 'sha1 (current-buffer) beg end))
+
+(cl-defun org-glance-graph--external-window-beg (offset)
+  "First byte of the window a cursor at OFFSET is verified over.
+THE ONE SPELLER OF WHICH BYTES: the fold mints the window out of the resident
+file and the poll reads those bytes alone, and the two answers are equal only
+because both ask here."
+  (max 0 (- offset org-glance-graph--external-window-bytes)))
+
+(cl-defun org-glance-graph--external-digests (offset)
+  "The digest pair a cursor at OFFSET records, over the CURRENT buffer.
+The buffer holds the notification file whole and unibyte.  `:window' covers
+\[`--external-window-beg' OFFSET, OFFSET) and `:prefix' covers [0, OFFSET) --
+the poll's claim and the fold's, minted together so a cursor cannot carry two
+readings.  THE ONE FUNCTION BOTH SIDES OF THE FOLD'S CHECK CALL, so a minter and
+a verifier have no way to drift apart.  THE RANGE IS CLAMPED, which makes this
+total over any OFFSET and is why an offset past the end says NOTHING here;
+`--external-folded-in' refuses such an offset before it asks."
+  (let* ((end (min (+ (point-min) offset) (point-max)))
+         (beg (min (+ (point-min) (org-glance-graph--external-window-beg offset))
+                   end)))
+    (list :window (org-glance-graph--external-digest beg end)
+          :prefix (org-glance-graph--external-digest (point-min) end))))
+
+(cl-defun org-glance-graph--external-bytes (path fn &optional refused)
+  "Call FN with notification file PATH's bytes resident and unibyte; return it.
+ONE READ ANSWERS EVERY QUESTION about a notification file's prefix -- how much
+of it is folded, what is owed, and the digest to record -- so nothing can move
+between the reading and the measuring.
+
+THE BUFFER IS THE FILE OR FN IS NOT CALLED, and REFUSED is the answer instead.
+FOUR SHAPES SIGNAL HERE and each is one refusal: a file that is not there, one
+this process may not read, a DIRECTORY wearing a generation's name, and a
+dangling symlink.  No caller tells them apart, and each names its own REFUSED,
+which is where the safe direction is spelled."
+  (with-temp-buffer
+    (if (org-glance--insert-bytes path)
+        (funcall fn)
+      refused)))
+
+(cl-defun org-glance-graph--external-cursor (path)
+  "What notification file PATH's cursor records, or nil.
+A plist of `:offset', `:window' and `:prefix' -- the byte count and the two
+digests of `--external-digests', which is where each one's meaning is written.
+The file spells them in that order and positionally, so the reader and the
+writer share no field name to drift apart on.
+
+A cursor ABSENT, UNREADABLE, GARBLED (a hand edit, say), carrying FEWER THAN TWO
+DIGESTS (one written before the window existed, or before either did) or naming
+a NEGATIVE offset records nothing: an offset alone says how far without saying
+WHICH bytes.  THE TWO READS REFUSE IN OPPOSITE DIRECTIONS and each takes the
+safe one -- a cursor nobody can read SAYS NOTHING, where a FILE nobody can read
+must read as folded by nobody and `--external-bytes' calls nothing over it."
+  (let ((cursor (org-glance-graph--external-cursor-path path)))
+    (pcase (condition-case nil
+               (split-string (s-trim (f-read-text cursor 'utf-8)) nil t)
+             (file-error nil))
+      (`(,offset ,window ,prefix)
+       (let ((n (string-to-number offset)))
+         (and (integerp n) (>= n 0)
+              (list :offset n :window window :prefix prefix))))
+      (_ nil))))
+
+(cl-defun org-glance-graph--external-window (path offset)
+  "Digest of notification file PATH's window ending at OFFSET, or nil.
+THE PENDING PATH'S WHOLE READ: `--external-window-bytes' at most, so its cost
+does not move with the file.  Reads those bytes alone and hashes them through
+the one speller, so its answer is the `:window' half `--external-digests'
+minted.
+
+Nil is a REFUSAL, and there are two: the file is shorter than OFFSET, or the
+byte before OFFSET is not a NEWLINE, a fold's cursor landing on a line boundary.
+Refusing costs a fold that finds nothing owed, which is why the assertion lives
+here and stays off the fold path, where it would re-fold forever.  A FAILED READ
+IS ONE OF THOSE TWO: this MEASURES what it got against the range it asked for."
+  (let ((beg (org-glance-graph--external-window-beg offset)))
+    (with-temp-buffer
+      (org-glance--insert-bytes path beg offset)
+      (and (= (- (point-max) (point-min)) (- offset beg))
+           (or (= offset 0) (eq ?\n (char-before (point-max))))
+           (org-glance-graph--external-digest (point-min) (point-max))))))
+
+(cl-defun org-glance-graph--external-folded-in
+    (path &optional (cursor (org-glance-graph--external-cursor path)))
+  "Bytes of notification file PATH already folded, read off the CURRENT buffer.
+CURSOR defaults to PATH's own and is passed in where a caller already read it.
+The buffer holds PATH whole and unibyte, so THE WHOLE PREFIX IS VERIFIED HERE
+AND IT COSTS NOTHING EXTRA.  The recorded pair must match what
+`--external-digests' makes of the same offset or this answers 0 and the fold
+re-runs from the start: something moved the bytes under the offset, and
+re-folding what is there is a no-op by construction (the crash rule), where
+trusting the number would resume mid-line and skip lines nothing ever read.
+BOTH HALVES ARE COMPARED, so a cursor whose window and prefix describe two files
+is refused here instead of failing the poll forever.  AN OFFSET PAST THE END IS
+REFUSED BEFORE ANYTHING IS HASHED, `--external-digests' clamping its range."
+  (or (and cursor
+           (let ((offset (plist-get cursor :offset)))
+             (and (<= offset (- (point-max) (point-min)))
+                  (let ((have (org-glance-graph--external-digests offset)))
+                    (and (string= (plist-get cursor :window)
+                                  (plist-get have :window))
+                         (string= (plist-get cursor :prefix)
+                                  (plist-get have :prefix))
+                         offset)))))
+      0))
+
+(cl-defun org-glance-graph--external-folded (path)
+  "How many of notification file PATH's bytes a fold has already taken.
+THE READERS' ACCESSOR: this suite and `glance''s interop harness ask it, and no
+production path does -- a fold asks `--external-folded-in' over the bytes it is
+already holding.  Reads PATH to answer; a file this process cannot read has
+folded NOTHING, the refusal that costs a re-fold and keeps a file."
+  (org-glance-graph--external-bytes
+   path (lambda () (org-glance-graph--external-folded-in path)) 0))
+
+(cl-defun org-glance-graph--external-drained?
+    (path &optional (cursor (org-glance-graph--external-cursor path)))
+  "Non-nil when notification file PATH is folded to its end, over a WINDOW.
+CURSOR defaults to PATH's own and is passed in where a caller already read it.
+THE ONE BOUNDED QUESTION, and both the poll and the fold ask it through
+`--external-survey', so a source it blesses costs a stat and at most
+`--external-window-bytes' of hashing however long the file is.  THE EXACT
+DIRECTION IS ROTATION'S (`--external-folded-whole?').
+
+THREE CONDITIONS: the cursor's offset is the file's SIZE, the byte before it is
+a NEWLINE, and the bytes it claims still hash to the WINDOW it recorded.  THE
+SIZE ALONE IS NO ANSWER: `Data.Org.External.noteLine' spells fixed-width lines,
+so a same-size whole-file replacement is this file's TYPICAL re-laying.  Wrong
+in the OTHER direction it costs a fold that finds nothing owed, so this is free
+to be conservative and the newline assertion is."
+  (if (null cursor)
+      (= 0 (org-glance--file-size path))
+    (let ((offset (plist-get cursor :offset)))
+      (and (= offset (org-glance--file-size path))
+           (equal (plist-get cursor :window)
+                  (org-glance-graph--external-window path offset))))))
+
+(cl-defun org-glance-graph--external-folded-whole? (path)
+  "Non-nil when every byte of notification file PATH is folded, EXACTLY.
+ROTATION ASKS THIS AND NOTHING ELSE DOES, and it is the ONE exact check a
+rotated generation ever gets: nothing appends to one, so no fold comes along to
+put a prefix check in front of it, and `--external-drained?''s window passes a
+same-length re-laying further back for as long as the file lives.
+
+WHAT THE ANSWER DECIDES is where the file goes: rotation MOVES what this blesses
+\(`--external-retire') and RE-FOLDS what it refuses (`--external-refold').
+
+ONE READ ANSWERS BOTH HALVES -- the size and the verified offset come out of the
+same buffer -- so a file growing between two readings cannot read as folded
+whole.  A READ THAT FAILED IS NOT AN ANSWER: `--external-bytes' refuses over an
+unreadable file, a directory or a dangling symlink wearing a generation's name.
+
+NO NEWLINE ASSERTION, where the poll makes one: every byte here was read by a
+fold, so an offset the writer's own torn line left mid-line owes nothing and may
+go.  What refuses is the prefix moving under the offset."
+  (org-glance-graph--external-bytes
+   path
+   (lambda ()
+     (= (- (point-max) (point-min))
+        (org-glance-graph--external-folded-in path)))
+   nil))
+
+(cl-defun org-glance-graph--external-refold (path)
+  "Drop notification file PATH's cursor, so the next fold takes PATH whole.
+A cursor whose bytes moved under it describes some other file, and everywhere
+in this module the answer to that is a re-fold, which is a no-op by construction
+\(the crash rule).  ROTATION IS THE ONE CALLER, being the one place that asks a
+generation the exact question, and it is what bounds invariant 34's residual on
+a rotated generation to one rotation cycle.  Dropping a cursor that is not there
+is what a generation nobody folded already looks like."
+  (ignore-errors (f-delete (org-glance-graph--external-cursor-path path))))
+
 (cl-defun org-glance-graph--external-generation (name)
   "Generation number of rotated notification basename NAME, or nil."
   (when (string-match org-glance-graph--external-generation-re name)
@@ -902,69 +1124,194 @@ pair and the fold asks every generation the same question."
 (cl-defun org-glance-graph--external-sources (graph)
   "GRAPH's notification files: rotated generations oldest first, then the live one.
 A generation is drained to completion before the live file, so ids reach the
-fold in the order the writer left them."
+fold in the order the writer left them.
+
+A SPENT GENERATION IS NOT A SOURCE, and it leaves this list by construction:
+`--external-generations' asks `directory-files' about `meta/' alone, which can
+name neither `spent/' nor anything inside it.  Nothing here filters it out, so
+nothing here can forget to."
   (let ((meta (org-glance-graph:meta-path graph)))
     (append (mapcar (lambda (name) (f-join meta name))
                     (org-glance-graph--external-generations graph))
             (list (org-glance-graph:external-path graph)))))
 
-(cl-defun org-glance-graph--external-folded (path size)
-  "How many of notification file PATH's SIZE bytes a fold has already taken.
-The number in the cursor beside it, else 0.  A cursor that is absent, garbled or
-PAST the file's end reads as 0: the file was rotated or replaced under it, and
-re-folding what is there is a no-op by construction (the crash rule), where
-trusting the number would skip lines nothing ever read."
-  (let ((cursor (org-glance-graph--external-cursor-path path)))
-    (or (and (f-exists? cursor)
-             (let ((n (string-to-number (s-trim (f-read-text cursor 'utf-8)))))
-               (and (integerp n) (<= 0 n size) n)))
-        0)))
+(cl-defun org-glance-graph--external-spent-path (graph &optional name)
+  "GRAPH's spent-generation directory, or the path of NAME inside it.
+`meta/spent/', beside the files it holds, for four reasons.  A rename inside one
+directory tree is ONE atomic operation, where a cross-filesystem `rename-file'
+degrades to a copy and a delete.  `meta/' is already off every walk that reads
+org files, so a spent generation cannot come back as a document or a row.
+`directory-files' over `meta/' with `--external-generation-re' names neither
+this directory nor its contents, which takes a moved generation out of
+`--external-sources' with no filter anybody has to remember.  And a store moved
+by path takes its spent generations with it."
+  (let ((dir (f-join (org-glance-graph:meta-path graph) "spent")))
+    (if name (f-join dir name) dir)))
 
-(cl-defun org-glance-graph--set-external-cursor (graph path offset)
-  "Record OFFSET as the prefix of GRAPH's notification file PATH now folded.
-Temp-then-rename (`--atomic-write'), so a crash leaves the old number rather
-than half a new one.  NOT guarded with `max': a cursor written backwards costs
-a re-fold, which is a no-op, while `max' would make a number past the bytes
-that exist stick -- and that is the direction which skips lines."
+(cl-defun org-glance-graph--external-move (from to)
+  "Rename FROM to TO, refusing to clobber; non-nil when it moved.
+ONE `condition-case' answers every refusal a move can meet -- FROM gone, TO
+already there, either end unwritable -- and each leaves both files where they
+are.  TO existing is the interesting one: it is a second move of one generation,
+and the bytes already kept are what an overwrite would spend."
+  (condition-case nil
+      (progn (rename-file from to nil) t)
+    (file-error nil)))
+
+(cl-defun org-glance-graph--external-retire (graph name)
+  "Move spent generation NAME out of GRAPH's live meta dir into `spent/'.
+ROTATION MOVES A SPENT GENERATION; IT NEVER UNLINKS ONE.  Every round of holes
+in the predicate that licenses this step was a lost tombstone, and each was a
+LOSS only because `f-delete' has no next attempt: the bytes are kept, so a wrong
+answer costs disk and a reader who notices puts the file back.  glance's own
+rule one repo over, where a delete is a move into the trash.
+
+THE CURSOR GOES FIRST and the file after it: a crash between the two leaves a
+generation with no cursor, which re-folds whole, where moving the file first
+would leave an orphan cursor no generation of that number ever meets again.
+NOTHING PRUNES `spent/' (`org-glance-graph:clear-spent-external').  Return
+non-nil when the file moved."
+  (let ((meta (org-glance-graph:meta-path graph))
+        (spent (org-glance-graph--external-spent-path graph)))
+    (f-mkdir-full-path spent)
+    (org-glance-graph--external-move
+     (org-glance-graph--external-cursor-path (f-join meta name))
+     (org-glance-graph--external-cursor-path (f-join spent name)))
+    (org-glance-graph--external-move (f-join meta name) (f-join spent name))))
+
+(cl-defun org-glance-graph:clear-spent-external (&optional (graph (org-glance-ensure-init)))
+  "Delete GRAPH's spent notification generations; return how many files went.
+NOTHING PRUNES THEM ON ITS OWN, a deliberate trade: a 1 MiB rotation cap times a
+few generations is nothing against one lost tombstone.  This command and `rm -r
+<store>/.org-glance/meta/spent/' are the two doors.  Every file under there was
+verified folded to its last byte before it moved; a reader who suspects
+otherwise moves the `.jsonl' back into `meta/' ALONE, where it carries no cursor
+and the next fold takes it whole.
+
+THAT REPAIR STRANDS THE OLD CURSOR, said here because the repair produces it:
+the `.cursor' stays under `spent/', so the next retirement of that generation
+finds its destination taken and `--external-move' refuses.  Inert -- nothing
+reads a cursor whose `.jsonl' is gone."
+  (interactive)
+  (let* ((dir (org-glance-graph--external-spent-path graph))
+         (files (when (f-directory? dir)
+                  (directory-files dir nil directory-files-no-dot-files-regexp)))
+         (n (length files)))
+    (if (and files
+             (or (not (called-interactively-p 'any))
+                 (y-or-n-p (format "Delete %d spent notification file(s) under %s? "
+                                   n dir))))
+        (progn (f-delete dir t)
+               (when (called-interactively-p 'any)
+                 (message "org-glance: cleared %d spent notification file%s"
+                          n (if (= n 1) "" "s")))
+               n)
+      0)))
+
+(cl-defun org-glance-graph--set-external-cursor (graph path offset digests)
+  "Record OFFSET, hashed as DIGESTS, as GRAPH's folded prefix of file PATH.
+DIGESTS is `--external-digests'' plist, written positionally as `OFFSET WINDOW
+PREFIX' on one line -- THE ONE SPELLER of that layout, read back by
+`--external-cursor'.
+
+DIGESTS ARE THE FOLD'S OWN, taken by `--external-tail' over the very bytes it
+returned, and this function hashes nothing.  Hashing here would measure the file
+AS IT IS NOW, at the far end of a window spanning every blob read, every
+re-parse and the `graph:insert', so a rewrite landing inside it minted a cursor
+self-consistent with a file nobody folded and the guard passed forever.
+
+Temp-then-rename (`--atomic-write'), so a crash leaves the old pair.  NOT
+guarded with `max': a cursor written backwards costs a re-fold, while `max'
+would make a number past the bytes that exist stick -- the direction that skips
+lines."
   (org-glance-graph--atomic-write
-   graph (org-glance-graph--external-cursor-path path) (format "%d\n" offset)))
+   graph (org-glance-graph--external-cursor-path path)
+   (format "%d %s %s\n" offset
+           (plist-get digests :window) (plist-get digests :prefix))))
 
-(cl-defun org-glance-graph--external-tail (path)
-  "Notification file PATH's unfolded bytes, as a cons of (TEXT . END).
-END is the offset TEXT reaches and is read BEFORE the bytes are, so a line the
-writer appends while this runs is past it and waits for the next fold -- which
-is the whole of what the cursor buys."
-  (let* ((size (or (file-attribute-size (file-attributes path)) 0))
-         (from (org-glance-graph--external-folded path size)))
-    (if (>= from size)
-        (cons "" size)
-      (cons (with-temp-buffer
-              (let ((coding-system-for-read 'utf-8))
-                (insert-file-contents path nil from size))
-              (buffer-string))
-            size))))
+(cl-defun org-glance-graph--external-tail
+    (path &optional (cursor (org-glance-graph--external-cursor path)))
+  "Notification file PATH's unfolded bytes, as (TEXT END DIGESTS), or nil.
+CURSOR defaults to PATH's own and is passed in where a caller already read it.
+END is the offset TEXT reaches -- the size of the file AS THIS READ SAW IT --
+so a line the writer appends while this runs is past it and waits for the next
+fold, which is the whole of what the cursor buys.
 
-(cl-defun org-glance-graph--read-external (graph)
+ONE READ ANSWERS BOTH HALVES.  The prefix the cursor claims is verified against
+the bytes in hand and DIGESTS is taken from that same buffer, so the offset that
+SLICES and the digests that are RECORDED describe one reading of one file.
+
+THREE ANSWERS, each its own: bytes owed is the three-element list; nothing owed
+is (\"\" END), a reading that VERIFIED the whole prefix and found the cursor at
+the end; NIL is a read that failed and verified nothing.  Rotation reads all
+three, so the middle one has to stay distinguishable from the last."
+  (org-glance-graph--external-bytes
+   path
+   (lambda ()
+     (let ((size (- (point-max) (point-min)))
+           (from (org-glance-graph--external-folded-in path cursor)))
+       (if (>= from size)
+           (list "" size)
+         (list (decode-coding-string
+                (buffer-substring-no-properties (+ (point-min) from) (point-max))
+                'utf-8)
+               size
+               (org-glance-graph--external-digests size)))))
+   nil))
+
+(cl-defun org-glance-graph--external-survey (graph)
+  "One reading of each of GRAPH's notification sources, as (PATH DRAINED TAIL).
+THE POLL'S QUESTION IS THE FOLD'S FIRST ONE, asked once per source per cycle.
+DRAINED is `--external-drained?''s bounded answer over one cursor read; TAIL is
+`--external-tail''s, taken only where the bound says something may be owed.  A
+settled generation therefore costs a stat and a bounded hash, where reading it
+whole to verify a prefix nothing is owed against grew with the file and ran on
+every fold.
+
+WHAT THE SKIP GIVES UP is invariant 34's residual and no more: a same-length
+re-laying further back than the window, which the bound cannot see whoever asks
+it.  On the LIVE file the next appended byte takes the file whole; on a rotated
+generation ROTATION asks the exact question and re-folds what it refuses."
+  (mapcar (lambda (path)
+            (let* ((cursor (org-glance-graph--external-cursor path))
+                   (drained (org-glance-graph--external-drained? path cursor)))
+              (list path drained
+                    (unless drained
+                      (org-glance-graph--external-tail path cursor)))))
+          (org-glance-graph--external-sources graph)))
+
+(cl-defun org-glance-graph--external-took (survey path)
+  "The offset a fold reading SURVEY moves PATH's cursor to, or nil.
+Non-nil exactly where this pass read PATH whole AND had bytes to take, which is
+rotation's own condition on the live file: the cursor it names has just been
+written, so the file is drained by definition."
+  (let ((tail (nth 2 (assoc path survey))))
+    (and tail (not (string-empty-p (car tail))) (cadr tail))))
+
+(cl-defun org-glance-graph--read-external (graph &optional survey)
   "Read GRAPH's pending notification bytes as a plist.
-`:text' is the bytes this fold takes, decoded, rotated generations first and the
-live file last -- what a caller wants to SEE, never anything to write back.
+SURVEY is `--external-survey''s reading, made here when a caller has none.
+Rotated generations first and the live file last.
 
 `:entries' is one (ID . KIND) cons per distinct id, KIND being `edit' or
 `tombstone': each id sits where it was FIRST sighted and carries its LAST
-sighting's kind, the rule `--latest-records' folds the WAL by -- so a write then
-a delete inside one window folds as the delete, the drift the third field exists
-to close.  A line that does not parse is skipped rather than signalled -- this
-file is a hint about work to redo, so the worst a bad line can cost is one entry
-left drifting until its next edit.
+sighting's kind, the rule `--latest-records' folds the WAL by, so a write then a
+delete inside one window folds as the delete.  A line that does not parse is
+skipped instead of signalled, this file being a hint about work to redo.
+Sightings are keyed by a HASH TABLE with the ORDER in a list beside it, an
+`assoc' over the entries having been quadratic in a generation's id count.
 
-`:marks' is one (PATH . OFFSET) cons per source that had bytes: where each
-cursor is to be moved once the records have landed."
-  (let (entries texts marks)
-    (dolist (path (org-glance-graph--external-sources graph))
-      (pcase-let ((`(,text . ,end) (org-glance-graph--external-tail path)))
-        (unless (string-empty-p text)
-          (push (cons path end) marks)
-          (push text texts)
+`:marks' is one (PATH OFFSET DIGESTS) list per source that had bytes: where each
+cursor moves once the records have landed, and the digests of the bytes THIS
+read took.  A mark is the tail's own answer with its path in front, so the
+offset and the digests cannot come from two readings."
+  (let ((kinds (make-hash-table :test 'equal))
+        order marks)
+    (pcase-dolist (`(,path ,_drained ,tail)
+                   (or survey (org-glance-graph--external-survey graph)))
+      (let ((text (car tail)))
+        (when (and text (not (string-empty-p text)))
+          (push (cons path (cdr tail)) marks)
           (dolist (line (split-string text "\n" t))
             (condition-case nil
                 (let ((object (json-parse-string line :object-type 'plist)))
@@ -972,68 +1319,79 @@ cursor is to be moved once the records have landed."
                     ;; `(eq t ...)': JSON false and null read as :false and :null
                     (let ((kind (if (eq t (plist-get object :tombstone))
                                     'tombstone
-                                  'edit))
-                          (seen (assoc id entries)))
-                      (if seen
-                          (setcdr seen kind)
-                        (push (cons id kind) entries)))))
+                                  'edit)))
+                      (unless (gethash id kinds) (push id order))
+                      (puthash id kind kinds))))
               (json-error nil))))))
-    (list :text (apply #'concat (nreverse texts))
-          :entries (nreverse entries)
+    (list :entries (mapcar (lambda (id) (cons id (gethash id kinds)))
+                           (nreverse order))
           :marks (nreverse marks))))
 
-(cl-defun org-glance-graph--external-pending-p (graph)
+(cl-defun org-glance-graph--external-pending-p (graph &optional survey)
   "Non-nil when one of GRAPH's notification files carries unfolded bytes.
+SURVEY is `--external-survey''s reading, made here when a caller has none.
 What the read path asks before folding: the file is never emptied now, so its
-SIZE alone says nothing about pending work."
-  (cl-some (lambda (path)
-             (let ((size (or (file-attribute-size (file-attributes path)) 0)))
-               (> size (org-glance-graph--external-folded path size))))
-           (org-glance-graph--external-sources graph)))
+SIZE alone says nothing about pending work, and its cursor -- verified over a
+bounded window (`--external-drained?') -- says the rest."
+  (cl-notevery #'cadr (or survey (org-glance-graph--external-survey graph))))
 
 (defcustom org-glance-graph-external-max-bytes (* 1024 1024)
   "Size at which `meta/EXTERNAL.jsonl' is rotated to a generation.
-A fold reads from its cursor, so LENGTH costs it nothing; what rotation bounds
-is what one lost cursor re-folds and what the directory carries.  Rotation also
-waits for the cursor to catch up, so a busy store rotates late rather than
-often."
+What rotation bounds is what a FOLD verifies and what one lost cursor re-folds:
+a fold with bytes owed hashes the folded prefix once to check the cursor and the
+whole file once to write it, so the cap is the knob on that SHA-1 as much as on
+what the directory carries.  The idle poll is out of it -- its window is bounded
+by `--external-window-bytes' and does not move with this at all."
   :group 'org-glance
   :type 'integer)
 
-(cl-defun org-glance-graph--rotate-external-maybe (graph)
+(cl-defun org-glance-graph--rotate-external-maybe (graph survey)
   "Rotate GRAPH's notification file to a generation once it is worth doing.
-TWO CONDITIONS over a file that has bytes, both asked after a fold: it is at
-least `org-glance-graph-external-max-bytes' long, and the cursor has caught up
-with it -- so a generation is born fully folded and the only thing that can
-still be in it is a line that landed after the rename.
+SURVEY is the fold's own `--external-survey' reading, and the live file's entry
+is both conditions at once (`--external-took'): it is there because bytes were
+folded, and its OFFSET is the size THIS FOLD READ and has just written the
+cursor to -- drained by definition.  Re-stating the size afterwards made the cap
+bound nothing: one append landing in the fold window left the file undrained,
+and a store being written to deferred rotation for as long as the writing
+lasted.  Bytes past that offset ride into the generation and fold there, a
+generation being drained ahead of the live file.
 
-GROWTH IS ROTATION, NEVER TRUNCATION, which is what lets the reader stop
-mutating this file at all.  Safe here because the writer opens the path per
+GROWTH IS ROTATION: the file is renamed and never truncated, which is what lets
+the reader stop mutating it at all.  Safe because the writer opens the path per
 line (`Data.Org.External.appendLine', O_CREAT|O_APPEND): a rename landing
-between its open and its write puts that line in the ROTATED file, which still
-exists and is drained ahead of the live one.  Nothing is unlinked under a live
-descriptor -- which is why a generation is never deleted on the pass that made
-it: the older one goes at the START of the next rotation, by which time any open
-the last one caught has completed.  This is the store's own shape one file over,
-where the open WAL segment is appended to and SEALED by a rename (invariant 2).
+between its open and its write puts that line in the ROTATED file, which is
+drained ahead of the live one.  Nothing is taken from under a live descriptor,
+which is why a generation is never retired on the pass that made it.  The CURSOR
+is renamed
+FIRST: a generation with no cursor re-folds whole, and a fresh live file under
+the old cursor would have its first lines skipped by a number nothing read.
 
-The CURSOR is renamed FIRST.  A generation with no cursor is re-folded whole,
-which is a no-op; a fresh live file under the old file's cursor would have its
-first lines skipped by a number nothing read."
+EACH CANDIDATE `butlast' NAMES IS ASKED EXACTLY, and this is the only place a
+generation is.  The answer is taken AFTER the fold this rotation ends, the fold
+window being where such a rewrite lands
+\(`external-a-rewrite-inside-the-fold-window-refolds'); a candidate THIS PASS
+already read whole carries that verdict in SURVEY and is not hashed twice.
+
+TWO ANSWERS, TWO MOVES.  Folded whole, it is RETIRED into `meta/spent/'
+\(`--external-retire'), moved and never unlinked.  Refused -- the prefix moved
+under its cursor, or the read failed -- it STAYS and is RE-FOLDED
+\(`--external-refold'), nothing saying the cursor still describes the file.
+Position spares the NEWEST, an in-flight open of the writer's being about to
+land in it."
   (let* ((path (org-glance-graph:external-path graph))
-         (size (or (file-attribute-size (file-attributes path)) 0)))
-    (when (and (> size 0)
-               (>= size org-glance-graph-external-max-bytes)
-               (= size (org-glance-graph--external-folded path size)))
+         (drained (org-glance-graph--external-took survey path)))
+    (when (and drained (>= drained org-glance-graph-external-max-bytes))
       (let* ((meta (org-glance-graph:meta-path graph))
              (generations (org-glance-graph--external-generations graph))
              (next (1+ (apply #'max 0 (mapcar #'org-glance-graph--external-generation
                                               generations))))
-             (born (f-join meta (format "EXTERNAL-%010d.jsonl" next))))
+             (born (org-glance-graph--external-generation-path graph next)))
         (dolist (name (butlast generations))
           (let ((old (f-join meta name)))
-            (ignore-errors (f-delete (org-glance-graph--external-cursor-path old)))
-            (ignore-errors (f-delete old))))
+            (if (or (nth 2 (assoc old survey))
+                    (org-glance-graph--external-folded-whole? old))
+                (org-glance-graph--external-retire graph name)
+              (org-glance-graph--external-refold old))))
         (let ((cursor (org-glance-graph--external-cursor-path path)))
           (when (f-exists? cursor)
             (rename-file cursor (org-glance-graph--external-cursor-path born) t)))
@@ -1089,33 +1447,36 @@ precedent)."
                 org-glance-graph-external-poll-seconds)
         ;; stamped BEFORE the fold: the reads it makes must not re-check either
         (setf (org-glance-graph:-external-checked graph) now)
-        (when (org-glance-graph--external-pending-p graph)
-          (condition-case err
-              (org-glance-graph:refresh-external graph)
-            (error (message "org-glance: refresh-external skipped: %S" err))))))))
+        (let ((survey (org-glance-graph--external-survey graph)))
+          (when (org-glance-graph--external-pending-p graph survey)
+            (condition-case err
+                (org-glance-graph:refresh-external graph survey)
+              (error (message "org-glance: refresh-external skipped: %S" err)))))))))
 
-(cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init)))
+(cl-defun org-glance-graph:refresh-external (&optional (graph (org-glance-ensure-init))
+                                                       survey)
   "Fold the entries an external writer moved back into GRAPH's metadata.
 Interactive: acts on the session's graph.  Reads run this fold themselves
-(`--fold-external-maybe'); this is the unthrottled, on-demand form.
+(`--fold-external-maybe'); this is the unthrottled, on-demand form.  SURVEY is
+the `--external-survey' reading whose bounded answers said work was owed, passed
+down so the poll's question is asked once; made here when a caller has none.
 
 For each WRITE `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now
-on disk and append it -- the same re-derivation `org-glance-graph:reindex' does,
-and what `org-glance-material:sync' does after a save here.  Blobs are READ and
-never rewritten: the content is already canonical, so only records append.  For
-each DELETE, append the tombstone `org-glance-graph:delete' would, under that
-command's own guard.  An id the store does not know, one already deleted, and a
-write with no stored blob are each skipped with a message and are spent by the
-cursor anyway -- there is no record for a refresh to replace.
+on disk and append it -- the same re-derivation `org-glance-graph:reindex' does.
+Blobs are READ and never rewritten: the content is already canonical, so only
+records append.  For each DELETE, append the tombstone `org-glance-graph:delete'
+would, under that command's own guard.  An id the store does not know, one
+already deleted, and a write with no stored blob are each skipped with a message
+and spent by the cursor anyway, there being no record for a refresh to replace.
 
-The whole batch is ONE append, and the CURSOR moves after it -- the crash rule:
-the records land BEFORE this store's fold position does, so a crash between the
-two costs a repeated fold, which is a no-op by construction.  The file itself is
-never rewritten; it is rotated once that is worth doing
+The whole batch is ONE append and the CURSOR moves after it -- the crash rule,
+so a crash between the two costs a repeated fold, which is a no-op by
+construction.  The file is rotated once that is worth doing
 (`--rotate-external-maybe').  Return the number of entries refreshed."
   (interactive)
   (let* ((org-glance-graph--folding-external t)   ; its own reads: no nested fold
-         (read (org-glance-graph--read-external graph))
+         (survey (or survey (org-glance-graph--external-survey graph)))
+         (read (org-glance-graph--read-external graph survey))
          (entries (plist-get read :entries))
          (specs nil)
          (skipped 0))
@@ -1138,9 +1499,10 @@ never rewritten; it is rotated once that is worth doing
     (when specs
       (org-glance-graph:insert graph (nreverse specs)))
     ;; BYTES, never entries: an all-unparseable file would be re-read forever.
-    (pcase-dolist (`(,path . ,offset) (plist-get read :marks))
-      (org-glance-graph--set-external-cursor graph path offset))
-    (org-glance-graph--rotate-external-maybe graph)
+    ;; The digests are the READ's, so a rewrite since costs a re-fold.
+    (pcase-dolist (`(,path ,offset ,digests) (plist-get read :marks))
+      (org-glance-graph--set-external-cursor graph path offset digests))
+    (org-glance-graph--rotate-external-maybe graph survey)
     (let ((n (- (length entries) skipped)))
       (when (called-interactively-p 'any)
         (message "org-glance: refreshed %d external entr%s%s"
@@ -1157,21 +1519,68 @@ hand-edited) file.  The idempotent-marker contract of invariant 8."
     (f-write-text content 'utf-8 path)))
 
 (cl-defun org-glance-graph--ensure-gitattributes (graph)
-  "Write the `merge=union' git driver for GRAPH's *.jsonl files, if absent.
+  "Write the `merge=union' git driver for GRAPH's WAL files, if absent.
 Concurrent appends to `headlines.jsonl' on two machines conflict when the store
 dir is synced via git; the built-in `union' driver keeps every line from both
 sides, and the positional last-wins reader (`--latest-records') resolves any
-duplicate id.  `union' is built in, so no `git config' is needed."
+duplicate id.  `union' is built in, so no `git config' is needed.
+
+THE GLOBS ARE THE RESOLVER'S OWN TWO PREDICATES (`--conflicted-jsonl-files'):
+the open segment by name and `--segment-stem'`*.jsonl'.  A `*.jsonl' glob handed
+git every other JSONL family in `meta/' as well -- the notification queue, its
+generations and glance's `COMPLETIONS.jsonl' -- which is the one cohort the
+gitignore cannot help, git applying no ignore rule to a path it already tracks.
+Unioning a notification queue means nothing, and it re-lays bytes under a live
+fold cursor (invariant 8)."
   (org-glance-graph--write-if-absent
    (f-join (org-glance-graph:meta-path graph) ".gitattributes")
-   "*.jsonl merge=union\n"))
+   (mapconcat (lambda (glob) (format "%s merge=union\n" glob))
+              (list (file-name-nondirectory
+                     (org-glance-graph--open-segment-path graph))
+                    (concat org-glance-graph--segment-stem "*.jsonl"))
+              "")))
+
+(defconst org-glance-graph--gitignore-lines
+  '("cache/" "meta/EXTERNAL*.jsonl" "meta/EXTERNAL*.cursor" "meta/spent/")
+  "Store-relative paths `--ensure-gitignore' keeps out of git.
+Per-machine and rebuildable, both families: `cache/' is derived from the WAL,
+and the notification family is a LOCAL HINT between the local daemon and the
+local Emacs.  What has to reach another machine is the WAL RECORD a fold
+produces, and that syncs on its own.
+
+THE FAMILY IS FOUR THINGS AND TWO GLOBS: the live `EXTERNAL.jsonl', every
+rotated `EXTERNAL-<gen>.jsonl', every `.cursor' beside one, and the `spent/'
+directory rotation retires into.  The globs also cover a per-host name should
+one ever be minted, which is the shape this design keeps declining.")
 
 (cl-defun org-glance-graph--ensure-gitignore (graph)
-  "Git-ignore the store's derived `cache/' dir, if no ignore file exists yet.
-Caches are per-machine and rebuildable -- syncing them is pure churn."
-  (org-glance-graph--write-if-absent
-   (f-join (org-glance-graph:store-path graph) ".gitignore")
-   "cache/\n"))
+  "Git-ignore GRAPH's per-machine files, appending any line the store lacks.
+APPENDS RATHER THAN WRITING WHEN ABSENT, unlike every other bootstrap marker: a
+store made before the notification family existed carries a one-line
+`cache/' file, and write-if-absent would leave every such store syncing a hint
+its other machine cannot use.  Each missing line of
+`org-glance-graph--gitignore-lines' joins the end and the rest is left alone, so
+a hand-edited file keeps its comments, its order and its own rules.
+
+IGNORING DOES NOT UNTRACK.  A store that has already committed these files goes
+on syncing them until `git rm --cached' is run over them by hand -- there is no
+safe way for this to reach into somebody's index.  A reader who WANTS one
+tracked says so the way git says it, `git add -f', and an ignore rule stops
+applying to it.
+
+Two costs, both stated in invariant 34: a line taken out by hand comes back at
+the next open, and a DAEMON HERE with an EMACS THERE no longer works, hazard
+H3."
+  (let* ((path (f-join (org-glance-graph:store-path graph) ".gitignore"))
+         (text (if (f-exists? path) (f-read-text path 'utf-8) ""))
+         (have (split-string text "\n" t "[ \t\r]+"))
+         (missing (--remove (member it have) org-glance-graph--gitignore-lines)))
+    (when missing
+      (org-glance-graph--atomic-write
+       graph path
+       (concat text
+               (if (or (string-empty-p text) (s-ends-with? "\n" text)) "" "\n")
+               (mapconcat #'identity missing "\n") "\n")))))
 
 (cl-defun org-glance-graph--manifest-broken? (text)
   "Non-nil when MANIFEST TEXT cannot be trusted as the live segment set.
@@ -1203,19 +1612,34 @@ another machine and synced in is adopted here, never reaped as an orphan."
         (org-glance-graph--write-manifest
          graph
          (sort (cl-loop for name in (org-glance-graph--segment-names graph)
-                        when (> (or (f-size (f-join meta name)) 0) 0)
+                        when (> (org-glance--file-size (f-join meta name)) 0)
                         collect name)
                #'string<))))))
 
 (cl-defun org-glance-graph--conflicted-jsonl-files (graph)
   "List of GRAPH meta/*.jsonl paths that carry git conflict markers.
-A store synced before the `union' driver was in place can arrive with markers
-already written into a segment; the JSONL reader would choke on those lines."
-  (let ((meta (org-glance-graph:meta-path graph)))
+THE WAL'S OWN FILES AND NO OTHER, NAMED POSITIVELY: the open segment and the
+sealed `seg-<gen>.jsonl', where every line is a record and a union of two sides
+is the right answer.  An ALLOWLIST, because `meta/' holds other JSONL families
+and each new one would otherwise join this resolver by default -- the
+notification queue, its rotated generations, and glance's own
+`COMPLETIONS.jsonl'.  Unioning any of them means nothing, and the resolver's
+rewrite would re-lay bytes under a live fold cursor.
+
+THE NAMES ARE THE HANDLE, the MANIFEST being unusable here: this runs at open
+AHEAD of
+`--reconcile-manifest', so a git-mangled MANIFEST has not been rebuilt yet and
+lists nothing to trust.  A store synced before the `union' driver was in place
+can arrive with markers already written into a segment; the JSONL reader would
+choke on those lines."
+  (let ((meta (org-glance-graph:meta-path graph))
+        (open (file-name-nondirectory (org-glance-graph--open-segment-path graph))))
     (cl-loop for name in (directory-files meta nil "\\.jsonl\\'")
-             for path = (f-join meta name)
-             when (org-glance--conflict-marked? (f-read-text path 'utf-8))
-             collect path)))
+             when (or (string= name open)
+                      (org-glance-graph--segment-generation name))
+             when (org-glance--conflict-marked?
+                   (f-read-text (f-join meta name) 'utf-8))
+             collect (f-join meta name))))
 
 (cl-defun org-glance-graph--union-resolve-file (path)
   "Strip git conflict markers from PATH by union merge; return blocks resolved.
@@ -1261,7 +1685,7 @@ brand-new empty store, whose open segment the constructor just touched)."
 
 (cl-defun org-glance-graph--open-empty? (graph)
   "Non-nil when GRAPH's open segment is empty (an absent file reads as empty)."
-  (= 0 (or (f-size (org-glance-graph--open-segment-path graph)) 0)))
+  (= 0 (org-glance--file-size (org-glance-graph--open-segment-path graph))))
 
 (cl-defun org-glance-graph--segment-seqs (graph name)
   "List of the `seq' ordinals recorded in sealed segment basename NAME."

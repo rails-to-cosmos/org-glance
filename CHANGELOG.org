@@ -15,6 +15,9 @@ Notable user-facing changes.  Versions date-based
 - An =EXTERNAL.jsonl= line carrying ="tombstone":true= folds as a DELETE: the
   fold appends the tombstone =org-glance-delete= would, under the same guard.
   A write and a delete for one id in one window land as the delete.
+- =M-x org-glance-graph:clear-spent-external= empties =meta/spent/=, where
+  rotation moves a notification generation it has folded to the last byte.
+  Nothing prunes that directory on its own.
 - Transient: =U= disables a plugin, and the *System* heading lists the enabled
   plugins, marking any whose library failed to load.  =I= reports when every
   known plugin is already enabled instead of prompting with nothing to offer.
@@ -136,6 +139,18 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- =meta/.gitattributes= gives the =union= merge driver the WAL's own files by
+  name -- =headlines.jsonl= and =seg-*.jsonl= -- where a =*.jsonl= glob also
+  handed it the notification family and =COMPLETIONS.jsonl=.  An existing
+  store's file is left alone (write-if-absent).
+- A fold reads a notification source WHOLE only where the poll says bytes may be
+  owed; a drained generation costs a stat and a bounded hash.  Folding one line
+  beside five drained 1 MiB generations: 48.5 ms -> 5.5 ms, 5,263,573 bytes
+  hashed -> 20,663.
+- The fold folds 18,000 distinct ids in 73 ms where it took 5.0 s: the
+  first-sighting set is a hash table.
+- Rotation reuses the verdict the pass's own read left, so a generation is
+  hashed once per rotation instead of twice.
 - Material =C-c #= is the only crypt key, dispatching on context: region ->
   wrap it; sealed buffer -> unseal; point inside a plaintext block -> unwrap
   it; decrypted buffer outside every block -> seal back, forgetting the
@@ -241,16 +256,53 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
-- An outside delete is no longer lost while =EXTERNAL.jsonl= is being folded:
-  the fold reads from a byte cursor (=meta/EXTERNAL.cursor=) and rewrites the
-  file never, so a note the daemon appends mid-fold survives whether or not it
-  is byte-identical to one already there, and two Emacsen folding at once cost
-  duplicate work rather than a lost tombstone.
-- =EXTERNAL.jsonl= grows by rotation rather than truncation: it is renamed to
-  =EXTERNAL-<generation>.jsonl= once it passes
-  =org-glance-graph-external-max-bytes= and the cursor has caught up, two
-  generations are kept, and a line that landed in a just-rotated file is still
-  folded.
+- A spent =EXTERNAL-<generation>.jsonl= is MOVED to
+  =meta/spent/= and kept.  Six rounds of holes in the check that licensed
+  the delete each cost a tombstone nothing could get back; a wrong answer costs
+  disk now, and the file is there to be moved back -- the =.jsonl= alone, since
+  it then carries no cursor and the next fold takes it whole.  A retired
+  generation is out of the fold's reach until somebody does that, and NOTHING
+  prunes =meta/spent/=: =M-x org-glance-graph:clear-spent-external= empties it,
+  or =rm -r= over the directory.
+- A generation this Emacs cannot READ is no longer taken for a fully folded
+  one.  An unreadable file and an absent one both left an empty buffer, so the
+  check compared 0 with 0, said every byte was folded and destroyed a file it
+  had never read -- measured over a generation carrying an unfolded tombstone:
+  readable, spared; =chmod 000=, unlinked.  A directory or a dangling symlink
+  wearing a generation's name is refused the same way.
+- =meta/EXTERNAL.jsonl=, its generations, their cursors and =meta/spent/= are
+  git-ignored; an existing store's =.gitignore= gains the lines on the next
+  open.  IGNORING DOES NOT UNTRACK: a store that already committed them keeps
+  syncing them until =git rm --cached '.org-glance/meta/EXTERNAL*'= is run once.
+- KNOWN COST of that ignore: a daemon on one machine no longer notifies an Emacs
+  on another (=git add -f= keeps one tracked on purpose).
+- Moving a retired =EXTERNAL-<gen>.jsonl= back into =meta/= strands its old
+  =.cursor= under =meta/spent/= and an =EXTERNAL-<gen>.cursor= in =meta/=; both
+  are inert.
+- An outside delete survives a fold: the fold reads from a byte cursor
+  (=meta/EXTERNAL.cursor=) and rewrites =EXTERNAL.jsonl= never.
+- =EXTERNAL.jsonl= grows by rotation: renamed to =EXTERNAL-<gen>.jsonl= once a
+  fold takes it past =org-glance-graph-external-max-bytes=, two DRAINED
+  generations kept, a line landing in a just-rotated file still folded.
+- The rotation cap bounds the file again: rotation reads the offset the fold
+  took, where re-stating the size afterwards deferred the rename indefinitely
+  under a live writer.
+- =meta/EXTERNAL.cursor= records TWO sha1s beside its offset -- the last 4 KiB
+  before it, and the whole prefix -- so a hand edit, a botched rotation or a
+  restore costs a re-fold.  A cursor written before this change reads as 0.
+- A fold READS THE NOTIFICATION FILE ONCE, verifying the cursor's prefix and
+  recording the new digest out of that one buffer.
+- An outside write replacing =EXTERNAL.jsonl= at its own length is folded: the
+  poll verifies the last 4 KiB before the offset and that the offset ends a
+  line, where a size comparison saw nothing.
+- Rotation retires an =EXTERNAL-<gen>.jsonl= only once that generation's own
+  cursor says every byte is folded, hashing the whole file itself.
+- A rotated generation rotation refuses to retire has its cursor dropped, so the
+  next fold takes it whole.
+- A cursor naming MORE BYTES than its file holds reads as 0 again.
+- The git conflict resolver names the WAL's own files POSITIVELY: the open
+  segment and the sealed =seg-<gen>.jsonl=, leaving the notification family and
+  =COMPLETIONS.jsonl= untouched.
 - Link picker (=j= / =C-c j=) labels a link with no description by the =KEY:=
   text introducing it in its list item — =- Local: [[file:~/x]]= offers
   "Local" instead of the raw URL.

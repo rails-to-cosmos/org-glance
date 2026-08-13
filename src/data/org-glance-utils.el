@@ -29,6 +29,24 @@ The single normalize-on-input rule for user-supplied property names."
   (and (f-exists? path)
        (file-attribute-modification-time (file-attributes path))))
 
+(cl-defun org-glance--file-size (path)
+  "Size of PATH in bytes; 0 when it does not exist.
+Zero because every caller compares it with an offset.  The one speller for a
+size read off its own stat; a caller already holding `file-attributes' for the
+mtime reads the size off that instead of paying a second stat."
+  (or (file-attribute-size (file-attributes path)) 0))
+
+(cl-defun org-glance--insert-bytes (path &optional beg end)
+  "Insert PATH's bytes [BEG, END) into the current buffer; t when the read ran.
+THE ONE UNIBYTE READ, and `set-buffer-multibyte' nil is the whole of what it is
+for: omit it in one copy and every offset the caller computes silently becomes
+a CHARACTER offset where the file is addressed in BYTES.  Nil leaves whatever
+the buffer already held, so each caller says what an unread file means."
+  (set-buffer-multibyte nil)
+  (condition-case nil
+      (progn (insert-file-contents-literally path nil beg end) t)
+    (file-error nil)))
+
 (defconst org-glance--conflict-marker-re
   "^\\(<<<<<<<\\|=======\\|>>>>>>>\\)"
   "Regexp matching a git conflict-marker line start.

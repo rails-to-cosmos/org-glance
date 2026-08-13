@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# WHAT THE REPOSITORY IS MADE OF — code, comments, DOCSTRINGS, blanks, prose.
+# `make loc'.
+#
+# ELISP KEEPS ITS PROSE IN TWO PLACES and they are counted apart: a `;' comment
+# and a DOCSTRING, which is a string literal and would otherwise read as code.
+# A docstring run opens on a line whose first non-blank is `"' and closes on the
+# first line ending `"'; a multi-line string constant that is not a docstring
+# lands in the same bucket, and in this repo those are docstrings.
+#
+# A COMMENT-ONLY LINE is one whose first non-blank character opens a comment.
+# A line carrying code AND a trailing comment counts as CODE.
+set -euo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "loc: not a git repository -- SKIPPED" >&2
+  exit 0
+fi
+
+git ls-files -z | awk -v RS='\0' '
+function bucket(path) {
+  if (path ~ /^docs\// || path ~ /\.(md|org)$/) return "docs"
+  if (path ~ /^test\//)                         return "tests"
+  if (path ~ /^plugins\//)                      return "plugins"
+  if (path ~ /\.el$/)                           return "source"
+  return "other"
+}
+function marker(path) {
+  if (path ~ /\.el$/)                    return ";"
+  if (path ~ /\.(sh|yml|yaml)$/)         return "#"
+  if (path ~ /^(Makefile|Eask|tools\/)/) return "#"
+  return ""
+}
+{ files[$0] = 1 }
+END {
+  RS = "\n"
+  for (path in files) {
+    b = bucket(path); m = marker(path); lisp = (path ~ /\.el$/)
+    n = 0; c = 0; d = 0; blank = 0; indoc = 0
+    while ((getline line < path) > 0) {
+      n++
+      s = line
+      sub(/^[ \t]+/, "", s)
+      if (indoc) {
+        d++
+        if (s ~ /"[ \t]*\)*[ \t]*$/) indoc = 0
+        continue
+      }
+      if (s == "") { blank++; continue }
+      if (m != "" && substr(s, 1, length(m)) == m) { c++; continue }
+      if (lisp && s ~ /^\((cl-)?(defun|defmacro|defcustom|defvar|defconst|defmethod|defstruct|ert-deftest)/) defs++
+      # A docstring opens on its own line; one that also closes there is one line.
+      if (lisp && substr(s, 1, 1) == "\"") {
+        d++
+        if (!(s ~ /^"[^"]*"[ \t]*\)*[ \t]*$/) && !(s ~ /"[ \t]*\)*[ \t]*$/)) indoc = 1
+        continue
+      }
+    }
+    close(path)
+    lines[b] += n; comments[b] += c; docs[b] += d; blanks[b] += blank; count[b]++
+  }
+  split("source plugins tests docs other", ord, " ")
+  printf "%-9s %6s %8s %9s %8s %9s %7s\n", "", "files", "lines", "code", "comment", "docstring", "prose%"
+  for (i = 1; i <= 5; i++) {
+    b = ord[i]
+    if (count[b] == 0) continue
+    code = lines[b] - comments[b] - docs[b] - blanks[b]
+    pct  = lines[b] ? (100 * (comments[b] + docs[b]) / lines[b]) : 0
+    printf "%-9s %6d %8d %9d %8d %9d %6.1f%%\n", b, count[b], lines[b], code, comments[b], docs[b], pct
+    tf += count[b]; tl += lines[b]; tc += comments[b]; td += docs[b]; tb += blanks[b]
+  }
+  printf "%-9s %6d %8d %9d %8d %9d %6.1f%%\n", "total", tf, tl, tl - tc - td - tb, tc, td,
+         tl ? (100 * (tc + td) / tl) : 0
+  # THE TARGET IS PROSE:CODE, 10%, DOCSTRINGS INCLUDED.  checkdoc mandates one
+  # on every definition, so one line each is the floor; it is reported beside
+  # the ratio, being the room the target leaves.
+  acode = tl - tc - td - tb
+  budget = int(acode / 10)
+  prose = tc + td
+  printf "\nprose:code   %.1f%%   target 10%% (%d lines)   ", acode ? 100 * prose / acode : 0, budget
+  if (prose > budget) printf "OVER by %d\n", prose - budget
+  else                printf "under by %d\n", budget - prose
+  printf "             %d comment + %d docstring over %d definitions, %.1f lines each\n",
+         tc, td, defs, defs ? td / defs : 0
+  printf "             floor, one docstring a definition: %d lines, %.1f%%\n",
+         defs + tc, acode ? 100 * (defs + tc) / acode : 0
+}
+'

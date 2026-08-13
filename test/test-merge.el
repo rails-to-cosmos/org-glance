@@ -33,21 +33,25 @@
   "Return a newline-terminated JSONL metadata line from plist KV."
   (concat (json-serialize (apply #'list kv)) "\n"))
 
-(cl-defun org-glance-test-merge:conflict-open (ours theirs)
-  "Return open-segment text git left conflict-marked with OURS/THEIRS records.
-OURS and THEIRS are each a string of newline-terminated JSONL record lines."
-  (concat "<<<<<<< HEAD\n" ours "=======\n" theirs ">>>>>>> other-machine\n"))
-
 (ert-deftest org-glance-test:merge-gitattributes-written ()
-  "Store construction writes meta/.gitattributes with exactly the union driver
-line, and a second open never clobbers a hand-edited file (write-if-absent)."
+  "Store construction gives the union driver THE WAL'S OWN FILES AND NO OTHER,
+and a second open never clobbers a hand-edited file (write-if-absent).
+
+THE GLOBS ARE THE RESOLVER'S TWO PREDICATES (`--conflicted-jsonl-files'): the
+open segment by name and the sealed `seg-*'.  A `*.jsonl' glob handed git the
+notification family and glance's `COMPLETIONS.jsonl' as well -- the one cohort
+the gitignore cannot reach, git applying no ignore rule to a path it already
+tracks -- where a union re-lays bytes under a live fold cursor."
   (org-glance-test:with-graph graph
-    (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes")))
+    (let ((path (f-join (org-glance-graph:meta-path graph) ".gitattributes"))
+          (expected "headlines.jsonl merge=union\nseg-*.jsonl merge=union\n"))
       (should (f-exists? path))
-      (should (string= "*.jsonl merge=union\n" (f-read-text path 'utf-8)))
-      (f-write-text "*.jsonl merge=union\n# local override\n" 'utf-8 path)
+      (should (string= expected (f-read-text path 'utf-8)))
+      (should-not (member "*.jsonl merge=union"
+                          (split-string (f-read-text path 'utf-8) "\n" t)))
+      (f-write-text (concat expected "# local override\n") 'utf-8 path)
       (let ((graph (org-glance-test:reopen graph)))
-        (should (string= "*.jsonl merge=union\n# local override\n"
+        (should (string= (concat expected "# local override\n")
                          (f-read-text (f-join (org-glance-graph:meta-path graph)
                                               ".gitattributes")
                                       'utf-8)))))))
@@ -142,7 +146,7 @@ from both sides kept, positional last-wins per id."
       (f-write-text
        (concat
         (org-glance-test-merge:record :id "a" :state "" :title "A-orig" :hash "ha1" :seq 1)
-        (org-glance-test-merge:conflict-open
+        (org-glance-test:conflict-open
          (org-glance-test-merge:record :id "b" :state "TODO" :title "B" :hash "hb1" :seq 2)
          (concat (org-glance-test-merge:record :id "c" :state "" :title "C" :hash "hc1" :seq 3)
                  (org-glance-test-merge:record :id "a" :state "DONE" :title "A-newer" :hash "ha2" :seq 4))))
@@ -164,7 +168,7 @@ segment; a declined prompt errors and leaves the markers in place."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution 'ask))
-      (f-write-text (org-glance-test-merge:conflict-open
+      (f-write-text (org-glance-test:conflict-open
                      (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
                      (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
                     'utf-8 open)
@@ -185,7 +189,7 @@ signals an error and leaves the markers in place for manual handling."
   (org-glance-test:with-graph graph
     (let ((open (org-glance-graph:headline-meta-path graph))
           (org-glance-conflict-resolution nil))
-      (f-write-text (org-glance-test-merge:conflict-open
+      (f-write-text (org-glance-test:conflict-open
                      (org-glance-test-merge:record :id "a" :state "" :title "A" :hash "ha1" :seq 1)
                      (org-glance-test-merge:record :id "b" :state "" :title "B" :hash "hb1" :seq 2))
                     'utf-8 open)

@@ -1,7 +1,12 @@
-.PHONY: build test info clean lint lint-package bench
+.PHONY: build test info clean lint lint-package bench loc
 
 info:
 	eask info
+
+# WHAT THE REPOSITORY IS MADE OF, by `git ls-files'.  Elisp keeps its prose in
+# two places, so comments and DOCSTRINGS are counted apart.
+loc:
+	@tools/loc
 
 init:
 	eask install-deps

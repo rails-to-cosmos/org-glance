@@ -1,46 +1,29 @@
 # org-glance — working conventions
 
-## Documentation is org-mode, not markdown
+## Documentation
 
-All documentation authored in this repo is written in **org-mode**
-(`.org`). Cross-reference documents with **org-links**, e.g.
-`[[file:2026-07-06-performance-audit.org][Performance audit]]` or a
-section anchor `[[file:foo.org::*Design][Design]]`. Proposals live in
-`docs/proposals/` and follow the naming `YYYY-MM-DD-slug.proposed.org`
-→ renamed to `…​.done.org` when implemented. The changelog is
-`CHANGELOG.org`.
-
-## Keep doc references live
-
-After changing code, grep the docs (`docs/`, the proposals) for
-references to anything you touched and update them in the same pass. A
-proposal citing `foo.el:365` after a refactor silently misleads the
-next reader, so better use links to git commit itself alongside file +
-line.
-
-## Keep the properties reference current
-
-`docs/properties.org` lists every special drawer property, content
-marker (`#+begin_crypt`, `#+begin_pin`), and file keyword org-glance
-gives meaning to. When a feature adds, renames, or changes the
-semantics of one (e.g. a new `ORG_GLANCE_*` property or `#+begin_*`
-block), update `docs/properties.org` in the **same pass** — the rule
-that ships it, where it is set, and where it is read.
-
-## Keep the CHANGELOG current
-
-`CHANGELOG.org` is the running summary of the project's actual state
-(Keep a Changelog structure, in org; date-based versions). After
-implementing a feature or any user-visible change, add a bullet under
-the `* Unreleased` heading in the **same pass** — grouped under `**
-Added` / `** Changed` / `** Fixed` / `** Removed`. On a version bump,
-rename `Unreleased` to the new version and open a fresh `*
-Unreleased`. A user-visible change landing without a changelog entry
-is an incomplete change; internal-only refactors (no behaviour change)
-need no entry.
-
-Keep it **compact — facts only**: one line per bullet, naming the command, key,
-or file that changed. No rationale, no prose; that belongs in `docs/proposals/`.
+- Docs are org-mode (`.org`); cross-references are org-links —
+  `[[file:2026-07-06-performance-audit.org][Performance audit]]`, section anchor
+  `[[file:foo.org::*Design][Design]]`.
+- Proposal file name: `docs/proposals/YYYY-MM-DD-slug.<status>.org`, status
+  `proposed` → `done` when implemented.
+- After changing code, grep `docs/` and the proposals for references to what you
+  touched and update them in the same pass. Cite a git commit link beside file +
+  line; a bare `foo.el:365` goes stale at the next refactor.
+- `docs/properties.org` lists every special drawer property, content marker
+  (`#+begin_crypt`, `#+begin_pin`) and file keyword org-glance gives meaning to.
+  Adding, renaming or re-defining one updates it in the SAME pass — the rule that
+  ships it, where it is set, where it is read.
+- `CHANGELOG.org` is Keep a Changelog in org, date-based versions. A user-visible
+  change adds a bullet under `* Unreleased` in the same pass, grouped
+  `** Added` / `** Changed` / `** Fixed` / `** Removed`; a version bump renames
+  `Unreleased` and opens a fresh one. A user-visible change landing without an
+  entry is an incomplete change; an internal-only refactor owes none.
+- KEEP THE FACT, DROP THE ESSAY. Rules files — this one, `docs/invariants.org`,
+  `CHANGELOG.org` — carry facts, one line each: no reasoning, no history, no
+  justification. A changelog bullet names the command, key or file that changed.
+  Measurements and failure reproductions live in `docs/invariants.org`; argument
+  lives in `docs/proposals/`.
 
 ## Global invariants
 
@@ -49,34 +32,47 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 
 1. WAL is append-only; duplicates resolve by physical position (last wins);
    `seq` is storage-only — never ordering, never re-stamped.
-2. Store writes are atomic temp-then-rename; MANIFEST swap is the commit
-   point; compaction commits MANIFEST before truncating the open segment.
+2. Store writes are atomic temp-then-rename; MANIFEST swap is the commit point;
+   compaction commits MANIFEST before truncating the open segment.
 3. A valid MANIFEST is byte-stable — rebuilt only when broken.
 4. Schema tables (`org-glance-headline-metadata:fields`,
-   `org-glance-filter:table`) are the single source of truth; append new
-   metadata fields at the end only (row order = JSON key order). A list-valued
-   field MUST encode to a JSON vector — `--append`'s `json-serialize` runs
-   outside the error-demoted hook, so a nil/list encoder crashes every save.
+   `org-glance-filter:table`) are the single source of truth; append new metadata
+   fields at the end only (row order = JSON key order). A list-valued field MUST
+   encode to a JSON vector — `--append`'s `json-serialize` runs outside the
+   error-demoted hook, so a nil/list encoder crashes every save, and the
+   load-time guard checks slot ORDER rather than encode kinds.
 5. Blobs are canonical; indexes are derived and rebuildable; metadata computes
    before any write, blob lands before its WAL record. The content hash ignores
    the id/hash properties and the LOGBOOK drawers, so clock churn never
-   invalidates it. The property index is a
-   pure cache — hash-guarded with O(N) blob fallback, dropped by reindex; never
-   trust it in a durable write. The `org-glance-material:` body link is
-   canonical; `relations` AND `links` metadata are projections, never written
-   independently.
+   invalidates it. The property index is a pure cache — hash-guarded with O(N)
+   blob fallback, dropped by reindex; never trust it in a durable write. The
+   `org-glance-material:` body link is canonical; `relations` AND `links`
+   metadata are projections, never written independently. Occurrence snapshots
+   are canonical content, GC'd with the id dir at compaction.
 6. Ids are path-safety-checked via `error` (never `cl-assert`) before any
    filesystem use.
 7. Single-user, no locking; staleness detection uses the full store snapshot
    (mtime + size + segment names), never mtime alone.
 8. Git conflicts heal by union merge; `.eld` sidecar merges are commutative and
-   non-inflating (earliest/latest/`max`, never a sum).
+   non-inflating (earliest/latest/`max`, never a sum), the property index being
+   the deliberate lossy-floor exception. The jsonl resolver is the WAL's alone,
+   named as an ALLOWLIST — the open segment and `seg-<gen>.jsonl` — so every
+   other JSONL family in `meta/` is out by construction: the notification queue,
+   its generations, and glance's `COMPLETIONS.jsonl`. The NAMES are the handle, a
+   git-mangled MANIFEST listing nothing to trust with the resolver running ahead
+   of `--reconcile-manifest`. THE SAME ALLOWLIST IS WHAT GIT IS HANDED:
+   `--ensure-gitattributes` writes `headlines.jsonl` and `seg-*.jsonl` off those
+   two predicates, where a `*.jsonl` glob gave the union driver the very families
+   the resolver excludes — and on the one cohort the gitignore cannot reach, git
+   applying no ignore rule to a tracked path.
 9. Side-index hooks, view refresh, occurrence snapshots and the plugin loader
    are error-demoted — they may never break a save, an open, a display or
    init; `org-glance-plugin-enable` is the deliberate loud counterpart.
 10. View coherence is flag-stale + pull-refresh; when freshness is in doubt,
     rebuild.
 11. Never clobber unsaved user edits: `user-error` or skip, never overwrite.
+    `material:delete` names unsaved edits in its consent prompt and tombstones
+    BEFORE discarding the buffer.
 12. Store content parses in temp buffers via `org-glance--org-mode`
     (`delay-mode-hooks`, `tab-width` 8); never `find-file` sources to read.
 13. Tags are canonical downcased interned symbols at the boundary; deserialized
@@ -89,7 +85,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     persistent secrecy annotation. Secrecy is per-block — text between blocks
     stays plaintext and indexed, even for an encrypted headline. Materialize
     opens SEALED; decryption is explicit and hardens the buffer before any
-    plaintext lands.
+    plaintext lands. An encrypted material buffer never snapshots, and both
+    encrypt paths purge existing snapshots.
 15. Table Title column is mandatory — never removable/hideable; the rule is
     spelled once, in `org-glance-table--mandatory-column?` (remove-column
     refuses it, the prompt never offers it, compose-columns un-hides it).
@@ -98,7 +95,7 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     order + sort persist separately per filter.
 17. Transient filters (`:where`, `:refers-to`, `:id-any` — table-flagged,
     judged by `org-glance-filter:transient?`) never persist per-filter state:
-    no overview cache, no table config, no column schema.  Sole exception:
+    no overview cache, no table config, no column schema. Sole exception:
     explicit `C-c C-c` in a reference table saves the layout under a scope
     key (anchor id / tag pair, per direction) in `table-refs.eld` — never
     under the filter identity.
@@ -107,7 +104,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     a scoped entry replaces the whole column set (never merges with the
     per-tag schema); scope-less relation views render defaults, never the
     ":none:" entry; pair order (anchor tag > row tag) single-sourced in
-    `org-glance-table--refs-tag-pairs`.
+    `org-glance-table--refs-tag-pairs`, the mirrored pair being a DIFFERENT
+    scope.
 19. The table is a pure projection: every `--act-*` mutation delegates to the
     `org-glance-material:` layer; bulk ops degrade per-row, never batch-abort.
 20. Overview headings are self-sufficient, metadata-only: state, priority,
@@ -132,7 +130,8 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
 25. Links are addressed by their enclosing list-item path plus their own label
     — description, else the `KEY:` text introducing them in their item, else
     the raw link (the link's own item label is dropped); the picker descends
-    one component per prompt and breaks path ties by target.
+    one component per prompt, takes a lone candidate at any depth, and breaks
+    exhausted-path ties by target.
 26. Plugins (`org-glance-plugins`) load error-demoted, self-register their UI
     remove-then-append, and never unload.
 27. `after-save-hook` depth order is load-bearing: `material:sync` (0) runs
@@ -160,69 +159,135 @@ with evidence anchors: [[file:docs/invariants.org][docs/invariants.org]].
     `graph:insert` for records and tombstones alike, and the fold's cursor moves
     always AFTER that append.
 34. The fold moves a CURSOR and never rewrites `EXTERNAL.jsonl`:
-    `meta/EXTERNAL.cursor` is one decimal BYTE offset, read to the file's end
-    and written temp-then-rename after the records land. Bytes because the
-    writer appends bytes and a fold consumes whole lines; a cursor absent,
-    garbled or past EOF reads as 0, and none is guarded with `max`. With no
-    mutation there is nothing for two Emacsen to serialise (inv 7). Growth is
-    ROTATION: over `external-max-bytes` with the cursor caught up, cursor then
-    file rename to `EXTERNAL-<gen>`, a generation drained ahead of the live file
-    and never deleted on the pass that made it.
+    - `meta/EXTERNAL.cursor` is `OFFSET WINDOW PREFIX` — one decimal BYTE offset
+      plus two sha1s of the bytes it names, spelled positionally; one plist's
+      `:offset`/`:window`/`:prefix` in code. BYTES, the writer appending bytes
+      where Emacs reads characters and a fold consuming whole lines. Written
+      temp-then-rename after the records land (inv 33's crash rule).
+    - WINDOW is `[max(0, OFFSET - 4096), OFFSET)` and the idle poll verifies it;
+      PREFIX is `[0, OFFSET)` and every fold that consumes anything verifies it.
+      `--external-digests` mints and verifies both, so the two sides cannot
+      drift.
+    - FIVE refusals read as 0: a cursor absent, garbled, carrying fewer than TWO
+      digests, naming bytes that no longer hash to what it recorded, or naming
+      MORE BYTES THAN THE FILE HOLDS. None is guarded with `max`. Past-the-end is
+      its own test, taken before anything is hashed — `--external-digests`
+      CLAMPS, so a bogus offset hashes exactly what the size does.
+    - ONE READ answers the whole fold: `--external-bytes` puts the file in a
+      unibyte buffer once, `--external-tail` verifies the claimed pair and mints
+      the new one out of THAT buffer; they ride `:marks` as (PATH OFFSET DIGESTS)
+      and `--set-external-cursor` hashes nothing. An APPEND is not caught and
+      must not be — the prefix a fold measured is stable while it is measured.
+    - NOTHING IRREVERSIBLE HAPPENS ON BOUNDED EVIDENCE: the POLL is bounded, the
+      FOLD and the RETIREMENT are exact.
+    - ONE QUESTION PER SOURCE PER CYCLE: `--external-survey` reads each source's
+      cursor once, asks `--external-drained?` — the offset is the SIZE, the byte
+      before it is a NEWLINE, the window still hashes — and reads the file WHOLE
+      only where that bound says bytes may be owed. Poll and fold read that one
+      survey. The newline assertion is the POLL's alone.
+    - KNOWN RESIDUAL: a same-length edit further back than the window passes the
+      bound whoever asks it. On the LIVE file it lasts until the writer's next
+      append; on a ROTATED GENERATION, which nothing appends to, until ROTATION,
+      which asks `--external-folded-whole?` over the whole prefix and DROPS THE
+      CURSOR of a candidate it refuses (`--external-refold`). A candidate the
+      survey read whole is not hashed twice. The window WIDTH is constrained
+      upward and free downward; narrowing costs promptness.
+    - A READ THAT FAILED IS NOT AN ANSWER: the buffer is the file or FN is not
+      called, and four shapes signal — absent, unreadable, a DIRECTORY wearing a
+      generation's name, a dangling symlink. `--external-cursor` still swallows
+      its own `file-error` on purpose, the two reads refusing in opposite
+      directions.
+    - With no mutation there is nothing for two Emacsen to serialise (inv 7).
+    - Growth is ROTATION, fired on the OFFSET THE FOLD TOOK: cursor first, then
+      the file, renamed to `EXTERNAL-<gen>`. A generation is drained ahead of the
+      live file and is never retired on the pass that made it.
+    - ROTATION MOVES A SPENT GENERATION; IT NEVER UNLINKS ONE.
+      `--external-retire` renames it into `meta/spent/` — cursor first, file
+      after — and NO CODE PATH REMOVES WHAT IT LEFT
+      (`org-glance-graph:clear-spent-external`, or `rm -r`, is the reader's own
+      door). The destination is beside the files it holds, so the rename is ONE
+      atomic operation; `meta/` is already off every org walk; and
+      `directory-files` cannot name a subdirectory, which takes a retired
+      generation out of `--external-sources` with no filter to forget. A
+      destination that already exists is refused.
+    - A RETIRED GENERATION IS OUT OF THE FOLD'S REACH. The repair is moving the
+      `.jsonl` ALONE back into `meta/`, where it carries no cursor and the next
+      fold takes it whole; that repair strands the old cursor under `spent/`, so
+      the next retirement finds its destination taken and an
+      `EXTERNAL-<gen>.cursor` is left in `meta/` for good — inert.
+    - A GENERATION IS RETIRED ON ITS OWN CURSOR: its position and its size say
+      nothing, one that is not FOLDED WHOLE stays however old it is, and ABSENCE
+      OF EVIDENCE NEVER LICENSES A MOVE. Position still spares the newest.
+    - THE FAMILY IS GIT-IGNORED (`--ensure-gitignore`: the live file, every
+      generation, every cursor, `meta/spent/`) because it is a LOCAL HINT between
+      the local daemon and the local Emacs — what crosses machines is the WAL
+      RECORD the fold produces. THE IGNORE REACHES A STORE THAT NEVER TRACKED THE
+      FAMILY AND NO OTHER, so on every store made before it the union-merge door
+      stays open until a human runs `git rm --cached`, and the digest is what
+      stands there. The retrofit APPENDS the lines an existing `.gitignore`
+      lacks; the cost is hazard H3. Nothing in the suite asserts the untrack
+      half.
 
 ## Known hazards
 
 Costs the code ships WITH — lettered, because an invariant is a rule a change
-must preserve and these are what today's design gives up. Each was reproduced by
-probe and pinned by a test in `test/test-external.el`, so closing one turns its
-case red. An OPEN entry states its cost, what would close it and why it stands;
-a CLOSED one keeps its letter and states what closed it. A letter is never
-reused. Full statements, with the evidence:
+must preserve and these are what today's design gives up. A letter is never
+reused. Each was reproduced by probe and is pinned by a case in
+`test/test-external.el`, so closing one turns its case red. An OPEN entry states
+its cost, what would close it and why it stands; a CLOSED one keeps its letter
+and states what closed it. Full statements:
 [[file:docs/invariants.org][docs/invariants.org]].
 
 H1. CLOSED 2026-08-12 by inv 34 — the external fold's truncate race ate a
-    tombstone. The compare-and-swap that preceded it narrowed the window and
-    left an inner one (`f-write-text` is `write-region` with `append` nil, so a
-    line appended between the guard's own read and write is destroyed); the
-    cursor closes it by removing the rewrite, and takes the byte-identical
-    residual with it.
+    tombstone. The compare-and-swap that preceded it left an inner window
+    (`f-write-text` is `write-region` with `append` nil, so a line appended
+    between the guard's own read and write is destroyed); the cursor closes it by
+    removing the rewrite, and the prefix digest answers the cursor's own price.
+    Of its two SYNCED causes the conflict resolver is shut by structure (inv 8)
+    and the git union merge only where git does not already track the family
+    (inv 34, at the cost of H3) — on a store that predates the ignore it is live,
+    and the digest is what stands there.
 H2. A folded delete is undone by the id's open material buffer. The tombstone
     arm touches no buffer, so the next save's `material:sync` appends a LIVE
     record and writes the blob back; the occurrence history stays behind. Open
     because a fold runs in the BACKGROUND, and `material:delete`'s
     consent-when-dirty guard (inv 11) exists because discarding a dirty buffer
     needs a human.
+H3. A daemon HERE cannot notify an Emacs THERE. The notification family is
+    git-ignored — once git stops tracking it, which on a store made before the
+    ignore takes a `git rm --cached` — so machine B folds nothing A's daemon
+    announced. Free where the daemon and Emacs share a machine, which is what
+    `glance` is built for; a per-host `EXTERNAL-<host>.jsonl` would close it and
+    is written up as NOT TAKEN. A reader who has the topology undoes it per store
+    with `git add -f`, and takes the merge door back with it.
 
 ## Fix — and prevent — the whole class
 
-A reported problem is one sample of a class. When you fix it, sweep the codebase
-for every instance of the same class and fix them in the same pass — a redundant
-point reset, a duplicated computation, an O(N²) idiom, a rhetorical tic in prose.
-State the class, find all sites, fix together, verify green.
+A reported problem is one sample of a class. State the class, find all its sites,
+fix them in the same pass, verify green — a redundant point reset, a duplicated
+computation, an O(N²) idiom, a rhetorical tic in prose.
 
-Prevent it going forward:
-- **Authors / actors:** write the general form correctly the first time; adding a
-  fresh instance of a known class is a regression.
-- **Reviewers:** flag the class a change belongs to and scan for its other
-  instances, so one fix generalizes and the class stops recurring.
+- **Authors / actors:** write the general form correctly the first time; a fresh
+  instance of a known class is a regression.
+- **Reviewers:** name the class a change belongs to and scan for its other
+  instances.
 
 ## Docstrings & comments
 
-Comment density stays near 3% of lines. A comment earns its line only as: a
-hazard or ordering constraint the code cannot state, a pointer to the invariant
-that owns the rule (`;; invariant 27: sync runs before --decrypt-buffer.`), a
-deliberate-difference note ("spelled twice on purpose"), or "why not the obvious
-thing". Each is ONE line. A rule lives in the invariant list once; a paragraph
-restating it in a comment is a second copy that drifts, and a sentence restating
-the line under it is deleted on sight.
-
-Cut genuine bloat — over-explanation, redundancy, three sentences where one
-works. Keep docstrings proper English and checkdoc-valid (they are public API,
-shown by `C-h f`): a complete imperative first line, arg names in CAPS, facts
-intact. Terse, but complete.
-
-Never use the "negation-reveal" pattern ("not X, but Y" / "it's not just A,
-it's B" / "this isn't about A, it's about B") in any generated text — docs,
-comments, commit messages, prose. State the point directly.
+- Comment density stays near 3% of lines.
+- A comment earns its line only as one of four, each ONE line: a hazard or
+  ordering constraint the code cannot state; a pointer to the invariant that owns
+  the rule (`;; invariant 27: sync runs before --decrypt-buffer.`); a
+  deliberate-difference note ("spelled twice on purpose"); "why not the obvious
+  thing".
+- A rule lives in the invariant list once. A comment restating it is a second
+  copy that drifts; a sentence restating the line under it is deleted on sight.
+- Docstrings are proper English and checkdoc-valid (public API, shown by
+  `C-h f`): a complete imperative first line, arg names in CAPS, facts intact.
+  Terse, but complete.
+- Never the "negation-reveal" pattern ("not X, but Y" / "it's not just A, it's
+  B") in any generated text — docs, comments, commit messages, prose. State the
+  point directly.
 
 ## Code conventions
 
