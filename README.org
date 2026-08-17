@@ -5,7 +5,7 @@
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-Thin metadata layer, query engine and UI for [[https://www.gnu.org/savannah-checkouts/gnu/emacs/emacs.html][Emacs]] [[https://orgmode.org/][org-mode]].
+Thin [[https://orgmode.org/][org-mode]] metadata layer, query engine and UI for [[https://www.gnu.org/savannah-checkouts/gnu/emacs/emacs.html][Emacs]].
 
 * Install
 
@@ -30,9 +30,9 @@ Entrypoint is =org-glance-transient= (=C-x j=).
 write an ordinary headline, =C-c C-c=:
 
 #+begin_src org
-,* TODO [#A] Kebena Decaf :coffee:
+,* TODO [#A] Kopi Luwak :coffee:
 DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
-Light roast, very floral.  [[https://example.com][Homepage]]
+Passed through a civet.  Worth every cent, apparently.  [[https://example.com][Homepage]]
 #+end_src
 
 ** 2. Browse a tag
@@ -41,8 +41,8 @@ Light roast, very floral.  [[https://example.com][Homepage]]
 todo states:
 
 #+begin_example
-State  Title         Scheduled         Deadline          Pri  Tags
-TODO   Kebena Decaf  <2026-08-01 Sat>  <2026-08-10 Mon>  A    coffee
+State  Title       Scheduled         Deadline          Pri  Tags
+TODO   Kopi Luwak  <2026-08-01 Sat>  <2026-08-10 Mon>  A    coffee
 #+end_example
 
 =O= toggles to the org-text *overview* — a plain org buffer, so folding,
@@ -50,7 +50,7 @@ TODO   Kebena Decaf  <2026-08-01 Sat>  <2026-08-10 Mon>  A    coffee
 overview heading is self-sufficient:
 
 #+begin_src org
-,* TODO [#A] Kebena Decaf :coffee:
+,* TODO [#A] Kopi Luwak :coffee:
 DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 - [[https://example.com][Homepage]]
 #+end_src
@@ -116,8 +116,8 @@ and =C-c += in the table now offers a =Roasted by= column with the target
 titles:
 
 #+begin_example
-State  Title         ...  Roasted by
-TODO   Kebena Decaf  ...  Manhattan Coffee Roasters
+State  Title       ...  Roasted by
+TODO   Kopi Luwak  ...  Manhattan Coffee Roasters
 #+end_example
 
 In a materialized buffer:
