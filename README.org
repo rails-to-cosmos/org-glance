@@ -35,7 +35,7 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 Passed through a civet.  [[https://example.com][Homepage]]
 #+end_src
 
-** Browse a tag
+** Overview
 
 =C-x j o= → pick a tag → its *table*: one row per headline, colour-coded
 todo states:
