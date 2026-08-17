@@ -39,8 +39,7 @@ write an ordinary headline, =C-c C-c=:
 
 ** Overview
 
-=C-x j o= → pick a tag → its *table*: one row per headline, colour-coded
-todo states:
+=C-x j o= → pick a tag → its *table*: one row per headline, colour-coded todo states:
 
 #+begin_example
 | State | Title      | Scheduled        | Deadline         | Pri | Tags   |
@@ -48,9 +47,7 @@ todo states:
 | TODO  | Kopi Luwak | <2026-08-01 Sat> | <2026-08-10 Mon> | A   | coffee |
 #+end_example
 
-=O= toggles to the org-text *overview* — a plain org buffer, so folding,
-=C-x j a= (agenda) and link clicking all behave exactly as in org.  Each
-overview heading is self-sufficient:
+=O= toggles to the org-text *overview* — a plain read-only org buffer, so folding, =C-x j a= (agenda) and link clicking all behave exactly as in org. Each overview heading is self-sufficient:
 
 #+begin_src org
 ,* TODO [#A] Kopi Luwak :coffee:
@@ -92,31 +89,23 @@ in that tag's overview / table to edit it directly).
 
 ** Edit a headline
 
-=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file
-opens in a normal org buffer.  Everything org can do works here — this IS
-org-mode.  =C-x C-s= saves and re-indexes; open views refresh on their next
-display.  (The =:ORG_GLANCE_ID:= drawer is concealed and protected: hand
-edits to it revert on save with a warning.)
+=RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file opens in a normal org buffer. Everything org can do works here. =C-x C-s= saves and re-indexes; open views refresh on their next display.  (The =:ORG_GLANCE_ID:= drawer is concealed and protected: hand edits to it revert on save with a warning.)
 
 ** Relations
 
-In a materialized buffer — or while capturing (step 1) — =@= at the start of
-a word prompts for another headline and inserts a link to it; =C-u @= also
-asks a reference *kind*:
+In a materialized buffer — or while capturing (step 1) — =@= at the start of a word prompts for another headline and inserts a link to it; =C-u @= also asks a reference *kind*:
 
 #+begin_src org
-roasted by [[org-glance-material:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
+roasted by [[glance:0e904834?kind=roasted-by][Manhattan Coffee Roasters]]
 #+end_src
 
-Clicking the link opens the roaster; the graph indexes it as a typed edge,
-and the views pick it up.  The overview heading gains a relation line:
+Clicking the link opens the roaster; the graph indexes it as a typed edge, and the views pick it up. The overview heading gains a relation line:
 
 #+begin_src org
 - roasted by [[org-glance-material:0e904834][Manhattan Coffee Roasters]]
 #+end_src
 
-and =C-c += in the table now offers a =Roasted by= column with the target
-titles:
+and =C-c += in the table now offers a =Roasted by= column with the target titles:
 
 #+begin_example
 State  Title       ...  Roasted by
@@ -131,19 +120,11 @@ In a materialized buffer:
 | =C-u @= | same, plus a reference kind (=roasted by=, …)    |
 | =C-c @= | table of everything this headline relates to   |
 
-A relation table lists both directions in one view — the headlines this one
-refers to AND the ones referring to it — and its =Relation= column names each
-row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or
-the overview opens the same view for that headline.
+A relation table lists both directions in one view — the headlines this one refers to AND the ones referring to it — and its =Relation= column names each row's direction and kind (=> roasted by=, =<=).  =@= on a row in the table or the overview opens the same view for that headline.
 
-Relation tables open with the default layout; edits to it are not saved
-automatically (an echo-area nudge reminds you) — =C-c C-c= applies the layout
-(columns, order, sort) to a scope of your choice: this headline, or a tag pair
-(=coffee → roaster=, the anchor's tag first).  Every later relation table
-matching the scope restores it.
+Relation tables open with the default layout; edits to it are not saved automatically (an echo-area nudge reminds you) — =C-c C-c= applies the layout (columns, order, sort) to a scope of your choice: this headline, or a tag pair (=coffee → roaster=, the anchor's tag first).  Every later relation table matching the scope restores it.
 
-A link can also address a whole view:
-=[[org-glance-overview:coffee?done=nil][Active coffees]]=.
+A link can also address a whole view: =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
 
 ** Encryption
 
@@ -155,11 +136,7 @@ bank: 1234-5678
 ,#+end_crypt
 #+end_src
 
-On disk it is ciphertext, and a materialized headline opens THAT WAY --
-no password prompt until you ask for one.  Unseal with =C-c #= in the
-buffer, or materialize with the transient's =-d= switch to open decrypted;
-then it re-seals on every save (auto-save and backups disabled).  Text
-OUTSIDE the blocks stays public and searchable.
+On disk it is ciphertext, and a materialized headline opens THAT WAY -- no password prompt until you ask for one.  Unseal with =C-c #= in the buffer, or materialize with the transient's =-d= switch to open decrypted; then it re-seals on every save (auto-save and backups disabled).  Text OUTSIDE the blocks stays public and searchable.
 
 =C-c #= is the only crypt key; what it does depends on where point is:
 
@@ -173,11 +150,7 @@ OUTSIDE the blocks stays public and searchable.
 
 ** Repeating headlines
 
-A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With
-=org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline
-=:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins), each completion snapshots the done
-state before org resets it; the table's =Rep= column marks repeaters, and
-=l= (=C-c h= in the buffer) opens any past occurrence read-only.
+A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With =org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline =:ORG_GLANCE_REPEAT_HISTORY_DEPTH:= wins), each completion snapshots the done state before org resets it; the table's =Rep= column marks repeaters, and =l= (=C-c h= in the buffer) opens any past occurrence read-only.
 
 * Customize
 
