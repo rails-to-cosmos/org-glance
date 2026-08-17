@@ -31,8 +31,8 @@ write an ordinary headline, =C-c C-c=:
 
 #+begin_src org
 ,* TODO [#A] Kopi Luwak :coffee:
-,  SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>
-,  Passed through a civet.  [[https://example.com][Homepage]]
+  SCHEDULED: <2026-08-01 Sat> DEADLINE: <2026-08-10 Mon>
+  Passed through a civet.  [[https://example.com][Homepage]]
 #+end_src
 
 ** Overview
