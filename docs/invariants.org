@@ -1,384 +1,338 @@
 #+TITLE: Global invariants
 #+DATE: 2026-07-18
 
-Rules the whole codebase enforces; every change must preserve them.  Each entry:
-the rule, where the code enforces it (symbol anchors, stable across refactors),
-what breaks on violation, and the measurements and reproductions that pin it.
-Compact index in [[file:../CLAUDE.md][CLAUDE.md]].  Facts and evidence only —
-argument belongs in [[file:proposals][docs/proposals/]].
+Rules the whole codebase enforces; every change must preserve them.  Each entry: the
+rule, the symbol anchors enforcing it, what breaks on violation, and the measurements
+and reproductions that pin it.  Compact index in [[file:../AGENTS.md][AGENTS.md]];
+argument in [[file:proposals][docs/proposals/]].
 
 * Store
 
-1. *Append-only WAL, positional last-wins.*  Duplicate ids resolve by physical
-   position (oldest→newest segments, last line wins); =seq= is a storage-only
-   ordinal — never read for ordering, never in headline metadata, never
-   re-stamped by compaction.  Enforced: =org-glance-graph--latest-records=,
-   =org-glance-graph--heal=.  Violation: union-merged stores resolve the wrong
-   record; heal misclassifies debris.
+1. *Append-only WAL, positional last-wins.*  Duplicate ids resolve by physical position
+   (oldest→newest segments, last line wins); =seq= is storage-only — never ordering,
+   never in headline metadata, never re-stamped by compaction.  Enforced:
+   =org-glance-graph--latest-records=, =org-glance-graph--heal=.  Violation:
+   union-merged stores resolve the wrong record; heal misclassifies debris.
 
 2. *Atomic writes; MANIFEST swap is the commit point.*  Every store write is
-   temp-then-rename (=org-glance-graph--atomic-write=, =file-precious-flag= on
-   blobs); compaction commits the MANIFEST *before* truncating the open segment.
-   Violation: crash/ENOSPC truncates data or resurrects a tombstoned headline.
+   temp-then-rename (=org-glance-graph--atomic-write=, =file-precious-flag= on blobs);
+   compaction commits the MANIFEST *before* truncating the open segment.  Violation:
+   crash/ENOSPC truncates data or resurrects a tombstoned headline.
 
-3. *MANIFEST byte-stability.*  A valid MANIFEST is never rewritten; rebuilt only
-   when broken (=org-glance-graph--manifest-broken?=).  Violation: churn that
-   fights compaction and generates sync conflicts.
+3. *MANIFEST byte-stability.*  A valid MANIFEST is never rewritten; rebuilt only when
+   broken (=org-glance-graph--manifest-broken?=).  Violation: churn that fights
+   compaction and generates sync conflicts.
 
 4. *Schema tables are the single source of truth.*
-   =org-glance-headline-metadata:fields= drives constructor + serialize +
-   deserialize (load-time guard against the struct; row order IS the JSON key
-   order — append new fields at the end only); =org-glance-filter:table= drives
-   keys + predicate + canonicalisation.  A list-valued field MUST encode to a
+   =org-glance-headline-metadata:fields= drives constructor + serialize + deserialize;
+   row order IS the JSON key order, so new fields append at the END only, and the
+   load-time guard checks slot ORDER against the struct.  =org-glance-filter:table=
+   drives keys + predicate + canonicalisation.  A list-valued field MUST encode to a
    JSON *vector* (=org-glance-graph--encode= builds =vector=s): =--append= calls
-   =json-serialize= OUTSIDE the error-demoted hook, so a nil/list encoder
-   crashes *every* save, and the load-time guard checks slot ORDER rather than
-   encode kinds.  Violation: silent drift (always-nil field, match-everything
-   filter), broken on-disk byte order, or an unsaveable store.
+   =json-serialize= OUTSIDE the error-demoted hook, so a nil/list encoder crashes
+   *every* save.  Violation: silent drift (always-nil field, match-everything filter),
+   broken on-disk byte order, an unsaveable store.
 
-5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical;
-   metadata, caches and sidecars are rebuildable (=org-glance-reindex=).  Write
-   ordering: metadata computed first (fail before any write), blob before WAL
-   append (=org-glance-graph:add=).  The property index
-   (=cache/property-index.eld=) is a PURE derived cache: every read is
-   content-hash-guarded with an O(N) blob-parse fallback, a gone id is never
-   cached, and =org-glance-reindex= drops it — no caller may trust an index
-   value in a durable write/delete without that fallback
-   (=org-glance-property-index--entry=).  The content hash covers what the
-   headline SAYS: the id/hash bookkeeping properties
+5. *Canonical blobs, derived indexes.*  =data/<id>/data.org= is canonical; metadata,
+   caches and sidecars are rebuildable (=org-glance-reindex=).  Write order: metadata
+   first (fail before any write), blob before WAL append (=org-glance-graph:add=).  The
+   property index (=cache/property-index.eld=) is a PURE derived cache — every read
+   content-hash-guarded with an O(N) blob-parse fallback
+   (=org-glance-property-index--entry=), a gone id never cached, dropped by
+   =org-glance-reindex=; never trust an index value in a durable write/delete without
+   that fallback.  The content hash strips the id/hash properties
    (=org-glance-headline:hash-ignore-properties=) and the LOGBOOK drawers
-   (=org-glance-headline:hash-ignore-drawers=) are stripped before hashing, so
-   clocking in and out never churns the hash or the caches keyed on it.  Relation
-   edges follow the same rule: the =org-glance-material:= body link is canonical;
-   the =relations= AND =links= metadata fields are projections recomputed on
-   save/reindex.  Occurrence snapshots (=data/<id>/occurrences/=) are canonical
-   content — immutable files GC'd with the id dir at compaction, so a tombstoned
-   id's snapshots linger until then.  Violation: unrebuildable facts or
-   half-states.
+   (=org-glance-headline:hash-ignore-drawers=), so clocking never churns it or the
+   caches keyed on it.  The =org-glance-material:= body link is canonical; =relations=
+   AND =links= metadata are projections recomputed on save/reindex.  Occurrence
+   snapshots (=data/<id>/occurrences/=) are canonical content — immutable, GC'd with
+   the id dir at compaction, so a tombstoned id's snapshots linger until then.
+   Violation: unrebuildable facts or half-states.
 
-6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and
-   =..=) via =error= — never =cl-assert=, which can be compiled out — before
-   feeding any path (=org-glance-graph:headline-data-path=).  Violation: a
-   hand-edited id escapes the store (traversal; an empty id resolves to the
-   data root, which compaction GC would delete).
+6. *Path safety before filesystem.*  An id is checked (reject empty, =/= and =..=) via
+   =error= — never =cl-assert=, which can be compiled out — before feeding any path
+   (=org-glance-graph:headline-data-path=).  Violation: a hand-edited id escapes the
+   store (traversal; an empty id resolves to the data root, which compaction GC would
+   delete).
 
 7. *Single user, no locking.*  Cross-process staleness is detected by the store
-   snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime
-   alone (=org-glance-graph--store-snapshot=); in-process mutations call
-   =--invalidate-cache= explicitly.  Violation: same-second external compaction
-   serves deleted data as live.  Two Emacsen folding one =EXTERNAL.jsonl= need
-   no lock: inv 34 leaves them nothing to serialise.
+   snapshot — open-segment mtime + SIZE + sealed-segment NAME list, never mtime alone
+   (=org-glance-graph--store-snapshot=); in-process mutations call =--invalidate-cache=
+   explicitly.  Violation: same-second external compaction serves deleted data as live.
+   Two Emacsen folding one =EXTERNAL.jsonl= need no lock: inv 34 leaves them nothing to
+   serialise.
 
-8. *Git conflicts heal by union merge.*  Gated by
-   =org-glance-conflict-resolution= (ask/union/nil).  THE RESOLVER IS THE WAL'S
-   AND IT NAMES IT POSITIVELY: =--conflicted-jsonl-files= takes the open segment
-   and the sealed =seg-<gen>.jsonl= and nothing else, so every other JSONL family
-   under =meta/= is out by construction — =EXTERNAL.jsonl=, its rotated
-   generations (retired ones under =meta/spent/= included), and glance's
-   =COMPLETIONS.jsonl=, which the previous exclusion-by-name did not cover.  A
-   notification QUEUE is not a segment, and the resolver's own
-   =f-read-text=/=f-write-text= would re-lay the bytes a fold cursor measured
-   (inv 34's second door).  The NAMES are the handle: the MANIFEST is unusable
-   here, this running at open ahead of =--reconcile-manifest=.  Markers left in a
-   notification file cost their own lines and no others, the fold skipping a line
-   no JSON reader can parse.  Measured: opening a graph over a 1 MiB notification
-   file is 2.2 ms with the rule and 31.1 ms without.
+8. *Git conflicts heal by union merge.*  Gated by =org-glance-conflict-resolution=
+   (ask/union/nil).  THE RESOLVER IS THE WAL'S AND NAMES IT POSITIVELY:
+   =--conflicted-jsonl-files= takes the open segment and the sealed =seg-<gen>.jsonl=
+   and nothing else, so every other JSONL family under =meta/= is out by construction —
+   =EXTERNAL.jsonl=, its rotated generations (retired ones under =meta/spent/=
+   included), glance's =COMPLETIONS.jsonl=.  The resolver's own
+   =f-read-text=/=f-write-text= would re-lay the bytes a fold cursor measured (inv 34's
+   second door).  The NAMES are the handle: the MANIFEST is unusable here, this running
+   at open ahead of =--reconcile-manifest=.  A marker left in a notification file costs
+   its own line and no others, the fold skipping what no JSON reader can parse.
+   Measured: opening a graph over a 1 MiB notification file, 2.2 ms with the rule and
+   31.1 ms without.
 
    =.gitattributes= is written only if absent, naming THE SAME TWO PREDICATES —
-   =headlines.jsonl= and =seg-*.jsonl= — so the allowlist reaches the rule git
-   obeys and not only the reader; a =*.jsonl= glob gave the union driver every
-   excluded family, on the one cohort =--ensure-gitignore= cannot help (inv 34).
-   A store already carrying the wide glob keeps it until a hand edit.
+   =headlines.jsonl= and =seg-*.jsonl= — so the allowlist reaches the rule git obeys
+   and not only the reader; a =*.jsonl= glob gave the union driver every excluded
+   family, on the one cohort =--ensure-gitignore= cannot help (inv 34).  A store
+   already carrying the wide glob keeps it until a hand edit.
 
-   =.eld= sidecar merges are commutative and non-inflating —
-   earliest/latest/=max=, never a sum; a =nil= side never shadows a populated one
-   (=org-glance--read-eld=, =org-glance-tag-metrics--merge-plists=).  The
-   property-index sidecar is the deliberate exception, reading via the lossy
-   =--read-eld= floor rather than a union, a conflict self-healing on the next
-   content-hash miss.  See
+   =.eld= sidecar merges are commutative and non-inflating — earliest/latest/=max=,
+   never a sum; a =nil= side never shadows a populated one (=org-glance--read-eld=,
+   =org-glance-tag-metrics--merge-plists=).  The property-index sidecar is the
+   deliberate exception, reading via the lossy =--read-eld= floor, a conflict
+   self-healing on the next content-hash miss.  See
    [[file:proposals/2026-07-15-eld-sidecar-conflict-resolution.done.org][eld-sidecar-conflict-resolution]].
 
 * Hooks and views
 
 9. *Soft paths are error-demoted.*  Side-index hooks
    (=org-glance-graph-before-append-functions=,
-   =org-glance-graph-after-open-functions=), view refresh, the occurrence
-   snapshot (=org-glance-material:snapshot-on-repeat=) and the PLUGIN loader
-   (=org-glance--load-plugins=) all run under demoted errors — a sidecar, a
-   reload or a third-party plugin may never break a save, an open, a display
-   or init.  The deliberate loud counterpart is =org-glance-plugin-enable=.
+   =org-glance-graph-after-open-functions=), view refresh, the occurrence snapshot
+   (=org-glance-material:snapshot-on-repeat=) and the PLUGIN loader
+   (=org-glance--load-plugins=) run under demoted errors — a sidecar, a reload or a
+   third-party plugin may never break a save, an open, a display or init.  The
+   deliberate loud counterpart is =org-glance-plugin-enable=.
 
-10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale
-    (boolean; no I/O, never touches point); views re-fill at display boundaries;
-    freshness checks are strict — when in doubt, rebuild.  Enforced:
-    =org-glance-view=, =org-glance-material:sync=.  Violation: serving stale is
-    the only real bug.
+10. *PUSH-flag + PULL-refresh coherence.*  A save only flags open views stale (boolean;
+    no I/O, never touches point); views re-fill at display boundaries; freshness checks
+    are strict — when in doubt, rebuild.  Enforced: =org-glance-view=,
+    =org-glance-material:sync=.  Violation: serving stale is the only real bug.
 
-11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a
-    modified buffer must =user-error= or skip that row
-    (=org-glance-material--replace-headline=, =:retag= — its =user-error= trapped
-    by the table's =org-glance-table--act-deltag=, bulk todo); a modified
-    file-backed view is flagged stale, never reverted.  Deletion
-    (=org-glance-material:delete=) names unsaved edits in its consent prompt
-    and tombstones BEFORE discarding the buffer, so a failed append never
-    costs the only unsaved copy.  The external fold discards nothing, having
-    no human to ask; the accepted cost is
+11. *Never clobber unsaved edits.*  Any operation rewriting a blob open in a modified
+    buffer must =user-error= or skip that row (=org-glance-material--replace-headline=,
+    =:retag= — its =user-error= trapped by the table's =org-glance-table--act-deltag=,
+    bulk todo); a modified file-backed view is flagged stale, never reverted.
+    =org-glance-material:delete= names unsaved edits in its consent prompt and
+    tombstones BEFORE discarding the buffer, so a failed append never costs the only
+    unsaved copy.  The external fold discards nothing, having no human to ask; the
+    accepted cost is
     [[*H2 -- a folded delete is undone by the id's open material buffer][H2]].
 
 * Parsing and data hygiene
 
 12. *Store content parses in temp buffers via =org-glance--org-mode=.*
-    =delay-mode-hooks= (no globalized minor modes, no undo-tree litter) and
-    =tab-width 8= set after mode init; sources are never =find-file='d for
-    reading.  Violation: user =tab-width= mis-parses content; hook litter.
+    =delay-mode-hooks= (no globalized minor modes, no undo-tree litter) and =tab-width
+    8= set after mode init; sources are never =find-file='d for reading.  Violation:
+    user =tab-width= mis-parses content; hook litter.
 
-13. *Tags are canonical downcased interned symbols; relation kinds are
-    canonical dash-slugs.*  Kinds slug (downcase, spaces→dashes) at EVERY
-    boundary — link encode, link decode, metadata deserialize
-    (=org-glance--kind-slug=); the spaced form is display-only.  Tags are
-    coerced via =org-glance-tag:from-string= wherever text enters and serialized
-    back to strings in metadata, so deserialized metadata carries STRING tags —
-    coerce with =(downcase (format "%s" tag))= when comparing, or read through
-    =org-glance-headline-metadata:tag-strings=, the one total coercion.
-    Case-twins collapse at every boundary: parse
-    (=org-glance-headline--from-element= dedupes), read (=tag-strings=
-    downcases + dedupes legacy records), retag compares canonically, and the
-    material save collapses =:Food:food:= in the heading itself
-    (=org-glance-material--dedupe-tags=).  Validation
-    (=org-glance-tag:validate-string=, org's tag grammar) runs ONLY at
-    creation boundaries — capture prompt, programmatic capture, retag add —
-    never on read or removal, so legacy tags stay loadable and removable.
-    Violation: mixed-case duplicates fragment filters and caches, or a stored
-    tag becomes untouchable.
+13. *Tags are canonical downcased interned symbols; relation kinds are canonical
+    dash-slugs.*  Kinds slug (downcase, spaces→dashes) at EVERY boundary — link encode,
+    link decode, metadata deserialize (=org-glance--kind-slug=); spaced form is
+    display-only.  Tags coerce via =org-glance-tag:from-string= wherever text enters
+    and serialize back to strings, so deserialized metadata carries STRING tags —
+    compare with =(downcase (format "%s" tag))= or read through
+    =org-glance-headline-metadata:tag-strings=, the one total coercion.  Case-twins
+    collapse at every boundary: parse (=org-glance-headline--from-element= dedupes),
+    read (=tag-strings= downcases + dedupes legacy records), retag compares
+    canonically, material save collapses =:Food:food:= in the heading
+    (=org-glance-material--dedupe-tags=).  Validation (=org-glance-tag:validate-string=,
+    org's tag grammar) runs ONLY at creation boundaries — capture prompt, programmatic
+    capture, retag add — never on read or removal.  Violation: mixed-case duplicates
+    fragment filters and caches, or a stored tag becomes untouchable.
 
-14. *Crypt: plaintext never touches disk; secrecy is per-block.*  An encrypted
-    headline materializes SEALED (ciphertext, no prompt, no hardening);
-    decryption is explicit (=C-c #= on a sealed buffer,
-    =org-glance-material:decrypt=, or =:open ... :decrypt t=) and hardens the
-    buffer BEFORE any plaintext lands — the unwrap path included
-    (=org-glance-material:crypt-unwrap= wires first).  =C-c #= on a decrypted
-    buffer seals it back (=org-glance-material:seal=), refusing while edits are
-    unsaved so ciphertext never hides them (inv 11).  Decrypted buffers are
-    hardened (no auto-save/backup/lockfiles), sealed by =before-save-hook=,
-    unsealed after; =#+begin_crypt= markers are the persistent secrecy
-    annotation, and the legacy upgrade cannot re-wrap plaintext (aes-header
-    guard in =org-glance-headline--crypt-upgrade-legacy=).  Only block bodies
-    are secret: text OUTSIDE the blocks stays plaintext on disk and IS indexed
-    even for an =encrypted?= headline, so its links/properties resolve and the
-    index never holds decrypted plaintext.  Occurrence snapshots are plaintext:
-    an encrypted material buffer never snapshots
-    (=org-glance-material:snapshot-on-repeat=), and BOTH encrypt paths purge
-    existing snapshots (=org-glance-material--purge-occurrences=).  The
-    =links=/=relations= projections compute from SEALED bytes, so a link inside
-    a crypt block is never indexed; capture of content already carrying UNSEALED
-    =#+begin_crypt= markers indexes it as the plaintext it is — markers bind
-    through the material/crypt-set flows only.  Violation: secrets leak to
-    =data.org= / backups / =occurrences/=, or an encrypted headline's
-    intentionally-public regions vanish from search.
+14. *Crypt: plaintext never touches disk; secrecy is per-block.*  An encrypted headline
+    materializes SEALED (ciphertext, no prompt, no hardening); decryption is explicit
+    (=C-c #= on a sealed buffer, =org-glance-material:decrypt=, =:open ... :decrypt t=)
+    and hardens the buffer BEFORE any plaintext lands, the unwrap path included
+    (=org-glance-material:crypt-unwrap= wires first).  =C-c #= on a decrypted buffer
+    seals it back (=org-glance-material:seal=), refusing while edits are unsaved
+    (inv 11).  Decrypted buffers are hardened (no auto-save/backup/lockfiles), sealed by
+    =before-save-hook=, unsealed after; =#+begin_crypt= markers are the persistent
+    secrecy annotation; the legacy upgrade cannot re-wrap plaintext (aes-header guard in
+    =org-glance-headline--crypt-upgrade-legacy=).  Only block bodies are secret: text
+    OUTSIDE the blocks stays plaintext on disk and IS indexed even for an =encrypted?=
+    headline.  Snapshots are plaintext, so an encrypted material buffer never snapshots
+    (=org-glance-material:snapshot-on-repeat=) and BOTH encrypt paths purge existing
+    snapshots (=org-glance-material--purge-occurrences=).  The =links=/=relations=
+    projections compute from SEALED bytes, so a link inside a crypt block is never
+    indexed; capture of content already carrying UNSEALED =#+begin_crypt= markers
+    indexes it as the plaintext it is — markers bind through the material/crypt-set
+    flows only.  Violation: secrets leak to =data.org= / backups / =occurrences/=, or an
+    encrypted headline's intentionally-public regions vanish from search.
 
 * Views and tables
 
-15. *Table Title column is mandatory.*  Never removable or hideable —
-    =org-glance-table--mandatory-column?= is the single spelling: =:remove-column=
-    refuses it (at point or by name), =--read-column= never offers it, and
-    =org-glance-table--compose-columns= (shared by the per-tag schema and the
-    scoped reference layouts) strips =title= from any hidden set, defence in
-    depth against a hand-edited sidecar.  Violation: rows lose their only
-    human-readable label; a schema file could blank every view of a tag.
+15. *Table Title column is mandatory.*  Never removable or hideable;
+    =org-glance-table--mandatory-column?= is the single spelling — =:remove-column=
+    refuses it (at point or by name), =--read-column= never offers it,
+    =org-glance-table--compose-columns= (shared by the per-tag schema and the scoped
+    reference layouts) strips =title= from any hidden set.  Violation: rows lose their
+    only human-readable label; a schema file could blank every view of a tag.
 
 16. *Per-tag column schema: hidden is a denylist; candidates are user keys.*  The
-    per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never
-    an allowlist of the visible set, so a built-in shipped in a later version
-    still appears; the =C-c += candidate keys exclude =ORG_GLANCE_*= bookkeeping
-    and org's synthesised =CATEGORY= (=org-glance-property-index--candidate-key?=).
-    Column order + sort persist separately, per filter (=table-views.eld=).
-    Violation: a version upgrade's new column is invisible to anyone with a saved
-    schema; internal keys pollute the column prompt.
+    per-tag =:hidden= set records REMOVED built-ins (=table-columns.eld=), never an
+    allowlist of the visible set, so a built-in shipped later still appears; =C-c +=
+    candidate keys exclude =ORG_GLANCE_*= bookkeeping and org's synthesised =CATEGORY=
+    (=org-glance-property-index--candidate-key?=).  Column order + sort persist
+    separately, per filter (=table-views.eld=).  Violation: a version upgrade's new
+    column is invisible to anyone with a saved schema; internal keys pollute the column
+    prompt.
 
-17. *Transient filters never persist per-filter state.*  Keys flagged
-    =:transient= in =org-glance-filter:table= (=:where=, =:refers-to=,
-    =:id-any=) are one-off views: the overview never caches them
-    (=org-glance-overview:spec-key= → nil), and the table persists neither
-    their view config (=org-glance-table--persist-config=) nor their column
-    schema (=org-glance-table--persist-schema= — a tagless relation view would
-    edit the shared ":none:" entry).  Judged by the single predicate
-    =org-glance-filter:transient?=.  EXPLICIT scoped persistence is the
-    sanctioned exception: =C-c C-c= in a reference table
-    (=org-glance-table:apply-layout=) saves the layout under a user-chosen scope
-    key (anchor id or tag pair, per direction) in =table-refs.eld= — never under
-    the filter identity, one entry per deliberate apply, so browsing accretes
-    nothing.  Violation: one cache dir / config entry accretes per visited
-    headline (=:id-any= identities embed the target snapshot — one per link-set
-    version), with no pruning pass to reclaim them.
+17. *Transient filters never persist per-filter state.*  =:transient= keys in
+    =org-glance-filter:table= (=:where=, =:refers-to=, =:id-any=) are one-off views: no
+    overview cache (=org-glance-overview:spec-key= → nil), no table config
+    (=org-glance-table--persist-config=), no column schema
+    (=org-glance-table--persist-schema=; a tagless relation view would edit the shared
+    ":none:" entry).  Judged by the single predicate =org-glance-filter:transient?=.
+    Sole exception, EXPLICIT: =C-c C-c= in a reference table
+    (=org-glance-table:apply-layout=) saves the layout under a user-chosen scope key
+    (anchor id or tag pair, per direction) in =table-refs.eld= — never under the filter
+    identity, one entry per deliberate apply.  Violation: one cache dir / config entry
+    per visited headline (=:id-any= identities embed the target snapshot, one per
+    link-set version), with no pruning pass to reclaim them.
 
-18. *Scoped relation layouts: out-of-band identity, id > pair, whole-set
-    replace.*  The anchor travels as =:context= into =org-glance-table:visit= —
-    never reconstructed from the filter, which has lost it.  Resolution
-    (=org-glance-table--refs-resolve=): the anchor's own entry beats tag pairs;
-    among pairs the latest =:applied= stamp wins.  A scoped entry REPLACES the
-    whole column set built from base columns — never merging with
-    =table-columns.eld= — and a scope-less relation view renders plain defaults,
-    never the shared untagged ":none:" entry.  A relation table lists BOTH
-    directions in one view (=org-glance-table--related-ids=), so pair keys read
-    anchor tag > row tag — scope, never edge direction — single-sourced in
-    =org-glance-table--refs-tag-pairs=; the mirrored pair (anchored on the other
-    side) is a DIFFERENT scope.  Pair tags are sorted, distinct, downcased
-    (mirrors inv 13).  =table-refs.eld= is written only on explicit =C-c C-c=,
-    so a git conflict drops one side with no self-healing rewrite, unlike the
-    constantly-rewritten auto-persisted stores.  Violation: saved layouts that
-    never match on restore, cross-scope leaks, nondeterministic pair resolution.
+18. *Scoped relation layouts: out-of-band identity, id > pair, whole-set replace.*  The
+    anchor travels as =:context= into =org-glance-table:visit=, never reconstructed from
+    the filter, which has lost it.  Resolution (=org-glance-table--refs-resolve=): the
+    anchor's own entry beats tag pairs; among pairs the latest =:applied= stamp wins.  A
+    scoped entry REPLACES the whole column set built from base columns, never merging
+    with =table-columns.eld=; a scope-less relation view renders plain defaults, never
+    the shared untagged ":none:" entry.  A relation table lists BOTH directions in one
+    view (=org-glance-table--related-ids=), so pair keys read anchor tag > row tag —
+    scope, never edge direction — single-sourced in
+    =org-glance-table--refs-tag-pairs=; the mirrored pair is a DIFFERENT scope.  Pair
+    tags are sorted, distinct, downcased (mirrors inv 13).  =table-refs.eld= is written
+    only on explicit =C-c C-c=, so a git conflict drops one side with no self-healing
+    rewrite.  Violation: saved layouts that never match on restore, cross-scope leaks,
+    nondeterministic pair resolution.
 
-19. *The table is a pure projection; every mutation routes through the
-    material layer.*  All =org-glance-table--act-*= handlers delegate to
-    =org-glance-material:= functions (todo, bulk todo, retag, crypt, delete,
-    planning, title/priority/property edits, duplicate) — no table-originated
-    write touches store, blob, or metadata directly — and bulk operations
-    degrade per-row (skip-and-report), never batch-abort.  Violation: bypasses
-    the unsaved-edit guard (inv 11) and the blob-canonical rule (inv 5).
+19. *The table is a pure projection; every mutation routes through the material layer.*
+    All =org-glance-table--act-*= handlers delegate to =org-glance-material:= functions
+    (todo, bulk todo, retag, crypt, delete, planning, title/priority/property edits,
+    duplicate) — no table-originated write touches store, blob or metadata directly —
+    and bulk operations degrade per-row (skip-and-report), never batch-abort.
+    Violation: bypasses the unsaved-edit guard (inv 11) and the blob-canonical rule
+    (inv 5).
 
 20. *Overview headings are self-sufficient, metadata-only.*  The render
-    (=org-glance-overview:render-headline=) carries state, priority cookie,
-    the SINGLE planning line, the id drawer, the verbatim date-interval line
-    (=<from>--<to>=, so agenda shows the span), relations and plain links —
-    all from metadata, zero blob parses; agenda and link-following work
-    without materializing.  Violation: agenda misses planning, or the render
-    cost becomes O(blobs).
+    (=org-glance-overview:render-headline=) carries state, priority cookie, the SINGLE
+    planning line, the id drawer, the verbatim date-interval line (=<from>--<to>=, so
+    agenda shows the span), relations and plain links — all from metadata, zero blob
+    parses; agenda and link-following work without materializing.  Violation: agenda
+    misses planning, or the render cost becomes O(blobs).
 
 21. *Reserved properties are managed keys.*  The keys in
-    =org-glance-material-hidden-properties= belong to org-glance: concealed in
-    material buffers (overlays only — file and store keep them), and hand edits
-    to them reverted at =before-save= with a warning
-    (=org-glance-material--restore-reserved= — the sole sanctioned in-buffer
-    edit under inv 11; it touches only the heading drawer, disjoint from the
-    crypt seal's body blocks).  Violation: a hand-edited or region-killed
+    =org-glance-material-hidden-properties= belong to org-glance: concealed in material
+    buffers (overlays only — file and store keep them), hand edits reverted at
+    =before-save= with a warning (=org-glance-material--restore-reserved=, the sole
+    sanctioned in-buffer edit under inv 11; it touches only the heading drawer, disjoint
+    from the crypt seal's body blocks).  Violation: a hand-edited or region-killed
     =ORG_GLANCE_ID= silently orphans the blob from its WAL id.
 
-22. *Material saves rewrite user content only through announced normalize
-    hooks.*  The =before-save-hook= rewrites are exactly: the reserved-property
-    revert (=org-glance-material--restore-reserved=), the case-twin tag
-    collapse (=org-glance-material--dedupe-tags=) — each raising a
-    =display-warning= — and the crypt seal (inv 14).  Violation: a silent
-    rewrite clobbers user text with no trace (collides with inv 11).
+22. *Material saves rewrite user content only through announced normalize hooks.*  The
+    =before-save-hook= rewrites are exactly: the reserved-property revert
+    (=org-glance-material--restore-reserved=), the case-twin tag collapse
+    (=org-glance-material--dedupe-tags=) — each raising a =display-warning= — and the
+    crypt seal (inv 14).  Violation: a silent rewrite clobbers user text with no trace
+    (collides with inv 11).
 
-23. *LLM session state is derived live, never persisted.*  Running / exited /
-    stopped, buffer names and titles all recompute at fill
-    (=org-glance-llm--session-rows=) from two cheap sources: the provider's
-    recorded sessions filtered to this graph's data dirs (=--recorded=,
-    O(recorded)) for the historical =stopped= rows, overlaid with live
-    =*llm:…*= buffers for running/exited state.  Nothing persists and nothing
-    scans the whole graph.  The enforcing symbols live in the external
-    =org-glance-llm= plugin repo, loaded via =org-glance-plugins=; this
-    invariant governs that plugin's contract, not core.
-    =org-glance-graph:cache-read= / =:cache-write= remain the public sidecar API
-    for a plugin that does want a derived, rebuildable cache under =cache/=
-    (inv-5 class, dropped by reindex).  Violation: a killed buffer shows
-    "running", a restarted one "stopped", or a stored row is trusted for
-    anything live.
+23. *LLM session state is derived live, never persisted.*  Running / exited / stopped,
+    buffer names and titles recompute at fill (=org-glance-llm--session-rows=) from two
+    cheap sources: the provider's recorded sessions filtered to this graph's data dirs
+    (=--recorded=, O(recorded)) for historical =stopped= rows, overlaid with live
+    =*llm:…*= buffers for running/exited state.  Nothing persists; nothing scans the
+    whole graph.  The enforcing symbols live in the external =org-glance-llm= plugin
+    repo, loaded via =org-glance-plugins=; this invariant is a contract on that
+    plugin.  =org-glance-graph:cache-read= / =:cache-write= remain the
+    public sidecar API for a plugin that does want a derived, rebuildable cache under
+    =cache/= (inv-5 class, dropped by reindex).  Violation: a killed buffer shows
+    "running", a restarted one "stopped", or a stored row is trusted for anything live.
 
-24. *Table point restoration restores the CELL — row AND column.*  Every
-    refill captures =org-glance-view:point-context= (ID LINE COL) and
-    restores through =org-glance-view:restore-point=, which re-lands on the
-    same cell by its =table-view-col= key; a row that left the view falls
-    back to its screen line.  Both tables obey it — the headline table's
-    =--finish= / =--reload= / bulk-todo paths and the LLM sessions table's
-    =g=.  Violation: the cursor drops to column 0, where the next =i= (edit
-    cell) or =C-c -= (remove column) acts on the WRONG column.
+24. *Table point restoration restores the CELL — row AND column.*  Every refill captures
+    =org-glance-view:point-context= (ID LINE COL) and restores through
+    =org-glance-view:restore-point=, which re-lands on the same cell by its
+    =table-view-col= key; a row that left the view falls back to its screen line.  Both
+    tables obey it — the headline table's =--finish= / =--reload= / bulk-todo paths and
+    the LLM sessions table's =g=.  Violation: the cursor drops to column 0, where the
+    next =i= (edit cell) or =C-c -= (remove column) acts on the WRONG column.
 
-25. *Links are addressed by their list path; the link's own item label is
-    dropped.*  =org-glance--link-paths= gives every link a PATH of enclosing
-    plain-list item labels plus its own LABEL (=org-glance--link-label=): its
-    description, else the =KEY:= text introducing it in its own item
-    (=- Local: [[file:~/x]]= reads "Local"), else the raw link.
-    =org-glance--link-ancestry= drops the innermost item (the label already
-    names it), and a link outside any list gets a one-element path, so flat and
-    nested bodies share one representation.  =org-glance--pick-link-pos=
-    descends one component per prompt, takes a lone candidate at any depth
-    without asking, and offers exhausted-path ties by TARGET — without that base
-    case identical paths recurse forever.  Violation: every leaf becomes a
-    one-option prompt, or the picker hangs.
+25. *Links are addressed by their list path; the link's own item label is dropped.*
+    =org-glance--link-paths= gives every link a PATH of enclosing plain-list item labels
+    plus its own LABEL (=org-glance--link-label=): its description, else the =KEY:= text
+    introducing it in its own item (=- Local: [[file:~/x]]= reads "Local"), else the raw
+    link.  =org-glance--link-ancestry= drops the innermost item (the label already names
+    it), and a link outside any list gets a one-element path, so flat and nested bodies
+    share one representation.  =org-glance--pick-link-pos= descends one component per
+    prompt, takes a lone candidate at any depth without asking, and offers
+    exhausted-path ties by TARGET — without that base case identical paths recurse
+    forever.  Violation: every leaf becomes a one-option prompt, or the picker hangs.
 
-26. *Plugins load error-demoted, self-register, and never unload.*  A plugin
-    is =org-glance-<name>.el= listed in =org-glance-plugins= and =require=-d
-    by =org-glance--load-plugins= (inv 9) before the graph opens; it appends
-    its own transient entries at load (remove-then-append, so a reload never
-    duplicates) and binds its own keys.  There is no unload protocol:
-    disabling = dropping it from the list and restarting.  Violation: a
-    broken third-party plugin bricks =org-glance-init=, or reloading
-    duplicates its UI.
+26. *Plugins load error-demoted, self-register, and never unload.*  A plugin is
+    =org-glance-<name>.el= listed in =org-glance-plugins= and =require=-d by
+    =org-glance--load-plugins= (inv 9) before the graph opens; it appends its own
+    transient entries at load (remove-then-append, so a reload never duplicates) and
+    binds its own keys.  There is no unload protocol: disabling = dropping it from the
+    list and restarting.  Violation: a broken third-party plugin bricks
+    =org-glance-init=, or reloading duplicates its UI.
 
 * Confirmed by the 2026-07-26 sweep
 
-Rules the code already enforced without being written down here.  Each was
-verified against its evidence site before being added.
-
-27. *Save-hook depth ordering is load-bearing.*  =org-glance-material:sync=
-    runs at depth 0, =--decrypt-buffer= at 90, =--hide-reserved-properties=
-    at 100, so =sync= reads the buffer while it is still SEALED and the WAL,
-    the property index and every projection see ciphertext — the concrete
-    mechanism behind inv 14.  Violation: lowering =--decrypt-buffer= below
-    =sync= indexes decrypted plaintext into =headlines.jsonl= and the property
+27. *Save-hook depth ordering is load-bearing.*  =org-glance-material:sync= runs at depth
+    0, =--decrypt-buffer= at 90, =--hide-reserved-properties= at 100, so =sync= reads the
+    buffer while it is still SEALED and the WAL, the property index and every projection
+    see ciphertext — the mechanism behind inv 14.  Violation: lowering =--decrypt-buffer=
+    below =sync= indexes decrypted plaintext into =headlines.jsonl= and the property
     cache.
 
 28. *Multi-block crypt rewrites iterate LAST to FIRST.*  Both
-    =org-glance--crypt--transform-blocks= and =--crypt-unwrap-blocks= walk
-    =(reverse (block-regions))=: any length-changing rewrite invalidates the
-    recorded positions of blocks after it.  Violation: a headline with two or
-    more =#+begin_crypt= blocks is corrupted on seal/unseal.
+    =org-glance--crypt--transform-blocks= and =--crypt-unwrap-blocks= walk =(reverse
+    (block-regions))=: any length-changing rewrite invalidates the recorded positions of
+    blocks after it.  Violation: a headline with two or more =#+begin_crypt= blocks is
+    corrupted on seal/unseal.
 
 29. *org's =ARCHIVE= marker is never a collection tag.*
-    =org-glance-headline--from-element= removes it from the parsed tag set
-    (the =archived?= flag carries it).  Violation: a phantom =archive= tag
-    appears in =graph:tags=, the capture picker and every per-tag view, over
-    headlines the ambient filter hides.
+    =org-glance-headline--from-element= removes it from the parsed tag set (the
+    =archived?= flag carries it).  Violation: a phantom =archive= tag appears in
+    =graph:tags=, the capture picker and every per-tag view, over headlines the ambient
+    filter hides.
 
-30. *=graph:get-headline= is tri-state: nil / =tombstone= / metadata.*
-    Read-only callers collapse the first two through
-    =org-glance-graph:live-meta=.  Two callers need the distinction and share
-    one guard: =org-glance-graph--tombstone-spec= answers the record a delete
-    owes or nil, for =org-glance-graph:delete= (which appends it alone) and for
-    =org-glance-graph:refresh-external= (which carries it into the one batch its
-    whole fold appends).  Violation: collapsing tombstone to nil resurrects
-    deleted ids in derived indexes and appends duplicate tombstones; spelling
-    the guard twice lets the two drift.
+30. *=graph:get-headline= is tri-state: nil / =tombstone= / metadata.*  Read-only callers
+    collapse the first two through =org-glance-graph:live-meta=.  Two callers need the
+    distinction and share one guard: =org-glance-graph--tombstone-spec= answers the
+    record a delete owes or nil, for =org-glance-graph:delete= (which appends it alone)
+    and =org-glance-graph:refresh-external= (which carries it into the one batch its
+    whole fold appends).  Violation: collapsing tombstone to nil resurrects deleted ids
+    in derived indexes and appends duplicate tombstones; spelling the guard twice lets
+    the two drift.
 
-31. *=org-glance-material= must never top-level =require= =org-glance-table=.*
-    The dependency runs table → material; the relation pivot
-    (=org-glance-material:references=) requires table at CALL time.
-    Violation: a circular load that breaks byte-compilation and init.
+31. *=org-glance-material= must never top-level =require= =org-glance-table=.*  The
+    dependency runs table → material; the relation pivot
+    (=org-glance-material:references=) requires table at CALL time.  Violation: a
+    circular load that breaks byte-compilation and init.
 
 32. *Torn-line tolerance is scoped to the open segment's FINAL line.*
-    =org-glance-graph--scan-file= swallows a =json-error= only for the last
-    line of the open segment and re-signals everywhere else.  Violation:
-    tolerating a torn line mid-file silently masks real store corruption.
+    =org-glance-graph--scan-file= swallows a =json-error= only for the last line of the
+    open segment and re-signals everywhere else.  Violation: tolerating a torn line
+    mid-file silently masks real store corruption.
 
-33. *An external writer announces moved and deleted blobs; READS fold them in.*
-    The =glance= daemon appends =\{"id":…,"at":…\}= lines to
-    =meta/EXTERNAL.jsonl= (=O_APPEND=, whole lines) and touches nothing else
-    under =meta=; a DELETE is those two fields plus ="tombstone":true=, the
-    only third field and the only value it takes, so a line's absence of it IS
-    the write.  =org-glance-graph--read-external= keeps ONE entry per id at its
-    first sighting carrying its LAST sighting's kind (=--latest-records='' own
-    rule), so a write followed by a delete in one window folds as the delete;
-    the kind test is =(eq t …)=, since =json-parse-string= maps JSON false and
-    null to the non-nil =:false= and =:null=.  An unknown key is inert both
-    ways: a new =glance= against an old org-glance degrades to a skipped
-    ="no stored blob"=, and an old =glance= writes no third field at all.
-    Every read folds the pending entries through
-    =org-glance-graph--fold-external-maybe= (=--ensure-cache=), so an outside
-    edit needs no command.  The fold is throttled
-    (=org-glance-graph-external-poll-seconds=, one =--external-pending-p= per
-    graph per interval — a stat and a cursor read per SOURCE, and no hash),
-    non-reentrant (=--folding-external=, bound by =refresh-external= itself so
-    its own reads cannot nest) and =condition-case='d, so it can neither loop
-    nor break a read under =debug-on-error=.  The whole batch — re-derived
-    records and tombstones alike — is ONE =graph:insert=; the fold's cursor
-    moves only AFTER that append (the crash rule: a repeated write costs an
-    equal record the latest-per-id fold cannot distinguish, and a repeated
-    delete finds the id already tombstoned and appends nothing).  Violation:
-    reversing the two steps loses an edit outright; per-id inserts break the
-    one-append rule the crash argument rests on; folding inside a fold recurses;
-    an unguarded signal takes a plain read down with it.  What this fold gives
-    up is [[*Known hazards][H2]].
+33. *An external writer announces moved and deleted blobs; READS fold them in.*  The
+    =glance= daemon appends =\{"id":…,"at":…\}= lines to =meta/EXTERNAL.jsonl=
+    (=O_APPEND=, whole lines) and touches nothing else under =meta=; a DELETE is those
+    two fields plus ="tombstone":true=, the only third field and the only value it
+    takes, so a line's absence of it IS the write.  =org-glance-graph--read-external=
+    keeps ONE entry per id at its first sighting carrying its LAST sighting's kind
+    (=--latest-records='' own rule), so a write followed by a delete in one window folds
+    as the delete; the kind test is =(eq t …)=, =json-parse-string= mapping JSON false
+    and null to the non-nil =:false= and =:null=.  An unknown key is inert both ways: a
+    new =glance= against an old org-glance degrades to a skipped ="no stored blob"=, an
+    old =glance= writes no third field at all.  Every read folds pending entries through
+    =org-glance-graph--fold-external-maybe= (=--ensure-cache=), so an outside edit needs
+    no command; the fold is throttled (=org-glance-graph-external-poll-seconds=, one
+    =--external-pending-p= per graph per interval — a stat and a cursor read per SOURCE,
+    no hash), non-reentrant (=--folding-external=, bound by =refresh-external= itself)
+    and =condition-case='d, so it can neither loop nor break a read under
+    =debug-on-error=.  The whole batch — records and tombstones alike — is ONE
+    =graph:insert=; the fold's cursor moves only AFTER that append (crash rule: a
+    repeated write costs an equal record the latest-per-id fold cannot distinguish, a
+    repeated delete finds the id tombstoned and appends nothing).  Violation: reversing
+    the two steps loses an edit outright; per-id inserts break the one-append rule the
+    crash argument rests on; folding inside a fold recurses; an unguarded signal takes a
+    plain read down with it.  What this fold gives up is [[*Known hazards][H2]].
 
 * Added 2026-08-12
 
@@ -386,633 +340,419 @@ verified against its evidence site before being added.
 
 ** The cursor
 
-=meta/EXTERNAL.cursor= is =OFFSET WINDOW PREFIX= — one decimal BYTE offset (how
-far this store has folded) plus two =secure-hash 'sha1= digests of the bytes it
-names, spelled positionally; in code they are one plist's =:offset=, =:window=
-and =:prefix=, so reader and writer share no field NAME either.  BYTES because
-the writer appends bytes where Emacs reads characters, and whole lines are what a
-fold consumes, so the offset always lands where decoding can start; the two
-spaces never have to agree.  =--set-external-cursor= writes the triple
-temp-then-rename after the records land (inv 33's crash rule).
+=meta/EXTERNAL.cursor= is =OFFSET WINDOW PREFIX= — one decimal BYTE offset plus two
+=secure-hash 'sha1= digests of the bytes it names, spelled positionally; one plist's
+=:offset=, =:window=, =:prefix= in code.  BYTES, the writer appending bytes where Emacs
+reads characters and a fold consuming whole lines.  =--set-external-cursor= writes it
+temp-then-rename AFTER the records land (inv 33's crash rule); digests come off an
+explicitly unibyte =insert-file-contents-literally=.
 
-Digests are taken over an explicitly unibyte =insert-file-contents-literally=, so
-a decoder's opinion cannot move them.  TWO RANGES, TWO QUESTIONS:
+WINDOW =[max(0, OFFSET - 4096), OFFSET)=, verified by the idle poll, bounded.  PREFIX
+=[0, OFFSET)=, verified by every fold that consumes anything, out of the buffer it
+holds.  =--external-digests= mints and verifies both, so the two sides cannot drift;
+the fold refuses a cursor whose two digests describe different files.
 
-- the WINDOW, =[max(0, OFFSET - 4096), OFFSET)=, verified by the idle poll —
-  bounded, so its cost does not move with the file;
-- the PREFIX, =[0, OFFSET)=, verified by every fold that consumes anything, out
-  of the buffer it already holds — exact, and free.
-
-=--external-digests= mints and verifies both, so a minter and a verifier cannot
-drift apart — a drift would refuse every cursor ever written, silently and
-forever, a re-fold being a no-op no test would notice.  A cursor whose two
-digests describe different files is refused by the fold.
-
-The digests give the OFFSET AN IDENTITY.  A cursor written BACKWARDS costs a
-re-fold and is deliberately NOT guarded with =max=: forwards is the direction
-that skips lines, and =max= is what would make a number past the bytes that exist
-stick.  FIVE refusals read as 0 — a cursor ABSENT, GARBLED, carrying FEWER THAN
-TWO DIGESTS (written before the window existed, or before either did), naming
-bytes that no longer hash to what it recorded, or naming MORE BYTES THAN THE FILE
-HOLDS.
-
-PAST-THE-END IS ITS OWN TEST, taken before anything is hashed: an offset past the
-end does NOT hash a strict prefix, =--external-digests= CLAMPING its range, so on
-a file at or under the window every offset from the SIZE up to the WINDOW WIDTH
-hashes exactly what the size does — which is what a cursor minted at the size
-carries.  Measured: a cursor rewritten to =4096 <same> <same>= over a 41-byte file
-read as 4096 bytes folded.
+FIVE refusals read as 0: a cursor absent, garbled, carrying fewer than TWO digests,
+naming bytes that no longer hash to what it recorded, or naming MORE BYTES THAN THE
+FILE HOLDS.  None is guarded with =max=, backwards costing only a re-fold.
+Past-the-end is its own test, taken before anything is hashed — =--external-digests=
+CLAMPS, so a bogus offset hashes exactly what the size does.  Reproduced: =4096 <same>
+<same>= over a 41-byte file read as 4096 bytes folded.
 
 ** One read
 
-=--external-bytes= puts the file in a unibyte buffer ONCE; =--external-folded-in=
-hashes =[point-min, point-min+OFFSET)= of that buffer to verify the cursor, the
-unfolded text is sliced from the same buffer, and the new digests are taken over
-the whole of it.  They travel in =--read-external='s =:marks= as
-(PATH OFFSET DIGESTS) and =--set-external-cursor= hashes NOTHING.
-
-READ TWICE — the offset out of one look and the digest out of another — the two
-described two readings, and the FOLD WINDOW between them spans every blob read,
-every org re-parse and the =graph:insert=: a rewrite landing inside it minted a
-cursor self-consistent with a file nobody folded, and the guard then passed
-forever.  Measured on the way in: read-time digest 97d35f7b against write-time
-c01a68fb, the cursor written with the latter; reproduced end to end with a real
-=git fetch && git reset --hard origin/main= fired from inside a fold, 3/3
-deterministic.
-
-An APPEND must NOT be caught and is not: the prefix a fold measured is stable
-while it is being measured, this file being append-only, so a line landing
-mid-fold sits past END and costs nothing.
-
-Cost, one line adopted at the 1 MiB cap: 22.3 ms over 2 reads (1.0 MiB) and
-2.0 MiB hashed with rotation disarmed, 20.6 ms with it armed at the file's own
-size — against 26.3 ms over 5 reads and 3.0 MiB before the one-read shape.  The
-window costs the fold 8 KiB of SHA-1 on top of the prefix's 2 MiB, inside the
-noise.
+ONE READ ANSWERS THE WHOLE FOLD.  =--external-bytes= puts the file in a unibyte buffer
+ONCE; =--external-folded-in= hashes =[point-min, point-min+OFFSET)= of it to verify the
+cursor, the unfolded text is sliced from the same buffer, =--external-tail= mints the
+new digests over the whole of it.  They ride =--read-external='s =:marks= as (PATH
+OFFSET DIGESTS); =--set-external-cursor= hashes NOTHING.  Offset from one read and
+digest from another leaves the FOLD WINDOW between them — every blob read, every org
+re-parse, the =graph:insert=.  An APPEND is not caught and must not be: the prefix a
+fold measured is stable while it is measured, this file being append-only.  Reproduced
+with =git fetch && git reset --hard origin/main= from inside a fold, 3/3; measured at
+the 1 MiB cap, 22.3 ms over 2 reads and 2.0 MiB hashed against 26.3 ms over 5 reads and
+3.0 MiB.
 
 ** The three doors the digest closes
 
-1. A GIT UNION MERGE: the store is synced, =--ensure-gitattributes= wrote
-   =*.jsonl merge=union= into =meta/=, and the cursor was TRACKED beside the file
-   it names — so a merge inserted the other machine's unfolded lines AHEAD of the
-   offset while the cursor fast-forwarded with no conflict, the fold resumed
-   MID-LINE, the fragment failed =json-parse-string= and was skipped in silence,
-   and the line in front of it was never seen at all.  Shut on a store that never
-   tracked the family (the ignore, below) and on no other.
-2. The conflict RESOLVER: =--union-resolve-file= is =f-read-text= then
-   =f-write-text=, which re-lays every byte behind a stripped marker line — shut
-   by structure (inv 8's positive allowlist).
-3. A rewrite with ONE WRITER — a hand edit, a restore from a backup, a botched
-   rotation.  No sync rule rules these out on any store; each degrades to a
-   re-fold, idempotent by the crash rule, in place of a silent skip.
-
-The truncating design was immune to all three by accident — an emptied file has
-no offsets to shift — so this is the price of the cursor.
+1. A GIT UNION MERGE inserting the other machine's unfolded lines AHEAD of the offset
+   while the cursor fast-forwards with no conflict (=--ensure-gitattributes= wrote
+   =*.jsonl merge=union= into =meta/=, the cursor TRACKED beside the file): the fold
+   resumes MID-LINE, the fragment fails =json-parse-string= and is skipped in silence,
+   the line in front of it never seen.  Shut on a store that never tracked the family
+   and on no other.
+2. The conflict RESOLVER: =--union-resolve-file= is =f-read-text= then =f-write-text=,
+   re-laying every byte behind a stripped marker line — shut by structure (inv 8).
+3. A rewrite with ONE WRITER — hand edit, restore from backup, botched rotation — which
+   no sync rule rules out; each degrades to a re-fold, idempotent by the crash rule.
 
 ** A read that failed is not an answer
 
-=--external-bytes= put the file in a buffer under =ignore-errors= and handed that
-buffer to every question, so an UNREADABLE file and an ABSENT one were one thing:
-both halves of =--external-folded-whole?='s equality came off the empty buffer,
-=0 = 0= answered t, and rotation destroyed a file it had never read.  Measured
-over a generation carrying an unfolded tombstone: readable, spared; =chmod 000=,
-unlinked.
-
-THE BUFFER IS THE FILE OR FN IS NOT CALLED.  Four shapes signal — absent,
-unreadable, a DIRECTORY wearing a generation's name, a DANGLING SYMLINK — and
-each caller names its own refusal: nothing owed for the tail, nothing folded for
-the offset, NOT FOLDED WHOLE for rotation.  =--external-window= needed no change:
-it MEASURES what it read against the range it asked for.  The two reads refuse in
-opposite directions and each takes the safe one — a CURSOR nobody can read says
-nothing and costs a re-fold, a FILE nobody can read must never read as folded —
-so =--external-cursor= swallows its own =file-error= deliberately and
-=--external-bytes= swallows none.
+THE BUFFER IS THE FILE OR FN IS NOT CALLED.  Four shapes signal: absent; unreadable; a
+DIRECTORY wearing a generation's name; a DANGLING SYMLINK.  Each caller names its own
+refusal — nothing owed for the tail, nothing folded for the offset, NOT FOLDED WHOLE
+for rotation; =--external-window= needs none, MEASURING what it read against the range
+it asked for.  The two reads refuse in opposite directions: =--external-cursor=
+swallows its own =file-error= deliberately (an unreadable cursor costs a re-fold),
+=--external-bytes= swallows none (an unreadable file must never read as folded).
+Reproduced: under the swallowed read =0 = 0= answered =--external-folded-whole?= =t=
+and rotation unlinked a =chmod 000= generation carrying an unfolded tombstone.
 
 ** The bound: nothing irreversible happens on bounded evidence
 
-The POLL is bounded (being wrong costs a fold that finds nothing owed); the FOLD
-is exact (it is about to consume bytes); ROTATION's move is exact
-(=--external-folded-whole?=).  Two changes the bound forbids: letting anything
-DESTRUCTIVE ask the poll's question, and letting the fold stop verifying the
-prefix because the poll "already checked".
+The POLL is bounded (being wrong costs a fold that finds nothing owed); the FOLD is
+exact; ROTATION's move is exact (=--external-folded-whole?=).  Two changes the bound
+forbids: anything DESTRUCTIVE asking the poll's question, and the fold dropping its
+prefix check because the poll "already checked".
 
-ONE QUESTION PER SOURCE PER CYCLE.  =--external-survey= reads each source's
-cursor once and asks =--external-drained?=, and only where that bound says bytes
+ONE QUESTION PER SOURCE PER CYCLE.  =--external-survey= reads each source's cursor once
+and asks =--external-drained?= — THREE conditions: the offset is the file's SIZE, the
+byte before it is a NEWLINE, the window still hashes.  Only where that bound says bytes
 MAY be owed does it read the file whole through =--external-tail=.  The poll
-(=--external-pending-p=) and the fold (=--read-external=,
-=--rotate-external-maybe=) all read that same survey, where they each listed
-=meta/= and each re-read every cursor and window 200 µs apart.
+(=--external-pending-p=) and the fold (=--read-external=, =--rotate-external-maybe=)
+read that one survey.  =--fold-external-maybe= runs before EVERY graph read at a 1 s
+throttle; two generations at the cap is the steady state.  Measured per poll with
+nothing owed, size alone / whole prefix / window + prefix: 4 KiB 0.28/0.49/0.43 ms,
+1 MiB 0.28/8.50/0.64, 4 × 1 MiB 0.74/36.10/1.61.
 
-=--external-drained?= is THREE conditions: the offset is the file's SIZE, the
-byte before it is a NEWLINE, and the window still hashes to what the cursor
-recorded.
+A SIZE COMPARISON IS NEITHER SOUND NOR NECESSARY: =Data.Org.External.noteLine= spells
+FIXED-WIDTH lines, so a same-size whole-file replacement is this file's TYPICAL
+re-laying (hand edit, restore, botched rotation, union merge on a store that tracked
+the family), and the same unverified predicate guarded rotation's DELETE loop.
+Reproduced: a 58-byte file replaced by a 58-byte tombstone for another id stayed unread
+over twenty polls.  THE WINDOW IS SOUND FOR THE EVENTS THAT HAPPEN: an insertion or a
+deletion ahead of the offset shifts every byte after it, this window included; a
+replacement is caught whenever it touches the last 4 KiB.  THE WIDTH IS CONSTRAINED
+UPWARD AND FREE DOWNWARD: widening it to the whole prefix reddens
+=external-the-fold-catches-what-the-window-passed= and
+=external-rotation-spares-a-generation-re-laid-mid-fold=, narrowing to 512 leaves all 50
+cases green at the cost of promptness.
 
-Cost per poll with nothing owed (this machine, Emacs 30.2, warm cache, median of
-3, =garbage-collect= before each, reads and hashes counted by advice over
-=insert-file-contents-literally= and =secure-hash= and filtered to the
-notification family; SHA-1 over the whole 1 MiB rotation cap is ~9 ms).  One
-reading, all three columns, the two controls being the live code with
-=--external-window='s range moved:
+THE RESIDUAL: a same-LENGTH edit further back than the window passes the poll.  The
+FOLD verifies the whole prefix, so on a file somebody APPENDS TO it lasts until the
+first byte owed (glance's =scan= reports the interval as index disagreement meanwhile);
+NOTHING EVER APPENDS TO A ROTATED GENERATION, so there it lasts as long as the file.
+Reproduced at cap 6000: a drained 6960 B generation re-laid from inside =graph:insert=
+(same size, last 4 KiB identical) was called drained and unlinked, its tombstoned id
+still LIVE twenty folds later.  THE ANSWER MUST ALSO BE FRESH: rotation reads the
+candidate itself, the =:marks= in hand having been taken before it, the fold window
+between being where a checkout or a merge re-lays bytes.
 
-| file           | size alone | whole prefix | window + prefix |
-|----------------+------------+--------------+-----------------|
-| 4 KiB          |    0.28 ms |      0.49 ms |         0.43 ms |
-| 64 KiB         |    0.27 ms |      1.07 ms |         0.43 ms |
-| 1 MiB          |    0.28 ms |      8.50 ms |         0.64 ms |
-| 2 x 1 MiB      |    0.47 ms |     14.70 ms |         1.23 ms |
-| 4 x 1 MiB      |    0.74 ms |     36.10 ms |         1.61 ms |
-
-The poll reads the small cursor file and at most 4 KiB more, so it does not move
-with the file's size, where verifying the whole prefix hashed every folded byte
-per source per poll and =--fold-external-maybe= runs before EVERY graph read at a
-1 s throttle.  Two generations at the cap is the natural steady state.
-
-A SIZE COMPARISON IS NEITHER SOUND NOR NECESSARY.  =Data.Org.External.noteLine=
-spells FIXED-WIDTH lines — one length for every write, another for every delete —
-so a same-size whole-file replacement is this file's TYPICAL re-laying, produced
-by a hand edit, a restore, a botched rotation, and a union merge on a store that
-tracked the family before the ignore.  Reproduced: fold a tombstone for one id,
-replace the 58-byte file with a 58-byte tombstone for another, poll the read path
-twenty times — the second id still LIVE, its tombstone unread.  The same
-unverified predicate also guarded rotation's DELETE loop, where being wrong
-unlinks a generation nobody folded.
-
-THE WINDOW IS SOUND FOR THE EVENTS THAT HAPPEN: an insertion or a deletion
-ANYWHERE ahead of the offset shifts every byte after it, this window included; a
-replacement is caught whenever it touches the last 4 KiB.  A git union merge and
-a hand edit are both of those.
-
-THE WIDTH IS CONSTRAINED UPWARD AND FREE DOWNWARD.  Measured: WIDENING it to the
-whole prefix reddens =external-the-fold-catches-what-the-window-passed= and
-=external-rotation-spares-a-generation-re-laid-mid-fold=; NARROWING it to 512
-leaves all 50 cases green.  Narrowing costs promptness — a replacement is caught
-where it touches the last WIDTH bytes — and buys 0.43 ms against a bare size
-comparison's 0.28 ms, most of which is the cursor's own open.
-
-THE RESIDUAL: a same-LENGTH edit far enough back that the last 4 KiB is
-byte-identical passes the poll.  The FOLD verifies the whole prefix, so on a file
-somebody APPENDS TO the drift lasts until the first byte owed, and glance's own
-=scan= reports the interval as index disagreement meanwhile.
-
-NOTHING EVER APPENDS TO A ROTATED GENERATION, so its residual lasts exactly as
-long as the file does.  Rotation's =f-delete= was what came along instead —
-reproduced with every generation made by rotation, cap 6000: two rotations left
-generation 1 drained at 6960 B, a third fold appended past the cap and re-laid
-that generation from inside =graph:insert= (same size, a 58-byte tombstone as its
-first line, the last 4 KiB byte-identical), and the bounded question called it
-drained and unlinked it.  Twenty further folds later =pending= was empty and the
-tombstoned id was still LIVE, with the suite at 392/392.
-
-THE ANSWER MUST ALSO BE FRESH: rotation reads the candidate itself, where the
-=:marks= already in hand were taken before it.  A source with no mark was exactly
-drained WHEN THE FOLD STARTED, and the fold window between that read and the
-rotation is precisely where a checkout or a merge re-lays bytes.
-
-THE NEWLINE ASSERTION IS FREE TO BE WRONG IN ONE DIRECTION and is: refusing costs
-a fold that finds nothing owed, so the POLL asserts it and the FOLD does not
-(asserted on the fold path it would re-fold the whole file forever, appending
-equal records on every read).  Its one false refusal is a final line the WRITER
-tore, which leaves the cursor mid-line; that store polls pending and folds
-nothing until the next append puts a boundary back.  A TORN LINE THAT RIDES INTO
-A ROTATION NEVER GETS THAT BOUNDARY BACK: that generation reads pending for as
-long as it exists — one fold per poll interval that reads every source and takes
-nothing.  Pure cost and no loss, every byte of it HAVING been folded; it ends at
-the next rotation, whose =--external-folded-whole?= makes no newline assertion.
+THE NEWLINE ASSERTION IS FREE TO BE WRONG IN ONE DIRECTION: the POLL asserts it, the
+FOLD does not — asserted on the fold path it would re-fold the whole file forever,
+appending equal records on every read.  Its one false refusal is a final line the WRITER
+tore, leaving the cursor mid-line; that store polls pending and folds nothing until the
+next append restores a boundary.  A TORN LINE THAT RIDES INTO A ROTATION NEVER GETS
+THAT BOUNDARY BACK: that generation reads pending for as long as it exists, one fold per
+poll interval taking nothing — pure cost and no loss, every byte HAVING been folded;
+it ends at the next rotation, whose =--external-folded-whole?= makes no newline
+assertion.
 
 ** The hash budget
 
-FOUR PER SOURCE THE SURVEY READ WHOLE — two ranges, minted and verified — and
-nothing else hashes:
+FOUR PER SOURCE THE SURVEY READ WHOLE — two ranges, minted and verified — and nothing
+else hashes.  Bytes owed: FOUR (=--external-folded-in= verifies the claimed window and
+prefix, =--external-tail= records both, out of one buffer; a cursor absent or garbled
+hashes NOTHING).  Read whole with nothing owed: TWO (the tail verifies, no cursor
+written).  Blessed by the bound: ONE, over at most =--external-window-bytes=, no whole
+read — the poll's own cost, which the fold pays exactly.  A pass that ROTATES: ONE per
+candidate generation the survey did not read, NOT bounded (=--external-folded-whole?=
+over the whole prefix, ~9 ms at the cap).  A candidate the pass DID read whole carries
+that verdict in the survey and is not asked again; WHAT THE SKIP GIVES UP is the
+residual above and nothing more, ROTATION carrying the repair (=--external-refold=).
 
-- a source with bytes owed — FOUR: =--external-folded-in= verifies the claimed
-  window and prefix, =--external-tail= records both over the whole of what it
-  read, all out of one buffer.  A cursor absent or garbled hashes NOTHING, so a
-  lost cursor is the cheap case.
-- a source the survey read whole with nothing owed — TWO: the tail verifies and
-  no cursor is written.
-- a source the bound BLESSED — ONE, over at most =--external-window-bytes=, and
-  no whole read at all.  The poll's own cost, which the fold pays exactly.
-- a pass that ROTATES — ONE per candidate generation the survey did not read, and
-  NOT bounded: =--external-folded-whole?= over the whole prefix.  ~9 ms per
-  candidate at the cap, paid once per 1 MiB of notifications.
-
-Reading every source WHOLE to verify a prefix nothing is owed against made the
-fold O(TOTAL BYTES OF EVERY SOURCE) where it is O(BYTES OWED).  One line adopted,
-N drained 1 MiB generations beside it (same conditions, five runs; the fixture
-also adds and inserts one record, the ~4 ms floor):
-
-| drained generations |  before |  after | hashed before | after  |
-|---------------------+---------+--------+---------------+--------|
-|                   0 |  6.1 ms | 4.3 ms |           183 |    183 |
-|                   1 | 15.1 ms | 4.6 ms |     1,052,861 |  4,279 |
-|                   3 | 31.0 ms | 5.1 ms |     3,158,217 | 12,471 |
-|                   5 | 48.5 ms | 5.5 ms |     5,263,573 | 20,663 |
-
-Flat in the number of settled generations.  The rotating pass falls with it —
-=--external-folded-whole?= over a =butlast= candidate re-hashed bytes
-=--external-tail= had read moments earlier in the same call: 4,210,779 bytes
-hashed → 2,113,615, 126.4 ms → 71.0 ms.  A candidate the pass DID read whole
-carries that verdict in the survey and is not asked again.  WHAT THE SKIP GIVES
-UP is the residual above and nothing more; ROTATION carries the repair, asking
-the exact question of every =butlast= candidate and DROPPING THE CURSOR of one it
-refuses (=--external-refold=), so the next fold takes that generation whole.
-
-THE FIRST-SIGHTING SET IS A HASH TABLE.  =--read-external= kept =(assoc id
-entries)= over a list, quadratic in a source's distinct ids, which the 1 MiB cap
-makes ~18,000 of: 1,000 ids 15.0 ms, 4,000 208.2 ms, 18,000 5,029.6 ms.  Keyed by
-hash with the ORDER in a list beside it — materialized at the end, so first
-sighting still decides position and last sighting still decides kind — it is
-3.1 ms, 10.7 ms and 72.7 ms.  The re-fold path the digest introduced is a fresh
-way to reach the big case.
+The fold is O(BYTES OWED), flat in settled generations: over 5 drained 1 MiB
+generations 48.5 → 5.5 ms and 5,263,573 → 20,663 B hashed, the rotating pass 4,210,779
+→ 2,113,615 B and 126.4 → 71.0 ms.  THE FIRST-SIGHTING SET IS A HASH TABLE, keyed by
+hash with the ORDER in a list beside it and materialized at the end, so first sighting
+still decides position and last sighting still decides kind; =(assoc id entries)= over
+a list is quadratic in a source's distinct ids, ~18,000 at the 1 MiB cap (5,029.6 ms
+against 72.7 ms).
 
 ** Rotation and retirement
 
-GROWTH IS ROTATION (=--rotate-external-maybe=): the file is renamed and never
-truncated, and it FIRES ON THE OFFSET THE FOLD TOOK.  =refresh-external= hands
-rotation its own SURVEY, and the live file's entry is both conditions at once
-(=--external-took=): it is there because bytes were folded, and its OFFSET is the
-size that fold read and has just written the cursor to — drained by definition.
-Re-stating the SIZE afterwards made the cap bound nothing: measured with the cap
-at 32768 and the driver appending inside the window, 12 folds left the file at
-99,456 B and still growing, with ZERO rotations.  Bytes past that offset ride
-into the generation and are folded there, a generation being drained ahead of the
-live file, so bounding the file costs no line.
+GROWTH IS ROTATION (=--rotate-external-maybe=): the file is renamed, never truncated,
+and it FIRES ON THE OFFSET THE FOLD TOOK.  =refresh-external= hands rotation its own
+SURVEY; the live file's entry is both conditions at once (=--external-took=) — there
+because bytes were folded, its OFFSET the size that fold read and has just written the
+cursor to, drained by definition.  A SIZE re-stated afterwards makes the cap bound
+nothing (reproduced at cap 32768: 12 folds, 99,456 B, ZERO rotations).  Bytes past that
+offset ride into the generation and are folded there, a generation being drained ahead
+of the live file.
 
-The cursor is renamed to =EXTERNAL-<gen>.cursor= and the file to
-=EXTERNAL-<gen>.jsonl= — cursor first, since a generation with no cursor is
-re-folded whole (a no-op) where a fresh live file under the old cursor would have
-its first lines skipped.  The daemon's next append creates the live file again,
-opening the path per line (=Data.Org.External.appendLine=, =O_CREAT|O_APPEND=),
-so a rename between its open and its write lands that line in the ROTATED file —
-which still exists, is drained ahead of the live one, and is NEVER retired on the
-pass that made it: an older DRAINED generation goes at the START of the next
-rotation, so it outlives any in-flight open.  This is the store's own shape one
-file over, where the open WAL segment is appended to and sealed by a rename
-(inv 2).
+Cursor renamed to =EXTERNAL-<gen>.cursor= and file to =EXTERNAL-<gen>.jsonl=, CURSOR
+FIRST: a generation with no cursor is re-folded whole (a no-op) where a fresh live file
+under the old cursor would have its first lines skipped.  The daemon recreates the live
+file on its next append, opening the path per line (=Data.Org.External.appendLine=,
+=O_CREAT|O_APPEND=), so a rename between its open and its write lands that line in the
+ROTATED file — which still exists, is drained ahead of the live one, and is NEVER
+retired on the pass that made it, an older DRAINED generation going at the START of the
+next rotation.
 
-ROTATION MOVES A SPENT GENERATION; IT NEVER UNLINKS ONE.  =--external-retire=
-renames it into =meta/spent/=, cursor first and file after, and NO CODE PATH EVER
-REMOVES WHAT IT LEFT — glance's own rule one repo over.  Seven consecutive rounds
-of this predicate were each signed off and each had a live hole, and SIX OF THE
-SEVEN were losses only because =f-delete= has no next attempt: a wrong answer
-costs DISK now and leaves a file a reader can put back.
+ROTATION MOVES A SPENT GENERATION; IT NEVER UNLINKS ONE.  =--external-retire= renames it
+into =meta/spent/=, cursor first and file after; NO CODE PATH EVER REMOVES WHAT IT LEFT.
+The destination is beside the files it holds, so the rename is ONE atomic operation (a
+cross-filesystem =rename-file= degrades to a copy and a delete); =meta/= is already off
+every org walk (glance's denylist names it whole); =directory-files= over =meta/= with
+=--external-generation-re= names neither that directory nor its contents, taking a
+retired generation out of =--external-sources= with no filter to forget; and a store
+moved by path takes its spent generations with it.
 
-WHY =meta/spent/=, four reasons.  A rename inside one directory tree is ONE
-atomic operation, where a cross-filesystem =rename-file= degrades to a copy and a
-delete.  =meta/= is already off every walk that reads org files (glance's denylist
-names it whole), so a retired generation cannot come back as a document or a row.
-=directory-files= over =meta/= with =--external-generation-re= can name neither
-that directory nor its contents, which takes a retired generation out of
-=--external-sources= by construction with no filter for anybody to remember.  And
-a store moved by path takes its spent generations with it.
+A RETIRED GENERATION IS OUT OF THE FOLD'S REACH.  THE REPAIR IS BY HAND, one =mv=: the
+=.jsonl= ALONE back into =meta/=, where it carries no cursor and the next fold takes it
+WHOLE, idempotent by the crash rule; moving the cursor back would restore the answer
+that was wrong.  THAT REPAIR STRANDS THE OLD CURSOR under =spent/=, so the next
+retirement finds its destination taken, =--external-move= refuses to clobber, and the
+fresh =EXTERNAL-<gen>.cursor= is left in =meta/= for good — inert, nothing reading a
+cursor whose =.jsonl= is gone, rotation minting strictly above the newest generation
+=meta/= holds (=butlast= sparing it) so no number comes round again.  Pinned by
+=external-retire-refuses-a-destination-that-exists=.  NOTHING PRUNES =spent/=, taken
+deliberately: =org-glance-graph:clear-spent-external= is the explicit door,
+=rm -r <store>/.org-glance/meta/spent/= the other, and both are the reader's.
 
-A RETIRED GENERATION IS OUT OF THE FOLD'S REACH — a behaviour change, said out
-loud.  Keeping =spent/= in the source list would put every generation the store
-ever retired under every poll.  THE REPAIR IS BY HAND and it is one =mv=: the
-=.jsonl= ALONE goes back into =meta/=, where it carries no cursor and the next
-fold takes it WHOLE, idempotent by the crash rule.  Moving the cursor back with
-it would restore the very answer that was wrong.
-
-THAT REPAIR STRANDS THE OLD CURSOR: the =.cursor= stays under =spent/=, so the
-next retirement of that generation finds its destination taken,
-=--external-move= refuses to clobber, and the fresh =EXTERNAL-<gen>.cursor= is
-left in =meta/= for good while the =.jsonl= moves.  Inert — nothing reads a
-cursor whose =.jsonl= is gone, and rotation mints strictly above the newest
-generation =meta/= holds, =butlast= sparing it, so no number ever comes round
-again.  Repairing the SAME generation a second time is the one thing that ever
-meets it, and it then folds nothing, those bytes having been folded.  Pinned by
-=external-retire-refuses-a-destination-that-exists=.
-
-NOTHING PRUNES =spent/=, taken deliberately: a 1 MiB rotation cap times a few
-generations is nothing against one lost tombstone.
-=org-glance-graph:clear-spent-external= is the explicit door and
-=rm -r <store>/.org-glance/meta/spent/= is the other, and both are the reader's.
-
-A GENERATION IS RETIRED ON ITS OWN CURSOR AND NOT ON ITS POSITION.  Each
-candidate =butlast= names is asked =--external-folded-whole?=: the whole prefix
-hashed out of one read, the size and the verified offset coming out of that same
-buffer — unless the survey already read that candidate whole, in which case its
-verdict is the same reading and the file is not hashed twice.  A candidate the
-check REFUSES stays where it is AND HAS ITS CURSOR DROPPED (=--external-refold=),
-nothing saying that cursor still describes the file; the next fold takes the
-generation whole, a no-op where the bytes did not move and the repair where they
-did.  A generation that is not folded whole STAYS however old it is, and so does
-a DIRECTORY or a DANGLING SYMLINK wearing a generation's name — =directory-files=
-lists them like anything else, the read that would answer for them fails, and the
-same predicate spares them.  Measured against the swallowed read and the unlink
-together: both answered FOLDED WHOLE on =0 = 0=, and rotation removed the empty
-directory and the dangling link alike.
-
-ABSENCE OF EVIDENCE NEVER LICENSES A MOVE: a generation that appeared after
-=--read-external= listed the sources has been folded by nobody, carries no
-cursor, and is spared, with no rule of its own.  Position alone retired exactly
-that generation, and under the unlink every tombstone in it went with the file —
-a lost write note the next edit of the same id repairs, and a lost TOMBSTONE
-never self-heals, the blob being gone.  What position still decides is which
-generations are CANDIDATES at all, the newest being spared whatever its cursor
-says, an in-flight open of the writer's being about to land in it.  So "at most
-two on disk" is "at most two FOLDED-WHOLE ones IN THE LIVE DIRECTORY": a store
-that stops folding accumulates generations and loses none.
+A GENERATION IS RETIRED ON ITS OWN CURSOR AND NOT ON ITS POSITION.  Each candidate
+=butlast= names is asked =--external-folded-whole?=: whole prefix hashed out of one
+read, size and verified offset out of that same buffer — unless the survey already read
+it whole, whose verdict is the same reading, and it is not hashed twice.  A candidate
+the check REFUSES stays where it is AND HAS ITS CURSOR DROPPED (=--external-refold=);
+the next fold takes it whole, a no-op where the bytes did not move and the repair where
+they did.  A generation not folded whole STAYS however old it is, and so does a
+DIRECTORY or a DANGLING SYMLINK wearing a generation's name.  ABSENCE OF EVIDENCE NEVER
+LICENSES A MOVE: a generation that appeared after =--read-external= listed the sources
+carries no cursor and is spared, with no rule of its own.  Position decides only which
+generations are CANDIDATES, the newest spared whatever its cursor says (an in-flight
+open is about to land in it).  So "at most two on disk" is "at most two FOLDED-WHOLE
+ones IN THE LIVE DIRECTORY".
 
 ** The git ignore
 
-=--ensure-gitignore= keeps four things out of git — the live
-=meta/EXTERNAL.jsonl=, every rotated generation, every =.cursor= beside one, and
-the =meta/spent/= directory — as two globs and a directory, beside the =cache/=
-line already there for the same reason.  The family is a LOCAL HINT between the
-LOCAL daemon and the LOCAL Emacs; what has to reach another machine is the WAL
-RECORD the fold produces, which syncs on its own.  A notification that crossed a
-machine boundary named a blob the other side had already folded or could not
-resolve.
+=--ensure-gitignore= keeps four things out of git — the live =meta/EXTERNAL.jsonl=,
+every rotated generation, every =.cursor= beside one, the =meta/spent/= directory — as
+two globs and a directory, beside the =cache/= line already there.  The family is a
+LOCAL HINT between the LOCAL daemon and the LOCAL Emacs; what crosses machines is the
+WAL RECORD the fold produces.  ON A STORE THAT NEVER TRACKED THE FAMILY it removes the
+union-merge door and the resolver's reach into this family (belt beside inv 8's braces);
+THE DIGEST STAYS, load-bearing on a store the ignore came too late for.
 
-WHAT IT REMOVES, ON A STORE THAT NEVER TRACKED THE FAMILY: the union-merge door
-and the conflict resolver's reach into this family (belt beside inv 8's braces).
-THE DIGEST STAYS, and on a store the ignore came too late for it stays
-load-bearing against the merge itself.
+THE RETROFIT IS AN APPEND, where every other bootstrap marker is write-if-absent:
+=--ensure-gitignore= adds each line the file LACKS and leaves order, comments and
+hand-written rules alone.  Two costs, both taken: a line removed by hand comes back at
+the next open, and IGNORING DOES NOT UNTRACK — a store that already committed these
+files needs =git rm --cached .org-glance/meta/EXTERNAL*= (and =meta/spent=) run by hand
+once, and =git add -f= keeps one tracked on purpose.  MEASURED WITH REAL GIT: over a
+store whose family is tracked the four patterns leave =git check-ignore -q= exiting 1,
+=git status= reporting =EXTERNAL.jsonl= modified after an append, and the next commit
+carrying its bytes.  NOTHING IN THE SUITE ASSERTS THAT HALF:
+=org-glance-test:git-ignores= runs =check-ignore= over a repository holding nothing,
+where the patterns ARE the whole answer — said in the helper's own docstring.
 
-THE RETROFIT IS AN APPEND, where every other bootstrap marker is
-write-if-absent: a store made before this carries a one-line =cache/= file and
-would otherwise sync the family forever, so =--ensure-gitignore= adds each line
-the file LACKS and leaves the rest — order, comments and hand-written rules
-included — alone.  Two costs, both taken: a line removed by hand comes back at
-the next open, and IGNORING DOES NOT UNTRACK, so a store that already committed
-these files needs =git rm --cached .org-glance/meta/EXTERNAL*= (and =meta/spent=)
-run by hand once.  A reader who WANTS one tracked says so git's own way,
-=git add -f=, after which the ignore rule stops applying to it.
-
-MEASURED WITH REAL GIT: the four patterns appended to a store whose family is
-tracked leave =git check-ignore -q= exiting 1 (NOT ignored), =git status=
-reporting =EXTERNAL.jsonl= modified after an append, and the next commit carrying
-its bytes.  =git rm --cached= over the pair is what makes =check-ignore= name the
-rule and =status= go quiet.  NOTHING IN THE SUITE ASSERTS THAT HALF:
-=org-glance-test:git-ignores= runs =check-ignore= over a repository holding
-nothing, where the patterns ARE the whole answer, and the same assertion over a
-store that tracks the family would go red.  Said in the helper's own docstring.
-
-NOT TAKEN: A NOTIFICATION FILE PER MACHINE, =EXTERNAL-<host>.jsonl=, each with
-ONE writer and each read by everyone with its own cursor.  It would buy H3 back —
-a synced family no merge can corrupt, so a daemon here could feed an Emacs there,
-and the merge shut on the stores the ignore cannot reach.  Three things stand in
-the way.  The line format is a FROZEN cross-repo contract and the file NAME is
-part of it, so the daemon would have to learn a host and both sides would have to
-agree on how one is spelled (=system-name= against a container's hostname is no
-stable key).  The reader would fold N files where it folds one, and
-=--external-sources='s ordering rule — generations before the live file — has no
-meaning ACROSS hosts, so the last-sighting-wins fold would need a rule about
-whose sighting is later, a clock comparison this design has deliberately never
-made (=at= is recorded and nothing acts on it).  And the digest is owed anyway, a
-hand edit, a botched rotation and a restore all being single-writer events.
+NOT TAKEN: A NOTIFICATION FILE PER MACHINE, =EXTERNAL-<host>.jsonl=, one writer each and
+one cursor per reader; it would buy H3 back and shut the merge on the stores the ignore
+cannot reach.  Three obstacles: the line format is a FROZEN cross-repo contract and the
+file NAME is part of it, so the daemon must learn a host and both sides agree how one is
+spelled (=system-name= against a container's hostname is no stable key); the reader
+folds N files where it folds one, and =--external-sources='s ordering rule — generations
+before the live file — has no meaning ACROSS hosts, so last-sighting-wins would need a
+rule about whose sighting is later, a clock comparison this design has deliberately
+never made (=at= is recorded, nothing acts on it); and the digest is owed anyway, a hand
+edit, a botched rotation and a restore all being single-writer events.
 
 ** Violation
 
-- Rewriting the file at all reopens the race H1 names: a fold dropping what
-  another already took eats the head of whatever arrived between, and a lost
-  tombstone never self-heals, the blob being gone.
-- Trusting an offset whose digest no longer holds resumes mid-line and skips
-  lines nothing read.
-- Hashing at WRITE time, or verifying against a SECOND read of the file, leaves
-  that door open for the whole fold window and closes it nowhere else.
-- Asking the poll for a SIZE leaves a same-length re-laying unfolded forever;
-  asking it for the whole prefix puts a SHA-1 of every folded byte on every graph
-  read; taking the prefix check off the FOLD to pay for it puts the residual back
-  with nothing to close it.
-- ASKING THE POLL'S BOUNDED QUESTION ANYWHERE DESTRUCTIVE loses a generation
-  outright — on a file nothing appends to, that residual never expires.
+- Rewriting the file at all reopens the race H1 names: a fold dropping what another
+  already took eats the head of whatever arrived between, and a lost tombstone never
+  self-heals, the blob being gone.
+- Trusting an offset whose digest no longer holds resumes mid-line and skips lines
+  nothing read.
+- Hashing at WRITE time, or verifying against a SECOND read, leaves that door open for
+  the whole fold window and closes it nowhere else.
+- Asking the poll for a SIZE leaves a same-length re-laying unfolded forever; asking it
+  for the whole prefix puts a SHA-1 of every folded byte on every graph read; taking the
+  prefix check off the FOLD to pay for it puts the residual back with nothing to close
+  it.
+- ASKING THE POLL'S BOUNDED QUESTION ANYWHERE DESTRUCTIVE loses a generation outright —
+  on a file nothing appends to, that residual never expires.
 - Rotating on a size re-stated after the fold makes the cap bound nothing.
-- Retiring a generation on the pass that rotated it loses the line an in-flight
-  open is about to write; retiring one by POSITION takes every line it still owed
-  out of reach; retiring one on evidence taken BEFORE the fold ran takes one the
-  fold window re-laid.
-- UNLINKING INSTEAD OF MOVING makes every one of those a loss where a move makes
-  them a recoverable misfiling — what six of the seven holes had in common.
-- Reading a FAILED READ as an answer says the file is folded whole and takes it
-  away unread.
+- Retiring a generation on the pass that rotated it loses the line an in-flight open is
+  about to write; retiring one by POSITION takes every line it still owed out of reach;
+  retiring one on evidence taken BEFORE the fold ran takes one the fold window re-laid.
+- UNLINKING INSTEAD OF MOVING makes every one of those a loss where a move makes them a
+  recoverable misfiling — what six of the seven closed holes had in common.
+- Reading a FAILED READ as an answer says the file is folded whole and takes it away
+  unread.
 - Un-ignoring the family puts the merge door back.
 
-REJECTED: a lock across Emacsen (inv 7, and it buys nothing — there is no
-mutation to serialise), and shortening the file under any guard, =f-write-text=
-being =write-region= with =append= nil and destroying whatever the daemon
-appended between its own read and its own write.
+REJECTED: a lock across Emacsen (inv 7; there is no mutation to serialise), and
+shortening the file under any guard, =f-write-text= being =write-region= with =append=
+nil and destroying whatever the daemon appended between its own read and its own write.
 
 ** Pinned by
 
-The cursor and the digests: =external-a-rewrite-ahead-of-the-cursor-refolds= (the
-re-laid byte layout landing BETWEEN two folds) and
-=external-a-rewrite-inside-the-fold-window-refolds= (the same bytes landing
-INSIDE one, driven from =graph:insert=) — two cases over one shared tail, and the
-second is the only case in either repo that goes red against a write-time digest,
-verified by mutation.  The first was =a-union-merge-refolds= until the family
-stopped syncing; the bytes are the same and the cause is now a hand edit or a
-botched rotation.  Also =external-a-cursor-that-says-nothing-refolds= (one ladder
-over all five refusals, the past-the-end rung wearing the file's OWN digests so
-it reads the offset test and not a bogus hash), =external-cursor-counts-bytes= (a
-file that only GREW keeps its cursor), =external-rotates-under-an-append= (a line
-landing inside the fold window does not defer the rename; red under the re-stated
-size), =external-rotation-spares-an-undrained-generation= (three generations, the
-oldest owing a tombstone), =external-is-out-of-the-union-resolver= (inv 8's half,
-over THREE families — red under the old exclusion by name) and
-=external-drains-a-generation-before-the-live-file= — the order rule four
-documents state and nothing asserted until now: reversing =--external-sources=
-left all 38 external cases green.
+The cursor and the digests, two cases over one shared tail:
+=external-a-rewrite-ahead-of-the-cursor-refolds= (bytes re-laid BETWEEN two folds) and
+=external-a-rewrite-inside-the-fold-window-refolds= (the same bytes INSIDE one, driven
+from =graph:insert=) — the second the only case in either repo that goes red against a
+write-time digest, verified by mutation; the first was =a-union-merge-refolds= until the
+family stopped syncing.  Then =external-a-cursor-that-says-nothing-refolds= (one ladder
+over all five refusals, the past-the-end rung wearing the file's OWN digests),
+=external-cursor-counts-bytes=, =external-rotates-under-an-append=,
+=external-rotation-spares-an-undrained-generation=,
+=external-is-out-of-the-union-resolver= (inv 8's half, over THREE families), and
+=external-drains-a-generation-before-the-live-file= — the order rule four documents
+state and nothing asserted until now: reversing =--external-sources= left all 38
+external cases green.
 
-The move, the ignore and the failed read, eight cases:
-=external-rotation-moves-a-spent-generation-aside= (the bytes under
-=meta/spent/=, cursor beside them, byte for byte what left =meta/=),
-=external-retire-refuses-a-destination-that-exists= (a generation retired TWICE:
-the refusal keeps the first one's bytes and its offset, and leaves the second's
-cursor in =meta/= — the orphan the hand repair produces),
-=external-retire-moves-the-cursor-first= (interrupted between the two moves: the
-file is still a source and re-folds whole, where the reverse order strands the
-offset), =external-a-spent-generation-is-out-of-the-fold= (with the
-=.jsonl=-alone repair folding it whole again),
-=external-nothing-prunes-a-spent-generation= (four rotations, every retired file
-still there, =clear-spent-external= as the door),
-=external-rotation-spares-an-unreadable-generation= (hole 7's own reproduction:
-=chmod 000= over a generation carrying an unfolded tombstone),
+The move, the ignore and the failed read, eight:
+=external-rotation-moves-a-spent-generation-aside=,
+=external-retire-refuses-a-destination-that-exists= (a generation retired TWICE, the
+orphan cursor the hand repair produces), =external-retire-moves-the-cursor-first=
+(interrupted between the two moves), =external-a-spent-generation-is-out-of-the-fold=
+(with the =.jsonl=-alone repair), =external-nothing-prunes-a-spent-generation=,
+=external-rotation-spares-an-unreadable-generation= (=chmod 000=),
 =external-rotation-refuses-a-name-that-is-not-a-file= (a directory and a dangling
-symlink wearing a generation's name, with a real drained generation retired on
-the same pass so the case cannot pass on a rotation that moved nothing), and
-=external-the-family-is-git-ignored= plus
-=external-the-gitignore-retrofits-an-old-store= (git itself as the oracle; the
-append-on-open half asserted apart from it).
+symlink, a real drained generation retired on the same pass),
+=external-the-family-is-git-ignored= and
+=external-the-gitignore-retrofits-an-old-store= (git itself as the oracle).
 
-The poll, the bound and the residual, seven more:
-=external-a-same-size-rewrite-of-a-drained-file-is-pending= (the case the size
-comparison lost), =external-a-torn-final-line-leaves-the-file-pending= (the
-newline assertion's only honest mid-line offset),
-=external-the-fold-catches-what-the-window-passed= (the residual asserted, then
-closed by the prefix on the first byte owed),
-=external-rotation-spares-a-re-laid-generation= (a re-laying INSIDE the window),
-=external-rotation-spares-a-generation-re-laid-mid-fold= (the same re-laying
-OUTSIDE it, the reproduction above as a fixture),
-=external-rotation-spares-a-generation-that-appeared-mid-fold= (absence of
-evidence, with a drained generation retired on the same pass) and
-=external-an-offset-past-the-end-is-refused= (the clamp asserted first, so what
-the case reads is the offset).
+The poll, the bound and the residual, seven:
+=external-a-same-size-rewrite-of-a-drained-file-is-pending=,
+=external-a-torn-final-line-leaves-the-file-pending=,
+=external-the-fold-catches-what-the-window-passed=,
+=external-rotation-spares-a-re-laid-generation= (INSIDE the window),
+=external-rotation-spares-a-generation-re-laid-mid-fold= (OUTSIDE it),
+=external-rotation-spares-a-generation-that-appeared-mid-fold=,
+=external-an-offset-past-the-end-is-refused= (the clamp asserted first, so what the case
+reads is the offset).
+
+And =make interop='s =bytes-move-under-a-live-cursor= over in glance, the only thing
+either repo has that constrains the cursor's digests: it moves the bytes under a live
+cursor between two folds at the SAME LENGTH and asks both halves — that the fold refuses
+the offset, and that the peer's own =pending= answer says a plain READ would fold.
+Every other interop case only ever GROWS the file.
 
 ** Mutation table
 
-This round's five mutants, over the whole 404-case suite:
+This round's five, over the whole 404-case suite.  The move back to an =f-delete=
+reddens 6: =moves-a-spent-generation-aside=, =a-spent-generation-is-out-of-the-fold=,
+=nothing-prunes-a-spent-generation=, =carries-two-generations=,
+=rotation-spares-an-undrained-generation=, =rotation-refuses-a-name-that-is-not-a-file=.
+The read-failure refusal removed (=ignore-errors= over the whole read) reddens
+=rotation-spares-an-unreadable-generation= and
+=rotation-refuses-a-name-that-is-not-a-file=.
+The family dropped from the ignore reddens =the-family-is-git-ignored=.
+=--external-move= clobbering (=rename-file= with OK-IF-ALREADY t) reddens
+=retire-refuses-a-destination-that-exists=.  =--external-retire='s two moves swapped,
+file before cursor, reddens =retire-moves-the-cursor-first=.  The last two CLOSE A GAP
+rather than confirm a guard, both having survived the whole suite before this round; a
+swapped retire needs a CRASH to be visible, so the case interrupts it between the two
+moves.  Two more, a list-shaped oracle being able to agree with itself: the ignore's
+APPEND put back to =--write-if-absent= reddens =the-gitignore-retrofits-an-old-store=
+alone; the cursor left behind by =--external-retire= reddens four,
+=carries-two-generations= among them.
 
-| mutant                                 | red                                              |
-|----------------------------------------+--------------------------------------------------|
-| the move back to an =f-delete=         | 6: =moves-a-spent-generation-aside=,             |
-|                                        | =a-spent-generation-is-out-of-the-fold=,         |
-|                                        | =nothing-prunes-a-spent-generation=,             |
-|                                        | =carries-two-generations=,                       |
-|                                        | =rotation-spares-an-undrained-generation=,       |
-|                                        | =rotation-refuses-a-name-that-is-not-a-file=     |
-| the read-failure refusal removed       | 2: =rotation-spares-an-unreadable-generation=,   |
-| (=ignore-errors= over the whole read)  | =rotation-refuses-a-name-that-is-not-a-file=     |
-| the family dropped from the ignore     | 1: =the-family-is-git-ignored=                   |
-| =--external-move= clobbering           | 1: =retire-refuses-a-destination-that-exists=    |
-| (=rename-file= with OK-IF-ALREADY t)   |                                                  |
-| =--external-retire='s two moves        | 1: =retire-moves-the-cursor-first=               |
-| swapped, file before cursor            |                                                  |
-
-The last two CLOSE A GAP rather than confirm a guard: both survived the whole
-suite before this round, so the refusal that keeps the bytes and the order its own
-docstring calls load-bearing were held by nothing.  A swapped =--external-retire=
-needs a CRASH to be visible at all — uninterrupted, either order ends with both
-files under =spent/= — so the case interrupts it between the two moves.
-
-Two more were run because a list-shaped oracle can agree with itself: the ignore's
-APPEND put back to =--write-if-absent= reddens
-=the-gitignore-retrofits-an-old-store= alone, and the cursor left behind by
-=--external-retire= reddens four, =carries-two-generations= among them.
-=the-family-is-git-ignored= is the case that reads the CONTENT, through git.
-
-THE OLDER MUTANTS STILL HOLD, eight of them, each reddening its own: rotation put
-back on =--external-drained?= reddens =re-laid-mid-fold= ALONE; the past-the-end
-refusal removed reddens =an-offset-past-the-end-is-refused= and the
-=says-nothing= ladder; the retire's check removed outright reddens the four
-=rotation-spares-= cases; the window comparison dropped from
-=--external-drained?= reddens the first two; the newline assertion dropped
+THE OLDER MUTANTS STILL HOLD, eight: rotation put back on =--external-drained?= reddens
+=re-laid-mid-fold= ALONE; the past-the-end refusal removed reddens
+=an-offset-past-the-end-is-refused= and the =says-nothing= ladder; the retire's check
+removed outright reddens the four =rotation-spares-= cases; the window comparison
+dropped from =--external-drained?= reddens the first two; the newline assertion dropped
 reddens the second alone; the FOLD's prefix check dropped reddens
-=the-fold-catches-what-the-window-passed= and =re-laid-mid-fold=; rotation put
-back on a bare size comparison reddens the two =re-laid= cases; and rotation
-deciding on the READ's =:marks= instead reddens =re-laid-mid-fold= and three
-more, which is why the answer is taken at the retire.  Two more show the older
-cases still read: a verifier asking =--external-digests= for the file's SIZE
-where the cursor's offset belongs reddens eight, =cursor-counts-bytes= among
-them; and the poll's window START moved off =--external-window-beg= reddens
-=the-fold-catches-what-the-window-passed= and =re-laid-mid-fold=, the two cases
-whose file is longer than the window.  Moving the ONE SPELLER instead reddens
-nothing.  59 external cases today, up from 50.
-
-And by =make interop='s =bytes-move-under-a-live-cursor= over in glance, the only
-thing either repo has that constrains the cursor's digests at all: the driver
-moves the bytes under a live cursor between two folds — at the SAME LENGTH, the
-lines being fixed-width — and asks both halves, that the fold refuses the offset
-and that the peer's own =pending= answer says a plain READ would fold.  Every
-other interop case passes against a reader whose cursor is an offset alone, those
-cases only ever GROWING the file.
+=the-fold-catches-what-the-window-passed= and =re-laid-mid-fold=; rotation put back on a
+bare size comparison reddens the two =re-laid= cases; rotation deciding on the READ's
+=:marks= instead reddens =re-laid-mid-fold= and three more, which is why the answer is
+taken at the retire.  Two more show the older cases still read: a verifier asking
+=--external-digests= for the file's SIZE where the cursor's offset belongs reddens
+eight, =cursor-counts-bytes= among them; the poll's window START moved off
+=--external-window-beg= reddens =the-fold-catches-what-the-window-passed= and
+=re-laid-mid-fold=.  Moving the ONE SPELLER instead reddens nothing.  59 external cases
+today, up from 50.
 
 * Known hazards
 
-Costs the code ships WITH, deliberately.  An invariant is a rule a change must
-preserve; a hazard is what today's design gives up, so it is lettered and kept
-apart.  Each was reproduced with a probe before being added, and each earns a
-test in [[file:../test/test-external.el][test-external.el]] pinning today's
-behaviour, so closing one turns its own case red.  An OPEN entry states what it
-costs, what would close it, and why it stands.  A letter is never reused, and a
-CLOSED entry keeps its place so the symptom stays findable.
+Costs the code ships WITH, deliberately.  Each was reproduced with a probe and each
+earns a test in [[file:../test/test-external.el][test-external.el]] pinning today's
+behaviour, so closing one turns its own case red.  An OPEN entry states what it costs,
+what would close it, why it stands; a letter is never reused, and a CLOSED entry keeps
+its place so the symptom stays findable.
 
 ** H1 -- CLOSED 2026-08-12: the external fold's truncate race ate a tombstone
 
-*The symptom.*  =org-glance-graph--truncate-external= rewrote the file with a
-character COUNT dropped from its head, counted against the file the fold had
-read.  Inv 7 gives two Emacsen folding one store no lock, so the second truncate
-ate the head of whatever landed between.  Measured: E2 reads 74 characters, E1
-folds and empties, the writer appends the 91-character tombstone, E2 truncates by
-74 and leaves =tombstone":true}=, with the record LIVE and the fragment surviving
-every later fold.  A lost write note self-heals, the blob still being the truth;
-a lost TOMBSTONE never does, the blob having gone.
-
-*Why a guarded mutation did not close it.*  A compare-and-swap on the prefix
-narrowed the window and left an inner one: =f-write-text= is =write-region= with
-=append= nil, so a line the daemon appends between that function's own
-=f-read-text= and its own =f-write-text= is destroyed — H1's exact symptom,
+*The symptom.*  =org-glance-graph--truncate-external= rewrote the file with a character
+COUNT dropped from its head, counted against the file the fold had read; inv 7 gives two
+Emacsen folding one store no lock, so the second truncate ate the head of whatever
+landed between.  Reproduced: E2 reads 74 characters, E1 folds and empties, the writer
+appends the 91-character tombstone, E2 truncates by 74 and leaves =tombstone":true}= —
+the record LIVE, the fragment surviving every later fold.  A lost write note self-heals,
+the blob still being the truth; a lost TOMBSTONE never does, the blob having gone.  A
+compare-and-swap on the prefix did not close it, leaving an inner window: =f-write-text=
+is =write-region= with =append= nil, so a line the daemon appends between that
+function's own =f-read-text= and its own =f-write-text= is destroyed — the same symptom,
 reachable with ONE Emacs.
 
-*Closed by inv 34*, which removes the mutation: the fold reads from a byte cursor
-and writes that cursor forward, and growth is handled by rotation.  Pinned by
-=external-race-spares-the-tombstone=,
-=external-keeps-a-note-that-arrived-mid-fold=,
+*Closed by inv 34*, which removes the mutation: the fold reads from a byte cursor and
+writes that cursor forward, growth handled by rotation.  Pinned by
+=external-race-spares-the-tombstone=, =external-keeps-a-note-that-arrived-mid-fold=,
 =external-keeps-a-byte-identical-note=, =external-double-fold-is-a-no-op=,
 =external-a-cursor-that-says-nothing-refolds= and the four rotation cases.
 
-*What the cursor cost, and what pays it.*  An offset is a claim about a file's
-first N bytes; anything re-laying the bytes ahead of it resumes the fold
-MID-LINE, where the fragment is skipped in silence and the line in front of it is
-never read — reproduced with the real fold, leaving a record LIVE with nothing
-pending, H1's own symptom under a new cause.  Its four doors are inv 34's three
-plus the merge: the resolver is shut by structure (inv 8); the merge is shut where
-git does not already track the family (inv 34, at the cost of H3), an ignore
-reaching no tracked path, so on a store made before that the merge is still live;
-and a hand edit, a botched rotation and a restore are everywhere.  The PREFIX
-DIGEST answers all four by giving the position an identity: a prefix that moved
-re-folds.
-
-*The residual is gone with it.*  Under the swap, a note arriving byte-identical
-to the text a fold read was indistinguishable from it and was dropped with it.
-An OFFSET counts bytes rather than comparing them, so the second note survives —
-=external-keeps-a-byte-identical-note=.
+*What the cursor cost, and what pays it.*  Anything re-laying the bytes ahead of an
+offset resumes the fold MID-LINE, the fragment skipped in silence and the line in front
+of it never read — H1's own symptom under a new cause, reproduced with the real fold.
+Its four doors are inv 34's three plus the merge, shut only where git does not already
+track the family (inv 34, at the cost of H3), an ignore reaching no tracked path.  The
+PREFIX DIGEST answers all four by giving the position an identity: a prefix that moved
+re-folds.  The residual goes with it — under the swap a note arriving byte-identical to
+the text a fold read was dropped with it, where an OFFSET counts bytes rather than
+comparing them (=external-keeps-a-byte-identical-note=).
 
 ** H2 -- a folded delete is undone by the id's open material buffer
 
-=org-glance-material:delete= discards the id's open material buffer, naming
-unsaved edits in its consent prompt (inv 11).  The fold's tombstone arm inserts
-the spec and touches no buffer, so that buffer survives a folded delete and the
-next save's =org-glance-material:sync= appends a LIVE record over the tombstone.
+=org-glance-material:delete= discards the id's open material buffer, naming unsaved edits
+in its consent prompt (inv 11).  The fold's tombstone arm inserts the spec and touches no
+buffer, so that buffer survives a folded delete and the next save's
+=org-glance-material:sync= appends a LIVE record over the tombstone.  Reproduced
+(=external-delete-is-undone-by-an-open-buffer=), both ways: with the blob directory left
+standing the save is silent; with it removed — as the daemon leaves it — the save asks
+org's own "Directory does not exist; create?" and a =yes= puts the blob back too.  A =no=
+aborts the save, so =after-save-hook= never runs and the tombstone stands: the record and
+the blob never come back apart.  What does not come back is the blob's occurrence
+history, canonical content under inv 5.
 
-Reproduced (=external-delete-is-undone-by-an-open-buffer=), both ways: with the
-blob directory left standing the save is silent; with it removed — as the daemon
-leaves it — the save asks org's own "Directory does not exist; create?" and a
-=yes= puts the blob back too.  A =no= aborts the save, so =after-save-hook= never
-runs and the tombstone stands: the record and the blob never come back apart.
-What does not come back is the blob's occurrence history, canonical content under
-inv 5.
-
-- *Costs:* one live record and one recreated blob per delete of an id somebody
-  had open, minus that id's =occurrences/=.  The record and the document come
-  back together, so no store-level counter moves in the ordinary interleaving.
-  It IS visible in one: a save landing BEFORE the fold reads leaves the tombstone
-  standing over a blob back on disk, which =glance='s scan counts as an unindexed
-  blob (=Data.Org.Index.driftOf=, =dfUnindexed=) — pinned as
-  =external-delete-after-a-save-strands-the-blob=.  Deleting the resurrected id
-  through =glance= again is refused, its trash destination already holding that
-  id (=Data.Org.Trash=, "the trash already holds"); =M-x org-glance-delete=
+- *Costs:* one live record and one recreated blob per delete of an id somebody had open,
+  minus that id's =occurrences/=.  Record and document come back together, so no
+  store-level counter moves in the ordinary interleaving.  It IS visible in one: a save
+  landing BEFORE the fold reads leaves the tombstone standing over a blob back on disk,
+  which =glance='s scan counts as an unindexed blob (=Data.Org.Index.driftOf=,
+  =dfUnindexed=) — pinned as =external-delete-after-a-save-strands-the-blob=.  Deleting
+  the resurrected id through =glance= again is refused, its trash destination already
+  holding that id (=Data.Org.Trash=, "the trash already holds"); =M-x org-glance-delete=
   clears the record.
-- *Would close it:* discarding the buffer in the tombstone arm, as
-  =material:delete= does; or discarding only CLEAN buffers and leaving a dirty
-  one with a warning.
-- *Open because:* a fold runs in the BACKGROUND, off any read, and
-  =material:delete='s consent-when-dirty guard exists precisely because
-  discarding a dirty buffer needs a human.  Silently discarding one during a
-  background fold breaks inv 11 to save a record =M-x org-glance-delete= clears
-  in one command.
+- *Would close it:* discarding the buffer in the tombstone arm, as =material:delete=
+  does; or discarding only CLEAN buffers and leaving a dirty one with a warning.
+- *Open because:* a fold runs in the BACKGROUND, off any read, and =material:delete='s
+  consent-when-dirty guard exists precisely because discarding a dirty buffer needs a
+  human.  Silently discarding one during a background fold breaks inv 11 to save a record
+  =M-x org-glance-delete= clears in one command.
 
 ** H3 -- a daemon HERE cannot notify an Emacs THERE
 
-The notification family is git-ignored (inv 34): =meta/EXTERNAL.jsonl=, every
-rotated generation, every =.cursor= and =meta/spent/= stay on the machine that
-wrote them.  So the DAEMON-HERE / EMACS-THERE topology stops working — machine B
-folds nothing machine A's daemon announced.
+The notification family is git-ignored (inv 34): =meta/EXTERNAL.jsonl=, every rotated
+generation, every =.cursor= and =meta/spent/= stay on the machine that wrote them, so the
+DAEMON-HERE / EMACS-THERE topology stops working — machine B folds nothing machine A's
+daemon announced.
 
-- *Costs:* nothing where the daemon and Emacs share a machine, which is what
-  =glance= is built for — it serves 127.0.0.1 and writes the blobs Emacs reads.
-  Where they do not, B's records go stale until somebody runs
-  =M-x org-glance-reindex= there, or A's Emacs folds and syncs the WAL records
-  that fold produced.  Deleted ids are the sharp end: a tombstone A folded does
-  reach B through the WAL, but a delete NOBODY folded reaches nobody.
-- *Would close it:* a notification file per machine, =EXTERNAL-<host>.jsonl=,
-  one writer each and one cursor per reader per file — then the family can sync
-  and no merge can corrupt it.  Written up under inv 34's NOT TAKEN, with the
-  three things standing in its way.
-- *Open because:* what syncing bought was one hazard-carrying door — the git
-  union merge that inserted another machine's unfolded lines ahead of a live
-  cursor and cost a tombstone (inv 34, H1's second cause) — for a topology
-  nothing in either repo supports today.  A reader who has it can undo the
-  decision per store: the ignore does not untrack, so =git add -f= over the
-  family keeps it synced, and the merge door comes back with it.
+- *Costs:* nothing where the daemon and Emacs share a machine, which is what =glance= is
+  built for — it serves 127.0.0.1 and writes the blobs Emacs reads.  Where they do not,
+  B's records go stale until somebody runs =M-x org-glance-reindex= there, or A's Emacs
+  folds and syncs the WAL records that fold produced.  Deleted ids are the sharp end: a
+  tombstone A folded does reach B through the WAL, but a delete NOBODY folded reaches
+  nobody.
+- *Would close it:* a notification file per machine, =EXTERNAL-<host>.jsonl=, one writer
+  each and one cursor per reader per file — then the family can sync and no merge can
+  corrupt it.  Written up under inv 34's NOT TAKEN, with the three things standing in its
+  way.
+- *Open because:* what syncing bought was one hazard-carrying door — the git union merge
+  that inserted another machine's unfolded lines ahead of a live cursor and cost a
+  tombstone (inv 34, H1's second cause) — for a topology nothing in either repo supports
+  today.  A reader who has it can undo the decision per store: the ignore does not
+  untrack, so =git add -f= over the family keeps it synced, and the merge door comes back
+  with it.

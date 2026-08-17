@@ -2,7 +2,7 @@
 
 The drawer properties, content markers and file keywords org-glance gives
 meaning to.  Everything else in a headline is ordinary org.  Keep this current
-when a feature adds or changes one (see [[file:../CLAUDE.md][CLAUDE.md]]).
+when a feature adds or changes one (see [[file:../AGENTS.md][AGENTS.md]]).
 
 * Headline drawer properties
 

@@ -1,38 +1,35 @@
 #+TITLE: org-glance
 #+AUTHOR: Dmitry Akatov
-#+EMAIL: akatovda@yandex.com
+#+EMAIL: dmitry.akatov@protonmail.com
 
 #+CATEGORY: org-glance
 #+STARTUP: overview
 
-Projections over your [[https://orgmode.org/][org-mode]] headlines.  The org files are the source
-of truth — durable and addressable; everything else is a projection.  Every
-entry gets an id and its own file; tags are collections carrying their own todo cycle and capture template;
-the table, the overview and the relations index are derived views — fast,
-rebuildable, and browsable without opening a single file.
+Thin metadata layer, query engine and UI for [[https://www.gnu.org/savannah-checkouts/gnu/emacs/emacs.html][Emacs]] [[https://orgmode.org/][org-mode]].
 
-* How it works
+* Install
 
-If you know org-mode, you know almost everything already:
+The published package archive is the simplest route.  Add the archive, then let
+=use-package= install and set it up:
 
-1. *Headlines are the unit.*  Every captured headline lives as its own small
-   org file in a hidden store (=.org-glance/= under =org-glance-directory=),
-   keyed by an =:ORG_GLANCE_ID:= property org-glance adds for you.
+#+begin_src emacs-lisp
+(add-to-list 'package-archives
+             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
 
-2. *Tags are collections.* An ordinary org tag (=:book:=, =:article:=)
-   groups headlines; a tag exists the moment you capture something
-   with it.  Optionally give a tag its own config: todo cycle and capture
-   template (=C= in the transient — or =C= in that tag's overview / table to
-   edit it directly).
+(use-package org-glance
+  :bind (("C-x j" . org-glance-transient))
+  :config (org-glance-init)
+  :ensure t)
+#+end_src
 
-3. *Views are projections.*  The table and the overview are generated,
-   read-only summaries built from an index — fast, and always rebuildable.
-   You never edit a view: you open the headline behind it, edit ordinary org,
-   save; views refresh themselves.
+=C-x j= opens =org-glance-transient=, the transient dispatcher (see
+[[*Usage][Usage]]); =org-glance-init= bootstraps the store.
 
-4. *Links are references.*  A link from one headline to another is indexed as
-   a typed relation, so the relations index answers "what references this?" —
-   one more projection, rebuilt with the rest.
+The =rails-to-cosmos= archive provides =org-glance= and its
+[[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the
+remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep
+a MELPA entry in =package-archives= too.  Everything else (=org= and its
+submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
 
 * Usage
 
@@ -78,8 +75,8 @@ Act on the row/heading at point without opening anything:
 | =M= / =U=             | mark all visible / unmark all                                                  |                              |                           |                                              |
 | =C-c C-t=           | change todo state                                                              |                              | one prompt sets all       |                                              |
 | =C-c C-s= / =C-c C-d= | schedule / deadline                                                            | clear it                     |                           |                                              |
-| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it                |                                       |                           |                                              |
-| =C-c +=             | add a column (drawer property or relation kind)                  |                                       |                           |                                              |
+| =+= / =-=             | add a headline to the view's tag (capture) / remove one from it                |                              |                           |                                              |
+| =C-c +=             | add a column (drawer property or relation kind)                                |                              |                           |                                              |
 | =C-c -=             | remove the column at point (prompts when point is off a column)                | always prompt for the column |                           |                                              |
 | =:=                 | add another tag to the headline                                                | remove one                   |                           |                                              |
 | =j= (or =!=)          | open a link inside the headline                                                |                              |                           |                                              |
@@ -97,7 +94,9 @@ Act on the row/heading at point without opening anything:
 | =?=                 | show the key legend (table)                                                    |                              |                           | hide it                                      |
 | =C-c C-c=           | save the layout (reference tables: prompt for a scope)                         |                              |                           |                                              |
 
-Column layout, sort and added columns persist per tag.
+Column layout, sort and added columns persist per tag.  Optionally give a tag
+its own config: todo cycle and capture template (=C= in the transient — or =C=
+in that tag's overview / table to edit it directly).
 
 ** 3. Edit a headline
 
@@ -172,13 +171,13 @@ OUTSIDE the blocks stays public and searchable.
 
 =C-c #= is the only crypt key; what it does depends on where point is:
 
-| Point / buffer state          | =C-c #=                                      |
-|-------------------------------+--------------------------------------------|
-| active region                 | wrap it in a crypt block                   |
-| sealed buffer (ciphertext)    | unseal it (prompts, hardens the buffer)    |
-| inside a plaintext block      | unwrap that block -- public on save        |
-| decrypted, outside any block  | seal it back, forgetting the password      |
-| plaintext headline            | encrypt the whole body as one block        |
+| Point / buffer state         | =C-c #=                                   |
+|------------------------------+-----------------------------------------|
+| active region                | wrap it in a crypt block                |
+| sealed buffer (ciphertext)   | unseal it (prompts, hardens the buffer) |
+| inside a plaintext block     | unwrap that block -- public on save     |
+| decrypted, outside any block | seal it back, forgetting the password   |
+| plaintext headline           | encrypt the whole body as one block     |
 
 ** 6. Repeating headlines keep their history
 
@@ -188,23 +187,21 @@ A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With
 state before org resets it; the table's =Rep= column marks repeaters, and
 =l= (=C-c h= in the buffer) opens any past occurrence read-only.
 
-** Customization
+* Customization
 
-| Variable                               | Default                       |                                                                                            |
-|----------------------------------------+-------------------------------+--------------------------------------------------------------------------------------------|
-| =org-glance-directory=                   | =org-directory=                 | root of the managed content (store lives in =.org-glance/=)                                  |
-| =org-glance-overview-default-view=       | =org-glance-table=              | what =o= opens; =org-glance-overview= for org-text                                             |
-| =org-glance-filter-spec=                 | active, -archived, -commented | ambient filter every view starts from (=nil= = everything)                                   |
-| =org-glance-view-fill-frame=             | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
-| =org-glance-repeat-history-depth=        | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
-| =org-glance-material-password-ttl=       | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
-| =org-glance-material-hidden-properties=  | id + hash                     | drawer keys concealed AND edit-protected in material buffers                               |
-| =org-glance-table-state-colors=          | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
-| =org-glance-plugins=                     | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
-| =org-glance-conflict-resolution=         | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
-| =org-glance-tag-config-dir=              | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
-| =org-glance-graph-segment-max-bytes=     | 256k                          | WAL segment size before sealing                                                            |
-| =org-glance-graph-compact-segment-count= | =4=                             | sealed segments that trigger auto-compaction                                               |
+| Variable                              | Default                       |                                                                                            |
+|---------------------------------------+-------------------------------+--------------------------------------------------------------------------------------------|
+| =org-glance-directory=                  | =org-directory=                 | root of the managed content (store lives in =.org-glance/=)                                  |
+| =org-glance-overview-default-view=      | =org-glance-table=              | what =o= opens; =org-glance-overview= for org-text                                             |
+| =org-glance-filter-spec=                | active, -archived, -commented | ambient filter every view starts from (=nil= = everything)                                   |
+| =org-glance-view-fill-frame=            | =t=                             | views take the whole frame; =nil= keeps your windows                                         |
+| =org-glance-repeat-history-depth=       | =0=                             | occurrence snapshots kept: N / =t= = all / =0= = off                                           |
+| =org-glance-material-password-ttl=      | =300=                           | seconds a crypt password stays cached; =0= = forever                                         |
+| =org-glance-material-hidden-properties= | id + hash                     | drawer keys concealed AND edit-protected in material buffers                               |
+| =org-glance-table-state-colors=         | tokyo-night-ish               | per-state badge colours (falls back to =org-todo-keyword-faces=, then =…-default-state-color=) |
+| =org-glance-plugins=                    | =nil=                           | plugins to load at init (e.g. =(llm)=); =I= enables one, =U= disables                            |
+| =org-glance-conflict-resolution=        | =ask=                           | git-conflict healing: =ask= / =union= / =nil= (error)                                            |
+| =org-glance-tag-config-dir=             | =nil=                           | override dir of per-tag config files (=config/tags/=)                                        |
 
 Example — org-text views, everything visible, daily history for a year:
 
@@ -214,59 +211,11 @@ Example — org-text views, everything visible, daily history for a year:
       org-glance-repeat-history-depth 365)
 #+end_src
 
-** The store, briefly
+* Plugins
 
-A segmented, append-only JSONL log with atomic commits, compaction, crash
-recovery and git-sync conflict healing.  The per-headline org files are
-canonical; every index is derived and rebuildable (=M-x org-glance-reindex=).
-Deletion (=D=, =M-x org-glance-delete=) writes a tombstone after a
-confirmation that names any headlines whose links would dangle.
-
-Because the org files are canonical, another program may edit or remove one
-directly.  It says so by appending the entry's id to =meta/EXTERNAL.jsonl= (the
-contract the =glance= daemon writes), marking a removal ="tombstone":true=, and
-the next read folds that entry back into the log by itself -- an edit as a fresh
-record, a removal as a tombstone.  Open tables and overviews repaint when you
-next look at them; =M-x org-glance-graph:refresh-external= forces the fold now.
-
-That file is LOCAL: it is git-ignored, along with the generations it rotates
-into and their fold cursors, because what has to travel between machines is the
-log record the fold produces.  Ignoring does not untrack, so a store that
-committed these files before the rule existed keeps syncing them until you run
-=git rm --cached '.org-glance/meta/EXTERNAL*'= over them once.  A spent
-generation is moved to =meta/spent/= and kept there; nothing prunes it --
-=M-x org-glance-graph:clear-spent-external= is how you empty that directory when
-it grows tiresome.
-
-* Install
-
-The published package archive is the simplest route.  Add the archive, then let
-=use-package= install and set it up:
-
-#+begin_src emacs-lisp
-(add-to-list 'package-archives
-             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
-
-(use-package org-glance
-  :bind (("C-x j" . org-glance-transient))
-  :config (org-glance-init)
-  :ensure t)
-#+end_src
-
-=C-x j= opens =org-glance-transient=, the transient dispatcher (see
-[[*Highlights][Highlights]]); =org-glance-init= bootstraps the store.
-
-The =rails-to-cosmos= archive provides =org-glance= and its
-[[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the
-remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep
-a MELPA entry in =package-archives= too.  Everything else (=org= and its
-submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
-
-** Plugins
-
-Optional features ship as SEPARATE packages, so a plain install stays minimal.
-Two steps, and they belong to different tools: your package manager installs
-the package, org-glance enables it.  Install it, then list it in
+Optional features ship as SEPARATE packages.  Two steps, and they belong to
+different tools: your package manager installs the package, org-glance enables
+it.  Install it, then list it in
 =org-glance-plugins= — or press =I= in the transient (=U= disables).  The
 transient's *System* heading lists what is enabled and marks any plugin whose
 library failed to load:
@@ -282,36 +231,23 @@ library failed to load:
   [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] session in the
   headline's data directory (or its =:ORG_GLANCE_PROJECT_DIR:=, set with
   =C-c d= in a materialized buffer); =L= lists every session (running /
-  exited / stopped) from a persisted cache; =C-c l= opens the session for
+  exited / stopped), derived live at each refresh; =C-c l= opens the session for
   the headline at hand.  It depends on =agnostic-llm= (also on the
   =rails-to-cosmos= archive), which pulls in =vterm= — loaded lazily on
   first use.  Core org-glance does NOT depend on it.
 
-* Development
+* Maintenance
 
-For hacking on org-glance, clone the repo and load it directly.  It is
-a multi-directory package: =org-glance.el= is at the root, modules under
-=src/data= and =src/view=; it does NOT add those to =load-path= itself, so
-all three must be on it.  [[https://github.com/rails-to-cosmos/table-view][table-view]] and [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]] are external
-dependencies from the =rails-to-cosmos= ELPA archive (not on MELPA); the
-MELPA deps above are still needed.  (=Eask= is the dev/test harness, not
-required to use the package.)
+Everything derived rebuilds from the org files, so these are safe to run at any
+time:
 
-#+begin_src emacs-lisp
-(dolist (dir '("" "src/data" "src/view"))
-  (add-to-list 'load-path (expand-file-name dir "~/path/to/org-glance")))
-(require 'org-glance)
-#+end_src
+| Command                                    | What it does                                     |
+|--------------------------------------------+--------------------------------------------------|
+| =M-x org-glance-reindex=                     | rebuild every derived index from the org files   |
+| =M-x org-glance-graph:refresh-external=      | fold in edits made by another program right now  |
+| =M-x org-glance-graph:clear-spent-external=  | delete spent notification files to reclaim space |
 
-With =straight.el= (also needs recipes for [[https://github.com/rails-to-cosmos/table-view][table-view]] and [[https://github.com/rails-to-cosmos/agnostic-llm][agnostic-llm]]):
+* Hacking
 
-#+begin_src emacs-lisp
-(use-package org-glance
-  :straight (org-glance :type git :host github :repo "rails-to-cosmos/org-glance"
-                        :files ("*.el" "src/data/*.el" "src/view/*.el")))
-(use-package table-view
-  :straight (table-view :type git :host github :repo "rails-to-cosmos/table-view"))
-
-(use-package agnostic-llm
-  :straight (agnostic-llm :type git :host github :repo "rails-to-cosmos/agnostic-llm"))
-#+end_src
+Conventions, invariants and the build/test commands: [[file:AGENTS.md][AGENTS.md]].
+Design wiki, including the local-development setup: [[file:docs/index.org][docs/index.org]].

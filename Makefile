@@ -27,9 +27,9 @@ test:
 	eask reinstall
 	eask run command test
 
-# Gate: checkdoc (CLAUDE.md docstring rules) + relint (store regexps).
+# Gate: checkdoc (AGENTS.md docstring rules) + relint (store regexps).
 # package-lint is advisory only -- its hyphen-separator rule conflicts with
-# the project's documented `:' public-API naming (see CLAUDE.md).
+# the project's documented `:' public-API naming (see AGENTS.md).
 lint:
 	make clean
 	eask lint checkdoc
