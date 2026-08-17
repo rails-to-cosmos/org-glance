@@ -24,7 +24,7 @@ The =rails-to-cosmos= archive provides =org-glance= and its [[https://github.com
 
 Entrypoint is =org-glance-transient= (=C-x j=).
 
-** 1. Capture a headline
+** Capture
 
 =C-x j += → pick (or type) a tag → an org-capture-style buffer opens →
 write an ordinary headline, =C-c C-c=:
@@ -35,7 +35,7 @@ DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
 Passed through a civet.  [[https://example.com][Homepage]]
 #+end_src
 
-** 2. Browse a tag
+** Browse a tag
 
 =C-x j o= → pick a tag → its *table*: one row per headline, colour-coded
 todo states:
@@ -87,7 +87,7 @@ Column layout, sort and added columns persist per tag.  Optionally give a tag
 its own config: todo cycle and capture template (=C= in the transient — or =C=
 in that tag's overview / table to edit it directly).
 
-** 3. Edit a headline
+** Edit a headline
 
 =RET= on a row/heading (or =C-x j m= anywhere) *materializes* it: its file
 opens in a normal org buffer.  Everything org can do works here — this IS
@@ -95,7 +95,7 @@ org-mode.  =C-x C-s= saves and re-indexes; open views refresh on their next
 display.  (The =:ORG_GLANCE_ID:= drawer is concealed and protected: hand
 edits to it revert on save with a warning.)
 
-** 4. Connect headlines
+** Relations
 
 In a materialized buffer — or while capturing (step 1) — =@= at the start of
 a word prompts for another headline and inserts a link to it; =C-u @= also
@@ -142,7 +142,7 @@ matching the scope restores it.
 A link can also address a whole view:
 =[[org-glance-overview:coffee?done=nil][Active coffees]]=.
 
-** 5. Keep secrets
+** Encryption
 
 Wrap a region in a crypt block with =C-c #= (no region: the whole body):
 
@@ -168,7 +168,7 @@ OUTSIDE the blocks stays public and searchable.
 | decrypted, outside any block | seal it back, forgetting the password   |
 | plaintext headline           | encrypt the whole body as one block     |
 
-** 6. Repeating headlines keep their history
+** Repeating headlines
 
 A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With
 =org-glance-repeat-history-depth= set (N newest, =t= = all, per-headline
@@ -176,7 +176,7 @@ A headline with a repeater (=SCHEDULED: <… +1d>=) stays ONE headline.  With
 state before org resets it; the table's =Rep= column marks repeaters, and
 =l= (=C-c h= in the buffer) opens any past occurrence read-only.
 
-* Customization
+* Customize
 
 | Variable                              | Default                       |                                                                                            |
 |---------------------------------------+-------------------------------+--------------------------------------------------------------------------------------------|
@@ -202,12 +202,7 @@ Example — org-text views, everything visible, daily history for a year:
 
 * Plugins
 
-Optional features ship as SEPARATE packages.  Two steps, and they belong to
-different tools: your package manager installs the package, org-glance enables
-it.  Install it, then list it in
-=org-glance-plugins= — or press =I= in the transient (=U= disables).  The
-transient's *System* heading lists what is enabled and marks any plugin whose
-library failed to load:
+Optional features ship as SEPARATE packages.  Two steps, and they belong to different tools: your package manager installs the package, org-glance enables it.  Install it, then list it in =org-glance-plugins= — or press =I= in the transient (=U= disables).  The transient's *System* heading lists what is enabled and marks any plugin whose library failed to load:
 
 #+begin_src emacs-lisp
 (use-package org-glance-llm
@@ -227,8 +222,7 @@ library failed to load:
 
 * Maintenance
 
-Everything derived rebuilds from the org files, so these are safe to run at any
-time:
+Everything derived rebuilds from the org files, so these are safe to run at any time:
 
 | Command                                    | What it does                                     |
 |--------------------------------------------+--------------------------------------------------|
@@ -239,4 +233,5 @@ time:
 * Hacking
 
 Conventions, invariants and the build/test commands: [[file:AGENTS.md][AGENTS.md]].
+
 Design wiki, including the local-development setup: [[file:docs/index.org][docs/index.org]].
