@@ -32,7 +32,7 @@ write an ordinary headline, =C-c C-c=:
 #+begin_src org
 ,* TODO [#A] Kopi Luwak :coffee:
 DEADLINE: <2026-08-10 Mon> SCHEDULED: <2026-08-01 Sat>
-Passed through a civet.  Worth every cent, apparently.  [[https://example.com][Homepage]]
+Passed through a civet.  [[https://example.com][Homepage]]
 #+end_src
 
 ** 2. Browse a tag
