@@ -9,12 +9,8 @@ Thin metadata layer, query engine and UI for [[https://www.gnu.org/savannah-chec
 
 * Install
 
-The published package archive is the simplest route.  Add the archive, then let
-=use-package= install and set it up:
-
 #+begin_src emacs-lisp
-(add-to-list 'package-archives
-             '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
+(add-to-list 'package-archives '("rails-to-cosmos" . "https://rails-to-cosmos.github.io/elpa/"))
 
 (use-package org-glance
   :bind (("C-x j" . org-glance-transient))
@@ -22,14 +18,7 @@ The published package archive is the simplest route.  Add the archive, then let
   :ensure t)
 #+end_src
 
-=C-x j= opens =org-glance-transient=, the transient dispatcher (see
-[[*Usage][Usage]]); =org-glance-init= bootstraps the store.
-
-The =rails-to-cosmos= archive provides =org-glance= and its
-[[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the
-remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep
-a MELPA entry in =package-archives= too.  Everything else (=org= and its
-submodules, =cl-lib=, =thunk=, =subr-x=) ships with Emacs 29.1+.
+The =rails-to-cosmos= archive provides =org-glance= and its [[https://github.com/rails-to-cosmos/table-view][table-view]] dependency; the remaining deps (=dash=, =f=, =s=, =aes=, =transient=) come from MELPA, so keep a MELPA entry in =package-archives= too.
 
 * Usage
 
