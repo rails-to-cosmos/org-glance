@@ -41,8 +41,9 @@ Passed through a civet.  [[https://example.com][Homepage]]
 todo states:
 
 #+begin_example
-State  Title       Scheduled         Deadline          Pri  Tags
-TODO   Kopi Luwak  <2026-08-01 Sat>  <2026-08-10 Mon>  A    coffee
+| State | Title      | Scheduled        | Deadline         | Pri | Tags   |
+|-------+------------+------------------+------------------+-----+--------|
+| TODO  | Kopi Luwak | <2026-08-01 Sat> | <2026-08-10 Mon> | A   | coffee |
 #+end_example
 
 =O= toggles to the org-text *overview* — a plain org buffer, so folding,
