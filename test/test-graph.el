@@ -108,6 +108,20 @@ to raw strings, not org-element timestamp objects, or `json-serialize' crashes).
     (org-glance-test:capture graph "* TODO foo\n:PROPERTIES:\n:ORG_GLANCE_ID: keep-me\n:END:\n")
     (should (org-glance-headline-metadata? (org-glance-graph:get-headline graph "keep-me")))))
 
+(ert-deftest org-glance-test:graph-capture-stamps-creation-time ()
+  "Capturing stamps ORG_GLANCE_CREATION_TIME as an inactive timestamp when it
+is absent, and keeps an existing one."
+  (org-glance-test:with-graph graph
+    (org-glance-test:capture graph
+      "* TODO fresh :a:\n* TODO kept :b:\n:PROPERTIES:\n:ORG_GLANCE_CREATION_TIME: [2020-01-01 Wed 09:00]\n:END:\n")
+    (let ((ids (org-glance-test:ids graph)))
+      (should (= 2 (length ids)))
+      (should (string-match-p
+               ":ORG_GLANCE_CREATION_TIME: \\[[0-9]\\{4\\}-[0-9][0-9]-[0-9][0-9] "
+               (org-glance-graph:get-content graph (nth 0 ids))))
+      (should (s-contains? "[2020-01-01 Wed 09:00]"
+                           (org-glance-graph:get-content graph (nth 1 ids)))))))
+
 (ert-deftest org-glance-test:graph-headlines-skips-tombstones ()
   "`headlines' returns live records only, newest per id."
   (org-glance-test:with-graph graph

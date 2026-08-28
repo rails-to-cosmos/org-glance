@@ -1777,18 +1777,30 @@ Return the live record count.  See docs/archive/MIGRATION-PLAN.md Phase 4."
     (cl-loop for element in (org-element-map (org-element-parse-buffer 'headline) 'headline #'identity)
              collect (org-glance-headline--from-element element))))
 
+(defun org-glance-graph--creation-stamp ()
+  "NOW as an inactive org timestamp, `[YYYY-MM-DD Dow HH:MM]' -- glance's own format."
+  (format-time-string "[%Y-%m-%d %a %H:%M]"))
+
 (cl-defun org-glance-graph:capture (graph &optional (buffer (current-buffer)))
   "Ingest BUFFER into GRAPH.
 Assign a fresh ORG_GLANCE_ID -- unique within GRAPH's namespace, via
-`org-glance-graph:make-id' -- to every headline that lacks one, then add
-them all to GRAPH.  Return GRAPH."
+`org-glance-graph:make-id' -- to every headline that lacks one, stamp
+ORG_GLANCE_CREATION_TIME on every headline that lacks one, then add them all
+to GRAPH.  Return GRAPH."
   (cl-check-type graph org-glance-graph)
   (with-current-buffer buffer
     (org-with-wide-buffer
      (org-map-entries
       (lambda ()
-        (unless (org-entry-get nil "ORG_GLANCE_ID")
-          (org-entry-put nil "ORG_GLANCE_ID" (org-glance-graph:make-id graph)))))))
+        ;; ANCHOR TO THE HEADING: the first put creates a drawer and drifts
+        ;; point into it, so a bare `nil' pom would read the NEXT entry.
+        (let ((heading (point-marker)))
+          (unless (org-entry-get heading "ORG_GLANCE_ID")
+            (org-entry-put heading "ORG_GLANCE_ID" (org-glance-graph:make-id graph)))
+          (unless (org-entry-get heading "ORG_GLANCE_CREATION_TIME")
+            (org-entry-put heading "ORG_GLANCE_CREATION_TIME"
+                           (org-glance-graph--creation-stamp)))
+          (set-marker heading nil))))))
   (apply #'org-glance-graph:add graph (org-glance-graph:capture-buffer buffer)))
 
 (provide 'org-glance-graph)

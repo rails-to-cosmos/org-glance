@@ -19,7 +19,7 @@
                                  (symbol (list types)))))
       (otherwise nil))))
 
-(defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH"))
+(defconst org-glance-headline:hash-ignore-properties (list "ORG_GLANCE_ID" "ORG_GLANCE_HASH" "ORG_GLANCE_CREATION_TIME"))
 
 (defconst org-glance-headline:hash-ignore-drawers (list "LOGBOOK")
   "Drawer names whose contents never affect the content hash.
