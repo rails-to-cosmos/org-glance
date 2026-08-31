@@ -68,7 +68,7 @@ live from GRAPH (id fallback for gone targets)."
             (if (org-glance--present-string? state) (concat state " ") "")
             (if (integerp priority) (format "[#%c] " priority) "")
             (org-glance-headline-metadata:title metadata)
-            (if-let ((tags (org-glance-headline-metadata:tag-strings metadata)))
+            (if-let* ((tags (org-glance-headline-metadata:tag-strings metadata)))
                 (format "  :%s:" (s-join ":" tags)) "")
             "\n"
             ;; Planning keywords parse ONLY on the line right after the heading.
@@ -159,7 +159,7 @@ invalidates existing overview caches like a content change, and
 soon as it lands rather than when `org-glance-graph:refresh-external' folds it
 in."
   (cl-check-type graph org-glance-graph)
-  (when-let ((mtime (org-glance--file-mtime file)))
+  (when-let* ((mtime (org-glance--file-mtime file)))
     (cl-every (lambda (src) (org-glance-overview--fresher-than? mtime src))
               (list (org-glance--file-mtime
                      (org-glance-graph:headline-meta-path graph))

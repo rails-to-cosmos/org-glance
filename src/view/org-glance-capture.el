@@ -110,7 +110,7 @@ separately."
     (add-hook 'org-capture-after-finalize-hook
               (lambda ()
                 (unwind-protect
-                    (when-let ((buffer (get-file-buffer file)))
+                    (when-let* ((buffer (get-file-buffer file)))
                       (org-glance-graph:capture org-glance-graph buffer))
                   (org-glance--discard-buffer (get-file-buffer file))
                   (f-delete file)))

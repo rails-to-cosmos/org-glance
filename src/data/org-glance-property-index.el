@@ -41,7 +41,7 @@ Hides org-glance bookkeeping (`ORG_GLANCE_*') and org's synthesised CATEGORY
 
 (cl-defun org-glance-property-index--flush (graph)
   "Persist GRAPH's in-session index to disk (alist form), atomically."
-  (when-let ((h (gethash (org-glance-graph:store-path graph)
+  (when-let* ((h (gethash (org-glance-graph:store-path graph)
                          org-glance-property-index--cache)))
     (org-glance--write-eld
      (org-glance-property-index--file graph)

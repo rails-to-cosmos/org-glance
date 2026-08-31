@@ -226,7 +226,7 @@ re-runs the fill-fn (rows back to load order, `--sort-keys' kept) and
 `--apply-sort' restores the ordering; capture the row under point up front and
 return to it afterwards, since the intermediate render + sort restore point by
 LINE, which drifts to another row once the sort reorders them."
-  (when-let ((buf (get-buffer buffer)))
+  (when-let* ((buf (get-buffer buffer)))
     (with-current-buffer buf
       (pcase-let ((`(,id ,line ,col) (org-glance-view:point-context)))
         (table-view-refresh buf)
@@ -450,7 +450,7 @@ the per-tag schema (see `org-glance-table--custom-column')."
     (align . "left")
     (prop . ,kind)
     (value-fn . ,(lambda (id _row)
-                   (if-let ((meta (org-glance-graph:live-meta graph id)))
+                   (if-let* ((meta (org-glance-graph:live-meta graph id)))
                        (s-join ", "
                                (cl-loop for (target . k) in (org-glance-headline-metadata:relations meta)
                                         when (equal k kind)
@@ -461,7 +461,7 @@ the per-tag schema (see `org-glance-table--custom-column')."
   "Return the kinds of FROM's edges to TO in GRAPH, nil when there is no edge.
 One element per edge, `nil' for a kindless one, so a single kindless edge
 reads as the one-element list (nil)."
-  (when-let ((meta (org-glance-graph:live-meta graph from)))
+  (when-let* ((meta (org-glance-graph:live-meta graph from)))
     (cl-loop for (target . kind) in (org-glance-headline-metadata:relations meta)
              when (equal target to) collect kind)))
 
@@ -503,7 +503,7 @@ and kind (`org-glance-table--relation-cell').  Metadata reads only."
 ID's edge targets first, then every headline carrying an edge to ID: the row
 population of a relation table."
   (delete-dups
-   (append (when-let ((meta (org-glance-graph:live-meta graph id)))
+   (append (when-let* ((meta (org-glance-graph:live-meta graph id)))
              (org-glance-headline-metadata:relation-targets meta))
            (mapcar #'org-glance-headline-metadata:id
                    (cl-remove-if-not (org-glance-filter:predicate `(:refers-to ,id))
@@ -933,7 +933,7 @@ open, `C-c C-c' to apply -- and the `Relation' column."
       (local-set-key (kbd "C-c +") #'org-glance-table:add-column)
       (local-set-key (kbd "C-c -") #'org-glance-table:remove-column)
       (add-hook 'table-view-schema-changed-hook #'org-glance-table--persist-schema nil t)
-      (if-let ((sort (or (plist-get ref-entry :sort) (plist-get saved :sort))))
+      (if-let* ((sort (or (plist-get ref-entry :sort) (plist-get saved :sort))))
           (table-view-set-sort sort)
         (table-view-apply-sort))
       (setq org-glance-table--config-snapshot (org-glance-table--current-config))

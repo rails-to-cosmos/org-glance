@@ -75,7 +75,7 @@ an empty config set."
 (cl-defun org-glance-tag-config:file (graph tag)
   "Path of TAG's config file under GRAPH's config directory, or nil.
 TAG is a tag symbol; the file is `<dir>/<tag>.org'."
-  (when-let ((dir (org-glance-tag-config:dir graph)))
+  (when-let* ((dir (org-glance-tag-config:dir graph)))
     (f-join dir (concat (org-glance-tag:to-string tag) ".org"))))
 
 (cl-defun org-glance-tag-config:source-mtime (graph)
@@ -187,7 +187,7 @@ with the global todo keywords -- the graceful-degradation path."
 The single configured tag's cycle when FILTER names one, else the global
 done set (`org-glance--done-keywords').  Bind to `org-done-keywords' while
 building a `:done' predicate or a badge split."
-  (if-let ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
+  (if-let* ((cycle (org-glance-tag-config:cycle-for-filter graph filter)))
       (org-glance-tag-config:done-keywords cycle)
     (org-glance--done-keywords)))
 
@@ -208,7 +208,7 @@ and corrupts the active/done split, so an ambiguous filter falls back to the
 global default."
   (let ((values (cl-remove-duplicates
                  (delq nil (mapcar (lambda (tag)
-                                     (when-let ((c (org-glance-tag-config:resolve graph tag)))
+                                     (when-let* ((c (org-glance-tag-config:resolve graph tag)))
                                        (cl-struct-slot-value 'org-glance-tag-config slot c)))
                                    (org-glance-filter:tags filter)))
                  :test #'string=)))

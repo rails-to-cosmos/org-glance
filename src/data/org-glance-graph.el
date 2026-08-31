@@ -430,7 +430,7 @@ an unknown id appends, a live one is replaced in place, a tombstone leaves LIVE
 but stays in BY-ID (the tri-state, invariant 30).  Re-adding a tombstoned id
 falls back to `--invalidate-cache': its first sighting is its ORIGINAL slot,
 which LIVE no longer records.  Any other doubt takes the same fallback."
-  (when-let ((cache (org-glance-graph:-meta-cache graph)))
+  (when-let* ((cache (org-glance-graph:-meta-cache graph)))
     (let ((by-id (plist-get cache :by-id))
           (live (plist-get cache :live))
           (bail nil))
@@ -659,7 +659,7 @@ an existing blob (the same temp-then-rename commit the MANIFEST/seal/compact
 paths use)."
   (cl-check-type graph org-glance-graph)
   (cl-check-type headline org-glance-headline)
-  (when-let ((id (org-glance-headline:id headline)))
+  (when-let* ((id (org-glance-headline:id headline)))
     (let ((dir (org-glance-graph:headline-data-path graph id))
           (path (org-glance-graph:content-path graph id)))
       (f-mkdir-full-path dir)
@@ -741,7 +741,7 @@ appends at once."
   "Append a tombstone for ID unless it is already absent or deleted."
   (cl-check-type graph org-glance-graph)
   (cl-check-type id string)
-  (when-let ((spec (org-glance-graph--tombstone-spec graph id)))
+  (when-let* ((spec (org-glance-graph--tombstone-spec graph id)))
     (org-glance-graph:insert graph (list spec))))
 
 (cl-defun org-glance-graph:headlines (graph)
@@ -819,7 +819,7 @@ With IDS, restrict the fold to those headlines.  An edge is (TARGET . KIND);
 
 (cl-defun org-glance-graph:title-or-id (graph id)
   "ID's headline title in GRAPH, or ID itself when the headline is gone."
-  (if-let ((meta (org-glance-graph:live-meta graph id)))
+  (if-let* ((meta (org-glance-graph:live-meta graph id)))
       (org-glance-headline-metadata:title meta)
     id))
 
@@ -1105,9 +1105,10 @@ go.  What refuses is the prefix moving under the offset."
   "Drop notification file PATH's cursor, so the next fold takes PATH whole.
 A cursor whose bytes moved under it describes some other file, and everywhere
 in this module the answer to that is a re-fold, which is a no-op by construction
-\(the crash rule).  ROTATION IS THE ONE CALLER, being the one place that asks a
-generation the exact question, and it is what bounds invariant 34's residual on
-a rotated generation to one rotation cycle.  Dropping a cursor that is not there
+\(the crash rule).  ROTATION IS THE PRODUCTION CALLER, the one place that asks a
+generation the exact question, and what bounds invariant 34's residual on a
+rotated generation to one rotation cycle; `org-glance-graph:reset-external'
+drops these by hand to re-fold the family whole.  Dropping a cursor not there
 is what a generation nobody folded already looks like."
   (ignore-errors (f-delete (org-glance-graph--external-cursor-path path))))
 
@@ -1315,7 +1316,7 @@ offset and the digests cannot come from two readings."
           (dolist (line (split-string text "\n" t))
             (condition-case nil
                 (let ((object (json-parse-string line :object-type 'plist)))
-                  (when-let ((id (plist-get object :id)))
+                  (when-let* ((id (plist-get object :id)))
                     ;; `(eq t ...)': JSON false and null read as :false and :null
                     (let ((kind (if (eq t (plist-get object :tombstone))
                                     'tombstone
@@ -1463,11 +1464,14 @@ down so the poll's question is asked once; made here when a caller has none.
 
 For each WRITE `meta/EXTERNAL.jsonl' names, re-derive metadata from the blob now
 on disk and append it -- the same re-derivation `org-glance-graph:reindex' does.
-Blobs are READ and never rewritten: the content is already canonical, so only
-records append.  For each DELETE, append the tombstone `org-glance-graph:delete'
-would, under that command's own guard.  An id the store does not know, one
-already deleted, and a write with no stored blob are each skipped with a message
-and spent by the cursor anyway, there being no record for a refresh to replace.
+A write NAMES A NEW id as readily as it re-states a known one, so a write whose
+blob the store has never seen is INGESTED, not skipped: it is how a headline
+created outside Emacs enters the graph at all.  Blobs are READ and never
+rewritten: the content is already canonical, so only records append.  For each
+DELETE, append the tombstone `org-glance-graph:delete' would, under that
+command's own guard.  A DELETE for an id the store does not know or has already
+deleted, and any note whose blob will not read or parse, are each skipped with a
+message and spent by the cursor anyway.
 
 The whole batch is ONE append and the CURSOR moves after it -- the crash rule,
 so a crash between the two costs a repeated fold, which is a no-op by
@@ -1482,20 +1486,31 @@ construction.  The file is rotated once that is worth doing
          (skipped 0))
     (pcase-dolist (`(,id . ,kind) entries)
       ;; Every guard reads the PRE-append store; one id yields one entry.
-      (let (spec why)
+      (let (spec reason)
         (if (eq kind 'tombstone)
             (setq spec (org-glance-graph--tombstone-spec graph id)
-                  why "unknown or deleted")
-          (let* ((meta (org-glance-graph:live-meta graph id))
-                 (contents (and meta (org-glance-graph:get-content graph id))))
-            (setq spec (and contents
-                            (org-glance-headline:metadata*
-                             (org-glance-graph--reparse-blob graph meta contents)))
-                  why (if meta "no stored blob" "unknown or deleted"))))
+                  reason "unknown or deleted")
+          ;; A WRITE for an id the store DOES NOT KNOW is a NEW blob an external
+          ;; writer created; INGEST it rather than skip.  The blob is read by its
+          ;; own path (`get-content'), so a new id has one too; a first parse
+          ;; gives a provisional metadata whose tag scopes the todo cycle a known
+          ;; id's does, then the blob re-derives as `reindex' would.
+          (let* ((contents (org-glance-graph:get-content graph id))
+                 (basis (or (org-glance-graph:live-meta graph id)
+                            (and contents
+                                 (ignore-errors
+                                   (org-glance-headline:metadata*
+                                    (org-glance-headline--from-string contents))))))
+                 (record (and contents basis
+                              (org-glance-graph--reparse-blob graph basis contents))))
+            (setq spec (and record (org-glance-headline:metadata* record))
+                  reason (cond ((not contents) "no stored blob")
+                            ((not basis) "the blob did not parse")
+                            (t "unknown or deleted")))))
         (if spec
             (push spec specs)
           (cl-incf skipped)
-          (message "org-glance: refresh-external skips %s (%s)" id why))))
+          (message "org-glance: refresh-external skips %s (%s)" id reason))))
     (when specs
       (org-glance-graph:insert graph (nreverse specs)))
     ;; BYTES, never entries: an all-unparseable file would be re-read forever.
@@ -1509,6 +1524,31 @@ construction.  The file is rotated once that is worth doing
                  n (if (= n 1) "y" "ies")
                  (if (> skipped 0) (format ", skipped %d" skipped) "")))
       n)))
+
+(cl-defun org-glance-graph:reset-external
+    (&optional (graph (org-glance-ensure-init)))
+  "Drop every notification cursor in GRAPH, then fold the family from byte zero.
+`refresh-external' only reads bytes PAST a cursor, so a WRITE a past fold SPENT
+WITHOUT INGESTING -- the cursor moved, the record never landed -- it can never
+revisit.  This drops the cursor on the live file and every rotated generation
+\(`--external-refold') and folds again, so each source is re-read whole and
+every id it still names re-enters the graph.
+
+RE-FOLDING IS A NO-OP for an id already known: the store folds records by id,
+last-wins (`--latest-records'), and compaction collapses the re-appended lines,
+so no headline is duplicated.  WHAT IT REPLAYS IS DELETES -- an id whose last
+WAL sighting is a tombstone is re-applied -- so an external delete already
+folded and since resurrected in-graph would go again.  Spent generations are
+already retired out of `--external-sources' and this does not reach them.
+Return the count `refresh-external' folded."
+  (interactive)
+  (dolist (path (org-glance-graph--external-sources graph))
+    (org-glance-graph--external-refold path))
+  (let ((n (org-glance-graph:refresh-external graph)))
+    (when (called-interactively-p 'any)
+      (message "org-glance: reset external, refolded %d entr%s"
+               n (if (= n 1) "y" "ies")))
+    n))
 
 ;;; Store bootstrap / recovery / compaction
 
@@ -1656,7 +1696,7 @@ reader collapses any duplicate id.  Blocks = the `<<<<<<<' count."
 A store synced before the `union' driver existed can carry markers a JSONL
 reader cannot parse.  Gated by `org-glance--resolve-conflict' (see
 `org-glance-conflict-resolution'): `ask' prompts, `union' silent, nil errors."
-  (when-let ((files (org-glance-graph--conflicted-jsonl-files graph)))
+  (when-let* ((files (org-glance-graph--conflicted-jsonl-files graph)))
     (let ((names (mapconcat #'file-name-nondirectory files ", ")))
       (org-glance--resolve-conflict
        names
@@ -1692,7 +1732,7 @@ brand-new empty store, whose open segment the constructor just touched)."
   (let (seqs)
     (org-glance-graph--scan-file
      graph (file-truename (f-join (org-glance-graph:meta-path graph) name))
-     (lambda (r) (when-let ((s (plist-get r :seq))) (push s seqs))))
+     (lambda (r) (when-let* ((s (plist-get r :seq))) (push s seqs))))
     seqs))
 
 (cl-defun org-glance-graph--heal (graph)

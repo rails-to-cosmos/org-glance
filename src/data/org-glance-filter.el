@@ -100,7 +100,7 @@ returned with any `:tag' folded into `:tags' so downstream code only ever sees
                         (t (setq out (plist-put out k v)))))
       (when (or tags-seen tag)
         ;; An empty tag list folds to the "all" key and shares its cache.
-        (when-let ((all (append (org-glance-tag:as-list tags)
+        (when-let* ((all (append (org-glance-tag:as-list tags)
                                 (when tag (list tag)))))
           (setq out (plist-put out :tags all))))
       (when (and (plist-member out :done-keywords) (not (plist-member out :done)))

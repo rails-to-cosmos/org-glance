@@ -198,7 +198,7 @@ The decode half of the edge wire format; `--edge->link-path' encodes."
              (stringp path)
              (string-match "\\`\\([^?]+\\)\\(?:\\?kind=\\(.+\\)\\)?\\'" path))
     (cons (match-string 1 path)
-          (when-let ((kind (match-string 2 path)))
+          (when-let* ((kind (match-string 2 path)))
             (org-glance--kind-slug kind)))))
 
 (cl-defun org-glance--edge->link-path (id &optional kind)
@@ -278,7 +278,7 @@ link description already names."
 The item text BEFORE the link, other bracket links removed and a trailing `:'
 or `-' dropped: `- Local: [[file:~/x]]' introduces its link as \"Local\".  Nil
 when ELEMENT is in no list item, or nothing precedes it there."
-  (when-let ((item (org-element-lineage element '(item))))
+  (when-let* ((item (org-element-lineage element '(item))))
     (let ((start (org-glance--item-body-start item))
           (end (org-element-property :begin element)))
       (when (< start end)

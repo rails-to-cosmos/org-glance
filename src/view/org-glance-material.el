@@ -166,7 +166,7 @@ unparseable values read as 0, floats truncate.")
   "Effective repeat-history depth for this buffer's headline.
 The `ORG_GLANCE_REPEAT_HISTORY_DEPTH' drawer property wins over the global
 `org-glance-repeat-history-depth'; t/inf mean unlimited."
-  (if-let ((v (org-glance-material--property org-glance-repeat-history-depth-property)))
+  (if-let* ((v (org-glance-material--property org-glance-repeat-history-depth-property)))
       (pcase (downcase (s-trim v))
         ((or "t" "inf" "unlimited") t)
         (n (truncate (string-to-number n))))   ; junk -> 0 -> disabled; 3.5 -> 3
@@ -474,7 +474,7 @@ consumers re-add one (`file-name-as-directory') for a `default-directory'."
            (expand-file-name
             (read-directory-name
              "Project dir: "
-             (if-let ((cur (org-glance-material--property
+             (if-let* ((cur (org-glance-material--property
                             org-glance-project-dir-property)))
                  (file-name-as-directory cur)
                "./"))))))
@@ -600,7 +600,7 @@ tombstoned, or has no stored blob."
     (let ((path (org-glance-graph:content-path graph id)))
       (unless (f-exists? path)
         (user-error "No stored content for id %s" id))
-      (when-let ((existing (find-buffer-visiting path)))
+      (when-let* ((existing (find-buffer-visiting path)))
         (when (equal id (buffer-local-value 'org-glance-material--id existing))
           (when decrypt (org-glance-material--maybe-decrypt meta existing))
           (cl-return-from org-glance-material:open existing)))

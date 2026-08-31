@@ -6,7 +6,7 @@
 
 ;; Author: Dmitry Akatov <dmitry.akatov@protonmail.com>
 ;; Created: 29 September, 2018
-;; Version: 1.37.0.0.20260828.0
+;; Version: 1.38.0.0.20260831.0
 ;; Package-Requires: ((emacs "29.1") (org) (aes) (dash) (f) (s) (transient) (cond-let "0") (table-view "0"))
 ;; Keywords: org-mode, outlines, data, database, store, projections
 ;; Homepage: https://github.com/rails-to-cosmos/org-glance
@@ -233,7 +233,7 @@ Also skips per-file `org-mode-hook'."
       (insert-file-contents file)
       (org-glance--org-mode)
       (dolist (headline (org-glance-graph:capture-buffer (current-buffer)))
-        (when-let ((id (org-glance-headline:id headline)))
+        (when-let* ((id (org-glance-headline:id headline)))
           (let ((hash (org-glance-headline:hash headline)))
             (unless (equal (gethash id seen) hash)
               (org-glance-graph:add graph headline)
