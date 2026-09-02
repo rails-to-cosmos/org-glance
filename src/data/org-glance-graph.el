@@ -1467,11 +1467,13 @@ on disk and append it -- the same re-derivation `org-glance-graph:reindex' does.
 A write NAMES A NEW id as readily as it re-states a known one, so a write whose
 blob the store has never seen is INGESTED, not skipped: it is how a headline
 created outside Emacs enters the graph at all.  Blobs are READ and never
-rewritten: the content is already canonical, so only records append.  For each
-DELETE, append the tombstone `org-glance-graph:delete' would, under that
-command's own guard.  A DELETE for an id the store does not know or has already
-deleted, and any note whose blob will not read or parse, are each skipped with a
-message and spent by the cursor anyway.
+rewritten: the content is already canonical, so only records append.  A WRITE
+for an id already TOMBSTONED never resurrects it -- the tombstone wins, even
+while its blob lingers pre-compaction (invariant 30).  For each DELETE, append
+the tombstone `org-glance-graph:delete' would, under that command's own guard.
+A DELETE for an id the store does not know or has already deleted, and any note
+whose blob will not read or parse, are each skipped with a message and spent by
+the cursor anyway.
 
 The whole batch is ONE append and the CURSOR moves after it -- the crash rule,
 so a crash between the two costs a repeated fold, which is a no-op by
@@ -1490,23 +1492,24 @@ construction.  The file is rotated once that is worth doing
         (if (eq kind 'tombstone)
             (setq spec (org-glance-graph--tombstone-spec graph id)
                   reason "unknown or deleted")
-          ;; A WRITE for an id the store DOES NOT KNOW is a NEW blob an external
-          ;; writer created; INGEST it rather than skip.  The blob is read by its
-          ;; own path (`get-content'), so a new id has one too; a first parse
-          ;; gives a provisional metadata whose tag scopes the todo cycle a known
-          ;; id's does, then the blob re-derives as `reindex' would.
-          (let* ((contents (org-glance-graph:get-content graph id))
-                 (basis (or (org-glance-graph:live-meta graph id)
-                            (and contents
-                                 (ignore-errors
-                                   (org-glance-headline:metadata*
-                                    (org-glance-headline--from-string contents))))))
-                 (record (and contents basis
-                              (org-glance-graph--reparse-blob graph basis contents))))
-            (setq spec (and record (org-glance-headline:metadata* record))
-                  reason (cond ((not contents) "no stored blob")
-                            ((not basis) "the blob did not parse")
-                            (t "unknown or deleted")))))
+          ;; invariant 30: a WRITE never resurrects a tombstoned id; the blob
+          ;; may linger pre-compaction, but the tombstone wins.  For an unknown
+          ;; id a first parse seeds provisional metadata (its tag scopes the
+          ;; todo cycle), then the blob re-derives as `reindex' would.
+          (if (eq (org-glance-graph:get-headline graph id) 'tombstone)
+              (setq spec nil reason "already deleted")
+            (let* ((contents (org-glance-graph:get-content graph id))
+                   (basis (or (org-glance-graph:live-meta graph id)
+                              (and contents
+                                   (ignore-errors
+                                     (org-glance-headline:metadata*
+                                      (org-glance-headline--from-string contents))))))
+                   (record (and contents basis
+                                (org-glance-graph--reparse-blob graph basis contents))))
+              (setq spec (and record (org-glance-headline:metadata* record))
+                    reason (cond ((not contents) "no stored blob")
+                                  ((not basis) "the blob did not parse")
+                                  (t "unknown or deleted"))))))
         (if spec
             (push spec specs)
           (cl-incf skipped)

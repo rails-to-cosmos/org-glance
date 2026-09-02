@@ -300,10 +300,13 @@ argument in [[file:proposals][docs/proposals/]].
     in derived indexes and appends duplicate tombstones; spelling the guard twice lets
     the two drift.
 
-31. *=org-glance-material= must never top-level =require= =org-glance-table=.*  The
-    dependency runs table → material; the relation pivot
-    (=org-glance-material:references=) requires table at CALL time.  Violation: a
-    circular load that breaks byte-compilation and init.
+31. *=org-glance-material= has NO dependency on =org-glance-table=, at load time or
+    call time.*  The dependency runs table → material only.  The one seam that
+    needs both -- opening a material headline's relation table
+    (=org-glance-relations:references=, =C-c @=) -- lives in
+    =org-glance-relations=, which sits ABOVE both and =require='s each outright.
+    Violation: a material → table reference, reintroducing the circular load that
+    breaks byte-compilation and init.
 
 32. *Torn-line tolerance is scoped to the open segment's FINAL line.*
     =org-glance-graph--scan-file= swallows a =json-error= only for the last line of the

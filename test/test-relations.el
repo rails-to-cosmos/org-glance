@@ -169,9 +169,9 @@ to nothing in either direction errors."
                    (push (cons filter (plist-get args :context)) calls)
                    nil)))
         (org-glance-test:with-material (buf graph "a")
-          (org-glance-material:references))
+          (org-glance-relations:references))
         (org-glance-test:with-material (buf graph "b")
-          (org-glance-material:references)))
+          (org-glance-relations:references)))
       (setq calls (nreverse calls))
       (should (equal '(:id-any ("b")) (car (nth 0 calls))))
       (should (equal '(:anchor "a" :dir relations) (cdr (nth 0 calls))))
@@ -179,7 +179,7 @@ to nothing in either direction errors."
       (should (equal '(:anchor "b" :dir relations) (cdr (nth 1 calls)))))
     (org-glance-test:with-material (buf graph "c")
       (cl-letf (((symbol-function 'org-glance-table:visit) #'ignore))
-        (should-error (org-glance-material:references) :type 'user-error)))))
+        (should-error (org-glance-relations:references) :type 'user-error)))))
 
 (ert-deftest org-glance-test:relations-table-relation-column ()
   "The relation table's `Relation' cell names direction and kind: `>' for an

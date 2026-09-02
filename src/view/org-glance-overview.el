@@ -19,6 +19,7 @@
 
 (require 'org-glance-core)
 (declare-function org-glance-table:visit "org-glance-table")
+(declare-function org-glance-table:visit-relations "org-glance-table" (graph id))
 (declare-function org-glance-capture "org-glance-capture")
 (declare-function org-glance-capture:completing-read-tag "org-glance-capture")
 

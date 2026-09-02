@@ -67,7 +67,7 @@ tag union costs one =--metas= pass over a small id list.
 =(:id-any TARGETS)= loses the anchor.  The filter language stays untouched;
 instead =org-glance-table:visit= gains =&key context= -- a plist
 =(:anchor ID :dir refs|backlinks)= stored buffer-locally.  Set by
-=org-glance-material:references=; nil everywhere else.  =C-c C-c= is bound
+=org-glance-relations:references=; nil everywhere else.  =C-c C-c= is bound
 only when context is present.
 
 ** Invariant 17 amendment
@@ -85,7 +85,7 @@ accretion by browsing.
 
 * Steps
 
-1. =table:visit= =&key context=; thread from =material:references=.
+1. =table:visit= =&key context=; thread from =relations:references=.
 2. =table-refs.eld= store: key builders, get/put, latest-applied
    resolution.
 3. Restore path in =visit= (custom columns + hidden + order + sort from a

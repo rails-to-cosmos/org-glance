@@ -139,6 +139,9 @@ Notable user-facing changes.  Versions date-based
   not deleted) -- mirror of the bare =+= capture.
 
 ** Changed
+- =C-c @= in a material buffer now calls =org-glance-relations:references=
+  (was =org-glance-material:references=); the command moved to the new
+  =org-glance-relations= bridge library, above both material and table.
 - =meta/.gitattributes= gives the =union= merge driver the WAL's own files by
   name -- =headlines.jsonl= and =seg-*.jsonl= -- where a =*.jsonl= glob also
   handed it the notification family and =COMPLETIONS.jsonl=.  An existing
@@ -256,6 +259,10 @@ Notable user-facing changes.  Versions date-based
   =:active?=, =:done?=, =:tag-string=, =:title-clean=).
 
 ** Fixed
+- An external WRITE no longer resurrects a tombstoned id whose blob still
+  lingers before compaction: =org-glance-graph:refresh-external= skips it, the
+  tombstone winning (invariant 30).  A WRITE still ingests a genuinely unknown
+  id and re-derives a live one.
 - A spent =EXTERNAL-<generation>.jsonl= is MOVED to
   =meta/spent/= and kept.  Six rounds of holes in the check that licensed
   the delete each cost a tombstone nothing could get back; a wrong answer costs

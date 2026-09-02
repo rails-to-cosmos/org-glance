@@ -85,7 +85,7 @@ FILTER, if non-nil, is a predicate on the metadata."
 (define-key org-glance-material-mode-map (kbd "C-c j") #'org-glance-material:open-link-here)
 (define-key org-glance-material-mode-map (kbd "C-c i") #'org-glance-material:set-interval)
 (define-key org-glance-material-mode-map (kbd "@") #'org-glance-material:refer)
-(define-key org-glance-material-mode-map (kbd "C-c @") #'org-glance-material:references)
+;; `C-c @' (references) is bound in org-glance-relations, above both layers.
 
 (defconst org-glance-project-dir-property "ORG_GLANCE_PROJECT_DIR"
   "Drawer property naming a headline's project directory.
@@ -1190,17 +1190,6 @@ prompt for a reference kind.  `C-q @' inserts a literal `@' anywhere."
   (org-glance-material:insert-reference org-glance-material--graph
                                         org-glance-material--id
                                         :with-kind arg))
-
-(cl-defun org-glance-material:references ()
-  "Open the table of every headline this one relates to (`C-c @').
-Rows are this headline's edge targets and its referrers, each row's direction
-and kind in the `Relation' column (`org-glance-table:visit-relations').
-Relations read LAST-SAVED metadata, so save first to see this session's edges."
-  (interactive)
-  (require 'org-glance-table)      ; not at top level: table requires material
-  (org-glance-material--ensure)
-  (org-glance-table:visit-relations org-glance-material--graph
-                                    org-glance-material--id))
 
 (provide 'org-glance-material)
 ;;; org-glance-material.el ends here

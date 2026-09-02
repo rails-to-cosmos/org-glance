@@ -107,7 +107,7 @@ relation keys are *transient* — a =:transient t= column in
 nil (uncacheable) and the table skip per-filter config persistence.  Compact
 =describe= arms keep buffer names bounded.
 
-Commands (table-only): =org-glance-material:references= / =:backlinks= on
+Commands (table-only): =org-glance-relations:references= / =:backlinks= on
 =C-c @= / =C-u C-c @= — passing the BARE relation filter, no ambient
 =(:done nil)= merge, so DONE referrers stay visible in backlinks.
 
