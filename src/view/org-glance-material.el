@@ -996,10 +996,27 @@ when OLD is wrong -- the decrypt fails before any write.  Return t."
 
 ;;; Commands
 
+(cl-defun org-glance-material--filter-spec ()
+  "Ambient `org-glance-filter-spec' with archived/completed relaxed per -a/-c.
+The transient's `-a' (include archived) and `-c' (include completed) switches
+each drop the hiding default for their dimension, so the headline pickers
+\(materialize / open / extract) then offer those headlines too; absent the
+switch, or outside the transient, the ambient spec stands unchanged."
+  (let ((args (and (eq transient-current-command 'org-glance-transient)
+                   (transient-args 'org-glance-transient)))
+        (spec (org-glance-filter:normalize-spec org-glance-filter-spec)))
+    (when (and (member "--archived" args)
+               (plist-member spec :archived) (null (plist-get spec :archived)))
+      (cl-remf spec :archived))
+    (when (and (member "--completed" args)
+               (plist-member spec :done) (null (plist-get spec :done)))
+      (cl-remf spec :done))
+    spec))
+
 (cl-defun org-glance-material:pick-metadata (graph)
   "Choose a live GRAPH headline gated by the ambient `org-glance-filter-spec'."
   (org-glance-material:completing-read
-   graph :filter (org-glance-filter:predicate org-glance-filter-spec)))
+   graph :filter (org-glance-filter:predicate (org-glance-material--filter-spec))))
 
 ;;;###autoload
 (cl-defun org-glance-materialize ()
@@ -1049,7 +1066,7 @@ Reads the LIVE buffer, so links typed since the last save count."
   "Read a graph headline matching the ambient filter AND EXTRA-PRED under PROMPT."
   (org-glance-ensure-init)
   (let* ((graph org-glance-graph)
-         (keep? (org-glance-filter:predicate org-glance-filter-spec))
+         (keep? (org-glance-filter:predicate (org-glance-material--filter-spec)))
          (metadata (org-glance-material:completing-read
                     graph :prompt prompt
                     :filter (lambda (m) (and (funcall keep? m)

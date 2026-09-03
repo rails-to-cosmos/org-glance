@@ -6,6 +6,9 @@ Notable user-facing changes.  Versions date-based
 * Unreleased
 
 ** Added
+- Transient: =-a= (with archived) and =-c= (with completed) relax the
+  headline pickers for materialize / open link / extract property; both default
+  off, so those actions hide archived and done headlines unless the switch is set.
 - External writers: the =glance= daemon names the blobs it moved in
   =meta/EXTERNAL.jsonl=, and every read folds those entries back into the WAL
   on its own -- open views repaint at their next display boundary.

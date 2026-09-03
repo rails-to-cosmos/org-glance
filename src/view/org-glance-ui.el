@@ -96,7 +96,9 @@ absent, and this heading is where that shows."
     ("m" "Materialize" org-glance-materialize)
     ("j" "Open link" org-glance-open)
     ("e" "Extract property" org-glance-extract)]
-   [("-d" "Decrypt" "--decrypt")]]
+   [("-a" "With archived" "--archived")
+    ("-c" "With completed" "--completed")
+    ("-d" "Decrypt" "--decrypt")]]
   [:description org-glance-transient--plugins-description
    [("I" "Enable plugin" org-glance-plugin-enable)
     ("U" "Disable plugin" org-glance-plugin-disable)
